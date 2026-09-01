@@ -30,16 +30,20 @@ const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf
 const mcpEnvIndex = process.argv.indexOf("--capture-mcp-env");
 const mcpEnvName = mcpEnvIndex === -1 ? undefined : process.argv.at(mcpEnvIndex + 1);
 const mcpBearer = mcpEnvName ? process.env[mcpEnvName] : undefined;
+const mcpFileIndex = process.argv.indexOf("--capture-mcp-file");
+const mcpFile = mcpFileIndex === -1 ? undefined : process.argv.at(mcpFileIndex + 1);
 const hasCodexConfig = await access(`${process.cwd()}/.codex/config.toml`).then(
   () => true,
   () => false,
 );
-if (mcpBearer) await writeFile(`${process.cwd()}/.mcp-bearer`, mcpBearer);
+if (mcpBearer && mcpFile) await writeFile(mcpFile, mcpBearer);
 const capture = JSON.stringify({
   args: process.argv.slice(2),
   prompt,
   cwd: process.cwd(),
   hasCodexConfig,
+  hasCodexApiKey: process.env.CODEX_API_KEY !== undefined,
+  hasOpenAiApiKey: process.env.OPENAI_API_KEY !== undefined,
 });
 const outputSchemaPath = () => {
   const index = process.argv.indexOf("--output-schema");
@@ -58,17 +62,24 @@ const stageResponse = () => {
   return capture;
 };
 const response = stageResponse();
-const events = [
-  { type: "thread.started", thread_id: "fake-thread-1" },
-  {
-    type: "item.completed",
-    item: { id: "message-1", type: "agent_message", text: response },
-  },
-  {
-    type: "turn.completed",
-    usage: { input_tokens: 10, output_tokens: 5 },
-  },
-];
+const turnError = process.argv.find((argument) => argument.startsWith("--fake-turn-error="));
+const turnErrorMessage = turnError?.slice("--fake-turn-error=".length).replaceAll("-", " ");
+const events = turnErrorMessage
+  ? [
+      { type: "thread.started", thread_id: "fake-thread-1" },
+      { type: "turn.failed", error: { message: turnErrorMessage } },
+    ]
+  : [
+      { type: "thread.started", thread_id: "fake-thread-1" },
+      {
+        type: "item.completed",
+        item: { id: "message-1", type: "agent_message", text: response },
+      },
+      {
+        type: "turn.completed",
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+    ];
 
 const run = async () => {
   if (!process.argv.includes("--hang")) {

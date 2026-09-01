@@ -1,19 +1,22 @@
+import { createHash } from "node:crypto";
 import {
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
-  FollowUpStageResult,
   HarnessName,
   ImplementStageResult,
   type LifecycleStage,
+  RunId,
   RunPlan,
   SessionId,
   stageResultJsonSchema,
   TriageStageResult,
+  WorkItemId,
 } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
-import { assert, describe, it, layer, live } from "@effect/vitest";
-import { EventType, type StreamChunk } from "@tanstack/ai";
-import { codexText } from "@tanstack/ai-codex";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import { assert, describe, it } from "@effect/vitest";
+import { EventType } from "@tanstack/ai";
+import { CODEX_MODELS, type CodexTextConfig, codexText } from "@tanstack/ai-codex";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
@@ -25,120 +28,83 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import {
-  type CodexRunChat,
-  type CodexRunChatOptions,
-  type CodexRunnerOptions,
-  codexChildEnvironment,
-  codexModelOptions,
-  codexRunner,
-  codexRuntimeConfig,
-  renderContext,
-} from "./harness";
+import { type CodexRunnerOptions, codexRunner } from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const session = Schema.decodeSync(SessionId)("session-1");
-const testEnvironment = { HOME: "/home/codex", PATH: "/usr/bin" };
+const runId = Schema.decodeSync(RunId)("run-codex-test");
+const workItemId = Schema.decodeSync(WorkItemId)("#150");
+const defaultModel = CODEX_MODELS[0];
 
-const assembled: ContextAssembler.AssembledContext = {
-  layers: [
-    { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
-    { kind: "repo", source: "/repo/AGENTS.md", content: "repo rules" },
-    {
-      kind: "operating-instructions",
-      source: "/operating-instructions/implement/INSTRUCTIONS.md",
-      content: "Operating Instructions rules",
-    },
-  ],
-  operatingInstructionsPath: "/home/operating-instructions/implement",
-  operatingInstructionResources: [],
-  sources: [],
-};
-
-const persistence = memoryPersistence();
+const instructions = [
+  { kind: "rules" as const, source: "/home/.agents/rules/global.md", content: "global rules" },
+  { kind: "repo" as const, source: "/repo/AGENTS.md", content: "repo rules" },
+];
 
 const sessionStore: SessionStore.SessionStoreService = {
-  persistence,
+  persistence: memoryPersistence(),
   resumeHandle: () => Effect.succeed("thread-123"),
   mint: () => Effect.die(new Error("unexpected mint")),
 };
 
-const contextAssembler: ContextAssembler.ContextAssemblerService = {
-  assemble: () => Effect.succeed(assembled),
-  cleanup: () => Effect.void,
-};
+const unexpected = () => Effect.die(new Error("unexpected service access"));
 
-const unexpected = () => Effect.die(new Error("unexpected credential-store access"));
-
-const credentialStore: CredentialStore.CredentialStoreService = {
-  bearerToken: unexpected,
-  resolveSource: unexpected,
-  persist: unexpected,
-  invalidate: unexpected,
-  providerKey: unexpected,
-  persistProviderKey: unexpected,
-  configureConnection: unexpected,
-  removeConnection: unexpected,
-};
-
-const fileSystem = FileSystem.makeNoop({
-  access: () => Effect.void,
-  stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
-});
-
-const harnessRunnerLayer = Layer.mergeAll(
+const services = Layer.mergeAll(
   Layer.succeed(SessionStore.SessionStore, sessionStore),
-  Layer.succeed(ContextAssembler.ContextAssembler, contextAssembler),
-  Layer.succeed(CredentialStore.CredentialStore, credentialStore),
-  Layer.succeed(FileSystem.FileSystem, fileSystem),
+  Layer.succeed(ContextAssembler.ContextAssembler, {
+    assemble: unexpected,
+    cleanup: unexpected,
+  }),
+  Layer.succeed(CredentialStore.CredentialStore, {
+    bearerToken: unexpected,
+    resolveSource: unexpected,
+    persist: unexpected,
+    invalidate: unexpected,
+    providerKey: unexpected,
+    persistProviderKey: unexpected,
+    configureConnection: unexpected,
+    removeConnection: unexpected,
+  }),
+  NodeFileSystem.layer,
   FetchHttpClient.layer,
 );
 
 interface RequestOverrides {
-  readonly checkoutPath?: string;
+  readonly checkoutPath: string;
   readonly session?: Harness.HarnessRequest["session"];
   readonly stage?: LifecycleStage;
-  readonly skill?: string;
   readonly prompt?: string;
   readonly mcpSkills?: ReadonlyArray<Harness.ResolvedMcpSkill>;
 }
 
-const testMcpIdentity = (name: string, index: number) =>
+const projectedMcpName = (name: string, index: number) =>
   `test__${name.toLowerCase().replace(/[^a-z0-9_]+/g, "_")}__${index}`;
 
-const testMcpEnvName = (name: string) =>
-  `COGWORK_MCP_${Buffer.from(name).toString("hex").toUpperCase()}_BEARER`;
-
-const testMcpProjection = (name: string, index: number) => {
-  const projectedName = testMcpIdentity(name, index);
-  return { projectedName, envName: testMcpEnvName(projectedName) };
-};
-
-const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest => {
+const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   const stage = overrides.stage ?? "implement";
   const profile = stage === "triage" || stage === "verify" ? "read-only" : "full";
-  const skill = overrides.skill ?? "implement-agent";
   const mcpSkills = overrides.mcpSkills ?? [];
   const structuredOutput =
     stageResultJsonSchema(stage)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
   const mcp = mcpSkills.map((server, index) => ({
     identity: `test/mcp/${index}`,
     name: server.name,
-    projectedName: testMcpIdentity(server.name, index),
+    projectedName: projectedMcpName(server.name, index),
     endpoint: server.endpoint,
     authenticated: server.bearer !== null,
     unavailableReason: null,
   }));
   return {
-    plan: Schema.decodeSync(RunPlan)({
-      id: "run-codex-test",
+    plan: RunPlan.make({
+      id: runId,
       operation: stage,
-      harness: { name, model: "gpt-5.6-sol", effort: "high", profile },
-      instructions: assembled.layers.map((layer) => ({
-        ...layer,
-        kind: layer.kind === "operating-instructions" ? "operating-instructions" : layer.kind,
-      })),
-      operatingInstructions: { name: skill, path: assembled.operatingInstructionsPath, resources: [] },
+      harness: { name, model: defaultModel, effort: "high", profile },
+      instructions,
+      operatingInstructions: {
+        name: `${stage}-agent`,
+        path: `/operating-instructions/${stage}`,
+        resources: [],
+      },
       tools: [],
       skills: [],
       mcp,
@@ -150,16 +116,23 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
       connections: [],
       messages: [{ role: "user", content: overrides.prompt ?? "implement the issue" }],
       workContext: {
-        reference: { workItem: "#1", url: null },
-        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        reference: { workItem: workItemId, url: null },
+        facts: {
+          roles: ["ready-for-agent"],
+          assignees: [],
+          openBlockers: 0,
+          claim: null,
+          priority: "medium",
+          pr: null,
+        },
         observation: { generation: 1, observedAtMillis: 1 },
       },
-      sandbox: { workspace: overrides.checkoutPath ?? "/repo", policy: profile },
+      sandbox: { workspace: overrides.checkoutPath, policy: profile },
       persistence: { sessionKind: "opaque-handle" },
       provenance: {
         resolution: [],
         stamps: [],
-        projectedNames: mcp.map(({ identity, projectedName: name }) => ({ identity, name })),
+        projectedNames: mcp.map(({ identity, projectedName }) => ({ identity, name: projectedName })),
         projection: [],
         observation: { generation: 1, observedAtMillis: 1 },
       },
@@ -173,49 +146,66 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
   };
 };
 
-const fakeCodexExecutable = (args = "") =>
-  `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${args}`;
+const fakeCodexExecutable = (arguments_ = "") =>
+  `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${arguments_}`;
 
-const testRunner = (options: Omit<CodexRunnerOptions, "name" | "environment">) =>
+const runner = (options: Partial<CodexRunnerOptions> = {}) =>
   codexRunner({
     name,
-    environment: testEnvironment,
+    environment: process.env,
     codexExecutable: fakeCodexExecutable(),
-    resolveGitMetadataDirectory: () => Effect.succeed(null),
     ...options,
   });
 
-const chunks: ReadonlyArray<StreamChunk> = [
-  {
-    type: EventType.TOOL_CALL_RESULT,
-    toolCallId: "call-1",
-    messageId: "message-1",
-    content: "done",
-    role: "tool",
-  },
-  { type: EventType.RUN_FINISHED, runId: "run-1", threadId: "thread-123" },
-];
+const createSandbox = () =>
+  Effect.acquireRelease(
+    Effect.promise(() => localProcessSandbox({}).create({})),
+    (sandbox) => Effect.promise(() => sandbox.destroy()),
+  );
 
-const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => ({
-  [Symbol.asyncIterator]: () => {
-    const iterator = items[Symbol.iterator]();
-    return { next: () => Promise.resolve(iterator.next()) };
-  },
-});
+const initializeRepository = (handle: SandboxHandle) =>
+  Effect.promise(() =>
+    handle.process.exec(
+      [
+        "git init",
+        'git config user.email "cogwork@example.com"',
+        'git config user.name "Cogwork"',
+        "git commit --allow-empty -m initial",
+      ].join(" && "),
+    ),
+  ).pipe(
+    Effect.flatMap((result) =>
+      result.exitCode === 0
+        ? Effect.succeed(handle.id)
+        : Effect.die(new Error(`${result.stderr}\n${result.stdout}`)),
+    ),
+  );
 
-const runErrorChunk = (
-  message: string,
-  fields: { readonly code?: string; readonly rawEvent?: unknown } = {},
-) =>
-  ({
-    type: EventType.RUN_ERROR,
-    message,
-    ...fields,
-  }) satisfies StreamChunk;
+const linkedWorktree = (handle: SandboxHandle) =>
+  Effect.gen(function* () {
+    yield* initializeRepository(handle);
+    const checkoutPath = `${handle.id}/linked-worktree`;
+    const setup = yield* Effect.promise(() =>
+      handle.process.exec(`git worktree add -b linked-worktree ${checkoutPath}`),
+    );
+    assert.strictEqual(setup.exitCode, 0);
+    const common = yield* Effect.promise(() =>
+      handle.process.exec(`git -C ${checkoutPath} rev-parse --path-format=absolute --git-common-dir`),
+    );
+    assert.strictEqual(common.exitCode, 0);
+    return { checkoutPath, commonDirectory: common.stdout.trim() };
+  });
 
-const failedChat = (error: unknown): AsyncIterable<StreamChunk> => ({
-  [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
-});
+const Capture = Schema.fromJsonString(
+  Schema.Struct({
+    args: Schema.Array(Schema.String),
+    prompt: Schema.String,
+    cwd: Schema.String,
+    hasCodexConfig: Schema.Boolean,
+    hasCodexApiKey: Schema.Boolean,
+    hasOpenAiApiKey: Schema.Boolean,
+  }),
+);
 
 const structuredCompletions = (events: ReadonlyArray<Harness.AgUiEvent>) =>
   events.flatMap((event) => (agUiIsStructuredOutputComplete(event) ? [event.value] : []));
@@ -223,839 +213,418 @@ const structuredCompletions = (events: ReadonlyArray<Harness.AgUiEvent>) =>
 const sessionHandles = (events: ReadonlyArray<Harness.AgUiEvent>) =>
   events.flatMap((event) => (agUiIsSessionHandleEvent(event) ? [event.value.sessionId] : []));
 
+const collectEvents = <Error, Requirements>(stream: Stream.Stream<Harness.AgUiEvent, Error, Requirements>) =>
+  Stream.runCollect(stream).pipe(Effect.map((events) => Array.from(events)));
+
 const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
   const completion = structuredCompletions(events)[0];
-  if (!completion) return assert.fail("fake Codex emitted no structured result");
+  if (!completion) return Effect.die(new Error("fake Codex emitted no structured result"));
   return Schema.decodeUnknownEffect(ImplementStageResult)(completion.object).pipe(
-    Effect.flatMap((result) =>
-      Schema.decodeUnknownEffect(
-        Schema.fromJsonString(
-          Schema.Struct({
-            args: Schema.Array(Schema.String),
-            prompt: Schema.String,
-            cwd: Schema.optional(Schema.String),
-            hasCodexConfig: Schema.optional(Schema.Boolean),
-          }),
-        ),
-      )(result.summary),
-    ),
+    Effect.flatMap((result) => Schema.decodeEffect(Capture)(result.summary)),
   );
 };
 
-const makeLiveHarness = (codexExecutable = fakeCodexExecutable()) =>
-  Effect.acquireRelease(
-    Effect.promise(() => localProcessSandbox({}).create({})),
-    (sandbox) => Effect.promise(() => sandbox.destroy()),
-  ).pipe(
-    Effect.map((handle) => ({
-      handle,
-      harness: Harness.make([
-        codexRunner({
-          name,
-          environment: process.env,
-          codexExecutable,
-        }),
-      ]),
-    })),
-  );
-
-const linkedWorktree = (handle: SandboxHandle) =>
+const runInRepository = (
+  harness: Harness.HarnessService,
+  handle: SandboxHandle,
+  overrides: Omit<RequestOverrides, "checkoutPath"> = {},
+) =>
   Effect.gen(function* () {
-    const checkoutPath = `${handle.id}/linked-worktree`;
-    const setup = yield* Effect.promise(() =>
-      handle.process.exec(
-        [
-          "git init",
-          'git config user.email "cogwork@example.com"',
-          'git config user.name "Cogwork"',
-          "git commit --allow-empty -m initial",
-          `git worktree add -b linked-worktree ${checkoutPath}`,
-        ].join(" && "),
+    const checkoutPath = yield* initializeRepository(handle);
+    return yield* collectEvents(harness.run(makeRequest({ checkoutPath, session: null, ...overrides })));
+  });
+
+const mcpEnvironmentName = (name: string) =>
+  `COGWORK_MCP_${createHash("sha256").update(name).digest("hex").toUpperCase()}_BEARER`;
+
+const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
+  {
+    name: "linear.api",
+    endpoint: "https://mcp.linear.app/mcp/readonly",
+    bearer: Redacted.make(secret),
+  },
+];
+
+describe("codexRunner", () => {
+  it.layer(services)((it) => {
+    it.effect("projects TanStack catalog metadata and honest native capabilities", () =>
+      Effect.gen(function* () {
+        const codex = runner();
+        const harness = Harness.make([codex]);
+        const catalog = yield* harness.catalog(name);
+
+        assert.deepStrictEqual(
+          catalog.models.map(({ value }) => value),
+          [...CODEX_MODELS],
+        );
+        assert.deepStrictEqual(
+          catalog.efforts?.map(({ value }) => value),
+          ["minimal", "low", "medium", "high"],
+        );
+        assert.deepStrictEqual(catalog.provenance, {
+          source: "tanstack-runtime",
+          packageVersion: "0.5.3",
+        });
+        assert.strictEqual(codex.sessionKind, "opaque-handle");
+        assert.deepStrictEqual(codex.authentication, {
+          mode: "host",
+          reference: "Codex host login",
+        });
+        assert.deepNestedInclude(codex.capabilities, {
+          authenticationModes: ["host"],
+          session: { affinity: "runtime-host", fork: false },
+          policyFidelity: "profile-only",
+          fileEventFidelity: "sandbox",
+          usageQuality: "metered",
+        });
+      }),
+    );
+
+    it.effect("projects host authentication, native options, and shared Git without local MCP config", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
+          const harness = Harness.make([
+            runner({
+              environment: {
+                ...process.env,
+                CODEX_API_KEY: "inherited-codex-key",
+                OPENAI_API_KEY: "inherited-openai-key",
+              },
+              makeAdapter: (model, config) => {
+                calls.push({ model, config });
+                return codexText(model, config);
+              },
+            }),
+          ]);
+          const events = yield* runInRepository(harness, handle);
+          const capture = yield* structuredCapture(events);
+          const call = calls[0];
+          if (!call) return assert.fail("Codex adapter was not created");
+          const realCheckout = yield* FileSystem.FileSystem.pipe(
+            Effect.flatMap((fs) => fs.realPath(handle.id)),
+          );
+
+          assert.strictEqual(call.model, defaultModel);
+          assert.strictEqual(call.config.authMode, "host");
+          assert.deepStrictEqual(call.config.additionalDirectories, [`${realCheckout}/.git`]);
+          assert.isUndefined(call.config.config);
+          assert.isUndefined(call.config.env);
+          assert.include(capture.args, 'model_reasoning_effort="high"');
+          assert.isFalse(capture.hasCodexApiKey);
+          assert.isFalse(capture.hasOpenAiApiKey);
+        }),
       ),
     );
-    assert.strictEqual(setup.exitCode, 0);
-    const commonDirectory = yield* Effect.promise(() =>
-      handle.process.exec(`git -C ${checkoutPath} rev-parse --git-common-dir`),
-    );
-    assert.strictEqual(commonDirectory.exitCode, 0);
-    return { checkoutPath, commonDirectory: commonDirectory.stdout.trim() };
-  });
 
-layer(harnessRunnerLayer)("codexRunner", (it) => {
-  it("encodes projected MCP names into exact environment keys", () => {
-    assert.strictEqual(
-      testMcpEnvName("test__linear__0"),
-      "COGWORK_MCP_746573745F5F6C696E6561725F5F30_BEARER",
-    );
-  });
-
-  it("declares an opaque Codex-owned session", () => {
-    assert.strictEqual(codexRunner({ name, environment: testEnvironment }).sessionKind, "opaque-handle");
-  });
-
-  it.effect("assembles context, applies policy, resumes Codex, and bridges every event field", () =>
-    Effect.gen(function* () {
-      const adapterCalls: Array<Parameters<typeof codexText>> = [];
-      const runCalls: Array<CodexRunChatOptions> = [];
-      const runChat: CodexRunChat = (options) => {
-        runCalls.push(options);
-        return toAsyncIterable(chunks);
-      };
-      const runner = testRunner({
-        makeAdapter: (model, config) => {
-          adapterCalls.push([model, config]);
-          return codexText(model, config);
-        },
-        runChat,
-      });
-      const harness = Harness.make([runner]);
-
-      const events = yield* Stream.runCollect(harness.run(makeRequest()));
-
-      assert.deepStrictEqual(adapterCalls, [
-        [
-          "gpt-5.6-sol",
-          {
-            approvalPolicy: "never",
-            codexExecutable: fakeCodexExecutable(),
-            sandboxMode: "workspace-write",
-            networkAccessEnabled: true,
-            modelReasoningEffort: "high",
-            env: codexChildEnvironment(testEnvironment),
-          },
-        ],
-      ]);
-      const call = runCalls[0];
-      if (!call) return assert.fail("runChat was not called");
-      assert.deepStrictEqual(call.messages, [{ role: "user", content: "implement the issue" }]);
-      assert.deepStrictEqual(call.systemPrompts, renderContext(assembled));
-      assert.deepStrictEqual(call.modelOptions, {
-        sessionId: "thread-123",
-        modelReasoningEffort: "high",
-      });
-      assert.lengthOf(call.middleware, 1);
-      const bridged = Array.from(events);
-      assert.lengthOf(bridged, chunks.length);
-      chunks.forEach((chunk, index) => {
-        const event = bridged[index];
-        if (!event) assert.fail(`missing bridged event ${index}`);
-        assert.sameMembers(Object.keys(event), Object.keys(chunk));
-        Object.entries(chunk).forEach(([key, value]) => {
-          assert.deepStrictEqual(Reflect.get(event, key), value);
-        });
-      });
-    }),
-  );
-
-  it.effect("aborts the Codex run when the harness stream is interrupted", () =>
-    Effect.gen(function* () {
-      const calls: Array<CodexRunChatOptions> = [];
-      const runner = testRunner({
-        runChat: (options) => {
-          calls.push(options);
-          return toAsyncIterable(chunks);
-        },
-      });
-      const harness = Harness.make([runner]);
-
-      yield* harness.run(makeRequest()).pipe(Stream.take(1), Stream.runDrain);
-
-      assert.isTrue(calls[0]?.abortController.signal.aborted);
-    }),
-  );
-
-  it.effect("passes MCP bearer values only through the Codex child environment", () =>
-    Effect.gen(function* () {
-      const adapterCalls: Array<Parameters<typeof codexText>> = [];
-      const runner = testRunner({
-        makeAdapter: (model, config) => {
-          adapterCalls.push([model, config]);
-          return codexText(model, config);
-        },
-        runChat: () => toAsyncIterable(chunks),
-      });
-      const harness = Harness.make([runner]);
-
-      yield* Stream.runDrain(
-        harness.run(
-          makeRequest({
-            mcpSkills: [
-              {
-                name: "linear",
-                endpoint: "https://mcp.linear.app/mcp/readonly",
-                bearer: Redacted.make("mcp-secret"),
-              },
-            ],
-          }),
-        ),
-      );
-
-      const config = adapterCalls[0]?.[1];
-      if (!config) return assert.fail("adapter was not created");
-      const { projectedName, envName } = testMcpProjection("linear", 0);
-      assert.deepStrictEqual(config.config, {
-        [`mcp_servers.${projectedName}.url`]: '"https://mcp.linear.app/mcp/readonly"',
-        [`mcp_servers.${projectedName}.bearer_token_env_var`]: `"${envName}"`,
-      });
-      assert.deepStrictEqual(config.env, {
-        ...codexChildEnvironment(testEnvironment),
-        [envName]: "mcp-secret",
-      });
-      assert.strictEqual(config.env?.[envName], "mcp-secret");
-      const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
-      assert.notInclude(serialized, "mcp-secret");
-    }),
-  );
-
-  it.effect("projects every MCP skill into a distinct safe Codex identity", () =>
-    Effect.gen(function* () {
-      const adapterCalls: Array<Parameters<typeof codexText>> = [];
-      const runner = testRunner({
-        makeAdapter: (model, config) => {
-          adapterCalls.push([model, config]);
-          return codexText(model, config);
-        },
-        runChat: () => toAsyncIterable(chunks),
-      });
-      const harness = Harness.make([runner]);
-
-      yield* Stream.runDrain(
-        harness.run(
-          makeRequest({
-            mcpSkills: [
-              { name: "linear.api", endpoint: "https://mcp.example.com/public", bearer: null },
-              {
-                name: "linear-api",
-                endpoint: "https://mcp.example.com/private",
-                bearer: Redacted.make("rotated-secret"),
-              },
-            ],
-          }),
-        ),
-      );
-
-      const config = adapterCalls[0]?.[1];
-      if (!config) return assert.fail("adapter was not created");
-      const { projectedName: publicName } = testMcpProjection("linear.api", 0);
-      const { projectedName: privateName, envName: privateEnvName } = testMcpProjection("linear-api", 1);
-      assert.deepStrictEqual(config.config, {
-        [`mcp_servers.${publicName}.url`]: '"https://mcp.example.com/public"',
-        [`mcp_servers.${privateName}.url`]: '"https://mcp.example.com/private"',
-        [`mcp_servers.${privateName}.bearer_token_env_var`]: `"${privateEnvName}"`,
-      });
-      assert.deepStrictEqual(config.env, {
-        ...codexChildEnvironment(testEnvironment),
-        [privateEnvName]: "rotated-secret",
-      });
-      const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
-      assert.notInclude(serialized, "rotated-secret");
-    }),
-  );
-
-  it.effect("rebuilds the child environment with a rotated MCP bearer on every run", () =>
-    Effect.gen(function* () {
-      const adapterCalls: Array<Parameters<typeof codexText>> = [];
-      const runner = testRunner({
-        makeAdapter: (model, config) => {
-          adapterCalls.push([model, config]);
-          return codexText(model, config);
-        },
-        runChat: () => toAsyncIterable(chunks),
-      });
-      const harness = Harness.make([runner]);
-      const mcpSkill = (bearer: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
-        { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: Redacted.make(bearer) },
-      ];
-
-      yield* Stream.runDrain(harness.run(makeRequest({ mcpSkills: mcpSkill("first-secret") })));
-      yield* Stream.runDrain(harness.run(makeRequest({ mcpSkills: mcpSkill("rotated-secret") })));
-
-      const firstConfig = adapterCalls[0]?.[1];
-      const rotatedConfig = adapterCalls[1]?.[1];
-      if (!firstConfig || !rotatedConfig) return assert.fail("adapter was not created for both runs");
-      const { envName } = testMcpProjection("linear", 0);
-      assert.strictEqual(firstConfig.env?.[envName], "first-secret");
-      assert.strictEqual(rotatedConfig.env?.[envName], "rotated-secret");
-    }),
-  );
-
-  it.effect("preserves unexpected preflight exit codes as launch errors", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        codexExecutable: fakeCodexExecutable(" --fake-version-failure"),
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(harness.preflight(name, "full", null));
-
-      assert.strictEqual(error.reason, "launch");
-      assert.isFalse(error.retryable);
-      assert.include(error.message, "unexpected version failure");
-    }),
-  );
-
-  it.effect("rejects an outdated Codex version during preflight", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        codexExecutable: fakeCodexExecutable(" --fake-version=codex-cli_0.1.0"),
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(harness.preflight(name, "full", null));
-
-      assert.strictEqual(error.reason, "incompatible-harness");
-      assert.include(error.message, "Update Codex to >=0.149.0");
-    }),
-  );
-
-  it.effect("rejects a Run Plan without mandatory Sandbox projection", () =>
-    Effect.gen(function* () {
-      const base = makeRequest();
-      const invalid = {
-        ...base,
-        plan: new RunPlan({ ...base.plan, middleware: [] }),
-      } satisfies Harness.HarnessRequest;
-      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
-
-      const error = yield* runner
-        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
-        .pipe(Effect.flip);
-
-      assert.strictEqual(error.reason, "sandbox");
-    }),
-  );
-
-  it.effect("rejects a missing checkout before Codex launch", () =>
-    Effect.gen(function* () {
-      const invalid = makeRequest({ checkoutPath: "/missing-codex-checkout" });
-      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
-
-      const error = yield* runner
-        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
-        .pipe(Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})), Effect.flip);
-
-      assert.strictEqual(error.reason, "workspace");
-      assert.include(error.message, "/missing-codex-checkout");
-    }),
-  );
-
-  it.effect("rejects an unreadable checkout before Codex launch", () =>
-    Effect.gen(function* () {
-      const invalid = makeRequest({ checkoutPath: "/unreadable-codex-checkout" });
-      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
-      const unreadable = FileSystem.makeNoop({
-        stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
-      });
-
-      const error = yield* runner
-        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
-        .pipe(Effect.provideService(FileSystem.FileSystem, unreadable), Effect.flip);
-
-      assert.strictEqual(error.reason, "workspace");
-      assert.include(error.message, "cannot read");
-    }),
-  );
-
-  it.effect("classifies a missing preflight executable by exit code", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        codexExecutable: `node -e 'process.exit(127)'`,
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(harness.preflight(name, "full", null));
-
-      assert.strictEqual(error.reason, "missing-harness");
-      assert.isFalse(error.retryable);
-    }),
-  );
-
-  live(
-    "keeps a timed-out preflight retryable",
-    () =>
-      Effect.gen(function* () {
-        const runner = testRunner({
-          codexExecutable: `node -e 'process.stdin.resume()'`,
-        });
-        const harness = Harness.make([runner]);
-
-        const error = yield* Effect.flip(harness.preflight(name, "full", null));
-
-        assert.strictEqual(error.reason, "launch");
-        assert.isTrue(error.retryable);
-        assert.include(error.message, "readiness check");
-      }).pipe(Effect.provide(harnessRunnerLayer)),
-    10_000,
-  );
-
-  it.effect("reports a failed host login as unavailable credentials", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        codexExecutable: fakeCodexExecutable(" --fake-login-failure"),
-      });
-      const harness = Harness.make([runner]);
-
-      const readiness = yield* runner.readiness();
-      const error = yield* Effect.flip(harness.preflight(name, "full", null));
-
-      assert.strictEqual(readiness.authentication.status, "unavailable");
-      assert.strictEqual(error.reason, "credential");
-      assert.isFalse(error.retryable);
-      assert.include(error.message, "codex login");
-    }),
-  );
-
-  live(
-    "gives each Codex readiness command its own deadline",
-    () =>
-      Effect.gen(function* () {
-        const runner = testRunner({
-          codexExecutable: fakeCodexExecutable(" --fake-probe-delay=3000"),
-        });
-
-        const readiness = yield* runner.readiness();
-
-        assert.strictEqual(readiness.operational.status, "ready");
-      }).pipe(Effect.provide(harnessRunnerLayer)),
-    10_000,
-  );
-
-  it.effect("does not classify missing-executable wording as a permanent failure", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        runChat: () => toAsyncIterable([runErrorChunk("spawn codex ENOENT")]),
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
-
-      assert.strictEqual(error.reason, "turn");
-      assert.isTrue(error.retryable);
-      assert.include(error.message, "Install Codex CLI");
-    }),
-  );
-
-  it.effect("hands off a RUN_ERROR with a missing-executable code", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        runChat: () => toAsyncIterable([runErrorChunk("Codex could not start", { code: "ENOENT" })]),
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
-
-      assert.strictEqual(error.reason, "missing-harness");
-      assert.isFalse(error.retryable);
-    }),
-  );
-
-  it.effect("reads a missing-executable code from the raw RUN_ERROR payload", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        runChat: () =>
-          toAsyncIterable([
-            runErrorChunk("Codex could not start", { rawEvent: { error: { code: "ENOENT" } } }),
-          ]),
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
-
-      assert.strictEqual(error.reason, "missing-harness");
-      assert.isFalse(error.retryable);
-    }),
-  );
-
-  it.effect("finds a nested missing-executable code behind a generic RUN_ERROR code", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        runChat: () =>
-          toAsyncIterable([
-            runErrorChunk("Codex could not start", {
-              code: "unknown",
-              rawEvent: { error: { code: "ENOENT" } },
+    it.effect("projects one shared Workspace with context and fresh MCP SecretRefs", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const fs = yield* FileSystem.FileSystem;
+          const capturePath = yield* fs.makeTempFileScoped({ prefix: "codex-mcp-capture-" });
+          const projectedName = projectedMcpName("linear.api", 0);
+          const envName = mcpEnvironmentName(projectedName);
+          const harness = Harness.make([
+            runner({
+              codexExecutable: fakeCodexExecutable(
+                ` --capture-mcp-env ${envName} --capture-mcp-file ${capturePath}`,
+              ),
             }),
-          ]),
-      });
-      const harness = Harness.make([runner]);
+          ]);
+          const first = yield* collectEvents(
+            harness.run(
+              makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("first-secret") }),
+            ),
+          );
+          assert.strictEqual(yield* fs.readFileString(capturePath), "first-secret");
+          const rotated = yield* collectEvents(
+            harness.run(
+              makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("rotated-secret") }),
+            ),
+          );
+          assert.strictEqual(yield* fs.readFileString(capturePath), "rotated-secret");
 
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+          const capture = yield* structuredCapture(rotated);
+          const agents = yield* fs.readFileString(`${checkoutPath}/AGENTS.md`);
+          const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))([
+            ...first,
+            ...rotated,
+          ]);
 
-      assert.strictEqual(error.reason, "missing-harness");
-      assert.isFalse(error.retryable);
-    }),
-  );
-
-  it.effect("classifies a thrown missing-executable code", () =>
-    Effect.gen(function* () {
-      const failure = Object.assign(new Error("Codex could not start"), { code: "EACCES" });
-      const runner = testRunner({ runChat: () => failedChat(failure) });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
-
-      assert.strictEqual(error.reason, "missing-harness");
-      assert.isFalse(error.retryable);
-    }),
-  );
-
-  it.effect("does not classify missing-login wording as a permanent failure", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        runChat: () => toAsyncIterable([runErrorChunk("You are not logged in")]),
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
-
-      assert.strictEqual(error.reason, "turn");
-      assert.isTrue(error.retryable);
-      assert.include(error.message, "codex login");
-    }),
-  );
-
-  it.effect("keeps ordinary not-found turn errors retryable", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        runChat: () => toAsyncIterable([runErrorChunk("File not found: /repo/input.json")]),
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
-
-      assert.strictEqual(error.reason, "turn");
-      assert.isTrue(error.retryable);
-    }),
-  );
-
-  it.effect("keeps provider authentication turn errors retryable", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        runChat: () => toAsyncIterable([runErrorChunk("Provider authentication failed with status 401")]),
-      });
-      const harness = Harness.make([runner]);
-
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
-
-      assert.strictEqual(error.reason, "turn");
-      assert.isTrue(error.retryable);
-    }),
-  );
-
-  it.effect("completes a fresh run through the Codex adapter and native event loop", () =>
-    Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness();
-
-      const events = yield* Stream.runCollect(
-        harness.run(makeRequest({ checkoutPath: handle.id, session: null })),
-      );
-      const capture = yield* structuredCapture(events);
-
-      assert.include(capture.args, "workspace-write");
-      assert.include(capture.args, 'approval_policy="never"');
-      assert.notInclude(capture.args, "danger-full-access");
-      assert.include(capture.args, "sandbox_workspace_write.network_access=true");
-      assert.notInclude(capture.args, "resume");
-      assert.include(capture.prompt, "global rules");
-      assert.include(capture.prompt, "repo rules");
-      assert.include(capture.prompt, "Operating Instructions rules");
-      assert.include(
-        capture.prompt,
-        "Mandatory Operating Instructions: /home/operating-instructions/implement",
-      );
-      assert.include(capture.prompt, "implement the issue");
-      assert.strictEqual(capture.cwd?.split("/").at(-1), handle.id.split("/").at(-1));
-      assert.isTrue(
-        events.some(
-          (event) =>
-            event.type === "CUSTOM" &&
-            event.name === "codex.session-id" &&
-            Schema.is(Schema.Struct({ sessionId: Schema.Literal("fake-thread-1") }))(event.value),
-        ),
-      );
-      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
-    }),
-  );
-
-  it.effect("grants Codex access to linked-worktree Git metadata", () =>
-    Effect.gen(function* () {
-      const { handle } = yield* makeLiveHarness();
-      const { checkoutPath, commonDirectory } = yield* linkedWorktree(handle);
-
-      const harness = Harness.make([
-        codexRunner({ name, environment: process.env, codexExecutable: fakeCodexExecutable() }),
-      ]);
-      const events = yield* Stream.runCollect(harness.run(makeRequest({ checkoutPath, session: null })));
-      const capture = yield* structuredCapture(events);
-
-      assert.include(capture.args, "--add-dir");
-      assert.include(capture.args, commonDirectory);
-    }),
-  );
-
-  it.effect("probes authenticated Codex linked-worktree commits when explicitly enabled", () =>
-    Effect.gen(function* () {
-      const probe = yield* Config.string("COGWORK_LIVE_CODEX_PROBE").pipe(Config.withDefault("0"));
-      if (probe !== "1") return;
-      const { handle, harness } = yield* makeLiveHarness("codex");
-      const { checkoutPath } = yield* linkedWorktree(handle);
-      const events = yield* Stream.runCollect(
-        harness.run(
-          makeRequest({
-            checkoutPath,
-            session: null,
-            prompt:
-              "Create a file named codex-probe.txt, add it to Git, and commit it with the message codex linked worktree probe. Then return the required implement result. Do not open a pull request.",
-          }),
-        ),
-      );
-      const completions = structuredCompletions(events);
-
-      assert.lengthOf(completions, 1);
-      yield* Schema.decodeUnknownEffect(ImplementStageResult)(completions[0]?.object);
-      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
-      const commit = yield* Effect.promise(() =>
-        handle.process.exec(`git -C ${checkoutPath} log -1 --format=%s`),
-      );
-      assert.strictEqual(commit.exitCode, 0);
-      assert.strictEqual(commit.stdout.trim(), "codex linked worktree probe");
-    }),
-  );
-
-  it.effect("returns a plain capture when the stage has no output schema", () =>
-    Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness();
-      const events = yield* Stream.runCollect(
-        harness.run(makeRequest({ checkoutPath: handle.id, session: null, stage: "verify" })),
-      );
-      const response = events.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
-      if (!response) return assert.fail("fake Codex emitted no response");
-      const capture = yield* Schema.decodeUnknownEffect(
-        Schema.fromJsonString(
-          Schema.Struct({
-            args: Schema.Array(Schema.String),
-            prompt: Schema.String,
-          }),
-        ),
-      )(response);
-
-      assert.notInclude(capture.args, "--output-schema");
-      assert.include(capture.prompt, "implement the issue");
-    }),
-  );
-
-  it.effect("keeps an MCP bearer out of the Codex command, events, and worktree configuration", () =>
-    Effect.gen(function* () {
-      const { envName } = testMcpProjection("linear", 0);
-      const { handle, harness } = yield* makeLiveHarness(
-        fakeCodexExecutable(` --capture-mcp-env ${envName}`),
-      );
-      const events = yield* Stream.runCollect(
-        harness.run(
-          makeRequest({
-            checkoutPath: handle.id,
-            session: null,
-            mcpSkills: [
-              {
-                name: "linear",
-                endpoint: "https://mcp.linear.app/mcp/readonly",
-                bearer: Redacted.make("mcp-secret"),
-              },
-            ],
-          }),
-        ),
-      );
-      const capture = yield* structuredCapture(events);
-      const bearer = yield* Effect.promise(() => handle.fs.read("/workspace/.mcp-bearer"));
-      const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(events);
-
-      assert.strictEqual(bearer, "mcp-secret");
-      assert.isFalse(capture.hasCodexConfig ?? true);
-      assert.notInclude(capture.args.join(" "), "mcp-secret");
-      assert.notInclude(capture.prompt, "mcp-secret");
-      assert.notInclude(serializedEvents, "mcp-secret");
-    }),
-  );
-
-  it.effect("streams one structured triage result through the native Codex adapter", () =>
-    Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness();
-      const events = yield* Stream.runCollect(
-        harness.run(
-          makeRequest({
-            checkoutPath: handle.id,
-            session: null,
-            stage: "triage",
-            skill: "triage-agent",
-            prompt: "triage the issue",
-          }),
-        ),
-      );
-      const completions = structuredCompletions(events);
-      assert.lengthOf(completions, 1);
-      const result = yield* Schema.decodeUnknownEffect(TriageStageResult)(completions[0]?.object);
-      const capture = yield* Schema.decodeUnknownEffect(
-        Schema.fromJsonString(
-          Schema.Struct({
-            args: Schema.Array(Schema.String),
-            prompt: Schema.String,
-          }),
-        ),
-      )(result.proposal);
-      assert.include(capture.args, "--output-schema");
-      assert.include(capture.prompt, "triage the issue");
-      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
-      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
-    }),
-  );
-
-  it.effect("streams one structured follow-up result through the native Codex adapter", () =>
-    Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness();
-      const events = yield* Stream.runCollect(
-        harness.run(
-          makeRequest({
-            checkoutPath: handle.id,
-            session: null,
-            stage: "follow-up",
-            skill: "follow-up-agent",
-            prompt: "follow up on the pull request",
-          }),
-        ),
-      );
-      const completions = structuredCompletions(events);
-
-      assert.lengthOf(completions, 1);
-      yield* Schema.decodeUnknownEffect(FollowUpStageResult)(completions[0]?.object);
-      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
-    }),
-  );
-
-  it.effect("records a fresh Codex handle and resumes it natively with reinjected context", () =>
-    Effect.gen(function* () {
-      const { handle, harness: freshHarness } = yield* makeLiveHarness();
-      const freshEvents = yield* Stream.runCollect(
-        freshHarness.run(makeRequest({ checkoutPath: handle.id, session: null, prompt: "first run prompt" })),
-      );
-      const recordedHandle = sessionHandles(freshEvents)[0];
-      if (!recordedHandle) return assert.fail("fresh Codex run emitted no session handle");
-
-      const resumedHarness = Harness.make([
-        codexRunner({
-          name,
-          environment: process.env,
-          codexExecutable: `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}`,
+          assert.include(agents, "global rules");
+          assert.include(agents, "repo rules");
+          assert.include(agents, "Mandatory Operating Instructions: /operating-instructions/implement");
+          assert.strictEqual(capture.prompt, "implement the issue");
+          assert.isTrue(capture.hasCodexConfig);
+          assert.isFalse(yield* fs.exists(`${checkoutPath}/.codex/config.toml`));
+          assert.notInclude(serializedEvents, "first-secret");
+          assert.notInclude(serializedEvents, "rotated-secret");
         }),
-      ]);
-      const resumedEvents = yield* Stream.runCollect(
-        resumedHarness.run(makeRequest({ checkoutPath: handle.id, prompt: "current run prompt" })),
-      ).pipe(
-        Effect.provideService(SessionStore.SessionStore, {
-          ...sessionStore,
-          resumeHandle: () => Effect.succeed(recordedHandle),
-        }),
-      );
-      const capture = yield* structuredCapture(resumedEvents);
-
-      assert.include(capture.args, "resume");
-      assert.include(capture.args, recordedHandle);
-      assert.include(capture.args, "workspace-write");
-      assert.include(capture.args, 'approval_policy="never"');
-      assert.notInclude(capture.args, "danger-full-access");
-      assert.include(capture.prompt, "global rules");
-      assert.include(capture.prompt, "repo rules");
-      assert.include(capture.prompt, "Operating Instructions rules");
-      assert.include(
-        capture.prompt,
-        "Mandatory Operating Instructions: /home/operating-instructions/implement",
-      );
-      assert.include(capture.prompt, "current run prompt");
-      assert.notInclude(capture.prompt, "first run prompt");
-    }),
-  );
-
-  it.effect("terminates the Codex child process when the run is interrupted", () =>
-    Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness(fakeCodexExecutable(" --hang"));
-
-      yield* harness
-        .run(makeRequest({ checkoutPath: handle.id, session: null }))
-        .pipe(Stream.take(2), Stream.runDrain);
-
-      const pid = yield* Schema.decodeUnknownEffect(Schema.FiniteFromString)(
-        yield* Effect.promise(() => handle.fs.read("/workspace/.pid")),
-      );
-      const stopped = yield* Effect.promise(() =>
-        handle.process.exec(
-          `for attempt in $(seq 1 100); do state=$(ps -o stat= -p ${pid} 2>/dev/null); case "$state" in ""|Z*) exit 0 ;; esac; sleep 0.01; done; exit 1`,
-        ),
-      );
-      assert.strictEqual(stopped.exitCode, 0);
-    }),
-  );
-});
-
-describe("codexRuntimeConfig", () => {
-  it("maps each operation posture to Codex's bounded unattended sandbox", () => {
-    assert.deepStrictEqual(codexRuntimeConfig("high", "full"), {
-      approvalPolicy: "never",
-      sandboxMode: "workspace-write",
-      networkAccessEnabled: true,
-      modelReasoningEffort: "high",
-    });
-    assert.deepStrictEqual(codexRuntimeConfig("high", "read-only"), {
-      approvalPolicy: "never",
-      sandboxMode: "read-only",
-      modelReasoningEffort: "high",
-    });
-  });
-});
-
-describe("codexChildEnvironment", () => {
-  it("preserves Codex login prerequisites without forwarding host secrets", () => {
-    assert.deepStrictEqual(
-      codexChildEnvironment({
-        HOME: "/home/codex",
-        PATH: "/usr/bin",
-        CODEX_HOME: "/codex",
-        XDG_CONFIG_HOME: "/config",
-        GITHUB_TOKEN: "github-secret",
-        GH_TOKEN: "gh-secret",
-        OPENAI_API_KEY: "openai-secret",
-        CODEX_API_KEY: "codex-secret",
-      }),
-      {
-        HOME: "/home/codex",
-        PATH: "/usr/bin",
-        CODEX_HOME: "/codex",
-        XDG_CONFIG_HOME: "/config",
-      },
+      ),
     );
-  });
-});
 
-describe("renderContext", () => {
-  it("keeps every instruction layer ordered and exposes the provisioned instruction path", () => {
-    assert.deepStrictEqual(renderContext(assembled), [
-      "global rules",
-      "repo rules",
-      "Operating Instructions rules",
-      "Mandatory Operating Instructions: /home/operating-instructions/implement",
-    ]);
-  });
-});
+    it.effect("maps the Operation policy through TanStack's Codex controls", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fullHandle = yield* createSandbox();
+          const readOnlyHandle = yield* createSandbox();
+          const harness = Harness.make([runner()]);
+          const full = yield* runInRepository(harness, fullHandle);
+          const readOnly = yield* runInRepository(harness, readOnlyHandle, { stage: "triage" });
+          const fullCapture = yield* structuredCapture(full);
+          const triageResponse = readOnly
+            .filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT)
+            .map((event) => event.delta)
+            .find((delta): delta is string => typeof delta === "string");
+          if (!triageResponse) return assert.fail("fake Codex emitted no triage response");
+          const triageResult = yield* Schema.decodeUnknownEffect(TriageStageResult)(
+            yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(triageResponse),
+          );
+          const readOnlyCapture = yield* Schema.decodeEffect(Capture)(triageResult.proposal);
 
-describe("codexModelOptions", () => {
-  it("passes both the Codex thread handle and requested effort", () => {
-    assert.deepStrictEqual(codexModelOptions("thread-123", "high"), {
-      sessionId: "thread-123",
-      modelReasoningEffort: "high",
-    });
-  });
+          assert.include(fullCapture.args, "workspace-write");
+          assert.include(fullCapture.args, 'approval_policy="never"');
+          assert.include(fullCapture.args, "sandbox_workspace_write.network_access=true");
+          assert.include(readOnlyCapture.args, "read-only");
+          assert.include(readOnlyCapture.args, 'approval_policy="on-request"');
+          assert.notInclude(readOnlyCapture.args, "danger-full-access");
+        }),
+      ),
+    );
 
-  it("omits a missing thread handle", () => {
-    assert.deepStrictEqual(codexModelOptions(null, "medium"), {
-      modelReasoningEffort: "medium",
-    });
+    it.effect("preserves native events, metered usage, and one structured result", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const events = yield* runInRepository(Harness.make([runner()]), handle);
+          const capture = yield* structuredCapture(events);
+
+          assert.lengthOf(structuredCompletions(events), 1);
+          assert.include(capture.args, "--output-schema");
+          assert.isTrue(events.some((event) => event.type === EventType.RUN_STARTED));
+          assert.isTrue(events.some((event) => event.type === EventType.TEXT_MESSAGE_CONTENT));
+          assert.isTrue(events.some((event) => event.type === EventType.CUSTOM));
+          assert.deepNestedInclude(events.at(-1), {
+            type: EventType.RUN_FINISHED,
+            usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          });
+        }),
+      ),
+    );
+
+    it.effect("resumes through the native Codex thread handle", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const harness = Harness.make([runner()]);
+          const fresh = yield* runInRepository(harness, handle, { prompt: "first prompt" });
+          const nativeHandle = sessionHandles(fresh)[0];
+          if (!nativeHandle) return assert.fail("fresh Codex run emitted no session handle");
+          const resumed = yield* collectEvents(
+            harness.run(makeRequest({ checkoutPath: handle.id, prompt: "current prompt" })),
+          ).pipe(
+            Effect.provideService(SessionStore.SessionStore, {
+              ...sessionStore,
+              resumeHandle: () => Effect.succeed(nativeHandle),
+            }),
+          );
+          const capture = yield* structuredCapture(resumed);
+
+          assert.include(capture.args, "resume");
+          assert.include(capture.args, nativeHandle);
+          assert.include(capture.prompt, "current prompt");
+          assert.notInclude(capture.prompt, "first prompt");
+        }),
+      ),
+    );
+
+    it.effect("grants linked Worktrees their shared Git metadata", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const { checkoutPath, commonDirectory } = yield* linkedWorktree(handle);
+          const calls: Array<CodexTextConfig> = [];
+          const harness = Harness.make([
+            runner({
+              makeAdapter: (model, config) => {
+                calls.push(config);
+                return codexText(model, config);
+              },
+            }),
+          ]);
+          yield* harness.run(makeRequest({ checkoutPath, session: null })).pipe(Stream.runDrain);
+
+          assert.deepStrictEqual(calls[0]?.additionalDirectories, [commonDirectory]);
+        }),
+      ),
+    );
+
+    it.effect("forwards common Sandbox hooks", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const ready: Array<string> = [];
+          const harness = Harness.make([
+            runner({
+              fileHooks: {
+                onReady: (sandbox) => {
+                  ready.push(sandbox.id);
+                },
+              },
+            }),
+          ]);
+          yield* runInRepository(harness, handle);
+
+          assert.lengthOf(ready, 1);
+        }),
+      ),
+    );
+
+    it.effect("classifies emitted Codex authentication errors after preserving the event", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const fs = yield* FileSystem.FileSystem;
+          const events: Array<Harness.AgUiEvent> = [];
+          const harness = Harness.make([
+            runner({ codexExecutable: fakeCodexExecutable(" --fake-turn-error=not-logged-in") }),
+          ]);
+          const error = yield* harness
+            .run(makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("error-secret") }))
+            .pipe(
+              Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+              Effect.flip,
+            );
+
+          assert.isTrue(events.some((event) => event.type === EventType.RUN_ERROR));
+          assert.strictEqual(error.reason, "credential");
+          assert.isFalse(error.retryable);
+          assert.include(error.message, "codex login");
+          assert.isFalse(yield* fs.exists(`${checkoutPath}/.codex/config.toml`));
+        }),
+      ),
+    );
+
+    it.effect("keeps emitted provider failures retryable", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const harness = Harness.make([
+            runner({ codexExecutable: fakeCodexExecutable(" --fake-turn-error=network-reset") }),
+          ]);
+          const error = yield* harness
+            .run(makeRequest({ checkoutPath, session: null }))
+            .pipe(Stream.runDrain, Effect.flip);
+
+          assert.strictEqual(error.reason, "turn");
+          assert.isTrue(error.retryable);
+        }),
+      ),
+    );
+
+    it.effect("classifies thrown native launch failures", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const harness = Harness.make([
+            runner({
+              makeAdapter: () => {
+                throw Object.assign(new Error("spawn codex ENOENT"), { code: "ENOENT" });
+              },
+            }),
+          ]);
+          const error = yield* harness
+            .run(makeRequest({ checkoutPath, session: null }))
+            .pipe(Stream.runDrain, Effect.flip);
+
+          assert.strictEqual(error.reason, "missing-harness");
+          assert.isFalse(error.retryable);
+          assert.include(error.message, "Install Codex CLI");
+        }),
+      ),
+    );
+
+    it.effect("terminates the Codex child when the Harness stream is cancelled", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const fs = yield* FileSystem.FileSystem;
+          const harness = Harness.make([runner({ codexExecutable: fakeCodexExecutable(" --hang") })]);
+
+          yield* harness
+            .run(makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("abort-secret") }))
+            .pipe(Stream.take(2), Stream.runDrain);
+
+          const pid = yield* Schema.decodeEffect(Schema.FiniteFromString)(
+            yield* Effect.promise(() => handle.fs.read("/workspace/.pid")),
+          );
+          const stopped = yield* Effect.promise(() =>
+            handle.process.exec(
+              `for attempt in $(seq 1 100); do state=$(ps -o stat= -p ${pid} 2>/dev/null); case "$state" in ""|Z*) exit 0 ;; esac; sleep 0.01; done; exit 1`,
+            ),
+          );
+          assert.strictEqual(stopped.exitCode, 0);
+          assert.isFalse(yield* fs.exists(`${checkoutPath}/.codex/config.toml`));
+        }),
+      ),
+    );
+
+    it.effect("reports missing, incompatible, and logged-out Runtime Hosts", () =>
+      Effect.gen(function* () {
+        const missing = yield* runner({ codexExecutable: "missing-codex-150" }).readiness();
+        const outdated = yield* runner({
+          codexExecutable: fakeCodexExecutable(" --fake-version=codex-cli_0.1.0"),
+        }).readiness();
+        const loggedOut = yield* runner({
+          codexExecutable: fakeCodexExecutable(" --fake-login-failure"),
+        }).readiness();
+
+        assert.strictEqual(missing.installation.status, "missing");
+        assert.include(missing.diagnostics[0] ?? "", "Install Codex CLI");
+        assert.strictEqual(outdated.compatibility.status, "incompatible");
+        assert.include(outdated.diagnostics[0] ?? "", "Update Codex");
+        assert.strictEqual(loggedOut.authentication.status, "unavailable");
+        assert.include(loggedOut.authentication.diagnostic, "codex login");
+      }),
+    );
+
+    it.effect("runs the opt-in authenticated linked-Worktree compatibility probe", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const enabled = yield* Config.string("COGWORK_LIVE_CODEX_PROBE").pipe(Config.withDefault("0"));
+          if (enabled !== "1") return;
+          const handle = yield* createSandbox();
+          const { checkoutPath } = yield* linkedWorktree(handle);
+          const harness = Harness.make([
+            codexRunner({ name, environment: process.env, codexExecutable: "codex" }),
+          ]);
+          const events = yield* collectEvents(
+            harness.run(
+              makeRequest({
+                checkoutPath,
+                session: null,
+                prompt:
+                  "Create codex-probe.txt, add it to Git, and commit it with message codex linked worktree probe. Return the required implement result. Do not open a pull request.",
+              }),
+            ),
+          );
+
+          assert.lengthOf(structuredCompletions(events), 1);
+          yield* Schema.decodeUnknownEffect(ImplementStageResult)(structuredCompletions(events)[0]?.object);
+          const commit = yield* Effect.promise(() =>
+            handle.process.exec(`git -C ${checkoutPath} log -1 --format=%s`),
+          );
+          assert.strictEqual(commit.exitCode, 0);
+          assert.strictEqual(commit.stdout.trim(), "codex linked worktree probe");
+        }),
+      ),
+    );
   });
 });
