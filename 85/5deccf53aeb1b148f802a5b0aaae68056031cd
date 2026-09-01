@@ -1,0 +1,30 @@
+apps/cli/src/login.ts
+  s_e58acf5c13358a::t_94aba5f6c830fe 119
+apps/cli/src/login.test.ts
+  s_e58acf5c13358a::t_05514c0a2904f4 63-71,73,151-161
+  s_a3cf98a3a7a202::t_9210a8786f4cbe 162-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "855deccf53aeb1b148f802a5b0aaae68056031cd",
+  "prompts": {},
+  "sessions": {
+    "s_a3cf98a3a7a202": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05acb-fafb-7171-96fc-d64c4bee49bb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e58acf5c13358a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05ad9-ecd4-7e53-a68c-f0586af4bc40",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
