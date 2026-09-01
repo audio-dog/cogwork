@@ -1,0 +1,49 @@
+packages/cursor-acp/src/harness.ts
+  s_ffed0fe3f37454::t_fc930aba49b369 377
+  s_ffed0fe3f37454::t_9a0825024387ed 232-236,246,324-332,334-351,353-356,360-361,365-371,373,378-400,403,405-411,413-414,416
+  s_ffed0fe3f37454::t_78c68050d3cc12 333,352,357-359,415
+  s_ffed0fe3f37454::t_79b65c0e938bec 3,12,19,24,115,127,146,149,204,206
+packages/cursor-acp/src/harness.test.ts
+  s_ffed0fe3f37454::t_1084aaa64fda65 336,365,399-401
+  s_ffed0fe3f37454::t_1bc976c4caeec9 31,136,141-142,144,299,301-303,305-309,311-330,333,337-340,342-344,346-353
+  s_ffed0fe3f37454::t_48b5f721dc0035 2-10,255-267,273,275-278,280-281,357,363,366-372,374-378,380,384,390-392,394-396,398,402-405,407
+  s_ffed0fe3f37454::t_0ec1adcd2429b3 310,345
+  s_ffed0fe3f37454::t_9b412f45b87b2b 287,290,293-296
+  s_ffed0fe3f37454::t_64034c1b14d6a3 177,282-283,473-481,490-491,493-504,511-512
+  s_ffed0fe3f37454::t_e83d1b2b4a7e7e 291-292
+  s_ffed0fe3f37454::t_fc930aba49b369 166-175
+  s_ffed0fe3f37454::t_62adcba7a9a354 36,268-272,373,379,393
+  s_ffed0fe3f37454::t_f45a4f878f40c4 24,37-52,143,341,412-416,419-422,425-429,432-434
+  s_ffed0fe3f37454::t_b5da103ebb7826 176
+  s_ffed0fe3f37454::t_471aee5cf251fb 178
+  s_1e9c792070af79::t_0dfbc6413db6d3 436,438-440,443-445,447-448
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_ffed0fe3f37454::t_d4618c13a9abe1 22-34,71
+  s_ffed0fe3f37454::t_48b5f721dc0035 44,64-67
+  s_ffed0fe3f37454::t_1bc976c4caeec9 1,56,59-60,78
+  s_1e9c792070af79::t_0a9b896e91c39c 35,68-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "adcb9c2e669364046185c85857f354070dd5bc58",
+  "prompts": {},
+  "sessions": {
+    "s_1e9c792070af79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dce-8136-7451-91c5-a0226c2b232e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ffed0fe3f37454": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dd5-8ef9-7211-94eb-c47c2b6e29be",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
