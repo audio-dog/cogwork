@@ -1,4 +1,3 @@
-import { RequestError } from "@agentclientprotocol/sdk";
 import {
   AgUiEvent,
   agUiIsStructuredOutputComplete,
@@ -20,13 +19,7 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import {
-  cursorDiagnostics,
-  cursorModelOptions,
-  cursorRunner,
-  estimatedUsage,
-  interceptCursorTelemetry,
-} from "./harness";
+import { cursorModelOptions, cursorRunner, estimatedUsage, interceptCursorTelemetry } from "./harness";
 import { cursorModels } from "./models.generated";
 
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
@@ -293,6 +286,9 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
     assert.strictEqual(runner.capabilities.fileEventFidelity, "none");
     assert.isFalse(runner.capabilities.journal);
     assert.isFalse(runner.capabilities.takeover);
+    assert.isFalse(runner.execution.nonInteractive);
+    assert.isFalse(runner.execution.worktreeConfined);
+    assert.deepStrictEqual(runner.execution.profiles, []);
   });
 
   it.effect("uses host login and the shared mandatory Workspace projection", () =>
@@ -332,7 +328,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
         agentBin: `node ${fakeCursorAgent} --observe`,
       });
 
-      const events = yield* Stream.runCollect(Harness.make([runner]).run(projectedRequest));
+      const events = yield* Stream.runCollect(runner.run(projectedRequest));
       const output = Array.from(events)
         .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
         .map(({ delta }) => delta ?? "")
@@ -361,7 +357,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       );
       const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
 
-      const events = yield* Stream.runCollect(Harness.make([runner]).run(request(checkout.id)));
+      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
       const session = Array.from(events).find(
         (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
       );
@@ -395,9 +391,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
 
       const events = yield* Stream.runCollect(
-        Harness.make([runner])
-          .run(resumedRequest)
-          .pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
+        runner.run(resumedRequest).pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
       );
       const session = Array.from(events).find(
         (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
@@ -418,7 +412,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
         agentBin: `node ${fakeCursorAgent} --metered`,
       });
 
-      const events = yield* Stream.runCollect(Harness.make([runner]).run(request(checkout.id)));
+      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
       const finished = events.at(-1);
 
       assert.deepStrictEqual(finished && agUiUsage(finished), {
@@ -428,32 +422,66 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       });
     }),
   );
-});
 
-describe("cursorDiagnostics", () => {
-  it("keeps unrecognized failures retryable without reading launch words from the message", () => {
-    const error = cursorDiagnostics(new Error("model output says command not found"));
-    assert.strictEqual(error.reason, "turn");
-    assert.isTrue(error.retryable);
-  });
+  it.effect("refuses a blocking Cursor extension without hanging the turn", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const runner = cursorRunner({
+        name: cursorName,
+        agentBin: `node ${fakeCursorAgent} --blocking-extension`,
+      });
 
-  it("makes missing executables non-retryable launch failures", () => {
-    const error = cursorDiagnostics(Object.assign(new Error("Cursor could not start"), { code: "ENOENT" }));
-    assert.strictEqual(error.reason, "launch");
-    assert.isFalse(error.retryable);
-  });
+      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
 
-  it("makes unavailable ACP authentication non-retryable", () => {
-    const error = cursorDiagnostics(RequestError.authRequired());
-    assert.strictEqual(error.reason, "credential");
-    assert.isFalse(error.retryable);
-    assert.include(error.message, "Sign in to Cursor");
-  });
+      assert.isTrue(Array.from(events).some(agUiIsStructuredOutputComplete));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
 
-  it("preserves ACP retry classification", () => {
-    assert.isTrue(cursorDiagnostics(RequestError.internalError({}, "temporary")).retryable);
-    assert.isFalse(cursorDiagnostics(RequestError.methodNotFound("session/prompt")).retryable);
-  });
+  it.effect("exposes a new handle when ACP silently falls back after rejected load", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const resumedRequest = {
+        ...request(checkout.id),
+        session: resumedSessionId,
+      } satisfies Harness.HarnessRequest;
+      const resumedStore = { ...sessionStore, resumeHandle: () => Effect.succeed("missing-cursor-session") };
+      const runner = cursorRunner({
+        name: cursorName,
+        agentBin: `node ${fakeCursorAgent} --reject-load`,
+      });
+
+      const events = yield* Stream.runCollect(
+        runner.run(resumedRequest).pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
+      );
+      const session = Array.from(events).find(
+        (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
+      );
+
+      assert.deepStrictEqual(session?.value, { sessionId: "fake-cursor-session" });
+    }),
+  );
+
+  it.effect("surfaces post-launch transport failures through the Harness runner", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const runner = cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-151" });
+
+      const error = yield* runner.run(request(checkout.id)).pipe(Stream.runDrain, Effect.flip);
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
+    }),
+  );
 });
 
 describe("cursorModelOptions", () => {

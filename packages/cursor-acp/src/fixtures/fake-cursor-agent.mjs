@@ -68,6 +68,14 @@ class FakeCursorAgent {
   }
 
   async prompt(params) {
+    if (process.argv.includes("--blocking-extension")) {
+      const response = this.connection.extMethod("cursor/create_plan", { sessionId: params.sessionId });
+      const refused = await response.then(
+        () => false,
+        (error) => error?.code === -32601,
+      );
+      if (!refused) throw new Error("cursor/create_plan was not refused with method-not-found");
+    }
     const content = await responseContent(this.sessionParams);
     await this.connection.sessionUpdate({
       sessionId: params.sessionId,

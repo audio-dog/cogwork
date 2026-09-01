@@ -407,10 +407,10 @@ const preflightRunner = Effect.fn("Harness.preflightRunner")(function* (
 ) {
   const selection = selectionOfPreflightInput(input);
   const runner = yield* runnerFor(registry, selection.name);
-  const posture = unsupportedPosture(runner, selection.profile);
-  if (posture) return yield* unsupportedRunnerPosture(runner, selection.profile, posture);
   const catalog = yield* resolveCatalog(runner);
   yield* validateSelection(runner, catalog, selection);
+  const posture = unsupportedPosture(runner, selection.profile);
+  if (posture) return yield* unsupportedRunnerPosture(runner, selection.profile, posture);
   yield* validateAuthenticationMode(runner);
   yield* validateReadiness(runner, yield* runner.readiness());
   yield* runner.preflight(input);

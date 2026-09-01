@@ -112,7 +112,7 @@ const requireCursorCommand = Effect.fn("CursorRunner.requireCommand")(function* 
   return result;
 });
 
-const cursorNativeState = Effect.fn("CursorRunner.nativeState")(function* (agentBin: string) {
+const cursorRuntimeVersion = Effect.fn("CursorRunner.runtimeVersion")(function* (agentBin: string) {
   const versionResult = yield* requireCursorCommand(agentBin, "--version");
   const modelResult = yield* requireCursorCommand(agentBin, "--list-models");
   const models = parseCursorModelList(modelResult.stdout);
@@ -143,7 +143,7 @@ const unavailableCursorReadiness = (error: Harness.HarnessError) =>
   }) satisfies Harness.HarnessReadiness;
 
 const cursorReadiness = Effect.fn("CursorRunner.readiness")((agentBin: string) =>
-  cursorNativeState(agentBin).pipe(
+  cursorRuntimeVersion(agentBin).pipe(
     Effect.match({
       onFailure: unavailableCursorReadiness,
       onSuccess: (version) => {
@@ -201,7 +201,7 @@ const fromRequestError = (error: RequestError) => {
   });
 };
 
-export const cursorDiagnostics = (error: unknown) => {
+const cursorDiagnostics = (error: unknown) => {
   if (error instanceof RequestError) return fromRequestError(error);
   const message = HarnessBridge.messageFromUnknown(error);
   const launch = hasLaunchCode(error);
@@ -312,7 +312,7 @@ const generatedCatalog = Harness.staticCatalogSource(
   },
   { source: "cogwork-fallback", fallbackVersion: "cursor-models-generated-1" },
 );
-const cursorScrubEnv = ["GITHUB_TOKEN", "GH_TOKEN", "CURSOR_API_KEY"] as const;
+const cursorScrubEnv: ReadonlyArray<string> = ["GITHUB_TOKEN", "GH_TOKEN", "CURSOR_API_KEY"];
 
 const selectedCursorModel = (
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
@@ -356,7 +356,11 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     name: options.name,
     sessionKind: "opaque-handle",
     capabilities: {
-      execution: Harness.fullHarnessExecution,
+      execution: {
+        nonInteractive: false,
+        worktreeConfined: false,
+        profiles: [],
+      },
       profile: {
         authenticationModes: ["host"],
         session: { affinity: "runtime-host", fork: false, humanAttach: false },
