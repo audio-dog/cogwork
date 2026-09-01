@@ -242,16 +242,18 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-const stateBadgeVariant = (tone: ItemStateDescriptor["tone"]) => {
-  if (tone === "attention") return "warning";
-  if (tone === "ready") return "success";
-  if (tone === "muted") return "outline";
-  return "default";
-};
-
 function StateBadge({ descriptor }: { descriptor: ItemStateDescriptor }) {
   return (
-    <Badge variant={stateBadgeVariant(descriptor.tone)} className="self-start">
+    <Badge
+      variant="outline"
+      className={cn(
+        "self-start",
+        descriptor.tone === "live" && "border-transparent bg-primary/15 text-primary",
+        descriptor.tone === "attention" && "border-transparent bg-warning/15 text-warning",
+        descriptor.tone === "ready" && "border-transparent bg-success/15 text-success",
+        descriptor.tone === "muted" && "border-transparent bg-muted text-muted-foreground",
+      )}
+    >
       {descriptor.running && <RiPulseLine data-icon="inline-start" className="animate-pulse" />}
       {descriptor.label}
     </Badge>
@@ -410,7 +412,7 @@ function TriageProposal({ proposal }: { proposal: string }) {
   const long = proposal.length > 320;
   return (
     <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-3">
-      <Badge variant="warning" className="w-fit">
+      <Badge variant="outline" className="w-fit border-transparent bg-warning/15 text-warning">
         AI suggestion
       </Badge>
       <div className={cn("relative", long && !expanded && "max-h-32 overflow-hidden")}>
