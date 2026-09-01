@@ -1,0 +1,25 @@
+apps/desktop/src/main/quit.test.ts
+  s_0384338913b047::t_59c16911bc1954 1-46
+  s_0384338913b047::t_0226ddeba808f6 47-62
+apps/desktop/src/main/quit.ts
+  s_0384338913b047::t_87403fbe731173 1-27,29-30
+  s_0384338913b047::t_58d995e3dec798 28
+apps/desktop/src/main/index.ts
+  s_0384338913b047::t_2d75692b281e24 11,62,126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c90b2569b0daf67944fbeaf62bc8a0eac71815af",
+  "prompts": {},
+  "sessions": {
+    "s_0384338913b047": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e51-8507-7780-a257-5053eaff8553",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
