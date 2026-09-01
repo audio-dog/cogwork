@@ -100,11 +100,14 @@ const codexPreflightError = (cause: unknown) => {
       message: "Codex CLI is not installed or executable",
     });
   }
-  return new Harness.HarnessError({
-    reason: "credential",
-    retryable: false,
-    message: "Codex CLI is not authenticated",
-  });
+  if (missingLoginPattern.test(message)) {
+    return new Harness.HarnessError({
+      reason: "credential",
+      retryable: false,
+      message: "Codex CLI is not authenticated",
+    });
+  }
+  return launchError(message);
 };
 
 const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>

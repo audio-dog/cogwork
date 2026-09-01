@@ -457,6 +457,36 @@ describe("codexRunner", () => {
     }),
   );
 
+  it.live("preserves unexpected preflight failures as launch errors", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: `node -e 'process.stderr.write("unexpected login status failure"); process.exit(1)'`,
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+
+      const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
+      assert.include(error.message, "unexpected login status failure");
+    }),
+  );
+
+  it.live("classifies explicit preflight login failures as credential errors", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: `node -e 'process.stderr.write("You are not logged in"); process.exit(1)'`,
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+
+      const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+      assert.strictEqual(error.reason, "credential");
+      assert.isFalse(error.retryable);
+      assert.include(error.message, "not authenticated");
+    }),
+  );
+
   it.effect("gives an actionable handoff for a missing Codex binary", () =>
     Effect.gen(function* () {
       const runner = testRunner({
