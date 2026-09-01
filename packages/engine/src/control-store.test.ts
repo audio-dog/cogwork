@@ -378,6 +378,37 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("leaves a rename-shaped store untouched when its WAL is active", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { dir, storePath } = yield* temporaryStore();
+      const writer = yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const db = new DatabaseSync(storePath);
+          db.exec(
+            `${createStatements.join("\n").replace("`source_control` text", "`source_control_old` text")}
+             PRAGMA journal_mode=WAL;
+             PRAGMA wal_autocheckpoint=0;
+             INSERT INTO workspaces (
+               id, name, checkout_path, issue_tracker, source_control_old, linear_history
+             ) VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 'original', 0);`,
+          );
+          return db;
+        }),
+        (db) => Effect.sync(() => db.close()),
+      );
+
+      assert.isTrue(yield* fs.exists(`${storePath}-wal`));
+      const store = yield* storeAt(storePath);
+
+      assert.strictEqual(store.health, "unavailable");
+      assert.isTrue(store.health === "unavailable" && store.message.includes("WAL"));
+      assert.isTrue(yield* fs.exists(storePath));
+      assert.strictEqual(controlStoreBackups(yield* fs.readDirectory(dir)).length, 0);
+      assert.deepStrictEqual(writer.prepare("SELECT id FROM workspaces").all(), [{ id: "workspace-1" }]);
+    }),
+  );
+
   it.effect("serializes racing rename-shaped preflights", () =>
     Effect.gen(function* () {
       const actualPushSchema = pushSchemaMock.getMockImplementation();

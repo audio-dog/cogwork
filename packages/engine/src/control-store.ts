@@ -115,6 +115,21 @@ type ControlStoreSchemaChange = {
 };
 type ControlStoreClientOptions = Pick<SqliteClient.SqliteClientConfig, "busyTimeout">;
 
+type WalCheckpoint = {
+  readonly busy: number;
+  readonly checkpointed: number;
+  readonly log: number;
+};
+
+type SqliteJournalMode = {
+  readonly journal_mode: string;
+};
+
+const walBackupFailure = (error: unknown) =>
+  new ControlStoreBootError({
+    message: `Control store WAL preparation failed: ${messageOf(error)}`,
+  });
+
 const maximumRunEventAge = Duration.days(30);
 const schemaPreflightLockOptions = {
   realpath: false,
@@ -718,11 +733,44 @@ export const controlStoreClientLayer = (storePath: string, options: ControlStore
     ),
   );
 
+const prepareStoreForRenameBackup = Effect.fn("ControlStore.prepareStoreForRenameBackup")(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const [checkpoint] = yield* sql
+    .unsafe<WalCheckpoint>("PRAGMA wal_checkpoint(TRUNCATE);")
+    .pipe(Effect.mapError(walBackupFailure));
+  const checkpointComplete = checkpoint?.busy === 0 && checkpoint.log === checkpoint.checkpointed;
+  if (!checkpointComplete) {
+    return yield* new ControlStoreBootError({
+      message: "Control store WAL checkpoint did not complete before backup",
+    });
+  }
+  const [journalMode] = yield* sql
+    .unsafe<SqliteJournalMode>("PRAGMA journal_mode=DELETE;")
+    .pipe(Effect.mapError(walBackupFailure));
+  if (journalMode?.journal_mode.toLowerCase() === "delete") return;
+  return yield* new ControlStoreBootError({
+    message: "Control store WAL journal mode remained active before backup",
+  });
+});
+
+const ensureWalSidecarsAreAbsent = Effect.fn("ControlStore.ensureWalSidecarsAreAbsent")(function* (
+  storePath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const sidecars = [`${storePath}-wal`, `${storePath}-shm`];
+  const remaining = yield* Effect.filter(sidecars, (path) => fs.exists(path));
+  if (remaining.length === 0) return;
+  return yield* new ControlStoreBootError({
+    message: `Control store WAL sidecars remain before backup: ${remaining.join(", ")}`,
+  });
+});
+
 const backupRenameShapedStore = Effect.fn("ControlStore.backupRenameShapedStore")(function* (
   storePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  yield* ensureWalSidecarsAreAbsent(storePath);
   const timestamp = yield* Clock.currentTimeMillis;
   const reservationPath = yield* fs.makeTempDirectory({
     directory: path.dirname(storePath),
@@ -733,6 +781,11 @@ const backupRenameShapedStore = Effect.fn("ControlStore.backupRenameShapedStore"
   yield* fs.rename(storePath, backupPath);
   yield* Effect.logWarning("backed up rename-shaped Control store", { backupPath });
 });
+
+const backupRenameShapedStoreIfRequired = (storePath: string, required: boolean) => {
+  if (!required) return Effect.void;
+  return backupRenameShapedStore(storePath);
+};
 
 const withSchemaPreflightLock = <A, E, R>(storePath: string, effect: Effect.Effect<A, E, R>) =>
   Effect.acquireUseRelease(
@@ -776,12 +829,16 @@ const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
     withSchemaPreflightLock(
       storePath,
       Effect.scoped(
-        controlStoreSchemaStatements().pipe(Effect.provide(controlStoreClientLayer(storePath, options))),
-      ).pipe(
-        Effect.as<ControlStoreBootError | null>(null),
-        Effect.catchTag("RenameShapedControlStoreDiff", () =>
-          backupRenameShapedStore(storePath).pipe(Effect.as<ControlStoreBootError | null>(null)),
+        controlStoreSchemaStatements().pipe(
+          Effect.map(() => false),
+          Effect.catchTag("RenameShapedControlStoreDiff", () =>
+            prepareStoreForRenameBackup().pipe(Effect.map(() => true)),
+          ),
+          Effect.provide(controlStoreClientLayer(storePath, options)),
         ),
+      ).pipe(
+        Effect.flatMap((requiresBackup) => backupRenameShapedStoreIfRequired(storePath, requiresBackup)),
+        Effect.as<ControlStoreBootError | null>(null),
       ),
     ).pipe(
       Effect.catch((error) =>
