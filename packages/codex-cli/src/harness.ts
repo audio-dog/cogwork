@@ -378,7 +378,7 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
             modelOptions: codexModelOptions(handle, effort),
             outputSchema: plan.structuredOutput ?? undefined,
           });
-          return HarnessBridge.bridgeChat(stream, codexTurnError).pipe(
+          return HarnessBridge.bridgeChat(stream, codexTurnError, codexTurnError).pipe(
             Stream.mapError(addRemediation),
             Stream.ensuring(Effect.sync(() => abortController.abort())),
           );
