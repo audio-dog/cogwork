@@ -1,0 +1,21 @@
+packages/engine/src/session-store.test.ts
+  s_ac62944615aa54::t_a7ce0e68a8e758 16-18,34
+packages/engine/src/run-recorder.test.ts
+  s_ac62944615aa54::t_a7ce0e68a8e758 22-23,31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "92aaa0c7650942bef123299d8c10a491ced3f6e0",
+  "prompts": {},
+  "sessions": {
+    "s_ac62944615aa54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05cfc-3319-7401-b163-04658d88d209",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
