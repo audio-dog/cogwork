@@ -13,12 +13,16 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Pull from "effect/Pull";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
+import * as Schedule from "effect/Schedule";
+import * as SynchronizedRef from "effect/SynchronizedRef";
 import { Availability } from "./availability";
 import { type Classification, classify, type EligibleWork } from "./classify";
 import { ConnectionStore } from "./connection";
@@ -108,7 +112,7 @@ const pausedState = (workspace: RegisteredWorkspace, pause: Pause): WorkspaceRec
 
 interface Cooldown {
   readonly untilMillis: number;
-  readonly consecutive: number;
+  readonly backoff: (nowMillis: number) => Effect.Effect<Duration.Duration>;
 }
 
 interface CooldownEntry {
@@ -116,11 +120,30 @@ interface CooldownEntry {
   readonly retryAtMillis: number | null;
 }
 
-const baseBackoffMillis = 60_000;
-const maxBackoffMillis = 900_000;
+export const rateLimitBackoff = Schedule.exponential(Duration.minutes(1), 2).pipe(
+  Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, Duration.minutes(15)))),
+);
 
-const backoffMillis = (consecutive: number) =>
-  Math.min(baseBackoffMillis * 2 ** (consecutive - 1), maxBackoffMillis);
+const nextCooldown = Effect.fn("ReconcileWorker.nextCooldown")(function* (
+  current: Cooldown | undefined,
+  nowMillis: number,
+  retryAfterMillis: number | undefined,
+) {
+  const backoff =
+    current?.backoff ??
+    (yield* Schedule.toStep(rateLimitBackoff).pipe(
+      Effect.map(
+        (step) => (now: number) =>
+          step(now, undefined).pipe(
+            Pull.catchDone((duration) => Effect.succeed([duration, duration] as const)),
+            Effect.map(([, duration]) => duration),
+          ),
+      ),
+    ));
+  const fallback = yield* backoff(nowMillis);
+  const delay = retryAfterMillis === undefined ? fallback : Duration.millis(retryAfterMillis);
+  return { untilMillis: nowMillis + Duration.toMillis(delay), backoff } satisfies Cooldown;
+});
 
 const activeAt = (cooldown: Cooldown | undefined, nowMillis: number) =>
   cooldown !== undefined && cooldown.untilMillis > nowMillis ? cooldown : null;
@@ -172,12 +195,12 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
     observedAtMillis: 0,
     workspaces: [],
   });
-  const cooldowns = yield* Ref.make(new Map<string, Cooldown>());
+  const cooldowns = yield* SynchronizedRef.make(new Map<string, Cooldown>());
 
   const heldCooldown = Effect.fn("ReconcileWorker.heldCooldown")(function* (scope: string | null) {
     if (scope === null) return null;
     const nowMillis = yield* Clock.currentTimeMillis;
-    return activeAt((yield* Ref.get(cooldowns)).get(scope), nowMillis);
+    return activeAt((yield* SynchronizedRef.get(cooldowns)).get(scope), nowMillis);
   });
 
   // Only the first failure into a window logs, so a pinned credential does not warn on every tick.
@@ -190,15 +213,16 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
       const retryAtMillis = retryAfterMillis === undefined ? null : nowMillis + retryAfterMillis;
       return Effect.succeed({ entered: true, retryAtMillis });
     }
-    return Ref.modify(cooldowns, (current): readonly [CooldownEntry, Map<string, Cooldown>] => {
+    return SynchronizedRef.modifyEffect(cooldowns, (current) => {
       const held = activeAt(current.get(scope), nowMillis);
-      if (held) return [{ entered: false, retryAtMillis: held.untilMillis }, current];
-      const consecutive = (current.get(scope)?.consecutive ?? 0) + 1;
-      const cooldown: Cooldown = {
-        untilMillis: nowMillis + (retryAfterMillis ?? backoffMillis(consecutive)),
-        consecutive,
-      };
-      return [{ entered: true, retryAtMillis: cooldown.untilMillis }, new Map(current).set(scope, cooldown)];
+      if (held) {
+        const entry: CooldownEntry = { entered: false, retryAtMillis: held.untilMillis };
+        return Effect.succeed([entry, current] as const);
+      }
+      return Effect.map(nextCooldown(current.get(scope), nowMillis, retryAfterMillis), (cooldown) => {
+        const entry: CooldownEntry = { entered: true, retryAtMillis: cooldown.untilMillis };
+        return [entry, new Map(current).set(scope, cooldown)] as const;
+      });
     });
   };
 
@@ -247,7 +271,9 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
   });
 
   const clearCooldown = (scope: string | null) =>
-    scope === null ? Effect.void : Ref.update(cooldowns, (current) => withoutScope(current, scope));
+    scope === null
+      ? Effect.void
+      : SynchronizedRef.update(cooldowns, (current) => withoutScope(current, scope));
 
   const pollReadyWorkspace = Effect.fn("ReconcileWorker.pollReadyWorkspace")(function* (
     workspace: RegisteredWorkspace,

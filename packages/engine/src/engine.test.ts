@@ -803,6 +803,12 @@ describe("reconcile worker", () => {
       yield* TestClock.adjust("2 seconds");
       yield* worker.submit();
       assert.strictEqual(yield* Ref.get(observes), 2);
+      yield* TestClock.adjust("119 seconds");
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 2);
+      yield* TestClock.adjust("2 seconds");
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 3);
     }).pipe(Effect.provide(rateLimitedWorker()), Effect.scoped),
   );
 
