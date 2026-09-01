@@ -1,0 +1,20 @@
+package.json
+  s_c09cd36848ebc7::t_a0fcf6ce1bc083 16
+  s_c09cd36848ebc7::t_090de456823bff 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2aca1c8001ac2f8ea10fbf58e678d4c5e93a9a35",
+  "prompts": {},
+  "sessions": {
+    "s_c09cd36848ebc7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e80-2d7d-7600-b17e-4072a5cd9a6f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
