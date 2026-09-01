@@ -37,14 +37,15 @@ import {
   selectedRunForItem,
   subTabs,
 } from "../features/item-tab";
-import { statusLine, useRunActivity } from "../features/run-activity";
+import { useRunActivity } from "../features/run-activity";
+import { statusLine } from "../features/run-transcript";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
 import { useRightPanelStore } from "../store/right-panel";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
 import { Markdown } from "./markdown";
 import { PullRequest } from "./pull-request";
-import { RunDrillIn } from "./run-drill-in";
+import { RunTranscript } from "./run-transcript";
 import { SurfaceTab } from "./surface-tab";
 
 interface ItemTabState {
@@ -516,8 +517,10 @@ function PreviousAttempts() {
                     <CollapsibleTrigger className="w-fit cursor-pointer text-muted-foreground hover:text-foreground">
                       Show transcript
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-2 h-96 rounded-md border">
-                      <RunDrillIn run={attempt} />
+                    <CollapsibleContent className="mt-2 flex h-96 flex-col rounded-md border">
+                      <RunTranscript.Provider run={attempt}>
+                        <RunTranscript.Conversation />
+                      </RunTranscript.Provider>
                     </CollapsibleContent>
                   </Collapsible>
                 </li>
@@ -595,7 +598,7 @@ function LiveRunBody() {
   const {
     state: { run },
   } = useItemTab();
-  if (!run) {
+  if (!run)
     return (
       <SubTabBody>
         <Empty>
@@ -606,23 +609,12 @@ function LiveRunBody() {
         </Empty>
       </SubTabBody>
     );
-  }
-  if (run.status !== "running") {
-    return (
-      <SubTabBody>
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No live run</EmptyTitle>
-            <EmptyDescription>The latest completed run is shown below.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-        <div className="h-96 rounded-md border">
-          <RunDrillIn run={run} />
-        </div>
-      </SubTabBody>
-    );
-  }
-  return <RunDrillIn run={run} />;
+  return (
+    <RunTranscript.Provider run={run}>
+      <RunTranscript.Now />
+      <RunTranscript.Conversation />
+    </RunTranscript.Provider>
+  );
 }
 
 function PullRequestBody({ pr }: { pr: PrSummary }) {

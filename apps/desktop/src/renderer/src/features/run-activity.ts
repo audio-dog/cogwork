@@ -1,10 +1,4 @@
-import {
-  type AgUiEvent,
-  agUiTextDelta,
-  type RunActivity,
-  type RunId,
-  type RunSummary,
-} from "@cogwork/contracts";
+import { type AgUiEvent, agUiTextDelta, type RunActivity, type RunId } from "@cogwork/contracts";
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -234,38 +228,6 @@ export const foldTranscript = (activities: ReadonlyArray<RunActivity>) => {
   for (const activity of activities)
     transcriptHandlers[activity.event.type]?.(state, activity.event, activity);
   return state.entries;
-};
-
-export const statusLine = (
-  activities: ReadonlyArray<RunActivity>,
-  status: RunSummary["status"] = "running",
-) => {
-  if (status === "succeeded") return "Run finished.";
-  if (status === "failed" || status === "crashed" || status === "exhausted") return "Run failed.";
-  if (status === "interrupted") return "Run interrupted.";
-
-  const names = new Map<string, string>();
-  const latest = activities.at(-1);
-  if (!latest) return "Thinking…";
-
-  for (const activity of activities) {
-    if (activity.event.type !== "TOOL_CALL_START") continue;
-    names.set(activity.event.toolCallId ?? "", activity.event.toolCallName ?? "tool");
-  }
-
-  const { event } = latest;
-  if (event.type === "REASONING_MESSAGE_CONTENT") return "Thinking…";
-  if (event.type === "TEXT_MESSAGE_CONTENT") return "Responding…";
-  if (event.type === "TOOL_CALL_START") return `Running ${event.toolCallName ?? "tool"}…`;
-  if (event.type === "TOOL_CALL_ARGS") return `Running ${names.get(event.toolCallId ?? "") ?? "tool"}…`;
-  if (event.type === "TOOL_CALL_END" || event.type === "TOOL_CALL_RESULT") {
-    return `Ran ${names.get(event.toolCallId ?? "") ?? event.toolCallName ?? "tool"}`;
-  }
-  if (event.type === "RUN_FINISHED") return "Run finished.";
-  if (event.type !== "CUSTOM" || event.name !== FILE_DIFF_EVENT) return "Thinking…";
-
-  const diff = Option.getOrNull(decodeFileDiff(event.value));
-  return diff ? `Editing ${diff.path}` : "Thinking…";
 };
 
 type ActivityResult = typeof runActivityAtom extends (id: RunId) => Atom.Atom<infer V> ? V : never;
