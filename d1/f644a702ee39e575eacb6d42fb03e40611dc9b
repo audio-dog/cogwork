@@ -1,0 +1,23 @@
+docs/spec/performance-observability.md
+  s_4ae61d8d70e02e::t_2a14ab05cee9d2 87
+  s_4ae61d8d70e02e::t_3b197850cd0945 1-48,51-57,61-86,88-123
+  s_4ae61d8d70e02e::t_99c9568a877287 124
+  s_4ae61d8d70e02e::t_f31c653d9b3500 58-60
+  s_4ae61d8d70e02e::t_ae552c03212c70 49-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d1f644a702ee39e575eacb6d42fb03e40611dc9b",
+  "prompts": {},
+  "sessions": {
+    "s_4ae61d8d70e02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb42e325-567c-4173-8033-8e65733e9986",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
