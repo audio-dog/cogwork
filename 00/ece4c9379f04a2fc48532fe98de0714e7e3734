@@ -1,0 +1,14 @@
+pnpm-workspace.yaml
+  h_46518a29d4dd91 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "00ece4c9379f04a2fc48532fe98de0714e7e3734",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
