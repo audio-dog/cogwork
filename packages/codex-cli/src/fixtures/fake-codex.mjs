@@ -2,7 +2,7 @@ import { once } from "node:events";
 import { access, readFile, writeFile } from "node:fs/promises";
 
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
-const mcpBearer = Object.entries(process.env).find(([name]) => /^COGWORK_MCP_.*_BEARER$/.test(name))?.[1];
+const mcpBearer = Object.entries(process.env).findLast(([name]) => /^COGWORK_MCP_.*_BEARER$/.test(name))?.[1];
 const hasCodexConfig = await access(`${process.cwd()}/.codex/config.toml`).then(
   () => true,
   () => false,
