@@ -1,4 +1,4 @@
-import { WorkspaceInput, WorkspaceRegistration } from "@cogwork/contracts";
+import { WorkspaceRegistration } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -15,14 +15,6 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { controlStoreClientLayer } from "./control-store";
 import * as Registry from "./registry";
 
-const workspaceInput = Schema.decodeSync(WorkspaceInput)({
-  worktrees: { setup: ["pnpm install"], linkPaths: [".env"] },
-});
-const changedWorkspaceInput = Schema.decodeSync(WorkspaceInput)({
-  ...workspaceInput,
-  worktrees: { setup: ["pnpm test"], linkPaths: [".env"] },
-});
-const encodeWorkspaceInput = Schema.encodeSync(Schema.fromJsonString(WorkspaceInput));
 const registration = Schema.decodeSync(WorkspaceRegistration);
 
 const githubRegistration = (name: string, checkoutPath: string) =>
@@ -51,9 +43,20 @@ const makeCheckout = Effect.fn("test.makeCheckout")(function* (root: string, nam
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const checkoutPath = path.join(root, name);
-  const agentsPath = path.join(checkoutPath, ".agents");
-  yield* fs.makeDirectory(agentsPath, { recursive: true });
-  yield* fs.writeFileString(path.join(agentsPath, "workspace.json"), encodeWorkspaceInput(workspaceInput));
+  yield* fs.makeDirectory(path.join(checkoutPath, ".agents"), { recursive: true });
+  return checkoutPath;
+});
+
+const makeProbedCheckout = Effect.fn("test.makeProbedCheckout")(function* (root: string, name: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const checkoutPath = yield* makeCheckout(root, name);
+  const rulesPath = path.join(checkoutPath, ".agents", "rules");
+  yield* fs.makeDirectory(rulesPath, { recursive: true });
+  yield* fs.writeFileString(
+    path.join(rulesPath, "project.md"),
+    '---\ndescription: project\nglobs: "**/*"\nalwaysApply: true\n---\nProject rules',
+  );
   return checkoutPath;
 });
 
@@ -125,7 +128,51 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("registers a workspace whose checkout ships no Workspace input", () =>
+  it.effect("round-trips worktree and MCP settings through the Control store", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-settings-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = path.join(root, "settings");
+      yield* fs.makeDirectory(checkoutPath, { recursive: true });
+      const context = yield* Layer.build(Registry.layerAt(storePath));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+      const change = yield* management.register(
+        registration({
+          name: "settings",
+          checkoutPath,
+          issueTracker: { type: "linear", teams: ["ENG"] },
+          worktrees: { setup: ["pnpm install"], linkPaths: [".env"] },
+          mcpSkills: [
+            {
+              name: "linear",
+              endpoint: "https://mcp.linear.app/mcp/readonly",
+              auth: { type: "credential-store" },
+            },
+          ],
+        }),
+      );
+
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+      const reloadedContext = yield* Layer.build(Registry.layerAt(storePath));
+      const [reloaded] = Context.get(reloadedContext, Registry.WorkspaceRegistry).workspaces;
+
+      assert.deepStrictEqual(reloaded?.config.worktrees, {
+        setup: ["pnpm install"],
+        linkPaths: [".env"],
+      });
+      assert.deepStrictEqual(reloaded?.config.mcpSkills, [
+        {
+          name: "linear",
+          endpoint: "https://mcp.linear.app/mcp/readonly",
+          auth: { type: "credential-store" },
+        },
+      ]);
+    }),
+  );
+
+  it.effect("registers a workspace without repository settings", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -140,24 +187,7 @@ layer(NodeServices.layer)((it) => {
 
       if (change._tag === "Failed")
         return assert.fail(`expected registration to succeed: ${change.failure.message}`);
-      assert.isUndefined(change.workspace.config.playbook);
-    }),
-  );
-
-  it.effect("reports a diagnostic when the Workspace input path is not a readable file", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-unreadable-" });
-      const storePath = path.join(root, "control.db");
-      const checkoutPath = path.join(root, "shadowed");
-      yield* fs.makeDirectory(path.join(checkoutPath, ".agents", "workspace.json"), { recursive: true });
-      const context = yield* Layer.build(Registry.layerAt(storePath));
-      const management = Context.get(context, Registry.WorkspaceManagement);
-
-      const change = yield* management.register(githubRegistration("shadowed", checkoutPath));
-
-      assert.strictEqual(change._tag, "Failed");
+      assert.isUndefined(change.workspace.config.worktrees);
     }),
   );
 
@@ -167,24 +197,24 @@ layer(NodeServices.layer)((it) => {
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-stale-" });
       const storePath = path.join(root, "control.db");
-      const firstCheckout = yield* makeCheckout(root, "first");
-      const secondCheckout = yield* makeCheckout(root, "second");
+      const firstCheckout = yield* makeProbedCheckout(root, "first");
+      const secondCheckout = yield* makeProbedCheckout(root, "second");
       const gated = yield* Ref.make(false);
       const gatedReads = yield* Ref.make(0);
       const refreshRead = yield* Deferred.make<void>();
       const releaseRefresh = yield* Deferred.make<void>();
       const gatedFileSystem = FileSystem.FileSystem.of({
         ...fs,
-        readFileString: (file, encoding) =>
+        stat: (target) =>
           Ref.get(gated).pipe(
             Effect.flatMap((enabled) => {
-              if (!enabled) return fs.readFileString(file, encoding);
+              if (!enabled) return fs.stat(target);
               return Ref.getAndUpdate(gatedReads, (count) => count + 1).pipe(
                 Effect.flatMap((count) => {
-                  if (count > 0) return fs.readFileString(file, encoding);
+                  if (count > 0) return fs.stat(target);
                   return Deferred.succeed(refreshRead, undefined).pipe(
                     Effect.andThen(Deferred.await(releaseRefresh)),
-                    Effect.andThen(fs.readFileString(file, encoding)),
+                    Effect.andThen(fs.stat(target)),
                   );
                 }),
               );
@@ -216,7 +246,7 @@ layer(NodeServices.layer)((it) => {
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-race-" });
       const storePath = path.join(root, "control.db");
-      const checkoutPath = yield* makeCheckout(root, "race");
+      const checkoutPath = yield* makeProbedCheckout(root, "race");
       const reads = yield* Ref.make(0);
       const registerRead = yield* Deferred.make<void>();
       const refreshRead = yield* Deferred.make<void>();
@@ -224,12 +254,12 @@ layer(NodeServices.layer)((it) => {
       const releaseRefresh = yield* Deferred.make<void>();
       const gatedFileSystem = FileSystem.FileSystem.of({
         ...fs,
-        readFileString: (file, encoding) =>
+        stat: (target) =>
           Ref.getAndUpdate(reads, (count) => count + 1).pipe(
             Effect.flatMap((count) =>
               orderedRead(count, registerRead, releaseRegister, refreshRead, releaseRefresh),
             ),
-            Effect.andThen(fs.readFileString(file, encoding)),
+            Effect.andThen(fs.stat(target)),
           ),
       });
       const fileSystemLayer = Layer.succeed(FileSystem.FileSystem, gatedFileSystem);
@@ -266,9 +296,7 @@ layer(NodeServices.layer)((it) => {
       const storePath = path.join(root, "control.db");
       const firstCheckout = yield* makeCheckout(root, "first");
       const secondCheckout = yield* makeCheckout(root, "second");
-      const missingCheckout = path.join(root, "missing");
-      yield* fs.makeDirectory(path.join(missingCheckout, ".agents"), { recursive: true });
-      yield* fs.writeFileString(path.join(missingCheckout, ".agents", "workspace.json"), "{ not json");
+      const invalidCheckout = yield* makeCheckout(root, "invalid");
 
       const registryContext = yield* Layer.build(Registry.layerAt(storePath));
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
@@ -281,7 +309,13 @@ layer(NodeServices.layer)((it) => {
           issueTracker: { type: "github", repo: "acme/repo" },
           sourceControl: { type: "github", repo: "acme/repo" },
           linearHistory: false,
-          worktrees: { root: path.join(root, "worktrees"), remote: "upstream", baseBranch: "trunk" },
+          worktrees: {
+            root: path.join(root, "worktrees"),
+            remote: "upstream",
+            baseBranch: "trunk",
+            setup: ["pnpm install"],
+            linkPaths: [".env"],
+          },
           concurrency: 2,
         }),
       );
@@ -294,17 +328,21 @@ layer(NodeServices.layer)((it) => {
           linearHistory: false,
         }),
       );
-      const missingChange = yield* management.register(
+      const invalidChange = yield* management.register(
         registration({
-          name: "unreadable input",
-          checkoutPath: missingCheckout,
+          name: "invalid stored settings",
+          checkoutPath: invalidCheckout,
           issueTracker: { type: "github", repo: "acme/repo" },
           linearHistory: false,
           concurrency: 3,
         }),
       );
-      if (firstChange._tag === "Failed" || secondChange._tag === "Failed") {
-        return assert.fail("expected valid Workspace inputs to register");
+      if (
+        firstChange._tag === "Failed" ||
+        secondChange._tag === "Failed" ||
+        invalidChange._tag === "Failed"
+      ) {
+        return assert.fail("expected valid workspace registrations");
       }
       const first = firstChange.workspace;
       const second = secondChange.workspace;
@@ -322,25 +360,23 @@ layer(NodeServices.layer)((it) => {
         setup: ["pnpm install"],
         linkPaths: [".env"],
       });
-      assert.strictEqual(missingChange._tag, "Failed");
-      if (missingChange._tag !== "Failed") return assert.fail("expected unreadable input diagnostic");
-      if (missingChange.failure.name === undefined) return assert.fail("expected minted workspace identity");
-      const missingName = missingChange.failure.name;
-      assert.strictEqual(missingChange.failure.displayName, "unreadable input");
-      assert.strictEqual(missingChange.failure.workspaceLimit, 3);
-      const liveIssueTracker = Registry.findWorkspaceIssueTracker(liveRegistry, missingName);
+      const invalidName = invalidChange.workspace.config.name;
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces SET mcp_skills = '{ not json' WHERE id = ${invalidName}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      yield* liveRegistry.refresh;
+      const [failure] = liveRegistry.failures;
+      assert.strictEqual(failure?.name, invalidName);
+      assert.strictEqual(failure?.displayName, "invalid stored settings");
+      assert.strictEqual(failure?.workspaceLimit, 3);
+      const liveIssueTracker = Registry.findWorkspaceIssueTracker(liveRegistry, invalidName);
       assert.strictEqual(liveIssueTracker?.type, "github");
       assert.strictEqual(liveIssueTracker?.repo, "acme/repo");
       assert.strictEqual(liveRegistry.failures.length, 1);
-
-      yield* fs.writeFileString(
-        path.join(firstCheckout, ".agents", "workspace.json"),
-        encodeWorkspaceInput(changedWorkspaceInput),
-      );
-      yield* liveRegistry.refresh;
       assert.deepStrictEqual(
         Registry.findWorkspace(liveRegistry, first.config.name)?.config.worktrees?.setup,
-        ["pnpm test"],
+        ["pnpm install"],
       );
 
       const reloadedContext = yield* Layer.build(Registry.layerAt(storePath));
@@ -348,9 +384,9 @@ layer(NodeServices.layer)((it) => {
 
       assert.strictEqual(reloaded.workspaces.length, 2);
       assert.strictEqual(reloaded.failures.length, 1);
-      assert.strictEqual(reloaded.failures[0]?.displayName, "unreadable input");
+      assert.strictEqual(reloaded.failures[0]?.displayName, "invalid stored settings");
       assert.strictEqual(reloaded.failures[0]?.workspaceLimit, 3);
-      const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloaded, missingName);
+      const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloaded, invalidName);
       assert.strictEqual(reloadedIssueTracker?.type, "github");
       assert.strictEqual(reloadedIssueTracker?.repo, "acme/repo");
       assert.deepStrictEqual(reloaded.workspaces.map((workspace) => workspace.config.displayName).sort(), [
