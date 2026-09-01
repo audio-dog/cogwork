@@ -1469,6 +1469,30 @@ export const make = Effect.gen(function* () {
       stage: item.stage,
       runId,
     };
+    const prepareAcceptedRun = Effect.fn("Executor.prepareAcceptedRun")(function* (
+      previous: SessionId | null,
+      prepared: PreparedRun,
+    ) {
+      const checked = yield* evaluateAvailability(workspace, item.stage);
+      if (!checked.resolved || !checked.availability.available) {
+        yield* noteUnavailableResume(workspace, item, checked.availability.causes);
+        return null;
+      }
+      const currentOps = opsFor(workspace, item, checked.resolved);
+      const refreshedOps =
+        previous === item.resume?.session ? currentOps : freshRecoveryOps(workspace, item, currentOps);
+      const planned = yield* planSession(
+        runId,
+        workspace,
+        item,
+        refreshedOps,
+        prepared,
+        startedAtMillis,
+        previous,
+        observation,
+      );
+      return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
+    });
     return yield* runControl.run(
       runId,
       workspace,
@@ -1477,36 +1501,7 @@ export const make = Effect.gen(function* () {
           const selectedOps: StageOps =
             previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
           return selectedOps.prepare.pipe(
-            Effect.flatMap((prepared) =>
-              evaluateAvailability(workspace, item.stage).pipe(
-                Effect.flatMap((checked) => {
-                  if (!checked.resolved || !checked.availability.available) {
-                    return noteUnavailableResume(workspace, item, checked.availability.causes).pipe(
-                      Effect.map(() => null),
-                    );
-                  }
-                  const currentOps = opsFor(workspace, item, checked.resolved);
-                  const refreshedOps =
-                    previous === item.resume?.session
-                      ? currentOps
-                      : freshRecoveryOps(workspace, item, currentOps);
-                  return planSession(
-                    runId,
-                    workspace,
-                    item,
-                    refreshedOps,
-                    prepared,
-                    startedAtMillis,
-                    previous,
-                    observation,
-                  ).pipe(
-                    Effect.flatMap((planned) =>
-                      acceptPlannedRun(runId, workspace, item, startedAtMillis, planned),
-                    ),
-                  );
-                }),
-              ),
-            ),
+            Effect.flatMap((prepared) => prepareAcceptedRun(previous, prepared)),
             Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
             Effect.matchEffect({
               onFailure: (error) =>
