@@ -16,8 +16,10 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Metric from "effect/Metric";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
+import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { EligibleWork } from "./classify";
@@ -43,6 +45,10 @@ import { engineTestLayer } from "./testing/engine-test-layer";
 const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const session = Schema.decodeSync(SessionId)("sess-abc");
+
+const crashLoopsCapped = Metric.counter("cogwork_recovery_crash_loops_capped_total", {
+  description: "Recovery crash loops capped before another resume.",
+});
 
 const wsA: RegisteredWorkspace = {
   source: "a.workspace.ts",
@@ -246,13 +252,26 @@ interface HandOffCall {
   readonly outcome: HandOffOutcome;
 }
 
+interface RecoveryLog {
+  readonly annotations: Record<string, unknown>;
+  readonly message: unknown;
+}
+
+const recoveryProbeLogger = (logs: Queue.Queue<RecoveryLog>) =>
+  Logger.make(({ fiber, message }) => {
+    Queue.offerUnsafe(logs, {
+      message,
+      annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
+    });
+  });
+
 interface RecoveryProbeState {
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
   readonly attempts: Ref.Ref<ReadonlyArray<AttemptCall>>;
   readonly handoffs: Ref.Ref<ReadonlyArray<HandOffCall>>;
   readonly inFlight: Ref.Ref<ReadonlySet<WorkItemIdType>>;
   readonly ledger: RunLedger.RunLedgerService;
-  readonly logs: Queue.Queue<string>;
+  readonly logs: Queue.Queue<RecoveryLog>;
   readonly notes: Ref.Ref<ReadonlyArray<string>>;
   readonly paused: Ref.Ref<boolean>;
   readonly released: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
@@ -271,7 +290,7 @@ class RecoveryProbe extends Context.Service<RecoveryProbe, RecoveryProbeState>()
         handoffs: yield* Ref.make<ReadonlyArray<HandOffCall>>([]),
         inFlight: yield* Ref.make<ReadonlySet<WorkItemIdType>>(new Set()),
         ledger: yield* RunLedger.makeMemory,
-        logs: yield* Queue.unbounded<string>(),
+        logs: yield* Queue.unbounded<RecoveryLog>(),
         notes: yield* Ref.make<ReadonlyArray<string>>([]),
         paused: yield* Ref.make(false),
         released: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
@@ -550,11 +569,13 @@ describe("Recovery.recover", () => {
     Effect.gen(function* () {
       const probe = yield* RecoveryProbe;
       const recovery = yield* Recovery.Recovery;
+      const cappedMetric = Metric.withAttributes(crashLoopsCapped, { stage: "implement" });
+      const cappedBefore = (yield* Metric.value(cappedMetric)).count;
       const running = crashedRun("crash-c", 3, "running");
       yield* probe.ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
       yield* probe.ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
       yield* probe.ledger.insertRun(running);
-      yield* recovery.recover();
+      yield* recovery.recover().pipe(Effect.withLogger(recoveryProbeLogger(probe.logs)));
       const handoffs = yield* Ref.get(probe.handoffs);
       const note = handoffs[0]?.outcome.note ?? "";
       assert.include(note, "Exhausted after 3 consecutive implement crashes");
@@ -567,6 +588,17 @@ describe("Recovery.recover", () => {
       assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
       assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
       assert.strictEqual((yield* probe.ledger.getRun(running.id))?.status, "crashed");
+      assert.strictEqual((yield* Metric.value(cappedMetric)).count, cappedBefore + 1);
+      const logs = yield* Queue.takeAll(probe.logs);
+      const capped = logs.find(({ message }) =>
+        Array.isArray(message) ? message.includes("crash loop capped") : message === "crash loop capped",
+      );
+      assert.deepStrictEqual(capped?.annotations, {
+        workspace: "a",
+        item: "#1",
+        stage: "implement",
+      });
+      assert.deepStrictEqual(capped?.message, ["crash loop capped", { crashes: 3 }]);
     }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs] }))),
   );
 
@@ -616,16 +648,10 @@ describe("Recovery.recover", () => {
       const probe = yield* RecoveryProbe;
       const recovery = yield* Recovery.Recovery;
       yield* probe.ledger.insertRun(interrupted);
-      yield* recovery.recover().pipe(
-        Effect.withLogger(
-          Logger.make(({ message }) => {
-            Queue.offerUnsafe(probe.logs, String(message));
-          }),
-        ),
-      );
+      yield* recovery.recover().pipe(Effect.withLogger(recoveryProbeLogger(probe.logs)));
       assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
       const logs = yield* Queue.takeAll(probe.logs);
-      assert.isTrue(logs.some((line) => line.includes("claim recovery deferred")));
+      assert.isTrue(logs.some(({ message }) => String(message).includes("claim recovery deferred")));
     }).pipe(
       Effect.provide(
         recoveryLayer({

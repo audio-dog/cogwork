@@ -2,18 +2,16 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
   AgUiEvent,
-  AgUiEventUnion,
+  agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   agUiIsTerminal,
-  agUiSessionId,
   agUiTextDelta,
   agUiUsage,
 } from "./ag-ui";
 
-const decodeFlatEvent = Schema.decodeUnknownSync(AgUiEvent);
-const decodeEvent = Schema.decodeUnknownSync(AgUiEventUnion);
+const decodeEvent = Schema.decodeUnknownSync(AgUiEvent);
 
-describe("AgUiEventUnion", () => {
+describe("AgUiEvent", () => {
   it("decodes named events with typed payloads and extra keys", () => {
     const event = decodeEvent({
       type: "TOOL_CALL_START",
@@ -23,10 +21,10 @@ describe("AgUiEventUnion", () => {
       vendorTraceId: "trace-1",
     });
 
-    if (!AgUiEventUnion.guards.TOOL_CALL_START(event)) return assert.fail("expected tool start");
+    if (!AgUiEvent.guards.TOOL_CALL_START(event)) return assert.fail("expected tool start");
     assert.strictEqual(event.vendorTraceId, "trace-1");
     assert.strictEqual(
-      AgUiEventUnion.match(event, {
+      AgUiEvent.match(event, {
         RUN_STARTED: () => "run",
         TEXT_MESSAGE_START: () => "text-start",
         TEXT_MESSAGE_CONTENT: () => "text",
@@ -50,8 +48,8 @@ describe("AgUiEventUnion", () => {
     const started = decodeEvent({ type: "TEXT_MESSAGE_START", messageId: "m1", role: "assistant" });
     const finished = decodeEvent({ type: "TEXT_MESSAGE_END", messageId: "m1" });
 
-    assert.isTrue(AgUiEventUnion.guards.TEXT_MESSAGE_START(started));
-    assert.isTrue(AgUiEventUnion.guards.TEXT_MESSAGE_END(finished));
+    assert.isTrue(AgUiEvent.guards.TEXT_MESSAGE_START(started));
+    assert.isTrue(AgUiEvent.guards.TEXT_MESSAGE_END(finished));
   });
 
   it("decodes unnamed event types without dropping keys", () => {
@@ -63,26 +61,10 @@ describe("AgUiEventUnion", () => {
       nested: { phase: "build" },
     });
     assert.strictEqual(
-      AgUiEventUnion.matchOrElse(event, { RUN_STARTED: () => "run" }, ({ type }) => type),
+      AgUiEvent.matchOrElse(event, { RUN_STARTED: () => "run" }, ({ type }) => type),
       "VENDOR\nPROGRESS",
     );
-    assert.isFalse(AgUiEventUnion.guards.RUN_STARTED(event));
-  });
-
-  it("decodes every payload accepted by the flat schema", () => {
-    const session = decodeFlatEvent({
-      type: "CUSTOM",
-      name: "codex.session-id",
-      value: { sessionId: "session-1", extra: undefined },
-    });
-    const finished = decodeFlatEvent({ type: "RUN_FINISHED", runId: 42 });
-    const text = decodeFlatEvent({ type: "TEXT_MESSAGE_CONTENT", delta: undefined });
-
-    assert.deepStrictEqual(decodeEvent(session), session);
-    assert.deepStrictEqual(decodeEvent(finished), finished);
-    assert.deepStrictEqual(decodeEvent(text), text);
-    assert.strictEqual(agUiSessionId(session), "session-1");
-    assert.isTrue(agUiIsTerminal(finished));
+    assert.isFalse(AgUiEvent.guards.RUN_STARTED(event));
   });
 
   it("backs event helpers with discriminated variants", () => {
@@ -103,7 +85,15 @@ describe("AgUiEventUnion", () => {
     });
 
     assert.strictEqual(agUiTextDelta(text), "hello");
-    assert.strictEqual(agUiSessionId(session), "session-1");
+    assert.isTrue(agUiIsSessionHandleEvent(session));
+    if (!agUiIsSessionHandleEvent(session)) return assert.fail("expected session handle");
+    assert.strictEqual(session.value.sessionId, "session-1");
+    assert.isTrue(agUiIsStructuredOutputComplete(structured));
+    if (!agUiIsStructuredOutputComplete(structured)) return assert.fail("expected structured output");
+    assert.deepStrictEqual(structured.value, {
+      object: { outcome: "done" },
+      raw: '{"outcome":"done"}',
+    });
     assert.isTrue(agUiIsTerminal(finished));
     assert.deepStrictEqual(agUiUsage(finished), {
       inputTokens: 3,
@@ -111,6 +101,5 @@ describe("AgUiEventUnion", () => {
       totalTokens: 5,
       estimated: true,
     });
-    assert.isTrue(agUiIsStructuredOutputComplete(structured));
   });
 });

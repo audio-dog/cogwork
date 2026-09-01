@@ -15,6 +15,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -32,6 +33,19 @@ import { engineTestLayer } from "./testing/engine-test-layer";
 const id = Schema.decodeSync(WorkItemId);
 
 const never = Latch.makeUnsafe(false).await;
+
+const runsInFlight = Metric.gauge("cogwork_scheduler_runs_in_flight", {
+  description: "Runs currently executing across all workspaces.",
+});
+const budgetUsed = Metric.gauge("cogwork_scheduler_budget_used", {
+  description: "Runs charged against the current UTC day's budget.",
+});
+const budgetExhaustedTicks = Metric.counter("cogwork_scheduler_budget_exhausted_ticks_total", {
+  description: "Scheduler ticks that found eligible work after the daily budget was exhausted.",
+});
+const jobOutcomes = Metric.counter("cogwork_scheduler_job_outcomes_total", {
+  description: "Scheduled jobs completed by outcome.",
+});
 
 const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace => ({
   source: `${name}.workspace.ts`,
@@ -532,12 +546,16 @@ describe("Scheduler.tick", () => {
     Effect.gen(function* () {
       const scheduler = yield* Scheduler.Scheduler;
       const probe = yield* SchedulerProbe;
+      const exhaustedBefore = (yield* Metric.value(budgetExhaustedTicks)).count;
 
       assert.strictEqual(yield* scheduler.tick(), 1);
       yield* scheduler.awaitIdle;
+      assert.strictEqual((yield* Metric.value(runsInFlight)).value, 0);
+      assert.strictEqual((yield* Metric.value(budgetUsed)).value, 1);
 
       yield* republish(probe);
       assert.strictEqual(yield* scheduler.tick(), 0);
+      assert.strictEqual((yield* Metric.value(budgetExhaustedTicks)).count, exhaustedBefore + 1);
 
       yield* TestClock.adjust("25 hours");
       yield* republish(probe);
@@ -551,6 +569,56 @@ describe("Scheduler.tick", () => {
         ),
       ),
     ),
+  );
+
+  it.effect("records scheduler job exits without counting drain interruption as failure", () =>
+    Effect.gen(function* () {
+      const success = Metric.withAttributes(jobOutcomes, { outcome: "success" });
+      const failure = Metric.withAttributes(jobOutcomes, { outcome: "failure" });
+      const interrupt = Metric.withAttributes(jobOutcomes, { outcome: "interrupt" });
+      const before = {
+        success: (yield* Metric.value(success)).count,
+        failure: (yield* Metric.value(failure)).count,
+        interrupt: (yield* Metric.value(interrupt)).count,
+      };
+      const runSchedulerToIdle = (execute: ExecuteStub) =>
+        Effect.gen(function* () {
+          const scheduler = yield* Scheduler.Scheduler;
+          yield* scheduler.tick();
+          yield* scheduler.awaitIdle;
+        }).pipe(
+          Effect.provide(
+            schedulerLayer(
+              { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 10 },
+              { registry: [wsA], snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute },
+            ),
+          ),
+        );
+
+      yield* runSchedulerToIdle(succeed);
+      yield* runSchedulerToIdle(crashIn(wsA.config.name));
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.tick();
+        yield* scheduler.drain({ graceMillis: 10_000, abort: Effect.void });
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 2, perWorkspaceLimit: 2, dailyBudget: 10 },
+            {
+              registry: [wsA],
+              snapshots: [{ workspace: wsA, eligible: [work(1), work(2)] }],
+              execute: waitForGate,
+            },
+          ),
+        ),
+      );
+
+      assert.strictEqual((yield* Metric.value(success)).count, before.success + 1);
+      assert.strictEqual((yield* Metric.value(failure)).count, before.failure + 1);
+      assert.strictEqual((yield* Metric.value(interrupt)).count, before.interrupt + 2);
+      assert.strictEqual((yield* Metric.value(runsInFlight)).value, 0);
+    }),
   );
 
   it.effect("picks an item once per generation and again once a newer snapshot lands", () =>

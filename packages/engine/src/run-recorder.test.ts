@@ -59,7 +59,7 @@ const text = (delta: string) => ({ type: "TEXT_MESSAGE_CONTENT", delta }) satisf
 const ledgerEvent = (seq: number, agUi: AgUiEvent, atMillis = 1000 + seq): RunEvent => ({
   seq,
   type: agUi.type,
-  name: agUi.name ?? null,
+  name: typeof agUi.name === "string" ? agUi.name : null,
   data: JSON.stringify(agUi),
   atMillis,
 });

@@ -1,6 +1,6 @@
 import {
-  agUiSessionId,
-  agUiStructuredOutputComplete,
+  agUiIsSessionHandleEvent,
+  agUiIsStructuredOutputComplete,
   FollowUpStageResult,
   HarnessName,
   ImplementStageResult,
@@ -213,10 +213,10 @@ const failedChat = (error: unknown): AsyncIterable<StreamChunk> => ({
 });
 
 const structuredCompletions = (events: ReadonlyArray<Harness.AgUiEvent>) =>
-  events.flatMap((event) => {
-    const completion = agUiStructuredOutputComplete(event);
-    return completion === null ? [] : [completion];
-  });
+  events.flatMap((event) => (agUiIsStructuredOutputComplete(event) ? [event.value] : []));
+
+const sessionHandles = (events: ReadonlyArray<Harness.AgUiEvent>) =>
+  events.flatMap((event) => (agUiIsSessionHandleEvent(event) ? [event.value.sessionId] : []));
 
 const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
   const completion = structuredCompletions(events)[0];
@@ -851,7 +851,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
       const freshEvents = yield* Stream.runCollect(
         freshHarness.run(makeRequest({ checkoutPath: handle.id, session: null, prompt: "first run prompt" })),
       );
-      const recordedHandle = freshEvents.map(agUiSessionId).find((value) => value !== null);
+      const recordedHandle = sessionHandles(freshEvents)[0];
       if (!recordedHandle) return assert.fail("fresh Codex run emitted no session handle");
 
       const resumedHarness = Harness.make([
