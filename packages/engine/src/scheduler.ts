@@ -39,6 +39,9 @@ const budgetExhaustedTicks = Metric.counter("cogwork_scheduler_budget_exhausted_
 const jobOutcomes = Metric.counter("cogwork_scheduler_job_outcomes_total", {
   description: "Scheduled jobs completed by outcome.",
 });
+export const schedulerTickDuration = Metric.timer("cogwork_scheduler_tick_duration", {
+  description: "Time to plan and dispatch one scheduler tick.",
+});
 
 export interface SchedulerConfig {
   readonly globalLimit: number;
@@ -322,7 +325,7 @@ export const make = (config: SchedulerConfig) =>
         discard: true,
       });
       return planned.picks.length;
-    });
+    }, Effect.trackDuration(schedulerTickDuration));
 
     const awaitIdle = FiberSet.awaitEmpty(jobs);
 
