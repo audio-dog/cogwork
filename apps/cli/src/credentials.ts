@@ -14,7 +14,11 @@ const directoryMode = 0o700;
 const decodeFile = Schema.decodeUnknownEffect(Schema.fromJsonString(CredentialStore.CredentialFileWire));
 const encodeFile = Schema.encodeEffect(Schema.fromJsonString(CredentialStore.CredentialFile));
 
-const emptyContents: CredentialStore.CredentialFileContents = { credentials: [], providerKeys: [] };
+const emptyContents: CredentialStore.CredentialFileContents = {
+  credentials: [],
+  providerKeys: [],
+  connectionCredentials: [],
+};
 
 export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -41,9 +45,10 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
     contents: CredentialStore.CredentialFileContents,
   ) {
     const encoded = yield* encodeFile({
-      version: 2,
+      version: 3,
       credentials: contents.credentials,
       providerKeys: contents.providerKeys,
+      connectionCredentials: contents.connectionCredentials,
     }).pipe(
       Effect.mapError(
         () => new CredentialStore.CredentialError({ account, message: `could not serialize ${filePath}` }),
@@ -89,11 +94,54 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
     yield* write(key.provider, { ...contents, providerKeys: [...others, key] });
   });
 
+  const saveConnectionCredential = Effect.fn("credentials.saveConnectionCredential")(function* (
+    credential: CredentialStore.StoredConnectionCredential,
+  ) {
+    const contents = yield* readForWrite(credential.connectionId);
+    const others = contents.connectionCredentials.filter(
+      (entry) => entry.connectionId !== credential.connectionId,
+    );
+    yield* write(credential.connectionId, {
+      ...contents,
+      connectionCredentials: [...others, credential],
+    });
+  });
+
+  const removeConnectionCredential = Effect.fn("credentials.removeConnectionCredential")(function* (
+    connectionId: string,
+  ) {
+    const contents = yield* readForWrite(connectionId);
+    yield* write(connectionId, {
+      ...contents,
+      connectionCredentials: contents.connectionCredentials.filter(
+        (entry) => entry.connectionId !== connectionId,
+      ),
+    });
+  });
+
+  const removeCredential = Effect.fn("credentials.removeCredential")(function* (
+    issueTracker: string,
+    organization: string,
+  ) {
+    const account = `${issueTracker}/${organization}`;
+    const contents = yield* readForWrite(account);
+    yield* write(account, {
+      ...contents,
+      credentials: contents.credentials.filter(
+        (entry) => entry.issueTracker !== issueTracker || entry.organization !== organization,
+      ),
+    });
+  });
+
   return {
     load: Effect.map(read(), (contents) => contents?.credentials ?? []),
     save,
     loadProviderKeys: Effect.map(read(), (contents) => contents?.providerKeys ?? []),
     saveProviderKey,
+    loadConnectionCredentials: Effect.map(read(), (contents) => contents?.connectionCredentials ?? []),
+    saveConnectionCredential,
+    removeConnectionCredential,
+    removeCredential,
   } satisfies CredentialStore.StoredCredentials;
 });
 

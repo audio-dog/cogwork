@@ -10,10 +10,10 @@ skills-lock.json
 # Local generator output when targeting this repo as a project dir.
 # `settings.json` is authored here (it carries the worktree-setup hook), so it is
 # re-included — which needs `/*` rather than `/`, since git cannot un-ignore a file
-# inside an ignored directory.
+# inside an ignored directory. `.mcp.json` is authored here too — it carries the
+# desktop-app attachment every harness needs — so it is not ignored at all.
 /.claude/*
 !/.claude/settings.json
-/.mcp.json
 
 # `drizzle-kit skills` writes its bundled skills into the package that owns drizzle-kit, plus a
 # Claude Code symlink mirror. They ship inside the dependency and `@tanstack/intent` already
@@ -27,6 +27,7 @@ packages/*/.claude/
 
 # Sandbox projection written by the TanStack AI local-process harness at runtime
 .tanstack-projected*
+.tanstack-output-schema*
 
 # Vendored reference source (Effect v4, etc.), pinned by `pnpm vendor`.
 # No trailing slash: a real dir in the main checkout, a symlink in a hydrated worktree.

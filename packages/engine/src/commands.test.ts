@@ -1,7 +1,10 @@
 import {
+  Connection,
+  type ConnectionEstablishment,
   type ContributionSettingUpdate,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
+  connectionIdOf,
   type DaemonLimitUpdate,
   DaemonRpcs,
   HarnessName,
@@ -35,6 +38,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
@@ -58,9 +62,24 @@ const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
   checkoutPath: "/repos/acme",
   gitRemote: "git@github.com:acme/repo.git",
-  issueTracker: { type: "github", repo: "acme/repo" },
+  issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/repo" },
   linearHistory: false,
   concurrency: 2,
+});
+const unboundRegistration = Schema.decodeSync(WorkspaceRegistration)({
+  name: "unbound",
+  checkoutPath: "/repos/unbound",
+  issueTracker: { type: "github", repo: "acme/repo" },
+  sourceControl: { type: "github", repo: "acme/repo" },
+});
+const mismatchedRegistration = Schema.decodeSync(WorkspaceRegistration)({
+  name: "mismatch",
+  checkoutPath: "/repos/mismatch",
+  issueTracker: {
+    type: "linear",
+    connectionId: "github/acme",
+    teams: ["ENG"],
+  },
 });
 
 const registered: Registry.RegisteredWorkspace = {
@@ -180,6 +199,32 @@ const pluginManagerLayer = Layer.succeed(PluginManager, {
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
   contributions: () => Effect.succeed([]),
 });
+const connectionStoreLayerWithStatus = (
+  status: "established" | "revoked",
+  existing: Connection | null = null,
+  remove: ConnectionStoreService["remove"] = () => Effect.die("unexpected Connection remove"),
+) =>
+  Layer.succeed(ConnectionStore, {
+    overview: Effect.succeed({ connections: [] }),
+    find: (connectionId) =>
+      Effect.succeed(
+        Connection.make({
+          id: connectionId,
+          system: connectionId.startsWith("linear/") ? "linear" : "github",
+          account: "test",
+          status,
+        }),
+      ),
+    findSystem: () => Effect.succeed(existing),
+    bearer: () => Effect.die("unexpected Connection bearer"),
+    readiness: () => Effect.succeed({ _tag: "Ready" }),
+    requireReady: () => Effect.void,
+    requireSystemReady: () => Effect.void,
+    establish: () => Effect.die("unexpected Connection establish"),
+    revoke: () => Effect.die("unexpected Connection revoke"),
+    remove,
+  });
+const connectionStoreLayer = connectionStoreLayerWithStatus("established");
 
 const installedPlugin = (pluginId: string) =>
   ({
@@ -238,6 +283,7 @@ const picture: ControlStorePicture = {
     revision: 0,
   },
   operationSettings: [],
+  connections: [],
   pluginInstalls: [],
   contributionSettings: [],
 };
@@ -266,6 +312,7 @@ const controlStoreStub = ({
         revision: picture.daemonLimits.revision + 1,
       },
       operationSettings: picture.operationSettings,
+      connections: picture.connections,
       pluginInstalls: picture.pluginInstalls,
       contributionSettings: picture.contributionSettings,
     }),
@@ -285,6 +332,9 @@ const controlStoreStub = ({
     seed,
     picture: read,
     setDaemonLimit,
+    establishConnection: () => Effect.succeed(picture),
+    revokeConnection: () => Effect.succeed(picture),
+    removeConnection: () => Effect.succeed(picture),
     updateOperationSetting,
     installPlugin: () => Effect.succeed(picture),
     uninstallPlugin: () => Effect.succeed(picture),
@@ -298,6 +348,7 @@ const daemonLayer = (
   controlStore = controlStoreStub(),
   registries = registryServices,
   plugins: Layer.Layer<PluginManager> = pluginManagerLayer,
+  connections = connectionStoreLayer,
 ) =>
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -310,6 +361,7 @@ const daemonLayer = (
     Layer.provideMerge(runLedgerLayer),
     Layer.provideMerge(RunControl.layer),
     Layer.provideMerge(controlStore),
+    Layer.provideMerge(connections),
     Layer.provideMerge(plugins),
     Layer.provideMerge(source),
   );
@@ -895,6 +947,49 @@ describe("SetContributionSetting", () => {
 });
 
 describe("RegisterWorkspace", () => {
+  // A registration that names no Connection is not a Connection problem, and saying so sends the
+  // reader to a Connections screen where everything is already established and fine.
+  it.effect("names the unset field when a registration binds no Connection", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const error = yield* Effect.flip(client.RegisterWorkspace({ registration: unboundRegistration }));
+
+      assert.include(error.message, "issueTracker names no Connection");
+      assert.include(error.message, '"issueTracker.connectionId"');
+      assert.include(error.message, "github/<account>");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("rejects a tracker bound to the wrong Connection system", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const error = yield* Effect.flip(client.RegisterWorkspace({ registration: mismatchedRegistration }));
+
+      assert.include(error.message, "not linear");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("rejects a tracker bound to a revoked Connection", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const error = yield* Effect.flip(client.RegisterWorkspace({ registration: acmeRegistration }));
+
+      assert.include(error.message, "not an established Connection");
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          pluginManagerLayer,
+          connectionStoreLayerWithStatus("revoked"),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
   it.effect("returns the minted workspace and publishes it once", () => {
     const registries = registrationServices();
     return Effect.gen(function* () {
@@ -992,6 +1087,101 @@ describe("RegisterWorkspace", () => {
           schedulerStub(),
           controlStoreStub({ seed: stored, read: Effect.succeed(stored) }),
           registries,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+});
+
+describe("Connection mutations", () => {
+  const existing = Connection.make({
+    id: connectionIdOf("linear", "acme"),
+    system: "linear",
+    account: "acme",
+    status: "established",
+  });
+  const layer = daemonLayer(
+    trackerLayer({}),
+    schedulerStub(),
+    controlStoreStub(),
+    registryServices,
+    pluginManagerLayer,
+    connectionStoreLayerWithStatus("established", existing),
+  );
+  const establishment: ConnectionEstablishment = {
+    system: "linear",
+    account: "other",
+    source: { _tag: "Stored" },
+  };
+
+  it.effect("directs account switches through removal", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const establishError = yield* Effect.flip(client.EstablishConnection({ establishment }));
+      const reconnectError = yield* Effect.flip(client.ReconnectConnection({ establishment }));
+
+      assert.strictEqual(
+        establishError.message,
+        "Connection already exists. Use re-connect for the same account, or remove it before connecting to a different account.",
+      );
+      assert.strictEqual(
+        reconnectError.message,
+        'Connection is established for "acme". Remove it before connecting to "other".',
+      );
+    }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+
+  it.effect("warns when a failed workspace uses the removed source-control Connection", () => {
+    const github = connectionIdOf("github", "acme");
+    const failed = Schema.decodeSync(WorkspaceConfig)({
+      name: "failed",
+      checkoutPath: "/repos/failed",
+      issueTracker: {
+        type: "linear",
+        connectionId: "linear/acme",
+        teams: ["ENG"],
+      },
+      sourceControl: {
+        type: "github",
+        connectionId: github,
+        repo: "acme/repo",
+      },
+      harness: { preferred: "cursor" },
+    });
+    const registries = Layer.mergeAll(
+      Layer.succeed(
+        Registry.WorkspaceRegistry,
+        Registry.readOnlyRegistry({
+          workspaces: [],
+          failures: [
+            {
+              name: failed.name,
+              displayName: "Failed",
+              source: failed.checkoutPath,
+              message: "invalid Workspace input",
+              issueTracker: failed.issueTracker,
+              sourceControl: failed.sourceControl,
+            },
+          ],
+        }),
+      ),
+      Registry.managementReadOnlyLayer,
+    );
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const result = yield* client.RemoveConnection({ connectionId: github });
+
+      assert.deepStrictEqual(result.danglingWorkspaces, [failed.name]);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub(),
+          registries,
+          pluginManagerLayer,
+          connectionStoreLayerWithStatus("established", null, () => Effect.void),
         ),
       ),
       Effect.scoped,

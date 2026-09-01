@@ -41,6 +41,7 @@ import * as Stream from "effect/Stream";
 import { Availability, availabilityCauseSummary } from "./availability";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
+import { ConnectionStore } from "./connection";
 import { ContextAssembler, type ContextAssemblerError } from "./context-assembler";
 import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
@@ -78,7 +79,12 @@ import {
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { SourceControlProvider } from "./source-control";
-import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
+import {
+  branchName,
+  type WorktreeDivergedError,
+  WorktreeManager,
+  type WorktreeOperationInProgressError,
+} from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
 type PrepareError =
@@ -86,6 +92,7 @@ type PrepareError =
   | GitError
   | WorktreeFsError
   | WorktreeDivergedError
+  | WorktreeOperationInProgressError
   | CredentialError
   | ContextFsError
   | ContextAssemblerError
@@ -219,7 +226,12 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
 
-const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError", "ContextAssemblerError"]);
+const nonRetryablePrepare = new Set([
+  "WorktreeDivergedError",
+  "WorktreeOperationInProgressError",
+  "CredentialError",
+  "ContextAssemblerError",
+]);
 
 const retryableOf = (error: PrepareError | HarnessError) => {
   if (error._tag === "HarnessError" || error._tag === "RunLedgerError") return error.retryable;
@@ -326,6 +338,7 @@ export const make = Effect.gen(function* () {
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
   const plugins = yield* PluginManager;
+  const connections = yield* ConnectionStore;
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
   const sourceControl = yield* SourceControlProvider;
@@ -392,27 +405,39 @@ export const make = Effect.gen(function* () {
       ({ id, server }) =>
         Effect.gen(function* () {
           const { endpoint, secretEnv } = server;
+          const unavailable = (message: string) => ({
+            identity: id,
+            name: id,
+            endpoint,
+            bearer: null,
+            unavailableReason: message,
+          });
+          if (!server.credentialAvailable) {
+            return unavailable(
+              secretEnv ? `MCP server needs environment key ${secretEnv}` : `${id} needs a ready Connection`,
+            );
+          }
+          if (server.connectionId) {
+            return yield* connections.bearer(server.connectionId).pipe(
+              Effect.match({
+                onFailure: (error) => unavailable(error.message),
+                onSuccess: (credential) => ({
+                  identity: id,
+                  name: id,
+                  endpoint,
+                  bearer: credential.token,
+                  unavailableReason: null,
+                }),
+              }),
+            );
+          }
           if (!secretEnv) {
             return { identity: id, name: id, endpoint, bearer: null, unavailableReason: null };
           }
-          if (!server.credentialAvailable) {
-            return {
-              identity: id,
-              name: id,
-              endpoint,
-              bearer: null,
-              unavailableReason: `MCP server needs environment key ${secretEnv}`,
-            };
-          }
           return yield* Config.redacted(secretEnv).pipe(
             Effect.match({
-              onFailure: (error) => ({
-                identity: id,
-                name: id,
-                endpoint,
-                bearer: null,
-                unavailableReason: `MCP server needs environment key ${secretEnv}: ${error.message}`,
-              }),
+              onFailure: (error) =>
+                unavailable(`MCP server needs environment key ${secretEnv}: ${error.message}`),
               onSuccess: (bearer) => ({
                 identity: id,
                 name: id,

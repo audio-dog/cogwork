@@ -50,6 +50,7 @@ const controlStore: ControlStore = {
     revision: 2,
   },
   operationSettings: [],
+  connections: [],
   pluginInstalls: [],
   contributionSettings: [],
 };

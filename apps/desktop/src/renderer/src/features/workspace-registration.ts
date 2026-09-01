@@ -9,10 +9,12 @@ export interface WorkspaceRegistrationDraft {
   readonly checkoutPath: string;
   readonly gitRemote: string;
   readonly tracker: WorkspaceTracker;
+  readonly issueTrackerConnectionId: string;
   readonly repository: string;
   readonly linearTeams: string;
   readonly linearOrganization: string;
   readonly sourceControlRepository: string;
+  readonly sourceControlConnectionId: string;
 }
 
 interface WorkspaceSubmission {
@@ -26,6 +28,11 @@ interface WorkspaceSubmission {
 const trimmed = (value: string) => value.trim();
 const optional = (value: string) => trimmed(value) || undefined;
 const teamsFrom = (value: string) => [...new Set(value.split(",").map(trimmed).filter(Boolean))];
+const githubSourceControlFrom = (repository: string | undefined, connectionId: string | undefined) => {
+  if (!repository) return undefined;
+  if (!connectionId) return null;
+  return { type: "github", connectionId, repo: repository };
+};
 
 export const absoluteCheckoutPathFrom = (value: string) => {
   const path = trimmed(value);
@@ -61,13 +68,15 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
 
   const gitRemote = optional(draft.gitRemote);
   const repository = trimmed(draft.repository);
+  const issueTrackerConnectionId = trimmed(draft.issueTrackerConnectionId);
+  if (!issueTrackerConnectionId) return null;
   if (draft.tracker === "github" && !repository) return null;
   if (draft.tracker === "github") {
     return {
       name,
       checkoutPath,
       ...(gitRemote ? { gitRemote } : {}),
-      issueTracker: { type: "github", repo: repository },
+      issueTracker: { type: "github", connectionId: issueTrackerConnectionId, repo: repository },
       linearHistory: false,
     };
   }
@@ -75,17 +84,22 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
   const teams = teamsFrom(draft.linearTeams);
   if (teams.length === 0) return null;
   const organization = optional(draft.linearOrganization);
-  const sourceControlRepository = optional(draft.sourceControlRepository);
+  const sourceControl = githubSourceControlFrom(
+    optional(draft.sourceControlRepository),
+    optional(draft.sourceControlConnectionId),
+  );
+  if (sourceControl === null) return null;
   return {
     name,
     checkoutPath,
     ...(gitRemote ? { gitRemote } : {}),
     issueTracker: {
       type: "linear",
+      connectionId: issueTrackerConnectionId,
       teams,
       ...(organization ? { organization } : {}),
     },
-    ...(sourceControlRepository ? { sourceControl: { type: "github", repo: sourceControlRepository } } : {}),
+    ...(sourceControl ? { sourceControl } : {}),
     linearHistory: false,
   };
 };

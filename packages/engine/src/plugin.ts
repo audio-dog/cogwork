@@ -1,4 +1,7 @@
 import {
+  type ConnectionReadiness,
+  ConnectionSystem,
+  type ConnectionSystem as ConnectionSystemType,
   ContentRevision,
   DeclaredVersion,
   type PluginContribution,
@@ -13,16 +16,16 @@ import {
   TrimmedNonEmptyString,
   type WorkspaceId,
 } from "@cogwork/contracts";
+
 import * as Clock from "effect/Clock";
-import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 
 const CatalogEntry = Schema.Struct({
@@ -48,7 +51,7 @@ const PluginManifest = Schema.Struct({
   version: Schema.optionalKey(TrimmedNonEmptyString),
   provenance: TrimmedNonEmptyString,
   authRecipe: Schema.Unknown,
-  requiredConnections: Schema.Array(TrimmedNonEmptyString),
+  requiredConnections: Schema.Array(ConnectionSystem),
   contributions: Schema.Array(ManifestContribution),
 });
 type PluginManifest = typeof PluginManifest.Type;
@@ -117,13 +120,14 @@ const uniqueContributionIds = (manifest: PluginManifest) => {
   return new Set(ids).size === ids.length ? ids : null;
 };
 
-const retainedConnectionNotices = (item: PluginItem) => {
-  const established = item.contributions.some(
-    (contribution) => contribution.load._tag === "Loaded" && contribution.load.mcpServer?.credentialAvailable,
-  );
-  if (!established) return [];
-  return item.requiredConnections.map((connection) => `The ${connection} Connection remains established.`);
-};
+const missingReadiness = (system: string) =>
+  ({
+    _tag: "NotReady",
+    reason: `${system} Connection is not established`,
+  }) satisfies ConnectionReadiness;
+
+const installedContributionsOf = (plugins: readonly PluginItem[]) =>
+  plugins.flatMap((plugin) => (plugin.record ? plugin.contributions : []));
 
 const loadedContribution = (
   pluginId: string,
@@ -159,6 +163,7 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const store = yield* ControlStore;
+  const connections = yield* ConnectionStore;
   const catalogRoot = path.dirname(config.catalogPath);
 
   const readFile = Effect.fn("PluginManager.readFile")(function* (
@@ -231,11 +236,7 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     const decoded = yield* decodeMcpServer(json).pipe(
       Effect.mapError((error) => failure("load Plugin contribution", pluginId, file, error)),
     );
-    const secretEnv = decoded.secret?.env ?? null;
-    const credentialAvailable = secretEnv
-      ? Option.isSome(yield* Config.redacted(secretEnv).pipe(Effect.option))
-      : true;
-    return { endpoint: decoded.endpoint, secretEnv, credentialAvailable };
+    return { endpoint: decoded.endpoint, secretEnv: decoded.secret?.env ?? null };
   });
 
   const loadMarkdown = Effect.fn("PluginManager.loadMarkdown")(function* (pluginId: string, file: string) {
@@ -244,10 +245,29 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     return yield* failure("load Plugin contribution", pluginId, file, "file is empty");
   });
 
+  const loadRequirement = Effect.fn("PluginManager.loadRequirement")(function* (
+    pluginId: string,
+    file: string,
+    requirement: ConnectionSystemType,
+  ) {
+    const connection = yield* connections
+      .findSystem(requirement)
+      .pipe(Effect.mapError((error) => failure("load Plugin contribution", pluginId, file, error)));
+    const readiness = connection
+      ? yield* connections.readiness(connection.id)
+      : missingReadiness(requirement);
+    return { connection, readiness };
+  });
+
   const contributionsOf = Effect.fn("PluginManager.contributionsOf")(function* (
     manifest: PluginManifest,
     bundlePath: string,
   ) {
+    const requirements = yield* Effect.forEach(manifest.requiredConnections, (requirement) =>
+      loadRequirement(manifest.pluginId, bundlePath, requirement),
+    );
+    const credentialAvailable = requirements.every((requirement) => requirement.readiness._tag === "Ready");
+    const connectionId = requirements[0]?.connection?.id;
     return yield* Effect.forEach(manifest.contributions, (pointer) => {
       const file = path.resolve(bundlePath, pointer.file);
       return Effect.gen(function* () {
@@ -263,7 +283,12 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
           yield* loadMarkdown(manifest.pluginId, canonicalFile);
           return loadedContribution(manifest.pluginId, pointer, canonicalFile);
         }
-        const mcpServer = yield* loadMcpServer(manifest.pluginId, canonicalFile);
+        const loaded = yield* loadMcpServer(manifest.pluginId, canonicalFile);
+        const mcpServer = {
+          ...loaded,
+          credentialAvailable,
+          ...(connectionId ? { connectionId } : {}),
+        };
         return loadedContribution(manifest.pluginId, pointer, canonicalFile, mcpServer);
       }).pipe(
         Effect.match({
@@ -317,7 +342,38 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     const plugins = yield* Effect.forEach(entries, (entry) =>
       itemFrom(entry, picture.pluginInstalls.find((record) => record.pluginId === entry.pluginId) ?? null),
     );
+    const requirements = plugins.flatMap((plugin) =>
+      plugin.requiredConnections.map((connection) => ({ connection, pluginId: plugin.pluginId })),
+    );
+    const duplicate = requirements.find(
+      (requirement, index) =>
+        requirements.findIndex((candidate) => candidate.connection === requirement.connection) !== index,
+    );
+    if (duplicate) {
+      return yield* failure(
+        "read Plugin catalog",
+        duplicate.pluginId,
+        config.catalogPath,
+        `multiple first-party Plugins require the ${duplicate.connection} Connection`,
+      );
+    }
     return { plugins } satisfies PluginOverview;
+  });
+
+  const retainedConnectionNotices = Effect.fn("PluginManager.retainedConnectionNotices")(function* (
+    item: PluginItem,
+  ) {
+    const retained = yield* Effect.forEach(item.requiredConnections, (requirement) =>
+      Effect.gen(function* () {
+        const connection = yield* connections
+          .findSystem(requirement)
+          .pipe(Effect.mapError((error) => failure("uninstall Plugin", item.pluginId, null, error)));
+        return connection?.status === "established" ? requirement : null;
+      }),
+    );
+    return retained.flatMap((connection) =>
+      connection ? [`The ${connection} Connection remains established.`] : [],
+    );
   });
 
   const provision = Effect.fn("PluginManager.provision")(function* (bundlePath: string, identity: string) {
@@ -422,7 +478,7 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
         );
         return {
           overview: yield* overview(),
-          notices: retainedConnectionNotices(item),
+          notices: yield* retainedConnectionNotices(item),
         } satisfies PluginMutationResult;
       }),
     );
@@ -481,9 +537,7 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     uninstall,
     contributions: () =>
       overview().pipe(
-        Effect.map((overview) =>
-          overview.plugins.flatMap((plugin) => (plugin.record ? plugin.contributions : [])),
-        ),
+        Effect.map((overview) => installedContributionsOf(overview.plugins)),
         Effect.mapError((error) => failure("read Plugin contributions", null, null, error)),
       ),
   } satisfies PluginManagerService;

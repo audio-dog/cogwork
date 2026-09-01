@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./base-schemas";
+import { ConnectionId, ConnectionSystem } from "./connection";
 import { FileContributionKind, PluginContributionAuthority } from "./contribution";
 import { PrincipalId } from "./principal";
 import { ProvenanceStamp } from "./provenance";
@@ -19,6 +20,7 @@ export const PluginMcpServer = Schema.Struct({
   endpoint: TrimmedNonEmptyString,
   secretEnv: Schema.NullOr(TrimmedNonEmptyString),
   credentialAvailable: Schema.Boolean,
+  connectionId: Schema.optionalKey(ConnectionId),
 });
 export type PluginMcpServer = typeof PluginMcpServer.Type;
 
@@ -50,7 +52,7 @@ export const PluginItem = Schema.Struct({
   record: Schema.NullOr(PluginInstall),
   resolvedIdentity: Schema.NullOr(TrimmedNonEmptyString),
   provenanceStamp: Schema.optionalKey(Schema.NullOr(ProvenanceStamp)),
-  requiredConnections: Schema.Array(TrimmedNonEmptyString),
+  requiredConnections: Schema.Array(ConnectionSystem),
   contributions: Schema.Array(PluginContribution),
   manifestFailure: Schema.NullOr(TrimmedNonEmptyString),
 });
@@ -60,6 +62,12 @@ export const PluginOverview = Schema.Struct({
   plugins: Schema.Array(PluginItem),
 });
 export type PluginOverview = typeof PluginOverview.Type;
+
+// At most one first-party Plugin may require a given Connection, so this answers one bundle or none,
+// never a set. It lives in the kernel because the Engine and every client derive it from the same
+// overview: a second copy of the rule is a second place to change when the tie-break moves.
+export const pluginRequiringConnection = (plugins: PluginOverview, system: ConnectionSystem) =>
+  plugins.plugins.find((plugin) => plugin.requiredConnections.includes(system)) ?? null;
 
 export const PluginMutationResult = Schema.Struct({
   overview: PluginOverview,

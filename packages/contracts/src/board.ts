@@ -1,5 +1,6 @@
 import * as Stream from "effect/Stream";
 import type { WorkspaceId } from "./base-schemas";
+import type { ConnectionOverview } from "./connection";
 import type { ControlStore, SchedulerStats, WorkspaceFailureInfo, WorkspaceInfo } from "./daemon";
 import { type ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import type { PluginOverview } from "./plugin";
@@ -18,6 +19,8 @@ export interface Board {
   readonly controlStore: ControlStore | null;
   readonly plugins: PluginOverview | null;
   readonly pluginNotices: readonly string[];
+  readonly connections: ConnectionOverview | null;
+  readonly connectionNotices: readonly WorkspaceId[];
 }
 
 export const initialBoard: Board = {
@@ -28,6 +31,8 @@ export const initialBoard: Board = {
   controlStore: null,
   plugins: null,
   pluginNotices: [],
+  connections: null,
+  connectionNotices: [],
 };
 
 export const settledRunLimit = 20;
@@ -107,6 +112,11 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
     }),
     ControlStoreChanged: ({ controlStore }) => ({ ...board, controlStore }),
     PluginsChanged: ({ plugins, notices }) => ({ ...board, plugins, pluginNotices: notices }),
+    ConnectionsChanged: ({ connections, danglingWorkspaces }) => ({
+      ...board,
+      connections,
+      connectionNotices: danglingWorkspaces,
+    }),
     SchedulerChanged: ({ scheduler }) => ({ ...board, scheduler }),
   });
 

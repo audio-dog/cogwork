@@ -2,7 +2,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { type BranchDivergence, Git, GitError, type WorktreeEntry } from "./git";
+import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
 import type { RegisteredWorkspace } from "./projector";
 import { WorktreeFs } from "./worktree-fs";
 
@@ -11,6 +11,16 @@ export class WorktreeDivergedError extends Schema.TaggedError<WorktreeDivergedEr
   {
     remote: Schema.String,
     branch: Schema.String,
+    message: Schema.String,
+  },
+) {}
+
+export class WorktreeOperationInProgressError extends Schema.TaggedError<WorktreeOperationInProgressError>()(
+  "WorktreeOperationInProgressError",
+  {
+    branch: Schema.String,
+    operation: Schema.Literals(["merge", "rebase", "cherry-pick"]),
+    unmergedPaths: Schema.Array(Schema.String),
     message: Schema.String,
   },
 ) {}
@@ -111,6 +121,16 @@ const unresolvableMessage = (remote: string, branch: string, divergence: BranchD
     "a human needs to decide how to reconcile the branch.",
   ].join(" ");
 
+const operationMessage = (branch: string, operation: GitOperationInProgress) => {
+  const conflicts = operation.unmergedPaths.length
+    ? `unmerged paths: ${operation.unmergedPaths.join(", ")}`
+    : "no unmerged paths remain";
+  return [
+    `branch ${branch} has a ${operation.operation} in progress (${conflicts}).`,
+    "The worktree was left as it was; a human needs to finish or abort the operation.",
+  ].join(" ");
+};
+
 export const make = Effect.gen(function* () {
   const git = yield* Git;
   const fs = yield* WorktreeFs;
@@ -184,6 +204,19 @@ export const make = Effect.gen(function* () {
     return yield* replayOntoRemote(worktreePath, remote, branch, divergence);
   });
 
+  const refuseOperationInProgress = Effect.fn("Worktree.refuseOperationInProgress")(function* (
+    worktreePath: string,
+    branch: string,
+  ) {
+    const operation = yield* git.operationInProgress(worktreePath);
+    if (!operation) return;
+    return yield* new WorktreeOperationInProgressError({
+      branch,
+      ...operation,
+      message: operationMessage(branch, operation),
+    });
+  });
+
   const ensure = Effect.fn("Worktree.ensure")(function* (
     workspace: RegisteredWorkspace,
     item: WorkItemRef,
@@ -202,6 +235,8 @@ export const make = Effect.gen(function* () {
     if (exists && options?.resume) {
       return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
     }
+
+    if (exists) yield* refuseOperationInProgress(worktreePath, branch);
 
     const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
     if (!exists) {

@@ -6,6 +6,7 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
+import { ConnectionOverview } from "./connection";
 import { LocalContribution } from "./contribution";
 import {
   ActionableItem,
@@ -61,6 +62,11 @@ export const DaemonEvent = Schema.TaggedUnion({
     emittedAtMillis: Schema.Finite,
     plugins: PluginOverview,
     notices: Schema.Array(TrimmedNonEmptyString),
+  },
+  ConnectionsChanged: {
+    emittedAtMillis: Schema.Finite,
+    connections: ConnectionOverview,
+    danglingWorkspaces: Schema.Array(WorkspaceId),
   },
   SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },
 });

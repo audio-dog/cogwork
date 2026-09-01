@@ -445,8 +445,20 @@ const contentStamp = (source: string, content: unknown) =>
     revision: revisionOf(typeof content === "string" ? content : JSON.stringify(content)),
   });
 
-const projectedName = (identity: string) =>
-  `cogwork_${Array.from(identity, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}`;
+const projectedNamePart = (value: string, maxLength: number) =>
+  value
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/^[_-]+|[_-]+$/g, "")
+    .slice(0, maxLength) || "unnamed";
+
+export const projectedContributionName = (identity: string) => {
+  const parts = identity.split("/");
+  const authority = projectedNamePart(parts[0] ?? identity, 18);
+  const localName = projectedNamePart(parts.at(-1) ?? identity, 20);
+  const identityHash = createHash("sha256").update(identity).digest("base64url").slice(0, 22);
+  return `${authority}__${localName}__${identityHash}`;
+};
 
 const contributionMembers = (
   contributions: ReadonlyArray<FileContribution>,
@@ -458,7 +470,7 @@ const contributionMembers = (
     .map((contribution) =>
       RunPlanContributionMember.make({
         identity: contribution.id,
-        name: projectedName(contribution.id),
+        name: projectedContributionName(contribution.id),
         source: contribution.file,
         ...(unavailableReasons.get(contribution.id)
           ? { unavailableReason: unavailableReasons.get(contribution.id) }
@@ -603,6 +615,37 @@ const projectionFor = (projectedMembers: ReadonlyArray<RunPlanMemberType>) => {
   );
 };
 
+interface NamedPlanMember {
+  readonly identity: string;
+  readonly name: string;
+}
+
+const projectionReason = (member: RunPlanMemberType) => `selected harness does not project ${member}`;
+
+const namedProjectionFor = (
+  member: RunPlanMemberType,
+  members: ReadonlyArray<NamedPlanMember>,
+  projectedMembers: ReadonlySet<RunPlanMemberType>,
+) => {
+  if (projectedMembers.has(member)) return [];
+  return members.map(({ identity }) =>
+    RunPlanProjectionDisposition.make({
+      member: `${member} ${identity}`,
+      disposition: "not-projected",
+      reason: projectionReason(member),
+    }),
+  );
+};
+
+const projectedNamesFor = (
+  member: RunPlanMemberType,
+  members: ReadonlyArray<NamedPlanMember>,
+  projectedMembers: ReadonlySet<RunPlanMemberType>,
+) =>
+  projectedMembers.has(member)
+    ? members.map(({ identity, name }) => RunPlanProjectedName.make({ identity, name }))
+    : [];
+
 const unprojectedMcp = (members: ReadonlyArray<RunPlanContributionMember>) =>
   members.map((member) =>
     RunPlanProjectionDisposition.make({
@@ -621,7 +664,7 @@ const mcpServers = (servers: ReadonlyArray<RunPlanMcpServerInput>) =>
     return RunPlanMcpServer.make({
       identity,
       name: server.name,
-      projectedName: projectedName(identity),
+      projectedName: projectedContributionName(identity),
       endpoint: server.endpoint,
       authenticated: server.authenticated,
       unavailableReason: server.unavailableReason ?? null,
@@ -680,6 +723,23 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     "mcp-server",
     input.unavailableContributionReasons,
   ).filter(({ identity }) => !resolvedMcpIdentities.has(identity));
+  const skills = contributionMembers(admitted, "skill");
+  const subagents = contributionMembers(admitted, "subagent");
+  const commands = contributionMembers(admitted, "command");
+  const projectedMembers = new Set(input.projectedMembers);
+  const namedMcpServers = mcpServersForRun.map(({ identity, projectedName: name }) => ({ identity, name }));
+  const namedProjection = [
+    ...namedProjectionFor("MCP", namedMcpServers, projectedMembers),
+    ...namedProjectionFor("Skills", skills, projectedMembers),
+    ...namedProjectionFor("Subagents", subagents, projectedMembers),
+    ...namedProjectionFor("Commands", commands, projectedMembers),
+  ];
+  const projectedNames = [
+    ...projectedNamesFor("MCP", namedMcpServers, projectedMembers),
+    ...projectedNamesFor("Skills", skills, projectedMembers),
+    ...projectedNamesFor("Subagents", subagents, projectedMembers),
+    ...projectedNamesFor("Commands", commands, projectedMembers),
+  ];
   const mcp = [...mcpServersForRun, ...unresolvedMcp];
   const engineStamps = [
     contentStamp(`${input.item.stage} Operation Definition`, {
@@ -726,11 +786,11 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
         ),
       }),
       messages: [RunPlanMessage.make({ role: "user", content: input.prompt })],
-      tools: input.projectedMembers.includes("Tools") ? [...ownedToolNames] : [],
-      skills: contributionMembers(admitted, "skill"),
+      tools: projectedMembers.has("Tools") ? [...ownedToolNames] : [],
+      skills,
       mcp,
-      subagents: contributionMembers(admitted, "subagent"),
-      commands: contributionMembers(admitted, "command"),
+      subagents,
+      commands,
       hooks: [],
       middleware: [...input.middleware],
       structuredOutput: structuredOutput(input.item.stage),
@@ -772,12 +832,12 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
           ...input.provenanceStamps,
           ...engineStamps,
         ],
-        projectedNames: input.projectedMembers.includes("MCP")
-          ? mcpServersForRun.map((server) =>
-              RunPlanProjectedName.make({ identity: server.identity, name: server.projectedName }),
-            )
-          : [],
-        projection: [...projectionFor(input.projectedMembers), ...unprojectedMcp(unresolvedMcp)],
+        projectedNames,
+        projection: [
+          ...projectionFor(input.projectedMembers),
+          ...namedProjection,
+          ...unprojectedMcp(unresolvedMcp),
+        ],
         observation,
       }),
     }),

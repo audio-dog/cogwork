@@ -21,10 +21,13 @@ const harnessServices = {
   },
   credentialStore: {
     bearerToken: () => Effect.die("unexpected bearer lookup"),
+    resolveSource: () => Effect.die("unexpected credential source resolution"),
     persist: () => Effect.die("unexpected credential persistence"),
     invalidate: () => Effect.die("unexpected credential invalidation"),
     providerKey: () => Effect.die("unexpected provider key lookup"),
     persistProviderKey: () => Effect.die("unexpected provider key persistence"),
+    configureConnection: () => Effect.die("unexpected Connection configuration"),
+    removeConnection: () => Effect.die("unexpected Connection removal"),
   },
   fileSystem: FileSystem.makeNoop({}),
 };

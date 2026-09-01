@@ -46,3 +46,52 @@ The renderer runs with the React Compiler. Do not add manual memoization the com
 for you — no `useMemo`, `useCallback`, or `React.memo` unless you have a concrete reason the
 compiler cannot (document that reason in the PR). Derive values inline during render; write event
 handlers as plain functions inside the component.
+
+## Looking at the running app
+
+**Never load the renderer in a browser.** `electron-vite dev` serves it at `http://localhost:5173`,
+so a browser tool can reach it — but that page has no preload script. `window.cogwork` is
+`undefined` there, so the app shows no engine status and has no RPC to the daemon socket. What you
+see is a dead shell, not the app.
+
+Attach to the real Electron window over the Chrome DevTools Protocol instead.
+
+1. **A human starts the app, never you** — the root `AGENTS.md` rule applies here in full. The
+   command they run is:
+
+   ```bash
+   REMOTE_DEBUGGING_PORT=9333 pnpm --filter @cogwork/desktop dev
+   ```
+
+   `electron-vite` reads `REMOTE_DEBUGGING_PORT` and appends the switch to the Electron process, so
+   nothing in `src/main` needs to change, and the port stays closed whenever the variable is unset.
+   It is 9333 rather than the Chrome default 9222 because a developer's own Chrome debugging profile
+   usually holds 9222; the app would then fail to bind, and the attach would land on Chrome without
+   saying so.
+
+   Check before you attach: `curl -s http://127.0.0.1:9333/json/version` names the Electron build
+   when the app is up with the port open. If it does not answer, ask for the app and wait. Starting
+   it yourself refocuses someone's window and attaches you to nothing.
+
+2. Use the `cogwork-app` MCP server. It runs `chrome-devtools-mcp` against `http://127.0.0.1:9333`
+   and gives you `list_pages`, `take_snapshot`, `take_screenshot`, `click`, `evaluate_script`, and
+   the console and network readers — all against the live window, with the preload bridge intact.
+
+   It is declared once per harness, in each harness's own project scope: `<repo>/.mcp.json` for
+   Claude Code, `<repo>/.codex/config.toml` for Codex. Keep the two in step. A third harness needs
+   its own file — there is no shared location, and `.agents/` is not one: nothing scans that tree
+   for an MCP server yet.
+
+   `.mcp.json` cannot move into `.claude/`. Project scope is that one path, no setting relocates it,
+   and the `.claude` directory reference states the constraint outright: "Lives at the project root,
+   not inside `.claude/`".
+
+`chrome-devtools-mcp` supports Chrome officially, not Electron. It works here because Electron 43
+ships Chromium 150, well clear of the Chromium 144 floor that its `Target.getDevToolsTarget` call
+needs ([issue #1197](https://github.com/ChromeDevTools/chrome-devtools-mcp/issues/1197)). If an
+Electron downgrade ever breaks the attach, that is the cause — fix the floor, and do not swap in one
+of the single-author Electron MCP forks.
+
+For a check that must run with no human-started app (CI, a `tester` agent), drive a built app with
+Playwright's [`_electron`](https://playwright.dev/docs/api/class-electron) API against
+`out/main/index.js`. That harness is not set up yet.

@@ -20,6 +20,7 @@ const picture = (enabled: boolean): ControlStore => ({
     dailyBudget: 50,
     revision: 0,
   },
+  connections: [],
   contributionSettings: [
     {
       contribution,

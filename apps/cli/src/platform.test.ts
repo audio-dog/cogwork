@@ -1,6 +1,7 @@
 import { ContextFs, Git, WorktreeFs } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -18,11 +19,14 @@ const testLayer = gitLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
 const isolated = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" };
 
-const processHandle = (exitCode: Effect.Effect<ChildProcessSpawner.ExitCode>) =>
+const processHandle = (
+  exitCode: Effect.Effect<ChildProcessSpawner.ExitCode>,
+  stdout: Stream.Stream<Uint8Array> = Stream.empty,
+) =>
   ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(1),
     stdin: Sink.drain,
-    stdout: Stream.empty,
+    stdout,
     stderr: Stream.empty,
     all: Stream.empty,
     exitCode,
@@ -43,6 +47,23 @@ const hangingSpawnerLayer = Layer.succeed(
   ChildProcessSpawner.make(() => Effect.succeed(processHandle(Effect.never))),
 );
 
+const gitLayerWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
+  gitLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        FileSystem.layerNoop({}),
+        Path.layer,
+      ),
+    ),
+  );
+
+class GitCommands extends Context.Service<GitCommands, Ref.Ref<ReadonlyArray<string>>>()(
+  "@cogwork/cli/platform.test/GitCommands",
+) {
+  static readonly layer = Layer.effect(GitCommands, Ref.make<ReadonlyArray<string>>([]));
+}
+
 const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
   Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer)),
 );
@@ -55,7 +76,9 @@ const shell = Effect.fn("test.shell")(function* (cwd: string, script: string) {
 });
 
 describe("subprocess deadlines", () => {
-  layer(gitLayer.pipe(Layer.provide(hangingSpawnerLayer)))((it) => {
+  layer(
+    gitLayer.pipe(Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer))),
+  )((it) => {
     it.effect("converts a git deadline into GitError", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
@@ -113,9 +136,7 @@ describe("subprocess deadlines", () => {
           return processHandle(Effect.succeed(exitCode));
         }),
       );
-      const interruptedGitLayer = gitLayer.pipe(
-        Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
-      );
+      const interruptedGitLayer = gitLayerWithSpawner(spawner);
       const fiber = yield* Effect.forkChild(
         Effect.gen(function* () {
           const git = yield* Git.Git;
@@ -128,6 +149,147 @@ describe("subprocess deadlines", () => {
 
       assert.deepStrictEqual(yield* Ref.get(commands), ["git rebase origin/main main", "git rebase --abort"]);
     }),
+  );
+});
+
+describe("worktree porcelain", () => {
+  it.effect("does not report entries marked prunable", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const entries = yield* git.listWorktrees("/repo");
+
+      assert.deepStrictEqual(entries, [
+        { path: "/repo", branch: "main" },
+        { path: "/repo.worktrees/278-live\nprunable-looking-path", branch: "278-live" },
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayerWithSpawner(
+          ChildProcessSpawner.make(() =>
+            Effect.succeed(
+              processHandle(
+                Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+                Stream.make(
+                  new TextEncoder().encode(
+                    [
+                      [
+                        "worktree /repo",
+                        "HEAD 1111111111111111111111111111111111111111",
+                        "branch refs/heads/main",
+                      ],
+                      [
+                        "worktree /repo.worktrees/277-stale",
+                        "HEAD 2222222222222222222222222222222222222222",
+                        "branch refs/heads/277-stale",
+                        "prunable gitdir file points to non-existent location",
+                      ],
+                      [
+                        "worktree /repo.worktrees/278-live\nprunable-looking-path",
+                        "HEAD 3333333333333333333333333333333333333333",
+                        "branch refs/heads/278-live",
+                      ],
+                    ]
+                      .map((fields) => fields.join("\0"))
+                      .join("\0\0"),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("returns live entries when pruning stale registrations fails", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const entries = yield* git.listWorktrees("/repo");
+
+      assert.deepStrictEqual(entries, [{ path: "/repo", branch: "main" }]);
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git worktree list --porcelain -z",
+        "git worktree prune",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              Layer.effect(
+                ChildProcessSpawner.ChildProcessSpawner,
+                Effect.gen(function* () {
+                  const commands = yield* GitCommands;
+                  return ChildProcessSpawner.make((command) =>
+                    Effect.gen(function* () {
+                      const text = commandText(command);
+                      yield* Ref.update(commands, (current) => [...current, text]);
+                      const isPrune = text === "git worktree prune";
+                      const stdout = isPrune
+                        ? Stream.empty
+                        : Stream.make(
+                            new TextEncoder().encode(
+                              [
+                                "worktree /repo\0branch refs/heads/main",
+                                "worktree /repo.worktrees/277-stale\0branch refs/heads/277-stale\0prunable stale",
+                              ].join("\0\0"),
+                            ),
+                          );
+                      return processHandle(
+                        Effect.succeed(ChildProcessSpawner.ExitCode(isPrune ? 1 : 0)),
+                        stdout,
+                      );
+                    }),
+                  );
+                }),
+              ).pipe(Layer.provideMerge(GitCommands.layer)),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+});
+
+describe("worktree removal", () => {
+  it.effect("prunes after remove fails", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const error = yield* Effect.flip(git.removeWorktree("/repo", "/repo.worktrees/277-stale", true));
+
+      assert.strictEqual(error.command, "git worktree remove --force /repo.worktrees/277-stale");
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git worktree remove --force /repo.worktrees/277-stale",
+        "git worktree prune",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              Layer.effect(
+                ChildProcessSpawner.ChildProcessSpawner,
+                Effect.gen(function* () {
+                  const commands = yield* GitCommands;
+                  return ChildProcessSpawner.make((command) =>
+                    Effect.gen(function* () {
+                      const text = commandText(command);
+                      yield* Ref.update(commands, (current) => [...current, text]);
+                      const exitCode = text.includes(" worktree remove ") ? 1 : 0;
+                      return processHandle(Effect.succeed(ChildProcessSpawner.ExitCode(exitCode)));
+                    }),
+                  );
+                }),
+              ).pipe(Layer.provideMerge(GitCommands.layer)),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 });
 
@@ -157,7 +319,112 @@ const fixture = Effect.fn("test.fixture")(function* (branch: string) {
   return { checkout, worktree: path.join(root, "wt"), peer, branch };
 });
 
+const conflictedFixture = Effect.fn("test.conflictedFixture")(function* (branch: string) {
+  const state = yield* fixture(branch);
+  yield* shell(
+    state.worktree,
+    "echo base > shared.txt && git add -A && git commit -qm shared && git push -q origin HEAD",
+  );
+  yield* shell(
+    state.peer,
+    `git fetch -q origin && git checkout -q -B ${branch} origin/${branch} && echo theirs > shared.txt && git add -A && git commit -qm theirs && git push -q origin HEAD`,
+  );
+  yield* shell(
+    state.worktree,
+    "echo ours > shared.txt && git add -A && git commit -qm ours && git fetch -q origin",
+  );
+  return state;
+});
+
+const operationFixtures: ReadonlyArray<{
+  readonly operation: Git.GitOperation;
+  readonly head: string;
+  readonly command: (branch: string) => string;
+}> = [
+  { operation: "merge", head: "MERGE_HEAD", command: (branch) => `git merge origin/${branch}` },
+  { operation: "rebase", head: "REBASE_HEAD", command: (branch) => `git rebase origin/${branch}` },
+  {
+    operation: "cherry-pick",
+    head: "CHERRY_PICK_HEAD",
+    command: (branch) => `git cherry-pick origin/${branch}`,
+  },
+];
+
 describe("gitLayer against a real repository", () => {
+  layer(testLayer)((it) => {
+    it.effect("clears a prunable registration so its worktree can be recreated", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const git = yield* Git.Git;
+        const { checkout, worktree, branch } = yield* fixture("277-prunable-recreation");
+
+        yield* fs.rename(worktree, `${worktree}-removed`);
+        const entries = yield* git.listWorktrees(checkout);
+        assert.deepStrictEqual(
+          entries.map((entry) => entry.branch),
+          ["main"],
+        );
+
+        yield* git.addWorktree({
+          repoPath: checkout,
+          worktreePath: worktree,
+          branch,
+          startPoint: "origin/main",
+        });
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect.each(operationFixtures)(
+      "reports a $operation in progress and its unmerged paths",
+      ({ operation, head, command }) =>
+        Effect.gen(function* () {
+          const git = yield* Git.Git;
+          const { worktree, branch } = yield* conflictedFixture(`84-${operation}-probe`);
+
+          yield* shell(
+            worktree,
+            `${command(branch)} >/dev/null 2>&1 || test -f "$(git rev-parse --git-path ${head})"`,
+          );
+
+          assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
+            operation,
+            unmergedPaths: ["shared.txt"],
+          });
+        }).pipe(Effect.scoped),
+    );
+
+    it.effect("reports a paused rebase without REBASE_HEAD", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { worktree } = yield* fixture("84-paused-rebase-probe");
+
+        yield* shell(
+          worktree,
+          `GIT_SEQUENCE_EDITOR=true git rebase -i --exec false HEAD~1 >/dev/null 2>&1 || { test -d "$(git rev-parse --git-path rebase-merge)" && test ! -f "$(git rev-parse --git-path REBASE_HEAD)"; }`,
+        );
+
+        assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
+          operation: "rebase",
+          unmergedPaths: [],
+        });
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("does not report git am as a rebase", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { worktree } = yield* fixture("84-git-am-probe");
+
+        yield* shell(
+          worktree,
+          `echo base > shared.txt && git add -A && git commit -qm shared && echo theirs > shared.txt && git commit -qam theirs && git format-patch -1 --stdout > ../theirs.patch && git reset --hard -q HEAD~1 && echo ours > shared.txt && git commit -qam ours && git am ../theirs.patch >/dev/null 2>&1 || test -f "$(git rev-parse --git-path rebase-apply/applying)"`,
+        );
+
+        assert.isNull(yield* git.operationInProgress(worktree));
+      }).pipe(Effect.scoped),
+    );
+  });
+
   it.effect("stops reporting a branch that was deleted on the remote", () =>
     Effect.gen(function* () {
       const git = yield* Git.Git;

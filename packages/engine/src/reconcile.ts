@@ -1,6 +1,7 @@
 import type {
   BlockedItem,
   ClaimedItem,
+  ConnectionId,
   NeedsHumanItem,
   OperationAvailability,
   PollPauseReason,
@@ -17,7 +18,11 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import { Availability } from "./availability";
 import { type Classification, classify, type EligibleWork } from "./classify";
+import { ConnectionStore } from "./connection";
+import { ControlStore } from "./control-store";
+import { DaemonEventBus } from "./daemon-event-bus";
 import { Executor } from "./executor";
+
 import { IssueTracker, type IssueTrackerError, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
@@ -118,6 +123,15 @@ const withoutScope = (cooldowns: Map<string, Cooldown>, scope: string) => {
   return next;
 };
 
+const connectionIdsOf = (workspace: RegisteredWorkspace) => [
+  ...new Set(
+    [workspace.config.issueTracker.connectionId, workspace.config.sourceControl?.connectionId].filter(
+      (connectionId): connectionId is ConnectionId =>
+        connectionId !== undefined && connectionId !== "unbound",
+    ),
+  ),
+];
+
 const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
   refreshAvailability?: (
     workspace: RegisteredWorkspace,
@@ -126,6 +140,9 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
   const registry = yield* WorkspaceRegistry;
   const issueTracker = yield* IssueTracker;
   const provider = yield* SourceControlProvider;
+  const connections = yield* ConnectionStore;
+  const controlStore = yield* ControlStore;
+  const bus = yield* DaemonEventBus;
   const availability = yield* Availability;
   const refresh = refreshAvailability ?? availability.current;
   const refreshedAvailability = Effect.fn("ReconcileWorker.refreshAvailability")(
@@ -202,6 +219,17 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
     if (error.reason === "rate-limited") {
       return yield* pauseForRateLimit(workspace, scope, error);
     }
+    if (error.reason === "auth") {
+      yield* (error.connectionId ? connections.revoke(error.connectionId) : Effect.void).pipe(Effect.ignore);
+      yield* Effect.gen(function* () {
+        const picture = yield* controlStore.picture;
+        yield* bus.publish({ _tag: "ControlStoreChanged", controlStore: picture });
+      }).pipe(Effect.ignore);
+      yield* Effect.gen(function* () {
+        const overview = yield* connections.overview;
+        yield* bus.publish({ _tag: "ConnectionsChanged", connections: overview, danglingWorkspaces: [] });
+      }).pipe(Effect.ignore);
+    }
     yield* Effect.logWarning("work source polling paused", {
       workspace: workspace.config.name,
       reason: error.reason,
@@ -213,7 +241,7 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
   const clearCooldown = (scope: string | null) =>
     scope === null ? Effect.void : Ref.update(cooldowns, (current) => withoutScope(current, scope));
 
-  const pollWorkspace = Effect.fn("ReconcileWorker.pollWorkspace")(function* (
+  const pollReadyWorkspace = Effect.fn("ReconcileWorker.pollReadyWorkspace")(function* (
     workspace: RegisteredWorkspace,
   ) {
     const scope = issueTracker.rateLimitScope(workspace);
@@ -244,6 +272,28 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
         ),
       ),
       Effect.catchTag("IssueTrackerError", (error) => pauseFor(workspace, scope, error)),
+    );
+  });
+
+  const pollWorkspace = Effect.fn("ReconcileWorker.pollWorkspace")(function* (
+    workspace: RegisteredWorkspace,
+  ) {
+    return yield* Effect.forEach(
+      connectionIdsOf(workspace),
+      (connectionId) => connections.requireReady(connectionId),
+      { discard: true },
+    ).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.succeed(
+            pausedState(workspace, {
+              reason: "auth",
+              message: error.message,
+              retryAtMillis: null,
+            }),
+          ),
+        onSuccess: () => pollReadyWorkspace(workspace),
+      }),
     );
   });
 
