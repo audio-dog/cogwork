@@ -275,36 +275,31 @@ describe("reconcile worker", () => {
     ),
     Layer.provideMerge(LogMessages.captureLayer),
   );
-  const coalescingSource = sources(
-    Layer.effect(
-      IssueTracker.IssueTracker,
-      Effect.map(ReconcileCoordinationProbe, (probe) =>
-        stub({
-          observe: Effect.fn(function* () {
-            const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
-            if (count > 0) yield* Deferred.succeed(probe.secondStarted, undefined);
-            yield* probe.release.await;
-            return [];
-          }),
-        }),
+  const coordinatedSource = (
+    observe: (probe: ReconcileCoordinationProbeService) => IssueTracker.IssueTrackerService["observe"],
+  ) =>
+    sources(
+      Layer.effect(
+        IssueTracker.IssueTracker,
+        Effect.map(ReconcileCoordinationProbe, (probe) => stub({ observe: observe(probe) })),
       ),
-    ),
+    );
+  const coalescingSource = coordinatedSource((probe) =>
+    Effect.fn(function* () {
+      const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
+      if (count > 0) yield* Deferred.succeed(probe.secondStarted, undefined);
+      yield* probe.release.await;
+      return [];
+    }),
   );
-  const postCurrentSource = sources(
-    Layer.effect(
-      IssueTracker.IssueTracker,
-      Effect.map(ReconcileCoordinationProbe, (probe) =>
-        stub({
-          observe: Effect.fn(function* () {
-            const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
-            if (count > 0) return [];
-            yield* probe.firstStarted.open;
-            yield* probe.release.await;
-            return [];
-          }),
-        }),
-      ),
-    ),
+  const postCurrentSource = coordinatedSource((probe) =>
+    Effect.fn(function* () {
+      const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
+      if (count > 0) return [];
+      yield* probe.firstStarted.open;
+      yield* probe.release.await;
+      return [];
+    }),
   );
   const coordinatedWorkerLayer = (
     source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider, never, ReconcileCoordinationProbe>,
