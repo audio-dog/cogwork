@@ -1,0 +1,205 @@
+packages/engine/src/linear/client.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 138-141,145-148,158,163-171,193-197,213-214,219,316-319,321-329,385,599-607,609-614,639-641
+configs/lint/no-flatmap-ladder.grit
+  s_6f47bf3b4207ce::t_5772b763e0bd57 10,18
+configs/lint/no-effect-sync-promise.grit
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-11
+packages/codex-cli/src/harness.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 17,91-93,99-109,141-149,175-213,216,218-225,229,232-275,278-313,433-439,464-485
+packages/cursor-acp/CONTEXT.md
+  s_6f47bf3b4207ce::t_5772b763e0bd57 17
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_6f47bf3b4207ce::t_5772b763e0bd57 5,177-190
+configs/lint/tests/fixtures/no-match-void-branch/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-effect-sync-effect/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-nested-effect-gen/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-7
+configs/lint/tests/fixtures/no-switch/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-8
+packages/cursor-acp/src/harness.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 37-38,76-262,304-320,322,456-462,482-504
+packages/engine/src/executor.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 24,50,399,674-735,741-742,745-746,1271-1286,1312
+configs/lint/tests/fixtures/no-arrow-ladder/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/no-effect-sync-throw.grit
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-11
+packages/engine/src/executor.test.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 54,498,574-614,617,634,651,665,681,701,859,871,1308-1322,1325,1339-1343,1345,1352,1594,1842-1938,1965-1968,1986-1989
+packages/engine/src/harness.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 13,15,59-158,173-184,189-222,227-229,232-233,238-240,245,249-252,257,267-291,306-392,395,397-415,423,425-436,439,443-445,448-449
+packages/engine/src/provider-adapter.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 14-19
+configs/lint/tests/fixtures/no-side-effect-in-state-updater/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-7
+packages/contracts/src/issue-tracker.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 8,12-16
+configs/lint/tests/fixtures/no-side-effect-in-state-updater/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+configs/lint/tests/fixtures/no-match-void-branch/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/no-effect-sync-effect.grit
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-18
+configs/lint/tests/rule-test-harness.mjs
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-48
+configs/lint/tests/fixtures/no-pipeline-fragment-staging/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-arrow-ladder/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-flatmap-ladder/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+docs/spec/control-store-convergence.md
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-101
+configs/lint/tests/fixtures/no-effect-all-step-sequencing/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-effect-never/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_6f47bf3b4207ce::t_5772b763e0bd57 4-14
+configs/lint/tests/fixtures/no-effect-sync-effect/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_6f47bf3b4207ce::t_5772b763e0bd57 4-28,30-32
+packages/engine/src/reconcile.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 26,110,154,156-157,164,169,216,222-223,227
+packages/engine/src/harness.test.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 12-21,57-88,136-147,254-591,612,633
+configs/lint/tests/fixtures/no-option-as/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+docs/adr/0019-per-workspace-operating-instructions-overrides.md
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-121
+configs/lint/tests/fixtures/no-effect-bind/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+packages/codex-cli/src/harness.test.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 14,84-87,176-178,183,320,485,493,497,500,506-507,511-559,562,566,568-569,573-591,594,598,601-602,608-622,849-852
+configs/lint/tests/fixtures/no-effect-sync-throw/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+packages/cursor-acp/src/harness.test.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 59-62,142-219,345-372
+packages/engine/CONTEXT.md
+  s_6f47bf3b4207ce::t_5772b763e0bd57 48-51,81,85,88-91,93,141
+configs/lint/tests/fixtures/no-effect-sync-promise/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-nested-effect-call/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+configs/lint/tests/fixtures/no-effect-all-step-sequencing/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+packages/engine/src/provider-runner.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 20-28,114,116-120,138-178
+configs/lint/tests/fixtures/no-effect-step-const-staging/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-5
+configs/lint/tests/fixtures/no-effect-never/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+biome.json
+  s_6f47bf3b4207ce::t_5772b763e0bd57 2,54-56,82-87
+apps/desktop/src/main/daemon-bridge.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 40
+configs/lint/tests/fixtures/no-effect-sync-promise/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-runtime-runfork/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-5
+configs/lint/tests/fixtures/no-use-effect/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-match-effect-branch/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-8
+configs/lint/tests/fixtures/no-effect-side-effect-wrapper/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+configs/lint/tests/fixtures/no-switch/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+configs/lint/tests/fixtures/no-effect-orElse-ladder/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+configs/lint/tests/fixtures/no-effect-step-const-staging/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-flatmap-ladder/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+packages/engine/src/cooldown.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1,3,7-9,11-17,44-55,57-59,61-64,66,78-80,83-85
+  s_6f47bf3b4207ce::t_699040a63186f3 2,4-6,10,18-43,56,60,65,67-77,81-82
+configs/lint/tests/fixtures/no-effect-sync-throw/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-5
+package.json
+  s_6f47bf3b4207ce::t_5772b763e0bd57 16-17
+configs/lint/tests/fixtures/no-effect-do/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-effect-do/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-4
+configs/lint/tests/fixtures/no-pipeline-fragment-staging/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+packages/engine/src/daemon-composition.test.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 25,45-70
+configs/lint/tests/fixtures/no-effect-fn-generator/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-5
+configs/lint/tests/fixtures/no-effect-orElse-ladder/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+configs/lint/tests/fixtures/no-effect-fn-generator/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-5
+configs/lint/tests/fixtures/no-iife-wrapper/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-5
+configs/lint/tests/fixtures/no-match-effect-branch/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-10
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_6f47bf3b4207ce::t_5772b763e0bd57 41-44
+packages/engine/src/linear/client.test.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1,127-128,687-871
+configs/lint/tests/fixtures/no-effect-side-effect-wrapper/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-native-button-mismatch/valid-example.tsx
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+configs/lint/tests/fixtures/no-nested-effect-call/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_6f47bf3b4207ce::t_5772b763e0bd57 7,258-352
+packages/engine/src/external-harness-runtime.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 40-43,46-47,69,108,133-135,160-191,257,264-280,309-325,417-461
+configs/lint/tests/fixtures/no-nested-effect-gen/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+configs/lint/tests/fixtures/no-effect-ladder/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-6
+packages/contracts/CONTEXT.md
+  s_6f47bf3b4207ce::t_5772b763e0bd57 129,274-277,342-353,367
+configs/lint/tests/fixtures/no-effect-bind/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-runtime-runfork/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/no-effect-do.grit
+  s_6f47bf3b4207ce::t_5772b763e0bd57 4
+configs/lint/tests/fixtures/no-native-button-mismatch/invalid-example.tsx
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-iife-wrapper/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-option-as/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-effect-ladder/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+configs/lint/tests/fixtures/no-use-effect/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-4
+configs/lint/tests/rules.test.mjs
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-181
+packages/engine/src/external-harness-runtime.test.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 30-41,240-241,298-307,311-336,373-377,381-383,407-409,660,855-925
+  s_6f47bf3b4207ce::t_e5e00a28bf3346 926
+configs/lint/tests/fixtures/no-effect-as/valid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+packages/engine/src/comments.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 22,80-86,88-91,94-105,107,116-117
+configs/lint/tests/fixtures/no-effect-as/invalid-example.ts
+  s_6f47bf3b4207ce::t_5772b763e0bd57 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dd4943defaa2a42ed6ce77694ad37353f3d599ad",
+  "prompts": {},
+  "sessions": {
+    "s_6f47bf3b4207ce": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05d9a-55a2-7e50-9cc4-aedf95a0c7a9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
