@@ -25,10 +25,15 @@ import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Schema from "effect/Schema";
 import * as SqlError from "effect/unstable/sql/SqlError";
 
 const { runEvents, runPlans, runs, sessions } = ControlStoreSchema;
+
+export const runLedgerAppendDuration = Metric.timer("cogwork_run_ledger_append_duration", {
+  description: "Time to append one event to the Run ledger.",
+});
 
 const unresumableStatuses = ["interrupted", "crashed", "exhausted"];
 
@@ -450,7 +455,8 @@ const make = Effect.fn("ledger.make")(function* () {
           .insert(runEvents)
           .values(values)
           .onConflictDoUpdate({ target: [runEvents.runId, runEvents.seq], set: values })
-          .run(),
+          .run()
+          .pipe(Effect.trackDuration(runLedgerAppendDuration)),
       );
     },
 
