@@ -5,6 +5,14 @@ import { resolveEngineCommand } from "./engine-command";
 const socketPath = "/home/me/.cogwork/cogwork.sock";
 
 describe("resolveEngineCommand", () => {
+  it("allows daemon drain to finish before supervisor termination", () => {
+    const command = resolveEngineCommand({ socketPath, packaged: false, baseDir: "/repo" });
+    const graceIndex = command.args.indexOf("--drain-grace");
+    const drainGraceMillis = Number(command.args[graceIndex + 1]) * 1_000;
+
+    expect(command.terminateTimeoutMillis).toBeGreaterThan(drainGraceMillis);
+  });
+
   it("runs the CLI daemon through the CLI's own tsx in development", () => {
     const baseDir = "/repo";
     const cliDir = join(baseDir, "apps", "cli");
@@ -60,5 +68,6 @@ describe("resolveEngineCommand", () => {
 
     const graceIndex = command.args.indexOf("--drain-grace");
     expect(command.args[graceIndex + 1]).toBe("30");
+    expect(command.terminateTimeoutMillis).toBe(35_000);
   });
 });
