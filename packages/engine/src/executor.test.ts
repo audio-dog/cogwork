@@ -2725,7 +2725,10 @@ describe("Executor.execute", () => {
       const attempts = log.filter((call) => call.method === "attemptFailed");
       assert.strictEqual(attempts.length, 2);
       assert.isTrue(
-        attempts.every((attempt) => attempt.reason?.includes("RunPlanInstruction.content") === true),
+        attempts.every(
+          (attempt) =>
+            attempt.reason?.includes("RunPlanInstruction") === true && attempt.reason.includes("content"),
+        ),
       );
       const handOff = log.find((call) => call.method === "handOff");
       assert.include(handOff?.note ?? "", "3 failed implement attempts");

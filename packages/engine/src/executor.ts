@@ -69,7 +69,6 @@ import {
   admittedContributions,
   admittedMcpServers,
   applicableContributionSettings,
-  assembleRunPlan,
   availabilityCauses,
   operationBindingsOf,
   type ResolvedOperation,
@@ -77,6 +76,7 @@ import {
   type RunPlanAssemblyError,
   resolveEngineContributionEnabled,
   resolveRunPlanStage,
+  tryAssembleRunPlan,
 } from "./run-plan";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
@@ -599,7 +599,7 @@ export const make = Effect.gen(function* () {
       preparedRequest.session ??
       (selectedOps.resumePolicy ? null : compatiblePrevious) ??
       (yield* mintSession(workspace, selectedOps, startedAtMillis));
-    const plan = yield* assembleRunPlan({
+    const plan = yield* tryAssembleRunPlan({
       runId,
       workspace,
       item,
