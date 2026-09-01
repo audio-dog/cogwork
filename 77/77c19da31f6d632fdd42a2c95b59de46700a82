@@ -1,0 +1,23 @@
+packages/contracts/src/daemon.ts
+  s_cd9a2a4babdc0a::t_20b4d228d67fa9 15-16,18-21,27-28,37-38,45-47,61-62
+  s_cd9a2a4babdc0a::t_3426d3ae58212b 17,22-26,29-36,39-44,48-60
+packages/contracts/src/process-health.test.ts
+  s_cd9a2a4babdc0a::t_74934e81277429 3,34-38
+  s_cd9a2a4babdc0a::t_36011b7a7e390b 1-2,4-33,39-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7777c19da31f6d632fdd42a2c95b59de46700a82",
+  "prompts": {},
+  "sessions": {
+    "s_cd9a2a4babdc0a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-86b1-72a0-a7f0-d3a37a22936d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
