@@ -1,9 +1,10 @@
 import { WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import {
   type AddWorktreeArgs,
@@ -18,6 +19,9 @@ import * as Worktree from "./worktree";
 import { type FileStat, WorktreeFs, type WorktreeFsService } from "./worktree-fs";
 
 const decodeConfig = Schema.decodeSync(WorkspaceConfig);
+const item = { id: "#13", title: "Worktree lifecycle" } satisfies Worktree.WorkItemRef;
+const worktreePath = (branch = Worktree.branchName(item)) =>
+  Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), branch);
 
 const workspaceWith = (worktrees?: Worktree.WorktreeSettings) => ({
   source: "test.workspace.ts",
@@ -54,6 +58,7 @@ const fakeGit = (
     readonly remoteBranches?: ReadonlyArray<string>;
     readonly divergence?: BranchDivergence;
     readonly operation?: GitOperationInProgress;
+    readonly addFailure?: GitError;
     readonly rebaseFailure?: GitError;
   },
 ) => {
@@ -62,7 +67,10 @@ const fakeGit = (
     fetch: (_repoPath: string, remote: string) => Ref.update(recorder.fetched, (log) => [...log, remote]),
     remoteBranchExists: (_repoPath: string, _remote: string, branch: string) =>
       Effect.succeed(remotes.has(branch)),
-    addWorktree: (args: AddWorktreeArgs) => Ref.update(recorder.added, (log) => [...log, args]),
+    addWorktree: (args: AddWorktreeArgs) => {
+      if (options.addFailure) return Effect.fail(options.addFailure);
+      return Ref.update(recorder.added, (log) => [...log, args]);
+    },
     removeWorktree: (_repoPath: string, worktreePath: string, force: boolean) =>
       Ref.update(recorder.removed, (log) => [...log, { path: worktreePath, force }]),
     listWorktrees: (_repoPath: string) => Effect.succeed(options.worktrees ?? []),
@@ -102,10 +110,7 @@ describe("Worktree.ensure", () => {
         Worktree.make,
         provide(fakeGit(recorder, {}), fakeFs(recorder, {})),
       );
-      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), {
-        id: "#13",
-        title: "Worktree lifecycle",
-      });
+      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item);
       assert.strictEqual(result.created, true);
       assert.strictEqual(result.branch, "13-worktree-lifecycle");
       assert.strictEqual(result.path, "/repo.worktrees/13-worktree-lifecycle");
@@ -120,12 +125,83 @@ describe("Worktree.ensure", () => {
     }),
   );
 
+  it.effect("removes a newly created worktree when setup is interrupted", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const setupStarted = yield* Deferred.make<void>();
+      const fs = {
+        ...fakeFs(recorder, {}),
+        runCommand: () => Deferred.succeed(setupStarted, undefined).pipe(Effect.andThen(Effect.never)),
+      } satisfies WorktreeFsService;
+      const manager = yield* Effect.provide(Worktree.make, provide(fakeGit(recorder, {}), fs));
+      const ensuring = yield* manager
+        .ensure(workspaceWith({ setup: ["pnpm install"] }), item)
+        .pipe(Effect.forkChild({ startImmediately: true }));
+
+      yield* Deferred.await(setupStarted);
+      yield* Fiber.interrupt(ensuring);
+
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), [
+        { path: "/repo.worktrees/13-worktree-lifecycle", force: true },
+      ]);
+    }),
+  );
+
+  it.effect("removes a newly created worktree when creation is interrupted", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const addStarted = yield* Deferred.make<void>();
+      const finishAdd = yield* Deferred.make<void>();
+      const git = {
+        ...fakeGit(recorder, {}),
+        addWorktree: (args: AddWorktreeArgs) =>
+          Deferred.succeed(addStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(finishAdd)),
+            Effect.andThen(Ref.update(recorder.added, (log) => [...log, args])),
+          ),
+      } satisfies GitService;
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+      const ensuring = yield* manager
+        .ensure(workspaceWith(), item)
+        .pipe(Effect.forkChild({ startImmediately: true }));
+
+      yield* Deferred.await(addStarted);
+      const interrupting = yield* Fiber.interrupt(ensuring).pipe(
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Deferred.succeed(finishAdd, undefined);
+      yield* Fiber.join(interrupting);
+
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), [
+        { path: "/repo.worktrees/13-worktree-lifecycle", force: true },
+      ]);
+    }),
+  );
+
+  it.effect("does not remove another caller's worktree when creation loses a race", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const addFailure = new GitError({
+        command: "worktree add 13-worktree-lifecycle",
+        message: "branch is already checked out",
+      });
+      const manager = yield* Effect.provide(
+        Worktree.make,
+        provide(fakeGit(recorder, { addFailure }), fakeFs(recorder, {})),
+      );
+
+      yield* Effect.flip(manager.ensure(workspaceWith(), item));
+
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
+    }),
+  );
+
   it.effect("creates from origin/<branch> when the remote branch already exists", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
       const git = fakeGit(recorder, { remoteBranches: ["13-worktree-lifecycle"] });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
+      yield* manager.ensure(workspaceWith(), item);
       const added = yield* Ref.get(recorder.added);
       assert.strictEqual(added[0]?.startPoint, "origin/13-worktree-lifecycle");
     }),
@@ -139,11 +215,7 @@ describe("Worktree.ensure", () => {
         Worktree.make,
         provide(fakeGit(recorder, { remoteBranches: [branch] }), fakeFs(recorder, {})),
       );
-      const result = yield* manager.ensure(
-        workspaceWith(),
-        { id: "#13", title: "Worktree lifecycle" },
-        { branch },
-      );
+      const result = yield* manager.ensure(workspaceWith(), item, { branch });
       const [added] = yield* Ref.get(recorder.added);
       assert.strictEqual(result.branch, branch);
       assert.strictEqual(result.path, `/repo.worktrees/${branch}`);
@@ -157,10 +229,7 @@ describe("Worktree.ensure", () => {
       const recorder = yield* makeRecorder();
       const fs = fakeFs(recorder, { "/repo/.env": { mtimeMillis: 1 } });
       const manager = yield* Effect.provide(Worktree.make, provide(fakeGit(recorder, {}), fs));
-      yield* manager.ensure(workspaceWith({ linkPaths: [".env", ".env.missing"] }), {
-        id: "#13",
-        title: "Worktree lifecycle",
-      });
+      yield* manager.ensure(workspaceWith({ linkPaths: [".env", ".env.missing"] }), item);
       const linked = yield* Ref.get(recorder.linked);
       assert.deepStrictEqual(linked, [
         { target: "/repo/.env", linkPath: "/repo.worktrees/13-worktree-lifecycle/.env" },
@@ -173,7 +242,7 @@ describe("Worktree.ensure", () => {
       const recorder = yield* makeRecorder();
       const fs = fakeFs(recorder, { "/repo/.repos": { mtimeMillis: 1 } });
       const manager = yield* Effect.provide(Worktree.make, provide(fakeGit(recorder, {}), fs));
-      yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
+      yield* manager.ensure(workspaceWith(), item);
       const linked = yield* Ref.get(recorder.linked);
       assert.deepStrictEqual(linked, []);
     }),
@@ -182,16 +251,15 @@ describe("Worktree.ensure", () => {
   it.effect("fast-forwards an existing worktree instead of recreating it", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      const result = yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
+      const result = yield* manager.ensure(workspaceWith(), item);
       assert.strictEqual(result.created, false);
       const fastForwarded = yield* Ref.get(recorder.fastForwarded);
-      assert.deepStrictEqual(fastForwarded, [worktreePath]);
+      assert.deepStrictEqual(fastForwarded, [worktreePath()]);
       const added = yield* Ref.get(recorder.added);
       assert.strictEqual(added.length, 0);
     }),
@@ -200,26 +268,20 @@ describe("Worktree.ensure", () => {
   it.effect("refuses to sync a reused worktree with a git operation in progress", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         operation: { operation: "merge", unmergedPaths: ["src/a.ts", "src/b.ts"] },
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
 
-      const failure = yield* Effect.flip(
-        manager.ensure(workspaceWith({ setup: ["pnpm install"] }), {
-          id: "#13",
-          title: "Worktree lifecycle",
-        }),
-      );
+      const failure = yield* Effect.flip(manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item));
 
       assert.strictEqual(failure._tag, "WorktreeOperationInProgressError");
       assert.include(failure.message, "branch 13-worktree-lifecycle");
       assert.include(failure.message, "merge");
       assert.include(failure.message, "src/a.ts, src/b.ts");
-      assert.deepStrictEqual(yield* Ref.get(recorder.operationProbes), [worktreePath]);
+      assert.deepStrictEqual(yield* Ref.get(recorder.operationProbes), [worktreePath()]);
       assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
     }),
@@ -228,16 +290,15 @@ describe("Worktree.ensure", () => {
   it.effect("replays local commits onto the remote when the branch has diverged", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         divergence: { ahead: 2, behind: 5 },
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      const result = yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
+      const result = yield* manager.ensure(workspaceWith(), item);
       assert.strictEqual(result.created, false);
-      assert.deepStrictEqual(yield* Ref.get(recorder.rebased), [worktreePath]);
+      assert.deepStrictEqual(yield* Ref.get(recorder.rebased), [worktreePath()]);
       assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
       assert.strictEqual((yield* Ref.get(recorder.added)).length, 0);
     }),
@@ -246,15 +307,14 @@ describe("Worktree.ensure", () => {
   it.effect("still fast-forwards a branch that is only ahead of its remote", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         divergence: { ahead: 3, behind: 0 },
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
-      assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), [worktreePath]);
+      yield* manager.ensure(workspaceWith(), item);
+      assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), [worktreePath()]);
       assert.deepStrictEqual(yield* Ref.get(recorder.rebased), []);
     }),
   );
@@ -262,9 +322,8 @@ describe("Worktree.ensure", () => {
   it.effect("reports an unresolvable divergence without discarding local commits", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         divergence: { ahead: 2, behind: 5 },
         rebaseFailure: new GitError({
@@ -273,13 +332,7 @@ describe("Worktree.ensure", () => {
         }),
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      const result = yield* Effect.result(
-        manager.ensure(workspaceWith({ setup: ["pnpm install"] }), {
-          id: "#13",
-          title: "Worktree lifecycle",
-        }),
-      );
-      const failure = Result.isFailure(result) ? result.failure : null;
+      const failure = yield* Effect.flip(manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item));
       assert.strictEqual(failure?._tag, "WorktreeDivergedError");
       assert.include(failure?.message ?? "", "2 local commits");
       assert.include(failure?.message ?? "", "5 remote commits");
@@ -293,9 +346,8 @@ describe("Worktree.ensure", () => {
   it.effect("preserves a timed-out rebase as GitError", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         divergence: { ahead: 2, behind: 5 },
         rebaseFailure: new GitError({
@@ -306,9 +358,7 @@ describe("Worktree.ensure", () => {
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
 
-      const failure = yield* Effect.flip(
-        manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" }),
-      );
+      const failure = yield* Effect.flip(manager.ensure(workspaceWith(), item));
 
       if (failure._tag !== "GitError")
         return yield* Effect.die(new Error(`expected GitError, got ${failure._tag}`));
@@ -319,22 +369,18 @@ describe("Worktree.ensure", () => {
   it.effect("reuses a worktree whose branch has no counterpart on the remote", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), {
-        id: "#13",
-        title: "Worktree lifecycle",
-      });
+      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item);
       assert.strictEqual(result.created, false);
       assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.rebased), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
       assert.strictEqual((yield* Ref.get(recorder.added)).length, 0);
       assert.deepStrictEqual(yield* Ref.get(recorder.commands), [
-        { cwd: worktreePath, command: "pnpm install" },
+        { cwd: worktreePath(), command: "pnpm install" },
       ]);
     }),
   );
@@ -342,40 +388,33 @@ describe("Worktree.ensure", () => {
   it.effect("re-runs setup when reusing an existing worktree", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), {
-        id: "#13",
-        title: "Worktree lifecycle",
-      });
+      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item);
       assert.strictEqual(result.created, false);
       const commands = yield* Ref.get(recorder.commands);
-      assert.deepStrictEqual(commands, [{ cwd: worktreePath, command: "pnpm install" }]);
+      assert.deepStrictEqual(commands, [{ cwd: worktreePath(), command: "pnpm install" }]);
     }),
   );
 
   it.effect("reuses an existing worktree untouched when resuming, leaving uncommitted work in place", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
       const git = fakeGit(recorder, {
-        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         divergence: { ahead: 2, behind: 5 },
         operation: { operation: "merge", unmergedPaths: ["src/a.ts"] },
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      const result = yield* manager.ensure(
-        workspaceWith({ setup: ["pnpm install"] }),
-        { id: "#13", title: "Worktree lifecycle" },
-        { resume: true },
-      );
+      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item, {
+        resume: true,
+      });
       assert.strictEqual(result.created, false);
-      assert.strictEqual(result.path, worktreePath);
+      assert.strictEqual(result.path, worktreePath());
       assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.rebased), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.operationProbes), []);
@@ -388,11 +427,9 @@ describe("Worktree.ensure", () => {
       const recorder = yield* makeRecorder();
       const git = fakeGit(recorder, { remoteBranches: ["13-worktree-lifecycle"] });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
-      const result = yield* manager.ensure(
-        workspaceWith({ setup: ["pnpm install"] }),
-        { id: "#13", title: "Worktree lifecycle" },
-        { resume: true },
-      );
+      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item, {
+        resume: true,
+      });
       assert.strictEqual(result.created, true);
       const added = yield* Ref.get(recorder.added);
       assert.strictEqual(added[0]?.startPoint, "origin/13-worktree-lifecycle");
