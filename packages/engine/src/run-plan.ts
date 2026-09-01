@@ -53,7 +53,9 @@ import {
   SettingScope as SettingScopeSchema,
   stageResultJsonSchema,
 } from "@cogwork/contracts";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
 import { operationPolicyProfile } from "./operation-policy";
@@ -713,7 +715,35 @@ export interface AssembleRunPlanInput {
   readonly unavailableContributionReasons?: ReadonlyMap<string, string>;
 }
 
-export const assembleRunPlan = (input: AssembleRunPlanInput) => {
+export class RunPlanAssemblyError extends Schema.TaggedError<RunPlanAssemblyError>()("RunPlanAssemblyError", {
+  message: Schema.String,
+  cause: Schema.Defect(),
+}) {}
+
+const planMemberFrom = (cause: Error) => cause.stack?.match(/\bnew (RunPlan\w+)/)?.[1] ?? "RunPlan";
+
+const pathKey = (part: unknown) => {
+  if (typeof part === "object" && part !== null && "key" in part) return part.key;
+  return part;
+};
+
+const formatPath = (path: ReadonlyArray<unknown>) =>
+  path
+    .map(pathKey)
+    .map((part) => (typeof part === "number" ? `[${part}]` : `.${String(part)}`))
+    .join("");
+
+const formatAssemblyError = (cause: unknown) => {
+  if (!(cause instanceof Error) || !SchemaIssue.isIssue(cause.cause)) {
+    return `RunPlan: ${cause instanceof Error ? cause.message : String(cause)}`;
+  }
+  const member = planMemberFrom(cause);
+  return SchemaIssue.makeFormatterStandardSchemaV1()(cause.cause)
+    .issues.map((issue) => `${member}${formatPath(issue.path ?? [])}: ${issue.message}`)
+    .join("; ");
+};
+
+const assembleRunPlanUnsafe = (input: AssembleRunPlanInput) => {
   const workContext = input.item.workContext;
   const observation = RunPlanObservation.make({ ...input.observation });
   const admitted = admittedContributions(
@@ -851,3 +881,9 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     }),
   );
 };
+
+export const assembleRunPlan = (input: AssembleRunPlanInput) =>
+  Effect.try({
+    try: () => assembleRunPlanUnsafe(input),
+    catch: (cause) => new RunPlanAssemblyError({ message: formatAssemblyError(cause), cause }),
+  });
