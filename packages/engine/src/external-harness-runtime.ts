@@ -43,6 +43,7 @@ import {
   resolvedMcpSkills,
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
+import { SessionStore } from "./session-store";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
 type AdapterOptions<Adapter extends AnyTextAdapter> = Adapter["~types"]["providerOptions"];
@@ -62,6 +63,7 @@ export interface ExternalHarnessAuthentication {
 export interface ExternalHarnessIdentity {
   readonly run: RunId;
   readonly session: SessionId | null;
+  readonly resumeHandle: string | null;
 }
 
 export interface ExternalHarnessSelection {
@@ -150,18 +152,32 @@ export interface ExternalHarnessRuntimeInputs {
 
 const preparedWorkspace = { source: { type: "none" } } satisfies WorkspaceDefinition;
 
-const resolvedRequest = (request: HarnessRequest, authentication: ExternalHarnessAuthentication) => ({
-  identity: { run: request.plan.id, session: request.session },
-  selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
-  authentication,
-  policy: request.plan.harness.profile,
-  instructions: request.plan.instructions,
-  operatingInstructions: request.plan.operatingInstructions,
-  mcp: resolvedMcpSkills(request),
-  secrets: { mcp: request.mcpCredentials },
-  checkout: { path: request.plan.sandbox.workspace },
-  prompt: request.plan.messages,
-  outputSchema: request.plan.structuredOutput,
+const resolveResumeHandle = Effect.fn("ExternalHarnessRuntime.resolveResumeHandle")(function* (
+  session: SessionId | null,
+) {
+  if (!session) return null;
+  const store = yield* SessionStore;
+  return yield* store.resumeHandle(session);
+});
+
+const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
+  request: HarnessRequest,
+  authentication: ExternalHarnessAuthentication,
+) {
+  const resumeHandle = yield* resolveResumeHandle(request.session);
+  return {
+    identity: { run: request.plan.id, session: request.session, resumeHandle },
+    selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
+    authentication,
+    policy: request.plan.harness.profile,
+    instructions: request.plan.instructions,
+    operatingInstructions: request.plan.operatingInstructions,
+    mcp: resolvedMcpSkills(request),
+    secrets: { mcp: request.mcpCredentials },
+    checkout: { path: request.plan.sandbox.workspace },
+    prompt: request.plan.messages,
+    outputSchema: request.plan.structuredOutput,
+  } satisfies ExternalHarnessResolvedRequest;
 });
 
 const outputCharacters = (event: AgUiEvent) =>
@@ -244,7 +260,7 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
     provider,
     workspace,
     ...(policy ? { policy } : {}),
-    fileEvents: true,
+    fileEvents: inputs.fileHooks !== undefined,
     ...(inputs.fileHooks ? { hooks: inputs.fileHooks } : {}),
   });
   const abortController = new AbortController();
@@ -265,7 +281,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
     Stream.unwrap(
       Effect.gen(function* () {
         const authentication = yield* inputs.authentication(request);
-        const resolved = resolvedRequest(request, authentication);
+        const resolved = yield* resolvedRequest(request, authentication);
         const provider = yield* inputs.sandboxProvider(resolved);
         const workspaceDefinition = yield* inputs.workspace(resolved);
         const policy = yield* inputs.sandboxPolicy(resolved);

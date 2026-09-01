@@ -1,4 +1,4 @@
-import { HarnessName, RunPlan } from "@cogwork/contracts";
+import { HarnessName, RunPlan, SessionId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import {
   type DefaultMessageMetadataByModality,
@@ -27,10 +27,12 @@ import { fullHarnessExecution, HarnessError, make } from "./harness";
 import { SessionStore } from "./session-store";
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
+const resumedSession = Schema.decodeSync(SessionId)("sess-external-147");
 
 interface ControlledOptions {
   readonly effort: string;
   readonly authentication: string;
+  readonly sessionId: string | null;
 }
 
 class ControlledAdapter
@@ -165,7 +167,7 @@ const controlledProvider = (created: Array<string>, destructions: Array<true>): 
 const harnessServices = {
   sessionStore: {
     persistence: memoryPersistence(),
-    resumeHandle: () => Effect.succeed(null),
+    resumeHandle: () => Effect.succeed("native-session-147"),
     mint: () => Effect.die("unexpected mint"),
   },
   contextAssembler: {
@@ -260,6 +262,7 @@ const descriptor = (
   projectOptions: (resolved) => ({
     effort: resolved.selection.effort ?? "high",
     authentication: resolved.authentication.mode,
+    sessionId: resolved.identity.resumeHandle,
   }),
   projectAuthentication: (authentication) => authentication.mode,
   transport: {
@@ -349,6 +352,7 @@ describe("external Harness runtime", () => {
         assert.deepStrictEqual(probe.chatOptions[0]?.modelOptions, {
           effort: "high",
           authentication: "host",
+          sessionId: null,
         });
         assert.deepNestedInclude(probe.chatOptions[0]?.outputSchema, request.structuredOutput ?? {});
         const outputSchema = probe.chatOptions[0]?.outputSchema;
@@ -356,6 +360,36 @@ describe("external Harness runtime", () => {
           return assert.fail("adapter received no converted JSON Schema");
         }
         assert.strictEqual(outputSchema.additionalProperties, false);
+      }),
+    );
+
+    it.effect("resolves the native session handle before descriptor projection", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const created: Array<string> = [];
+        const harness = makeHarness(
+          descriptor(
+            [
+              { type: EventType.RUN_STARTED, threadId: resumedSession, runId: request.id },
+              { type: EventType.RUN_FINISHED, threadId: resumedSession, runId: request.id },
+            ],
+            probe,
+          ),
+          created,
+        );
+
+        yield* harness
+          .run({ plan: request, session: resumedSession, mcpCredentials: new Map() })
+          .pipe(Stream.take(1), Stream.runDrain);
+
+        assert.deepNestedInclude(probe.resolved[0]?.request, {
+          identity: {
+            run: request.id,
+            session: resumedSession,
+            resumeHandle: "native-session-147",
+          },
+        });
+        assert.strictEqual(probe.chatOptions[0]?.modelOptions?.sessionId, "native-session-147");
       }),
     );
 
