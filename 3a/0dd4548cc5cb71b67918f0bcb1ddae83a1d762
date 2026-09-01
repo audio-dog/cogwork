@@ -1,0 +1,118 @@
+apps/desktop/src/main/index.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 4,7,11,15,33,38,43,55,108,110,114-115,119,121-123
+packages/engine/src/recovery.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 29,366,492,506
+packages/engine/src/harness.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 93,105,107,412-413
+packages/engine/src/scheduler.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 22
+apps/desktop/src/main/quit.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 1-16
+packages/engine/src/recovery.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 9,25,28,33,52,68-72,81
+docs/research/repeatable-performance-benchmarking.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-350
+apps/desktop/src/main/window.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 15-26
+packages/engine/src/external-harness-runtime.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 300-301,928-966
+  s_5cf84fa7f14674::t_84030ce7fbe21c 967
+packages/codex-cli/src/harness.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 466-467
+packages/engine/src/linear/linear.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 3,61-77,95,166-167,295-297,429,431-432,565-573,575-577
+patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
+  s_5cf84fa7f14674::t_c5040e26748bee 1-20
+packages/engine/src/daemon-composition.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 10,18,51-52,144-247,256-257,260,265,274
+packages/engine/CONTEXT.md
+  s_5cf84fa7f14674::t_c5040e26748bee 89,227-246
+packages/engine/src/comments.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 93,132,172,176,191-202
+  s_5cf84fa7f14674::t_3a31f2fe198a17 203
+packages/cursor-acp/src/harness.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 3,12,19,24,115,127,146,149,204,206,227-230,306-343,347-353,355,359-386,389,391-397,399-402
+packages/engine/src/linear/client.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 4,9-10,101-106,108-134,477-479,483-485,487-489,496-498,500-502,506-508
+docs/adr/0021-the-performance-sensor-files-its-own-tickets.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-105
+packages/engine/src/linear/client-credentials.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 7
+apps/desktop/src/main/window.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 1-32
+packages/engine/src/worktree.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 553
+packages/engine/src/issue-tracker-router.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 3,5-6,8,35-62,67-68,79,83,88-89,91-92
+apps/desktop/src/main/quit.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 1-77
+docs/adr/0020-telemetry-is-local-first-in-its-own-store.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-99
+apps/desktop/src/main/engine-command.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 3,6-7,10-15,70-71
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_5cf84fa7f14674::t_c5040e26748bee 106-117,131-132
+docs/research/performance-feedback-loop-into-tracker.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-341
+packages/engine/src/harness.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 60-61
+apps/cli/src/platform.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 15,91-107,221-223,229
+packages/engine/src/executor.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 20,46-52,816-819,836,841,848,857,867,892,909,912,964,973-981,1021,1026,1030,1057-1058,1075-1076,1143,1148,1151,1192-1193,1493-1501,1522,1524,1600-1611,1613-1614
+apps/cli/src/stop-signal.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 5
+apps/desktop/src/main/engine-command.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 27-33,36
+packages/cursor-acp/src/harness.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 1-9,22-23,28-44,128,133-136,158-170,247-265,267-270,272-275,279,282-291,294,296-298,300-325,328,331-348,352,354-358,360-375,379,381-398,400,404,406-409,412,415-422,426,428-431,434,437-440,444,450-454,457,460-465,467,471,477,479,481-482
+packages/engine/src/provider-runner.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 140-141
+docs/research/effect-never-lint-rule.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-168
+packages/engine/src/credential-store.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 5,585-586,589-617,620,626,628-634,646,655,658-660,664-666,673,681,684-686,689-691
+packages/cursor-acp/CONTEXT.md
+  s_5cf84fa7f14674::t_c5040e26748bee 13,17,25,28-31,37
+packages/cursor-acp/FINDINGS.md
+  s_5cf84fa7f14674::t_c5040e26748bee 75-76
+packages/engine/src/external-harness-runtime.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 273-286
+packages/engine/src/executor.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 2,49,318-322,583-584,639,643-646,661-678,2662,2694,2720-2742,2764-2789,2966,2979,2988-3006
+docs/research/electron-node-performance-practices.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-325
+pnpm-workspace.yaml
+  s_5cf84fa7f14674::t_c5040e26748bee 44-46
+docs/research/cogwork-performance-bottleneck-survey.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-99
+packages/engine/src/comments.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 2,51,135-141,147,150-154
+  s_5cf84fa7f14674::t_8c4e632813398b 155
+docs/research/effect-observability-for-performance.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-305
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_5cf84fa7f14674::t_c5040e26748bee 3,116-140
+docs/spec/performance-observability.md
+  s_5cf84fa7f14674::t_c5040e26748bee 1-124
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_5cf84fa7f14674::t_c5040e26748bee 1,22-35,44,56,59-60,64-69,71-79,86,90-95
+pnpm-lock.yaml
+  s_5cf84fa7f14674::t_7363efd9fb091e 74-76,325,328,331,338,341,347,360,366,384,387,390,397,400,409,436,439,442,461,467,5932,5935,6257,6272,6807,6811,6823,6826,6857,6862,6864,6866,6868,6872,6874-6875,6881,6886,6910,7231,7249,7259,7281,7289,9730,9821,9845
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3a0dd4548cc5cb71b67918f0bcb1ddae83a1d762",
+  "prompts": {},
+  "sessions": {
+    "s_5cf84fa7f14674": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e8f-e6d5-7001-84b2-e8275f6fc77d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
