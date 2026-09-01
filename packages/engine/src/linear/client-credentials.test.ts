@@ -1,10 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { vi } from "vitest";
 import type { CredentialAccount } from "../credential-store";
 import { make } from "./client-credentials";
 
@@ -183,6 +185,34 @@ describe("linear client credentials", () => {
         const error = yield* Effect.flip(grant.token(account));
         assert.include(error.message, "rejected");
         assert.notInclude(error.message, "s3cret");
+      }),
+    );
+  });
+
+  it.effect("fails a hanging mint at the token endpoint deadline", () => {
+    const onAbort = vi.fn();
+    const run = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      effect.pipe(
+        Effect.provideService(FetchHttpClient.Fetch, ((_input, init) => {
+          init?.signal?.addEventListener("abort", onAbort);
+          return Promise.withResolvers<Response>().promise;
+        }) satisfies typeof globalThis.fetch),
+        Effect.provide(
+          Layer.mergeAll(
+            FetchHttpClient.layer,
+            ConfigProvider.layer(ConfigProvider.fromEnv({ env: { [secretEnv]: "s3cret" } })),
+          ),
+        ),
+      );
+    return run(
+      Effect.gen(function* () {
+        const grant = yield* make();
+        const requestFiber = yield* Effect.forkChild(Effect.flip(grant.token(account)));
+        yield* TestClock.adjust("1 minute");
+        const error = yield* Fiber.join(requestFiber);
+        assert.strictEqual(error.account, "AUD");
+        assert.include(error.message, "timed out");
+        assert.strictEqual(onAbort.mock.calls.length, 1);
       }),
     );
   });

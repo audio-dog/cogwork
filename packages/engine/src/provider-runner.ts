@@ -158,7 +158,9 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const sandbox = yield* openWorktreeSandbox(plan.sandbox.workspace).pipe(
             Effect.mapError((error) => launchError(true, error.message)),
           );
-          const baseSha = yield* resolveBaseSha(sandbox);
+          const baseSha = yield* resolveBaseSha(sandbox).pipe(
+            Effect.mapError((error) => launchError(true, error.message)),
+          );
           const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>();
           const toolSet = makeOwnedToolSet(sandbox, runPromise, policyForProfile(plan.harness.profile));
           const toolsByName: ReadonlyMap<string, AnyTool> = new Map(Object.entries(toolSet));
