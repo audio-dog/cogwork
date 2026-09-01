@@ -116,6 +116,51 @@ class SentMessages extends Context.Service<SentMessages, Ref.Ref<ReadonlyArray<F
   );
 }
 
+const makeSocketFixture = Effect.fn("test.makeSocketFixture")(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const home = yield* fs.makeTempDirectoryScoped({ prefix: "cf-" });
+  const dir = path.join(home, "home");
+  return { dir, socketPath: path.join(dir, "d.sock") };
+});
+
+class SocketFixture extends Context.Service<
+  SocketFixture,
+  { readonly dir: string; readonly socketPath: string }
+>()("@cogwork/cli/rpc.test/SocketFixture") {
+  static readonly layer = Layer.effect(SocketFixture, makeSocketFixture());
+  static readonly looseDirectoryLayer = Layer.effect(
+    SocketFixture,
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const fixture = yield* makeSocketFixture();
+      yield* fs.makeDirectory(fixture.dir, { mode: 0o755 });
+      return fixture;
+    }),
+  );
+}
+
+const socketTransportLayer = Layer.unwrap(
+  Effect.map(SocketFixture, ({ socketPath }) =>
+    transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson)),
+  ),
+);
+const socketTestLayer = socketTransportLayer.pipe(
+  Layer.provideMerge(SocketFixture.layer),
+  Layer.provideMerge(NodeServices.layer),
+);
+const looseSocketTestLayer = socketTransportLayer.pipe(
+  Layer.provideMerge(SocketFixture.looseDirectoryLayer),
+  Layer.provideMerge(NodeServices.layer),
+);
+const socketFixtureLayer = SocketFixture.layer.pipe(Layer.provideMerge(NodeServices.layer));
+
+const withTransport = <A, E, R>(socketPath: string, effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.provide(transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson))),
+    Effect.scoped,
+  );
+
 describe("daemon socket", () => {
   layer(SentMessages.clientLayer)((it) => {
     it.effect("fails a daemon call that does not answer before the deadline", () =>
@@ -221,60 +266,35 @@ describe("daemon socket", () => {
   it.effect("binds a 0600 socket inside a freshly created 0700 directory", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "cf-" });
-      const dir = path.join(home, "home");
-      const socketPath = path.join(dir, "d.sock");
+      const { dir, socketPath } = yield* SocketFixture;
 
-      yield* Effect.gen(function* () {
-        assert.strictEqual((yield* fs.stat(socketPath)).mode & 0o777, 0o600);
-        assert.strictEqual((yield* fs.stat(dir)).mode & 0o777, 0o700);
-      }).pipe(
-        Effect.provide(transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson))),
-        Effect.scoped,
-      );
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+      assert.strictEqual((yield* fs.stat(socketPath)).mode & 0o777, 0o600);
+      assert.strictEqual((yield* fs.stat(dir)).mode & 0o777, 0o700);
+    }).pipe(Effect.provide(socketTestLayer)),
   );
 
   it.effect("tightens a pre-existing loose socket directory to 0700", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "cf-" });
-      const dir = path.join(home, "home");
-      const socketPath = path.join(dir, "d.sock");
-      yield* fs.makeDirectory(dir, { mode: 0o755 });
+      const { dir } = yield* SocketFixture;
 
-      yield* Effect.gen(function* () {
-        assert.strictEqual((yield* fs.stat(dir)).mode & 0o777, 0o700);
-      }).pipe(
-        Effect.provide(transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson))),
-        Effect.scoped,
-      );
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+      assert.strictEqual((yield* fs.stat(dir)).mode & 0o777, 0o700);
+    }).pipe(Effect.provide(looseSocketTestLayer)),
   );
 
   it.effect("releases the socket on scope teardown, leaving nothing to leak", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "cf-" });
-      const dir = path.join(home, "home");
-      const socketPath = path.join(dir, "d.sock");
+      const { socketPath } = yield* SocketFixture;
 
-      yield* Effect.gen(function* () {
-        assert.isTrue(yield* fs.exists(socketPath));
-      }).pipe(
-        Effect.provide(transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson))),
-        Effect.scoped,
+      yield* withTransport(
+        socketPath,
+        Effect.map(fs.exists(socketPath), (exists) => assert.isTrue(exists)),
       );
 
       assert.isFalse(yield* fs.exists(socketPath));
 
-      yield* Effect.void.pipe(
-        Effect.provide(transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson))),
-        Effect.scoped,
-      );
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+      yield* withTransport(socketPath, Effect.void);
+    }).pipe(Effect.provide(socketFixtureLayer)),
   );
 });
