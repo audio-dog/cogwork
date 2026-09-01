@@ -1,0 +1,37 @@
+packages/engine/CONTEXT.md
+  s_cfc9c6593dbaa8::t_19398a38b5520b 84-87
+packages/engine/src/external-harness-runtime.test.ts
+  s_cfc9c6593dbaa8::t_19398a38b5520b 1-501
+packages/engine/src/provider-bridge.ts
+  s_cfc9c6593dbaa8::t_19398a38b5520b 10,31-33,36-39,42
+  s_cfc9c6593dbaa8::t_69ca02563600dd 26
+packages/engine/src/index.ts
+  s_cfc9c6593dbaa8::t_19398a38b5520b 11
+packages/codex-cli/src/harness.ts
+  s_cfc9c6593dbaa8::t_bb3f3564ab2c71 381
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_cfc9c6593dbaa8::t_19398a38b5520b 24,26,70-75,80-83,101-105,127-129,136-149,158-164,169-172,247-248,250-254,257,259,294-295,299-300,310,317,328,335,343-362,366,376,378-379,415,417,437-438,454-474,490-491,493,496,554
+packages/engine/src/external-harness-runtime.ts
+  s_cfc9c6593dbaa8::t_19398a38b5520b 1-315
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_cfc9c6593dbaa8::t_19398a38b5520b 1,29-36
+  s_cfc9c6593dbaa8::t_d8046f199c4d22 37
+apps/desktop/src/renderer/src/components/item-tab-actions.test.tsx
+  s_cfc9c6593dbaa8::t_19398a38b5520b 1-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4c13c80635055d877de964ddbeea9b79faa95cee",
+  "prompts": {},
+  "sessions": {
+    "s_cfc9c6593dbaa8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b81-9f9b-7aa2-b500-ed62bdc602b4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
