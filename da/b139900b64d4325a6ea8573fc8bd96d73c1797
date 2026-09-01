@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_6e9e628a99a807::t_c95ceb13395937 1,30
+  s_6e9e628a99a807::t_28b6081a50f926 37
+  s_6e9e628a99a807::t_8e369c301a3be7 29,31-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dab139900b64d4325a6ea8573fc8bd96d73c1797",
+  "prompts": {},
+  "sessions": {
+    "s_6e9e628a99a807": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05af9-3f07-7b21-984f-de336e55702c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
