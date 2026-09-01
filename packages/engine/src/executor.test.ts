@@ -574,7 +574,8 @@ interface TestRunner {
 const testRunnerDefaults = {
   capabilities: {
     authenticationModes: ["host"],
-    session: { affinity: "runtime-host", fork: false },
+    session: { affinity: "runtime-host", fork: false, humanAttach: true },
+    structuredOutput: "none",
     policyFidelity: "exact",
     fileEventFidelity: "none",
     usageQuality: "none",
@@ -629,9 +630,14 @@ const capturingRunner = (
   tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
   sessionKind: SessionKind = "opaque-handle",
   name: HarnessName = cursor,
+  humanAttach = true,
 ): TestRunner => ({
   make: (requests) => ({
     ...testRunnerDefaults,
+    capabilities: {
+      ...testRunnerDefaults.capabilities,
+      session: { ...testRunnerDefaults.capabilities.session, humanAttach },
+    },
     name,
     sessionKind,
     projectedMembers: [],
@@ -2604,6 +2610,32 @@ describe("Executor.execute", () => {
       assert.strictEqual(run?.stage, "implement");
       assert.strictEqual(run?.status, "exhausted");
     }).pipe(Effect.provide(provide([failingRunner(error)])));
+  });
+
+  it.effect("does not publish a human attach command for a programmatic-only session", () => {
+    const error = new HarnessError({ reason: "turn", retryable: false, message: "resume failed" });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
+      assert.notInclude(handOff?.note ?? "", "Resume the session");
+      assert.notInclude(handOff?.note ?? "", "agent --resume");
+    }).pipe(
+      Effect.provide(
+        provide([
+          capturingRunner(
+            [runStarted, sessionEvent("cursor-acp-session")],
+            Stream.fail(error),
+            "opaque-handle",
+            cursor,
+            false,
+          ),
+        ]),
+      ),
+    );
   });
 
   it.effect("hands a diverged worktree to a human on the first attempt without retrying", () => {

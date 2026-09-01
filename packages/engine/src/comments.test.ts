@@ -188,4 +188,18 @@ describe("comments", () => {
     assert.include(note, "Exhausted after 2 consecutive triage crashes.");
     assert.notInclude(note, "Resume the session");
   });
+
+  it("omits a human attach command for a programmatic-only session", () => {
+    const note = handoffNote({
+      workspace,
+      item,
+      stage: "implement",
+      cause: { kind: "non-retryable" },
+      reason: "boom",
+      session: "cursor-acp-session",
+      humanAttach: false,
+    });
+    assert.notInclude(note, "Resume the session");
+    assert.notInclude(note, "agent --resume");
+  });
 });
