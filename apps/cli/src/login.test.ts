@@ -2,15 +2,21 @@ import { CredentialStore } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { afterEach, vi } from "vitest";
 import { makeFileStore } from "./credentials";
-import { BrowserOpener, type LinearLoginConfig, loginKey, loginLinear } from "./login";
+import { BrowserOpener, browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear } from "./login";
 
 const redirectPort = 39_642;
 
@@ -69,7 +75,10 @@ class LoginCredentialFile extends Context.Service<LoginCredentialFile, string>()
   "@cogwork/cli/login.test/LoginCredentialFile",
 ) {}
 
-const withLoginTest = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+const withLoginTest = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  openerLayer: Layer.Layer<BrowserOpener> = fakeBrowser,
+) =>
   effect.pipe(
     Effect.provide(
       Layer.mergeAll(
@@ -81,7 +90,7 @@ const withLoginTest = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
             return CredentialStore.make({ stored });
           }),
         ),
-        fakeBrowser,
+        openerLayer,
         FetchHttpClient.layer,
       ).pipe(
         Layer.provideMerge(
@@ -135,6 +144,71 @@ describe("login linear", () => {
       assert.include(error.message, "other");
       assert.deepStrictEqual(yield* (yield* makeFileStore(filePath)).load, []);
     }).pipe(withLoginTest),
+  );
+
+  it.effect("times out waiting for the callback and releases the loopback port", () =>
+    Effect.gen(function* () {
+      vi.stubGlobal("fetch", vi.fn(routedFetch));
+      const opened = yield* Deferred.make<void>();
+      const silentBrowser = Layer.succeed(BrowserOpener, { open: () => Deferred.succeed(opened, undefined) });
+      const first = yield* Effect.forkChild(
+        Effect.flip(loginLinear(config)).pipe((effect) => withLoginTest(effect, silentBrowser)),
+      );
+
+      yield* Deferred.await(opened);
+      yield* TestClock.adjust("5 minutes");
+      const error = yield* Fiber.join(first);
+
+      assert.include(error.message, "timed out");
+      assert.include(error.message, "retry");
+      assert.deepStrictEqual(yield* loginLinear(config).pipe(withLoginTest), {
+        organization: "acme",
+        actorUserId: "bot-user",
+      });
+    }),
+  );
+});
+
+describe("browser opener", () => {
+  it.effect("times out a hanging browser subprocess with retry guidance", () =>
+    Effect.gen(function* () {
+      const opener = yield* BrowserOpener;
+      const fiber = yield* Effect.forkChild(Effect.flip(opener.open("https://linear.app/oauth/authorize")));
+
+      yield* TestClock.adjust("30 seconds");
+      const error = yield* Fiber.join(fiber);
+
+      assert.strictEqual(error._tag, "LinearOAuthError");
+      assert.include(error.message, "timed out");
+      assert.include(error.message, "retry");
+    }).pipe(
+      Effect.provide(
+        browserOpenerLayer.pipe(
+          Layer.provide(
+            Layer.succeed(
+              ChildProcessSpawner.ChildProcessSpawner,
+              ChildProcessSpawner.make(() =>
+                Effect.succeed(
+                  ChildProcessSpawner.makeHandle({
+                    pid: ChildProcessSpawner.ProcessId(1),
+                    stdin: Sink.drain,
+                    stdout: Stream.empty,
+                    stderr: Stream.empty,
+                    all: Stream.empty,
+                    exitCode: Effect.never,
+                    isRunning: Effect.succeed(true),
+                    kill: () => Effect.void,
+                    getInputFd: () => Sink.drain,
+                    getOutputFd: () => Stream.empty,
+                    unref: Effect.succeed(Effect.void),
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 });
 

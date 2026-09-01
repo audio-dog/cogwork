@@ -17,6 +17,9 @@ import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner
 
 const { LinearOAuthError } = Linear.OAuth;
 
+const browserOpenDeadline = "30 seconds";
+const callbackDeadline = "5 minutes";
+
 export interface LinearLoginConfig {
   readonly clientId: string;
   readonly redirectPort: number;
@@ -53,6 +56,14 @@ export const browserOpenerLayer = Layer.effect(
           Effect.mapError(
             (cause) =>
               new LinearOAuthError({ message: `could not open a browser for ${url}: ${cause.message}` }),
+          ),
+          Effect.timeout(browserOpenDeadline),
+          Effect.catchTag(
+            "TimeoutError",
+            () =>
+              new LinearOAuthError({
+                message: `Opening the browser timed out after ${browserOpenDeadline}; retry cogwork login linear.`,
+              }),
           ),
         ),
     }),
@@ -97,7 +108,16 @@ const awaitAuthorization = Effect.fn("cli.login.awaitAuthorization")(
     yield* HttpServer.serveEffect(callbackApp(result));
     const opener = yield* BrowserOpener;
     yield* opener.open(authorizeUrl);
-    const callback = yield* Deferred.await(result);
+    const callback = yield* Deferred.await(result).pipe(
+      Effect.timeout(callbackDeadline),
+      Effect.catchTag(
+        "TimeoutError",
+        () =>
+          new LinearOAuthError({
+            message: `Linear login timed out waiting for the browser callback after ${callbackDeadline}; retry cogwork login linear.`,
+          }),
+      ),
+    );
     if (callback.error !== null) {
       return yield* new LinearOAuthError({
         message: `Linear denied the authorization ("${callback.error}"). Confirm ${redirectUriFor(config.redirectPort)} is a registered redirect URL for this OAuth app.`,
