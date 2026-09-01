@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { waitForDaemonListening } from "./wait-for-socket";
 
@@ -27,11 +28,9 @@ describe("waitForDaemonListening", () => {
   it("resolves true when the socket is already listening", () =>
     withTempDir(async (dir) => {
       const server = await listen(join(dir, "live.sock"));
-      const controller = new AbortController();
       try {
-        expect(await waitForDaemonListening(join(dir, "live.sock"), controller.signal)).toBe(true);
+        expect(await Effect.runPromise(waitForDaemonListening(join(dir, "live.sock")))).toBe(true);
       } finally {
-        controller.abort();
         await close(server);
       }
     }));
@@ -39,23 +38,23 @@ describe("waitForDaemonListening", () => {
   it("resolves once a server binds the socket after the wait begins", () =>
     withTempDir(async (dir) => {
       const socketPath = join(dir, "late.sock");
-      const controller = new AbortController();
-      const waiting = waitForDaemonListening(socketPath, controller.signal);
-
-      const server = await listen(socketPath);
+      const [listening, server] = await Promise.all([
+        Effect.runPromise(waitForDaemonListening(socketPath)),
+        listen(socketPath),
+      ]);
       try {
-        expect(await waiting).toBe(true);
+        expect(listening).toBe(true);
       } finally {
-        controller.abort();
         await close(server);
       }
     }));
 
-  it("resolves false when aborted before the socket appears", () =>
+  it("stops waiting when the caller's timeout expires", () =>
     withTempDir(async (dir) => {
-      const controller = new AbortController();
-      const waiting = waitForDaemonListening(join(dir, "never.sock"), controller.signal);
-      controller.abort();
-      expect(await waiting).toBe(false);
+      const result = await Effect.runPromise(
+        waitForDaemonListening(join(dir, "never.sock")).pipe(Effect.timeoutOption("10 millis")),
+      );
+
+      expect(result._tag).toBe("None");
     }));
 });
