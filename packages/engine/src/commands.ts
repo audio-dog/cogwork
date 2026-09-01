@@ -617,7 +617,6 @@ export const removeConnection = Effect.fn("Daemon.RemoveConnection")(function* (
 }) {
   const connections = yield* ConnectionStore;
   const plugins = yield* PluginManager;
-  const registry = yield* (yield* WorkspaceRegistry).state;
   const connection = yield* connections.find(payload.connectionId);
   if (!connection) {
     return yield* connectionFailure("remove Connection", payload.connectionId, "Connection not found");
@@ -629,6 +628,7 @@ export const removeConnection = Effect.fn("Daemon.RemoveConnection")(function* (
   yield* Effect.forEach(requiring, (plugin) => publishPluginMutation(plugins.uninstall(plugin.pluginId)), {
     discard: true,
   });
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const danglingWorkspaces = boundWorkspaceIds(registry, payload.connectionId);
   yield* connections
     .remove(payload.connectionId)

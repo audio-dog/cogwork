@@ -1515,6 +1515,51 @@ describe("Connection mutations", () => {
       Effect.scoped,
     );
   });
+
+  it.effect("includes a workspace registered while required Plugins uninstall", () =>
+    Effect.gen(function* () {
+      const github = connectionIdOf("github", "acme");
+      const uninstallStarted = yield* Deferred.make<void>();
+      const finishUninstall = yield* Deferred.make<void>();
+      const pluginOverview = {
+        plugins: [{ ...installedPlugin("github"), requiredConnections: ["github"] }],
+      } satisfies PluginOverview;
+      const plugins = Layer.succeed(PluginManager, {
+        overview: Effect.succeed(pluginOverview),
+        install: () => Effect.die("unexpected Plugin install"),
+        uninstall: () =>
+          Deferred.succeed(uninstallStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(finishUninstall)),
+            Effect.map(() => ({ overview: { plugins: [] }, notices: [] })),
+          ),
+        contributions: () => Effect.succeed([]),
+      });
+      const registries = registrationServices();
+      yield* Effect.gen(function* () {
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const removing = yield* Effect.forkChild(client.RemoveConnection({ connectionId: github }));
+        yield* Deferred.await(uninstallStarted);
+        const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+        if (registered.name === undefined) return assert.fail("expected registration to succeed");
+        yield* Deferred.succeed(finishUninstall, undefined);
+        const result = yield* Fiber.join(removing);
+
+        assert.deepStrictEqual(result.danglingWorkspaces, [registered.name]);
+      }).pipe(
+        Effect.provide(
+          daemonLayer(
+            trackerLayer({}),
+            schedulerStub(),
+            controlStoreStub(),
+            registries,
+            plugins,
+            connectionStoreLayerWithStatus("established", null, () => Effect.void),
+          ),
+        ),
+        Effect.scoped,
+      );
+    }),
+  );
 });
 
 describe("workspace lifecycle commands", () => {
