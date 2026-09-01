@@ -1,0 +1,44 @@
+apps/desktop/src/main/daemon-bridge.ts
+  s_0052d4f9e2cd98::t_b9e43e8c49048e 1,3,11-12,14,18,20-24,28-30,32-33,63-64
+  s_0052d4f9e2cd98::t_59d4de505d9bae 44-50,54-55
+  s_0052d4f9e2cd98::t_c21e171eb41a65 2
+  s_0052d4f9e2cd98::t_a68c1cf7bcb3c1 36,57-58,60-62
+  s_0052d4f9e2cd98::t_20c353e167f1f0 35
+  s_0052d4f9e2cd98::t_c44f8483e2b539 15,51
+  s_0052d4f9e2cd98::t_ea1fcb54d3b1d8 27,31
+  s_0052d4f9e2cd98::t_8c5f3f6bcc0bdd 34,37-43,56
+  s_ebaf2e72481122::t_82bae0e8e326ff 25,52-53
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_0052d4f9e2cd98::t_5227bb5d204a0d 20,48-49,62,65-66,75,77
+  s_0052d4f9e2cd98::t_0cbacf9e44451e 12,45-47,50-61,63-64,67-74,78
+  s_0052d4f9e2cd98::t_b2426575e8d019 8,41,44,87,121,156
+apps/desktop/src/main/daemon-bridge.test.ts
+  s_0052d4f9e2cd98::t_26ee088cb5f43d 1-4,6-11,13,19-31,34-36,59-61
+  s_0052d4f9e2cd98::t_c8b162e5b7f09a 37-55,57-58
+  s_0052d4f9e2cd98::t_c1b0022e32e30f 5,56
+  s_0052d4f9e2cd98::t_30c863fc9a8629 12,14-18,32-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dc66b805008d3520253f5f7f3a8261805f20bd26",
+  "prompts": {},
+  "sessions": {
+    "s_0052d4f9e2cd98": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05a81-79db-7883-8b79-60ac1db2bfdc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ebaf2e72481122": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05aba-ca57-7471-9130-0a23ba35db09",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
