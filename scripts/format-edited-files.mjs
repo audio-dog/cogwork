@@ -95,13 +95,16 @@ const formatEditedFile = async (checkout, path) => {
         { cwd: checkout, encoding: "utf8", input },
       );
       if (result.stderr) process.stderr.write(result.stderr);
-      if (result.error) console.error(result.error.message);
-      if (result.error || result.status !== 0) return result.status ?? 1;
-      if (typeof result.stdout === "string" && result.stdout !== input) {
+      if (result.error) {
+        console.error(result.error.message);
+        return 1;
+      }
+      const canWrite = typeof result.stdout === "string" && (result.status === 0 || result.stdout.length > 0);
+      if (canWrite && result.stdout !== input) {
         await file.truncate(0);
         await file.write(result.stdout, 0, "utf8");
       }
-      return 0;
+      return result.status ?? 1;
     } finally {
       await file.close();
     }

@@ -154,6 +154,30 @@ test("does not change an edited file when Biome fails", async (context) => {
   assert.equal(await readFile(file, "utf8"), contents);
 });
 
+test("applies formatted output when Biome reports remaining errors", async (context) => {
+  const checkout = process.cwd();
+  const directory = await mkdtemp(join(checkout, "format-edited-files-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const executableDirectory = join(directory, "bin");
+  const file = join(directory, "edited.ts");
+  await mkdir(executableDirectory);
+  await writeFile(
+    join(executableDirectory, "pnpm"),
+    "#!/bin/sh\nprintf '%s\\n' 'export const value = { nested: true };'\nexit 1\n",
+    { mode: 0o755 },
+  );
+  await writeFile(file, "export const value={nested:true}\n");
+
+  const result = runHook(
+    checkout,
+    { hook_event_name: "afterFileEdit", file_path: file },
+    { ...process.env, PATH: executableDirectory },
+  );
+
+  assert.equal(result.status, 1);
+  assert.equal(await readFile(file, "utf8"), "export const value = { nested: true };\n");
+});
+
 test("formats every patched file without changing an unrelated file", async (context) => {
   const checkout = process.cwd();
   const directory = await mkdtemp(join(checkout, "format-edited-files-"));
