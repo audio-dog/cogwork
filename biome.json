@@ -80,6 +80,12 @@
   },
   "overrides": [
     {
+      "includes": ["configs/lint/tests/fixtures/**"],
+      "linter": {
+        "enabled": false
+      }
+    },
+    {
       "includes": ["**/routes/**"],
       "linter": {
         "rules": {

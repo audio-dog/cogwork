@@ -22,6 +22,7 @@ import {
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
   ImplementStageResultCompletion,
+  issueTrackerErrorIsPermanent,
   PluginContributionLoad,
   RunId,
   sessionHandle,
@@ -53,6 +54,7 @@ import { ConnectionStore } from "./connection";
 import { ContextAssembler, type ContextAssemblerError } from "./context-assembler";
 import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
+import * as Cooldown from "./cooldown";
 import { type CredentialError, CredentialStore } from "./credential-store";
 import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
@@ -401,6 +403,7 @@ export const make = Effect.gen(function* () {
   );
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
+  const claimCooldowns = yield* Cooldown.make;
 
   const cleanupRunContext = (runId: RunId) =>
     contextAssembler
@@ -675,18 +678,79 @@ export const make = Effect.gen(function* () {
     return { request: runRequest, session, plan, selectedOps };
   });
 
+  const claimScope = (workspace: RegisteredWorkspace, item: EligibleWork) =>
+    `${workspace.config.name}:${item.id}:${item.stage}`;
+
+  const holdOffClaim = Effect.fn("Executor.holdOffClaim")(function* (
+    scope: string,
+    item: EligibleWork,
+    error: IssueTrackerError,
+  ) {
+    const { retryAtMillis } = yield* claimCooldowns.enter(scope, error.retryAfterMillis);
+    yield* Effect.logWarning("claim failed; holding this item off until the window expires", {
+      stage: item.stage,
+      item: item.id,
+      retryAtMillis,
+      error,
+    });
+  });
+
+  const logParkStep = (step: string, item: EligibleWork, error: IssueTrackerError) =>
+    Effect.logWarning("could not park a refused claim", {
+      step,
+      stage: item.stage,
+      item: item.id,
+      error,
+    });
+
+  // The note goes first and on its own: the role writes can hit the very refusal being reported, and
+  // a human surface that survives that is the whole point of parking.
+  const parkRefusedClaim = Effect.fn("Executor.parkRefusedClaim")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    error: IssueTrackerError,
+  ) {
+    yield* issueTracker
+      .note(
+        workspace,
+        item.id,
+        handoffNote({
+          workspace,
+          item,
+          stage: item.stage,
+          cause: { kind: "refused-claim" },
+          reason: error.message,
+          session: null,
+        }),
+      )
+      .pipe(Effect.catchTag("IssueTrackerError", (error) => logParkStep("note", item, error)));
+    yield* issueTracker
+      .handOff(workspace, item.id, { stage: item.stage })
+      .pipe(Effect.catchTag("IssueTrackerError", (error) => logParkStep("roles", item, error)));
+  });
+
+  const declineClaim = Effect.fn("Executor.declineClaim")(function* (
+    scope: string,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    error: IssueTrackerError,
+  ) {
+    yield* holdOffClaim(scope, item, error);
+    if (issueTrackerErrorIsPermanent(error)) yield* parkRefusedClaim(workspace, item, error);
+    return false;
+  });
+
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     at: number,
   ) {
+    const scope = claimScope(workspace, item);
+    if ((yield* claimCooldowns.heldUntil(scope)) !== null) return false;
     return yield* issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }).pipe(
       Effect.matchEffect({
-        onFailure: (error) =>
-          Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error }).pipe(
-            Effect.map(() => false),
-          ),
-        onSuccess: () => Effect.succeed(true),
+        onFailure: (error) => declineClaim(scope, workspace, item, error),
+        onSuccess: () => claimCooldowns.clear(scope).pipe(Effect.map(() => true)),
       }),
     );
   });
@@ -1315,16 +1379,14 @@ export const make = Effect.gen(function* () {
     resolved: ResolvedOperation | null,
     facts: AvailabilityFacts,
   ) {
-    const concludeAvailability = (causes: ReadonlyArray<AvailabilityCause>) =>
-      Effect.gen(function* () {
-        const conclusion: OperationAvailability = {
-          operation,
-          available: causes.length === 0,
-          causes,
-        };
-        yield* availability.record(workspace, conclusion);
-        return conclusion;
-      });
+    const concludeAvailability = (causes: ReadonlyArray<AvailabilityCause>) => {
+      const conclusion: OperationAvailability = {
+        operation,
+        available: causes.length === 0,
+        causes,
+      };
+      return availability.record(workspace, conclusion).pipe(Effect.map(() => conclusion));
+    };
 
     if (!resolved) {
       return {
@@ -1500,62 +1562,62 @@ export const make = Effect.gen(function* () {
       stage: item.stage,
       runId,
     };
+    const prepareAcceptedRun = Effect.fn("Executor.prepareAcceptedRun")(function* (
+      previous: SessionId | null,
+      prepared: PreparedRun,
+    ) {
+      const checked = yield* evaluateAvailability(workspace, item.stage);
+      if (!checked.resolved || !checked.availability.available) {
+        yield* noteUnavailableResume(workspace, item, checked.availability.causes);
+        return null;
+      }
+      const currentOps = opsFor(workspace, item, checked.resolved);
+      const refreshedOps =
+        previous === item.resume?.session ? currentOps : freshRecoveryOps(workspace, item, currentOps);
+      const planned = yield* planSession(
+        runId,
+        workspace,
+        item,
+        refreshedOps,
+        prepared,
+        startedAtMillis,
+        previous,
+        observation,
+      );
+      return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
+    });
     return yield* runControl.run(
       runId,
       workspace,
-      Effect.gen(function* () {
-        const previous = yield* candidateSession(workspace, item, ops.branch);
-        const selectedOps: StageOps =
-          previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
-        return yield* selectedOps.prepare.pipe(
-          Effect.flatMap((prepared) =>
-            Effect.gen(function* () {
-              const checked = yield* evaluateAvailability(workspace, item.stage);
-              if (!checked.resolved || !checked.availability.available) {
-                yield* noteUnavailableResume(workspace, item, checked.availability.causes);
-                return null;
-              }
-              const currentOps = opsFor(workspace, item, checked.resolved);
-              const refreshedOps =
-                previous === item.resume?.session
-                  ? currentOps
-                  : freshRecoveryOps(workspace, item, currentOps);
-              const planned = yield* planSession(
-                runId,
-                workspace,
-                item,
-                refreshedOps,
-                prepared,
-                startedAtMillis,
-                previous,
-                observation,
-              );
-              return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
-            }),
-          ),
-          Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
-          Effect.matchEffect({
-            onFailure: (error) =>
-              handleOf(ledger, previous).pipe(
-                Effect.flatMap((handle) =>
-                  reportFailure(
-                    workspace,
-                    item,
-                    retryableOf(error),
-                    prepareFailureReason(error),
-                    ops.resolved.harness,
-                    handle,
+      candidateSession(workspace, item, ops.branch).pipe(
+        Effect.flatMap((previous) => {
+          const selectedOps: StageOps =
+            previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
+          return selectedOps.prepare.pipe(
+            Effect.flatMap((prepared) => prepareAcceptedRun(previous, prepared)),
+            Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+            Effect.matchEffect({
+              onFailure: (error) =>
+                handleOf(ledger, previous).pipe(
+                  Effect.flatMap((handle) =>
+                    reportFailure(
+                      workspace,
+                      item,
+                      retryableOf(error),
+                      prepareFailureReason(error),
+                      selectedOps.resolved.harness,
+                      handle,
+                    ),
                   ),
                 ),
-              ),
-            onSuccess: (accepted) => {
-              if (!accepted) return Effect.void;
-              const { request, selectedOps: acceptedOps, record } = accepted;
-              return settleOutcome(workspace, item, acceptedOps, record, runId, request);
-            },
-          }),
-        );
-      }).pipe(
+              onSuccess: (accepted) => {
+                if (!accepted) return Effect.void;
+                const { request, selectedOps: acceptedOps, record } = accepted;
+                return settleOutcome(workspace, item, acceptedOps, record, runId, request);
+              },
+            }),
+          );
+        }),
         Effect.ensuring(cleanupRunContext(runId)),
         Effect.annotateLogs(correlation),
         Effect.annotateSpans(correlation),

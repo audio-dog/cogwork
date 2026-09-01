@@ -513,8 +513,10 @@ const activeHeartbeats = (options: HeartbeatOptions) =>
     concurrency: "unbounded",
   }).pipe(Effect.onInterrupt(() => Effect.flatMap(Scheduler, (scheduler) => scheduler.drain(options.drain))));
 
+const awaitHeartbeatInterruption = () => Effect.callback<never>(() => Effect.void);
+
 export const heartbeats = (options: HeartbeatOptions) =>
   Effect.flatMap(ControlStore, (controlStore) => {
-    if (controlStore.health === "unavailable") return Effect.never;
+    if (controlStore.health === "unavailable") return awaitHeartbeatInterruption();
     return activeHeartbeats(options);
   });

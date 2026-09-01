@@ -116,7 +116,7 @@ const awaitAuthorization = Effect.fn("cli.login.awaitAuthorization")(
             message: `Linear login timed out waiting for the browser callback after ${callbackDeadline}; retry cogwork login linear.`,
           }),
       ),
-      Effect.raceFirst(opener.open(authorizeUrl).pipe(Effect.andThen(Effect.never))),
+      Effect.raceFirst(opener.open(authorizeUrl).pipe(Effect.andThen(Deferred.await(result)))),
     );
     if (callback.error !== null) {
       return yield* new LinearOAuthError({

@@ -20,6 +20,7 @@ const maxReasonChars = 800;
 export type HandoffCause =
   | { readonly kind: "max-attempts"; readonly attempts: number }
   | { readonly kind: "non-retryable" }
+  | { readonly kind: "refused-claim" }
   | { readonly kind: "crash-loop"; readonly crashes: number };
 
 const attemptWord = (count: number) => (count === 1 ? "attempt" : "attempts");
@@ -77,14 +78,34 @@ export const prepareFailureReason = (error: {
 
 const crashWord = (count: number) => (count === 1 ? "crash" : "crashes");
 
-const headline = (stage: LifecycleStage, cause: HandoffCause) => {
+const exhausted = (headline: string, reason: string) => ({
+  headline,
+  takeover: "Applied `ready-for-human`; a human needs to take over.",
+  failure: `Last failure: ${markdownCode(statusReason(reason))}`,
+});
+
+const handoffCopy = (stage: LifecycleStage, cause: HandoffCause, reason: string) => {
   if (cause.kind === "max-attempts") {
-    return `**Exhausted after ${cause.attempts} failed ${stage} ${attemptWord(cause.attempts)}.**`;
+    return exhausted(
+      `**Exhausted after ${cause.attempts} failed ${stage} ${attemptWord(cause.attempts)}.**`,
+      reason,
+    );
   }
   if (cause.kind === "crash-loop") {
-    return `**Exhausted after ${cause.crashes} consecutive ${stage} ${crashWord(cause.crashes)}.**`;
+    return exhausted(
+      `**Exhausted after ${cause.crashes} consecutive ${stage} ${crashWord(cause.crashes)}.**`,
+      reason,
+    );
   }
-  return `**Exhausted: ${stage} hit a non-retryable failure.**`;
+  if (cause.kind === "refused-claim") {
+    return {
+      headline: `**Could not claim this issue for ${stage}.**`,
+      takeover:
+        "Add the label named below to this work source, then move this issue back into the queue. Applied `ready-for-human` until then, because every retry gets the same refusal.",
+      failure: `Refused with: ${markdownCode(statusReason(reason))}`,
+    };
+  }
+  return exhausted(`**Exhausted: ${stage} hit a non-retryable failure.**`, reason);
 };
 
 export const handoffComment = (
@@ -93,15 +114,8 @@ export const handoffComment = (
   reason: string,
   resume: string | undefined,
 ) => {
-  const lines = [
-    attribution,
-    "",
-    headline(stage, cause),
-    "",
-    "Applied `ready-for-human`; a human needs to take over.",
-    "",
-    `Last failure: ${markdownCode(statusReason(reason))}`,
-  ];
+  const copy = handoffCopy(stage, cause, reason);
+  const lines = [attribution, "", copy.headline, "", copy.takeover, "", copy.failure];
   return resume === undefined
     ? lines.join("\n")
     : [...lines, "", "Resume the session manually:", "", "```sh", resume, "```"].join("\n");

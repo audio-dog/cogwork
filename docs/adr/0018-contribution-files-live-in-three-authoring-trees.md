@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-08-25
+- **Amended:** 2026-09-01 — [the private overlay tree may replace an Operating Instructions package](#amendment-2026-09-01--the-private-overlay-tree-may-replace-an-operating-instructions-package)
 
 ## Context
 
@@ -173,3 +174,17 @@ than a new decision.
   bytes in the provision root and never in an Authoring tree. A Connection has no Scope and therefore no tree.
 - `sync` gains a `~/.agents/rules/` target, or the two files are placed by hand. Either way `sync`
   stays the only writer to `~/.agents/`; Cogwork reads that tree and never writes it.
+
+## Amendment (2026-09-01) — the private overlay tree may replace an Operating Instructions package
+
+The disposition row "Engine Operating Instructions — kept as is. Engine Authority, shipped with the
+binary, not a contribution and not in any tree" narrows. ADR
+[0019](./0019-per-workspace-operating-instructions-overrides.md) lets a Workspace carry an
+operator-authored replacement package at
+`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`, which replaces the shipped
+package whole for that operation's Runs in that Workspace.
+
+"Not a contribution" stands: an override has no Customize row, no on / off, no Authority, and the
+tree scan does not produce it — the Context assembler resolves it directly, and presence is its
+whole state. "Not in any tree" is the part that falls. The deregister cascade this ADR already
+records deletes the override with the rest of the overlay directory.
