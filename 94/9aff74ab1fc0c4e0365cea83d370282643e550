@@ -1,0 +1,19 @@
+packages/ui/src/components/badge.tsx
+  s_6e9e628a99a807::t_6df65f9f82d262 16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "949aff74ab1fc0c4e0365cea83d370282643e550",
+  "prompts": {},
+  "sessions": {
+    "s_6e9e628a99a807": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05af9-3f07-7b21-984f-de336e55702c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
