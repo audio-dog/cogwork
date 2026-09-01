@@ -982,7 +982,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
         .run(makeRequest({ checkoutPath: handle.id, session: null }))
         .pipe(Stream.takeUntil(agUiIsSessionHandleEvent), Stream.runDrain);
 
-      const pid = yield* Schema.decodeUnknownEffect(Schema.FiniteFromString)(
+      const pid = yield* Schema.decodeEffect(Schema.FiniteFromString)(
         yield* Effect.promise(() => handle.fs.read("/workspace/.pid")),
       );
       const stopped = yield* Effect.promise(() =>

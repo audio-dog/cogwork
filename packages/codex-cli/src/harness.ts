@@ -14,10 +14,18 @@ import {
   type CodexTextProviderOptions,
   codexText,
 } from "@tanstack/ai-codex";
-import { defineSandbox, defineWorkspace, type SandboxHandle, withSandbox } from "@tanstack/ai-sandbox";
+import {
+  defineSandbox,
+  defineWorkspace,
+  type SandboxHandle,
+  type SandboxProvider,
+  withSandbox,
+} from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as Redacted from "effect/Redacted";
+import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
 export type CodexEffort = NonNullable<CodexTextConfig["modelReasoningEffort"]>;
@@ -58,6 +66,51 @@ const defaultRunChat: CodexRunChat = (options) =>
     outputSchema: options.outputSchema,
     stream: true,
   });
+
+const completedIteration = () => ({ done: true, value: undefined }) satisfies IteratorReturnResult<undefined>;
+
+const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abort: () => void | Promise<void>) => ({
+  [Symbol.asyncIterator]: () => {
+    const iterator = stream[Symbol.asyncIterator]();
+    return {
+      next: () => iterator.next(),
+      return: (value?: unknown) =>
+        Promise.resolve(abort()).then(() => iterator.return?.(value) ?? completedIteration()),
+    };
+  },
+});
+
+type RunPromise = <A, E>(effect: Effect.Effect<A, E, never>) => Promise<A>;
+
+const destroySandboxHandle = (sandboxHandleRef: Ref.Ref<SandboxHandle | null>) =>
+  Ref.getAndSet(sandboxHandleRef, null).pipe(
+    Effect.flatMap((sandboxHandle) =>
+      sandboxHandle ? Effect.promise(() => sandboxHandle.destroy()) : Effect.void,
+    ),
+  );
+
+const ownRunSandbox = (
+  source: SandboxProvider,
+  runPromise: RunPromise,
+  sandboxHandleRef: Ref.Ref<SandboxHandle | null>,
+) => {
+  const trackSandboxHandle = (sandboxHandle: SandboxHandle) =>
+    Ref.set(sandboxHandleRef, sandboxHandle).pipe(Effect.map(() => sandboxHandle));
+
+  return {
+    name: source.name,
+    capabilities: () => source.capabilities(),
+    create: (input) =>
+      runPromise(
+        Effect.tryPromise({
+          try: () => source.create(input),
+          catch: codexTurnError,
+        }).pipe(Effect.flatMap(trackSandboxHandle)),
+      ),
+    resume: () => Promise.resolve(null),
+    destroy: () => runPromise(destroySandboxHandle(sandboxHandleRef)),
+  } satisfies SandboxProvider;
+};
 
 const sandboxMode = (profile: Harness.OperationPolicyProfile) =>
   profile === "read-only" ? "read-only" : "workspace-write";
@@ -507,24 +560,27 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
               options.environment,
             ),
           );
-          const ownedProvider = HarnessBridge.ownSandboxHandles(
-            localProcessSandbox({
-              dir: plan.sandbox.workspace,
-              scrubEnv: [
-                "GITHUB_TOKEN",
-                "GH_TOKEN",
-                "OPENAI_API_KEY",
-                "CODEX_API_KEY",
-                ...ambientMcpEnvironmentNames,
-              ],
-            }),
+          const sandboxSource = localProcessSandbox({
+            dir: plan.sandbox.workspace,
+            scrubEnv: [
+              "GITHUB_TOKEN",
+              "GH_TOKEN",
+              "OPENAI_API_KEY",
+              "CODEX_API_KEY",
+              ...ambientMcpEnvironmentNames,
+            ],
+          });
+          const runPromise = yield* FiberSet.makeRuntimePromise();
+          const sandboxHandleRef = yield* Effect.acquireRelease(
+            Ref.make<SandboxHandle | null>(null),
+            destroySandboxHandle,
           );
           const sandbox = defineSandbox({
             id: `cogwork-${options.name}`,
             fileEvents: false,
-            provider: ownedProvider.provider,
+            provider: ownRunSandbox(sandboxSource, runPromise, sandboxHandleRef),
             workspace: defineWorkspace({ source: { type: "none" } }),
-            lifecycle: HarnessBridge.perRunSandboxLifecycle,
+            lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
           });
           const abortController = new AbortController();
           const stream = runChat({
@@ -537,9 +593,9 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
             outputSchema: plan.structuredOutput ?? undefined,
           });
           return HarnessBridge.bridgeChat(
-            HarnessBridge.abortOnReturn(stream, () => {
+            abortOnReturn(stream, () => {
               abortController.abort();
-              return ownedProvider.destroy();
+              return runPromise(destroySandboxHandle(sandboxHandleRef));
             }),
             codexTurnError,
             codexTurnError,
