@@ -1,6 +1,7 @@
 export * from "./ag-ui";
 export * from "./base-schemas";
 export * from "./board";
+export * from "./connection";
 export * from "./contribution";
 export * from "./coordination";
 export * from "./daemon";

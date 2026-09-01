@@ -46,6 +46,7 @@ const controlStore: ControlStore = {
       value: "workspace-triage-model",
     },
   ],
+  connections: [],
   pluginInstalls: [],
   contributionSettings: [],
 };

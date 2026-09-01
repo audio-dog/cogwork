@@ -3,6 +3,13 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import {
+  ConnectionEstablishment,
+  ConnectionFailure,
+  ConnectionId,
+  ConnectionMutationResult,
+  ConnectionOverview,
+} from "./connection";
+import {
   ControlStore,
   ControlStoreFailure,
   DaemonLimitUpdate,
@@ -42,6 +49,11 @@ export const GetPlugins = Rpc.make("GetPlugins", {
   error: PluginFailure,
 });
 
+export const GetConnections = Rpc.make("GetConnections", {
+  success: ConnectionOverview,
+  error: ConnectionFailure,
+});
+
 export const ListRuns = Rpc.make("ListRuns", { success: Schema.Array(RunSummary) });
 
 export const GetRunEvents = Rpc.make("GetRunEvents", {
@@ -69,6 +81,7 @@ export const DaemonQueries = RpcGroup.make(
   GetStatus,
   GetControlStore,
   GetPlugins,
+  GetConnections,
   ListRuns,
   GetRunEvents,
   ResolveWatchTarget,
@@ -159,6 +172,24 @@ export const UninstallPlugin = Rpc.make("UninstallPlugin", {
   error: PluginFailure,
 });
 
+export const EstablishConnection = Rpc.make("EstablishConnection", {
+  payload: { establishment: ConnectionEstablishment },
+  success: ConnectionMutationResult,
+  error: Schema.Union([ConnectionFailure, PluginFailure]),
+});
+
+export const ReconnectConnection = Rpc.make("ReconnectConnection", {
+  payload: { establishment: ConnectionEstablishment },
+  success: ConnectionMutationResult,
+  error: Schema.Union([ConnectionFailure, PluginFailure]),
+});
+
+export const RemoveConnection = Rpc.make("RemoveConnection", {
+  payload: { connectionId: ConnectionId },
+  success: ConnectionMutationResult,
+  error: Schema.Union([ConnectionFailure, PluginFailure]),
+});
+
 export const DeregisterWorkspace = Rpc.make("DeregisterWorkspace", {
   payload: { workspace: WorkspaceId },
   success: WorkspaceId,
@@ -182,6 +213,9 @@ export const DaemonCommands = RpcGroup.make(
   RegisterWorkspace,
   InstallPlugin,
   UninstallPlugin,
+  EstablishConnection,
+  ReconnectConnection,
+  RemoveConnection,
   DeregisterWorkspace,
   RebindWorkspace,
 ).middleware(PrincipalMiddleware);

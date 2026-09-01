@@ -41,10 +41,12 @@ const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
   if (source.type !== "github" || !source.repo) return null;
   const [owner, name] = source.repo.split("/");
   if (!owner || !name) return null;
+  const connectionId = source.connectionId === "unbound" ? undefined : source.connectionId;
   return {
     owner,
     name,
-    tokenEnv: source.tokenEnv ?? "GITHUB_TOKEN",
+    tokenEnv: "GITHUB_TOKEN",
+    ...(connectionId ? { connectionId } : {}),
     actorLogin: source.actorLogin ?? null,
     priority: source.priority ?? null,
   } satisfies GitHubTarget;

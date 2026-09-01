@@ -138,7 +138,8 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
     event._tag === "SeedEnd" ||
     event._tag === "RunActivity" ||
     event._tag === "ControlStoreChanged" ||
-    event._tag === "PluginsChanged"
+    event._tag === "PluginsChanged" ||
+    event._tag === "ConnectionsChanged"
   )
     return null;
   const atMillis = stamp(event, arrival);

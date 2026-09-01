@@ -1,4 +1,5 @@
 import type {
+  Connection,
   ControlStore,
   DaemonLimitUpdate,
   WorkspaceId,
@@ -10,6 +11,7 @@ import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useState } from "react";
 import { deregisterWorkspaceAtom, rebindWorkspaceAtom, registerWorkspaceAtom } from "../daemon/atoms";
 import { useBoard } from "../features/activity-session";
+import { readyConnections } from "../features/connections-view";
 import { useDaemonLimit } from "../features/use-daemon-limit";
 
 type WorkspacesStatus = "loading" | "offline" | "ready";
@@ -18,6 +20,7 @@ interface WorkspacesStateValue {
   readonly status: WorkspacesStatus;
   readonly workspaces: readonly WorkspaceState[];
   readonly controlStore: ControlStore | null;
+  readonly connections: readonly Connection[];
 }
 
 interface WorkspacesActions {
@@ -82,6 +85,7 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const picture = board._tag === "Success" ? board.board : null;
   const limits = useDaemonLimit(picture?.controlStore ?? null);
   const workspaces = picture ? [...picture.workspaces.values()] : [];
+  const connections = readyConnections(picture?.connections);
 
   const actions: WorkspacesActions = {
     register: (registration) => runRegister({ payload: { registration } }),
@@ -103,6 +107,7 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
           status: boardStatus(board._tag),
           workspaces,
           controlStore: limits.controlStore,
+          connections,
         },
         actions,
         meta: {

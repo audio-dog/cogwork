@@ -7,6 +7,7 @@ import {
   TrimmedNonEmptyString,
   WorkspaceId,
 } from "./base-schemas";
+import { ConnectionBindingId } from "./connection";
 import { McpSkill } from "./mcp-skill";
 
 export const TriageRoleLabels = Schema.Struct({
@@ -33,11 +34,10 @@ export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
 
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
+  connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
   repo: Schema.optional(TrimmedNonEmptyString),
   teams: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   organization: Schema.optional(TrimmedNonEmptyString),
-  tokenEnv: Schema.optional(TrimmedNonEmptyString),
-  oauth: Schema.optional(OAuthAppConfig),
   actorLogin: Schema.optional(TrimmedNonEmptyString),
   actorUserId: Schema.optional(TrimmedNonEmptyString),
   assigneeAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
@@ -54,8 +54,8 @@ export const linearTeams = (source: IssueTrackerConfig) => {
 
 export const SourceControlConfig = Schema.Struct({
   type: SourceControlType,
+  connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
   repo: Schema.optional(TrimmedNonEmptyString),
-  tokenEnv: Schema.optional(TrimmedNonEmptyString),
   actorLogin: Schema.optional(TrimmedNonEmptyString),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
 });

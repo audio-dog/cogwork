@@ -91,16 +91,18 @@ describe("workspaceRegistrationFrom", () => {
         checkoutPath: "  /Users/taylor/sites/cogwork  ",
         gitRemote: "  git@github.com:colonylabs/cogwork.git  ",
         tracker: "github",
+        issueTrackerConnectionId: "github/acme",
         repository: "  colonylabs/cogwork  ",
         linearTeams: "",
         linearOrganization: "",
         sourceControlRepository: "",
+        sourceControlConnectionId: "",
       }),
     ).toEqual({
       name: "Cogwork",
       checkoutPath: "/Users/taylor/sites/cogwork",
       gitRemote: "git@github.com:colonylabs/cogwork.git",
-      issueTracker: { type: "github", repo: "colonylabs/cogwork" },
+      issueTracker: { type: "github", connectionId: "github/acme", repo: "colonylabs/cogwork" },
       linearHistory: false,
     });
   });
@@ -112,16 +114,23 @@ describe("workspaceRegistrationFrom", () => {
         checkoutPath: "/Users/taylor/sites/cogwork",
         gitRemote: "",
         tracker: "linear",
+        issueTrackerConnectionId: "linear/acme",
         repository: "",
         linearTeams: "ENG, Platform, ENG",
         linearOrganization: "  colony  ",
         sourceControlRepository: " colonylabs/cogwork ",
+        sourceControlConnectionId: "github/acme",
       }),
     ).toEqual({
       name: "cogwork",
       checkoutPath: "/Users/taylor/sites/cogwork",
-      issueTracker: { type: "linear", teams: ["ENG", "Platform"], organization: "colony" },
-      sourceControl: { type: "github", repo: "colonylabs/cogwork" },
+      issueTracker: {
+        type: "linear",
+        connectionId: "linear/acme",
+        teams: ["ENG", "Platform"],
+        organization: "colony",
+      },
+      sourceControl: { type: "github", connectionId: "github/acme", repo: "colonylabs/cogwork" },
       linearHistory: false,
     });
   });
@@ -133,10 +142,12 @@ describe("workspaceRegistrationFrom", () => {
         checkoutPath: "relative/path",
         gitRemote: "",
         tracker: "github",
+        issueTrackerConnectionId: "",
         repository: "",
         linearTeams: "",
         linearOrganization: "",
         sourceControlRepository: "",
+        sourceControlConnectionId: "",
       }),
     ).toBeNull();
   });

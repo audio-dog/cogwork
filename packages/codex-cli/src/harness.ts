@@ -154,7 +154,8 @@ export const codexChildEnvironment = (environment: NodeJS.ProcessEnv = process.e
     }),
   );
 
-const mcpEnvName = (identity: string) => `${identity.toUpperCase()}_BEARER`;
+const mcpEnvName = (identity: string) =>
+  `COGWORK_MCP_${Buffer.from(identity).toString("hex").toUpperCase()}_BEARER`;
 
 const mcpBearerEntries = (prefix: string, envName: string, bearer: Harness.ResolvedMcpSkill["bearer"]) => {
   if (!bearer) return { configEntries: [], envEntries: [] };

@@ -125,6 +125,7 @@ const decodeWorkspaceIdOption = Schema.decodeUnknownOption(WorkspaceId);
 const decodeIssueTracker = Schema.decodeUnknownEffect(Schema.fromJsonString(IssueTrackerConfig));
 const decodeIssueTrackerOption = Schema.decodeUnknownOption(Schema.fromJsonString(IssueTrackerConfig));
 const decodeSourceControl = Schema.decodeUnknownEffect(Schema.fromJsonString(SourceControlConfig));
+const decodeSourceControlOption = Schema.decodeUnknownOption(Schema.fromJsonString(SourceControlConfig));
 const decodeWorkspaceInput = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceInput));
 const decodeWorkspaceConfig = Schema.decodeUnknownEffect(WorkspaceConfig);
 const encodeIssueTracker = Schema.encodeSync(Schema.fromJsonString(IssueTrackerConfig));
@@ -147,9 +148,11 @@ const present = <A>(value: A | null) => (value === null ? undefined : value);
 const workspaceFailure = (row: WorkspaceRow, message: string) => {
   const name = Option.getOrUndefined(decodeWorkspaceIdOption(row.id));
   const issueTracker = Option.getOrUndefined(decodeIssueTrackerOption(row.issueTracker));
+  const sourceControl = Option.getOrUndefined(decodeSourceControlOption(row.sourceControl));
   return {
     ...(name ? { name } : {}),
     ...(issueTracker ? { issueTracker } : {}),
+    ...(sourceControl ? { sourceControl } : {}),
     displayName: row.name,
     source: row.checkoutPath,
     message,

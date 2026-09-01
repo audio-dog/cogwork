@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import {
   agUiIsTerminal,
+  type ConnectionOverview,
   type DaemonEvent,
   DaemonRpcs,
   defaultControlStore,
@@ -10,6 +11,7 @@ import {
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
+
 import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -28,17 +30,23 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import {
   cancelRun,
   deregisterWorkspace,
+  establishConnection,
   handBack,
   installPlugin,
   rebindWorkspace,
   reclassify,
+  reconnectConnection,
   registerWorkspace,
+  removeConnection,
   setContributionSetting,
   setDaemonLimit,
   setOperationSetting,
   setScheduling,
   uninstallPlugin,
 } from "./commands";
+
+import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
+import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
 import {
   bootControlStoreLayer,
@@ -122,6 +130,13 @@ const controlStoreSeedEvents = Effect.fn("Daemon.controlStoreSeedEvents")(functi
   );
 });
 
+const connectionSeedEvent = (connections: ConnectionOverview) =>
+  ({
+    _tag: "ConnectionsChanged",
+    connections,
+    danglingWorkspaces: [],
+  }) satisfies Omit<Extract<DaemonEvent, { readonly _tag: "ConnectionsChanged" }>, "emittedAtMillis">;
+
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
   const bus = yield* DaemonEventBus;
   if (id === undefined) return bus.activity;
@@ -147,6 +162,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const scheduler = yield* Scheduler;
   const controlStore = yield* ControlStore;
   const plugins = yield* PluginManager;
+  const connections = yield* ConnectionStore;
   const ledger = yield* RunLedger;
   const emittedAtMillis = yield* Clock.currentTimeMillis;
   const snapshot = yield* worker.snapshot;
@@ -171,12 +187,24 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
       onSuccess: (overview) => [{ _tag: "PluginsChanged" as const, plugins: overview, notices: [] }],
     }),
   );
-  return [...items, ...workspaces, ...runs, ...controlStoreEvents, ...pluginEvents, scheduling].map(
-    (event) => ({
-      ...event,
-      emittedAtMillis,
+  const connectionEvents = yield* connections.overview.pipe(
+    Effect.match({
+      onFailure: () => [],
+      onSuccess: (overview) => [connectionSeedEvent(overview)],
     }),
   );
+  return [
+    ...items,
+    ...workspaces,
+    ...runs,
+    ...controlStoreEvents,
+    ...pluginEvents,
+    ...connectionEvents,
+    scheduling,
+  ].map((event) => ({
+    ...event,
+    emittedAtMillis,
+  }));
 });
 
 // Subscribe before reading the seed so an event published between the two is not lost.
@@ -228,6 +256,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   GetPlugins: Effect.fn("Daemon.GetPlugins")(function* () {
     return yield* (yield* PluginManager).overview;
   }),
+  GetConnections: Effect.fn("Daemon.GetConnections")(function* () {
+    return yield* (yield* ConnectionStore).overview;
+  }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
     return yield* ledger.listRuns(50);
@@ -253,6 +284,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   RegisterWorkspace: registerWorkspace,
   InstallPlugin: installPlugin,
   UninstallPlugin: uninstallPlugin,
+  EstablishConnection: establishConnection,
+  ReconnectConnection: reconnectConnection,
+  RemoveConnection: removeConnection,
   DeregisterWorkspace: deregisterWorkspace,
   RebindWorkspace: rebindWorkspace,
 });
@@ -281,18 +315,26 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
   // one, or they would mint and rotate the app-actor token independently.
   const credentials = adapters.credentials;
+  // One GitHub client, built once: the issue tracker and the establish-time credential check must
+  // share it, or the second instance resolves its own credentials and drifts from the first.
+  const githubClient = GitHub.clientLayer.pipe(Layer.provide(credentials));
   const issueTracker = Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
-    Layer.provide(GitHub.clientLayer),
+    Layer.provide(githubClient),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
   );
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
+  const connections = connectionStoreLayer.pipe(
+    Layer.provide(controlStore),
+    Layer.provide(credentials),
+    Layer.provide(connectionVerifierLayer.pipe(Layer.provide(githubClient))),
+  );
   const plugins = pluginManagerLayer({
     catalogPath:
       adapters.pluginCatalogPath ?? fileURLToPath(new URL("../plugins/catalog.json", import.meta.url)),
     provisionRoot: adapters.pluginProvisionRoot ?? `${adapters.controlStorePath}.plugins`,
-  }).pipe(Layer.provide(controlStore));
+  }).pipe(Layer.provide(controlStore), Layer.provide(connections));
   const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
     Layer.provide(storeClient),
@@ -314,6 +356,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     registry,
     controlStore,
     plugins,
+    connections,
     daemonInfoLayer,
     issueTracker,
     runLedger,

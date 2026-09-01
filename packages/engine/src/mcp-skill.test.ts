@@ -15,7 +15,6 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded>) =>
     issueTracker: {
       type: "linear",
       teams: ["ENG"],
-      oauth: { clientId: "cid", clientSecretEnv: "LINEAR_CLIENT_SECRET" },
     },
     harness: { preferred: "cursor" },
     ...over,
@@ -34,6 +33,7 @@ const minted: Credential = {
 };
 
 const storeStub = (calls: Ref.Ref<ReadonlyArray<string>>): CredentialStoreService => ({
+  resolveSource: () => Effect.die("unexpected credential source resolution"),
   bearerToken: (account) => Ref.update(calls, (xs) => [...xs, account.key]).pipe(Effect.map(() => minted)),
   persist: () => Effect.void,
   invalidate: () => Effect.void,
@@ -41,6 +41,8 @@ const storeStub = (calls: Ref.Ref<ReadonlyArray<string>>): CredentialStoreServic
     Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
   persistProviderKey: (key) =>
     Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
+  configureConnection: () => Effect.void,
+  removeConnection: () => Effect.void,
 });
 
 describe("credentialAccountFor", () => {

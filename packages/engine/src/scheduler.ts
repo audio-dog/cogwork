@@ -216,20 +216,23 @@ export const make = (config: SchedulerConfig) =>
     const configRef = yield* Ref.make(config);
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
-    const runJob = (candidate: Candidate) =>
-      executor.execute(candidate.workspace, candidate.work, candidate.observation).pipe(
+    const runJob = (candidate: Candidate) => {
+      const correlation = {
+        workspace: candidate.workspace.config.name,
+        item: candidate.work.id,
+        stage: candidate.work.stage,
+      };
+      return executor.execute(candidate.workspace, candidate.work, candidate.observation).pipe(
         Effect.flatMap((started) => (started ? Effect.void : Ref.update(stateRef, refundBudget))),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
-          (cause) =>
-            Effect.logWarning("scheduled job crashed", {
-              workspace: candidate.workspace.config.name,
-              item: candidate.work.id,
-              cause: Cause.pretty(cause),
-            }),
+          (cause) => Effect.logWarning("scheduled job crashed", cause),
         ),
         Effect.ensuring(Ref.update(stateRef, (state) => release(state, candidate))),
+        Effect.annotateLogs(correlation),
+        Effect.annotateSpans(correlation),
       );
+    };
 
     const tick = Effect.fn("Scheduler.tick")(function* () {
       const config = yield* Ref.get(configRef);

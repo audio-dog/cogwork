@@ -6,7 +6,6 @@ import { shell } from "@tanstack/highlight/languages/shell";
 import { ts } from "@tanstack/highlight/languages/ts";
 import { tsx } from "@tanstack/highlight/languages/tsx";
 import { createTanStackMarkdownHighlighter } from "@tanstack/highlight/markdown";
-import { createHighlightedCodeBlockProps } from "@tanstack/highlight/react";
 import { type MarkdownComponentProps, Markdown as TanStackMarkdown } from "@tanstack/markdown/react";
 
 const highlighter = createHighlighter({ languages: [diff, json, shell, ts, tsx] });
@@ -16,10 +15,29 @@ function MarkdownParagraph({ className, ...props }: MarkdownComponentProps<"p">)
   return <p className={cn("leading-relaxed", className)} {...props} />;
 }
 
-function MarkdownLink({ className, ...props }: MarkdownComponentProps<"a">) {
+const linkSchemes = new Set(["http:", "https:", "mailto:"]);
+
+/**
+ * Markdown here renders agent output, so a `javascript:` or `data:` href would
+ * execute in the renderer when clicked. `target`/`rel` do not stop that.
+ */
+const safeHref = (href: string | undefined) => {
+  if (!href) return undefined;
+  if (href.startsWith("#") || href.startsWith("/")) return href;
+  try {
+    return linkSchemes.has(new URL(href, "https://localhost").protocol) ? href : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+function MarkdownLink({ className, href, ...props }: MarkdownComponentProps<"a">) {
+  const safe = safeHref(href);
+  if (!safe) return <span className={className} {...props} />;
   return (
     <a
       className={cn("font-medium text-primary underline underline-offset-2", className)}
+      href={safe}
       rel="noreferrer"
       target="_blank"
       {...props}
@@ -74,15 +92,5 @@ export function Markdown({ children, className }: { children: string; className?
         {children}
       </TanStackMarkdown>
     </div>
-  );
-}
-
-export function CodeBlock({ code, language }: { code: string; language: string }) {
-  const { htmlMarkup } = createHighlightedCodeBlockProps({ highlighter, code, lang: language });
-  return (
-    <div
-      className="overflow-x-auto rounded-md border bg-muted text-xs"
-      dangerouslySetInnerHTML={{ __html: htmlMarkup }}
-    />
   );
 }

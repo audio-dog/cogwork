@@ -11,10 +11,13 @@ const unexpected = () => Effect.die(new Error("credential store method not expec
 
 const credentialStore = (providerKey: CredentialStoreService["providerKey"]): CredentialStoreService => ({
   bearerToken: unexpected,
+  resolveSource: unexpected,
   persist: unexpected,
   invalidate: () => Effect.void,
   providerKey,
   persistProviderKey: unexpected,
+  configureConnection: unexpected,
+  removeConnection: unexpected,
 });
 
 const keyProvider: CredentialStoreService["providerKey"] = () =>

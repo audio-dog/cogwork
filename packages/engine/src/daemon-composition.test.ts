@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { DaemonRpcs, HarnessName } from "@cogwork/contracts";
+import { connectionIdOf, DaemonRpcs, HarnessName, WorkspaceConfig } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -17,10 +18,13 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as Socket from "effect/unstable/socket/Socket";
 import * as SocketServer from "effect/unstable/socket/SocketServer";
+import { afterEach, vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
 import { fullHarnessExecution, type HarnessRunner } from "./harness";
+import { IssueTracker } from "./issue-tracker";
+import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker } from "./reconcile";
 import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
@@ -58,7 +62,81 @@ const socketServerLayer = (socket: Socket.Socket) =>
     run: (handler) => handler(socket).pipe(Effect.ignore, Effect.andThen(Effect.never)),
   });
 
+const connectedWorkspace: RegisteredWorkspace = {
+  source: "control-store:github",
+  contributions: [],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "github",
+    checkoutPath: "/repos/github",
+    issueTracker: {
+      type: "github",
+      repo: "owner/repo",
+      connectionId: connectionIdOf("github", "acme"),
+    },
+    harness: { preferred: "cursor" },
+  }),
+};
+
+const storedGitHubCredentials = Layer.succeed(CredentialStore.CredentialStore, {
+  resolveSource: () => Effect.die("unexpected credential source resolution"),
+  bearerToken: () =>
+    Effect.succeed({ source: "stored-key", token: Redacted.make("stored-token"), identity: null }),
+  persist: () => Effect.void,
+  invalidate: () => Effect.void,
+  providerKey: () => Effect.die("unexpected provider key"),
+  persistProviderKey: () => Effect.die("unexpected provider key persist"),
+  configureConnection: () => Effect.void,
+  removeConnection: () => Effect.void,
+} satisfies CredentialStore.CredentialStoreService);
+
 describe("daemon server composition", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it.effect("uses a GitHub Connection credential through the composed daemon", () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.acquireRelease(
+        Effect.sync(() => mkdtempSync(join(tmpdir(), "cogwork-github-credential-"))),
+        (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+      );
+      vi.stubEnv("GITHUB_TOKEN", "fallback-token");
+      const fetchStub = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response("[]", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        ),
+      );
+      vi.stubGlobal("fetch", fetchStub);
+      const toServer = new TransformStream<Uint8Array, Uint8Array>();
+      const toClient = new TransformStream<Uint8Array, Uint8Array>();
+      const server = yield* Socket.fromTransformStream(
+        Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
+      );
+      const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
+      const serverLayer = Daemon.serverLayer({
+        transport,
+        credentials: storedGitHubCredentials,
+        contextAssembler: contextAssemblerLayer,
+        runLedger: RunLedger.layerMemoryCore,
+        controlStorePath: join(root, "control.db"),
+        userAgentsDir: join(root, ".agents"),
+        worktrees: worktreeLayer,
+        harnessRunners: [stubRunner],
+      });
+
+      yield* Effect.gen(function* () {
+        yield* (yield* IssueTracker).observe(connectedWorkspace);
+      }).pipe(Effect.provide(serverLayer.pipe(Layer.provide(NodeServices.layer))), Effect.scoped);
+
+      const authorization = new Headers(fetchStub.mock.calls[0]?.[1]?.headers).get("authorization");
+      assert.strictEqual(authorization, "Bearer stored-token");
+    }),
+  );
+
   it.effect("serves RPC without booting dispatch when the Control store is unavailable", () =>
     Effect.gen(function* () {
       const controlStore = yield* Effect.acquireRelease(

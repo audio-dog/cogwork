@@ -1,5 +1,6 @@
 import {
   type ContributionSettingRow,
+  type FileContribution,
   operationSettingNames,
   RunId,
   type SettingResolutionCase,
@@ -11,16 +12,32 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
+import { resolvedMcpSkills } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
 import {
   assembleRunPlan,
   engineAdmissibleSettingScope,
   engineSettingScopeDirection,
+  projectedContributionName,
   resolveEngineContributionEnabled,
   resolveEngineContributionUnion,
   resolveEngineOperationSetting,
   resolveRunPlanStage,
 } from "./run-plan";
+
+describe("projectedContributionName", () => {
+  it("qualifies identity deterministically with readable Authority inside the Codex budget", () => {
+    const pluginName = projectedContributionName("plugin:linear/mcp/linear");
+    const localName = projectedContributionName("local:repo/mcp/linear");
+    const longName = projectedContributionName(`plugin:${"authority".repeat(40)}/mcp/${"server".repeat(40)}`);
+
+    assert.match(pluginName, /^plugin_linear__/);
+    assert.match(localName, /^local_repo__/);
+    assert.notStrictEqual(pluginName, localName);
+    assert.strictEqual(projectedContributionName("plugin:linear/mcp/linear"), pluginName);
+    assert.isAtMost(Buffer.byteLength(longName), 64);
+  });
+});
 
 const resolvedValue = (testCase: SettingResolutionCase) => {
   if (testCase._tag === "Direction") return engineSettingScopeDirection;
@@ -147,6 +164,131 @@ const context: AssembledContext = {
 };
 
 describe("Run Plan assembly", () => {
+  it("projects same-named servers under distinct qualified names recorded in Provenance", () => {
+    const runId = Schema.decodeSync(RunId)("run-qualified-mcp");
+    const contributions = [
+      {
+        id: "plugin:linear/mcp/linear",
+        authority: "plugin:linear",
+        kind: "mcp-server",
+        localName: "linear",
+        file: "/plugins/linear/mcp/linear.json",
+      },
+      {
+        id: "local:repo/mcp/linear",
+        authority: "local:repo",
+        kind: "mcp-server",
+        localName: "linear",
+        file: "/repo/.agents/mcp/linear.json",
+      },
+    ] satisfies ReadonlyArray<FileContribution>;
+    const resolved = resolveRunPlanStage(
+      workspace.config,
+      "implement",
+      [],
+      [
+        {
+          contribution: { id: "local:repo/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: true,
+        },
+      ],
+    );
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId,
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #230",
+      checkoutPath: "/worktrees/230",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["MCP"],
+      middleware: [],
+      context,
+      contributions,
+      mcpServers: contributions.map((contribution) => ({
+        identity: contribution.id,
+        name: contribution.localName,
+        endpoint: `https://${contribution.authority}.example.test/mcp`,
+        authenticated: false,
+      })),
+      provenanceStamps: [],
+    });
+
+    const projected = plan.mcp.flatMap((server) => ("projectedName" in server ? [server] : []));
+    assert.strictEqual(projected.length, 2);
+    assert.notStrictEqual(projected[0]?.projectedName, projected[1]?.projectedName);
+    assert.deepStrictEqual(
+      resolvedMcpSkills({ plan, session: null, mcpCredentials: new Map() }).map(({ name }) => name),
+      projected.map(({ projectedName }) => projectedName),
+    );
+    assert.deepStrictEqual(
+      plan.provenance.projectedNames.map(({ identity, name }) => ({ identity, name })),
+      projected.map(({ identity, projectedName: name }) => ({ identity, name })),
+    );
+  });
+
+  it("records optional contributions the selected runner cannot project", () => {
+    const runId = Schema.decodeSync(RunId)("run-optional-projection");
+    const contribution = {
+      id: "plugin:linear/mcp/linear",
+      authority: "plugin:linear",
+      kind: "mcp-server",
+      localName: "linear",
+      file: "/plugins/linear/mcp/linear.json",
+    } satisfies FileContribution;
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [
+      {
+        setting: "bindings",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "SettingsProfile" },
+        value: [{ need: "tracker", contribution: contribution.id }],
+      },
+    ]);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId,
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #230",
+      checkoutPath: "/worktrees/230",
+      sessionKind: "opaque-handle",
+      projectedMembers: [],
+      middleware: [],
+      context,
+      contributions: [contribution],
+      mcpServers: [
+        {
+          identity: contribution.id,
+          name: contribution.localName,
+          endpoint: "https://linear.example.test/mcp",
+          authenticated: false,
+        },
+      ],
+      provenanceStamps: [],
+    });
+
+    assert.deepStrictEqual(plan.provenance.projectedNames, []);
+    assert.deepStrictEqual(
+      {
+        ...plan.provenance.projection.find(({ member }) => member === `MCP ${contribution.id}`),
+      },
+      {
+        member: `MCP ${contribution.id}`,
+        disposition: "not-projected",
+        reason: "selected harness does not project MCP",
+      },
+    );
+  });
+
   it("freezes Messages, admitting Work Context facts, and provenance", () => {
     const resolved = resolveRunPlanStage(
       workspace.config,

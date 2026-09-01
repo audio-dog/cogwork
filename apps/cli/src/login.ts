@@ -20,6 +20,7 @@ const { LinearOAuthError } = Linear.OAuth;
 export interface LinearLoginConfig {
   readonly clientId: string;
   readonly redirectPort: number;
+  readonly expectedOrganization?: string;
 }
 
 export interface LinearLoginResult {
@@ -177,11 +178,17 @@ export const loginLinear = Effect.fn("cli.login.linear")(function* (config: Line
   const now = yield* Clock.currentTimeMillis;
   const token = Linear.OAuth.storedTokenFrom(tokenResponse, now);
   const identity = yield* Linear.OAuth.discoverIdentity(tokenResponse.access_token);
+  if (config.expectedOrganization !== undefined && config.expectedOrganization !== identity.organization) {
+    return yield* new LinearOAuthError({
+      message: `The Linear Connection is established for "${config.expectedOrganization}". Remove it before logging in to "${identity.organization}".`,
+    });
+  }
   const store = yield* CredentialStore.CredentialStore;
   yield* store.persist({
     issueTracker: "linear",
     organization: identity.organization,
     actorUserId: identity.actorUserId,
+    oauthClientId: config.clientId,
     token,
   });
   yield* Effect.logInfo("stored Linear credential", {

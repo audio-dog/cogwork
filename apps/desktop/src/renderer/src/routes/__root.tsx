@@ -1,5 +1,8 @@
 import { SidebarProvider } from "@cogwork/ui/components/sidebar";
+import { TanStackDevtools } from "@tanstack/react-devtools";
+import { FormDevtoolsPanel } from "@tanstack/react-form-devtools";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { CSSProperties } from "react";
 import { RightPanelWidthProvider } from "../components/right-panel-resize";
 import { useSidebarWidth } from "../components/sidebar-resize";
@@ -24,6 +27,18 @@ function RootLayout() {
       <SidebarProvider style={providerStyle}>
         <RightPanelWidthProvider sidebarWidth={width}>
           <Outlet />
+          <TanStackDevtools
+            plugins={[
+              {
+                name: "TanStack Router",
+                render: <TanStackRouterDevtoolsPanel />,
+              },
+              {
+                name: "TanStack Form",
+                render: <FormDevtoolsPanel />,
+              },
+            ]}
+          />
         </RightPanelWidthProvider>
       </SidebarProvider>
     </ActivitySessionProvider>

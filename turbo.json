@@ -13,7 +13,7 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "passThroughEnv": ["NODE_PATH", "ELECTRON_*"]
+      "passThroughEnv": ["NODE_PATH", "ELECTRON_*", "REMOTE_DEBUGGING_PORT"]
     },
     "test": {
       "dependsOn": ["transit", "^test"]

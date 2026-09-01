@@ -1,4 +1,10 @@
-import { maxSchedulerLimit, type WorkspaceId, type WorkspaceState } from "@cogwork/contracts";
+import {
+  type Connection,
+  type ConnectionSystem,
+  maxSchedulerLimit,
+  type WorkspaceId,
+  type WorkspaceState,
+} from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
   AlertDialog,
@@ -93,10 +99,12 @@ const registrationDraftFrom = (form: HTMLFormElement, tracker: WorkspaceTracker)
     checkoutPath: textFrom(data, "checkoutPath"),
     gitRemote: textFrom(data, "gitRemote"),
     tracker,
+    issueTrackerConnectionId: textFrom(data, "issueTrackerConnectionId"),
     repository: textFrom(data, "repository"),
     linearTeams: textFrom(data, "linearTeams"),
     linearOrganization: textFrom(data, "linearOrganization"),
     sourceControlRepository: textFrom(data, "sourceControlRepository"),
+    sourceControlConnectionId: textFrom(data, "sourceControlConnectionId"),
   };
 };
 
@@ -108,19 +116,134 @@ const workspaceTrackerFrom = (value: string | null) => {
 const deregisterWorkspaceWarning =
   "Deregistering removes the registration, its private settings, and private authoring tree. Run history stays.";
 
-function GitHubRegistrationFields() {
+const connectionsFor = (connections: readonly Connection[], system: ConnectionSystem) =>
+  connections.filter((connection) => connection.system === system && connection.status === "established");
+
+function GitHubTrackerConnectionField({ connections }: { readonly connections: readonly Connection[] }) {
+  const invalid = connections.length === 0;
   return (
-    <Field>
-      <FieldLabel htmlFor="workspace-repository">GitHub repository</FieldLabel>
-      <Input id="workspace-repository" name="repository" placeholder="owner/repository" required />
-      <FieldDescription>The issue repository this workspace watches.</FieldDescription>
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor="workspace-github-connection">GitHub Connection</FieldLabel>
+      <Select name="issueTrackerConnectionId" defaultValue={connections[0]?.id} required>
+        <SelectTrigger id="workspace-github-connection" className="w-full" aria-invalid={invalid}>
+          <SelectValue placeholder="Choose a Connection" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {connections.map((connection) => (
+              <SelectItem key={connection.id} value={connection.id}>
+                {connection.account}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {connections.length === 0 ? (
+        <FieldDescription>Establish this Connection before registering the workspace.</FieldDescription>
+      ) : null}
     </Field>
   );
 }
 
-function LinearRegistrationFields() {
+function GitHubRegistrationFields({ connections }: { readonly connections: readonly Connection[] }) {
   return (
     <>
+      <GitHubTrackerConnectionField connections={connections} />
+      <Field>
+        <FieldLabel htmlFor="workspace-repository">GitHub repository</FieldLabel>
+        <Input id="workspace-repository" name="repository" placeholder="owner/repository" required />
+        <FieldDescription>The issue repository this workspace watches.</FieldDescription>
+      </Field>
+    </>
+  );
+}
+
+function LinearTrackerConnectionField({ connections }: { readonly connections: readonly Connection[] }) {
+  const invalid = connections.length === 0;
+  return (
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor="workspace-linear-connection">Linear Connection</FieldLabel>
+      <Select name="issueTrackerConnectionId" defaultValue={connections[0]?.id} required>
+        <SelectTrigger id="workspace-linear-connection" className="w-full" aria-invalid={invalid}>
+          <SelectValue placeholder="Choose a Connection" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {connections.map((connection) => (
+              <SelectItem key={connection.id} value={connection.id}>
+                {connection.account}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {invalid ? (
+        <FieldDescription>Establish this Connection before registering the workspace.</FieldDescription>
+      ) : null}
+    </Field>
+  );
+}
+
+function GitHubSourceControlConnectionField({
+  connections,
+}: {
+  readonly connections: readonly Connection[];
+}) {
+  const invalid = connections.length === 0;
+  return (
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor="workspace-source-control-connection">GitHub source-control Connection</FieldLabel>
+      <Select name="sourceControlConnectionId" defaultValue={connections[0]?.id} required>
+        <SelectTrigger id="workspace-source-control-connection" className="w-full" aria-invalid={invalid}>
+          <SelectValue placeholder="Choose a Connection" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {connections.map((connection) => (
+              <SelectItem key={connection.id} value={connection.id}>
+                {connection.account}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {invalid ? (
+        <FieldDescription>Establish this Connection before adding source control.</FieldDescription>
+      ) : null}
+    </Field>
+  );
+}
+
+function OptionalSourceControlFields({ connections }: { readonly connections: readonly Connection[] }) {
+  const [repository, setRepository] = useState("");
+  return (
+    <>
+      <Field>
+        <FieldLabel htmlFor="workspace-source-control">GitHub source control</FieldLabel>
+        <Input
+          id="workspace-source-control"
+          name="sourceControlRepository"
+          placeholder="owner/repository"
+          value={repository}
+          onChange={(event) => setRepository(event.target.value)}
+        />
+        <FieldDescription>Optional repository used to read pull request state.</FieldDescription>
+      </Field>
+      {repository.trim() ? <GitHubSourceControlConnectionField connections={connections} /> : null}
+    </>
+  );
+}
+
+function LinearRegistrationFields({
+  githubConnections,
+  linearConnections,
+}: {
+  readonly githubConnections: readonly Connection[];
+  readonly linearConnections: readonly Connection[];
+}) {
+  return (
+    <>
+      <LinearTrackerConnectionField connections={linearConnections} />
       <Field>
         <FieldLabel htmlFor="workspace-linear-teams">Linear teams</FieldLabel>
         <Input id="workspace-linear-teams" name="linearTeams" placeholder="ENG, Platform" required />
@@ -130,11 +253,7 @@ function LinearRegistrationFields() {
         <FieldLabel htmlFor="workspace-linear-organization">Linear organization</FieldLabel>
         <Input id="workspace-linear-organization" name="linearOrganization" placeholder="acme" />
       </Field>
-      <Field>
-        <FieldLabel htmlFor="workspace-source-control">GitHub source control</FieldLabel>
-        <Input id="workspace-source-control" name="sourceControlRepository" placeholder="owner/repository" />
-        <FieldDescription>Optional repository used to read pull request state.</FieldDescription>
-      </Field>
+      <OptionalSourceControlFields connections={githubConnections} />
     </>
   );
 }
@@ -178,12 +297,15 @@ function WorkspaceActions({
 
 function RegisterWorkspaceDialog() {
   const {
+    state: { connections },
     actions: { register },
     meta: { registerPending, registerError, registerOutcome },
   } = useWorkspaces();
   const [tracker, setTracker] = useState<WorkspaceTracker>("github");
   const [invalid, setInvalid] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const githubConnections = connectionsFor(connections, "github");
+  const linearConnections = connectionsFor(connections, "linear");
   const status = workspaceSubmissionStatus({
     submitted,
     pending: registerPending,
@@ -267,7 +389,14 @@ function RegisterWorkspaceDialog() {
                 </SelectContent>
               </Select>
             </Field>
-            {tracker === "github" ? <GitHubRegistrationFields /> : <LinearRegistrationFields />}
+            {tracker === "github" ? (
+              <GitHubRegistrationFields connections={githubConnections} />
+            ) : (
+              <LinearRegistrationFields
+                githubConnections={githubConnections}
+                linearConnections={linearConnections}
+              />
+            )}
             {invalid ? <FieldError>Complete the required fields and use an absolute path.</FieldError> : null}
             {activeError ? <FieldError>{activeError}</FieldError> : null}
             {activeOutcome ? <RegistrationOutcome outcome={activeOutcome} /> : null}

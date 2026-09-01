@@ -32,7 +32,7 @@ const overview: PluginOverview = {
         installedAtMillis: 1,
       },
       resolvedIdentity: "linear@1.0.0",
-      requiredConnections: ["Linear"],
+      requiredConnections: ["linear"],
       contributions: [
         {
           id: "plugin:linear/mcp/linear",
@@ -59,7 +59,7 @@ const overview: PluginOverview = {
       summary: "GitHub tools",
       record: null,
       resolvedIdentity: "github@1.0.0",
-      requiredConnections: ["GitHub"],
+      requiredConnections: ["github"],
       contributions: [],
       manifestFailure: null,
     },

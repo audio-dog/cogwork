@@ -1,6 +1,5 @@
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
-import { RiPlugLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
+import { ConnectionsSurface } from "../../components/connections-surface";
 
 export const Route = createFileRoute("/_app/connections")({
   component: ConnectionsRoute,
@@ -8,16 +7,8 @@ export const Route = createFileRoute("/_app/connections")({
 
 function ConnectionsRoute() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl px-8 py-16">
-      <Empty className="w-full">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <RiPlugLine />
-          </EmptyMedia>
-          <EmptyTitle>Connections aren't ready yet</EmptyTitle>
-          <EmptyDescription>We're still working out what one is.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+    <div className="mx-auto w-full max-w-5xl px-8 pt-6 pb-12">
+      <ConnectionsSurface />
     </div>
   );
 }

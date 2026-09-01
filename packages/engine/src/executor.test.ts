@@ -1,4 +1,5 @@
 import {
+  ConnectionId,
   type ContributionSettingRow,
   DeclaredVersion,
   defaultControlStore,
@@ -35,6 +36,7 @@ import * as Stream from "effect/Stream";
 import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
+import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import * as ContextAssembler from "./context-assembler";
 import { ContextFsError } from "./context-fs";
 import { ControlStore, type ControlStoreService } from "./control-store";
@@ -58,6 +60,7 @@ import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
+import { projectedContributionName } from "./run-plan";
 import { layer as runRecorderLayer } from "./run-recorder";
 import * as SessionStore from "./session-store";
 import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
@@ -73,6 +76,7 @@ const cursor = Schema.decodeSync(HarnessName)("cursor");
 const codex = Schema.decodeSync(HarnessName)("codex");
 const id = Schema.decodeSync(WorkItemId);
 const testObservation = { generation: 1, observedAtMillis: 1 } as const;
+const linearConnectionId = Schema.decodeSync(ConnectionId)("linear/acme");
 
 const execute = (
   executor: Effect.Success<typeof Executor.make>,
@@ -923,6 +927,7 @@ const availablePluginMcpContributions = [
         endpoint: "https://mcp.linear.app/mcp",
         secretEnv: null,
         credentialAvailable: true,
+        connectionId: linearConnectionId,
       },
     },
   },
@@ -956,6 +961,20 @@ const unavailablePluginLayer = Layer.succeed(PluginManager, {
   contributions: () => Effect.succeed([]),
 });
 
+const connectionStoreStub = Layer.succeed(ConnectionStore, {
+  overview: Effect.succeed({ connections: [] }),
+  find: () => Effect.succeed(null),
+  findSystem: () => Effect.succeed(null),
+  bearer: () =>
+    Effect.succeed({ source: "stored-key", token: Redacted.make("connection-token"), identity: null }),
+  readiness: () => Effect.succeed({ _tag: "Ready" }),
+  requireReady: () => Effect.void,
+  requireSystemReady: () => Effect.void,
+  establish: () => Effect.die(new Error("unexpected Connection establishment")),
+  revoke: () => Effect.die(new Error("unexpected Connection revocation")),
+  remove: () => Effect.die(new Error("unexpected Connection removal")),
+} satisfies ConnectionStoreService);
+
 const controlStoreLayer = (
   operationSettings: ReadonlyArray<OperationSettingRow>,
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
@@ -967,6 +986,9 @@ const controlStoreLayer = (
     seed: picture,
     picture: Effect.succeed(picture),
     setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
+    establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
+    revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
+    removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
     updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
     installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
     uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
@@ -1012,6 +1034,9 @@ const changingControlStoreLayer = (
           }),
         ),
         setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
+        establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
+        revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
+        removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
         updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
         installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
         uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
@@ -1075,6 +1100,7 @@ function provide(
   transformRunLedger: (
     layer: Layer.Layer<RunLedger.RunLedger>,
   ) => Layer.Layer<RunLedger.RunLedger> = runLedgerIdentity,
+  connections = connectionStoreStub,
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = transformRunLedger(RunLedger.layerMemory.pipe(Layer.provide(bus)));
@@ -1103,6 +1129,7 @@ function provide(
         contextAssembler,
         controlStore,
         plugins,
+        connections,
       ),
     ),
   );
@@ -1563,7 +1590,7 @@ describe("Executor.execute", () => {
         [
           {
             identity: privateSkill.id,
-            name: `cogwork_${Array.from(privateSkill.id, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}`,
+            name: projectedContributionName(privateSkill.id),
             source: privateSkill.file,
           },
         ],
@@ -1700,17 +1727,18 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
-  it.effect("keeps running when an installed Plugin needs an MCP credential", () => {
+  it.effect("rejects a Run Plan when an installed Plugin needs an MCP credential", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
+      const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
+      const executed = yield* execute(executor, implementWorkspace, implementItem);
+      const ledger = yield* RunLedger.RunLedger;
 
-      const [request] = yield* Ref.get(requests);
-      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], []);
-      assert.isTrue(
-        request?.plan.instructions.some(({ source }) => source === "/plugins/linear/rules/linear.md"),
-      );
+      assert.isFalse(executed);
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(
       Effect.provide(
         provide(
@@ -1733,13 +1761,10 @@ describe("Executor.execute", () => {
       yield* execute(executor, implementWorkspace, implementItem);
 
       const [request] = yield* Ref.get(requests);
-      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], [
-        {
-          name: request ? resolvedMcpSkills(request)[0]?.name : undefined,
-          endpoint: "https://mcp.linear.app/mcp",
-          bearer: null,
-        },
-      ]);
+      const [skill] = request ? resolvedMcpSkills(request) : [];
+      assert.strictEqual(skill?.name, projectedContributionName("plugin:linear/mcp/linear"));
+      assert.strictEqual(skill?.endpoint, "https://mcp.linear.app/mcp");
+      assert.strictEqual(skill?.bearer ? Redacted.value(skill.bearer) : null, "connection-token");
       assert.deepStrictEqual(
         request?.plan.mcp.filter(({ identity }) => identity === "plugin:linear/mcp/linear").length,
         1,
@@ -1835,7 +1860,7 @@ describe("Executor.execute", () => {
 
       const [request] = yield* Ref.get(requests);
       const [skill] = request ? resolvedMcpSkills(request) : [];
-      assert.match(skill?.name ?? "", /^cogwork_/);
+      assert.match(skill?.name ?? "", /^engine__/);
       assert.isNotNull(skill?.bearer ?? null);
       assert.strictEqual(skill?.bearer ? Redacted.value(skill.bearer) : null, "token-for-linear");
 
@@ -2722,7 +2747,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], worktreeStubLayer)));
   });
 
-  it.effect("hands a stalled follow-up to a human with no harness run", () => {
+  it.effect("hands a stalled follow-up to a human without resolving the Run Plan", () => {
     const stalledItem = {
       ...followUpItem,
       followUp: { ...followUpItem.followUp, noProgress: 3, stalled: true },
@@ -2747,7 +2772,19 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
-    }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)])));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(followUpEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          ContextCleanupCalls.contextAssemblerLayer,
+          missingPluginCredentialLayer,
+        ),
+      ),
+    );
   });
 
   it.effect(

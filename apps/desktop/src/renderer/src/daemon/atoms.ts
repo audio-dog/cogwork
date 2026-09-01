@@ -34,9 +34,17 @@ export const setContributionSettingAtom = DaemonAtomRpc.mutation("SetContributio
 
 export const pluginsAtom = DaemonAtomRpc.query("GetPlugins", undefined);
 
+export const connectionsAtom = DaemonAtomRpc.query("GetConnections", undefined);
+
 export const installPluginAtom = DaemonAtomRpc.mutation("InstallPlugin");
 
 export const uninstallPluginAtom = DaemonAtomRpc.mutation("UninstallPlugin");
+
+export const establishConnectionAtom = DaemonAtomRpc.mutation("EstablishConnection");
+
+export const reconnectConnectionAtom = DaemonAtomRpc.mutation("ReconnectConnection");
+
+export const removeConnectionAtom = DaemonAtomRpc.mutation("RemoveConnection");
 
 export const registerWorkspaceAtom = DaemonAtomRpc.mutation("RegisterWorkspace");
 

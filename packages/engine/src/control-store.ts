@@ -1,4 +1,7 @@
 import {
+  type Connection,
+  type ConnectionId,
+  Connection as ConnectionSchema,
   type ContributionSettingCell,
   type ContributionSettingRow,
   ContributionSettingRow as ContributionSettingRowSchema,
@@ -41,6 +44,15 @@ export type ControlStoreService =
       readonly setDaemonLimit: (
         update: DaemonLimitUpdate,
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure | StaleControlStoreWrite>;
+      readonly establishConnection: (
+        connection: Connection,
+      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
+      readonly revokeConnection: (
+        connectionId: ConnectionId,
+      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
+      readonly removeConnection: (
+        connectionId: ConnectionId,
+      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
       readonly updateOperationSetting: (
         update: OperationSettingUpdate,
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
@@ -63,6 +75,9 @@ export type ControlStoreService =
       readonly setDaemonLimit: (
         update: DaemonLimitUpdate,
       ) => Effect.Effect<never, ControlStoreFailure | StaleControlStoreWrite>;
+      readonly establishConnection: (connection: Connection) => Effect.Effect<never, ControlStoreFailure>;
+      readonly revokeConnection: (connectionId: ConnectionId) => Effect.Effect<never, ControlStoreFailure>;
+      readonly removeConnection: (connectionId: ConnectionId) => Effect.Effect<never, ControlStoreFailure>;
       readonly updateOperationSetting: (
         update: OperationSettingUpdate,
       ) => Effect.Effect<never, ControlStoreFailure>;
@@ -89,6 +104,7 @@ const storeFailure = (operation: string) => (error: unknown) =>
   ControlStoreFailure.make({ operation, message: messageOf(error) });
 
 const decodeDaemonLimits = Schema.decodeUnknownEffect(DaemonLimitsSchema);
+const decodeConnection = Schema.decodeUnknownEffect(ConnectionSchema);
 const decodeContributionSettingRow = Schema.decodeUnknownEffect(ContributionSettingRowSchema);
 const decodeOperationSettingRow = Schema.decodeUnknownEffect(OperationSettingRowSchema);
 const decodePluginInstall = Schema.decodeUnknownEffect(PluginInstallSchema);
@@ -162,6 +178,25 @@ const readContributionSettings = (sql: SqlClient.SqlClient) =>
     );
   });
 
+const StoredConnection = Schema.Struct({
+  id: Schema.String,
+  system: Schema.String,
+  account: Schema.String,
+  status: Schema.String,
+});
+type StoredConnection = typeof StoredConnection.Type;
+const decodeStoredConnections = Schema.decodeUnknownEffect(Schema.Array(StoredConnection));
+
+const readConnections = Effect.fn("ControlStore.readConnections")(function* (sql: SqlClient.SqlClient) {
+  const stored = yield* sql<StoredConnection>`
+      SELECT id, system, account, status
+      FROM connections
+      ORDER BY system, account
+    `;
+  const rows = yield* decodeStoredConnections(stored);
+  return yield* Effect.forEach(rows, (row) => decodeConnection(row));
+});
+
 const levelOf = (row: StoredOperationSettingRow) => {
   if (row.level === "default") return { _tag: "Default" };
   if (row.level === "workflow") return { _tag: "Workflow", workflow: row.workflow };
@@ -221,12 +256,13 @@ const readPicture = (sql: SqlClient.SqlClient) =>
       WHERE id = 1
     `;
     const daemonLimits = yield* decodeDaemonLimits(row);
-    const [operationSettings, pluginInstalls, contributionSettings] = yield* Effect.all([
+    const [connections, operationSettings, pluginInstalls, contributionSettings] = yield* Effect.all([
+      readConnections(sql),
       readOperationSettings(sql),
       readPluginInstalls(sql),
       readContributionSettings(sql),
     ]);
-    return { daemonLimits, operationSettings, pluginInstalls, contributionSettings };
+    return { daemonLimits, connections, operationSettings, pluginInstalls, contributionSettings };
   });
 
 const storedContributionScope = (scope: ContributionSettingCell["scope"]) =>
@@ -404,6 +440,39 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       }),
     );
   });
+  const establishConnection = Effect.fn("ControlStore.establishConnection")(function* (
+    connection: Connection,
+  ) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        yield* sql`
+          INSERT INTO connections (id, system, account, status)
+          VALUES (${connection.id}, ${connection.system}, ${connection.account}, 'established')
+          ON CONFLICT (id) DO UPDATE SET
+            system = excluded.system,
+            account = excluded.account,
+            status = 'established'
+        `;
+        return yield* readPicture(sql);
+      }),
+    );
+  });
+  const revokeConnection = Effect.fn("ControlStore.revokeConnection")(function* (connectionId: ConnectionId) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        yield* sql`UPDATE connections SET status = 'revoked' WHERE id = ${connectionId}`;
+        return yield* readPicture(sql);
+      }),
+    );
+  });
+  const removeConnection = Effect.fn("ControlStore.removeConnection")(function* (connectionId: ConnectionId) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        yield* sql`DELETE FROM connections WHERE id = ${connectionId}`;
+        return yield* readPicture(sql);
+      }),
+    );
+  });
   const updateOperationSetting = Effect.fn("ControlStore.updateOperationSetting")(function* (
     update: OperationSettingUpdate,
   ) {
@@ -466,6 +535,12 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
     picture: picture(),
     setDaemonLimit: (update: DaemonLimitUpdate) =>
       setDaemonLimit(update).pipe(Effect.mapError(setDaemonLimitFailure)),
+    establishConnection: (connection: Connection) =>
+      establishConnection(connection).pipe(Effect.mapError(storeFailure("establish Connection"))),
+    revokeConnection: (connectionId: ConnectionId) =>
+      revokeConnection(connectionId).pipe(Effect.mapError(storeFailure("revoke Connection"))),
+    removeConnection: (connectionId: ConnectionId) =>
+      removeConnection(connectionId).pipe(Effect.mapError(storeFailure("remove Connection"))),
     updateOperationSetting: (update: OperationSettingUpdate) =>
       updateOperationSetting(update).pipe(Effect.mapError(storeFailure("update Operation setting"))),
     installPlugin: (
@@ -568,6 +643,9 @@ const unavailable = (message: string): ControlStoreService => {
     seed: null,
     picture: Effect.fail(failure),
     setDaemonLimit: () => Effect.fail(failure),
+    establishConnection: () => Effect.fail(failure),
+    revokeConnection: () => Effect.fail(failure),
+    removeConnection: () => Effect.fail(failure),
     updateOperationSetting: () => Effect.fail(failure),
     installPlugin: () => Effect.fail(failure),
     uninstallPlugin: () => Effect.fail(failure),
