@@ -1,0 +1,23 @@
+packages/engine/src/model-catalog.test.ts
+  s_18fc8076b0e53f::t_e955c7b1fd7b35 9,148,150-152,165-176,179-180
+  s_18fc8076b0e53f::t_0dbba91c7d8420 142-146,149,177-178,191,200,209
+  s_18fc8076b0e53f::t_77394eda6843e5 153-164
+packages/engine/src/model-catalog.ts
+  s_18fc8076b0e53f::t_e955c7b1fd7b35 13,70,117-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "205da23f0e8d8cd3b0b0d690f7f667fcb20120ec",
+  "prompts": {},
+  "sessions": {
+    "s_18fc8076b0e53f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05ab3-2db5-75d0-85cf-ff7d937d2bd3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
