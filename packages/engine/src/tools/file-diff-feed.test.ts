@@ -29,7 +29,7 @@ const DiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String });
 const decodeDiffValue = Schema.decodeUnknownEffect(DiffValue);
 const fileDiffMaxBytes = 64 * 1024;
 const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
-const gitIdentity = {
+const gitFixtureEnvironment = {
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_AUTHOR_NAME: "cogwork-test",
@@ -60,7 +60,7 @@ const openSandbox = Effect.fn("file-diff-feed.test.openSandbox")(function* () {
   const sandbox: WorktreeSandbox = { handle, root: handle.id };
   const init = yield* Effect.promise(() =>
     handle.process.exec("git init -q && printf 'seed\\n' > seed.txt && git add -A && git commit -q -m init", {
-      env: gitIdentity,
+      env: gitFixtureEnvironment,
     }),
   );
   assert.strictEqual(init.exitCode, 0, init.stderr);
@@ -410,7 +410,9 @@ describe("file diff feed", () => {
       yield* writeFile(original, { path: "tracked/first.txt", content: "first\n" });
       yield* writeFile(original, { path: "tracked/second.txt", content: "second\n" });
       const commit = yield* Effect.promise(() =>
-        original.handle.process.exec("git add -A && git commit -q -m tracked-directory"),
+        original.handle.process.exec("git add -A && git commit -q -m tracked-directory", {
+          env: gitFixtureEnvironment,
+        }),
       );
       assert.strictEqual(commit.exitCode, 0, commit.stderr);
       const baseSha = yield* resolveBaseSha(original);
