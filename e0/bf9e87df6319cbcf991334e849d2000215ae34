@@ -1,0 +1,19 @@
+CONTEXT-MAP.md
+  s_8bc8c2d33b667c::t_0ebed4e91a6ae8 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e0bf9e87df6319cbcf991334e849d2000215ae34",
+  "prompts": {},
+  "sessions": {
+    "s_8bc8c2d33b667c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638c-1f6e-7753-9601-dfac58747a5e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
