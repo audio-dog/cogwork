@@ -1,4 +1,5 @@
 import type { LifecycleStage, WorkItemId } from "@cogwork/contracts";
+import type { HarnessHumanAttach } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
 import { checkoutPathFor } from "./worktree";
 
@@ -47,7 +48,7 @@ export const parseTriageProposal = (body: string) => {
 export const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
 export const attachCommand = (checkoutPath: string, sessionId: string) =>
-  `cd ${shellQuote(checkoutPath)} && agent --resume ${shellQuote(sessionId)}`;
+  `cd ${shellQuote(checkoutPath)} && codex resume ${shellQuote(sessionId)}`;
 
 export const recoveryReason = "worker did not survive a daemon restart";
 
@@ -131,12 +132,24 @@ export interface HandoffRequest {
   readonly stage: LifecycleStage;
   readonly cause: HandoffCause;
   readonly reason: string;
-  readonly session: string | null | undefined;
+  readonly session:
+    | {
+        readonly handle: string;
+        readonly access: HarnessHumanAttach | "programmatic-only";
+      }
+    | null
+    | undefined;
 }
 
 export const handoffNote = (request: HandoffRequest) => {
   const { workspace, item, stage, cause, reason, session } = request;
   const checkout = checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
-  const resume = session ? attachCommand(checkout, session) : undefined;
+  const resume = session?.access === "codex-cli" ? attachCommand(checkout, session.handle) : undefined;
   return handoffComment(stage, cause, reason, resume);
+};
+
+export const handoffSession = (handle: string | null, humanAttach: HarnessHumanAttach | undefined) => {
+  if (!handle) return null;
+  const access: HarnessHumanAttach | "programmatic-only" = humanAttach || "programmatic-only";
+  return { handle, access };
 };

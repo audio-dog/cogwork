@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 
@@ -18,6 +19,20 @@ const result = JSON.stringify({
   proposal: "Verified and ready.",
 });
 
+const responseContent = async (sessionParams) => {
+  if (process.argv.includes("--malformed")) return "Disposition: ready-for-agent";
+  if (!process.argv.includes("--observe")) return result;
+  return JSON.stringify({
+    instructions: await readFile("AGENTS.md", "utf8"),
+    model: process.argv[process.argv.indexOf("--model") + 1],
+    mcp: sessionParams.mcpServers.map((server) => ({
+      name: server.name,
+      url: server.url,
+      authenticated: server.headers.some((header) => header.name === "Authorization"),
+    })),
+  });
+};
+
 class FakeCursorAgent {
   constructor(connection) {
     this.connection = connection;
@@ -26,7 +41,7 @@ class FakeCursorAgent {
   initialize(params) {
     return Promise.resolve({
       protocolVersion: params.protocolVersion,
-      agentCapabilities: { loadSession: false },
+      agentCapabilities: { loadSession: true },
       authMethods: [
         {
           id: "cursor_login",
@@ -38,25 +53,46 @@ class FakeCursorAgent {
   }
 
   authenticate() {
-    return Promise.resolve({});
+    return Promise.reject(new Error("host login must skip ACP authenticate"));
   }
 
-  newSession() {
+  newSession(params) {
+    this.sessionParams = params;
     return Promise.resolve({ sessionId: "fake-cursor-session" });
   }
 
+  loadSession(params) {
+    if (process.argv.includes("--reject-load")) return Promise.reject(new Error("session missing"));
+    this.sessionParams = params;
+    return Promise.resolve({});
+  }
+
   async prompt(params) {
+    if (process.argv.includes("--blocking-extension")) {
+      const response = this.connection.extMethod("cursor/create_plan", { sessionId: params.sessionId });
+      const refused = await response.then(
+        () => false,
+        (error) => error?.code === -32601,
+      );
+      if (!refused) throw new Error("cursor/create_plan was not refused with method-not-found");
+    }
+    const content = await responseContent(this.sessionParams);
     await this.connection.sessionUpdate({
       sessionId: params.sessionId,
       update: {
         sessionUpdate: "agent_message_chunk",
         content: {
           type: "text",
-          text: process.argv.includes("--malformed") ? "Disposition: ready-for-agent" : result,
+          text: content,
         },
       },
     });
-    return { stopReason: "end_turn" };
+    return {
+      stopReason: "end_turn",
+      ...(process.argv.includes("--metered")
+        ? { usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 } }
+        : {}),
+    };
   }
 
   cancel() {

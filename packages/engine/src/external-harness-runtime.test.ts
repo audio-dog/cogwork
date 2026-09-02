@@ -39,6 +39,7 @@ import {
   make,
   staticCatalogSource,
 } from "./harness";
+import { messageFromUnknown } from "./provider-bridge";
 import { SessionStore } from "./session-store";
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
@@ -297,7 +298,8 @@ const descriptor = (
     execution: fullHarnessExecution,
     profile: {
       authenticationModes: ["host"],
-      session: { affinity: "runtime-host", fork: false },
+      session: { affinity: "runtime-host", fork: false, humanAttach: false },
+      structuredOutput: "native",
       policyFidelity: "exact",
       fileEventFidelity: "sandbox",
       usageQuality: "estimated",
@@ -334,6 +336,7 @@ const descriptor = (
       },
       diagnostics: [],
     }),
+  sharedGit: "none",
   makeAdapter: (resolved) => {
     probe.resolved.push(resolved);
     return new ControlledAdapter(() => toAsyncIterable(chunks), probe);
@@ -348,9 +351,15 @@ const descriptor = (
   transport: {},
   diagnostics: (cause) =>
     new HarnessError({
+      reason: "launch",
+      retryable: false,
+      message: messageFromUnknown(cause),
+    }),
+  turnDiagnostics: (cause) =>
+    new HarnessError({
       reason: "turn",
       retryable: true,
-      message: cause instanceof Error ? cause.message : JSON.stringify(cause),
+      message: messageFromUnknown(cause),
     }),
   estimateUsage: (_resolved, event, characters) =>
     event.type === EventType.RUN_FINISHED
@@ -834,12 +843,6 @@ describe("external Harness runtime", () => {
           makeAdapter: () => {
             throw nativeFailure;
           },
-          diagnostics: (cause) =>
-            new HarnessError({
-              reason: "launch",
-              retryable: false,
-              message: cause === nativeFailure ? nativeFailure.message : "unexpected failure",
-            }),
         };
         const harness = makeHarness(controlledDescriptor, created);
         const error = yield* harness
@@ -924,33 +927,64 @@ describe("external Harness runtime", () => {
       }),
     );
 
+    it.effect("rejects a Run Plan without Sandbox middleware before adapter launch", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const created: Array<string> = [];
+        const harness = makeHarness(descriptor([], probe), created);
+        const plan = RunPlan.make({
+          ...request,
+          middleware: [],
+        });
+        const error = yield* harness
+          .run({ plan, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "sandbox");
+        assert.include(error.message, "missing mandatory Sandbox projection");
+        assert.deepStrictEqual(created, []);
+        assert.deepStrictEqual(probe.resolved, []);
+      }),
+    );
+
+    it.effect("rejects a Sandbox policy mismatch before adapter launch", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const created: Array<string> = [];
+        const harness = makeHarness(descriptor([], probe), created);
+        const plan = RunPlan.make({
+          ...request,
+          sandbox: { ...request.sandbox, policy: "read-only" },
+        });
+        const error = yield* harness
+          .run({ plan, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "policy");
+        assert.include(error.message, "does not match its immutable Harness profile");
+        assert.deepStrictEqual(created, []);
+        assert.deepStrictEqual(probe.resolved, []);
+      }),
+    );
+
     it.effect("preserves a run error event before failing through the Harness taxonomy", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
         const created: Array<string> = [];
         const seen: Array<{ readonly [key: string]: unknown; readonly type: string }> = [];
         const harness = makeHarness(
-          {
-            ...descriptor(
-              [
-                { type: EventType.RUN_STARTED, threadId: "session-147", runId: "run-external-test" },
-                {
-                  type: EventType.RUN_ERROR,
-                  message: "controlled turn failed",
-                  code: "CONTROLLED_FAILURE",
-                  metadata: { controlled: { retryAfter: 3 } },
-                },
-              ],
-              probe,
-            ),
-            diagnostics: (cause) => {
-              const message =
-                typeof cause === "object" && cause && "message" in cause
-                  ? String(cause.message)
-                  : "unexpected failure";
-              return new HarnessError({ reason: "launch", retryable: false, message });
-            },
-          },
+          descriptor(
+            [
+              { type: EventType.RUN_STARTED, threadId: "session-147", runId: "run-external-test" },
+              {
+                type: EventType.RUN_ERROR,
+                message: "controlled turn failed",
+                code: "CONTROLLED_FAILURE",
+                metadata: { controlled: { retryAfter: 3 } },
+              },
+            ],
+            probe,
+          ),
           created,
         );
         const error = yield* harness.run({ plan: request, session: null, mcpCredentials: new Map() }).pipe(
@@ -958,8 +992,8 @@ describe("external Harness runtime", () => {
           Effect.flip,
         );
 
-        assert.strictEqual(error.reason, "launch");
-        assert.strictEqual(error.retryable, false);
+        assert.strictEqual(error.reason, "turn");
+        assert.strictEqual(error.retryable, true);
         assert.strictEqual(error.message, "controlled turn failed");
         assert.strictEqual(seen[1]?.type, EventType.RUN_ERROR);
         assert.strictEqual(seen[1]?.code, "CONTROLLED_FAILURE");

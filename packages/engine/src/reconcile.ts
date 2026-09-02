@@ -56,6 +56,7 @@ export interface WorkspaceReconcileState {
   readonly blocked: ReadonlyArray<BlockedItem>;
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
   readonly observed: ReadonlyArray<ObservedItem>;
+  readonly observedCount: number;
   readonly availability: ReadonlyArray<OperationAvailability>;
 }
 
@@ -89,6 +90,7 @@ const okState = (
   blocked: classified.blocked,
   needsHuman: classified.needsHuman,
   observed,
+  observedCount: observed.length,
   availability,
 });
 
@@ -106,6 +108,7 @@ const pausedState = (workspace: RegisteredWorkspace, pause: Pause): WorkspaceRec
   blocked: [],
   needsHuman: [],
   observed: [],
+  observedCount: 0,
   availability: [],
 });
 

@@ -6,6 +6,7 @@ import type {
   SessionId,
   WorkspaceId,
 } from "@cogwork/contracts";
+import { sessionHandle } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -21,14 +22,15 @@ import {
   maxAttemptsPerStage,
   observedStage,
 } from "./classify";
-import { type HandoffCause, handoffNote, recoveryReason } from "./comments";
+import { type HandoffCause, handoffNote, handoffSession, recoveryReason } from "./comments";
 import { Executor } from "./executor";
 import { isStalledFollowUp } from "./follow-up";
+import { Harness } from "./harness";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
-import { handleOf, RunLedger } from "./run-ledger";
+import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
 
 const maxCrashesPerItem = 3;
@@ -47,6 +49,7 @@ export const make = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const issueTracker = yield* IssueTracker;
   const ledger = yield* RunLedger;
+  const harness = yield* Harness;
   const scheduler = yield* Scheduler;
   const executor = yield* Executor;
   const releaseClaim = makeReleaseClaim(issueTracker);
@@ -62,6 +65,11 @@ export const make = Effect.gen(function* () {
     cause: HandoffCause,
     session: SessionId | null,
   ) {
+    const storedSession = session ? yield* ledger.getSession(session) : null;
+    const handle = sessionHandle(storedSession);
+    const humanAttach = storedSession
+      ? harness.capabilities(storedSession.harness)?.session.humanAttach
+      : undefined;
     yield* issueTracker.handOff(workspace, item.id, {
       stage,
       note: handoffNote({
@@ -70,7 +78,7 @@ export const make = Effect.gen(function* () {
         stage,
         cause,
         reason: recoveryReason,
-        session: yield* handleOf(ledger, session),
+        session: handoffSession(handle, humanAttach),
       }),
     });
   });
@@ -167,7 +175,8 @@ export const make = Effect.gen(function* () {
   const recoverCrashed = Effect.fn("Recovery.recoverCrashed")(function* (
     workspace: RegisteredWorkspace,
     item: ObservedItem,
-    stage: LifecycleStage,
+    currentStage: LifecycleStage,
+    crashedStage: LifecycleStage,
     session: SessionId | null,
     observation: RunPlanObservation,
   ) {
@@ -179,9 +188,9 @@ export const make = Effect.gen(function* () {
       item.handback?.atMillis ?? 0,
     );
     if (crashes < maxCrashesPerItem) {
-      return yield* reschedule(workspace, item, stage, "crashed", session, observation);
+      return yield* reschedule(workspace, item, currentStage, "crashed", session, observation);
     }
-    yield* handoffCrashLoop(workspace, item, stage, crashes, session);
+    yield* handoffCrashLoop(workspace, item, crashedStage, crashes, session);
   });
 
   const rejectRecovery = Effect.fn("Recovery.rejectRecovery")(function* (
@@ -213,8 +222,8 @@ export const make = Effect.gen(function* () {
     item: ObservedItem,
     observation: RunPlanObservation,
   ) {
-    const stage = observedStage(item);
-    const work = stage ? eligibleWork(item, stage) : null;
+    const currentStage = observedStage(item);
+    const work = currentStage ? eligibleWork(item, currentStage) : null;
     if (work && !isStalledFollowUp(work.stage, work.followUp)) {
       const availability = yield* executor.availabilityOf(workspace, work);
       if (!availability.available) {
@@ -222,13 +231,15 @@ export const make = Effect.gen(function* () {
       }
     }
     const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
-    if (stage && last?.status === "interrupted") {
-      return yield* reschedule(workspace, item, stage, "interrupted", last.session, observation);
+    const accountedRun = last && last.startedAtMillis >= (item.claim?.claimedAtMillis ?? 0) ? last : null;
+    if (currentStage && last?.status === "interrupted") {
+      return yield* reschedule(workspace, item, currentStage, "interrupted", last.session, observation);
     }
-    if (stage && last?.status === "running") {
-      return yield* recoverCrashed(workspace, item, stage, last.session, observation);
+    if (currentStage && last?.status === "running") {
+      return yield* recoverCrashed(workspace, item, currentStage, last.stage, last.session, observation);
     }
-    yield* recoverStale(workspace, item, stage, last?.session ?? null);
+    const staleStage = currentStage ? (accountedRun?.stage ?? item.claim?.stage ?? currentStage) : null;
+    yield* recoverStale(workspace, item, staleStage, accountedRun?.session ?? null);
   });
 
   const recoverWorkspace = Effect.fn("Recovery.recoverWorkspace")(function* (

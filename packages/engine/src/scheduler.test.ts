@@ -19,7 +19,7 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
@@ -327,6 +327,7 @@ const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileS
     blocked: [],
     needsHuman: [],
     observed: [],
+    observedCount: 0,
     availability: [],
   })),
 });

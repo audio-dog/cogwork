@@ -17,6 +17,7 @@ import type {
 } from "@cogwork/contracts";
 import {
   AgUiEvent,
+  agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
@@ -43,7 +44,13 @@ import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { Availability, availabilityCauseSummary } from "./availability";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
-import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
+import {
+  followUpNoteBody,
+  handoffNote,
+  handoffSession,
+  prepareFailureReason,
+  triageProposalBody,
+} from "./comments";
 import { ConnectionStore } from "./connection";
 import { ContextAssembler, type ContextAssemblerError } from "./context-assembler";
 import type { ContextFsError } from "./context-fs";
@@ -812,10 +819,10 @@ export const make = Effect.gen(function* () {
   const foldTriageRun = (record: RunRecord, request: HarnessRequest) =>
     foldStream(record, request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
 
-  const guardResume = <A extends RunAccumulator>(prev: A, next: A, expected: string) =>
-    prev.handle === null && next.handle !== null && next.handle !== expected
-      ? Effect.fail(new SessionRestarted({}))
-      : Effect.succeed(next);
+  const guardResume = (event: AgUiEvent, expected: string) => {
+    if (!agUiIsSessionHandleEvent(event) || event.value.sessionId === expected) return Effect.void;
+    return Effect.fail(new SessionRestarted({}));
+  };
 
   const rejectedResume = (record: RunRecord) =>
     recorder.record(record, failedTerminal).pipe(
@@ -832,30 +839,28 @@ export const make = Effect.gen(function* () {
 
   const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
     foldStream(record, request, emptyAccumulator, (acc, event) =>
-      foldEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
+      guardResume(event, expected).pipe(Effect.andThen(foldEvent(record, acc, event))),
     ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldTriageResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
     foldStream(record, request, emptyTriageAccumulator, (acc, event) =>
-      foldTriageEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
+      guardResume(event, expected).pipe(Effect.andThen(foldTriageEvent(record, acc, event))),
     ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldOutcome = Effect.fn("Executor.foldOutcome")(function* (
     record: RunRecord,
-    ops: CommonStageOps,
     request: HarnessRequest,
   ) {
-    const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
+    const expected = yield* handleOf(ledger, request.session);
     if (!expected) return yield* foldRun(record, request);
     return yield* foldResume(record, request, expected);
   });
 
   const foldTriageOutcome = Effect.fn("Executor.foldTriageOutcome")(function* (
     record: RunRecord,
-    ops: TriageStageOps,
     request: HarnessRequest,
   ) {
-    const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
+    const expected = yield* handleOf(ledger, request.session);
     if (!expected) return yield* foldTriageRun(record, request);
     return yield* foldTriageResume(record, request, expected);
   });
@@ -865,6 +870,7 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     retryable: boolean,
     reason: string,
+    harnessName: HarnessName,
     handle: string | null,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
@@ -889,7 +895,7 @@ export const make = Effect.gen(function* () {
           stage: item.stage,
           cause: handoffCause(retryable, attempts),
           reason,
-          session: handle,
+          session: handoffSession(handle, harness.capabilities(harnessName)?.session.humanAttach),
         }),
       });
     }
@@ -906,9 +912,10 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     retryable: boolean,
     reason: string,
+    harnessName: HarnessName,
     handle: string | null,
   ) {
-    yield* settleRun(runId, yield* reportFailure(workspace, item, retryable, reason, handle));
+    yield* settleRun(runId, yield* reportFailure(workspace, item, retryable, reason, harnessName, handle));
   });
 
   const applyTriageSuccess = Effect.fn("Executor.applyTriageSuccess")(function* (
@@ -960,6 +967,7 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     record: RunRecord,
     acc: TriageAccumulator,
+    harnessName: HarnessName,
   ) {
     return yield* decodeTriageResult(acc).pipe(
       Effect.matchEffect({
@@ -968,7 +976,15 @@ export const make = Effect.gen(function* () {
             .record(record, failedTerminal)
             .pipe(
               Effect.andThen(
-                applyFailure(workspace, item, record.id, error.retryable, error.message, acc.handle),
+                applyFailure(
+                  workspace,
+                  item,
+                  record.id,
+                  error.retryable,
+                  error.message,
+                  harnessName,
+                  acc.handle,
+                ),
               ),
             ),
         onSuccess: (result) =>
@@ -1008,15 +1024,16 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     runId: RunId,
     acc: RunAccumulator,
+    harnessName: HarnessName,
   ) {
     return yield* decodeImplementResult(acc).pipe(
       Effect.matchEffect({
         onFailure: (error) =>
-          applyFailure(workspace, item, runId, error.retryable, error.message, acc.handle),
+          applyFailure(workspace, item, runId, error.retryable, error.message, harnessName, acc.handle),
         onSuccess: (result) =>
           result.outcome === "opened-pr"
             ? applyImplementSuccess(workspace, item, runId, acc)
-            : applyFailure(workspace, item, runId, false, result.summary, acc.handle),
+            : applyFailure(workspace, item, runId, false, result.summary, harnessName, acc.handle),
       }),
     );
   });
@@ -1043,7 +1060,8 @@ export const make = Effect.gen(function* () {
         prompt: fullPrompt,
         session: null,
       }),
-      complete: (record: RunRecord, acc: TriageAccumulator) => completeTriage(workspace, item, record, acc),
+      complete: (record: RunRecord, acc: TriageAccumulator) =>
+        completeTriage(workspace, item, record, acc, resolved.harness),
       fullPrompt,
       resume: false,
       resumePolicy: false,
@@ -1060,7 +1078,8 @@ export const make = Effect.gen(function* () {
       planStage,
       branch,
       prepare: prepareImplement(workspace, item, fullPrompt),
-      complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
+      complete: (runId: RunId, acc: RunAccumulator) =>
+        completeImplement(workspace, item, runId, acc, resolved.harness),
       fullPrompt,
       resume: false,
       resumePolicy: false,
@@ -1127,14 +1146,15 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     acc: RunAccumulator,
     context: FollowUpContext,
+    harnessName: HarnessName,
   ) {
     return yield* decodeFollowUpResult(acc).pipe(
       Effect.matchEffect({
         onFailure: (error) =>
-          applyFailure(workspace, item, runId, error.retryable, error.message, acc.handle),
+          applyFailure(workspace, item, runId, error.retryable, error.message, harnessName, acc.handle),
         onSuccess: (result) =>
           result.outcome === "stuck"
-            ? applyFailure(workspace, item, runId, false, result.summary, acc.handle)
+            ? applyFailure(workspace, item, runId, false, result.summary, harnessName, acc.handle)
             : applyFollowUpSuccess(workspace, item, runId, acc, context, result),
       }),
     );
@@ -1175,7 +1195,8 @@ export const make = Effect.gen(function* () {
       planStage,
       branch,
       prepare: prepareFollowUp(workspace, item, branch, context, fullPrompt),
-      complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
+      complete: (runId: RunId, acc: RunAccumulator) =>
+        completeFollowUp(workspace, item, runId, acc, context, resolved.harness),
       fullPrompt,
       resume: false,
       resumePolicy: true,
@@ -1475,7 +1496,15 @@ export const make = Effect.gen(function* () {
       recordEncodingFailureTerminal(error).pipe(
         Effect.andThen(handleOf(ledger, record.session)),
         Effect.flatMap((handle) =>
-          applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
+          applyFailure(
+            workspace,
+            item,
+            runId,
+            retryableOf(error),
+            prepareFailureReason(error),
+            ops.resolved.harness,
+            handle,
+          ),
         ),
       );
 
@@ -1496,9 +1525,9 @@ export const make = Effect.gen(function* () {
       );
 
     if (ops.kind === "triage") {
-      return yield* settle(foldTriageOutcome(record, ops, request), (acc) => ops.complete(record, acc));
+      return yield* settle(foldTriageOutcome(record, request), (acc) => ops.complete(record, acc));
     }
-    return yield* settle(foldOutcome(record, ops, request), (acc) => ops.complete(runId, acc));
+    return yield* settle(foldOutcome(record, request), (acc) => ops.complete(runId, acc));
   });
 
   const acceptPlannedRun = Effect.fn("Executor.acceptPlannedRun")(function* (
@@ -1574,12 +1603,21 @@ export const make = Effect.gen(function* () {
             Effect.flatMap((prepared) => prepareAcceptedRun(previous, prepared)),
             Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
             Effect.matchEffect({
-              onFailure: (error) =>
-                handleOf(ledger, previous).pipe(
-                  Effect.flatMap((handle) =>
-                    reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
+              onFailure: (error) => {
+                const storedSession = previous ? ledger.getSession(previous) : Effect.succeed(null);
+                return storedSession.pipe(
+                  Effect.flatMap((session) =>
+                    reportFailure(
+                      workspace,
+                      item,
+                      retryableOf(error),
+                      prepareFailureReason(error),
+                      session?.harness ?? selectedOps.resolved.harness,
+                      sessionHandle(session),
+                    ),
                   ),
-                ),
+                );
+              },
               onSuccess: (accepted) => {
                 if (!accepted) return Effect.void;
                 const { request, selectedOps: acceptedOps, record } = accepted;

@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { Effect, Layer, Logger, ManagedRuntime, Stream, SubscriptionRef } from "effect";
+import { Cause, Effect, Exit, Layer, Logger, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
@@ -113,6 +113,31 @@ const crashChild = (child: FakeChild) => {
 };
 
 describe("EngineSupervisor", () => {
+  it("settles startup interruption when the runtime drains", async () => {
+    const probing = Promise.withResolvers<void>();
+
+    await withSupervisor(
+      options({
+        spawn: () => new FakeChild(),
+        probe: () =>
+          Effect.promise(() => {
+            probing.resolve();
+            return Promise.withResolvers<boolean>().promise;
+          }),
+      }),
+      async (runtime, supervisor) => {
+        const starting = runtime.runPromiseExit(supervisor.start);
+        await probing.promise;
+        await runtime.dispose();
+        const exit = await starting;
+
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isSuccess(exit)) return;
+        expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
+      },
+    );
+  });
+
   it("adopts an existing daemon without spawning", async () => {
     const spawn = vi.fn(() => new FakeChild());
 
