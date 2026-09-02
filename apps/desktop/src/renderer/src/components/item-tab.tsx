@@ -1,11 +1,11 @@
-import type {
+import {
   ClassifiedItem,
-  NeedsHumanItem,
-  PrSummary,
-  RunSummary,
-  TriageRole,
-  WorkItemId,
-  WorkspaceId,
+  type NeedsHumanItem,
+  type PrSummary,
+  type RunSummary,
+  type TriageRole,
+  type WorkItemId,
+  type WorkspaceId,
 } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
@@ -309,7 +309,7 @@ function ApproveButton() {
     actions: { reclassify },
     meta: { roleCommandPending },
   } = useItemTab();
-  if (item._tag !== "NeedsHuman") return null;
+  if (!ClassifiedItem.guards.NeedsHuman(item)) return null;
   return (
     <Button
       size="sm"
@@ -327,7 +327,7 @@ function ReclassifyButton() {
     state: { item },
     meta: { roleCommandPending, triageRef },
   } = useItemTab();
-  if (item._tag !== "NeedsHuman") return null;
+  if (!ClassifiedItem.guards.NeedsHuman(item)) return null;
   return (
     <Button
       size="sm"
@@ -346,7 +346,7 @@ function HandBackButton() {
     actions: { handBack: submitHandBack },
     meta: { handBack, roleCommandPending },
   } = useItemTab();
-  if (item._tag !== "NeedsHuman") return null;
+  if (!ClassifiedItem.guards.NeedsHuman(item)) return null;
   return (
     <Button
       size="sm"
@@ -365,7 +365,7 @@ function ActionBar() {
     state: { item, descriptor },
     meta: { cancel, handBack },
   } = useItemTab();
-  const hasActions = descriptor.running || item._tag === "NeedsHuman";
+  const hasActions = descriptor.running || ClassifiedItem.guards.NeedsHuman(item);
   if (!hasActions) return null;
   return (
     <div className="flex flex-col gap-1.5">
@@ -638,8 +638,8 @@ function MainBody() {
       <Header />
       <ActionBar />
       {run?.status === "running" && <RunningAffordance run={run} />}
-      {item._tag === "NeedsHuman" && <TriageSection item={item} />}
-      {item._tag === "Blocked" && <BlockersSection openBlockers={item.openBlockers} />}
+      {ClassifiedItem.guards.NeedsHuman(item) && <TriageSection item={item} />}
+      {ClassifiedItem.guards.Blocked(item) && <BlockersSection openBlockers={item.openBlockers} />}
       {item.pr && <PullRequestSummary pr={item.pr} />}
       <PreviousAttempts />
       {run && <Metadata run={run} />}
