@@ -103,6 +103,8 @@ export const harnessEventFoldDuration = Metric.timer("cogwork_harness_event_fold
   description: "Time to fold one harness event into Run state.",
 });
 
+const isReplayHarness = (harness: HarnessName) => harness === "replay";
+
 import type { WorktreeFsError } from "./worktree-fs";
 
 type PrepareError =
@@ -1250,14 +1252,33 @@ export const make = Effect.gen(function* () {
     return { checkoutPath: worktree.path, prompt, session: null } satisfies PreparedRun;
   });
 
-  const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+  const plannedStageOps = (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    planStage: ResolvedOperation,
+  ) => {
     if (item.stage === "implement") return implementOps(workspace, item, planStage);
     if (item.stage === "follow-up") return followUpOps(workspace, item, planStage);
     return triageOps(workspace, item, planStage);
   };
 
+  const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+    const ops = plannedStageOps(workspace, item, planStage);
+    if (!isReplayHarness(ops.resolved.harness)) return ops;
+    return {
+      ...ops,
+      branch: null,
+      prepare: Effect.succeed({
+        checkoutPath: workspace.config.checkoutPath,
+        prompt: ops.fullPrompt,
+        session: null,
+      }),
+    } satisfies StageOps;
+  };
+
   const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
     const ops = stageOps(workspace, item, planStage);
+    if (isReplayHarness(ops.resolved.harness)) return ops;
     const session = item.resume?.session;
     if (!session) return ops;
     return {
@@ -1523,6 +1544,23 @@ export const make = Effect.gen(function* () {
           onSuccess: (acc) => complete(acc).pipe(Effect.catchTag("RunLedgerError", settleCompletionFailure)),
         }),
       );
+
+    const settleRecordedRun = (status: "failed" | "succeeded", usage: TokenUsage | null) =>
+      Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
+        settleRun(runId, { status, usage, endedAtMillis }),
+      );
+
+    const settleRecorded = <R>(attempt: Effect.Effect<RunAccumulator, PrepareError | HarnessError, R>) =>
+      attempt.pipe(
+        Effect.matchEffect({
+          onFailure: () => settleRecordedRun("failed", null),
+          onSuccess: (acc) => settleRecordedRun("succeeded", acc.usage),
+        }),
+      );
+
+    if (isReplayHarness(record.harness)) {
+      return yield* settleRecorded(foldOutcome(record, request));
+    }
 
     if (ops.kind === "triage") {
       return yield* settle(foldTriageOutcome(record, request), (acc) => ops.complete(record, acc));

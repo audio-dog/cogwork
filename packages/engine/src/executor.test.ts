@@ -49,6 +49,7 @@ import {
   fullHarnessExecution,
   type HarnessCapabilityProfile,
   HarnessError,
+  type HarnessExecution,
   type HarnessRequest,
   type HarnessRunner,
   layer as harnessLayer,
@@ -75,6 +76,7 @@ import {
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const codex = Schema.decodeSync(HarnessName)("codex");
+const replay = Schema.decodeSync(HarnessName)("replay");
 const id = Schema.decodeSync(WorkItemId);
 const testObservation = { generation: 1, observedAtMillis: 1 } as const;
 const linearConnectionId = Schema.decodeSync(ConnectionId)("linear/acme");
@@ -621,17 +623,30 @@ const testRunnerDefaults = {
   "authentication" | "capabilities" | "catalogSources" | "preflight" | "readiness"
 >;
 
-const runner = (events: ReadonlyArray<AgUiEvent>, execution = fullHarnessExecution): TestRunner => ({
+const runner = (
+  events: ReadonlyArray<AgUiEvent>,
+  execution: HarnessExecution = fullHarnessExecution,
+  overrides: {
+    readonly sessionKind?: SessionKind;
+    readonly name?: HarnessName;
+  } = {},
+) => ({
   make: () => ({
     ...testRunnerDefaults,
-    name: cursor,
-    sessionKind: "opaque-handle",
+    name: overrides.name ?? cursor,
+    sessionKind: overrides.sessionKind ?? "opaque-handle",
     projectedMembers: [],
     planMiddleware: [],
     execution,
     run: () => Stream.fromArray(events),
   }),
 });
+
+const recordOnlyRunner = (events: ReadonlyArray<AgUiEvent>) =>
+  runner(events, fullHarnessExecution, {
+    sessionKind: "owned-transcript",
+    name: replay,
+  });
 
 const capturingRunner = (
   events: ReadonlyArray<AgUiEvent>,
@@ -1116,8 +1131,14 @@ const codexHarness: OperationSettingRow = {
   value: "codex",
 };
 
+const replayHarness: OperationSettingRow = {
+  ...cursorHarness,
+  value: "replay",
+};
+
 const runnableStages = [stagesEnabled, cursorHarness];
 const runnableCodexStages = [stagesEnabled, codexHarness];
+const runnableReplayStages = [stagesEnabled, replayHarness];
 
 class SelectedHarness extends Context.Service<SelectedHarness, Ref.Ref<ReadonlyArray<OperationSettingRow>>>()(
   "@cogwork/engine/executor.test/SelectedHarness",
@@ -1304,6 +1325,9 @@ function provide(
     ),
   );
 }
+
+const provideReplay = (runners: ReadonlyArray<TestRunner>) =>
+  provide(runners, worktreeStubLayer, noopProviderLayer, trackerRecorder(), runnableReplayStages);
 
 const harnessSwitchLayer = (alternates: ReadonlyArray<HarnessName>) =>
   provide(
@@ -2064,6 +2088,59 @@ describe("Executor.execute", () => {
       assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
       assert.deepStrictEqual(run?.usage, usage);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
+  });
+
+  it.effect("records replay output without applying its structured outcome", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const log = yield* Ref.get(calls);
+      assert.isFalse(log.some((call) => call.method === "implemented"));
+      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "succeeded");
+      assert.strictEqual(run?.eventCount, implementEvents.length);
+    }).pipe(Effect.provide(provideReplay([recordOnlyRunner(implementEvents)])));
+  });
+
+  it.effect("records deterministic counts across eight concurrent replays", () => {
+    return Effect.gen(function* () {
+      const items = Array.from({ length: 8 }, (_, index) => {
+        const workItem = id(`#${100 + index}`);
+        return {
+          ...implementItem,
+          id: workItem,
+          title: `Replay ${index + 1}`,
+          workContext: workContext(workItem),
+        };
+      });
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const expectedEvents = items.length * implementEvents.length;
+      const recordedActivities = yield* DaemonEventBus.runActivityStream(
+        Stream.fromSubscription(subscription),
+      ).pipe(Stream.take(expectedEvents), Stream.runCount, Effect.forkChild({ startImmediately: true }));
+      const executor = yield* Executor.Executor;
+
+      const accepted = yield* Effect.forEach(items, (item) => execute(executor, implementWorkspace, item), {
+        concurrency: "unbounded",
+      });
+      const ledger = yield* RunLedger.RunLedger;
+      const runs = yield* ledger.listRuns(items.length);
+
+      assert.deepStrictEqual(
+        accepted,
+        items.map(() => true),
+      );
+      assert.strictEqual(yield* Fiber.join(recordedActivities), expectedEvents);
+      assert.strictEqual(runs.length, items.length);
+      assert.isTrue(runs.every((run) => run.eventCount === implementEvents.length));
+      assert.isTrue(runs.every((run) => run.status === "succeeded"));
+    }).pipe(Effect.provide(provideReplay([recordOnlyRunner(implementEvents)])));
   });
 
   it.effect("correlates claimed-run library logs and spans", () => {
