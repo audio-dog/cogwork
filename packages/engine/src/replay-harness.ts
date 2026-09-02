@@ -1,7 +1,9 @@
 import { type HarnessName, RunEvent as RunEventSchema, RunId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import type { ConfigError } from "effect/Config";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -361,55 +363,71 @@ const configuredFixture = Effect.fn("ReplayHarness.configuredFixture")(function*
   return yield* readReplayFixture(path);
 });
 
+const invalidateFailedFixture =
+  (invalidate: Effect.Effect<void>) => (exit: Exit.Exit<ReplayFixture, HarnessError>) => {
+    if (Exit.isSuccess(exit)) return Effect.void;
+    return invalidate;
+  };
+
 export const replayRunner = Effect.fn("ReplayHarness.runner")(function* (options: {
   readonly name: HarnessName;
   readonly fixturePath: Effect.Effect<string | undefined, ConfigError>;
 }) {
-  const fixture = yield* Effect.cached(configuredFixture(options.fixturePath));
-  return {
-    name: options.name,
-    sessionKind: "owned-transcript",
-    execution: fullHarnessExecution,
-    capabilities: {
-      authenticationModes: ["host"],
-      session: { affinity: "portable", fork: false, humanAttach: false },
-      structuredOutput: "native",
-      policyFidelity: "exact",
-      fileEventFidelity: "none",
-      usageQuality: "none",
-      readinessDiagnostics: true,
-      journal: false,
-      takeover: false,
-    },
-    authentication: { mode: "host", reference: "fixture" },
-    catalogSources: {
-      fallback: staticCatalogSource(
-        {
-          models: [{ value: "fixture", label: "Exported fixture" }],
-          efforts: replaySpeeds.map((speed) => ({ value: speed, label: speed })),
-        },
-        { source: "cogwork-fallback", fallbackVersion: "1" },
-      ),
-    },
-    projectedMembers: [],
-    planMiddleware: [],
-    readiness: () =>
-      fixture.pipe(
-        Effect.match({
-          onFailure: (error) => unavailable(error.message, error.retryable),
-          onSuccess: ready,
-        }),
-      ),
-    preflight: () => fixture.pipe(Effect.asVoid),
-    run: (request) =>
-      Stream.unwrap(
-        fixture.pipe(
-          Effect.map((loadedFixture) =>
-            replayFixtureEvents(loadedFixture, speedFrom(request.plan.harness.effort)).pipe(
-              Stream.mapError(() => fixtureFailure("replay fixture contains an invalid event")),
+  return yield* Effect.cachedInvalidateWithTTL(
+    configuredFixture(options.fixturePath),
+    Duration.infinity,
+  ).pipe(
+    Effect.map(
+      ([fixture, invalidateFixture]) =>
+        ({
+          name: options.name,
+          sessionKind: "owned-transcript",
+          execution: fullHarnessExecution,
+          capabilities: {
+            authenticationModes: ["host"],
+            session: { affinity: "portable", fork: false, humanAttach: false },
+            structuredOutput: "native",
+            policyFidelity: "exact",
+            fileEventFidelity: "none",
+            usageQuality: "none",
+            readinessDiagnostics: true,
+            journal: false,
+            takeover: false,
+          },
+          authentication: { mode: "host", reference: "fixture" },
+          catalogSources: {
+            fallback: staticCatalogSource(
+              {
+                models: [{ value: "fixture", label: "Exported fixture" }],
+                efforts: replaySpeeds.map((speed) => ({ value: speed, label: speed })),
+              },
+              { source: "cogwork-fallback", fallbackVersion: "1" },
             ),
-          ),
-        ),
-      ),
-  } satisfies HarnessRunner;
+          },
+          projectedMembers: [],
+          planMiddleware: [],
+          readiness: () =>
+            fixture.pipe(
+              Effect.onExit(invalidateFailedFixture(invalidateFixture)),
+              Effect.match({
+                onFailure: (error) => unavailable(error.message, error.retryable),
+                onSuccess: ready,
+              }),
+            ),
+          preflight: () =>
+            fixture.pipe(Effect.onExit(invalidateFailedFixture(invalidateFixture)), Effect.asVoid),
+          run: (request) =>
+            Stream.unwrap(
+              fixture.pipe(
+                Effect.onExit(invalidateFailedFixture(invalidateFixture)),
+                Effect.map((loadedFixture) =>
+                  replayFixtureEvents(loadedFixture, speedFrom(request.plan.harness.effort)).pipe(
+                    Stream.mapError(() => fixtureFailure("replay fixture contains an invalid event")),
+                  ),
+                ),
+              ),
+            ),
+        }) satisfies HarnessRunner,
+    ),
+  );
 });

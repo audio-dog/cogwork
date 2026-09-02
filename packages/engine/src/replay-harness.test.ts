@@ -1,7 +1,10 @@
-import { RunId } from "@cogwork/contracts";
+import { HarnessName, RunId } from "@cogwork/contracts";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
@@ -15,11 +18,13 @@ import {
   ReplayReport,
   type ReplaySpeed,
   replayFixtureEvents,
+  replayRunner,
 } from "./replay-harness";
 
 const runId = Schema.decodeSync(RunId);
 const reportVersion = Schema.decodeSync(Schema.Literal(1))(1);
 const reportSpeed: ReplaySpeed = "8x";
+const replayHarnessName = Schema.decodeSync(HarnessName)("replay");
 
 const fixture = ReplayFixture.make({
   version: reportVersion,
@@ -120,6 +125,25 @@ describe("replay fixture", () => {
         Array.from({ length: 8 }, () => 2),
       );
     }),
+  );
+
+  it.effect("retries failed fixture loads and caches a successful load", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-replay-" });
+      const fixturePath = path.join(directory, "fixture.json");
+      const runner = yield* replayRunner({
+        name: replayHarnessName,
+        fixturePath: Effect.succeed(fixturePath),
+      });
+
+      assert.strictEqual((yield* runner.readiness()).operational.status, "unavailable");
+      yield* fs.writeFileString(fixturePath, yield* encodeReplayFixture(fixture));
+      assert.strictEqual((yield* runner.readiness()).operational.status, "ready");
+      yield* fs.remove(fixturePath);
+      assert.strictEqual((yield* runner.readiness()).operational.status, "ready");
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });
 
