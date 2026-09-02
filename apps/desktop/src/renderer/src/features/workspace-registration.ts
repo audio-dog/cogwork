@@ -1,4 +1,4 @@
-import { WorkspaceRegistration, type WorkspaceState } from "@cogwork/contracts";
+import { WorkspaceRegistration, WorkspaceState } from "@cogwork/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -57,7 +57,7 @@ export const workspaceSubmissionIsLocked = (status: ReturnType<typeof workspaceS
   status === "submitting" || status === "complete";
 
 export const workspaceOutcomeError = (outcome: WorkspaceState | null) => {
-  if (outcome?._tag !== "Failed") return null;
+  if (!WorkspaceState.guards.Failed(outcome)) return null;
   return outcome.message;
 };
 

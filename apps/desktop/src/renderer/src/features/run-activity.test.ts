@@ -34,7 +34,7 @@ const activity = (
       event: agui,
     },
   });
-  if (decoded._tag !== "RunActivity") throw new Error("Expected run activity");
+  if (!DaemonEvent.guards.RunActivity(decoded)) throw new Error("Expected run activity");
   return decoded.activity;
 };
 

@@ -1,10 +1,11 @@
-import type {
-  Board,
+import {
+  type Board,
   ClassifiedItem,
-  IssueTrackerType,
-  NeedsHumanReason,
-  PrSummary,
-  WorkspaceId,
+  type IssueTrackerType,
+  type NeedsHumanReason,
+  type PrSummary,
+  type WorkspaceId,
+  WorkspaceState,
 } from "@cogwork/contracts";
 
 export type AttentionKind = "needs-decision" | "ready-to-merge";
@@ -32,7 +33,7 @@ export type AttentionEntry = ReadyToMergeAttentionEntry | NeedsDecisionAttention
 
 const trackerFor = (board: Board, workspace: WorkspaceId): IssueTrackerType | null => {
   const state = board.workspaces.get(workspace);
-  if (state?._tag !== "Registered") return null;
+  if (!WorkspaceState.guards.Registered(state)) return null;
   return state.issueTracker;
 };
 
@@ -60,7 +61,7 @@ const attentionEntryFor = (
       },
     ];
   }
-  if (item._tag !== "NeedsHuman") return [];
+  if (!ClassifiedItem.guards.NeedsHuman(item)) return [];
   return [
     {
       workspace,

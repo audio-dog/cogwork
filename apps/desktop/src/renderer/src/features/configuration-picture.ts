@@ -1,10 +1,12 @@
-import type {
-  Board,
-  ContributionSettingDiagnostic,
-  ContributionSettingRow,
-  LocalContribution,
-  LocalContributionAuthority,
-  WorkspaceId,
+import {
+  type Board,
+  type ContributionSettingDiagnostic,
+  type ContributionSettingRow,
+  ContributionSettingScope,
+  type LocalContribution,
+  type LocalContributionAuthority,
+  type WorkspaceId,
+  WorkspaceState,
 } from "@cogwork/contracts";
 import {
   type AuthoringTree,
@@ -29,10 +31,12 @@ const definedAtByAuthority: Record<LocalContributionAuthority, Contribution["def
   "local:private": "private-overlay",
 };
 
-const settingScope = (row: ContributionSettingRow) =>
-  row.scope._tag === "SettingsProfile"
-    ? ({ kind: "settings-profile" } satisfies ScopeRef)
-    : ({ kind: "private-overlay", workspaceId: row.scope.workspace } satisfies ScopeRef);
+const settingScope = (row: ContributionSettingRow): ScopeRef =>
+  ContributionSettingScope.match(row.scope, {
+    SettingsProfile: () => ({ kind: "settings-profile" }) satisfies ScopeRef,
+    PrivateWorkspaceOverlay: ({ workspace }) =>
+      ({ kind: "private-overlay", workspaceId: workspace }) satisfies ScopeRef,
+  });
 
 const diagnosticOf = (diagnostic: ContributionSettingDiagnostic) =>
   ({
@@ -55,7 +59,7 @@ const settingApplies = (
   workspace: WorkspaceId | undefined,
 ) => {
   if (row.contribution.id !== contribution.id) return false;
-  if (row.scope._tag === "SettingsProfile") return true;
+  if (ContributionSettingScope.guards.SettingsProfile(row.scope)) return true;
   if (workspace === undefined) return false;
   return row.scope.workspace === workspace;
 };
@@ -92,7 +96,7 @@ const contributionOf = (
 };
 
 const registeredWorkspaces = (board: Board) =>
-  [...board.workspaces.values()].flatMap((state) => (state._tag === "Registered" ? [state] : []));
+  [...board.workspaces.values()].filter(WorkspaceState.guards.Registered);
 
 const workspaceOf = (state: ReturnType<typeof registeredWorkspaces>[number]) =>
   ({
@@ -115,7 +119,7 @@ const sameSettingScope = (enablement: EnablementRow, setting: ContributionSettin
 };
 
 const danglingContribution = (matches: readonly Contribution[], setting: ContributionSettingRow) => {
-  if (setting.scope._tag !== "PrivateWorkspaceOverlay") return undefined;
+  if (!ContributionSettingScope.guards.PrivateWorkspaceOverlay(setting.scope)) return undefined;
   const prototype = matches.at(0);
   if (prototype === undefined) return undefined;
   const { definedIn: _definedIn, ...contribution } = prototype;
