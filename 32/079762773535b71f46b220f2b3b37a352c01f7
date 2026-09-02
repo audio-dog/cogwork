@@ -1,0 +1,23 @@
+apps/desktop/src/shared/ipc.ts
+  s_471ef6216cbab1::t_3a6f80992901c2 34-45,48,51-52
+apps/desktop/src/renderer/src/daemon/electron-bridge.ts
+  s_471ef6216cbab1::t_3a6f80992901c2 4
+apps/desktop/src/preload/index.ts
+  s_471ef6216cbab1::t_3a6f80992901c2 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "32079762773535b71f46b220f2b3b37a352c01f7",
+  "prompts": {},
+  "sessions": {
+    "s_471ef6216cbab1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f50-46c8-71f0-ba6f-7dcd77bb416b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
