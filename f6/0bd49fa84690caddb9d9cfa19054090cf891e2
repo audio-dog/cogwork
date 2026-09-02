@@ -1,0 +1,25 @@
+apps/desktop/src/main/index.ts
+  s_e56f2f08236ec0::t_939024ca957ace 2-5,8,29,44-50,53,56-59,66-71,103-104,121-126,129-130
+  s_e56f2f08236ec0::t_328fe75b62ca28 136-139
+  s_e56f2f08236ec0::t_99f75de9e93c9f 10,42,51,62
+  s_e56f2f08236ec0::t_7a2764c92a5a37 52,127-128
+  s_e56f2f08236ec0::t_f39c988800e990 131
+apps/desktop/electron.vite.config.ts
+  s_e56f2f08236ec0::t_41de8da544b725 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f60bd49fa84690caddb9d9cfa19054090cf891e2",
+  "prompts": {},
+  "sessions": {
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
