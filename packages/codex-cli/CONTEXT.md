@@ -42,7 +42,8 @@ _Avoid_: Sandbox isolation (the local-process provider scopes the worktree but i
 
 **Harness Workspace channel**:
 Instructions and MCP servers arrive only through the shared Harness Workspace. TanStack resolves
-live SecretRefs into Codex's transient native config; the descriptor removes that secret-bearing
-file at every terminal outcome. Cogwork does not generate Codex MCP identities, config keys, or
-bearer environment names.
-_Avoid_: Codex MCP assembler, Codex authentication, persistent credential file
+live SecretRefs into child environment values and native command overrides. The shared runtime sends
+required Instructions through Codex's in-memory system prompt. Neither projection writes into the
+prepared Worktree, and its repository-authored `AGENTS.md` remains unchanged. Cogwork does not
+generate Codex MCP identities, config keys, or bearer environment names.
+_Avoid_: Codex MCP assembler, Codex authentication, projected instruction file, persistent credential file
