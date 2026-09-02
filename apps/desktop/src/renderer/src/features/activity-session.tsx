@@ -16,6 +16,7 @@ import { useAtomRefresh, useAtomSet, useAtomSubscribe } from "@effect/atom-react
 import type * as Atom from "effect/unstable/reactivity/Atom";
 import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
+import { recordDaemonEventsApplied } from "../daemon/process-health";
 import {
   applyRunPreview,
   previewMap,
@@ -414,6 +415,7 @@ const recordDaemonResult = (
   if (!events) return;
   cell.processedDaemonEvents = events;
   const next = events.reduce((current, event) => ingestDaemonEvent(current, event, clock()), cell.session);
+  recordDaemonEventsApplied(events.length);
   publish(updateLifecycle(next, next.engine, "live", clock()));
 };
 

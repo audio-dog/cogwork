@@ -1,6 +1,7 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
 import { type CogworkBridge, IpcChannel } from "../shared/ipc";
+import { kibibytesToBytes } from "../shared/process-health";
 
 const subscribe = <T>(channel: string, listener: (value: T) => void) => {
   const handler = (_event: Electron.IpcRendererEvent, value: T) => listener(value);
@@ -15,6 +16,23 @@ const bridge: CogworkBridge = {
   setEngineEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.setEngineEnabled, enabled),
   onEngineStatus: (listener) => subscribe(IpcChannel.engineStatusChanged, listener),
   getWindowPreferences: () => ipcRenderer.invoke(IpcChannel.getWindowPreferences),
+  getProcessHealth: async () => {
+    const [main, memory] = await Promise.all([
+      ipcRenderer.invoke(IpcChannel.getMainProcessHealth),
+      process.getProcessMemoryInfo(),
+    ]);
+    const heap = process.getHeapStatistics();
+    return [
+      main,
+      {
+        process: "renderer",
+        sampledAtMillis: Date.now(),
+        heapUsedBytes: kibibytesToBytes(heap.usedHeapSize),
+        heapLimitBytes: kibibytesToBytes(heap.heapSizeLimit),
+        privateBytes: kibibytesToBytes(memory.private),
+      },
+    ];
+  },
   setWindowPreferences: (preferences) => ipcRenderer.invoke(IpcChannel.setWindowPreferences, preferences),
   rpc: {
     connect: () => ipcRenderer.invoke(IpcChannel.rpcConnect),

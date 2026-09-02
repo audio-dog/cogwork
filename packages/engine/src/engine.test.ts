@@ -328,7 +328,9 @@ describe("reconcile worker", () => {
   it.effect("emits a receipt reflecting the registry when a reconcile is submitted", () =>
     Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;
+      const before = (yield* Metric.value(Reconcile.reconcilePollDuration)).count;
       const receipt = yield* worker.submit();
+      assert.strictEqual((yield* Metric.value(Reconcile.reconcilePollDuration)).count, before + 1);
       assert.strictEqual(receipt.workspaces, 1);
       assert.strictEqual(receipt.failures, 2);
       assert.strictEqual(receipt.pendingWork, 0);
@@ -475,6 +477,14 @@ describe("reconcile worker", () => {
   const workerWithWork = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([eligibleItem]))),
   );
+  const manyEligibleItems = Array.from({ length: 101 }, (_, index) => ({
+    ...eligibleItem,
+    id: id(`AUD-${index + 1}`),
+    title: `ticket ${index + 1}`,
+  }));
+  const workerWithManyItems = reconcileLayer.pipe(
+    Layer.provide(Layer.mergeAll(registryLayer, observing(manyEligibleItems))),
+  );
 
   it.effect("advances the snapshot generation on every published reconcile", () =>
     Effect.gen(function* () {
@@ -496,6 +506,18 @@ describe("reconcile worker", () => {
       const snapshot = yield* worker.snapshot;
       assert.strictEqual(snapshot.workspaces[0]?.eligible[0]?.stage, "implement");
     }).pipe(Effect.provide(workerWithWork), Effect.scoped),
+  );
+
+  it.effect("classifies and counts more than one page of observed work", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const receipt = yield* worker.submit();
+      const state = (yield* worker.snapshot).workspaces[0];
+
+      assert.strictEqual(receipt.pendingWork, 101);
+      assert.strictEqual(state?.eligible.length, 101);
+      assert.strictEqual(state?.observedCount, 101);
+    }).pipe(Effect.provide(workerWithManyItems), Effect.scoped),
   );
 
   const inReviewItem: TrackerItem = {
@@ -1130,6 +1152,55 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.failures[0]?.name, "broken");
       assert.strictEqual(status.failures[0]?.displayName, "Broken workspace");
       assert.isAtLeast(status.uptimeMillis, 0);
+      assert.strictEqual(status.eventBusDroppedEvents, 0);
+    }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+
+  it.effect("reports daemon event bus loss", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* bus.subscribe();
+      yield* Effect.forEach(
+        Array.from({ length: 1025 }, (_, i) => i),
+        (i) =>
+          bus.publish({
+            _tag: "SchedulerChanged",
+            scheduler: {
+              scheduling: "running",
+              globalInFlight: i,
+              globalLimit: 4,
+              perWorkspaceLimit: 4,
+              dailyBudgetUsed: 7,
+              dailyBudgetLimit: 50,
+              perWorkspace: [],
+            },
+          }),
+        { discard: true },
+      );
+
+      assert.strictEqual((yield* client.GetStatus()).eventBusDroppedEvents, 1);
+    }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+
+  it.effect("accepts desktop health samples and dumps live metrics", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.ReportProcessHealth({
+        samples: [
+          {
+            process: "renderer",
+            sampledAtMillis: 1_000,
+            heapUsedBytes: 400,
+            heapLimitBytes: 1_000,
+            protocolInboxDepth: 3,
+            eventsAppliedPerSecond: 12,
+          },
+        ],
+      });
+      const metrics = yield* client.GetMetrics();
+      assert.include(metrics, "cogwork_process_heap_headroom_bytes");
+      assert.include(metrics, "cogwork_renderer_protocol_inbox_depth");
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 

@@ -3,12 +3,22 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import * as AtomRpc from "effect/unstable/reactivity/AtomRpc";
+import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { electronDaemonBridge } from "./electron-bridge";
+import { reportDesktopProcessHealth } from "./process-health";
 import { layerProtocolIpc } from "./protocol";
 
 export class DaemonAtomRpc extends AtomRpc.Service<DaemonAtomRpc>()("DaemonAtomRpc", {
   group: DaemonRpcs,
   protocol: layerProtocolIpc(electronDaemonBridge),
+  makeEffect: Effect.gen(function* () {
+    const client = yield* RpcClient.make(DaemonRpcs, { flatten: true });
+    yield* reportDesktopProcessHealth(
+      () => window.cogwork.getProcessHealth(),
+      (samples) => client("ReportProcessHealth", { samples }),
+    ).pipe(Effect.forkScoped);
+    return client;
+  }),
 }) {}
 
 export const pullChunkSize = 256;

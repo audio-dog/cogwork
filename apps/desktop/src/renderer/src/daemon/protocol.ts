@@ -11,6 +11,7 @@ import type { FromServerEncoded } from "effect/unstable/rpc/RpcMessage";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import { SocketCloseError, SocketOpenError } from "effect/unstable/socket/Socket";
 import type { DaemonRpcBridge } from "../../../shared/ipc";
+import { recordProtocolInboxChange, resetProtocolInboxDepth } from "./process-health";
 
 type Incoming =
   | { readonly _tag: "data"; readonly frame: Uint8Array }
@@ -57,11 +58,14 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
       };
 
       const offerIncoming = (message: Incoming) => {
-        if (Queue.offerUnsafe(conn.inbox, message)) return;
-        Deferred.doneUnsafe(
-          conn.overflow,
-          Effect.fail(closeError(`renderer protocol inbox exceeded ${protocolInboxCapacity} frames`)),
-        );
+        if (!Queue.offerUnsafe(conn.inbox, message)) {
+          Deferred.doneUnsafe(
+            conn.overflow,
+            Effect.fail(closeError(`renderer protocol inbox exceeded ${protocolInboxCapacity} frames`)),
+          );
+          return;
+        }
+        recordProtocolInboxChange(1);
       };
       const offData = bridge.onData((frame) => {
         offerIncoming({ _tag: "data", frame });
@@ -73,6 +77,7 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         Effect.sync(() => {
           offData();
           offClosed();
+          resetProtocolInboxDepth();
         }),
       );
 
@@ -102,6 +107,7 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
 
       const consume = (inbox: Queue.Queue<Incoming>) =>
         Queue.take(inbox).pipe(
+          Effect.tap(() => Effect.sync(() => recordProtocolInboxChange(-1))),
           Effect.flatMap((message) =>
             message._tag === "closed" ? Effect.fail(closeError(message.reason)) : processFrame(message.frame),
           ),
@@ -118,6 +124,7 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
                     conn.parser = serialization.makeUnsafe();
                     conn.inbox = inbox;
                     conn.overflow = overflow;
+                    resetProtocolInboxDepth();
                   }),
                 ),
                 Effect.andThen(Effect.tryPromise({ try: () => bridge.connect(), catch: openError })),
