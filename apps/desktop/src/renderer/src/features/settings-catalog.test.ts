@@ -18,6 +18,11 @@ describe("searchSettings", () => {
     expect(ids).toContain("close-to-hide");
   });
 
+  it("finds process diagnostics settings", () => {
+    const ids = searchSettings("cpu profile").map((entry) => entry.id);
+    expect(ids).toContain("profiling");
+  });
+
   it("matches on a keyword that is not in the title", () => {
     const ids = searchSettings("tray").map((entry) => entry.id);
     expect(ids).toEqual(["close-to-hide"]);
@@ -54,6 +59,6 @@ describe("catalog helpers", () => {
 
   it("lists the settings that belong to a section", () => {
     const ids = settingsForSection("general").map((entry) => entry.id);
-    expect(ids).toEqual(["close-to-hide"]);
+    expect(ids).toEqual(["close-to-hide", "profiling", "process-captures"]);
   });
 });

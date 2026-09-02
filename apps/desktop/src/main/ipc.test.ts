@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime, SubscriptionRef } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
-import { type EngineStatus, IpcChannel } from "../shared/ipc";
+import { type EngineStatus, IpcChannel, type WindowPreferences } from "../shared/ipc";
 import { EngineSupervisor, type EngineSupervisorService } from "./engine-supervisor";
 
 type IpcHandler = (...args: readonly unknown[]) => unknown;
@@ -42,14 +42,30 @@ const supervisor: EngineSupervisorService = {
   status: Effect.runSync(SubscriptionRef.make<EngineStatus>("adopted")),
   start: Effect.void,
   stop: Effect.void,
+  captureProfile: () => Effect.succeed("/diagnostics/engine.heapsnapshot"),
 };
 
 const windowPreferences = {
-  get: () => ({ closeToHide: true }),
-  set: (preferences: { readonly closeToHide: boolean }) => preferences,
+  get: () => ({ closeToHide: true, profiling: false }),
+  set: (preferences: { readonly closeToHide?: boolean; readonly profiling?: boolean }) => ({
+    closeToHide: preferences.closeToHide ?? true,
+    profiling: preferences.profiling ?? false,
+  }),
 };
 
+const captureMainProfile = () => Effect.succeed("/diagnostics/main.heapsnapshot");
+
 const makeRuntime = () => ManagedRuntime.make(Layer.succeed(EngineSupervisor, supervisor));
+
+const deps = (socketPath: string, runtime: ReturnType<typeof makeRuntime>) => ({
+  socketPath,
+  supervisor,
+  windowPreferences,
+  diagnosticsDirectory: "/diagnostics",
+  captureMainProfile,
+  isTrustedSender: () => true,
+  runtime,
+});
 
 const listen = (server: net.Server, socketPath: string) =>
   new Promise<void>((resolve) => server.listen(socketPath, resolve));
@@ -75,7 +91,7 @@ it("closes a renderer's socket when the renderer is destroyed", async () => {
   const sender = new FakeSender();
 
   try {
-    registerIpc({ socketPath, supervisor, windowPreferences, runtime });
+    registerIpc(deps(socketPath, runtime));
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     if (!connect) throw new Error("RPC connect handler was not registered");
 
@@ -104,7 +120,7 @@ it("resolves connect with a value Electron can clone across IPC", async () => {
   const sender = new FakeSender();
 
   try {
-    registerIpc({ socketPath, supervisor, windowPreferences, runtime });
+    registerIpc(deps(socketPath, runtime));
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     if (!connect) throw new Error("RPC connect handler was not registered");
 
@@ -130,7 +146,7 @@ it("replaces a renderer's socket when it connects again", async () => {
   const sender = new FakeSender();
 
   try {
-    registerIpc({ socketPath, supervisor, windowPreferences, runtime });
+    registerIpc(deps(socketPath, runtime));
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     const send = ipc.listeners.get(IpcChannel.rpcSend);
     if (!connect || !send) throw new Error("RPC handlers were not registered");
@@ -172,7 +188,7 @@ it("closes a renderer's socket before its reconnect", async () => {
   const sender = new FakeSender();
 
   try {
-    registerIpc({ socketPath, supervisor, windowPreferences, runtime });
+    registerIpc(deps(socketPath, runtime));
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     const disconnect = ipc.handlers.get(IpcChannel.rpcDisconnect);
     if (!connect || !disconnect) throw new Error("RPC session handlers were not registered");
@@ -197,7 +213,7 @@ it("interrupts a pending connection when the renderer is destroyed", async () =>
   const sender = new FakeSender();
 
   try {
-    registerIpc({ socketPath: join(dir, "missing.sock"), supervisor, windowPreferences, runtime });
+    registerIpc(deps(join(dir, "missing.sock"), runtime));
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     if (!connect) throw new Error("RPC connect handler was not registered");
 
@@ -226,7 +242,7 @@ it("drops renderer frames until its daemon connection is ready", async () => {
   const sender = new FakeSender();
 
   try {
-    registerIpc({ socketPath, supervisor, windowPreferences, runtime });
+    registerIpc(deps(socketPath, runtime));
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     const send = ipc.listeners.get(IpcChannel.rpcSend);
     if (!connect || !send) throw new Error("RPC handlers were not registered");
@@ -243,5 +259,234 @@ it("drops renderer frames until its daemon connection is ready", async () => {
     await runtime.dispose();
     await closeServer(server);
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it("persists profiling through the shared desktop preferences", async () => {
+  const ownedSupervisor = {
+    ...supervisor,
+    status: Effect.runSync(SubscriptionRef.make<EngineStatus>("running")),
+  };
+  const runtime = ManagedRuntime.make(Layer.succeed(EngineSupervisor, ownedSupervisor));
+  const set = vi.fn((preferences: { readonly profiling?: boolean }) => ({
+    closeToHide: true,
+    profiling: preferences.profiling ?? false,
+  }));
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      supervisor: ownedSupervisor,
+      windowPreferences: {
+        get: () => ({ closeToHide: true, profiling: false }),
+        set,
+      },
+    });
+    const update = ipc.handlers.get(IpcChannel.setWindowPreferences);
+    if (!update) throw new Error("Window preferences handler was not registered");
+
+    expect(await update({ sender }, { profiling: true })).toEqual({
+      closeToHide: true,
+      profiling: true,
+    });
+    expect(set).toHaveBeenCalledWith({ profiling: true });
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("restores profiling preferences when the engine restart fails", async () => {
+  const failedSupervisor = {
+    ...supervisor,
+    status: Effect.runSync(SubscriptionRef.make<EngineStatus>("running")),
+    start: Effect.die("restart failed"),
+  };
+  const runtime = ManagedRuntime.make(Layer.succeed(EngineSupervisor, failedSupervisor));
+  const cache: { current: WindowPreferences } = {
+    current: { closeToHide: true, profiling: false },
+  };
+  const set = vi.fn((preferences: Partial<WindowPreferences>) => {
+    cache.current = { ...cache.current, ...preferences };
+    return cache.current;
+  });
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      supervisor: failedSupervisor,
+      windowPreferences: { get: () => cache.current, set },
+    });
+    const update = ipc.handlers.get(IpcChannel.setWindowPreferences);
+    if (!update) throw new Error("Window preferences handler was not registered");
+
+    await expect(update({ sender }, { profiling: true })).rejects.toThrow("restart failed");
+    expect(cache.current).toEqual({ closeToHide: true, profiling: false });
+    expect(set).toHaveBeenLastCalledWith({ closeToHide: true, profiling: false });
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("rejects profiling for an adopted standalone daemon", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+
+  try {
+    registerIpc(deps("/tmp/test.sock", runtime));
+    const update = ipc.handlers.get(IpcChannel.setWindowPreferences);
+    if (!update) throw new Error("Window preferences handler was not registered");
+
+    await expect(update({ sender }, { profiling: true })).rejects.toThrow(
+      "Stop the standalone daemon before enabling profiling",
+    );
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("leaves an adopted standalone daemon alone when profiling is disabled", async () => {
+  const start = vi.fn();
+  const stop = vi.fn();
+  const adoptedSupervisor = {
+    ...supervisor,
+    status: Effect.runSync(SubscriptionRef.make<EngineStatus>("adopted")),
+    start: Effect.sync(start),
+    stop: Effect.sync(stop),
+  };
+  const runtime = ManagedRuntime.make(Layer.succeed(EngineSupervisor, adoptedSupervisor));
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      supervisor: adoptedSupervisor,
+      windowPreferences: {
+        get: () => ({ closeToHide: true, profiling: true }),
+        set: (preferences: { readonly profiling?: boolean }) => ({
+          closeToHide: true,
+          profiling: preferences.profiling ?? true,
+        }),
+      },
+    });
+    const update = ipc.handlers.get(IpcChannel.setWindowPreferences);
+    if (!update) throw new Error("Window preferences handler was not registered");
+
+    expect(await update({ sender }, { profiling: false })).toEqual({
+      closeToHide: true,
+      profiling: false,
+    });
+    expect(stop).not.toHaveBeenCalled();
+    expect(start).not.toHaveBeenCalled();
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("captures profiles from the main process and owned daemon", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+  const profilingPreferences = {
+    ...windowPreferences,
+    get: () => ({ closeToHide: true, profiling: true }),
+  };
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      windowPreferences: profilingPreferences,
+    });
+    const captureMain = ipc.handlers.get(IpcChannel.captureProcessProfile);
+    if (!captureMain) throw new Error("Process profile handler was not registered");
+
+    await expect(captureMain({ sender }, { _tag: "MainHeapSnapshot" })).resolves.toBe(
+      "/diagnostics/main.heapsnapshot",
+    );
+
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      windowPreferences: profilingPreferences,
+    });
+    const captureEngine = ipc.handlers.get(IpcChannel.captureProcessProfile);
+    if (!captureEngine) throw new Error("Process profile handler was not registered");
+    await expect(captureEngine({ sender }, { _tag: "DaemonHeapSnapshot" })).resolves.toBe(
+      "/diagnostics/engine.heapsnapshot",
+    );
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("rejects rapid repeated profile captures", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      windowPreferences: {
+        ...windowPreferences,
+        get: () => ({ closeToHide: true, profiling: true }),
+      },
+    });
+    const capture = ipc.handlers.get(IpcChannel.captureProcessProfile);
+    if (!capture) throw new Error("Process profile handler was not registered");
+
+    await capture({ sender }, { _tag: "MainHeapSnapshot" });
+    await expect(capture({ sender }, { _tag: "MainHeapSnapshot" })).rejects.toThrow(
+      "Wait before starting another process profile",
+    );
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("allows an immediate retry after a rejected profile capture", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+  const getPreferences = vi
+    .fn()
+    .mockReturnValueOnce({ closeToHide: true, profiling: false })
+    .mockReturnValue({ closeToHide: true, profiling: true });
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      windowPreferences: { ...windowPreferences, get: getPreferences },
+    });
+    const capture = ipc.handlers.get(IpcChannel.captureProcessProfile);
+    if (!capture) throw new Error("Process profile handler was not registered");
+
+    await expect(capture({ sender }, { _tag: "MainHeapSnapshot" })).rejects.toThrow("Profiling is disabled");
+    await expect(capture({ sender }, { _tag: "MainHeapSnapshot" })).resolves.toBe(
+      "/diagnostics/main.heapsnapshot",
+    );
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("rejects diagnostics from an untrusted renderer", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      isTrustedSender: () => false,
+      windowPreferences: {
+        ...windowPreferences,
+        get: () => ({ closeToHide: true, profiling: true }),
+      },
+    });
+    const capture = ipc.handlers.get(IpcChannel.captureProcessProfile);
+    if (!capture) throw new Error("Process profile handler was not registered");
+
+    await expect(capture({ sender }, { _tag: "MainHeapSnapshot" })).rejects.toThrow(
+      "Diagnostics are unavailable from this renderer",
+    );
+  } finally {
+    await runtime.dispose();
   }
 });

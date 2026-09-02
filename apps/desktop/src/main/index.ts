@@ -1,8 +1,11 @@
 import { spawn } from "node:child_process";
-import { join } from "node:path";
+import { chmodSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { makeLiveProcessProfiler, type ProcessProfileInput } from "@cogwork/process-diagnostics";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, crashReporter } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
 import { EngineSupervisor } from "./engine-supervisor";
@@ -23,6 +26,7 @@ const requestQuit = () => {
 };
 
 const windowPreferences = createWindowPreferencesStore();
+const diagnosticsDirectory = dirname(defaultSocketPath);
 
 const windowDeps: MainWindowDeps = {
   shouldQuit: () => control.quitting,
@@ -36,25 +40,34 @@ const makeSupervisorLayer = () => {
   const socketPath = defaultSocketPath;
   const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
   const shutdown = resolveEngineShutdownBudgets();
-  const command = resolveEngineCommand({
-    socketPath,
-    packaged: app.isPackaged,
-    baseDir,
-    drainGraceSeconds: shutdown.drainGraceSeconds,
-    nodeBinary: process.env.COGWORK_NODE,
-    engineEntry: process.env.COGWORK_ENGINE_ENTRY,
-  });
-
   return EngineSupervisor.layer({
-    command,
+    command: () =>
+      resolveEngineCommand({
+        socketPath,
+        packaged: app.isPackaged,
+        baseDir,
+        nodeBinary: process.env.COGWORK_NODE,
+        engineEntry: process.env.COGWORK_ENGINE_ENTRY,
+        drainGraceSeconds: shutdown.drainGraceSeconds,
+        profiling: windowPreferences.get().profiling,
+      }),
     socketPath,
     spawn: (engine) =>
-      spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),
+      spawn(engine.command, [...engine.args], {
+        cwd: engine.cwd,
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
+      }),
     probe: isDaemonListening,
     awaitReachable: waitForDaemonListening,
     terminateTimeout: shutdown.terminateTimeoutMillis,
   });
 };
+
+const captureMainProfile = (input: ProcessProfileInput) =>
+  makeLiveProcessProfiler().pipe(
+    Effect.flatMap((profiler) => profiler.capture(input)),
+    Effect.provide(NodeServices.layer),
+  );
 
 const publishEngineStatus = Effect.fn("DesktopMain.publishEngineStatus")(function* (
   status: Parameters<typeof broadcastEngineStatus>[1],
@@ -87,8 +100,15 @@ const makeMainLayer = () => {
 };
 
 const bootstrap = () => {
+  mkdirSync(diagnosticsDirectory, { recursive: true, mode: 0o700 });
+  chmodSync(diagnosticsDirectory, 0o700);
+  crashReporter.start({ uploadToServer: false });
   app.whenReady().then(async () => {
     const runtime = ManagedRuntime.make(makeMainLayer());
+    app.on("before-quit", () => {
+      control.quitting = true;
+    });
+    installShutdownBeforeQuit(app, () => runtime.dispose());
     electronApp.setAppUserModelId("com.cogwork");
     app.on("browser-window-created", (_event, window) => optimizer.watchWindowShortcuts(window));
 
@@ -103,7 +123,24 @@ const bootstrap = () => {
     });
 
     const supervisor = runtime.runSync(EngineSupervisor);
-    registerIpc({ socketPath: defaultSocketPath, supervisor, windowPreferences, runtime });
+    registerIpc({
+      socketPath: defaultSocketPath,
+      supervisor,
+      windowPreferences,
+      diagnosticsDirectory,
+      captureMainProfile,
+      isTrustedSender: (sender) =>
+        BrowserWindow.getAllWindows().some((window) => window.webContents === sender),
+      runtime,
+    });
+
+    const startExit = await runtime.runPromiseExit(supervisor.start);
+    if (Exit.isFailure(startExit) && Cause.hasInterruptsOnly(startExit.cause)) return;
+    if (Exit.isFailure(startExit)) mainLogger.error("Engine startup failed", startExit.cause);
+    const status = runtime.runSync(SubscriptionRef.get(supervisor.status));
+    if (status === "adopted" && windowPreferences.get().profiling) {
+      windowPreferences.set({ profiling: false });
+    }
 
     showWindow();
     createTray({
@@ -113,14 +150,6 @@ const bootstrap = () => {
 
     app.on("activate", showWindow);
     app.on("second-instance", showWindow);
-    app.on("before-quit", () => {
-      control.quitting = true;
-    });
-    installShutdownBeforeQuit(app, () => runtime.dispose());
-
-    const startExit = await runtime.runPromiseExit(supervisor.start);
-    if (Exit.isSuccess(startExit) || Cause.hasInterruptsOnly(startExit.cause)) return;
-    mainLogger.error("Engine startup failed", startExit.cause);
   });
 };
 

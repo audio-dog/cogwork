@@ -1,20 +1,19 @@
 import { useSyncExternalStore } from "react";
 import type { WindowPreferences } from "../../../shared/ipc";
 
-// The main process owns window behavior and persists it. The renderer seeds from it on first read and
-// writes through on change — there is no local copy that can drift from what the window actually does.
-let current: WindowPreferences | null = null;
+const cache: { current: WindowPreferences | null } = { current: null };
+const writes: { current: Promise<unknown> } = { current: Promise.resolve() };
 const listeners = new Set<() => void>();
 
 function emit(next: WindowPreferences) {
-  if (current !== null && current.closeToHide === next.closeToHide) return;
-  current = next;
+  if (cache.current?.closeToHide === next.closeToHide && cache.current.profiling === next.profiling) return;
+  cache.current = next;
   for (const listener of listeners) listener();
 }
 
 function subscribe(onStoreChange: () => void): () => void {
   listeners.add(onStoreChange);
-  if (current === null) {
+  if (cache.current === null) {
     window.cogwork.getWindowPreferences().then(emit);
   }
   return () => {
@@ -23,15 +22,29 @@ function subscribe(onStoreChange: () => void): () => void {
 }
 
 function getSnapshot(): WindowPreferences | null {
-  return current;
+  return cache.current;
 }
+
+const persistPreferences = (next: Partial<WindowPreferences>) => {
+  const write = writes.current.then(() => window.cogwork.setWindowPreferences(next));
+  writes.current = write.catch(() => undefined);
+  return write.then((preferences) => {
+    emit(preferences);
+    return preferences;
+  });
+};
 
 export function useWindowPreferences() {
   const preferences = useSyncExternalStore(subscribe, getSnapshot);
 
-  const setCloseToHide = (closeToHide: boolean) => {
-    window.cogwork.setWindowPreferences({ closeToHide }).then(emit);
+  const setPreferences = (next: Partial<WindowPreferences>) => {
+    if (!preferences) return Promise.reject(new Error("Desktop preferences are not loaded"));
+    return persistPreferences(next);
   };
 
-  return { preferences, setCloseToHide };
+  return {
+    preferences,
+    setCloseToHide: (closeToHide: boolean) => setPreferences({ closeToHide }),
+    setProfiling: (profiling: boolean) => setPreferences({ profiling }),
+  };
 }
