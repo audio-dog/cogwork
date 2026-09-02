@@ -28,6 +28,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
@@ -38,6 +39,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import lockfile, { type LockOptions } from "proper-lockfile";
 import * as controlStoreSchema from "./control-store-schema";
 
 export const controlStoreWriteGateWaitDuration = Metric.timer(
@@ -104,14 +106,49 @@ export type ControlStoreService =
 export class ControlStoreBootError extends Data.TaggedError("ControlStoreBootError")<{
   readonly message: string;
 }> {}
+class RenameShapedControlStoreDiff extends Data.TaggedError("RenameShapedControlStoreDiff")<{
+  readonly message: string;
+}> {}
 
 type ControlStoreSchemaStatements = Effect.Effect<
   ReadonlyArray<string>,
-  ControlStoreBootError,
+  ControlStoreBootError | RenameShapedControlStoreDiff,
   SqlClient.SqlClient
 >;
+type ControlStoreSchemaChange = {
+  readonly classification: "additive" | "destructive";
+  readonly statement: string;
+};
+type ControlStoreClientOptions = Pick<SqliteClient.SqliteClientConfig, "busyTimeout">;
+
+type WalCheckpoint = {
+  readonly busy: number;
+  readonly checkpointed: number;
+  readonly log: number;
+};
+
+type SqliteJournalMode = {
+  readonly journal_mode: string;
+};
+
+const walBackupFailure = (error: unknown) =>
+  new ControlStoreBootError({
+    message: `Control store WAL preparation failed: ${messageOf(error)}`,
+  });
 
 const maximumRunEventAge = Duration.days(30);
+const schemaPreflightLockOptions = {
+  realpath: false,
+  retries: {
+    retries: 200,
+    factor: 1,
+    minTimeout: 50,
+    maxTimeout: 50,
+    randomize: true,
+  },
+  stale: 5_000,
+  update: 1_000,
+} satisfies LockOptions;
 const additiveSchemaStatementPatterns = [
   /^CREATE\s+TABLE\s+/i,
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+/i,
@@ -120,8 +157,25 @@ const additiveSchemaStatementPatterns = [
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const isAdditiveSchemaStatement = (statement: string) =>
-  additiveSchemaStatementPatterns.some((pattern) => pattern.test(statement.trim()));
+const schemaDiffError = (error: unknown) => {
+  const message = messageOf(error);
+  if (/resolver\([^)]*\) was called without a HintsHandler/.test(message))
+    return new RenameShapedControlStoreDiff({ message });
+  return new ControlStoreBootError({ message: `Control store schema diff failed: ${message}` });
+};
+
+const classifySchemaStatement = (statement: string) =>
+  ({
+    classification: additiveSchemaStatementPatterns.some((pattern) => pattern.test(statement.trim()))
+      ? "additive"
+      : "destructive",
+    statement,
+  }) satisfies ControlStoreSchemaChange;
+
+const isForeignKeysPragma = (statement: string) => /^PRAGMA\s+foreign_keys\s*=/i.test(statement.trim());
+
+const disablesForeignKeys = (statement: string) =>
+  /^PRAGMA\s+foreign_keys\s*=\s*OFF\s*;?$/i.test(statement.trim());
 
 const storeFailure = (operation: string) => (error: unknown) =>
   ControlStoreFailure.make({ operation, message: messageOf(error) });
@@ -605,10 +659,7 @@ const controlStoreSchemaStatements = Effect.fn("ControlStore.schemaStatements")(
       };
       const result = yield* Effect.tryPromise({
         try: () => DrizzleSqlite.pushSchema(controlStoreSchema, database),
-        catch: (error) =>
-          new ControlStoreBootError({
-            message: `Control store schema diff failed: ${messageOf(error)}`,
-          }),
+        catch: schemaDiffError,
       });
       return result.sqlStatements;
     }),
@@ -621,20 +672,27 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
   const sql = yield* SqlClient.SqlClient;
   const statements = yield* schemaStatements;
   if (statements.length === 0) return;
-  const nonAdditiveStatements = statements.filter((statement) => !isAdditiveSchemaStatement(statement));
-  if (nonAdditiveStatements.length > 0)
-    return yield* new ControlStoreBootError({
-      message: `Control store schema requires non-additive changes:\n${nonAdditiveStatements.join("\n")}`,
-    });
-  yield* Effect.logInfo("converging Control store schema", { statements });
-  yield* sql.withTransaction(
-    Effect.forEach(statements, (statement) => sql.unsafe(statement), { discard: true }),
+  const changes = statements.map(classifySchemaStatement);
+  const transactionStatements = statements.filter((statement) => !isForeignKeysPragma(statement));
+  const transaction = sql.withTransaction(
+    Effect.gen(function* () {
+      yield* Effect.forEach(transactionStatements, (statement) => sql.unsafe(statement), {
+        discard: true,
+      });
+      const remaining = yield* schemaStatements;
+      if (remaining.length === 0) return;
+      return yield* new ControlStoreBootError({
+        message: `Control store schema did not converge. Remaining statements:\n${remaining.join("\n")}`,
+      });
+    }),
   );
-  const remaining = yield* schemaStatements;
-  if (remaining.length === 0) return;
-  return yield* new ControlStoreBootError({
-    message: `Control store schema did not converge. Remaining statements:\n${remaining.join("\n")}`,
-  });
+  yield* Effect.logInfo("converging Control store schema", { changes });
+  if (!statements.some(disablesForeignKeys)) return yield* transaction;
+  return yield* Effect.acquireUseRelease(
+    sql.unsafe("PRAGMA foreign_keys=OFF;"),
+    () => transaction,
+    () => sql.unsafe("PRAGMA foreign_keys=ON;"),
+  );
 });
 
 const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
@@ -679,10 +737,136 @@ const prepareStoreDirectory = Effect.fn("ControlStore.prepareStoreDirectory")(fu
   yield* fs.chmod(path.dirname(storePath), 0o700);
 });
 
-export const controlStoreClientLayer = (storePath: string) =>
+export const controlStoreClientLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
   Layer.unwrap(
-    Effect.map(prepareStoreDirectory(storePath), () => SqliteClient.layer({ filename: storePath })),
+    Effect.map(prepareStoreDirectory(storePath), () =>
+      SqliteClient.layer({ filename: storePath, ...options }),
+    ),
   );
+
+const prepareStoreForRenameBackup = Effect.fn("ControlStore.prepareStoreForRenameBackup")(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const [checkpoint] = yield* sql
+    .unsafe<WalCheckpoint>("PRAGMA wal_checkpoint(TRUNCATE);")
+    .pipe(Effect.mapError(walBackupFailure));
+  const checkpointComplete = checkpoint?.busy === 0 && checkpoint.log === checkpoint.checkpointed;
+  if (!checkpointComplete) {
+    return yield* new ControlStoreBootError({
+      message: "Control store WAL checkpoint did not complete before backup",
+    });
+  }
+  const [journalMode] = yield* sql
+    .unsafe<SqliteJournalMode>("PRAGMA journal_mode=DELETE;")
+    .pipe(Effect.mapError(walBackupFailure));
+  if (journalMode?.journal_mode === "delete") return;
+  return yield* new ControlStoreBootError({
+    message: "Control store WAL journal mode remained active before backup",
+  });
+});
+
+const ensureWalSidecarsAreAbsent = Effect.fn("ControlStore.ensureWalSidecarsAreAbsent")(function* (
+  storePath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const sidecars = [`${storePath}-wal`, `${storePath}-shm`];
+  const remaining = yield* Effect.filter(sidecars, (path) => fs.exists(path));
+  if (remaining.length === 0) return;
+  return yield* new ControlStoreBootError({
+    message: `Control store WAL sidecars remain before backup: ${remaining.join(", ")}`,
+  });
+});
+
+const backupRenameShapedStore = Effect.fn("ControlStore.backupRenameShapedStore")(function* (
+  storePath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  yield* ensureWalSidecarsAreAbsent(storePath);
+  const timestamp = yield* Clock.currentTimeMillis;
+  const reservationPath = yield* fs.makeTempDirectory({
+    directory: path.dirname(storePath),
+    prefix: `${path.basename(storePath)}.${timestamp}.`,
+  });
+  const backupPath = `${reservationPath}.backup`;
+  yield* fs.remove(reservationPath, { recursive: true });
+  yield* fs.rename(storePath, backupPath);
+  yield* Effect.logWarning("backed up rename-shaped Control store", { backupPath });
+});
+
+const backupRenameShapedStoreIfRequired = (storePath: string, required: boolean) => {
+  if (!required) return Effect.void;
+  return backupRenameShapedStore(storePath);
+};
+
+const withSchemaPreflightLock = <A, E, R>(storePath: string, effect: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.gen(function* () {
+      yield* prepareStoreDirectory(storePath);
+      const compromised = yield* Deferred.make<never, ControlStoreBootError>();
+      const release = yield* Effect.tryPromise({
+        try: () =>
+          lockfile.lock(storePath, {
+            ...schemaPreflightLockOptions,
+            onCompromised: (error) =>
+              Deferred.doneUnsafe(
+                compromised,
+                Effect.fail(
+                  new ControlStoreBootError({
+                    message: `Control store schema lock was compromised: ${messageOf(error)}`,
+                  }),
+                ),
+              ),
+          }),
+        catch: (error) =>
+          new ControlStoreBootError({
+            message: `Control store schema lock failed: ${messageOf(error)}`,
+          }),
+      });
+      return { compromised, release };
+    }),
+    ({ compromised }) => Effect.raceFirst(effect, Deferred.await(compromised)),
+    ({ release }) =>
+      Effect.tryPromise({
+        try: () => release(),
+        catch: (error) =>
+          new ControlStoreBootError({
+            message: `Control store schema lock release failed: ${messageOf(error)}`,
+          }),
+      }),
+  );
+
+const bootFailureMessage = (cause: Cause.Cause<unknown>) => {
+  if (!Cause.hasFails(cause)) return Cause.pretty(cause);
+  return messageOf(Cause.squash(cause));
+};
+
+const recoverSchemaPreflightFailure = (cause: Cause.Cause<unknown>) => {
+  if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+  return Effect.succeed(
+    new ControlStoreBootError({
+      message: `Control store schema preflight failed: ${bootFailureMessage(cause)}`,
+    }),
+  );
+};
+
+const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
+  (storePath: string, options: ControlStoreClientOptions) =>
+    withSchemaPreflightLock(
+      storePath,
+      Effect.scoped(
+        controlStoreSchemaStatements().pipe(
+          Effect.map(() => false),
+          Effect.catchTag("RenameShapedControlStoreDiff", () =>
+            prepareStoreForRenameBackup().pipe(Effect.map(() => true)),
+          ),
+          Effect.provide(controlStoreClientLayer(storePath, options)),
+        ),
+      ).pipe(
+        Effect.flatMap((requiresBackup) => backupRenameShapedStoreIfRequired(storePath, requiresBackup)),
+        Effect.as<ControlStoreBootError | null>(null),
+      ),
+    ).pipe(Effect.catchCause(recoverSchemaPreflightFailure)),
+);
 
 const unavailable = (message: string): ControlStoreService => {
   const failure = ControlStoreFailure.make({ operation: "open Control store", message });
@@ -708,18 +892,27 @@ export const ControlStore = Context.Reference<ControlStoreService>(
   { defaultValue: () => unavailable("Control store did not boot") },
 );
 
-export const bootControlStoreLayer = (storePath: string) =>
-  Layer.effect(
-    ControlStore,
-    Effect.andThen(boot(storePath), makeAvailableControlStore).pipe(
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
-        return Effect.andThen(
-          Effect.logError("control store boot failed", { cause: Cause.pretty(cause) }),
-          Effect.succeed(
-            unavailable(Cause.hasFails(cause) ? messageOf(Cause.squash(cause)) : Cause.pretty(cause)),
-          ),
-        );
-      }),
-    ),
+const recoverBootFailure = (cause: Cause.Cause<unknown>) => {
+  if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+  return Effect.andThen(
+    Effect.logError("control store boot failed", { cause: Cause.pretty(cause) }),
+    Effect.succeed(unavailable(bootFailureMessage(cause))),
+  );
+};
+
+const bootControlStore = (storePath: string, preflightError: ControlStoreBootError | null) => {
+  if (preflightError) return Effect.succeed(unavailable(preflightError.message));
+  return Effect.andThen(boot(storePath), makeAvailableControlStore).pipe(
+    Effect.catchCause(recoverBootFailure),
+  );
+};
+
+export const bootControlStoreLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
+  Layer.unwrap(
+    Effect.map(prepareSchemaFallback(storePath, options), (preflightError) => {
+      const client = controlStoreClientLayer(storePath, options);
+      return Layer.effect(ControlStore, bootControlStore(storePath, preflightError)).pipe(
+        Layer.provideMerge(client),
+      );
+    }),
   );

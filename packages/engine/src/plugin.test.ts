@@ -12,7 +12,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { ConnectionStore } from "./connection";
-import { bootControlStoreLayer, ControlStore, controlStoreClientLayer } from "./control-store";
+import { bootControlStoreLayer, ControlStore } from "./control-store";
 import { PluginManager, pluginManagerLayer } from "./plugin";
 
 const write = Effect.fn("test.writePluginFile")(function* (file: string, content: string) {
@@ -100,7 +100,7 @@ interface PluginFixtureState {
 }
 
 const storeLayerAt = (storePath: string) =>
-  bootControlStoreLayer(storePath).pipe(Layer.provide(controlStoreClientLayer(storePath)));
+  Layer.effect(ControlStore, ControlStore).pipe(Layer.provide(bootControlStoreLayer(storePath)));
 
 class PluginFixture extends Context.Service<PluginFixture, PluginFixtureState>()(
   "@cogwork/engine/plugin.test/PluginFixture",

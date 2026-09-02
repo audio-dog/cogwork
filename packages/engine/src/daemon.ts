@@ -50,12 +50,7 @@ import {
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
-import {
-  bootControlStoreLayer,
-  ControlStore,
-  type ControlStoreService,
-  controlStoreClientLayer,
-} from "./control-store";
+import { bootControlStoreLayer, ControlStore, type ControlStoreService } from "./control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
 import {
@@ -344,8 +339,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
   );
-  const storeClient = controlStoreClientLayer(adapters.controlStorePath);
-  const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
+  const controlStore = bootControlStoreLayer(adapters.controlStorePath);
   const connections = connectionStoreLayer.pipe(
     Layer.provide(controlStore),
     Layer.provide(credentials),
@@ -358,7 +352,6 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   }).pipe(Layer.provide(controlStore), Layer.provide(connections));
   const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
-    Layer.provide(storeClient),
   );
   const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
     runLedgerPublishingLayer.pipe(
@@ -367,7 +360,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
           Effect.map(ControlStore, (store) =>
             store.health === "available" ? adapters.runLedger : memoryRunLedgerLayer,
           ),
-        ).pipe(Layer.provide(controlStore), Layer.provide(storeClient)),
+        ).pipe(Layer.provide(controlStore)),
       ),
       Layer.provide(daemonEventBusLayer),
     );

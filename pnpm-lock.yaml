@@ -453,6 +453,9 @@ importers:
       effect:
         specifier: catalog:effect
         version: 4.0.0-rc.112
+      proper-lockfile:
+        specifier: 4.1.2
+        version: 4.1.2
     devDependencies:
       '@catenarycloud/linteffect':
         specifier: ^0.0.7
@@ -463,6 +466,9 @@ importers:
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
+      '@types/proper-lockfile':
+        specifier: 4.1.4
+        version: 4.1.4
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -2479,6 +2485,9 @@ packages:
 
   '@types/node@26.4.0':
     resolution: {integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==}
+
+  '@types/proper-lockfile@4.1.4':
+    resolution: {integrity: sha512-uo2ABllncSqg9F1D4nugVl9v93RmjxF6LJzQLMLDdPaXCUIDPeOJ21Gbqi43xNKzBi/WQ0Q0dICqufzQbMjipQ==}
 
   '@types/react-dom@19.2.5':
     resolution: {integrity: sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg==}
@@ -7271,6 +7280,10 @@ snapshots:
   '@types/node@26.4.0':
     dependencies:
       undici-types: 8.3.0
+
+  '@types/proper-lockfile@4.1.4':
+    dependencies:
+      '@types/retry': 0.12.0
 
   '@types/react-dom@19.2.5(@types/react@19.2.18)':
     dependencies:
