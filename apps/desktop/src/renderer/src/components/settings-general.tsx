@@ -6,16 +6,6 @@ import { settingEntry } from "../features/settings-catalog";
 import { useWindowPreferences } from "../features/use-window-preferences";
 import { SettingRow, SettingsSection, SubSectionCard } from "./settings-parts";
 
-const processCaptures = [
-  { label: "Daemon heap", request: { _tag: "DaemonHeapSnapshot" } },
-  { label: "Daemon CPU", request: { _tag: "DaemonCpuProfile" } },
-  { label: "Main heap", request: { _tag: "MainHeapSnapshot" } },
-  { label: "Main CPU", request: { _tag: "MainCpuProfile" } },
-] as const satisfies ReadonlyArray<{
-  readonly label: string;
-  readonly request: ProcessProfileCapture;
-}>;
-
 function ProcessCaptureControls() {
   const { preferences } = useWindowPreferences();
   const [pending, setPending] = useState(false);
@@ -36,11 +26,23 @@ function ProcessCaptureControls() {
   return (
     <div className="flex max-w-xl flex-wrap items-center justify-end gap-2">
       {message && <span>{message}</span>}
-      {processCaptures.map(({ label, request }) => (
-        <Button key={label} variant="outline" size="sm" disabled={disabled} onClick={capture(request)}>
-          {label}
-        </Button>
-      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={capture({ _tag: "DaemonHeapSnapshot" })}
+      >
+        Daemon heap
+      </Button>
+      <Button variant="outline" size="sm" disabled={disabled} onClick={capture({ _tag: "DaemonCpuProfile" })}>
+        Daemon CPU
+      </Button>
+      <Button variant="outline" size="sm" disabled={disabled} onClick={capture({ _tag: "MainHeapSnapshot" })}>
+        Main heap
+      </Button>
+      <Button variant="outline" size="sm" disabled={disabled} onClick={capture({ _tag: "MainCpuProfile" })}>
+        Main CPU
+      </Button>
     </div>
   );
 }
