@@ -1,0 +1,131 @@
+import {
+  type ControlStore,
+  type LifecycleStage,
+  type OperationSettingName,
+  type OperationSettingRow,
+  type OperationSettingUpdate,
+  resolveOperationSetting,
+  type WorkspaceId,
+} from "@cogwork/contracts";
+import { catalogFor } from "./harness-catalog";
+
+/** `operationSettingRefusal` refuses any workflow but this one, so it is fixed today. */
+export const codingWorkflow = "coding";
+
+export const operations: readonly LifecycleStage[] = ["triage", "implement", "follow-up", "verify"];
+
+export const operationLabels: Record<LifecycleStage, string> = {
+  triage: "Triage",
+  implement: "Implement",
+  "follow-up": "Follow-up",
+  verify: "Verify",
+};
+
+export const operationSummaries: Record<LifecycleStage, string> = {
+  triage: "Reads a new work item and proposes what happens to it.",
+  implement: "Writes the change and opens a pull request.",
+  "follow-up": "Answers failing checks and review comments on its own pull request.",
+  verify: "Checks the change against what the work item asked for.",
+};
+
+/**
+ * One setting of one operation. `own` is what this page has set; `inherited` is what would
+ * win without it. Kept apart so a control can show the inherited value without pretending
+ * a person chose it — and so picking the same value as the default is still an override.
+ */
+export interface SettingCell {
+  readonly own: string | null;
+  readonly inherited: string | null;
+  readonly effective: string | null;
+  readonly stale: boolean;
+}
+
+const isOverride = (row: OperationSettingRow, operation: LifecycleStage, workspace: WorkspaceId) =>
+  row.level._tag === "Operation" &&
+  row.level.workflow === codingWorkflow &&
+  row.level.operation === operation &&
+  row.scope._tag === "PrivateWorkspaceOverlay" &&
+  row.scope.workspace === workspace;
+
+const asDisplayValue = (value: ReturnType<typeof resolveOperationSetting>) => {
+  if (value === null) return null;
+  if (typeof value === "boolean") return String(value);
+  if (typeof value === "object") return null;
+  return value;
+};
+
+export const settingCell = (
+  controlStore: ControlStore | null,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+  setting: OperationSettingName,
+) => {
+  const rows = controlStore?.operationSettings ?? [];
+  const context = { workflow: codingWorkflow, operation, workspace };
+  const inherited = asDisplayValue(
+    resolveOperationSetting(
+      rows.filter((row) => !isOverride(row, operation, workspace)),
+      setting,
+      context,
+    ),
+  );
+  const stored = rows.find((row) => row.setting === setting && isOverride(row, operation, workspace));
+  const own = stored ? asDisplayValue(stored.value) : null;
+  const effective = own ?? inherited;
+  return {
+    own,
+    inherited,
+    effective,
+    stale: isStale(setting, effective, controlStore, workspace, operation),
+  };
+};
+
+/** A saved choice absent from the current catalog is stale drift, never free-form input. */
+const isStale = (
+  setting: OperationSettingName,
+  value: string | null,
+  controlStore: ControlStore | null,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+) => {
+  if (value === null) return false;
+  if (setting === "harness") return catalogFor(value) === null;
+  if (setting !== "model" && setting !== "effort") return false;
+  const catalog = catalogFor(settingCell(controlStore, workspace, operation, "harness").effective);
+  if (!catalog) return false;
+  const options = setting === "model" ? catalog.models : (catalog.efforts ?? []);
+  return !options.some((option) => option.value === value);
+};
+
+/** A one-line summary of an operation, for a collapsed row. */
+export const operationSummaryLine = (
+  controlStore: ControlStore | null,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+) => {
+  const harness = settingCell(controlStore, workspace, operation, "harness").effective;
+  const model = settingCell(controlStore, workspace, operation, "model").effective;
+  const effort = settingCell(controlStore, workspace, operation, "effort").effective;
+  const parts = [catalogFor(harness)?.label ?? harness, model, effort].filter(
+    (part): part is string => typeof part === "string" && part.length > 0,
+  );
+  return parts.length === 0 ? "Inherited" : parts.join(" · ");
+};
+
+/** The act that writes one setting, or clears it back onto the default. */
+export const operationSettingUpdate = (
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+  setting: OperationSettingName,
+  value: string | null,
+) => {
+  const level = { _tag: "Operation" as const, workflow: codingWorkflow, operation };
+  const scope = { _tag: "PrivateWorkspaceOverlay" as const, workspace };
+  if (value === null) return { _tag: "Clear", cell: { setting, level, scope } } as OperationSettingUpdate;
+  // `enabled` is the one boolean in the family; every other setting is a string.
+  const row =
+    setting === "enabled"
+      ? { setting, level, scope, value: value === "true" }
+      : { setting, level, scope, value };
+  return { _tag: "Set", row } as OperationSettingUpdate;
+};
