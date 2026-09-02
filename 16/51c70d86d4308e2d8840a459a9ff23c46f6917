@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/settings-scheduling.tsx
+  s_adbad50efd40b7::t_46b660f2868da4 2-82,109-111,123-126
+  s_adbad50efd40b7::t_0cd612adeb3152 83-108,112-122
+  s_adbad50efd40b7::t_bc8229d268a3fc 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1651c70d86d4308e2d8840a459a9ff23c46f6917",
+  "prompts": {},
+  "sessions": {
+    "s_adbad50efd40b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3de78da9-460f-46c7-954a-e6f06aa3992b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
