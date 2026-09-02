@@ -40,10 +40,14 @@ Codex `--add-dir`. Codex CLI owns
 authentication through its host login; Cogwork's credential store is not consulted.
 _Avoid_: Sandbox isolation (the local-process provider scopes the worktree but is not a container)
 
-**Harness Workspace channel**:
-Instructions and MCP servers arrive only through the shared Harness Workspace. TanStack resolves
-live SecretRefs into child environment values and native command overrides. The shared runtime sends
-required Instructions through Codex's in-memory system prompt. Neither projection writes into the
-prepared Worktree, and its repository-authored `AGENTS.md` remains unchanged. Cogwork does not
-generate Codex MCP identities, config keys, or bearer environment names.
-_Avoid_: Codex MCP assembler, Codex authentication, projected instruction file, persistent credential file
+**Native MCP projection**:
+The descriptor declares native MCP projection and maps each resolved MCP server from the request
+onto TanStack's documented Codex adapter passthrough: `config` carries `mcp_servers.<name>.url`
+and, for an authenticated server, `bearer_token_env_var` naming a hashed `COGWORK_MCP_*` variable;
+`env` carries the resolved bearer value into the Codex child environment only. Codex prepends
+`Bearer ` itself. Command arguments carry names and URLs, never secret values. The adapter is
+constructed per launch, so a rotated credential applies on the next Run. The shared runtime sends
+required Instructions through Codex's in-memory system prompt and keeps the Harness Workspace
+projection already satisfied, so neither channel writes into the prepared Worktree and its
+repository-authored `AGENTS.md` remains unchanged.
+_Avoid_: Codex MCP assembler, Codex authentication, projected instruction file, persistent credential file, package patch

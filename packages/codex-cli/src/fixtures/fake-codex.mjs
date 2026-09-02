@@ -37,9 +37,16 @@ if (process.argv.includes("login") && process.argv.includes("status")) {
 }
 
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
-const mcpBearer = Object.entries(process.env).find(
-  ([name, value]) => name.startsWith("COGWORK_MCP_") && value !== undefined,
-)?.[1];
+// Resolve the bearer exactly as Codex would: read the env var NAMED by the
+// `bearer_token_env_var` config override, so a drift between the argv name and the
+// delivered environment fails the capture instead of passing on a prefix scan.
+const mcpBearer = process.argv
+  .flatMap((argument) => {
+    const match = argument.match(/\.bearer_token_env_var="([^"]+)"$/);
+    return match ? [match[1]] : [];
+  })
+  .map((name) => process.env[name])
+  .find((value) => value !== undefined);
 const mcpFileIndex = process.argv.indexOf("--capture-mcp-file");
 const mcpFile = mcpFileIndex === -1 ? undefined : process.argv.at(mcpFileIndex + 1);
 const hasCodexConfig = await access(`${process.cwd()}/.codex/config.toml`).then(
