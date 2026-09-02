@@ -15,13 +15,15 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppConnectionsRouteImport } from './routes/_app/connections'
 import { Route as AppCustomizeRouteRouteImport } from './routes/_app/customize/route'
 import { Route as AppWorkflowsRouteImport } from './routes/_app/workflows'
-import { Route as AppWorkspacesRouteImport } from './routes/_app/workspaces'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsSplatRouteImport } from './routes/settings/$'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
+import { Route as SettingsSchedulingRouteImport } from './routes/settings/scheduling'
+import { Route as SettingsSupRouteImport } from './routes/settings/sup'
 import { Route as AppCustomizeIndexRouteImport } from './routes/_app/customize/index'
 import { Route as AppCustomizeFacetRouteImport } from './routes/_app/customize/$facet'
+import { Route as AppWorkspacesWorkspaceIdRouteImport } from './routes/_app/workspaces/$workspaceId'
 import { Route as AppCustomizePluginPluginIdRouteImport } from './routes/_app/customize/plugin.$pluginId'
 
 const AppRouteRoute = AppRouteRouteImport.update({
@@ -53,11 +55,6 @@ const AppWorkflowsRoute = AppWorkflowsRouteImport.update({
   path: '/workflows',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AppWorkspacesRoute = AppWorkspacesRouteImport.update({
-  id: '/workspaces',
-  path: '/workspaces',
-  getParentRoute: () => AppRouteRoute,
-} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -78,6 +75,16 @@ const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
+const SettingsSchedulingRoute = SettingsSchedulingRouteImport.update({
+  id: '/scheduling',
+  path: '/scheduling',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsSupRoute = SettingsSupRouteImport.update({
+  id: '/sup',
+  path: '/sup',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
 const AppCustomizeIndexRoute = AppCustomizeIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -88,6 +95,12 @@ const AppCustomizeFacetRoute = AppCustomizeFacetRouteImport.update({
   path: '/$facet',
   getParentRoute: () => AppCustomizeRouteRoute,
 } as any)
+const AppWorkspacesWorkspaceIdRoute =
+  AppWorkspacesWorkspaceIdRouteImport.update({
+    id: '/workspaces/$workspaceId',
+    path: '/workspaces/$workspaceId',
+    getParentRoute: () => AppRouteRoute,
+  } as any)
 const AppCustomizePluginPluginIdRoute =
   AppCustomizePluginPluginIdRouteImport.update({
     id: '/plugin/$pluginId',
@@ -101,25 +114,29 @@ export interface FileRoutesByFullPath {
   '/customize': typeof AppCustomizeRouteRouteWithChildren
   '/connections': typeof AppConnectionsRoute
   '/workflows': typeof AppWorkflowsRoute
-  '/workspaces': typeof AppWorkspacesRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/scheduling': typeof SettingsSchedulingRoute
+  '/settings/sup': typeof SettingsSupRoute
   '/settings/': typeof SettingsIndexRoute
   '/customize/$facet': typeof AppCustomizeFacetRoute
+  '/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
   '/customize/': typeof AppCustomizeIndexRoute
   '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
 export interface FileRoutesByTo {
   '/connections': typeof AppConnectionsRoute
   '/workflows': typeof AppWorkflowsRoute
-  '/workspaces': typeof AppWorkspacesRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/scheduling': typeof SettingsSchedulingRoute
+  '/settings/sup': typeof SettingsSupRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/customize/$facet': typeof AppCustomizeFacetRoute
+  '/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
   '/customize': typeof AppCustomizeIndexRoute
   '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
@@ -130,13 +147,15 @@ export interface FileRoutesById {
   '/_app/customize': typeof AppCustomizeRouteRouteWithChildren
   '/_app/connections': typeof AppConnectionsRoute
   '/_app/workflows': typeof AppWorkflowsRoute
-  '/_app/workspaces': typeof AppWorkspacesRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/scheduling': typeof SettingsSchedulingRoute
+  '/settings/sup': typeof SettingsSupRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/_app/customize/$facet': typeof AppCustomizeFacetRoute
+  '/_app/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
   '/_app/customize/': typeof AppCustomizeIndexRoute
   '/_app/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
@@ -148,25 +167,29 @@ export interface FileRouteTypes {
     | '/customize'
     | '/connections'
     | '/workflows'
-    | '/workspaces'
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
+    | '/settings/scheduling'
+    | '/settings/sup'
     | '/settings/'
     | '/customize/$facet'
+    | '/workspaces/$workspaceId'
     | '/customize/'
     | '/customize/plugin/$pluginId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connections'
     | '/workflows'
-    | '/workspaces'
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
+    | '/settings/scheduling'
+    | '/settings/sup'
     | '/'
     | '/settings'
     | '/customize/$facet'
+    | '/workspaces/$workspaceId'
     | '/customize'
     | '/customize/plugin/$pluginId'
   id:
@@ -176,13 +199,15 @@ export interface FileRouteTypes {
     | '/_app/customize'
     | '/_app/connections'
     | '/_app/workflows'
-    | '/_app/workspaces'
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
+    | '/settings/scheduling'
+    | '/settings/sup'
     | '/_app/'
     | '/settings/'
     | '/_app/customize/$facet'
+    | '/_app/workspaces/$workspaceId'
     | '/_app/customize/'
     | '/_app/customize/plugin/$pluginId'
   fileRoutesById: FileRoutesById
@@ -236,13 +261,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWorkflowsRouteImport
       parentRoute: typeof AppRouteRoute
     }
-    '/_app/workspaces': {
-      id: '/_app/workspaces'
-      path: '/workspaces'
-      fullPath: '/workspaces'
-      preLoaderRoute: typeof AppWorkspacesRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
     '/settings/': {
       id: '/settings/'
       path: '/'
@@ -271,6 +289,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsGeneralRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
+    '/settings/scheduling': {
+      id: '/settings/scheduling'
+      path: '/scheduling'
+      fullPath: '/settings/scheduling'
+      preLoaderRoute: typeof SettingsSchedulingRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/sup': {
+      id: '/settings/sup'
+      path: '/sup'
+      fullPath: '/settings/sup'
+      preLoaderRoute: typeof SettingsSupRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/_app/customize/': {
       id: '/_app/customize/'
       path: '/'
@@ -284,6 +316,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/customize/$facet'
       preLoaderRoute: typeof AppCustomizeFacetRouteImport
       parentRoute: typeof AppCustomizeRouteRoute
+    }
+    '/_app/workspaces/$workspaceId': {
+      id: '/_app/workspaces/$workspaceId'
+      path: '/workspaces/$workspaceId'
+      fullPath: '/workspaces/$workspaceId'
+      preLoaderRoute: typeof AppWorkspacesWorkspaceIdRouteImport
+      parentRoute: typeof AppRouteRoute
     }
     '/_app/customize/plugin/$pluginId': {
       id: '/_app/customize/plugin/$pluginId'
@@ -314,16 +353,16 @@ interface AppRouteRouteChildren {
   AppCustomizeRouteRoute: typeof AppCustomizeRouteRouteWithChildren
   AppConnectionsRoute: typeof AppConnectionsRoute
   AppWorkflowsRoute: typeof AppWorkflowsRoute
-  AppWorkspacesRoute: typeof AppWorkspacesRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppWorkspacesWorkspaceIdRoute: typeof AppWorkspacesWorkspaceIdRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppCustomizeRouteRoute: AppCustomizeRouteRouteWithChildren,
   AppConnectionsRoute: AppConnectionsRoute,
   AppWorkflowsRoute: AppWorkflowsRoute,
-  AppWorkspacesRoute: AppWorkspacesRoute,
   AppIndexRoute: AppIndexRoute,
+  AppWorkspacesWorkspaceIdRoute: AppWorkspacesWorkspaceIdRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
@@ -334,6 +373,8 @@ interface SettingsRouteRouteChildren {
   SettingsSplatRoute: typeof SettingsSplatRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
+  SettingsSchedulingRoute: typeof SettingsSchedulingRoute
+  SettingsSupRoute: typeof SettingsSupRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
@@ -341,6 +382,8 @@ const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
   SettingsSplatRoute: SettingsSplatRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
+  SettingsSchedulingRoute: SettingsSchedulingRoute,
+  SettingsSupRoute: SettingsSupRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 

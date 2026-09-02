@@ -44,6 +44,7 @@ describe("catalog helpers", () => {
   it("gives every section a route of its own, so the router does the dispatch", () => {
     expect(settingsSections.map((section) => section.link.to)).toEqual([
       "/settings/general",
+      "/settings/scheduling",
       "/settings/appearance",
     ]);
   });

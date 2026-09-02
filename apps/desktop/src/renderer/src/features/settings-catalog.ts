@@ -1,15 +1,20 @@
-import { RiPaletteLine, RiSettings3Line } from "@remixicon/react";
+import { RiPaletteLine, RiSettings3Line, RiSpeedUpLine } from "@remixicon/react";
 import { linkOptions } from "@tanstack/react-router";
 
 /**
  * Every section is its own route, so `linkOptions` checks each target where it is written rather
  * than at each spread site. A typo here fails the build instead of redirecting at runtime.
  */
-const sectionLinks = linkOptions([{ to: "/settings/general" }, { to: "/settings/appearance" }]);
+const sectionLinks = linkOptions([
+  { to: "/settings/general" },
+  { to: "/settings/scheduling" },
+  { to: "/settings/appearance" },
+]);
 
 export const settingsSections = [
   { id: "general", label: "General", icon: RiSettings3Line, link: sectionLinks[0] },
-  { id: "appearance", label: "Appearance", icon: RiPaletteLine, link: sectionLinks[1] },
+  { id: "scheduling", label: "Scheduling", icon: RiSpeedUpLine, link: sectionLinks[1] },
+  { id: "appearance", label: "Appearance", icon: RiPaletteLine, link: sectionLinks[2] },
 ] as const;
 
 export type SettingsSection = (typeof settingsSections)[number];
@@ -31,6 +36,27 @@ export const settingsIndex = [
     title: "Close to hide",
     description: "Closing the window hides it and leaves the engine running.",
     keywords: ["close", "hide", "window", "tray", "menu bar", "quit"],
+  },
+  {
+    id: "global-concurrency",
+    sectionId: "scheduling",
+    title: "Runs at once",
+    description: "How many Runs the daemon keeps in flight across every workspace.",
+    keywords: ["concurrency", "parallel", "limit", "runs", "scheduler", "global"],
+  },
+  {
+    id: "per-workspace-concurrency",
+    sectionId: "scheduling",
+    title: "Runs at once per workspace",
+    description: "The default a workspace inherits when it sets no concurrency of its own.",
+    keywords: ["concurrency", "workspace", "limit", "runs", "scheduler", "default"],
+  },
+  {
+    id: "daily-budget",
+    sectionId: "scheduling",
+    title: "Runs per day",
+    description: "How many Runs may start each day before the scheduler pauses new work.",
+    keywords: ["budget", "daily", "spend", "cap", "limit", "runs", "pause"],
   },
   {
     id: "theme",
