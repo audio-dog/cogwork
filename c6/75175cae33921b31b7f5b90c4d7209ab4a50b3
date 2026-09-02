@@ -1,0 +1,31 @@
+packages/process-diagnostics/src/process-profile-protocol.ts
+  s_e56f2f08236ec0::t_5eee8f97b44a41 2-4,16,18-23,25-27,29-32
+  s_e56f2f08236ec0::t_a58609c4ed8377 1,5-15,17,24,28
+packages/process-diagnostics/src/index.ts
+  s_e56f2f08236ec0::t_5eee8f97b44a41 1
+  s_6394507e8d162d::t_21449b77f42756 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c675175cae33921b31b7f5b90c4d7209ab4a50b3",
+  "prompts": {},
+  "sessions": {
+    "s_6394507e8d162d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eed-5dca-7be2-9220-ab2576f5bc8c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
