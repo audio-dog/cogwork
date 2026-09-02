@@ -105,6 +105,10 @@ const bootstrap = () => {
   crashReporter.start({ uploadToServer: false });
   app.whenReady().then(async () => {
     const runtime = ManagedRuntime.make(makeMainLayer());
+    app.on("before-quit", () => {
+      control.quitting = true;
+    });
+    installShutdownBeforeQuit(app, () => runtime.dispose());
     electronApp.setAppUserModelId("com.cogwork");
     app.on("browser-window-created", (_event, window) => optimizer.watchWindowShortcuts(window));
 
@@ -131,9 +135,8 @@ const bootstrap = () => {
     });
 
     const startExit = await runtime.runPromiseExit(supervisor.start);
-    if (Exit.isFailure(startExit) && !Cause.hasInterruptsOnly(startExit.cause)) {
-      mainLogger.error("Engine startup failed", startExit.cause);
-    }
+    if (Exit.isFailure(startExit) && Cause.hasInterruptsOnly(startExit.cause)) return;
+    if (Exit.isFailure(startExit)) mainLogger.error("Engine startup failed", startExit.cause);
     const status = runtime.runSync(SubscriptionRef.get(supervisor.status));
     if (status === "adopted" && windowPreferences.get().profiling) {
       windowPreferences.set({ profiling: false });
@@ -147,10 +150,6 @@ const bootstrap = () => {
 
     app.on("activate", showWindow);
     app.on("second-instance", showWindow);
-    app.on("before-quit", () => {
-      control.quitting = true;
-    });
-    installShutdownBeforeQuit(app, () => runtime.dispose());
   });
 };
 
