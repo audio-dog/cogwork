@@ -148,11 +148,12 @@ describe("foldTranscript", () => {
       runActivity(2, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
       runActivity(3, { type: "TOOL_CALL_RESULT", toolCallId: "t1", result: "contents" }),
     ];
-    const incremental = makeTranscriptFold();
+    const incremental = activities.reduce<ReturnType<typeof makeTranscriptFold>>(
+      (fold, next) => applyTranscriptActivities(fold, [next]),
+      makeTranscriptFold(),
+    );
 
-    for (const next of activities) applyTranscriptActivities(incremental, [next]);
-
-    expect(incremental.entries).toEqual(foldTranscript(activities));
+    expect(Array.from(incremental.entries)).toEqual(foldTranscript(activities));
   });
 
   it("ignores already-folded history when a later chunk overlaps it", () => {
@@ -161,12 +162,24 @@ describe("foldTranscript", () => {
       runActivity(1, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "world" }),
       runActivity(2, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
     ];
-    const incremental = makeTranscriptFold();
+    const first = applyTranscriptActivities(makeTranscriptFold(), activities.slice(0, 2));
+    const incremental = applyTranscriptActivities(first, activities.slice(1));
 
-    applyTranscriptActivities(incremental, activities.slice(0, 2));
-    applyTranscriptActivities(incremental, activities.slice(1));
+    expect(Array.from(incremental.entries)).toEqual(foldTranscript(activities));
+  });
 
-    expect(incremental.entries).toEqual(foldTranscript(activities));
+  it("keeps published entries unchanged when a later chunk extends them", () => {
+    const first = applyTranscriptActivities(makeTranscriptFold(), [
+      runActivity(0, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "hello " }),
+    ]);
+
+    const second = applyTranscriptActivities(first, [
+      runActivity(1, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "world" }),
+    ]);
+
+    expect(Array.from(first.entries)).toEqual([{ kind: "text", key: "text:m1", text: "hello " }]);
+    expect(second.entries).not.toBe(first.entries);
+    expect(Array.from(second.entries)).toEqual([{ kind: "text", key: "text:m1", text: "hello world" }]);
   });
 
   it("marks a tool call done when its result arrives", () => {

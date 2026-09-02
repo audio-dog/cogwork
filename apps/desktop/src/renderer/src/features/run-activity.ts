@@ -7,6 +7,8 @@ import {
 } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
+import * as Chunk from "effect/Chunk";
+import * as HashMap from "effect/HashMap";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
@@ -154,61 +156,80 @@ const FileDiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String }
 const decodeFileDiff = Schema.decodeUnknownOption(FileDiffValue);
 
 export type TranscriptEntry =
-  | { readonly kind: "text"; readonly key: string; text: string }
-  | { readonly kind: "reasoning"; readonly key: string; text: string }
+  | { readonly kind: "text"; readonly key: string; readonly text: string }
+  | { readonly kind: "reasoning"; readonly key: string; readonly text: string }
   | {
       readonly kind: "tool";
       readonly key: string;
       readonly name: string;
-      args: string;
-      result: string | null;
-      complete: boolean;
+      readonly args: string;
+      readonly result: string | null;
+      readonly complete: boolean;
     }
-  | { readonly kind: "diff"; readonly key: string; readonly path: string; diff: string }
+  | { readonly kind: "diff"; readonly key: string; readonly path: string; readonly diff: string }
   | { readonly kind: "error"; readonly key: string; readonly message: string };
 
 interface TranscriptFold {
-  readonly entries: TranscriptEntry[];
-  readonly byKey: Map<string, TranscriptEntry>;
-  lastSeq: number | null;
+  readonly entries: Iterable<TranscriptEntry>;
+  readonly order: Chunk.Chunk<string>;
+  readonly byKey: HashMap.HashMap<string, TranscriptEntry>;
+  readonly lastSeq: number | null;
 }
 
-export const makeTranscriptFold = () => ({
-  entries: [],
-  byKey: new Map(),
-  lastSeq: null,
+const entriesFor = (order: Chunk.Chunk<string>, byKey: HashMap.HashMap<string, TranscriptEntry>) => ({
+  *[Symbol.iterator]() {
+    for (const key of order) {
+      const entry = HashMap.get(byKey, key);
+      if (Option.isSome(entry)) yield entry.value;
+    }
+  },
 });
+
+const transcriptFold = (
+  order: Chunk.Chunk<string>,
+  byKey: HashMap.HashMap<string, TranscriptEntry>,
+  lastSeq: number | null,
+) => ({
+  entries: entriesFor(order, byKey),
+  order,
+  byKey,
+  lastSeq,
+});
+
+export const makeTranscriptFold = (): TranscriptFold =>
+  transcriptFold(Chunk.empty<string>(), HashMap.empty<string, TranscriptEntry>(), null);
 
 const transcriptToolKey = (toolCallId: string | null | undefined) => `tool:${toolCallId ?? ""}`;
 
 const transcriptDiffKey = (path: string) => `diff:${path}`;
 
+const setTranscriptEntry = (state: TranscriptFold, key: string, entry: TranscriptEntry) => {
+  const order = HashMap.has(state.byKey, key) ? state.order : Chunk.append(state.order, key);
+  return transcriptFold(order, HashMap.set(state.byKey, key, entry), state.lastSeq);
+};
+
 const append = (state: TranscriptFold, kind: "text" | "reasoning", key: string, delta: string) => {
-  const existing = state.byKey.get(key);
+  const existing = Option.getOrUndefined(HashMap.get(state.byKey, key));
   if (existing && (existing.kind === "text" || existing.kind === "reasoning")) {
-    existing.text += delta;
-    return;
+    return setTranscriptEntry(state, key, { ...existing, text: existing.text + delta });
   }
   const entry: TranscriptEntry = { kind, key, text: delta };
-  state.byKey.set(key, entry);
-  state.entries.push(entry);
+  return setTranscriptEntry(state, key, entry);
 };
 
 const toolEntryFor = (state: TranscriptFold, toolCallId: string | null | undefined) => {
-  const entry = state.byKey.get(transcriptToolKey(toolCallId));
+  const entry = Option.getOrUndefined(HashMap.get(state.byKey, transcriptToolKey(toolCallId)));
   return entry?.kind === "tool" ? entry : null;
 };
 
 const setDiffEntry = (state: TranscriptFold, path: string, diff: string) => {
   const key = transcriptDiffKey(path);
-  const existing = state.byKey.get(key);
+  const existing = Option.getOrUndefined(HashMap.get(state.byKey, key));
   if (existing?.kind === "diff") {
-    existing.diff = diff;
-    return;
+    return setTranscriptEntry(state, key, { ...existing, diff });
   }
   const entry: TranscriptEntry = { kind: "diff", key, path, diff };
-  state.byKey.set(key, entry);
-  state.entries.push(entry);
+  return setTranscriptEntry(state, key, entry);
 };
 
 const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
@@ -221,7 +242,7 @@ const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
         append(state, "reasoning", `reason:${messageId ?? "0"}`, delta ?? ""),
       TOOL_CALL_START: ({ toolCallId, toolCallName }) => {
         const key = transcriptToolKey(toolCallId);
-        if (state.byKey.has(key)) return;
+        if (HashMap.has(state.byKey, key)) return state;
         const entry: TranscriptEntry = {
           kind: "tool",
           key,
@@ -230,55 +251,59 @@ const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
           result: null,
           complete: false,
         };
-        state.byKey.set(key, entry);
-        state.entries.push(entry);
+        return setTranscriptEntry(state, key, entry);
       },
       TOOL_CALL_ARGS: ({ toolCallId, delta }) => {
         const entry = toolEntryFor(state, toolCallId);
-        if (!entry) return;
-        entry.args += delta ?? "";
+        if (!entry) return state;
+        return setTranscriptEntry(state, entry.key, { ...entry, args: entry.args + (delta ?? "") });
       },
       TOOL_CALL_END: ({ toolCallId, args }) => {
         const entry = toolEntryFor(state, toolCallId);
-        if (!entry) return;
-        if (entry.args === "" && args) entry.args = args;
-        entry.complete = true;
+        if (!entry) return state;
+        return setTranscriptEntry(state, entry.key, {
+          ...entry,
+          args: entry.args === "" && args ? args : entry.args,
+          complete: true,
+        });
       },
       TOOL_CALL_RESULT: ({ toolCallId, result, content }) => {
         const entry = toolEntryFor(state, toolCallId);
-        if (!entry) return;
-        entry.result = firstString(result, content);
-        entry.complete = true;
+        if (!entry) return state;
+        return setTranscriptEntry(state, entry.key, {
+          ...entry,
+          result: firstString(result, content),
+          complete: true,
+        });
       },
       CUSTOM: ({ name, value }) => {
-        if (name !== FILE_DIFF_EVENT) return;
+        if (name !== FILE_DIFF_EVENT) return state;
         const diff = Option.getOrNull(decodeFileDiff(value));
-        if (!diff) return;
-        setDiffEntry(state, diff.path, diff.diff);
+        if (!diff) return state;
+        return setDiffEntry(state, diff.path, diff.diff);
       },
       RUN_ERROR: ({ message }) => {
-        state.entries.push({
+        const entry: TranscriptEntry = {
           kind: "error",
           key: `error:${activity.seq}`,
           message: message ?? "run error",
-        });
+        };
+        return setTranscriptEntry(state, entry.key, entry);
       },
     },
-    () => undefined,
+    () => state,
   );
 
-export const applyTranscriptActivities = (state: TranscriptFold, activities: ReadonlyArray<RunActivity>) => {
-  for (const activity of activities) {
-    if (state.lastSeq !== null && activity.seq <= state.lastSeq) continue;
-    foldTranscriptActivity(state, activity);
-    state.lastSeq = activity.seq;
-  }
-  return state;
-};
+export const applyTranscriptActivities = (state: TranscriptFold, activities: ReadonlyArray<RunActivity>) =>
+  activities.reduce((current, activity) => {
+    if (current.lastSeq !== null && activity.seq <= current.lastSeq) return current;
+    const next = foldTranscriptActivity(current, activity);
+    return transcriptFold(next.order, next.byKey, activity.seq);
+  }, state);
 
 export const foldTranscript = (activities: ReadonlyArray<RunActivity>) => {
   const state = applyTranscriptActivities(makeTranscriptFold(), activities);
-  return state.entries;
+  return Array.from(state.entries);
 };
 
 type ActivityResult = typeof runActivityAtom extends (id: RunId) => Atom.Atom<infer V> ? V : never;
@@ -286,7 +311,7 @@ type ActivityError = ActivityResult extends AsyncResult.AsyncResult<unknown, inf
 
 interface TranscriptSnapshot {
   readonly done: boolean;
-  readonly entries: ReadonlyArray<TranscriptEntry>;
+  readonly entries: Iterable<TranscriptEntry>;
 }
 
 type TranscriptResult = AsyncResult.AsyncResult<TranscriptSnapshot, ActivityError>;
@@ -332,7 +357,7 @@ const applyActivityResult = (cell: TranscriptCell, current: ActivityResult) => {
       }),
     );
   }
-  applyTranscriptActivities(cell.fold, current.value.items);
+  cell.fold = applyTranscriptActivities(cell.fold, current.value.items);
   cell.result = AsyncResult.success(
     {
       done: current.value.done,
