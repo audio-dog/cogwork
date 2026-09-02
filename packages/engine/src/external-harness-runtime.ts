@@ -101,6 +101,7 @@ export interface ExternalHarnessResolvedRequest {
   readonly instructions: ReadonlyArray<RunPlanInstruction>;
   readonly operatingInstructions: RunPlanOperatingInstructions;
   readonly mcp: ReadonlyArray<ResolvedMcpSkill>;
+  readonly mcpServers: ReadonlyArray<ProjectedMcpServer>;
   readonly secrets: ExternalHarnessSecrets;
   readonly checkout: ExternalHarnessCheckout;
   readonly prompt: ReadonlyArray<RunPlanMessage>;
@@ -132,7 +133,8 @@ export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
   /**
    * Replaces the default `mcpSkill` Workspace entries when the installed
    * adapter's own MCP projection cannot keep credentials out of the checkout.
-   * The returned skills still travel through the one Harness Workspace.
+   * A descriptor may instead consume `request.mcpServers` directly and return
+   * no Workspace skills.
    */
   readonly mcpProjection?: (servers: ReadonlyArray<ProjectedMcpServer>) => ReadonlyArray<WorkspaceSkill>;
   readonly messages?: (
@@ -248,7 +250,7 @@ const mcpWorkspaceProjection = (
   const secretValues = Object.fromEntries(request.mcp.flatMap(mcpSecretEntry));
   const secrets = createSecrets(secretValues);
   const skills = transport.mcpProjection
-    ? [...transport.mcpProjection(request.mcp.map(projectedMcpServer))]
+    ? [...transport.mcpProjection(request.mcpServers)]
     : request.mcp.map((server) => mcpSkill(server.name, mcpSkillConfig(secrets, server)));
   return { secrets, skills, hasSecrets: Object.keys(secretValues).length > 0 };
 };
@@ -387,6 +389,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
 ) {
   const resumeHandle = yield* resolveResumeHandle(request.session);
   const gitDirectory = yield* sharedGitDirectory(descriptor, request.plan.sandbox.workspace);
+  const mcp = resolvedMcpSkills(request);
   return {
     identity: { run: request.plan.id, session: request.session, resumeHandle },
     selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
@@ -394,7 +397,8 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     policy: request.plan.harness.profile,
     instructions: request.plan.instructions,
     operatingInstructions: request.plan.operatingInstructions,
-    mcp: resolvedMcpSkills(request),
+    mcp,
+    mcpServers: mcp.map(projectedMcpServer),
     secrets: { mcp: request.mcpCredentials },
     checkout: { path: request.plan.sandbox.workspace, sharedGitDirectory: gitDirectory },
     prompt: request.plan.messages,
