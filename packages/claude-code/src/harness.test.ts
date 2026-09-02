@@ -430,7 +430,7 @@ describe("Claude Code Harness", () => {
           assert.strictEqual(capture.settingSources, "user,project");
           assert.notInclude(capture.settingSources ?? "", "local");
           assert.strictEqual(capture.authMode, "host");
-          assert.strictEqual(capture.permissionMode, "default");
+          assert.strictEqual(capture.permissionMode, "bypassPermissions");
           assert.isNull(capture.apiKey);
           assert.isNull(capture.authToken);
           assert.notInclude(capture.files, ".mcp.json");
@@ -494,7 +494,7 @@ describe("Claude Code Harness", () => {
         assert.include(capture.args, "--disallowedTools");
         assert.include(capture.args.join(" "), "Write,Edit,MultiEdit");
         assert.include(capture.args.join(" "), "NotebookEdit");
-        assert.strictEqual(capture.permissionMode, "default");
+        assert.strictEqual(capture.permissionMode, "acceptEdits");
         assert.include(capture.args, "--permission-prompt-tool");
       }),
     );

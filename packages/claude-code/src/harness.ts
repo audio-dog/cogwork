@@ -314,7 +314,6 @@ const adapterConfig = (
   const mcp = mcpProjection(request.mcp);
   return {
     authMode: "host",
-    permissionMode: "default",
     settingSources: ["user", "project"],
     emitDiff: true,
     // "." instead of the adapter's virtual `/workspace` default: the Sandbox
