@@ -1,0 +1,26 @@
+packages/process-diagnostics/package.json
+  s_e56f2f08236ec0::t_a58609c4ed8377 14
+  s_e56f2f08236ec0::t_441d9711ffce85 1-13,15-23
+apps/cli/package.json
+  s_e56f2f08236ec0::t_6a866f9fdf4563 19
+apps/desktop/package.json
+  s_e56f2f08236ec0::t_5eee8f97b44a41 30
+pnpm-lock.yaml
+  s_e56f2f08236ec0::t_72714899edf20b 111-113,178-180,472-493,7261,7279,7289,7311,7319
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1b7eae0b732a18dcfbd0ad863a39ec05dfd016e8",
+  "prompts": {},
+  "sessions": {
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
