@@ -21,7 +21,7 @@ import { contextFsLayer, gitLayer, worktreeFsLayer } from "./platform";
 const testLayer = gitLayer.pipe(Layer.provideMerge(NodeServices.layer));
 const interruptionGate = Latch.makeUnsafe();
 
-const isolated = {
+const gitFixtureEnvironment = {
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_AUTHOR_NAME: "cogwork-test",
@@ -169,11 +169,16 @@ const denied = (method: string, target: string) =>
     pathOrDescriptor: target,
   });
 
-const setupFixture = Effect.fn("test.setupFixture")(function* (cwd: string, script: string) {
+const executeFixtureCommand = Effect.fn("test.executeFixtureCommand")(function* (
+  cwd: string,
+  script: string,
+) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const exitCode = yield* spawner.exitCode(ChildProcess.make(script, { cwd, shell: true, env: isolated }));
+  const exitCode = yield* spawner.exitCode(
+    ChildProcess.make(script, { cwd, shell: true, env: gitFixtureEnvironment }),
+  );
   if (exitCode === 0) return;
-  return yield* Effect.die(new Error(`fixture setup failed (${exitCode}) in ${cwd}: ${script}`));
+  return yield* Effect.die(new Error(`fixture failed (${exitCode}) in ${cwd}: ${script}`));
 });
 
 const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwd: string, script: string) {
@@ -181,7 +186,7 @@ const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwd: strin
   const path = yield* Path.Path;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const topLevel = yield* spawner.string(
-    ChildProcess.make("git rev-parse --show-toplevel", { cwd, shell: true, env: isolated }),
+    ChildProcess.make("git rev-parse --show-toplevel", { cwd, shell: true, env: gitFixtureEnvironment }),
   );
   const repositoryRoot = topLevel.trim();
   if (!repositoryRoot)
@@ -197,9 +202,7 @@ const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwd: strin
       new Error(`fixture repository ${realRepositoryRoot} is outside fixture root ${realFixtureRoot}`),
     );
 
-  const exitCode = yield* spawner.exitCode(ChildProcess.make(script, { cwd, shell: true, env: isolated }));
-  if (exitCode === 0) return;
-  return yield* Effect.die(new Error(`fixture failed (${exitCode}) in ${cwd}: ${script}`));
+  return yield* executeFixtureCommand(cwd, script);
 });
 
 describe("real git fixture confinement", () => {
@@ -211,8 +214,8 @@ describe("real git fixture confinement", () => {
       const outsideRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-git-outside-" });
       const sentinel = path.join(outsideRoot, "escaped");
 
-      yield* setupFixture(fixtureRoot, "git init -q");
-      yield* setupFixture(outsideRoot, "git init -q");
+      yield* executeFixtureCommand(fixtureRoot, "git init -q");
+      yield* executeFixtureCommand(outsideRoot, "git init -q");
 
       const cause = yield* Effect.flip(
         shell(fixtureRoot, outsideRoot, `touch ${sentinel}`).pipe(Effect.sandbox),
@@ -515,8 +518,8 @@ const fixture = Effect.fn("test.fixture")(function* (branch: string) {
   const checkout = path.join(root, "checkout");
   const peer = path.join(root, "peer");
 
-  yield* setupFixture(root, `git init -q --bare ${remote}`);
-  yield* setupFixture(root, `git -c init.defaultBranch=main clone -q ${remote} checkout`);
+  yield* executeFixtureCommand(root, `git init -q --bare ${remote}`);
+  yield* executeFixtureCommand(root, `git -c init.defaultBranch=main clone -q ${remote} checkout`);
   yield* shell(
     root,
     checkout,
@@ -527,7 +530,7 @@ const fixture = Effect.fn("test.fixture")(function* (branch: string) {
     checkout,
     `git worktree add -q -B ${branch} ${path.join(root, "wt")} origin/main && cd ${path.join(root, "wt")} && echo work > work.txt && git add -A && git commit -qm work && git push -q origin ${branch}`,
   );
-  yield* setupFixture(root, `git clone -q ${remote} peer`);
+  yield* executeFixtureCommand(root, `git clone -q ${remote} peer`);
 
   return { root, checkout, worktree: path.join(root, "wt"), peer, branch };
 });
