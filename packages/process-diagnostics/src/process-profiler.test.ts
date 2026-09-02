@@ -1,18 +1,27 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { makeProcessProfiler, type ProcessInspector, type ProcessProfilerPlatform } from "./process-profiler";
+import {
+  makeProcessProfiler,
+  type ProcessInspector,
+  ProcessProfileError,
+  type ProcessProfilerPlatform,
+} from "./process-profiler";
 
-const makeProbe = () => {
+const takeHeapSnapshot: ProcessInspector["takeHeapSnapshot"] = (write) =>
+  Effect.sync(() => {
+    write("first");
+    write("second");
+  });
+
+const makeProbe = (captureHeapSnapshot: ProcessInspector["takeHeapSnapshot"] = takeHeapSnapshot) => {
   const calls: string[] = [];
   const files = new Map<string, string>();
   const inspector: ProcessInspector = {
     takeHeapSnapshot: (write) =>
       Effect.sync(() => {
         calls.push("heap");
-        write("first");
-        write("second");
-      }),
+      }).pipe(Effect.andThen(captureHeapSnapshot(write))),
     startCpuProfile: Effect.sync(() => calls.push("cpu:start")),
     stopCpuProfile: Effect.sync(() => {
       calls.push("cpu:stop");
@@ -27,6 +36,7 @@ const makeProbe = () => {
       Effect.sync(() => calls.push("disconnect")),
     ),
     ensureDirectory: (directory) => Effect.sync(() => calls.push(`mkdir:${directory}`)),
+    removeFile: (path) => Effect.sync(() => calls.push(`remove:${path}`)),
     writeFile: (path, contents) => Effect.sync(() => files.set(path, contents)),
     writeChunks: (path, produce) => {
       const chunks: string[] = [];
@@ -68,6 +78,31 @@ describe("ProcessProfiler", () => {
       );
       assert.deepStrictEqual(profile, { nodes: [{ id: 1 }] });
       assert.deepStrictEqual(probe.calls, ["mkdir:/diagnostics", "cpu:start", "cpu:stop", "disconnect"]);
+    }),
+  );
+
+  it.effect("removes a partial heap snapshot after capture fails", () =>
+    Effect.gen(function* () {
+      const probe = makeProbe((write) =>
+        Effect.sync(() => write("partial")).pipe(
+          Effect.andThen(
+            Effect.fail(ProcessProfileError.make({ operation: "capture heap", cause: "failed" })),
+          ),
+        ),
+      );
+      yield* Effect.flip(
+        probe.profiler.capture({
+          _tag: "HeapSnapshot",
+          directory: "/diagnostics",
+        }),
+      );
+
+      assert.deepStrictEqual(probe.calls, [
+        "mkdir:/diagnostics",
+        "heap",
+        "remove:/diagnostics/Heap.42.1234.heapsnapshot",
+        "disconnect",
+      ]);
     }),
   );
 });

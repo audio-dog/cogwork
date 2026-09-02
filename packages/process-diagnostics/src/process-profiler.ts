@@ -1,6 +1,7 @@
 import { Session } from "node:inspector/promises";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
@@ -35,6 +36,7 @@ export interface ProcessProfilerPlatform {
   readonly currentTimeMillis: Effect.Effect<number>;
   readonly openInspector: Effect.Effect<ProcessInspector, ProcessProfileError, Scope.Scope>;
   readonly ensureDirectory: (directory: string) => Effect.Effect<void, ProcessProfileError>;
+  readonly removeFile: (path: string) => Effect.Effect<void, ProcessProfileError>;
   readonly writeFile: (path: string, contents: string) => Effect.Effect<void, ProcessProfileError>;
   readonly writeChunks: (
     path: string,
@@ -55,8 +57,15 @@ const profilePath = (platform: ProcessProfilerPlatform, input: ProcessProfileInp
 
 const profileError = (operation: string) => (cause: unknown) =>
   ProcessProfileError.make({ operation, cause });
+const removeFailedProfile =
+  (platform: ProcessProfilerPlatform, target: string) => (exit: Exit.Exit<string, ProcessProfileError>) => {
+    if (Exit.isSuccess(exit)) return Effect.void;
+    return platform.removeFile(target).pipe(Effect.ignore);
+  };
 const inspectorCommandTimeout = "5 seconds";
 const heapSnapshotTimeout = "110 seconds";
+const profileDirectoryMode = 0o700;
+const profileFileMode = 0o600;
 
 export const makeProcessProfiler = (platform: ProcessProfilerPlatform) => {
   const captureHeapSnapshot = (path: string, inspector: ProcessInspector) =>
@@ -83,7 +92,7 @@ export const makeProcessProfiler = (platform: ProcessProfilerPlatform) => {
     return yield* ProcessProfileInput.match(input, {
       HeapSnapshot: () => captureHeapSnapshot(path, inspector),
       CpuProfile: ({ durationMillis }) => captureCpuProfile(path, inspector, durationMillis ?? 30_000),
-    });
+    }).pipe(Effect.onExit(removeFailedProfile(platform, path)));
   });
 
   return { capture: (input: ProcessProfileInput) => Effect.scoped(capture(input)) };
@@ -139,6 +148,14 @@ function acquireInspector() {
 export const makeLiveProcessProfiler = Effect.fn("ProcessProfiler.live")(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const removePartial = (target: string) =>
+    fs.remove(target, { force: true }).pipe(Effect.mapError(profileError("remove partial profile")));
+  const secureFile = (target: string) =>
+    fs.chmod(target, profileFileMode).pipe(Effect.mapError(profileError("secure profile")));
+  const finishChunks = (target: string, exit: Exit.Exit<void, ProcessProfileError>) => {
+    if (Exit.isSuccess(exit)) return secureFile(target);
+    return Effect.void;
+  };
 
   return makeProcessProfiler({
     pid: process.pid,
@@ -147,10 +164,16 @@ export const makeLiveProcessProfiler = Effect.fn("ProcessProfiler.live")(functio
     openInspector: acquireInspector(),
     ensureDirectory: (directory) =>
       fs
-        .makeDirectory(directory, { recursive: true })
-        .pipe(Effect.mapError(profileError("create diagnostics directory"))),
+        .makeDirectory(directory, { recursive: true, mode: profileDirectoryMode })
+        .pipe(
+          Effect.andThen(fs.chmod(directory, profileDirectoryMode)),
+          Effect.mapError(profileError("secure diagnostics directory")),
+        ),
+    removeFile: removePartial,
     writeFile: (target, contents) =>
-      fs.writeFileString(target, contents).pipe(Effect.mapError(profileError("write profile"))),
+      fs
+        .writeFileString(target, contents, { flag: "w", mode: profileFileMode })
+        .pipe(Effect.andThen(secureFile(target)), Effect.mapError(profileError("write profile"))),
     writeChunks: (target, produce) =>
       Effect.acquireUseRelease(
         Effect.try({
@@ -176,11 +199,11 @@ export const makeLiveProcessProfiler = Effect.fn("ProcessProfiler.live")(functio
             ),
           );
         },
-        (writer) =>
+        (writer, exit) =>
           Effect.try({
             try: writer.close,
             catch: profileError("close heap snapshot"),
-          }),
+          }).pipe(Effect.andThen(finishChunks(target, exit))),
       ),
   });
 });

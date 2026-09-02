@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { makeLiveProcessProfiler, type ProcessProfileInput } from "@cogwork/process-diagnostics";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -100,7 +100,8 @@ const makeMainLayer = () => {
 };
 
 const bootstrap = () => {
-  mkdirSync(diagnosticsDirectory, { recursive: true });
+  mkdirSync(diagnosticsDirectory, { recursive: true, mode: 0o700 });
+  chmodSync(diagnosticsDirectory, 0o700);
   crashReporter.start({ uploadToServer: false });
   app.whenReady().then(async () => {
     const runtime = ManagedRuntime.make(makeMainLayer());
