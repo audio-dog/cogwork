@@ -8,7 +8,7 @@ import {
   type ClaudeCodeTextProviderOptions,
   claudeCodeText,
 } from "@tanstack/ai-claude-code";
-import { fileSkill, type SandboxHandle, type WorkspaceSkill } from "@tanstack/ai-sandbox";
+import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 
@@ -275,34 +275,34 @@ const turnDiagnostics = (cause: unknown) => {
   return harnessError("turn", true, message);
 };
 
-// Cogwork-owned name: a repository's own `.mcp.json` stays untouched ambient
-// state, and without the `--mcp-config` flag Claude never reads this file.
-const mcpConfigFile = ".cogwork-mcp.json";
-
 const mcpServerEntry = (server: ExternalHarnessRuntime.ProjectedMcpServer) =>
   [
     server.name,
     {
       type: "http",
       url: server.url,
-      // Claude expands `${VAR}` from its process environment, where the shared
-      // runtime resolved the token; the checkout only ever holds the reference.
       ...(server.bearerEnvironment === null
         ? {}
         : { headers: { Authorization: `Bearer \${${server.bearerEnvironment}}` } }),
     },
   ] as const;
 
-const mcpProjection = (
-  servers: ReadonlyArray<ExternalHarnessRuntime.ProjectedMcpServer>,
-): ReadonlyArray<WorkspaceSkill> => {
-  if (servers.length === 0) return [];
-  const content = JSON.stringify({ mcpServers: Object.fromEntries(servers.map(mcpServerEntry)) }, null, 2);
-  return [fileSkill({ path: mcpConfigFile, content })];
+const inlineMcpConfig = (servers: ReadonlyArray<ExternalHarnessRuntime.ProjectedMcpServer>) => {
+  if (servers.length === 0) return "";
+  return JSON.stringify({ mcpServers: Object.fromEntries(servers.map(mcpServerEntry)) }).replaceAll(
+    " ",
+    "\\u0020",
+  );
 };
 
-const adapterConfig = (executable: string, request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
-  ({
+const mcpProjection = () => [];
+
+const adapterConfig = (
+  executable: string,
+  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+) => {
+  const mcpConfig = inlineMcpConfig(request.mcpServers);
+  return {
     authMode: "host",
     permissionMode: "default",
     settingSources: ["user", "project"],
@@ -312,15 +312,13 @@ const adapterConfig = (executable: string, request: ExternalHarnessRuntime.Exter
     // strings, so the post-run `git -C <cwd> diff` only sees the prepared
     // checkout when cwd already resolves there.
     cwd: ".",
-    // The adapter splits this on spaces into leading argv, which is the only
-    // channel it exposes for the `--mcp-config` flag; Claude accepts repeated
-    // occurrences, so the adapter's own tool-bridge config still applies.
-    claudeExecutable: request.mcp.length > 0 ? `${executable} --mcp-config ${mcpConfigFile}` : executable,
+    claudeExecutable: mcpConfig.length > 0 ? `${executable} --mcp-config ${mcpConfig}` : executable,
     // Upstream maps a write-deny policy to Write/Edit/MultiEdit but misses
     // NotebookEdit; close that write path for read-only Operations.
     ...(request.policy === "read-only" ? { disallowedTools: ["NotebookEdit"] } : {}),
     ...(request.checkout.sharedGitDirectory ? { addDirs: [request.checkout.sharedGitDirectory] } : {}),
-  }) satisfies ClaudeCodeTextConfig;
+  } satisfies ClaudeCodeTextConfig;
+};
 
 const providerOptions = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
   ({

@@ -17,7 +17,7 @@ The ownership boundary for an opaque Claude session handle. Resume is allowed on
 _Avoid_: Transcript replay, cross-worktree resume
 
 **MCP config projection**:
-The Run's MCP servers travel as one Harness Workspace file skill: a Cogwork-owned `.cogwork-mcp.json` at the checkout root, handed to Claude with `--mcp-config`. The file holds only URLs and `${...}` environment references. The shared runtime resolves each bearer token onto the live Sandbox environment, and the engine removes the file after the Run. A repository's own `.mcp.json` is untouched ambient state.
+The Run's MCP servers travel through Claude's inline `--mcp-config` argument. The JSON holds only URLs and `${...}` environment references, so no generated MCP file can enter the driven checkout. The shared runtime resolves each bearer token onto the live Sandbox environment. A repository's own `.mcp.json` is untouched ambient state.
 _Avoid_: `.mcp.json` (that name belongs to the repository), credential file, adapter patch
 
 **Ambient Claude state**:

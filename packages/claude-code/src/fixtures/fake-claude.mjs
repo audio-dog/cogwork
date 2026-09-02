@@ -1,5 +1,9 @@
+import { execFile } from "node:child_process";
 import { once } from "node:events";
 import { readdir, readFile, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
+
+const run = promisify(execFile);
 
 const argument = (prefix) => process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length);
 
@@ -40,13 +44,18 @@ const valueAfter = (flag) => {
 const firstValueAfter = (...flags) => flags.map(valueAfter).find((value) => value !== null) ?? null;
 const environmentValue = (name) => (name ? (process.env[name] ?? null) : null);
 const agents = await readFile(`${process.cwd()}/AGENTS.md`, "utf8").catch(() => "");
-// The first `--mcp-config` value is Cogwork's cwd-relative config file; the
-// adapter's own tool-bridge config arrives as a later occurrence.
-const mcpConfigPath = valueAfter("--mcp-config");
-const mcpConfig = mcpConfigPath
-  ? await readFile(`${process.cwd()}/${mcpConfigPath}`, "utf8").catch(() => null)
-  : null;
+const mcpConfigArgument = valueAfter("--mcp-config");
+const readMcpConfig = () => {
+  if (!mcpConfigArgument) return null;
+  if (mcpConfigArgument.startsWith("{")) return mcpConfigArgument;
+  return readFile(`${process.cwd()}/${mcpConfigArgument}`, "utf8").catch(() => null);
+};
+const mcpConfig = await readMcpConfig();
 const mcpEnvironmentName = mcpConfig?.match(/\$\{([^}]+)\}/)?.[1] ?? null;
+if (process.argv.includes("--commit-mcp-config") && mcpConfigArgument && !mcpConfigArgument.startsWith("{")) {
+  await run("git", ["add", "-f", mcpConfigArgument], { cwd: process.cwd() });
+  await run("git", ["commit", "-m", "commit projected MCP config"], { cwd: process.cwd() });
+}
 if (process.argv.includes("--emit-change")) {
   await writeFile(`${process.cwd()}/tracked.txt`, "changed by Claude\n");
 }
@@ -62,7 +71,7 @@ const capture = {
   authMode: process.argv.includes("--bare") ? "bare" : "host",
   permissionMode: valueAfter("--permission-mode"),
   systemPrompt: firstValueAfter("--append-system-prompt", "--system-prompt"),
-  mcpConfigPath,
+  mcpConfigArgument,
   mcpConfig,
   mcpBearer: environmentValue(mcpEnvironmentName),
   apiKey: process.env.ANTHROPIC_API_KEY ?? null,

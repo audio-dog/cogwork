@@ -245,7 +245,7 @@ const Capture = Schema.Struct({
   authMode: Schema.String,
   permissionMode: Schema.NullOr(Schema.String),
   systemPrompt: Schema.NullOr(Schema.String),
-  mcpConfigPath: Schema.NullOr(Schema.String),
+  mcpConfigArgument: Schema.NullOr(Schema.String),
   mcpConfig: Schema.NullOr(Schema.String),
   mcpBearer: Schema.NullOr(Schema.String),
   apiKey: Schema.NullOr(Schema.String),
@@ -419,7 +419,7 @@ describe("Claude Code Harness", () => {
       "runs host auth with ambient settings, mandatory Workspace projection, native events, and usage",
       () =>
         Effect.gen(function* () {
-          const { handle, harness } = yield* makeLiveHarness(" --emit-change");
+          const { handle, harness } = yield* makeLiveHarness(" --emit-change --commit-mcp-config");
           const events = yield* withInheritedAnthropicEnvironment(
             harness.run(makeRequest(handle.id, { mcp: true })).pipe(Stream.runCollect),
           );
@@ -434,10 +434,11 @@ describe("Claude Code Harness", () => {
           assert.isNull(capture.apiKey);
           assert.isNull(capture.authToken);
           assert.notInclude(capture.files, ".mcp.json");
-          assert.strictEqual(capture.mcpConfigPath, ".cogwork-mcp.json");
-          assert.include(capture.files, ".cogwork-mcp.json");
+          assert.match(capture.mcpConfigArgument ?? "", /^\{"mcpServers":/);
+          assert.notInclude(capture.files, ".cogwork-mcp.json");
           assert.include(mcpConfig, "https://mcp.example.test/readonly");
           assert.include(mcpConfig, "${COGWORK_MCP_");
+          assert.include(mcpConfig, "Bearer\\u0020${COGWORK_MCP_");
           assert.notInclude(mcpConfig, "mcp-test-bearer");
           assert.strictEqual(capture.mcpBearer, "mcp-test-bearer");
           assert.notInclude(capture.args, "--disallowedTools");
@@ -489,7 +490,7 @@ describe("Claude Code Harness", () => {
 
         assert.strictEqual(capture.resume, "fake-claude-session-1");
         assert.isFalse(capture.forkSession);
-        assert.notInclude(capture.args.join(" "), ".cogwork-mcp.json");
+        assert.notMatch(capture.mcpConfigArgument ?? "", /^\{/);
         assert.include(capture.args, "--disallowedTools");
         assert.include(capture.args.join(" "), "Write,Edit,MultiEdit");
         assert.include(capture.args.join(" "), "NotebookEdit");
