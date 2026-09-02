@@ -173,6 +173,36 @@ describe("local telemetry", () => {
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 
+  it.live("updates an existing local store without losing telemetry", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const start = yield* Clock.currentTimeMillis;
+      yield* update(
+        storePath,
+        `CREATE TABLE spans (
+          name TEXT NOT NULL,
+          trace_id TEXT NOT NULL,
+          span_id TEXT NOT NULL,
+          start INTEGER NOT NULL,
+          duration REAL NOT NULL,
+          exit TEXT NOT NULL,
+          attributes TEXT NOT NULL CONSTRAINT spans_attributes_json CHECK (json_valid(attributes))
+        );
+        INSERT INTO spans (name, trace_id, span_id, start, duration, exit, attributes)
+        VALUES ('Telemetry.existing', 'trace', 'span', ${start}, 1, 'success', '{}');`,
+      );
+
+      yield* Effect.void.pipe(Effect.provide(localLayer(storePath)), Effect.scoped);
+
+      assert.isTrue(
+        (yield* query(storePath, "PRAGMA table_info(spans)")).some((column) => column.name === "parent"),
+      );
+      assert.deepEqual(yield* query(storePath, "SELECT name FROM spans WHERE name = 'Telemetry.existing'"), [
+        { name: "Telemetry.existing" },
+      ]);
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
   it.live("flushes a dequeued partial span batch during shutdown", () =>
     Effect.gen(function* () {
       const storePath = yield* temporaryStore();

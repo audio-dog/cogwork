@@ -1,12 +1,15 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import * as DrizzleSqlite from "drizzle-kit/payload/sqlite";
 import { lt, sql } from "drizzle-orm";
 import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node";
 import { check, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import type * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
 import * as Formatter from "effect/Formatter";
 import * as Layer from "effect/Layer";
@@ -17,6 +20,7 @@ import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 import * as Semaphore from "effect/Semaphore";
 import * as Tracer from "effect/Tracer";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 const pageSize = 4096;
 const spanBatchSize = 1000;
@@ -98,29 +102,67 @@ const metricTable = sqliteTable(
   ],
 );
 
-const schemaStatements = [
-  `CREATE TABLE IF NOT EXISTS spans (
-    name TEXT NOT NULL,
-    trace_id TEXT NOT NULL,
-    span_id TEXT NOT NULL,
-    parent TEXT,
-    start INTEGER NOT NULL,
-    duration REAL NOT NULL,
-    exit TEXT NOT NULL,
-    attributes TEXT NOT NULL CONSTRAINT spans_attributes_json CHECK (json_valid(attributes))
-  )`,
-  "CREATE INDEX IF NOT EXISTS spans_name_start ON spans (name, start)",
-  "CREATE INDEX IF NOT EXISTS spans_start ON spans (start)",
-  `CREATE TABLE IF NOT EXISTS metrics (
-    timestamp INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    type TEXT NOT NULL,
-    attributes TEXT NOT NULL CONSTRAINT metrics_attributes_json CHECK (json_valid(attributes)),
-    state TEXT NOT NULL CONSTRAINT metrics_state_json CHECK (json_valid(state))
-  )`,
-  "CREATE INDEX IF NOT EXISTS metrics_name_timestamp ON metrics (name, timestamp)",
-  "CREATE INDEX IF NOT EXISTS metrics_timestamp ON metrics (timestamp)",
-];
+const telemetryStoreSchema = { spanTable, metricTable };
+
+class TelemetryStoreSchemaError extends Data.TaggedError("TelemetryStoreSchemaError")<{
+  readonly message: string;
+}> {}
+
+const telemetryStoreSchemaStatements = Effect.fn("TelemetryStore.schemaStatements")(function* () {
+  const sqlClient = yield* SqlClient.SqlClient;
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const runPromise = yield* FiberSet.makeRuntimePromise();
+      const database = {
+        query: <T = never>(query: string, params: ReadonlyArray<unknown> = []) =>
+          runPromise(sqlClient.unsafe<T & object>(query, params)).then((rows) => rows.map((row) => row)),
+        run: (query: string) => runPromise(sqlClient.unsafe(query)).then(() => undefined),
+        batch: (statements: ReadonlyArray<string>) =>
+          runPromise(
+            Effect.forEach(statements, (statement) => sqlClient.unsafe(statement), {
+              discard: true,
+            }),
+          ).then(() => undefined),
+      };
+      const result = yield* Effect.tryPromise({
+        try: () => DrizzleSqlite.pushSchema(telemetryStoreSchema, database),
+        catch: (error) =>
+          new TelemetryStoreSchemaError({
+            message: `Telemetry store schema diff failed: ${String(error)}`,
+          }),
+      });
+      return result.sqlStatements;
+    }),
+  );
+});
+
+const foreignKeysPragma = /^PRAGMA foreign_keys\s*=\s*(?:ON|OFF);?$/i;
+
+const applySchemaStatements = Effect.fn("TelemetryStore.applySchemaStatements")(function* (
+  statements: ReadonlyArray<string>,
+) {
+  if (statements.length === 0) return;
+  const sqlClient = yield* SqlClient.SqlClient;
+  const schemaChanges = statements.filter((statement) => !foreignKeysPragma.test(statement));
+  const disablesForeignKeys = statements.some((statement) => /foreign_keys\s*=\s*OFF/i.test(statement));
+  const applyChanges = sqlClient.withTransaction(
+    Effect.forEach(schemaChanges, (statement) => sqlClient.unsafe(statement), { discard: true }),
+  );
+  if (!disablesForeignKeys) return yield* applyChanges;
+  yield* sqlClient.unsafe("PRAGMA foreign_keys = OFF");
+  yield* applyChanges.pipe(Effect.ensuring(Effect.ignore(sqlClient.unsafe("PRAGMA foreign_keys = ON"))));
+});
+
+const convergeSchema = Effect.fn("TelemetryStore.convergeSchema")(function* () {
+  const statements = yield* telemetryStoreSchemaStatements();
+  if (statements.length === 0) return;
+  yield* applySchemaStatements(statements);
+  const remaining = yield* telemetryStoreSchemaStatements();
+  if (remaining.length === 0) return;
+  return yield* new TelemetryStoreSchemaError({
+    message: `Telemetry store schema did not converge:\n${remaining.join("\n")}`,
+  });
+});
 
 const prepareStoreDirectory = Effect.fn("TelemetryStore.prepareDirectory")(function* (storePath: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -287,7 +329,7 @@ const makeStore = Effect.fn("TelemetryStore.make")(function* (options: LocalTele
   const maxPages = Math.max(1, Math.floor(options.sizeCapBytes / pageSize));
   yield* db.run(`PRAGMA page_size = ${pageSize}`);
   yield* db.run(`PRAGMA max_page_count = ${maxPages}`);
-  yield* Effect.forEach(schemaStatements, (statement) => db.run(statement), { discard: true });
+  yield* convergeSchema();
   yield* fs.chmod(options.storePath, 0o600);
 
   const instrumentWrite =
