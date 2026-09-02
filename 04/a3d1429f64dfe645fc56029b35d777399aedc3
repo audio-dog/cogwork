@@ -1,0 +1,19 @@
+f.txt
+  s_9a302e730a7fe8::t_155cc4bbe00ff0 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "04a3d1429f64dfe645fc56029b35d777399aedc3",
+  "prompts": {},
+  "sessions": {
+    "s_9a302e730a7fe8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0631d-3873-7d72-93c0-551bf7751c45",
+        "model": "gpt-5.4"
+      },
+      "human_author": "agent <agent@example.com>"
+    }
+  }
+}
