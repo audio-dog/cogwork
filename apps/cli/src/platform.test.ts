@@ -568,6 +568,39 @@ describe("gitLayer against a real repository", () => {
       }).pipe(Effect.scoped),
     );
 
+    it.effect("does not report a completed rebase with leftover REBASE_HEAD", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { worktree, branch } = yield* conflictedFixture("434-completed-rebase-probe");
+
+        yield* shell(
+          worktree,
+          `git rebase origin/${branch} >/dev/null 2>&1 || test -f "$(git rev-parse --git-path REBASE_HEAD)"`,
+        );
+        yield* shell(
+          worktree,
+          `echo resolved > shared.txt && git add shared.txt && GIT_EDITOR=true git rebase --continue >/dev/null && test -f "$(git rev-parse --git-path REBASE_HEAD)"`,
+        );
+
+        assert.isNull(yield* git.operationInProgress(worktree));
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("does not report an aborted rebase", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { worktree, branch } = yield* conflictedFixture("434-aborted-rebase-probe");
+
+        yield* shell(
+          worktree,
+          `git rebase origin/${branch} >/dev/null 2>&1 || test -f "$(git rev-parse --git-path REBASE_HEAD)"`,
+        );
+        yield* shell(worktree, "git rebase --abort");
+
+        assert.isNull(yield* git.operationInProgress(worktree));
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("does not report git am as a rebase", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
