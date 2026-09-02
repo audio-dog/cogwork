@@ -12,6 +12,7 @@ import {
 } from "@cogwork/contracts";
 import { bootControlStoreLayer, DaemonEventBus, RunLedger } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { assert, describe, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
