@@ -1,0 +1,39 @@
+packages/engine/CONTEXT.md
+  s_40b75154cfcc59::t_54812ba4743960 97
+packages/engine/src/external-harness-runtime.test.ts
+  s_40b75154cfcc59::t_7af201f7cbba5a 644,654-655,657-662
+  s_40b75154cfcc59::t_a4c9cb04854401 19
+  s_40b75154cfcc59::t_8b61871d7a7572 677
+  s_40b75154cfcc59::t_111919439d35ea 722-724
+  s_40b75154cfcc59::t_6492ea53af77f5 34
+  s_40b75154cfcc59::t_f3ca2608e30a4b 637-643,645-653,656,663-676,678-719,721,725-727
+  s_40b75154cfcc59::t_09a150a3c3bee9 720
+packages/engine/src/external-harness-runtime.ts
+  s_40b75154cfcc59::t_cc977e8fda30b3 422-423,427,445-446
+  s_40b75154cfcc59::t_ca6969a218d276 424-426,434,436-443
+  s_40b75154cfcc59::t_a6625676e393f2 435
+  s_40b75154cfcc59::t_e79c726bf79806 584-585
+  s_40b75154cfcc59::t_d84d7ce5141758 245
+  s_40b75154cfcc59::t_ee1c7e9c35feb5 33
+  s_40b75154cfcc59::t_49ad04111fa73d 117-128,132-137
+  s_40b75154cfcc59::t_336327f3ff74af 251
+  s_40b75154cfcc59::t_c175de003cc960 238-244,246-247,250,252,260
+  s_40b75154cfcc59::t_9911b11c637c62 428-429,431-433,444
+  s_40b75154cfcc59::t_31a3106124cc44 430
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "131a8f3e50dbcf5faa8cc07900dd7a82ad4259f1",
+  "prompts": {},
+  "sessions": {
+    "s_40b75154cfcc59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2be7ad5a-e4c7-45fc-acc5-c8b4572c836e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
