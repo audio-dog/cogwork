@@ -1,6 +1,7 @@
 import { ContextFs, Git, WorktreeFs } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -20,7 +21,14 @@ import { contextFsLayer, gitLayer, worktreeFsLayer } from "./platform";
 const testLayer = gitLayer.pipe(Layer.provideMerge(NodeServices.layer));
 const interruptionGate = Latch.makeUnsafe();
 
-const isolated = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" };
+const isolated = {
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_AUTHOR_NAME: "cogwork-test",
+  GIT_AUTHOR_EMAIL: "cogwork-test@invalid",
+  GIT_COMMITTER_NAME: "cogwork-test",
+  GIT_COMMITTER_EMAIL: "cogwork-test@invalid",
+};
 
 const processHandle = (
   exitCode: Effect.Effect<ChildProcessSpawner.ExitCode>,
@@ -161,11 +169,64 @@ const denied = (method: string, target: string) =>
     pathOrDescriptor: target,
   });
 
-const shell = Effect.fn("test.shell")(function* (cwd: string, script: string) {
+const initializeFixtureRoot = Effect.fn("test.initializeFixtureRoot")(function* (root: string) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const exitCode = yield* spawner.exitCode(
+    ChildProcess.make("git init -q", { cwd: root, shell: true, env: isolated }),
+  );
+  if (exitCode === 0) return;
+  return yield* Effect.die(new Error(`fixture root initialization failed (${exitCode}) in ${root}`));
+});
+
+const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwd: string, script: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const topLevel = yield* spawner.string(
+    ChildProcess.make("git rev-parse --show-toplevel", { cwd, shell: true, env: isolated }),
+  );
+  const repositoryRoot = topLevel.trim();
+  if (!repositoryRoot)
+    return yield* Effect.die(new Error(`fixture working directory ${cwd} is not in a repository`));
+
+  const [realFixtureRoot, realRepositoryRoot] = yield* Effect.all([
+    fs.realPath(fixtureRoot),
+    fs.realPath(repositoryRoot),
+  ]);
+  const relative = path.relative(realFixtureRoot, realRepositoryRoot);
+  if (relative !== "" && (relative.startsWith("..") || path.isAbsolute(relative)))
+    return yield* Effect.die(
+      new Error(`fixture repository ${realRepositoryRoot} is outside fixture root ${realFixtureRoot}`),
+    );
+
   const exitCode = yield* spawner.exitCode(ChildProcess.make(script, { cwd, shell: true, env: isolated }));
   if (exitCode === 0) return;
   return yield* Effect.die(new Error(`fixture failed (${exitCode}) in ${cwd}: ${script}`));
+});
+
+describe("real git fixture confinement", () => {
+  it.effect("rejects a repository outside the fixture root before running its script", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const fixtureRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-git-fixture-" });
+      const outsideRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-git-outside-" });
+      const sentinel = path.join(outsideRoot, "escaped");
+
+      yield* initializeFixtureRoot(fixtureRoot);
+      yield* spawner.exitCode(
+        ChildProcess.make("git init -q", { cwd: outsideRoot, env: isolated, shell: true }),
+      );
+
+      const cause = yield* Effect.flip(
+        shell(fixtureRoot, outsideRoot, `touch ${sentinel}`).pipe(Effect.sandbox),
+      );
+
+      assert.include(Cause.pretty(cause), "outside fixture root");
+      assert.isFalse(yield* fs.exists(sentinel));
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
 });
 
 describe("subprocess deadlines", () => {
@@ -451,8 +512,6 @@ describe("worktree removal", () => {
   );
 });
 
-const identity = "git config user.email agent@example.com && git config user.name agent";
-
 const fixture = Effect.fn("test.fixture")(function* (branch: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -461,33 +520,38 @@ const fixture = Effect.fn("test.fixture")(function* (branch: string) {
   const checkout = path.join(root, "checkout");
   const peer = path.join(root, "peer");
 
-  yield* shell(root, `git init -q --bare ${remote}`);
-  yield* shell(root, `git -c init.defaultBranch=main clone -q ${remote} checkout`);
+  yield* initializeFixtureRoot(root);
+  yield* shell(root, root, `git init -q --bare ${remote}`);
+  yield* shell(root, root, `git -c init.defaultBranch=main clone -q ${remote} checkout`);
   yield* shell(
+    root,
     checkout,
-    `${identity} && git checkout -q -b main && echo base > base.txt && git add -A && git commit -qm base && git push -q -u origin main`,
+    "git checkout -q -b main && echo base > base.txt && git add -A && git commit -qm base && git push -q -u origin main",
   );
   yield* shell(
+    root,
     checkout,
     `git worktree add -q -B ${branch} ${path.join(root, "wt")} origin/main && cd ${path.join(root, "wt")} && echo work > work.txt && git add -A && git commit -qm work && git push -q origin ${branch}`,
   );
-  yield* shell(root, `git clone -q ${remote} peer`);
-  yield* shell(peer, identity);
+  yield* shell(root, root, `git clone -q ${remote} peer`);
 
-  return { checkout, worktree: path.join(root, "wt"), peer, branch };
+  return { root, checkout, worktree: path.join(root, "wt"), peer, branch };
 });
 
 const conflictedFixture = Effect.fn("test.conflictedFixture")(function* (branch: string) {
   const state = yield* fixture(branch);
   yield* shell(
+    state.root,
     state.worktree,
     "echo base > shared.txt && git add -A && git commit -qm shared && git push -q origin HEAD",
   );
   yield* shell(
+    state.root,
     state.peer,
     `git fetch -q origin && git checkout -q -B ${branch} origin/${branch} && echo theirs > shared.txt && git add -A && git commit -qm theirs && git push -q origin HEAD`,
   );
   yield* shell(
+    state.root,
     state.worktree,
     "echo ours > shared.txt && git add -A && git commit -qm ours && git fetch -q origin",
   );
@@ -510,6 +574,18 @@ const operationFixtures: ReadonlyArray<{
 
 describe("gitLayer against a real repository", () => {
   layer(testLayer)((it) => {
+    it.effect("keeps identity out of the fixture repository config", () =>
+      Effect.gen(function* () {
+        const { root, checkout } = yield* fixture("437-environment-identity");
+
+        yield* shell(
+          root,
+          checkout,
+          `test -z "$(git config --local --get-regexp '^user\\.')" && test "$(git log -1 --format='%an <%ae>')" = "cogwork-test <cogwork-test@invalid>"`,
+        );
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("clears a prunable registration so its worktree can be recreated", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
@@ -537,9 +613,10 @@ describe("gitLayer against a real repository", () => {
       ({ operation, head, command }) =>
         Effect.gen(function* () {
           const git = yield* Git.Git;
-          const { worktree, branch } = yield* conflictedFixture(`84-${operation}-probe`);
+          const { root, worktree, branch } = yield* conflictedFixture(`84-${operation}-probe`);
 
           yield* shell(
+            root,
             worktree,
             `${command(branch)} >/dev/null 2>&1 || test -f "$(git rev-parse --git-path ${head})"`,
           );
@@ -554,9 +631,10 @@ describe("gitLayer against a real repository", () => {
     it.effect("reports a paused rebase without REBASE_HEAD", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
-        const { worktree } = yield* fixture("84-paused-rebase-probe");
+        const { root, worktree } = yield* fixture("84-paused-rebase-probe");
 
         yield* shell(
+          root,
           worktree,
           `GIT_SEQUENCE_EDITOR=true git rebase -i --exec false HEAD~1 >/dev/null 2>&1 || { test -d "$(git rev-parse --git-path rebase-merge)" && test ! -f "$(git rev-parse --git-path REBASE_HEAD)"; }`,
         );
@@ -571,9 +649,10 @@ describe("gitLayer against a real repository", () => {
     it.effect("does not report git am as a rebase", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
-        const { worktree } = yield* fixture("84-git-am-probe");
+        const { root, worktree } = yield* fixture("84-git-am-probe");
 
         yield* shell(
+          root,
           worktree,
           `echo base > shared.txt && git add -A && git commit -qm shared && echo theirs > shared.txt && git commit -qam theirs && git format-patch -1 --stdout > ../theirs.patch && git reset --hard -q HEAD~1 && echo ours > shared.txt && git commit -qam ours && git am ../theirs.patch >/dev/null 2>&1 || test -f "$(git rev-parse --git-path rebase-apply/applying)"`,
         );
@@ -586,9 +665,9 @@ describe("gitLayer against a real repository", () => {
   it.effect("stops reporting a branch that was deleted on the remote", () =>
     Effect.gen(function* () {
       const git = yield* Git.Git;
-      const { checkout, peer, branch } = yield* fixture("84-diverged-branch");
+      const { root, checkout, peer, branch } = yield* fixture("84-diverged-branch");
 
-      yield* shell(peer, `git push -q origin --delete ${branch}`);
+      yield* shell(root, peer, `git push -q origin --delete ${branch}`);
       assert.isTrue(yield* git.remoteBranchExists(checkout, "origin", branch));
 
       yield* git.fetch(checkout, "origin");
@@ -600,13 +679,14 @@ describe("gitLayer against a real repository", () => {
   it.effect("measures divergence against the fetched remote and replays local commits", () =>
     Effect.gen(function* () {
       const git = yield* Git.Git;
-      const { worktree, peer, branch } = yield* fixture("84-diverged-branch");
+      const { root, worktree, peer, branch } = yield* fixture("84-diverged-branch");
 
       yield* shell(
+        root,
         peer,
         `git checkout -q -b ${branch} origin/${branch} && echo one > one.txt && git add -A && git commit -qm one && echo two > two.txt && git add -A && git commit -qm two && git push -q origin ${branch}`,
       );
-      yield* shell(worktree, "echo ours > ours.txt && git add -A && git commit -qm ours");
+      yield* shell(root, worktree, "echo ours > ours.txt && git add -A && git commit -qm ours");
       yield* git.fetch(worktree, "origin");
 
       assert.deepStrictEqual(yield* git.divergence(worktree, "origin", branch), {
@@ -626,13 +706,14 @@ describe("gitLayer against a real repository", () => {
   it.effect("leaves the branch where it was when a rebase conflicts", () =>
     Effect.gen(function* () {
       const git = yield* Git.Git;
-      const { worktree, peer, branch } = yield* fixture("84-diverged-branch");
+      const { root, worktree, peer, branch } = yield* fixture("84-diverged-branch");
 
       yield* shell(
+        root,
         peer,
         `git checkout -q -b ${branch} origin/${branch} && echo theirs > shared.txt && git add -A && git commit -qm theirs && git push -q origin ${branch}`,
       );
-      yield* shell(worktree, "echo ours > shared.txt && git add -A && git commit -qm ours");
+      yield* shell(root, worktree, "echo ours > shared.txt && git add -A && git commit -qm ours");
       yield* git.fetch(worktree, "origin");
 
       const failure = yield* Effect.flip(git.rebase(worktree, "origin", branch));
