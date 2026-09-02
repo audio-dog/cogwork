@@ -1,0 +1,35 @@
+packages/engine/CONTEXT.md
+  s_7084ecaf41e3f6::t_04439a2973dfde 97
+packages/engine/src/external-harness-runtime.test.ts
+  s_7084ecaf41e3f6::t_9bced39f430028 688-694
+  s_7084ecaf41e3f6::t_c0cb774a6e694c 661
+  s_7084ecaf41e3f6::t_5e27ff76792013 636-660,662-687,695-700
+packages/engine/src/external-harness-runtime.ts
+  s_7084ecaf41e3f6::t_e8e98a8349ec33 242,248
+  s_7084ecaf41e3f6::t_b63151e9355c50 27,29-31
+  s_7084ecaf41e3f6::t_e0838202b8e238 208-212
+  s_7084ecaf41e3f6::t_b62363bfcabf61 228
+  s_7084ecaf41e3f6::t_22e92b364cb6a1 525-529
+  s_7084ecaf41e3f6::t_1d3450b4ca306c 221
+  s_7084ecaf41e3f6::t_6b41c467c43b66 254-256
+  s_7084ecaf41e3f6::t_dbb6a798b12a63 253,257-279
+  s_7084ecaf41e3f6::t_d3a410d1534fa8 122-127
+  s_7084ecaf41e3f6::t_76b48cd7174aa5 249
+  s_7084ecaf41e3f6::t_6f99bc628c3941 280
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "71c03675a21879cb09089eab9e5e2053025bc587",
+  "prompts": {},
+  "sessions": {
+    "s_7084ecaf41e3f6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fdcd0b9-512e-4e1d-a2b0-2b92be3b1607",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
