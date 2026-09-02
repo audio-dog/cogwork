@@ -1,0 +1,23 @@
+apps/cli/src/telemetry-store.ts
+  s_6394507e8d162d::t_a7ab8d932d3413 2-4,65-100,110,118-119,284,288-290,344-349,351,353-354,356,359-366,368-383,386
+  s_6394507e8d162d::t_faaee1d6cb81ba 24-26,161-165,307-311,313-314,325,327-328
+apps/cli/src/telemetry.test.ts
+  s_6394507e8d162d::t_14fdd678da17f0 6,278,283
+  s_6394507e8d162d::t_2bac6114dd1f7d 310-313
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "25f172410be25004b1aa00f3faf9edd641793294",
+  "prompts": {},
+  "sessions": {
+    "s_6394507e8d162d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eed-5dca-7be2-9220-ab2576f5bc8c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
