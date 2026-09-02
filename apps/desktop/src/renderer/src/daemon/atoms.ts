@@ -1,4 +1,10 @@
-import { DaemonRpcs, type RunId, type WorkItemId, type WorkspaceId } from "@cogwork/contracts";
+import {
+  DaemonRpcs,
+  type OperationSettingName,
+  type RunId,
+  type WorkItemId,
+  type WorkspaceId,
+} from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Atom from "effect/unstable/reactivity/Atom";
@@ -61,6 +67,13 @@ export const setSchedulingAtom = DaemonAtomRpc.mutation("SetScheduling");
 export const setDaemonLimitAtom = DaemonAtomRpc.mutation("SetDaemonLimit");
 
 export const setContributionSettingAtom = DaemonAtomRpc.mutation("SetContributionSetting");
+
+// One mutation atom per setting name. `Atom.fn` is non-concurrent, so a second call on the
+// same atom interrupts the first — and choosing a model writes both the harness and the
+// model. A family gives each setting its own fiber, so neither write is lost.
+export const setOperationSettingAtom = Atom.family((_setting: OperationSettingName) =>
+  DaemonAtomRpc.mutation("SetOperationSetting"),
+);
 
 export const pluginsAtom = DaemonAtomRpc.query("GetPlugins", undefined);
 
