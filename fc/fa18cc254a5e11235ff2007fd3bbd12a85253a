@@ -1,0 +1,38 @@
+packages/claude-code/src/harness.ts
+  s_8bc8c2d33b667c::t_c84b60a1051786 35,52-70,170,175,178-179,226,242,326,356,366,413,447
+  s_8bc8c2d33b667c::t_4213c64507b70c 50-51
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_8bc8c2d33b667c::t_4213c64507b70c 109
+packages/claude-code/src/harness.test.ts
+  s_8bc8c2d33b667c::t_c97b9e45348300 133,135,137-145,149
+  s_8bc8c2d33b667c::t_58dec71324a50b 695,697,699,707
+  s_8bc8c2d33b667c::t_29ecb61fe3ba0a 16,109-115,118-123,127,129-131,146
+  s_8bc8c2d33b667c::t_d667283fc96b4d 128
+  s_8bc8c2d33b667c::t_d2e88cc89a073d 721-722,725
+  s_8bc8c2d33b667c::t_4213c64507b70c 730-741
+  s_adbad50efd40b7::t_855f96776c2e00 132,742-743
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "fcfa18cc254a5e11235ff2007fd3bbd12a85253a",
+  "prompts": {},
+  "sessions": {
+    "s_8bc8c2d33b667c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638c-1f6e-7753-9601-dfac58747a5e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_adbad50efd40b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3de78da9-460f-46c7-954a-e6f06aa3992b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
