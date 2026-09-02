@@ -1,0 +1,19 @@
+apps/cli/src/rpc.ts
+  s_8bc8c2d33b667c::t_9204ae5f3850c6 86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dbd1224809fb273e16a3dab74630f5864a7f9ce5",
+  "prompts": {},
+  "sessions": {
+    "s_8bc8c2d33b667c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638c-1f6e-7753-9601-dfac58747a5e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
