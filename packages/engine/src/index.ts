@@ -27,6 +27,7 @@ export * as ReadModel from "./read-model";
 export * as Reconcile from "./reconcile";
 export * as Recovery from "./recovery";
 export * as Registry from "./registry";
+export * as Replay from "./replay-harness";
 export * as RunControl from "./run-control";
 export * as RunLedger from "./run-ledger";
 export * as Scheduler from "./scheduler";
