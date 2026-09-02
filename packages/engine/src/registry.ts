@@ -21,12 +21,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { type ScanAuthoringTreesRequest, scanAuthoringTrees } from "./authoring-tree";
-import {
-  bootControlStoreLayer,
-  ControlStore,
-  controlStoreClientLayer,
-  readOnlyControlStoreClientLayer,
-} from "./control-store";
+import { bootControlStoreLayer, ControlStore, readOnlyControlStoreClientLayer } from "./control-store";
 import {
   emptyRegistry,
   type RegisteredWorkspace,
@@ -628,9 +623,8 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
   );
 
 export const layerAt = (storePath: string, userAgentsDir = `${storePath}.agents`) => {
-  const client = controlStoreClientLayer(storePath);
-  const store = bootControlStoreLayer(storePath).pipe(Layer.provide(client));
-  return layer(storePath, userAgentsDir).pipe(Layer.provideMerge(store), Layer.provide(client));
+  const store = bootControlStoreLayer(storePath);
+  return layer(storePath, userAgentsDir).pipe(Layer.provideMerge(store));
 };
 
 export const readOnlyLayerAt = (storePath: string) =>

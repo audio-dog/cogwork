@@ -31,6 +31,17 @@ import { ReconcileWorker } from "./reconcile";
 import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
 
+const pushSchemaMock = vi.hoisted(() => vi.fn());
+
+vi.mock("drizzle-kit/payload/sqlite", () =>
+  vi
+    .importActual<typeof import("drizzle-kit/payload/sqlite")>("drizzle-kit/payload/sqlite")
+    .then((actual) => {
+      pushSchemaMock.mockImplementation(actual.pushSchema);
+      return { ...actual, pushSchema: pushSchemaMock };
+    }),
+);
+
 const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
@@ -191,14 +202,12 @@ const githubServerTestLayer = () =>
 
 function makeUnavailableServerFixture() {
   return Effect.gen(function* () {
+    pushSchemaMock.mockRejectedValueOnce(new Error("unexpected converge failure"));
     const controlStore = yield* Effect.acquireRelease(
       Effect.sync(() => {
         const dir = mkdtempSync(join(tmpdir(), "cogwork-poisoned-store-"));
         const path = join(dir, "control.db");
         const db = new DatabaseSync(path);
-        db.exec(
-          "CREATE TABLE control_migrations (migration_id INTEGER PRIMARY KEY NOT NULL, created_at datetime NOT NULL DEFAULT current_timestamp, name VARCHAR(255) NOT NULL); INSERT INTO control_migrations (migration_id, name) VALUES (99999999999999, 'from-the-future')",
-        );
         db.close();
         return { dir, path };
       }),
@@ -247,6 +256,7 @@ const unavailableServerTestLayer = () =>
 
 describe("daemon server composition", () => {
   afterEach(() => {
+    pushSchemaMock.mockClear();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
