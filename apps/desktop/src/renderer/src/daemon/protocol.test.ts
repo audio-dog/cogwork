@@ -4,6 +4,7 @@ import { join } from "node:path";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -82,6 +83,7 @@ const makeBridge = (socketPath: string): DaemonRpcBridge & { readonly dispose: (
 
   return {
     connect,
+    disconnect: () => runtime.runPromise(ScopedRef.set(current, Effect.succeed(null))),
     send,
     onData: (listener) => {
       dataListeners.add(listener);
@@ -108,6 +110,7 @@ const makeStalledBridge = () => {
   const connection = Promise.withResolvers<void>();
   const bridge: DaemonRpcBridge = {
     connect: () => connection.promise,
+    disconnect: () => Promise.resolve(),
     send: () => undefined,
     onData: () => () => undefined,
     onClosed: () => () => undefined,
@@ -117,6 +120,7 @@ const makeStalledBridge = () => {
 
 const failingBridge = (cause: Error): DaemonRpcBridge => ({
   connect: () => Promise.reject(cause),
+  disconnect: () => Promise.resolve(),
   send: () => undefined,
   onData: () => () => undefined,
   onClosed: () => () => undefined,
@@ -140,35 +144,63 @@ class FloodBridgeProbe extends Context.Service<
   FloodBridgeProbe,
   {
     readonly bridge: DaemonRpcBridge;
-    readonly flood: (count: number) => void;
+    readonly flood: (count: number) => Effect.Effect<void>;
     readonly connectionCount: Effect.Effect<number>;
+    readonly initialConnectionReady: Effect.Effect<void>;
+    readonly reconnectStarted: Effect.Effect<void>;
+    readonly resumeReconnect: Effect.Effect<void>;
   }
 >()("@cogwork/desktop/test/FloodBridgeProbe") {
   static readonly layer = Layer.effect(
     FloodBridgeProbe,
-    Ref.make(0).pipe(
-      Effect.map((connections) => {
-        const dataListeners = new Set<(frame: Uint8Array) => void>();
-        return {
-          bridge: {
-            connect: () => Effect.runPromise(Ref.update(connections, (count) => count + 1)),
-            send: () => undefined,
-            onData: (listener) => {
-              dataListeners.add(listener);
-              return () => dataListeners.delete(listener);
-            },
-            onClosed: () => () => undefined,
+    Effect.gen(function* () {
+      const connections = yield* Ref.make(0);
+      const connected = yield* Ref.make(false);
+      const initialConnectionReady = yield* Deferred.make<void>();
+      const reconnectStarted = yield* Deferred.make<void>();
+      const resumeReconnect = yield* Deferred.make<void>();
+      const dataListeners = new Set<(frame: Uint8Array) => void>();
+      return {
+        bridge: {
+          connect: () =>
+            Effect.runPromise(
+              Ref.updateAndGet(connections, (count) => count + 1).pipe(
+                Effect.flatMap((count) => {
+                  if (count === 1) return Effect.void;
+                  return Deferred.succeed(reconnectStarted, undefined).pipe(
+                    Effect.andThen(Deferred.await(resumeReconnect)),
+                  );
+                }),
+                Effect.andThen(Ref.set(connected, true)),
+                Effect.tap(() => Deferred.succeed(initialConnectionReady, undefined)),
+              ),
+            ),
+          disconnect: () => Effect.runPromise(Ref.set(connected, false)),
+          send: () => undefined,
+          onData: (listener: (frame: Uint8Array) => void) => {
+            dataListeners.add(listener);
+            return () => dataListeners.delete(listener);
           },
-          flood: (count) => {
-            const frame = new TextEncoder().encode("{}\n");
-            for (const _ of Array.from({ length: count })) {
-              for (const listener of dataListeners) listener(frame);
-            }
-          },
-          connectionCount: Ref.get(connections),
-        };
-      }),
-    ),
+          onClosed: () => () => undefined,
+        },
+        flood: (count: number) =>
+          Ref.get(connected).pipe(
+            Effect.flatMap((active) => {
+              if (!active) return Effect.void;
+              return Effect.sync(() => {
+                const frame = new TextEncoder().encode("{}\n");
+                for (const _ of Array.from({ length: count })) {
+                  for (const listener of dataListeners) listener(frame);
+                }
+              });
+            }),
+          ),
+        connectionCount: Ref.get(connections),
+        initialConnectionReady: Deferred.await(initialConnectionReady),
+        reconnectStarted: Deferred.await(reconnectStarted),
+        resumeReconnect: Deferred.succeed(resumeReconnect, undefined).pipe(Effect.asVoid),
+      };
+    }),
   );
 }
 
@@ -220,17 +252,22 @@ const makeLogCapture = () => {
 };
 
 describe("IPC RPC protocol", () => {
-  it("reconnects when incoming frames exceed the bounded inbox", async () => {
+  it("keeps replaced-session frames out of the replacement inbox", async () => {
     await Effect.runPromise(
       Effect.gen(function* () {
         const flood = yield* FloodBridgeProbe;
         yield* Layer.build(layerProtocolIpc(flood.bridge));
+        yield* flood.initialConnectionReady;
+        yield* flood.flood(protocolInboxCapacity + 1);
         yield* Effect.yieldNow;
-        yield* Effect.sync(() => flood.flood(protocolInboxCapacity + 1));
+        yield* TestClock.adjust("1 minute");
+        yield* flood.reconnectStarted;
+        yield* flood.flood(protocolInboxCapacity + 1);
+        yield* flood.resumeReconnect;
         yield* Effect.yieldNow;
         yield* TestClock.adjust("1 minute");
         yield* Effect.yieldNow;
-        expect(yield* flood.connectionCount).toBeGreaterThan(1);
+        expect(yield* flood.connectionCount).toBe(2);
       }).pipe(Effect.provide(FloodBridgeProbe.layer), Effect.provide(TestClock.layer()), Effect.scoped),
     );
   });

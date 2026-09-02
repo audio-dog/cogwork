@@ -112,11 +112,14 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         Effect.flatMap((inbox) =>
           Deferred.make<never, RpcClientError>().pipe(
             Effect.flatMap((overflow) =>
-              Effect.sync(() => {
-                conn.parser = serialization.makeUnsafe();
-                conn.inbox = inbox;
-                conn.overflow = overflow;
-              }).pipe(
+              Effect.tryPromise({ try: () => bridge.disconnect(), catch: openError }).pipe(
+                Effect.andThen(
+                  Effect.sync(() => {
+                    conn.parser = serialization.makeUnsafe();
+                    conn.inbox = inbox;
+                    conn.overflow = overflow;
+                  }),
+                ),
                 Effect.andThen(Effect.tryPromise({ try: () => bridge.connect(), catch: openError })),
                 Effect.onExit((exit) => Deferred.done(conn.gate, exit)),
                 Effect.andThen(Effect.raceFirst(consume(inbox), Deferred.await(overflow))),

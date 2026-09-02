@@ -31,7 +31,7 @@ export interface RendererErrorReport {
 // Renderer relays RPC wire frames to `main`; it never opens the daemon socket (ADR 0009).
 export interface DaemonRpcBridge {
   readonly connect: () => Promise<void>;
-  readonly disconnect?: () => Promise<void>;
+  readonly disconnect: () => Promise<void>;
   readonly send: (frame: string) => void;
   readonly onData: (listener: (frame: Uint8Array) => void) => () => void;
   readonly onClosed: (listener: (reason: string | null) => void) => () => void;
