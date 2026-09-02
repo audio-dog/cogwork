@@ -83,7 +83,7 @@ const providerName = Schema.decodeSync(HarnessName)("provider");
 
 export const harnessRunners = [
   cursorRunner({ name: cursorName }),
-  claudeCodeRunner({ name: claudeName }),
+  claudeCodeRunner({ name: claudeName, authentication: { mode: "host" } }),
   codexRunner({ name: codexName, environment: process.env }),
   Provider.providerRunner({ name: providerName }),
 ];
