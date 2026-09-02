@@ -24,7 +24,7 @@ import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
-import { defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
+import { type CreateIssueInput, defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
 import {
   boardMissing,
   decodeProjectPriorities,
@@ -103,6 +103,11 @@ const IssueSchema = Schema.Struct({
   assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
   issue_dependencies_summary: Schema.optional(Schema.NullOr(DependenciesSummarySchema)),
+});
+
+const CreatedIssueSchema = Schema.Struct({
+  number: Schema.Finite,
+  labels: Schema.Array(LabelName),
 });
 
 const PullSchema = Schema.Struct({
@@ -252,6 +257,7 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
+const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
@@ -508,6 +514,40 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     yield* withTransientRetry(send(repo, withBody, acceptResponse));
   });
 
+  const sendJsonOnce = Effect.fn("github.sendJsonOnce")(function* (
+    repo: GitHubRepoRef,
+    request: HttpClientRequest.HttpClientRequest,
+    body: unknown,
+  ) {
+    const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), toUnavailable);
+    return yield* send(repo, withBody, (response) => response.json).pipe(
+      Effect.mapError((error) => error.error),
+    );
+  });
+
+  const addLabel = Effect.fn("github.addLabel")((repo: GitHubRepoRef, issueNumber: number, label: string) =>
+    sendJson(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/labels`)), {
+      labels: [label],
+    }),
+  );
+
+  const createIssue = Effect.fn("github.createIssue")(function* (
+    repo: GitHubRepoRef,
+    input: CreateIssueInput,
+  ) {
+    const json = yield* sendJsonOnce(repo, HttpClientRequest.post(repoPath(repo, "/issues")), {
+      title: input.title,
+      body: input.body,
+      labels: input.labels,
+    });
+    const created = yield* Effect.mapError(decodeCreatedIssue(json), toUnavailable);
+    const applied = new Set(created.labels.map(labelName));
+    yield* Effect.forEach(
+      input.labels.filter((label) => !applied.has(label)),
+      (label) => addLabel(repo, created.number, label),
+    );
+  });
+
   // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
   const graphql = Effect.fn("github.graphql")(function* (
     repo: GitHubRepoRef,
@@ -638,10 +678,8 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           }),
         );
       }),
-    addLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
-      sendJson(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/labels`)), {
-        labels: [label],
-      }),
+    createIssue,
+    addLabel,
     removeLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
       withTransientRetry(
         send(
