@@ -1,0 +1,23 @@
+packages/engine/src/issue-tracker-router.ts
+  s_1e1e3ff9f08ccc::t_c72bc803865881 17-19
+packages/engine/src/issue-tracker-router.test.ts
+  s_1e1e3ff9f08ccc::t_ecf75ad6987d2f 57-61
+  s_1e1e3ff9f08ccc::t_900f73c127a024 30-32,46,91-92,132
+  s_1e1e3ff9f08ccc::t_89dc41b4bdebd8 43-45,47,55-56,62,76-90,93-96,112-121,131,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2e03472b00f7977b918f3f6bc4200694d5ad9c86",
+  "prompts": {},
+  "sessions": {
+    "s_1e1e3ff9f08ccc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f42-20eb-73a3-8a09-508564737f2a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
