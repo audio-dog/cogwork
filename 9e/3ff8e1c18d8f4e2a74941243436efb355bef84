@@ -1,0 +1,20 @@
+packages/process-diagnostics/src/synchronous-file-writer.ts
+  s_e56f2f08236ec0::t_e2e99da265afcc 2-6,8-9
+  s_e56f2f08236ec0::t_5d718d08cb0335 1,7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9e3ff8e1c18d8f4e2a74941243436efb355bef84",
+  "prompts": {},
+  "sessions": {
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
