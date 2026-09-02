@@ -26,6 +26,11 @@ const DiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String });
 const decodeDiffValue = Schema.decodeUnknownEffect(DiffValue);
 const fileDiffMaxBytes = 64 * 1024;
 const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
+const emptyOutput: AsyncIterable<string> = {
+  [Symbol.asyncIterator]: () => ({
+    next: () => Promise.resolve({ done: true, value: undefined }),
+  }),
+};
 
 class ExecCalls extends Context.Service<ExecCalls, Queue.Queue<string>>()(
   "@cogwork/engine/tools/file-diff-feed.test/ExecCalls",
@@ -223,6 +228,72 @@ describe("file diff feed", () => {
     }),
   );
 
+  it.effect("escalates a timed-out diff subprocess to SIGKILL", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      yield* writeFile(original, { path: "hung.txt", content: "hung\n" });
+      const started = yield* Deferred.make<void>();
+      const terminated = yield* Deferred.make<void>();
+      const killed = yield* Deferred.make<void>();
+      const exit = Promise.withResolvers<number>();
+      const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = () => {
+        Deferred.doneUnsafe(started, Effect.void);
+        return Promise.resolve({
+          pid: 1,
+          stdout: emptyOutput,
+          stderr: emptyOutput,
+          stdin: {
+            write: () => Promise.resolve(),
+            end: () => Promise.resolve(),
+          },
+          wait: () => exit.promise,
+          kill: (signal) => {
+            if (signal === "SIGTERM") Deferred.doneUnsafe(terminated, Effect.void);
+            if (signal === "SIGKILL") {
+              Deferred.doneUnsafe(killed, Effect.void);
+              exit.resolve(137);
+            }
+            return Promise.resolve();
+          },
+        });
+      };
+      const sandbox: WorktreeSandbox = {
+        ...original,
+        handle: {
+          ...original.handle,
+          process: { ...original.handle.process, spawn },
+        },
+      };
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, "").pipe(
+        Stream.runDrain,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.flip,
+        Effect.forkChild,
+      );
+      yield* Queue.offer(events, { _tag: "Create", path: "hung.txt" });
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("100 millis");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("1 second");
+      if (Option.isNone(yield* Deferred.poll(started))) return assert.fail("diff process did not start");
+      yield* TestClock.adjust("5 minutes");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      if (Option.isNone(yield* Deferred.poll(terminated))) {
+        exit.resolve(1);
+        return assert.fail("diff process did not receive SIGTERM");
+      }
+      yield* TestClock.adjust("5 seconds");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      if (Option.isNone(yield* Deferred.poll(killed))) {
+        exit.resolve(1);
+        return assert.fail("diff process did not receive SIGKILL");
+      }
+      const error = yield* Fiber.join(fiber);
+      assert.strictEqual(error.reason, "timeout");
+    }),
+  );
+
   it.effect("collapses a per-file event burst into one diff subprocess", () =>
     Effect.gen(function* () {
       const original = yield* openSandbox();
@@ -287,6 +358,45 @@ describe("file diff feed", () => {
       const diffCommands = commands.filter((command) => command.startsWith("git diff"));
       assert.lengthOf(diffCommands, 1);
       assert.notInclude(diffCommands[0], "packages/dist/bundle.js");
+    }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
+  it.effect("skips directory events before starting diff subprocesses", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      yield* Effect.promise(() => original.handle.fs.mkdir("build"));
+      yield* writeFile(original, { path: "seed.txt", content: "settled\n" });
+      const baseSha = yield* resolveBaseSha(original);
+      const calls = yield* ExecCalls;
+      const sandbox = yield* withExecProbe(original);
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+        Stream.take(1),
+        Stream.runHead,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* Queue.offer(events, { _tag: "Create", path: "build" });
+      yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
+      yield* TestClock.adjust("100 millis");
+      const ignoreCommand = yield* Stream.fromQueue(calls).pipe(
+        Stream.filter((command) => command.startsWith("git check-ignore")),
+        Stream.runHead,
+      );
+      if (Option.isNone(ignoreCommand)) return assert.fail("ignore check did not complete");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("1 second");
+      const head = yield* Fiber.join(fiber);
+      if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
+      const value = yield* decodeDiffValue(head.value.value);
+      assert.strictEqual(value.path, "seed.txt");
+      const remainingCommands = yield* Queue.takeAll(calls);
+      const commands = [ignoreCommand.value, ...remainingCommands];
+      const diffCommands = commands.filter((command) => command.startsWith("git diff"));
+      assert.lengthOf(diffCommands, 1);
+      assert.include(diffCommands[0], "seed.txt");
+      assert.notInclude(diffCommands[0], "build");
     }).pipe(Effect.provide(ExecCalls.layer)),
   );
 

@@ -197,13 +197,13 @@ const acquireProcess = (sandbox: WorktreeSandbox, command: string) =>
             onNone: () =>
               Effect.tryPromise(() => process.kill("SIGTERM")).pipe(
                 Effect.ignore,
-                Effect.andThen(Effect.tryPromise(() => exit)),
+                Effect.andThen(Effect.tryPromise(() => exit).pipe(Effect.interruptible)),
                 Effect.timeoutOrElse({
                   duration: processReleaseDeadline,
                   orElse: () =>
                     Effect.tryPromise(() => process.kill("SIGKILL")).pipe(
                       Effect.ignore,
-                      Effect.andThen(Effect.tryPromise(() => exit)),
+                      Effect.andThen(Effect.tryPromise(() => exit).pipe(Effect.interruptible)),
                       Effect.timeout(processReleaseDeadline),
                       Effect.ignore,
                     ),
@@ -214,6 +214,7 @@ const acquireProcess = (sandbox: WorktreeSandbox, command: string) =>
           }),
         ),
       ),
+    { interruptible: true },
   );
 
 const streamDiff = Effect.fn("Tools.streamDiff")(function* (
@@ -376,6 +377,11 @@ const dedupeFileDiff = (previous: ReadonlyMap<string, string>, current: FileDiff
   return [new Map([...previous, [current.path, current.fingerprint]]), [current]] as const;
 };
 
+const isDirectory = (sandbox: WorktreeSandbox, path: string) =>
+  Effect.tryPromise(() => sandbox.handle.fs.list(path)).pipe(
+    Effect.match({ onFailure: () => false, onSuccess: () => true }),
+  );
+
 // FileSystem.watch reports paths relative to the watched root, and its
 // create/remove classification stats them against the process cwd, so it
 // cannot be trusted here. The diff pipeline only distinguishes "gone" from
@@ -386,6 +392,7 @@ const classifyWorktreeEvent = Effect.fn("Tools.classifyWorktreeEvent")(function*
   rel: string,
 ) {
   const path = `${DEFAULT_WORKSPACE_ROOT}/${rel}`;
+  if (yield* isDirectory(sandbox, path)) return null;
   const exists = yield* Effect.tryPromise(() => sandbox.handle.fs.exists(path)).pipe(
     Effect.orElseSucceed(() => false),
   );
@@ -407,6 +414,7 @@ export const watchWorktreeDiffs = (
           Stream.flatMap(Stream.fromIterable),
           debounceByPath,
           Stream.mapEffect((event) => classifyWorktreeEvent(sandbox, event.path)),
+          Stream.filter((event) => event !== null),
           Stream.mapEffect((event) => computeFileDiff(sandbox, baseSha, event)),
           Stream.mapAccum(() => new Map<string, string>(), dedupeFileDiff),
           Stream.map(({ path, diff }) => fileDiffEvent(path, diff)),
