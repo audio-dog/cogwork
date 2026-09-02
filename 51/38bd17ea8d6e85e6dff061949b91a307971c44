@@ -1,0 +1,22 @@
+packages/engine/src/daemon-event-bus.test.ts
+  s_0a5f6da99397f7::t_368a9f41b77b76 1,107-111
+packages/engine/src/daemon-event-bus.ts
+  s_0a5f6da99397f7::t_a97042c37e6f06 75
+  s_0a5f6da99397f7::t_564d9f1ad7fa3a 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5138bd17ea8d6e85e6dff061949b91a307971c44",
+  "prompts": {},
+  "sessions": {
+    "s_0a5f6da99397f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638f-b3ac-77f3-a98c-c1184a53eed8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
