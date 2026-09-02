@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  s_471ef6216cbab1::t_b4d0eaf8f41abf 227-228,256,290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e76cb932f56d19bf59b3b46213c6d810ad3e8150",
+  "prompts": {},
+  "sessions": {
+    "s_471ef6216cbab1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f50-46c8-71f0-ba6f-7dcd77bb416b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
