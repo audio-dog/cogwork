@@ -1,0 +1,23 @@
+packages/engine/src/run-event-codec.ts
+  s_d83326dc1387b5::t_0c2172affe17cf 1-5
+packages/engine/src/run-recorder.ts
+  s_d83326dc1387b5::t_0c2172affe17cf 10,63
+  s_d83326dc1387b5::t_b7627da19c4c39 95,106,108
+  s_d83326dc1387b5::t_560af9442d0f94 107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0cb3c33325603766ac02f3465db84a9b1127e24a",
+  "prompts": {},
+  "sessions": {
+    "s_d83326dc1387b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638f-84de-7a11-9905-c01962b7d554",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
