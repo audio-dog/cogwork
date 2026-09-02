@@ -1,0 +1,32 @@
+packages/claude-code/src/harness.ts
+  s_40b75154cfcc59::t_989e6fbf426382 278-304,310-322
+  s_40b75154cfcc59::t_07402d9dca4f3a 11
+  s_40b75154cfcc59::t_bd453350bb2c33 368,372
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_40b75154cfcc59::t_99002d1abdf977 43-48
+  s_40b75154cfcc59::t_0a5e0bc8565457 65
+packages/claude-code/CONTEXT.md
+  s_40b75154cfcc59::t_015d10f02a13e7 19-22
+packages/claude-code/src/harness.test.ts
+  s_40b75154cfcc59::t_9e84053af5818a 469
+  s_40b75154cfcc59::t_f7cbb753d550c6 492
+  s_40b75154cfcc59::t_4deb158bc757c9 248
+  s_40b75154cfcc59::t_2de36fabba491c 474-478
+  s_40b75154cfcc59::t_f993a6672e112f 437-438,443
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "73e0befeeb5bbff0c1aa9a017a80313c62e1f341",
+  "prompts": {},
+  "sessions": {
+    "s_40b75154cfcc59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2be7ad5a-e4c7-45fc-acc5-c8b4572c836e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
