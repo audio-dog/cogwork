@@ -22,10 +22,10 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
 import { RiArrowDownSLine, RiCheckLine, RiErrorWarningLine, RiStopCircleLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
-import { createContext, type ReactNode, use, useMemo } from "react";
+import { createContext, type ReactNode, use } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
 import { duration } from "../features/format";
-import { foldTranscript, useRunActivity } from "../features/run-activity";
+import { useRunTranscript } from "../features/run-activity";
 import {
   runLine,
   type StepView,
@@ -61,19 +61,19 @@ interface RunTranscriptContextValue {
 
 const RunTranscriptContext = createContext<RunTranscriptContextValue | null>(null);
 
-function useRunTranscript() {
+function useRunTranscriptContext() {
   const value = use(RunTranscriptContext);
   if (!value) throw new Error("Run transcript parts must render inside RunTranscript.Provider");
   return value;
 }
 
 function RunTranscriptProvider({ run, children }: { run: RunSummary; children: ReactNode }) {
-  const result = useRunActivity(run.id);
+  const result = useRunTranscript(run.id);
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
 
   const running = run.status === "running";
-  const activities = result._tag === "Success" ? result.value.items : [];
-  const rows = useMemo(() => transcriptRows(foldTranscript(activities), !running), [activities, running]);
+  const entries = result._tag === "Success" ? result.value.entries : [];
+  const rows = transcriptRows(entries, !running);
 
   return (
     <RunTranscriptContext
@@ -100,7 +100,7 @@ function RunTranscriptProvider({ run, children }: { run: RunSummary; children: R
 function ElapsedTime() {
   const {
     state: { run },
-  } = useRunTranscript();
+  } = useRunTranscriptContext();
   const now = useNow();
   return <span className="tabular-nums">{duration(run.startedAtMillis, run.endedAtMillis ?? now)}</span>;
 }
@@ -230,7 +230,7 @@ function Row({ row }: { row: TranscriptRow }) {
 function WorkingRow() {
   const {
     state: { line },
-  } = useRunTranscript();
+  } = useRunTranscriptContext();
   return (
     <div className="flex min-w-0 items-center gap-2 px-0.5 py-1.5 text-xs text-muted-foreground">
       <Gutter>
@@ -247,7 +247,7 @@ function WorkingRow() {
 function EmptyStream() {
   const {
     state: { running },
-  } = useRunTranscript();
+  } = useRunTranscriptContext();
   return (
     <Empty className="m-4">
       <EmptyHeader>
@@ -279,7 +279,7 @@ function StreamError({ message }: { message: string }) {
 function TranscriptConversation() {
   const {
     state: { rows, running, streamError },
-  } = useRunTranscript();
+  } = useRunTranscriptContext();
 
   if (streamError) return <StreamError message={streamError} />;
   if (rows.length === 0)
@@ -322,7 +322,7 @@ function TranscriptConversation() {
 function RunStatusGlyph() {
   const {
     state: { run, running },
-  } = useRunTranscript();
+  } = useRunTranscriptContext();
   if (running)
     return (
       <>
@@ -353,7 +353,7 @@ function CancelButton() {
     state: { running },
     actions: { cancel },
     meta: { cancelPending },
-  } = useRunTranscript();
+  } = useRunTranscriptContext();
   if (!running) return null;
   return (
     <Button className="ms-auto" disabled={cancelPending} size="sm" variant="outline" onClick={cancel}>
@@ -367,7 +367,7 @@ function RunNow() {
   const {
     state: { run, line },
     meta: { cancelError },
-  } = useRunTranscript();
+  } = useRunTranscriptContext();
   return (
     <div className="shrink-0 border-b p-3">
       <div className="rounded-lg border bg-card px-3 py-2.5">
