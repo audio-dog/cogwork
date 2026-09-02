@@ -13,6 +13,7 @@ import { memoryPersistence } from "@tanstack/ai-persistence";
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Config from "effect/Config";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
@@ -105,37 +106,47 @@ const runtimeLayer = Layer.mergeAll(
   FetchHttpClient.layer,
 );
 
-const harnessLayer = Layer.merge(
-  runtimeLayer,
-  Layer.succeed(
-    CredentialStore.CredentialStore,
-    credentialStore(() => Effect.die("unexpected provider key lookup")),
+const harnessLayerWith = (providerKey: CredentialStore.CredentialStoreService["providerKey"]) =>
+  Layer.merge(runtimeLayer, Layer.succeed(CredentialStore.CredentialStore, credentialStore(providerKey)));
+
+const harnessLayer = harnessLayerWith(() => Effect.die("unexpected provider key lookup"));
+
+const byokHarnessLayer = harnessLayerWith(() =>
+  Effect.succeed({ source: "stored-key", key: Redacted.make("anthropic-test-key-one") }),
+);
+
+const missingByokHarnessLayer = harnessLayerWith(() =>
+  Effect.fail(
+    new CredentialStore.CredentialError({
+      account: "anthropic",
+      message: "no api key for anthropic: ANTHROPIC_API_KEY is unset or empty",
+    }),
   ),
 );
 
-const byokHarnessLayer = Layer.merge(
-  runtimeLayer,
-  Layer.succeed(
-    CredentialStore.CredentialStore,
-    credentialStore(() =>
-      Effect.succeed({ source: "stored-key", key: Redacted.make("anthropic-test-key-one") }),
-    ),
-  ),
-);
+class CredentialVersion extends Context.Service<CredentialVersion, Ref.Ref<"one" | "two">>()(
+  "@cogwork/claude-code/harness.test/CredentialVersion",
+) {
+  static readonly layer = Layer.effect(CredentialVersion, Ref.make<"one" | "two">("one"));
+}
 
-const missingByokHarnessLayer = Layer.merge(
+const rotatingByokHarnessLayer = Layer.merge(
   runtimeLayer,
-  Layer.succeed(
+  Layer.effect(
     CredentialStore.CredentialStore,
-    credentialStore(() =>
-      Effect.fail(
-        new CredentialStore.CredentialError({
-          account: "anthropic",
-          message: "no api key for anthropic: ANTHROPIC_API_KEY is unset or empty",
-        }),
+    CredentialVersion.pipe(
+      Effect.map((version) =>
+        credentialStore(() =>
+          Ref.get(version).pipe(
+            Effect.map((current) => ({
+              source: "stored-key" as const,
+              key: Redacted.make(`anthropic-test-key-${current}`),
+            })),
+          ),
+        ),
       ),
     ),
-  ),
+  ).pipe(Layer.provideMerge(CredentialVersion.layer)),
 );
 
 const fakeClaudeExecutable = (args = "") =>
@@ -681,23 +692,11 @@ describe("Claude Code Harness", () => {
 
     it.effect("resolves the Anthropic credential again for each Run", () =>
       Effect.gen(function* () {
-        const version = yield* Ref.make<"one" | "two">("one");
-        const rotatingStore = credentialStore(() =>
-          Ref.get(version).pipe(
-            Effect.map((current) => ({
-              source: "stored-key" as const,
-              key: Redacted.make(`anthropic-test-key-${current}`),
-            })),
-          ),
-        );
+        const version = yield* CredentialVersion;
         const { handle, harness } = yield* makeLiveHarness("", byokAuthentication);
-        const first = yield* harness
-          .run(makeRequest(handle.id))
-          .pipe(Stream.runCollect, Effect.provideService(CredentialStore.CredentialStore, rotatingStore));
+        const first = yield* harness.run(makeRequest(handle.id)).pipe(Stream.runCollect);
         yield* Ref.set(version, "two");
-        const second = yield* harness
-          .run(makeRequest(handle.id))
-          .pipe(Stream.runCollect, Effect.provideService(CredentialStore.CredentialStore, rotatingStore));
+        const second = yield* harness.run(makeRequest(handle.id)).pipe(Stream.runCollect);
         const captures = [yield* captureFrom(first), yield* captureFrom(second)];
 
         assert.deepStrictEqual(
@@ -705,7 +704,7 @@ describe("Claude Code Harness", () => {
           ["one", "two"],
         );
         assert.isTrue(captures.every(({ apiKey }) => apiKey === "[redacted]"));
-      }),
+      }).pipe(Effect.provide(rotatingByokHarnessLayer)),
     );
 
     it.effect("scrubs rejected BYOK from events and diagnostics without falling back", () =>
@@ -719,10 +718,27 @@ describe("Claude Code Harness", () => {
         );
         const events = yield* Ref.get(seen);
 
+        assert.strictEqual(error.reason, "credential");
+        assert.isFalse(error.retryable);
         assert.include(error.message, "[redacted]");
         assert.notInclude(error.message, "anthropic-test-key-one");
+        assert.include(error.message, "cogwork login key --provider anthropic");
         assert.isTrue(containsString(events, "[redacted]"));
         assert.isFalse(containsString(events, "anthropic-test-key-one"));
+      }),
+    );
+
+    it.effect("keeps MCP API-key failures independent from Anthropic BYOK", () =>
+      Effect.gen(function* () {
+        const { handle, harness } = yield* makeLiveHarness(" --mcp-api-key-run-error", byokAuthentication);
+        const error = yield* harness
+          .run(makeRequest(handle.id, { mcp: true }))
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "turn");
+        assert.isTrue(error.retryable);
+        assert.include(error.message, "MCP server invalid API key");
+        assert.notInclude(error.message, "cogwork login key --provider anthropic");
       }),
     );
   });

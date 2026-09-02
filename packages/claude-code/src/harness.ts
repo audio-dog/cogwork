@@ -32,11 +32,7 @@ const supportedClaudeMajor = 2;
 const versionRequirement = `>=${supportedClaudeMajor}.0.0 <${supportedClaudeMajor + 1}.0.0`;
 const commandDeadline = "5 seconds";
 const anthropicEnvironment = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
-const authenticationBindings = {
-  host: { mode: "host", reference: "Claude Code host login on this Runtime Host" },
-  byok: { mode: "byok", reference: "Anthropic provider key in the Credential store" },
-} as const;
-type ClaudeAuthenticationMode = keyof typeof authenticationBindings;
+type ClaudeAuthenticationMode = ClaudeCodeRunnerOptions["authentication"]["mode"];
 const requiredEnvironmentName = (names: ReadonlyArray<string> | undefined) => {
   const name = names?.[0];
   if (name) return name;
@@ -51,6 +47,27 @@ const nativeAuthenticationMode = "host" as const;
 const missingExecutableCodes = new Set(["ENOENT", "EACCES"]);
 const missingExecutableExitCodes = new Set([126, 127]);
 const missingLoginPattern = /not (?:logged|signed) in|claude (?:auth )?login/i;
+const rejectedApiKeyPattern =
+  /(?:claude|anthropic).{0,80}(?:api[- ]?key|x-api-key|authentication_error|invalid (?:credential|key))|(?:api[- ]?key|x-api-key|authentication_error|invalid (?:credential|key)).{0,80}(?:claude|anthropic)/i;
+const authenticationProfiles = {
+  host: {
+    binding: { mode: "host", reference: "Claude Code host login on this Runtime Host" },
+    availableDiagnostic: "Claude Code host login is available",
+    installNextStep: "Install Claude Code, then run `claude auth login`.",
+    credentialGuidance: "Claude Code host login is unavailable. Run `claude auth login`, then retry.",
+    failurePattern: missingLoginPattern,
+    scrubEnv: anthropicEnvironment,
+  },
+  byok: {
+    binding: { mode: "byok", reference: "Anthropic provider key in the Credential store" },
+    availableDiagnostic: "Anthropic provider key is available",
+    installNextStep: "Install Claude Code.",
+    credentialGuidance:
+      "Claude Code API-key authentication is unavailable. Store an Anthropic key with `cogwork login key --provider anthropic`, then retry.",
+    failurePattern: rejectedApiKeyPattern,
+    scrubEnv: ["ANTHROPIC_AUTH_TOKEN"],
+  },
+} as const;
 const modelPattern = /['"]((?:claude-[a-z0-9-]+)|opus|sonnet|haiku|fable)['"]/gi;
 
 const isMissingExecutableCause = (cause: unknown, seen: ReadonlySet<object> = new Set()): boolean => {
@@ -150,23 +167,16 @@ const versionParts = (version: string) => {
 const versionCompatible = (version: string) => versionParts(version)?.[0] === supportedClaudeMajor;
 
 const setupGuidance = (mode: ClaudeAuthenticationMode, error: Harness.HarnessError) => {
+  const profile = authenticationProfiles[mode];
   if (error.reason === "missing-harness") {
-    const nextStep =
-      mode === "host" ? "Install Claude Code, then run `claude auth login`." : "Install Claude Code.";
     return harnessError(
       error.reason,
       error.retryable,
-      `Claude Code could not start. ${nextStep} (${error.message})`,
+      `Claude Code could not start. ${profile.installNextStep} (${error.message})`,
     );
   }
-  if (mode === "host" && (error.reason === "credential" || missingLoginPattern.test(error.message))) {
-    return harnessError(
-      "credential",
-      false,
-      `Claude Code host login is unavailable. Run \`claude auth login\`, then retry. (${error.message})`,
-    );
-  }
-  return error;
+  if (error.reason !== "credential") return error;
+  return harnessError("credential", false, `${profile.credentialGuidance} (${error.message})`);
 };
 
 const readinessFromFailure = (mode: ClaudeAuthenticationMode, error: Harness.HarnessError) => {
@@ -184,9 +194,6 @@ const readinessFromFailure = (mode: ClaudeAuthenticationMode, error: Harness.Har
     diagnostics: [error.message],
   } satisfies Harness.HarnessReadiness;
 };
-
-const availableAuthenticationDiagnostic = (mode: ClaudeAuthenticationMode) =>
-  mode === "host" ? "Claude Code host login is available" : "Anthropic provider key is available";
 
 const readinessFromVersion = (
   mode: ClaudeAuthenticationMode,
@@ -216,7 +223,7 @@ const readinessFromVersion = (
     authentication: {
       mode,
       status: authenticated ? "available" : "unavailable",
-      diagnostic: authenticationError?.message ?? availableAuthenticationDiagnostic(mode),
+      diagnostic: authenticationError?.message ?? authenticationProfiles[mode].availableDiagnostic,
     },
     diagnostics,
   } satisfies Harness.HarnessReadiness;
@@ -232,11 +239,7 @@ const probeHostAuthentication = (sandbox: SandboxHandle, executable: string) =>
   );
 
 const byokCredentialError = (error: CredentialStore.CredentialError) =>
-  harnessError(
-    "credential",
-    false,
-    `Claude Code API-key authentication is unavailable. Store an Anthropic key with \`cogwork login key --provider anthropic\`, then retry. (${error.message})`,
-  );
+  setupGuidance("byok", harnessError("credential", false, error.message));
 
 const probeByokAuthentication = Effect.fn("ClaudeCode.probeByokAuthentication")(function* () {
   const credentials = yield* CredentialStore.CredentialStore;
@@ -320,7 +323,7 @@ export const claudeCodeCatalogSources = (
 const turnDiagnostics = (mode: ClaudeAuthenticationMode, cause: unknown) => {
   const message = HarnessBridge.messageFromUnknown(cause);
   if (isMissingExecutableCause(cause)) return setupGuidance(mode, missingHarnessError(message));
-  if (mode === "host" && missingLoginPattern.test(message)) {
+  if (authenticationProfiles[mode].failurePattern.test(message)) {
     return setupGuidance(mode, harnessError("credential", false, message));
   }
   return harnessError("turn", true, message);
@@ -346,15 +349,11 @@ const inlineMcpConfig = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
   );
 };
 
-const mcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>) => ({
-  config: inlineMcpConfig(servers),
-});
-
 const adapterConfig = (
   executable: string,
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
 ) => {
-  const mcp = mcpProjection(request.mcp);
+  const mcpConfig = inlineMcpConfig(request.mcp);
   return {
     authMode: nativeAuthenticationMode,
     settingSources: ["user", "project"],
@@ -364,7 +363,7 @@ const adapterConfig = (
     // strings, so the post-run `git -C <cwd> diff` only sees the prepared
     // checkout when cwd already resolves there.
     cwd: ".",
-    claudeExecutable: mcp.config.length > 0 ? `${executable} --mcp-config ${mcp.config}` : executable,
+    claudeExecutable: mcpConfig.length > 0 ? `${executable} --mcp-config ${mcpConfig}` : executable,
     // Upstream maps a write-deny policy to Write/Edit/MultiEdit but misses
     // NotebookEdit; close that write path for read-only Operations.
     ...(request.policy === "read-only" ? { disallowedTools: ["NotebookEdit"] } : {}),
@@ -411,7 +410,7 @@ const descriptor = (
       ],
       planMiddleware: ["sandbox"],
     },
-    authentication: authenticationBindings[options.authentication.mode],
+    authentication: authenticationProfiles[options.authentication.mode].binding,
     catalogSources: claudeCodeCatalogSources(executable),
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
@@ -445,7 +444,7 @@ const resolvedAuthentication = Effect.fn("ClaudeCode.resolveAuthentication")(fun
 
 const sandboxProviderFor = (mode: ClaudeAuthenticationMode) =>
   ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({
-    scrubEnv: mode === "host" ? anthropicEnvironment : ["ANTHROPIC_AUTH_TOKEN"],
+    scrubEnv: authenticationProfiles[mode].scrubEnv,
   });
 
 export const claudeCodeRunner = (options: ClaudeCodeRunnerOptions) => {
