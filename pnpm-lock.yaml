@@ -15,6 +15,9 @@ catalogs:
     '@tanstack/ai':
       specifier: 0.52.0
       version: 0.52.0
+    '@tanstack/ai-claude-code':
+      specifier: 0.6.3
+      version: 0.6.3
     '@tanstack/ai-codex':
       specifier: 0.5.3
       version: 0.5.3
@@ -72,6 +75,7 @@ catalogs:
       version: 4.0.0-rc.112
 
 patchedDependencies:
+  '@tanstack/ai-claude-code@0.6.3': daef66349c73e18a8e2e25571b40e6660432ad86278740b8a52d817a8bff3100
   '@tanstack/ai-codex@0.5.3': a2e239cb51b52508e886e37f72c86b58016413754e4d01c6ce93290bb167ae41
   '@tanstack/ai-sandbox-local-process@0.2.4': bba2105beaf153572dfa5bdcc0c628ae4c7c776a8bfad5961c5e496c171bf98c
 
@@ -309,6 +313,43 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/claude-code:
+    dependencies:
+      '@cogwork/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@cogwork/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@tanstack/ai':
+        specifier: 'catalog:'
+        version: 0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4)
+      '@tanstack/ai-claude-code':
+        specifier: 'catalog:'
+        version: 0.6.3(patch_hash=daef66349c73e18a8e2e25571b40e6660432ad86278740b8a52d817a8bff3100)(@tanstack/ai-sandbox@0.5.4(@tanstack/ai-persistence@0.5.4(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(zod@4.5.4))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))
+      '@tanstack/ai-sandbox':
+        specifier: 'catalog:'
+        version: 0.5.4(@tanstack/ai-persistence@0.5.4(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(zod@4.5.4)
+      '@tanstack/ai-sandbox-local-process':
+        specifier: 'catalog:'
+        version: 0.2.4(patch_hash=bba2105beaf153572dfa5bdcc0c628ae4c7c776a8bfad5961c5e496c171bf98c)(@tanstack/ai-sandbox@0.5.4(@tanstack/ai-persistence@0.5.4(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(zod@4.5.4))
+      effect:
+        specifier: catalog:effect
+        version: 4.0.0-rc.112
+    devDependencies:
+      '@effect/vitest':
+        specifier: catalog:effect
+        version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
+      '@tanstack/ai-persistence':
+        specifier: 'catalog:'
+        version: 0.5.4(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
 
   packages/codex-cli:
     dependencies:
@@ -2109,6 +2150,12 @@ packages:
     peerDependenciesMeta:
       '@anthropic-ai/vertex-sdk':
         optional: true
+
+  '@tanstack/ai-claude-code@0.6.3':
+    resolution: {integrity: sha512-89pqeMx0Txt7itqGtJ6bKKM4A3NaDP2Bdw1WqVvCHcS9IQxomFcoh4aUeKcG1AdZasUJwteSN+mpnIL93q43xA==}
+    peerDependencies:
+      '@tanstack/ai': ^0.52.0
+      '@tanstack/ai-sandbox': ^0.5.4
 
   '@tanstack/ai-codex@0.5.3':
     resolution: {integrity: sha512-8wBcAEXSue/koim3BVVpIzBylk0ro1hsjZuhN7zZJJXFvnyPai8hubYBG2hYkSiYl7X0Bc1jssKk/5KmcDj0IQ==}
@@ -6832,6 +6879,11 @@ snapshots:
       '@tanstack/ai-utils': 0.4.0
     transitivePeerDependencies:
       - zod
+
+  '@tanstack/ai-claude-code@0.6.3(patch_hash=daef66349c73e18a8e2e25571b40e6660432ad86278740b8a52d817a8bff3100)(@tanstack/ai-sandbox@0.5.4(@tanstack/ai-persistence@0.5.4(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(zod@4.5.4))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))':
+    dependencies:
+      '@tanstack/ai': 0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4)
+      '@tanstack/ai-sandbox': 0.5.4(@tanstack/ai-persistence@0.5.4(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(zod@4.5.4)
 
   '@tanstack/ai-codex@0.5.3(patch_hash=a2e239cb51b52508e886e37f72c86b58016413754e4d01c6ce93290bb167ae41)(@tanstack/ai-sandbox@0.5.4(@tanstack/ai-persistence@0.5.4(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(zod@4.5.4))(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))':
     dependencies:

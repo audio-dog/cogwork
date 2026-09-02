@@ -1,0 +1,67 @@
+diff --git a/dist/esm/adapters/policy-map.js b/dist/esm/adapters/policy-map.js
+--- a/dist/esm/adapters/policy-map.js
++++ b/dist/esm/adapters/policy-map.js
+@@ -2,7 +2,8 @@
+ var WRITE_TOOLS = [
+ 	"Write",
+ 	"Edit",
+-	"MultiEdit"
++	"MultiEdit",
++	"NotebookEdit"
+ ];
+ var NETWORK_TOOLS = ["WebFetch", "WebSearch"];
+ var BUILTIN_TOOL_NAMES = /* @__PURE__ */ new Set([
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -184,7 +184,9 @@
+ 				runId
+ 			});
+ 			const projection = options.capabilities ? getWorkspaceProjection(options.capabilities, { optional: true }) : void 0;
++			const hasProjectedMcpConfig = projection?.skills.some((skill) => skill.kind === "mcp") ?? false;
+ 			if (projection) await projectClaudeWorkspace(sandbox, projection);
++			if (hasProjectedMcpConfig) tempFiles.push("/workspace/.mcp.json");
+ 			const policy = options.capabilities ? getSandboxPolicy(options.capabilities, { optional: true }) : void 0;
+ 			const permission = policy !== void 0 ? {
+ 				toolName: "approval_prompt",
+@@ -256,7 +258,10 @@
+ 				...journalOptions === void 0 ? {} : { journal: journalOptions }
+ 			});
+ 			async function* asMessages() {
+-				for await (const event of rawEvents) yield event;
++				for await (const event of rawEvents) {
++					if (event.type === "system" && event.subtype === "init" && hasProjectedMcpConfig) await sandbox.fs.remove("/workspace/.mcp.json");
++					yield event;
++				}
+ 			}
+ 			yield* alignedIfAttaching(mergeChunkStreams(translateSdkStream(asMessages(), {
+ 				model: this.model,
+@@ -268,7 +273,8 @@
+ 				onSdkMessage: (message) => logger.provider(`provider=claude-code type=${message.type}`, { chunk: message })
+ 			}), channel.stream), durability, logger);
+ 			if (this.adapterConfig.emitDiff !== false) try {
+-				const diff = await sandbox.process.exec(`git -C ${q(cwd)} diff`, { cwd });
++				const diffCwd = sandbox.provider === "local-process" ? projection?.root ?? cwd : cwd;
++				const diff = await sandbox.process.exec(`git -C ${q(diffCwd)} diff`, { cwd });
+ 				if (diff.exitCode === 0 && diff.stdout.trim() !== "") yield {
+ 					type: EventType.CUSTOM,
+ 					name: "file.changed",
+diff --git a/dist/esm/stream/translate.js b/dist/esm/stream/translate.js
+--- a/dist/esm/stream/translate.js
++++ b/dist/esm/stream/translate.js
+@@ -418,7 +418,14 @@
+ 						sessionId: sdkMessage.session_id,
+ 						model: sdkMessage.model,
+ 						tools: sdkMessage.tools,
+-						skills: sdkMessage.skills ?? []
++						skills: sdkMessage.skills ?? [],
++						ambient: {
++							instructions: sdkMessage.instructions ?? [],
++							skills: sdkMessage.skills ?? [],
++							plugins: sdkMessage.plugins ?? [],
++							hooks: sdkMessage.hooks ?? [],
++							settings: sdkMessage.settings ?? {}
++						}
+ 					}
+ 				};
+ 				continue;
