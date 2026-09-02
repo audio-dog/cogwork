@@ -266,6 +266,10 @@ const satisfiedProjection = (): ChatMiddleware => ({
   provides: [ProjectionCapability],
   setup: (context) => {
     const root = resolveHarnessCwd(getSandbox(context));
+    // The duplicate-provide warning exists to catch accidental overwrites; this overwrite
+    // is the point, and the warning would otherwise land in the daemon log on every such
+    // launch. This middleware is the last provider in the chain, so muting loses nothing.
+    context.capabilities.setOnDuplicate(() => {});
     provideWorkspaceProjection(context, {
       skills: [],
       plugins: [],
