@@ -1,0 +1,24 @@
+packages/engine/CONTEXT.md
+  s_8bc8c2d33b667c::t_0ebed4e91a6ae8 97
+packages/engine/src/external-harness-runtime.ts
+  s_8bc8c2d33b667c::t_0684f9de449142 22,32,238,241-243,248-252,258-261,267-274,276-288
+  s_8bc8c2d33b667c::t_2f7a52252d105a 266
+  s_8bc8c2d33b667c::t_9acd78ebca1040 46,275,464-470,506,524,550,574,603,605-606,609,618-622
+  s_8bc8c2d33b667c::t_62e66b6a7f0b9f 265,572
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "476e64c4cb1bd0db7ec03efd16e543d5b487e726",
+  "prompts": {},
+  "sessions": {
+    "s_8bc8c2d33b667c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638c-1f6e-7753-9601-dfac58747a5e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
