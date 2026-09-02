@@ -116,6 +116,7 @@ export const runs = sqliteTable(
     status: text("status").notNull(),
     startedAt: integer("started_at").notNull(),
     endedAt: integer("ended_at"),
+    eventCount: integer("event_count").notNull().default(0),
   },
   (table) => [index("runs_started_at").on(desc(table.startedAt))],
 );
