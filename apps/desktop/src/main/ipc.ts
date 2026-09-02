@@ -5,6 +5,7 @@ import {
   type EngineStatus,
   IpcChannel,
   type RendererErrorReport,
+  type RpcSessionId,
   type WindowPreferences,
 } from "../shared/ipc";
 import { createDaemonBridgePort, type DaemonBridgePort } from "./daemon-bridge";
@@ -71,15 +72,20 @@ export const registerIpc = (deps: IpcDeps) => {
     return closeSessionScope(session.scope);
   };
 
-  const openSession = Effect.fn("DesktopIpc.openSession")(function* (sender: WebContents) {
+  const openSession = Effect.fn("DesktopIpc.openSession")(function* (
+    sender: WebContents,
+    sessionId: RpcSessionId,
+  ) {
     yield* closeSession(sender);
 
     const scope = yield* Scope.fork(deps.runtime.scope);
     const port = yield* createDaemonBridgePort(deps.socketPath, {
       onData: (frame) => {
-        if (safeSend(sender, IpcChannel.rpcData, frame)) processHealth.recordToRenderer();
+        if (safeSend(sender, IpcChannel.rpcData, { sessionId, frame })) {
+          processHealth.recordToRenderer();
+        }
       },
-      onClosed: (reason) => safeSend(sender, IpcChannel.rpcClosed, reason),
+      onClosed: (reason) => safeSend(sender, IpcChannel.rpcClosed, { sessionId, reason }),
     }).pipe(Scope.provide(scope));
     const onDestroyed = () => deps.runtime.runFork(closeSessionScope(scope));
     sender.once("destroyed", onDestroyed);
@@ -98,7 +104,9 @@ export const registerIpc = (deps: IpcDeps) => {
     sessions.set(sender, { scope, port });
   });
 
-  ipcMain.handle(IpcChannel.rpcConnect, (event) => deps.runtime.runPromise(openSession(event.sender)));
+  ipcMain.handle(IpcChannel.rpcConnect, (event, sessionId: RpcSessionId) =>
+    deps.runtime.runPromise(openSession(event.sender, sessionId)),
+  );
   ipcMain.handle(IpcChannel.rpcDisconnect, (event) => deps.runtime.runPromise(closeSession(event.sender)));
   ipcMain.on(IpcChannel.rpcSend, (event, frame: string) => {
     const session = sessions.get(event.sender);
