@@ -27,10 +27,9 @@ const workspaceOf = (
 const githubWorkspace = workspaceOf("gh", { type: "github", repo: "acme/app" });
 const linearWorkspace = workspaceOf("lin", { type: "linear", teams: ["AUD"] });
 
-interface Recorded {
-  readonly source: string;
-  readonly reason: string | undefined;
-}
+type Recorded =
+  | { readonly source: string; readonly action: "attemptFailed"; readonly reason: string | undefined }
+  | { readonly source: string; readonly action: "createIssue"; readonly title: string };
 
 class RouterCalls extends Context.Service<RouterCalls, Ref.Ref<ReadonlyArray<Recorded>>>()(
   "@cogwork/engine/issue-tracker-router.test/RouterCalls",
@@ -41,6 +40,11 @@ class RouterCalls extends Context.Service<RouterCalls, Ref.Ref<ReadonlyArray<Rec
 const fakeSource = (source: string, calls: Ref.Ref<ReadonlyArray<Recorded>>): IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
+  createIssue: (_workspace, input) =>
+    Ref.update(calls, (recorded) => [
+      ...recorded,
+      { source, action: "createIssue", title: input.title } satisfies Recorded,
+    ]),
   claim: () => Effect.void,
   release: () => Effect.void,
   note: () => Effect.void,
@@ -48,7 +52,14 @@ const fakeSource = (source: string, calls: Ref.Ref<ReadonlyArray<Recorded>>): Is
   implemented: () => Effect.void,
   followedUp: () => Effect.void,
   attemptFailed: (_workspace, _id, outcome) =>
-    Ref.update(calls, (recorded) => [...recorded, { source, reason: outcome.reason }]),
+    Ref.update(calls, (recorded) => [
+      ...recorded,
+      {
+        source,
+        action: "attemptFailed",
+        reason: outcome.reason,
+      } satisfies Recorded,
+    ]),
   handOff: () => Effect.void,
   handBack: () => Effect.void,
   stalled: () => Effect.void,
@@ -62,6 +73,27 @@ const routerLayer = () =>
   ).pipe(Layer.provideMerge(RouterCalls.layer));
 
 describe("issueTrackerRouter", () => {
+  it.effect("routes issue creation to the adapter for the workspace's source", () =>
+    Effect.gen(function* () {
+      const calls = yield* RouterCalls;
+      const router = yield* IssueTracker;
+      yield* router.createIssue(githubWorkspace, {
+        title: "GitHub ticket",
+        body: "Signal: event-loop-delay",
+        labels: ["needs-triage"],
+      });
+      yield* router.createIssue(linearWorkspace, {
+        title: "Linear ticket",
+        body: "Signal: event-loop-delay",
+        labels: ["needs-triage"],
+      });
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { source: "github", action: "createIssue", title: "GitHub ticket" },
+        { source: "linear", action: "createIssue", title: "Linear ticket" },
+      ]);
+    }).pipe(Effect.provide(routerLayer())),
+  );
+
   it.effect("forwards the failure reason to the adapter for the workspace's source", () =>
     Effect.gen(function* () {
       const calls = yield* RouterCalls;
@@ -77,8 +109,16 @@ describe("issueTrackerRouter", () => {
         reason: "pnpm install: exit 1",
       });
       assert.deepStrictEqual(yield* Ref.get(calls), [
-        { source: "github", reason: "git worktree add: boom" },
-        { source: "linear", reason: "pnpm install: exit 1" },
+        {
+          source: "github",
+          action: "attemptFailed",
+          reason: "git worktree add: boom",
+        },
+        {
+          source: "linear",
+          action: "attemptFailed",
+          reason: "pnpm install: exit 1",
+        },
       ]);
     }).pipe(Effect.provide(routerLayer())),
   );
@@ -88,7 +128,9 @@ describe("issueTrackerRouter", () => {
       const calls = yield* RouterCalls;
       const router = yield* IssueTracker;
       yield* router.attemptFailed(githubWorkspace, id("#7"), { stage: "implement", atMillis: 1 });
-      assert.deepStrictEqual(yield* Ref.get(calls), [{ source: "github", reason: undefined }]);
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { source: "github", action: "attemptFailed", reason: undefined },
+      ]);
     }).pipe(Effect.provide(routerLayer())),
   );
 });

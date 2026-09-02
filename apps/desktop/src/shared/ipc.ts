@@ -10,6 +10,7 @@ export const IpcChannel = {
   getMainProcessHealth: "cogwork:get-main-process-health",
   setWindowPreferences: "cogwork:set-window-preferences",
   rpcConnect: "cogwork:rpc-connect",
+  rpcDisconnect: "cogwork:rpc-disconnect",
   rpcSend: "cogwork:rpc-send",
   rpcData: "cogwork:rpc-data",
   rpcClosed: "cogwork:rpc-closed",
@@ -30,12 +31,25 @@ export interface RendererErrorReport {
   readonly origin?: string;
 }
 
+export type RpcSessionId = number;
+
+export interface DaemonRpcData {
+  readonly sessionId: RpcSessionId;
+  readonly frame: Uint8Array;
+}
+
+export interface DaemonRpcClosed {
+  readonly sessionId: RpcSessionId;
+  readonly reason: string | null;
+}
+
 // Renderer relays RPC wire frames to `main`; it never opens the daemon socket (ADR 0009).
 export interface DaemonRpcBridge {
-  readonly connect: () => Promise<void>;
+  readonly connect: (sessionId: RpcSessionId) => Promise<void>;
+  readonly disconnect: () => Promise<void>;
   readonly send: (frame: string) => void;
-  readonly onData: (listener: (frame: Uint8Array) => void) => () => void;
-  readonly onClosed: (listener: (reason: string | null) => void) => () => void;
+  readonly onData: (listener: (message: DaemonRpcData) => void) => () => void;
+  readonly onClosed: (listener: (message: DaemonRpcClosed) => void) => () => void;
 }
 
 export interface CogworkBridge {

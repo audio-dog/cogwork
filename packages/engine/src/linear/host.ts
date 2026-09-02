@@ -138,6 +138,15 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
       );
       return perTeam.flat();
     }),
+    createIssue: Effect.fn("linear.createIssue")(() =>
+      Effect.fail(
+        new IssueTrackerError({
+          reason: "unavailable",
+          message: "Linear issue creation is not supported",
+          retryable: false,
+        }),
+      ),
+    ),
     resolve: Effect.fn("linear.resolve")(function* (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) {
       const targets = targetsFor(workspace);
       const [first, ...rest] = targets;
