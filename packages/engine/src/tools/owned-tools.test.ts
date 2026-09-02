@@ -30,6 +30,14 @@ import type { WorktreeSandbox } from "./sandbox";
 
 const runId = Schema.decodeSync(RunId)("run-tool-cancel");
 const interruptionGate = Latch.makeUnsafe();
+const gitFixtureEnvironment = {
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_AUTHOR_NAME: "cogwork-test",
+  GIT_AUTHOR_EMAIL: "cogwork-test@invalid",
+  GIT_COMMITTER_NAME: "cogwork-test",
+  GIT_COMMITTER_EMAIL: "cogwork-test@invalid",
+};
 
 const openSandbox = Effect.fn("owned-tools.test.openSandbox")(function* () {
   const handle = yield* Effect.acquireRelease(
@@ -38,9 +46,9 @@ const openSandbox = Effect.fn("owned-tools.test.openSandbox")(function* () {
   );
   const sandbox: WorktreeSandbox = { handle, root: handle.id };
   const init = yield* Effect.promise(() =>
-    handle.process.exec(
-      "git init -q && git config user.email t@example.com && git config user.name test && printf 'seed\\n' > seed.txt && git add -A && git commit -q -m init",
-    ),
+    handle.process.exec("git init -q && printf 'seed\\n' > seed.txt && git add -A && git commit -q -m init", {
+      env: gitFixtureEnvironment,
+    }),
   );
   assert.strictEqual(init.exitCode, 0, init.stderr);
   return sandbox;

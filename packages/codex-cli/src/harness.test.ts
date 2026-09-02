@@ -13,6 +13,7 @@ import {
 } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType } from "@tanstack/ai";
 import { CODEX_MODELS, type CodexTextConfig, codexText } from "@tanstack/ai-codex";
@@ -23,11 +24,12 @@ import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { type CodexRunnerOptions, codexRunner, defaultCodexModel } from "./harness";
+import { type CodexRunnerOptions, codexRunner, defaultCodexModel, type MakeCodexAdapter } from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const session = Schema.decodeSync(SessionId)("session-1");
@@ -67,6 +69,7 @@ const services = Layer.mergeAll(
     removeConnection: unexpected,
   }),
   NodeFileSystem.layer,
+  NodePath.layer,
   FetchHttpClient.layer,
 );
 
@@ -147,14 +150,27 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   };
 };
 
+const gitFixtureEnvironment = {
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_AUTHOR_NAME: "cogwork-test",
+  GIT_AUTHOR_EMAIL: "cogwork-test@invalid",
+  GIT_COMMITTER_NAME: "cogwork-test",
+  GIT_COMMITTER_EMAIL: "cogwork-test@invalid",
+};
+
 const fakeCodexExecutable = (arguments_ = "") =>
   `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${arguments_}`;
+
+const makeTestAdapter: MakeCodexAdapter = (model, config) =>
+  codexText(model, { ...config, env: { ...config.env, ...gitFixtureEnvironment } });
 
 const runner = (options: Partial<CodexRunnerOptions> = {}) =>
   codexRunner({
     name,
     environment: process.env,
     codexExecutable: fakeCodexExecutable(),
+    makeAdapter: makeTestAdapter,
     ...options,
   });
 
@@ -164,23 +180,50 @@ const createSandbox = () =>
     (sandbox) => Effect.promise(() => sandbox.destroy()),
   );
 
-const initializeRepository = (handle: SandboxHandle) =>
-  Effect.promise(() =>
-    handle.process.exec(
-      [
-        "git init",
-        'git config user.email "cogwork@example.com"',
-        'git config user.name "Cogwork"',
-        "git commit --allow-empty -m initial",
-      ].join(" && "),
-    ),
-  ).pipe(
-    Effect.flatMap((result) =>
-      result.exitCode === 0
-        ? Effect.succeed(handle.id)
-        : Effect.die(new Error(`${result.stderr}\n${result.stdout}`)),
-    ),
+const ensureSuccess = (result: Awaited<ReturnType<SandboxHandle["process"]["exec"]>>) => {
+  if (result.exitCode === 0) return Effect.succeed(result);
+  return Effect.die(new Error(`${result.stderr}\n${result.stdout}`));
+};
+
+const assertInsideFixture = Effect.fn("test.assertInsideFixture")(function* (
+  fixtureRoot: string,
+  candidate: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const [realFixtureRoot, realCandidate] = yield* Effect.all([
+    fs.realPath(fixtureRoot),
+    fs.realPath(candidate),
+  ]);
+  const relative = path.relative(realFixtureRoot, realCandidate);
+  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) return;
+  return yield* Effect.die(
+    new Error(`fixture repository ${realCandidate} is outside fixture root ${realFixtureRoot}`),
   );
+});
+
+const initializeRepository = Effect.fn("test.initializeRepository")(function* (handle: SandboxHandle) {
+  const location = yield* Effect.promise(() => handle.process.exec("pwd -P", { env: gitFixtureEnvironment }));
+  yield* ensureSuccess(location);
+  yield* assertInsideFixture(handle.id, location.stdout.trim());
+
+  const initialized = yield* Effect.promise(() =>
+    handle.process.exec("git init", { env: gitFixtureEnvironment }),
+  );
+  yield* ensureSuccess(initialized);
+
+  const probe = yield* Effect.promise(() =>
+    handle.process.exec("git rev-parse --show-toplevel", { env: gitFixtureEnvironment }),
+  );
+  yield* ensureSuccess(probe);
+  yield* assertInsideFixture(handle.id, probe.stdout.trim());
+
+  const committed = yield* Effect.promise(() =>
+    handle.process.exec("git commit --allow-empty -m initial", { env: gitFixtureEnvironment }),
+  );
+  yield* ensureSuccess(committed);
+  return handle.id;
+});
 
 const linkedWorktree = (handle: SandboxHandle) =>
   Effect.gen(function* () {
@@ -245,6 +288,24 @@ const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkil
     bearer: Redacted.make(secret),
   },
 ];
+
+describe("repository fixtures", () => {
+  it.effect("keeps identity out of the repository config", () =>
+    Effect.gen(function* () {
+      const handle = yield* createSandbox();
+      yield* initializeRepository(handle);
+
+      const config = yield* Effect.promise(() =>
+        handle.process.exec("git config --local --get-regexp '^user\\.'"),
+      );
+      const author = yield* Effect.promise(() => handle.process.exec("git log -1 --format='%an <%ae>'"));
+
+      assert.strictEqual(config.exitCode, 1);
+      assert.strictEqual(config.stdout, "");
+      assert.strictEqual(author.stdout.trim(), "cogwork-test <cogwork-test@invalid>");
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+  );
+});
 
 describe("codexRunner", () => {
   it.layer(services)((it) => {
@@ -336,7 +397,9 @@ describe("codexRunner", () => {
             const fs = yield* FileSystem.FileSystem;
             yield* fs.writeFileString(`${checkoutPath}/AGENTS.md`, "original repo instructions\n");
             const baseline = yield* Effect.promise(() =>
-              handle.process.exec("git add AGENTS.md && git commit -m 'add repo instructions'"),
+              handle.process.exec("git add AGENTS.md && git commit -m 'add repo instructions'", {
+                env: gitFixtureEnvironment,
+              }),
             );
             assert.strictEqual(baseline.exitCode, 0);
             const capturePath = yield* fs.makeTempFileScoped({ prefix: "codex-mcp-capture-" });
@@ -392,10 +455,15 @@ describe("codexRunner", () => {
             const secretHistory = yield* Effect.promise(() =>
               handle.process.exec("git log --all -G'first-secret|rotated-secret' --format=%H"),
             );
+            const authors = yield* Effect.promise(() => handle.process.exec("git log --format='%an <%ae>'"));
             assert.strictEqual(committedAgents.stdout, "original repo instructions\n");
             assert.notInclude(committedPaths.stdout, ".codex/config.toml");
             assert.notMatch(committedPaths.stdout, /\.tanstack-projected-/);
             assert.strictEqual(secretHistory.stdout, "");
+            assert.deepStrictEqual(
+              new Set(authors.stdout.trim().split("\n")),
+              new Set(["cogwork-test <cogwork-test@invalid>"]),
+            );
           }),
         ),
       10_000,
