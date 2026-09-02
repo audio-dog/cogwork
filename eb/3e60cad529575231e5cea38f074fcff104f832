@@ -1,0 +1,27 @@
+packages/claude-code/src/harness.ts
+  s_1e9c792070af79::t_74f97529b7d234 256-270,328
+patches/@tanstack__ai-claude-code@0.6.3.patch
+  s_1e9c792070af79::t_da1d1c9e0a621a 174,182,198,326,335,344,361,387,396,405
+  s_1e9c792070af79::t_7f0253d8e5c5e5 171,184-197
+packages/claude-code/src/harness.test.ts
+  s_1e9c792070af79::t_74f97529b7d234 22,231-235
+  s_1e9c792070af79::t_64449a5593eaa5 66-69,71-72,286-289,291-310,312-315,317-327,329,331-338,340-347,349-351,353-374,377-390,392-468,470-478,480-482,484,486-498,500-504,506-540
+pnpm-lock.yaml
+  s_1e9c792070af79::t_5c83f6d537a845 78,333,6889
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "eb3e60cad529575231e5cea38f074fcff104f832",
+  "prompts": {},
+  "sessions": {
+    "s_1e9c792070af79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dce-8136-7451-91c5-a0226c2b232e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
