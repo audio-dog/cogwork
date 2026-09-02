@@ -1,3 +1,10 @@
+import {
+  ProcessProfileError,
+  type ProcessProfileInput,
+  ProcessProfileRequest,
+  ProcessProfileRequestId,
+  ProcessProfileResponse,
+} from "@cogwork/process-diagnostics";
 import { NodeStream } from "@effect/platform-node";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -10,6 +17,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -20,8 +28,11 @@ import type { EngineCommand } from "./engine-command";
 export interface EngineChild {
   readonly pid?: number;
   kill(signal?: NodeJS.Signals): boolean;
-  once(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
-  off(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+  once(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+  on(event: "message", listener: (message: unknown) => void): unknown;
+  off(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+  off(event: "message", listener: (message: unknown) => void): unknown;
+  send(message: unknown, callback?: (error: Error | null) => void): boolean;
   readonly stdout: NodeJS.ReadableStream | null;
   readonly stderr: NodeJS.ReadableStream | null;
 }
@@ -29,7 +40,7 @@ export interface EngineChild {
 export type SpawnEngine = (command: EngineCommand) => EngineChild;
 
 export interface EngineSupervisorOptions {
-  readonly command: EngineCommand;
+  readonly command: () => EngineCommand;
   readonly socketPath: string;
   readonly spawn: SpawnEngine;
   readonly probe: (socketPath: string) => Effect.Effect<boolean>;
@@ -39,7 +50,7 @@ export interface EngineSupervisorOptions {
   readonly forceKillTimeout?: Duration.Input;
 }
 
-interface EngineExit {
+interface EngineClose {
   readonly code: number | null;
   readonly pid: number | null;
   readonly signal: NodeJS.Signals | null;
@@ -47,8 +58,8 @@ interface EngineExit {
 
 interface OwnedChild {
   readonly child: EngineChild;
-  readonly exit: Deferred.Deferred<EngineExit>;
-  readonly onExit: (code: number | null, signal: NodeJS.Signals | null) => void;
+  readonly closed: Deferred.Deferred<EngineClose>;
+  readonly onClose: (code: number | null, signal: NodeJS.Signals | null) => void;
   readonly outputFibers: ReadonlyArray<Fiber.Fiber<void>>;
 }
 
@@ -56,12 +67,15 @@ export interface EngineSupervisorService {
   readonly status: SubscriptionRef.SubscriptionRef<EngineStatus>;
   readonly start: Effect.Effect<void>;
   readonly stop: Effect.Effect<void>;
+  readonly captureProfile: (input: ProcessProfileInput) => Effect.Effect<string, ProcessProfileError>;
 }
 
 const defaultTerminateTimeout = "5 seconds";
 const defaultForceKillTimeout = "5 seconds";
 const maxOutputLineLength = 16_384;
 const outputDrainTimeout = "250 millis";
+const profileCaptureTimeout = "2 minutes";
+const decodeProfileResponse = Schema.decodeUnknownOption(ProcessProfileResponse);
 
 const isActiveStatus = (status: EngineStatus) =>
   status === "starting" || status === "running" || status === "adopted";
@@ -80,9 +94,15 @@ const signalChild = (child: EngineChild, signal: NodeJS.Signals) =>
 
 const awaitExitAfter = (owned: OwnedChild, signal: NodeJS.Signals, timeout: Duration.Input) =>
   signalChild(owned.child, signal).pipe(
-    Effect.andThen(Deferred.await(owned.exit)),
+    Effect.andThen(Deferred.await(owned.closed)),
     Effect.timeoutOption(timeout),
   );
+
+const logExpectedClose = (closed: EngineClose) =>
+  Effect.logInfo("Engine closed", { code: closed.code, signal: closed.signal });
+
+const logForcedClose = (closed: EngineClose) =>
+  Effect.logWarning("Engine closed after SIGKILL", { code: closed.code, signal: closed.signal });
 
 const releaseChild = (
   owned: OwnedChild,
@@ -90,16 +110,18 @@ const releaseChild = (
   forceKillTimeout: Duration.Input,
 ) =>
   Effect.gen(function* () {
-    if (yield* Deferred.isDone(owned.exit)) return;
+    if (yield* Deferred.isDone(owned.closed)) return;
     yield* Effect.logInfo("Stopping the supervised engine");
     const terminated = yield* awaitExitAfter(owned, "SIGTERM", terminateTimeout);
-    if (Option.isSome(terminated)) return;
+    if (Option.isSome(terminated)) return yield* logExpectedClose(terminated.value);
     yield* Effect.logWarning("Engine ignored SIGTERM; sending SIGKILL");
-    yield* awaitExitAfter(owned, "SIGKILL", forceKillTimeout);
+    const killed = yield* awaitExitAfter(owned, "SIGKILL", forceKillTimeout);
+    if (Option.isSome(killed)) return yield* logForcedClose(killed.value);
+    yield* Effect.logWarning("Engine did not close after SIGKILL", { code: null, signal: null });
   }).pipe(
     Effect.annotateLogs({ pid: owned.child.pid ?? null }),
     Effect.andThen(drainOutput(owned.outputFibers)),
-    Effect.ensuring(Effect.sync(() => owned.child.off("exit", owned.onExit))),
+    Effect.ensuring(Effect.sync(() => owned.child.off("close", owned.onClose))),
     Effect.ignore,
   );
 
@@ -153,12 +175,12 @@ const pipeOutput = (readable: NodeJS.ReadableStream | null, stream: "stdout" | "
 
 const acquireChild = (options: EngineSupervisorOptions, launched: Deferred.Deferred<void>) =>
   Effect.gen(function* () {
-    const exit = yield* Deferred.make<EngineExit>();
-    const child = yield* Effect.sync(() => options.spawn(options.command));
-    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
-      Deferred.doneUnsafe(exit, Effect.succeed({ code, pid: child.pid ?? null, signal }));
+    const closed = yield* Deferred.make<EngineClose>();
+    const child = yield* Effect.sync(() => options.spawn(options.command()));
+    const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+      Deferred.doneUnsafe(closed, Effect.succeed({ code, pid: child.pid ?? null, signal }));
     };
-    yield* Effect.sync(() => child.once("exit", onExit));
+    yield* Effect.sync(() => child.once("close", onClose));
     const annotations = { pid: child.pid ?? null };
     const stdout = yield* pipeOutput(child.stdout, "stdout").pipe(
       Effect.annotateLogs(annotations),
@@ -171,7 +193,7 @@ const acquireChild = (options: EngineSupervisorOptions, launched: Deferred.Defer
       Effect.forkScoped,
     );
     yield* Deferred.succeed(launched, undefined);
-    return { child, exit, onExit, outputFibers: [stdout, stderr] };
+    return { child, closed, onClose, outputFibers: [stdout, stderr] };
   });
 
 const drainOutput = (fibers: ReadonlyArray<Fiber.Fiber<void>>) =>
@@ -180,11 +202,76 @@ const drainOutput = (fibers: ReadonlyArray<Fiber.Fiber<void>>) =>
     Effect.asVoid,
   );
 
-const make = (options: EngineSupervisorOptions) =>
-  Effect.gen(function* () {
+const captureChildProfile = Effect.fn("EngineSupervisor.captureProfile")(function* (
+  activeChild: Ref.Ref<OwnedChild | null>,
+  profileRequestCounter: Ref.Ref<number>,
+  input: ProcessProfileInput,
+) {
+  const owned = yield* Ref.get(activeChild);
+  if (!owned) {
+    return yield* ProcessProfileError.make({
+      operation: "capture daemon profile",
+      cause: "The daemon is not owned by this supervisor",
+    });
+  }
+  const sequence = yield* Ref.getAndUpdate(profileRequestCounter, (value) => value + 1);
+  const request = ProcessProfileRequest.make({
+    requestId: ProcessProfileRequestId.make(`${owned.child.pid ?? "engine"}:${sequence}`),
+    input,
+  });
+  const response = Effect.callback<string, ProcessProfileError>((resume) => {
+    const onMessage = (message: unknown) => {
+      Option.match(decodeProfileResponse(message), {
+        onNone: () => undefined,
+        onSome: (decoded) => {
+          if (decoded.requestId !== request.requestId) return;
+          ProcessProfileResponse.match(decoded, {
+            ProcessProfileCompleted: ({ path }) => resume(Effect.succeed(path)),
+            ProcessProfileFailed: ({ message }) =>
+              resume(
+                Effect.fail(
+                  ProcessProfileError.make({ operation: "capture daemon profile", cause: message }),
+                ),
+              ),
+          });
+        },
+      });
+    };
+    owned.child.on("message", onMessage);
+    try {
+      owned.child.send(request, (error) => {
+        if (!error) return;
+        resume(
+          Effect.fail(ProcessProfileError.make({ operation: "send daemon profile request", cause: error })),
+        );
+      });
+    } catch (cause) {
+      resume(Effect.fail(ProcessProfileError.make({ operation: "send daemon profile request", cause })));
+    }
+    return Effect.sync(() => owned.child.off("message", onMessage));
+  });
+  return yield* Effect.raceFirst(
+    response,
+    Deferred.await(owned.closed).pipe(
+      Effect.flatMap((closed) =>
+        ProcessProfileError.make({ operation: "capture daemon profile", cause: closed }),
+      ),
+    ),
+  ).pipe(
+    Effect.timeout(profileCaptureTimeout),
+    Effect.catchTag("TimeoutError", (cause) =>
+      ProcessProfileError.make({ operation: "capture daemon profile", cause }),
+    ),
+  );
+});
+
+function make(options: EngineSupervisorOptions) {
+  return Effect.gen(function* () {
     const ownerScope = yield* Effect.scope;
     const status = yield* SubscriptionRef.make<EngineStatus>("stopped");
     const activeScope = yield* Ref.make<Scope.Closeable | null>(null);
+    const activeChild = yield* Ref.make<OwnedChild | null>(null);
+    const profileRequestCounter = yield* Ref.make(0);
     const lifecycle = Semaphore.makeUnsafe(1);
     const restartBudget = options.maxRestarts ?? 3;
     const restartSchedule = Schedule.recurs(restartBudget);
@@ -196,25 +283,29 @@ const make = (options: EngineSupervisorOptions) =>
       const owned = yield* Effect.acquireRelease(acquireChild(options, launched), (child) =>
         releaseChild(child, terminateTimeout, forceKillTimeout),
       );
+      yield* Ref.set(activeChild, owned);
+      yield* Effect.addFinalizer(() =>
+        Ref.update(activeChild, (current) => (current === owned ? null : current)),
+      );
       const pid = owned.child.pid ?? null;
       const annotations = { pid };
       yield* Effect.logInfo("Engine started").pipe(
         Effect.annotateLogs(annotations),
         Effect.annotateSpans(annotations),
       );
-      const awaitExit = Deferred.await(owned.exit);
+      const awaitClose = Deferred.await(owned.closed);
       return yield* Effect.raceFirst(
-        awaitExit,
+        awaitClose,
         options
           .awaitReachable(options.socketPath)
-          .pipe(Effect.andThen(setRunning(status)), Effect.andThen(awaitExit)),
+          .pipe(Effect.andThen(setRunning(status)), Effect.andThen(awaitClose)),
       ).pipe(Effect.annotateLogs(annotations), Effect.annotateSpans(annotations));
     });
 
     const supervise = Effect.fn("EngineSupervisor.supervise")(function* (launched: Deferred.Deferred<void>) {
       yield* Effect.scoped(runChild(launched)).pipe(
         Effect.tap((exit) =>
-          Effect.logWarning("Engine exited unexpectedly", {
+          Effect.logWarning("Engine closed unexpectedly", {
             code: exit.code,
             signal: exit.signal,
           }).pipe(Effect.annotateLogs({ pid: exit.pid })),
@@ -266,8 +357,11 @@ const make = (options: EngineSupervisorOptions) =>
       status,
       start: lifecycle.withPermits(1)(startUnlocked()),
       stop: lifecycle.withPermits(1)(stopUnlocked()),
+      captureProfile: (input: ProcessProfileInput) =>
+        captureChildProfile(activeChild, profileRequestCounter, input),
     };
   });
+}
 
 export class EngineSupervisor extends Context.Service<EngineSupervisor, EngineSupervisorService>()(
   "@cogwork/desktop/engine-supervisor",
