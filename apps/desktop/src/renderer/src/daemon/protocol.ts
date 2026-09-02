@@ -11,6 +11,7 @@ import type { FromServerEncoded } from "effect/unstable/rpc/RpcMessage";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import { SocketCloseError, SocketOpenError } from "effect/unstable/socket/Socket";
 import type { DaemonRpcBridge } from "../../../shared/ipc";
+import { recordProtocolInboxChange, resetProtocolInboxDepth } from "./process-health";
 
 type Incoming =
   | { readonly _tag: "data"; readonly frame: Uint8Array }
@@ -54,14 +55,17 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
       const inbox = yield* Queue.unbounded<Incoming>();
       const offData = bridge.onData((frame) => {
         Queue.offerUnsafe(inbox, { _tag: "data", frame });
+        recordProtocolInboxChange(1);
       });
       const offClosed = bridge.onClosed((reason) => {
         Queue.offerUnsafe(inbox, { _tag: "closed", reason });
+        recordProtocolInboxChange(1);
       });
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
           offData();
           offClosed();
+          resetProtocolInboxDepth();
         }),
       );
 
@@ -90,6 +94,7 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         );
 
       const consume: Effect.Effect<never, RpcClientError> = Queue.take(inbox).pipe(
+        Effect.tap(() => Effect.sync(() => recordProtocolInboxChange(-1))),
         Effect.flatMap((message) =>
           message._tag === "closed" ? Effect.fail(closeError(message.reason)) : processFrame(message.frame),
         ),
@@ -98,6 +103,7 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
 
       yield* Effect.sync(() => {
         conn.parser = serialization.makeUnsafe();
+        resetProtocolInboxDepth();
       }).pipe(
         Effect.andThen(Effect.tryPromise({ try: () => bridge.connect(), catch: openError })),
         Effect.onExit((exit) => Deferred.done(conn.gate, exit)),

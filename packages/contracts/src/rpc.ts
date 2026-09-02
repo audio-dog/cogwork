@@ -14,6 +14,7 @@ import {
   ControlStoreFailure,
   DaemonLimitUpdate,
   DaemonStatus,
+  DesktopProcessHealthSample,
   SchedulerStats,
   SchedulingState,
   StaleControlStoreWrite,
@@ -38,6 +39,8 @@ import {
 } from "./workspace";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
+
+export const GetMetrics = Rpc.make("GetMetrics", { success: Schema.String });
 
 export const GetControlStore = Rpc.make("GetControlStore", {
   success: ControlStore,
@@ -79,6 +82,7 @@ export const WatchEvents = Rpc.make("WatchEvents", {
 
 export const DaemonQueries = RpcGroup.make(
   GetStatus,
+  GetMetrics,
   GetControlStore,
   GetPlugins,
   GetConnections,
@@ -140,6 +144,11 @@ export const HandBack = Rpc.make("HandBack", {
 export const SetScheduling = Rpc.make("SetScheduling", {
   payload: { desired: SchedulingState },
   success: SchedulerStats,
+});
+
+export const ReportProcessHealth = Rpc.make("ReportProcessHealth", {
+  payload: { samples: Schema.Array(DesktopProcessHealthSample) },
+  success: Schema.Void,
 });
 
 export const SetDaemonLimit = Rpc.make("SetDaemonLimit", {
@@ -213,6 +222,7 @@ export const DaemonCommands = RpcGroup.make(
   HandBack,
   Reclassify,
   SetScheduling,
+  ReportProcessHealth,
   SetDaemonLimit,
   SetContributionSetting,
   SetOperationSetting,
