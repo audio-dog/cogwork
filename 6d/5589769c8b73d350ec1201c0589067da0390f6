@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_471ef6216cbab1::t_fcc5964a50537f 13,139-173
+  s_471ef6216cbab1::t_31646952b313e9 226-227,233
+  s_471ef6216cbab1::t_6527105390c16b 234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6d5589769c8b73d350ec1201c0589067da0390f6",
+  "prompts": {},
+  "sessions": {
+    "s_471ef6216cbab1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f50-46c8-71f0-ba6f-7dcd77bb416b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
