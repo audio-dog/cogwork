@@ -6,14 +6,16 @@ import { claudeCodeRunner } from "@cogwork/claude-code";
 import { codexRunner } from "@cogwork/codex-cli";
 import { DaemonRpcs, HarnessName } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
-import { ContextAssembler, Daemon, Provider } from "@cogwork/engine";
+import { ContextAssembler, Daemon, Provider, Replay } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
+import * as Config from "effect/Config";
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -80,13 +82,19 @@ const cursorName = Schema.decodeSync(HarnessName)("cursor");
 const claudeName = Schema.decodeSync(HarnessName)("claude");
 const codexName = Schema.decodeSync(HarnessName)("codex");
 const providerName = Schema.decodeSync(HarnessName)("provider");
+const replayName = Schema.decodeSync(HarnessName)("replay");
 
-export const harnessRunners = [
+const standardHarnessRunners = [
   cursorRunner({ name: cursorName }),
   claudeCodeRunner({ name: claudeName }),
   codexRunner({ name: codexName, environment: process.env }),
   Provider.providerRunner({ name: providerName }),
 ];
+
+export const harnessRunners = Replay.replayRunner({
+  name: replayName,
+  fixturePath: Config.option(Config.string("COGWORK_REPLAY_FIXTURE")).pipe(Effect.map(Option.getOrUndefined)),
+}).pipe(Effect.map((runner) => [...standardHarnessRunners, runner]));
 
 const engineOperatingInstructionsDir = nodePath.resolve(
   nodePath.dirname(fileURLToPath(import.meta.resolve("@cogwork/engine"))),
@@ -297,16 +305,22 @@ const contextAssemblerLayer = (homeDir: string) =>
   }).pipe(Layer.provide(contextFsLayer));
 
 export const serverLayer = (options: DaemonOptions) =>
-  Daemon.serverLayer({
-    transport: transportLayer(options.socketPath),
-    credentials: credentialsLayer(options.credentialsPath),
-    contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
-    runLedger: ledgerLayer,
-    controlStorePath: options.controlStorePath,
-    userAgentsDir,
-    worktrees: worktreeManagerLayer,
-    harnessRunners,
-  });
+  Layer.unwrap(
+    harnessRunners.pipe(
+      Effect.map((runners) =>
+        Daemon.serverLayer({
+          transport: transportLayer(options.socketPath),
+          credentials: credentialsLayer(options.credentialsPath),
+          contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
+          runLedger: ledgerLayer,
+          controlStorePath: options.controlStorePath,
+          userAgentsDir,
+          worktrees: worktreeManagerLayer,
+          harnessRunners: runners,
+        }),
+      ),
+    ),
+  );
 
 export const clientLayer = (socketPath: string) =>
   daemonRpcDeadlineLayer(daemonRpcDeadline).pipe(
