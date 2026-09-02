@@ -169,13 +169,11 @@ const denied = (method: string, target: string) =>
     pathOrDescriptor: target,
   });
 
-const initializeFixtureRoot = Effect.fn("test.initializeFixtureRoot")(function* (root: string) {
+const setupFixture = Effect.fn("test.setupFixture")(function* (cwd: string, script: string) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const exitCode = yield* spawner.exitCode(
-    ChildProcess.make("git init -q", { cwd: root, shell: true, env: isolated }),
-  );
+  const exitCode = yield* spawner.exitCode(ChildProcess.make(script, { cwd, shell: true, env: isolated }));
   if (exitCode === 0) return;
-  return yield* Effect.die(new Error(`fixture root initialization failed (${exitCode}) in ${root}`));
+  return yield* Effect.die(new Error(`fixture setup failed (${exitCode}) in ${cwd}: ${script}`));
 });
 
 const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwd: string, script: string) {
@@ -209,15 +207,12 @@ describe("real git fixture confinement", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const fixtureRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-git-fixture-" });
       const outsideRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-git-outside-" });
       const sentinel = path.join(outsideRoot, "escaped");
 
-      yield* initializeFixtureRoot(fixtureRoot);
-      yield* spawner.exitCode(
-        ChildProcess.make("git init -q", { cwd: outsideRoot, env: isolated, shell: true }),
-      );
+      yield* setupFixture(fixtureRoot, "git init -q");
+      yield* setupFixture(outsideRoot, "git init -q");
 
       const cause = yield* Effect.flip(
         shell(fixtureRoot, outsideRoot, `touch ${sentinel}`).pipe(Effect.sandbox),
@@ -520,9 +515,8 @@ const fixture = Effect.fn("test.fixture")(function* (branch: string) {
   const checkout = path.join(root, "checkout");
   const peer = path.join(root, "peer");
 
-  yield* initializeFixtureRoot(root);
-  yield* shell(root, root, `git init -q --bare ${remote}`);
-  yield* shell(root, root, `git -c init.defaultBranch=main clone -q ${remote} checkout`);
+  yield* setupFixture(root, `git init -q --bare ${remote}`);
+  yield* setupFixture(root, `git -c init.defaultBranch=main clone -q ${remote} checkout`);
   yield* shell(
     root,
     checkout,
@@ -533,7 +527,7 @@ const fixture = Effect.fn("test.fixture")(function* (branch: string) {
     checkout,
     `git worktree add -q -B ${branch} ${path.join(root, "wt")} origin/main && cd ${path.join(root, "wt")} && echo work > work.txt && git add -A && git commit -qm work && git push -q origin ${branch}`,
   );
-  yield* shell(root, root, `git clone -q ${remote} peer`);
+  yield* setupFixture(root, `git clone -q ${remote} peer`);
 
   return { root, checkout, worktree: path.join(root, "wt"), peer, branch };
 });
