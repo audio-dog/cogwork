@@ -17,23 +17,24 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
-import { TooltipProvider } from "@cogwork/ui/components/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import {
   RiEqualizerLine,
-  RiFoldersLine,
   RiNodeTree,
   RiPlugLine,
   RiPulseLine,
   RiSettings3Line,
+  RiSettings4Line,
   RiUserLine,
 } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { useBoard } from "../features/activity-session";
-import { registeredWorkspaces } from "../features/feed";
+import { registeredWorkspaceOptions } from "../features/feed";
 import { useChromeStore } from "../store/chrome";
 import { HistoryNav } from "./history-nav";
 import { useTheme } from "./theme-provider";
@@ -46,7 +47,6 @@ interface View {
 
 const views: ReadonlyArray<View> = [
   { label: "Feed", icon: RiPulseLine, to: "/" },
-  { label: "Workspaces", icon: RiFoldersLine, to: "/workspaces" },
   { label: "Workflows", icon: RiNodeTree, to: "/workflows" },
   { label: "Connections", icon: RiPlugLine, to: "/connections" },
   { label: "Customize", icon: RiEqualizerLine, to: "/customize" },
@@ -75,7 +75,7 @@ function WorkspaceFilter() {
   const board = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
   const setFilter = useChromeStore((state) => state.setWorkspaceFilter);
-  const workspaces = board._tag === "Success" ? registeredWorkspaces(board.board) : [];
+  const workspaces = board._tag === "Success" ? registeredWorkspaceOptions(board.board) : [];
 
   return (
     <SidebarGroup>
@@ -92,14 +92,28 @@ function WorkspaceFilter() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           {workspaces.map((workspace) => (
-            <SidebarMenuItem key={workspace}>
+            <SidebarMenuItem key={workspace.id}>
               <SidebarMenuButton
-                isActive={filter === workspace}
-                onClick={() => setFilter(workspace)}
-                tooltip={workspace}
+                isActive={filter === workspace.id}
+                onClick={() => setFilter(workspace.id)}
+                tooltip={workspace.label}
               >
-                <span>{workspace}</span>
+                <span>{workspace.label}</span>
               </SidebarMenuButton>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <SidebarMenuAction
+                      showOnHover
+                      aria-label={`${workspace.label} settings`}
+                      render={<Link to="/workspaces/$workspaceId" params={{ workspaceId: workspace.id }} />}
+                    />
+                  }
+                >
+                  <RiSettings4Line />
+                </TooltipTrigger>
+                <TooltipContent side="right">Workspace settings</TooltipContent>
+              </Tooltip>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>

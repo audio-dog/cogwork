@@ -48,11 +48,24 @@ const runs = (board: Board, filter: WorkspaceId | null) =>
 const workspaceItems = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
   [...board.items.values()].filter(({ workspace }) => inWorkspace(filter, workspace));
 
+const registeredStates = (board: Board) =>
+  [...board.workspaces.values()].filter((state) => state._tag === "Registered");
+
 export const registeredWorkspaces = (board: Board): WorkspaceId[] =>
-  [...board.workspaces.values()]
-    .filter((state) => state._tag === "Registered")
+  registeredStates(board)
     .map((state) => state.name)
     .sort();
+
+export interface WorkspaceOption {
+  readonly id: WorkspaceId;
+  readonly label: string;
+}
+
+/** Register mints the WorkspaceId as a UUIDv7, so anything a person picks from needs the name. */
+export const registeredWorkspaceOptions = (board: Board): WorkspaceOption[] =>
+  registeredStates(board)
+    .map((state) => ({ id: state.name, label: state.displayName ?? state.name }))
+    .sort((left, right) => left.label.localeCompare(right.label));
 
 export const runningRuns = (board: Board, filter: WorkspaceId | null): FeedRun[] =>
   runs(board, filter)
