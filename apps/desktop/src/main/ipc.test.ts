@@ -409,6 +409,31 @@ it("rejects rapid repeated profile captures", async () => {
   }
 });
 
+it("allows an immediate retry after a rejected profile capture", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+  const getPreferences = vi
+    .fn()
+    .mockReturnValueOnce({ closeToHide: true, profiling: false })
+    .mockReturnValue({ closeToHide: true, profiling: true });
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      windowPreferences: { ...windowPreferences, get: getPreferences },
+    });
+    const capture = ipc.handlers.get(IpcChannel.captureProcessProfile);
+    if (!capture) throw new Error("Process profile handler was not registered");
+
+    await expect(capture({ sender }, { _tag: "MainHeapSnapshot" })).rejects.toThrow("Profiling is disabled");
+    await expect(capture({ sender }, { _tag: "MainHeapSnapshot" })).resolves.toBe(
+      "/diagnostics/main.heapsnapshot",
+    );
+  } finally {
+    await runtime.dispose();
+  }
+});
+
 it("rejects diagnostics from an untrusted renderer", async () => {
   const runtime = makeRuntime();
   const sender = new FakeSender();

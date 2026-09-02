@@ -64,9 +64,6 @@ const authorizeDiagnostics = (
   return fail("Diagnostics are unavailable from this renderer");
 };
 
-// Profiling flags reach the daemon only on an owned spawn's argv. A restart therefore changes
-// nothing for an adopted daemon, which another process launched, and only churns the reported
-// status through stopped and back to adopted.
 const isOwnedStatus = (status: EngineStatus) => status === "starting" || status === "running";
 
 const restartSupervisorIfOwned = Effect.fn("DesktopIpc.restartSupervisorIfOwned")(function* (
@@ -113,8 +110,7 @@ const makeCaptureProfileHandler = (deps: IpcDeps) => {
     if (now - previous < profileCaptureCooldownMillis) {
       return yield* captureFailure("Wait before starting another process profile");
     }
-    yield* Ref.set(lastStartedAt, now);
-    return yield* captureProfile(deps, capture);
+    return yield* captureProfile(deps, capture).pipe(Effect.tap(() => Ref.set(lastStartedAt, now)));
   });
   return Effect.fn("DesktopIpc.captureProfileHandler")(function* (sender: WebContents, input: unknown) {
     yield* authorizeDiagnostics(deps, sender, captureFailure);
