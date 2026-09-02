@@ -207,6 +207,24 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("does not fail an accepted issue creation whose response body stalls", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(hangingResponse("{", 201)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(
+        client.createIssue(repo, {
+          title: "Daemon event loop delay is high",
+          body: "Signal: event-loop-delay",
+          labels: ["needs-triage", "origin:selfperf"],
+        }),
+      );
+      yield* TestClock.adjust("1 minute");
+      assert.strictEqual(fetch.mock.calls.length, 1);
+      yield* Fiber.join(operation);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("retries a transient label removal", () =>
     transientWrite(503, (client) => client.removeLabel(repo, 287, "cogwork:claimed")),
   );

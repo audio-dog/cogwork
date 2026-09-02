@@ -514,14 +514,19 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     yield* withTransientRetry(send(repo, withBody, acceptResponse));
   });
 
-  const sendJsonOnce = Effect.fn("github.sendJsonOnce")(function* (
+  const sendAcceptedJsonOnce = Effect.fn("github.sendAcceptedJsonOnce")(function* (
     repo: GitHubRepoRef,
     request: HttpClientRequest.HttpClientRequest,
     body: unknown,
   ) {
     const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), toUnavailable);
-    return yield* send(repo, withBody, (response) => response.json).pipe(
+    const response = yield* send(repo, withBody, Effect.succeed).pipe(
       Effect.mapError((error) => error.error),
+    );
+    return yield* response.json.pipe(
+      Effect.option,
+      Effect.timeoutOption(transientAttemptDeadline),
+      Effect.map(Option.flatten),
     );
   });
 
@@ -535,12 +540,17 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     repo: GitHubRepoRef,
     input: CreateIssueInput,
   ) {
-    const json = yield* sendJsonOnce(repo, HttpClientRequest.post(repoPath(repo, "/issues")), {
-      title: input.title,
-      body: input.body,
-      labels: input.labels,
-    });
-    const created = yield* Effect.mapError(decodeCreatedIssue(json), toUnavailable);
+    const acceptedBody = yield* sendAcceptedJsonOnce(
+      repo,
+      HttpClientRequest.post(repoPath(repo, "/issues")),
+      {
+        title: input.title,
+        body: input.body,
+        labels: input.labels,
+      },
+    );
+    if (Option.isNone(acceptedBody)) return;
+    const created = yield* Effect.mapError(decodeCreatedIssue(acceptedBody.value), toUnavailable);
     const applied = new Set(created.labels.map(labelName));
     yield* Effect.forEach(
       input.labels.filter((label) => !applied.has(label)),
