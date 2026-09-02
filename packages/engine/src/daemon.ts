@@ -19,6 +19,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import type * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as Schedule from "effect/Schedule";
@@ -63,6 +64,7 @@ import * as Harness from "./harness";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
+import { recordProcessHealth, reportDaemonProcessHealth } from "./performance-metrics";
 import { PluginManager, pluginManagerLayer } from "./plugin";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import {
@@ -236,6 +238,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const config = yield* scheduler.config;
     const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
+    const bus = yield* DaemonEventBus;
     const controlStore = yield* ControlStore;
     const registry = yield* (yield* WorkspaceRegistry).state;
     const stateByName = statesByName(snapshot);
@@ -243,6 +246,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
       health: controlStore.health === "available" ? "running" : "store-unavailable",
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
+      eventBusDroppedEvents: yield* bus.droppedEvents,
       scheduler: schedulerStatsOf(registry, config, stats),
       workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
       failures: registry.failures.map(({ name, displayName, source, message }) => ({
@@ -252,6 +256,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
         message,
       })),
     };
+  }),
+  GetMetrics: Effect.fn("Daemon.GetMetrics")(function* () {
+    return yield* Metric.dump;
   }),
   GetControlStore: Effect.fn("Daemon.GetControlStore")(function* () {
     const store = yield* ControlStore;
@@ -284,6 +291,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   HandBack: handBack,
   Reclassify: reclassify,
   SetScheduling: setScheduling,
+  ReportProcessHealth: Effect.fn("Daemon.ReportProcessHealth")(function* ({ samples }) {
+    yield* Effect.forEach(samples, recordProcessHealth, { discard: true });
+  }),
   SetDaemonLimit: setDaemonLimit,
   SetContributionSetting: setContributionSetting,
   SetOperationSetting: setOperationSetting,
@@ -508,8 +518,13 @@ const activeHeartbeats = (options: HeartbeatOptions) =>
 
 const awaitHeartbeatInterruption = () => Effect.callback<never>(() => Effect.void);
 
-export const heartbeats = (options: HeartbeatOptions) =>
+const operationalHeartbeats = (options: HeartbeatOptions) =>
   Effect.flatMap(ControlStore, (controlStore) => {
     if (controlStore.health === "unavailable") return awaitHeartbeatInterruption();
     return activeHeartbeats(options);
+  });
+
+export const heartbeats = (options: HeartbeatOptions) =>
+  Effect.all([operationalHeartbeats(options), reportDaemonProcessHealth], {
+    concurrency: "unbounded",
   });

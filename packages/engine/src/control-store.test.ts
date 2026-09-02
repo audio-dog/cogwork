@@ -15,6 +15,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -27,6 +28,7 @@ import {
   bootControlStoreLayer,
   ControlStore,
   type ControlStoreService,
+  controlStoreWriteGateWaitDuration,
   readControlStore,
 } from "./control-store";
 import { createStatements } from "./control-store-create.gen";
@@ -582,6 +584,15 @@ layer(NodeServices.layer)((it) => {
         "linear/acme",
         "linear/other",
       ]);
+    }),
+  );
+
+  it.effect("measures time waiting for the write gate", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      const before = (yield* Metric.value(controlStoreWriteGateWaitDuration)).count;
+      yield* withStore(storePath, (store) => store.withWrite(Effect.void));
+      assert.strictEqual((yield* Metric.value(controlStoreWriteGateWaitDuration)).count, before + 1);
     }),
   );
 

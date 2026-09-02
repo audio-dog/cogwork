@@ -12,6 +12,54 @@ import { OperationNeedKind, WorkspaceConcurrency } from "./workspace";
 export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
 
+const NonNegativeFinite = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
+
+const processMemoryFields = {
+  sampledAtMillis: Schema.Natural,
+  heapUsedBytes: Schema.optionalKey(NonNegativeFinite),
+  heapLimitBytes: Schema.optionalKey(NonNegativeFinite),
+  privateBytes: Schema.optionalKey(NonNegativeFinite),
+} as const;
+
+export const DaemonProcessHealthSample = Schema.Struct({
+  process: Schema.tag("daemon"),
+  ...processMemoryFields,
+  eventLoopDelayP99Millis: Schema.optionalKey(NonNegativeFinite),
+  eventLoopUtilization: Schema.optionalKey(NonNegativeFinite),
+});
+export type DaemonProcessHealthSample = typeof DaemonProcessHealthSample.Type;
+
+export const MainProcessHealthSample = Schema.Struct({
+  process: Schema.tag("main"),
+  ...processMemoryFields,
+  eventLoopDelayP99Millis: Schema.optionalKey(NonNegativeFinite),
+  eventLoopUtilization: Schema.optionalKey(NonNegativeFinite),
+  ipcFramesToRendererPerSecond: Schema.optionalKey(NonNegativeFinite),
+  ipcFramesToDaemonPerSecond: Schema.optionalKey(NonNegativeFinite),
+});
+export type MainProcessHealthSample = typeof MainProcessHealthSample.Type;
+
+export const RendererProcessHealthSample = Schema.Struct({
+  process: Schema.tag("renderer"),
+  ...processMemoryFields,
+  protocolInboxDepth: Schema.optionalKey(Schema.Natural),
+  eventsAppliedPerSecond: Schema.optionalKey(NonNegativeFinite),
+});
+export type RendererProcessHealthSample = typeof RendererProcessHealthSample.Type;
+
+export const DesktopProcessHealthSample = Schema.Union([
+  MainProcessHealthSample,
+  RendererProcessHealthSample,
+]).pipe(Schema.toTaggedUnion("process"));
+export type DesktopProcessHealthSample = typeof DesktopProcessHealthSample.Type;
+
+export const ProcessHealthSample = Schema.Union([
+  DaemonProcessHealthSample,
+  MainProcessHealthSample,
+  RendererProcessHealthSample,
+]).pipe(Schema.toTaggedUnion("process"));
+export type ProcessHealthSample = typeof ProcessHealthSample.Type;
+
 export const PrChecks = Schema.Literals(["passing", "failing", "pending"]);
 export type PrChecks = typeof PrChecks.Type;
 
@@ -212,6 +260,7 @@ export const DaemonStatus = Schema.Struct({
   health: DaemonHealth,
   startedAtMillis: Schema.Natural,
   uptimeMillis: Schema.Natural,
+  eventBusDroppedEvents: Schema.Natural,
   scheduler: SchedulerStats,
   workspaces: Schema.Array(WorkspaceInfo),
   failures: Schema.Array(WorkspaceFailureInfo),

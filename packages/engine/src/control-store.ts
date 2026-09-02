@@ -34,12 +34,18 @@ import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import lockfile, { type LockOptions } from "proper-lockfile";
 import * as controlStoreSchema from "./control-store-schema";
+
+export const controlStoreWriteGateWaitDuration = Metric.timer(
+  "cogwork_control_store_write_gate_wait_duration",
+  { description: "Time spent waiting to enter the Control store write gate." },
+);
 
 export type ControlStoreService =
   | {
@@ -626,7 +632,12 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       uninstallPlugin(pluginId).pipe(Effect.mapError(storeFailure("uninstall Plugin"))),
     updateContributionSetting: (update: ContributionSettingUpdate) =>
       updateContributionSetting(update).pipe(Effect.mapError(storeFailure("update contribution setting"))),
-    withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => writeGate.withPermits(1)(effect),
+    withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      Effect.acquireUseRelease(
+        writeGate.take(1).pipe(Effect.trackDuration(controlStoreWriteGateWaitDuration)),
+        () => effect,
+        () => writeGate.release(1),
+      ),
   };
 });
 

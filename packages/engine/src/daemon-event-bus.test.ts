@@ -2,6 +2,9 @@ import { RunId, SchedulerStats, WorkItemId, WorkspaceId } from "@cogwork/contrac
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as Logger from "effect/Logger";
+import * as Metric from "effect/Metric";
+import * as MutableRef from "effect/MutableRef";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as DaemonEventBus from "./daemon-event-bus";
@@ -10,6 +13,9 @@ const stats = Schema.decodeSync(SchedulerStats);
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("example");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
+const droppedEvents = Metric.counter("cogwork_daemon_event_bus_dropped_events_total", {
+  description: "Daemon events evicted before every subscriber consumed them.",
+});
 
 const schedulerEvent = (globalInFlight: number) =>
   ({
@@ -27,6 +33,53 @@ const schedulerEvent = (globalInFlight: number) =>
   }) as const;
 
 describe("DaemonEventBus", () => {
+  it.effect("counts every evicted event and logs only when loss starts", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const logs = MutableRef.make<ReadonlyArray<string>>([]);
+      const before = (yield* Metric.value(droppedEvents)).count;
+      yield* bus.subscribe();
+      yield* Effect.forEach(
+        Array.from({ length: 1026 }, (_, i) => i),
+        (i) => bus.publish(schedulerEvent(i)),
+        { discard: true },
+      ).pipe(
+        Effect.withLogger(
+          Logger.make(({ message }) => MutableRef.update(logs, (current) => [...current, String(message)])),
+        ),
+      );
+
+      assert.strictEqual(yield* bus.droppedEvents, 2);
+      assert.strictEqual((yield* Metric.value(droppedEvents)).count, before + 2);
+      assert.strictEqual(
+        logs.current.filter((message) => message.includes("Daemon event bus started dropping events")).length,
+        1,
+      );
+    }).pipe(Effect.provide(DaemonEventBus.layer), Effect.scoped),
+  );
+
+  it.effect("stays silent while every event fits", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const logs = MutableRef.make<ReadonlyArray<string>>([]);
+      yield* bus.subscribe();
+      yield* Effect.forEach(
+        Array.from({ length: 100 }, (_, i) => i),
+        (i) => bus.publish(schedulerEvent(i)),
+        { discard: true },
+      ).pipe(
+        Effect.withLogger(
+          Logger.make(({ message }) => MutableRef.update(logs, (current) => [...current, String(message)])),
+        ),
+      );
+
+      assert.strictEqual(yield* bus.droppedEvents, 0);
+      assert.isFalse(
+        logs.current.some((message) => message.includes("Daemon event bus started dropping events")),
+      );
+    }).pipe(Effect.provide(DaemonEventBus.layer), Effect.scoped),
+  );
+
   it.effect("a subscriber that never drains cannot block the publisher", () =>
     Effect.gen(function* () {
       const bus = yield* DaemonEventBus.DaemonEventBus;

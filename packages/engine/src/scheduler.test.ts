@@ -327,6 +327,7 @@ const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileS
     blocked: [],
     needsHuman: [],
     observed: [],
+    observedCount: 0,
     availability: [],
   })),
 });
@@ -463,8 +464,10 @@ describe("Scheduler.tick", () => {
     Effect.gen(function* () {
       const scheduler = yield* Scheduler.Scheduler;
       const probe = yield* SchedulerProbe;
+      const before = (yield* Metric.value(Scheduler.schedulerTickDuration)).count;
 
       assert.strictEqual(yield* scheduler.tick(), 0);
+      assert.strictEqual((yield* Metric.value(Scheduler.schedulerTickDuration)).count, before + 1);
       assert.deepStrictEqual(yield* Ref.get(probe.executions), []);
     }).pipe(
       Effect.provide(

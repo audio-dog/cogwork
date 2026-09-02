@@ -10,6 +10,7 @@ import {
 import { createDaemonBridgePort, type DaemonBridgePort } from "./daemon-bridge";
 import type { EngineSupervisor, EngineSupervisorService } from "./engine-supervisor";
 import { mainLogger, rendererLogger } from "./logger";
+import { makeMainProcessHealth } from "./process-health";
 import type { WindowPreferencesStore } from "./window-preferences";
 
 export interface IpcDeps {
@@ -23,13 +24,15 @@ export interface IpcDeps {
 // underlying render frame can already be disposed — so `send` throws "Render frame was disposed".
 // That throw would otherwise escape the daemon socket's data pump as an uncaught exception. The
 // renderer re-subscribes once its frame is back, so dropping the frame here is the correct recovery.
-const safeSend = (contents: WebContents, channel: string, payload: unknown): void => {
-  if (contents.isDestroyed()) return;
+const safeSend = (contents: WebContents, channel: string, payload: unknown) => {
+  if (contents.isDestroyed()) return false;
   try {
     contents.send(channel, payload);
+    return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     mainLogger.warn(`Dropped ${channel} to a disposed frame: ${message}`);
+    return false;
   }
 };
 
@@ -41,6 +44,8 @@ interface RendererSession {
 const closeSessionScope = (scope: Scope.Closeable) => Scope.close(scope, Exit.void);
 
 export const registerIpc = (deps: IpcDeps) => {
+  const processHealth = makeMainProcessHealth();
+  deps.runtime.runFork(Scope.addFinalizer(deps.runtime.scope, processHealth.close));
   ipcMain.handle(IpcChannel.getEngineStatus, () =>
     deps.runtime.runPromise(SubscriptionRef.get(deps.supervisor.status)),
   );
@@ -53,6 +58,7 @@ export const registerIpc = (deps: IpcDeps) => {
   );
 
   ipcMain.handle(IpcChannel.getWindowPreferences, () => deps.windowPreferences.get());
+  ipcMain.handle(IpcChannel.getMainProcessHealth, () => deps.runtime.runPromise(processHealth.sample));
   ipcMain.handle(IpcChannel.setWindowPreferences, (_event, preferences: WindowPreferences) =>
     deps.windowPreferences.set(preferences),
   );
@@ -70,7 +76,9 @@ export const registerIpc = (deps: IpcDeps) => {
 
     const scope = yield* Scope.fork(deps.runtime.scope);
     const port = yield* createDaemonBridgePort(deps.socketPath, {
-      onData: (frame) => safeSend(sender, IpcChannel.rpcData, frame),
+      onData: (frame) => {
+        if (safeSend(sender, IpcChannel.rpcData, frame)) processHealth.recordToRenderer();
+      },
       onClosed: (reason) => safeSend(sender, IpcChannel.rpcClosed, reason),
     }).pipe(Scope.provide(scope));
     const onDestroyed = () => deps.runtime.runFork(closeSessionScope(scope));
@@ -94,7 +102,15 @@ export const registerIpc = (deps: IpcDeps) => {
   ipcMain.on(IpcChannel.rpcSend, (event, frame: string) => {
     const session = sessions.get(event.sender);
     if (!session?.port) return;
-    deps.runtime.runFork(Effect.forkIn(session.port.send(frame).pipe(Effect.ignore), session.scope));
+    deps.runtime.runFork(
+      Effect.forkIn(
+        session.port.send(frame).pipe(
+          Effect.tap(() => Effect.sync(processHealth.recordToDaemon)),
+          Effect.ignore,
+        ),
+        session.scope,
+      ),
+    );
   });
   ipcMain.on(IpcChannel.rendererError, (_event, report: RendererErrorReport) => {
     rendererLogger.error(`${report.origin ?? "renderer"}: ${report.message}`, report.stack);

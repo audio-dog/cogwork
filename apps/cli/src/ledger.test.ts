@@ -18,10 +18,11 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
-import { layer as ledgerLayer } from "./ledger";
+import { layer as ledgerLayer, runLedgerAppendDuration } from "./ledger";
 
 class TestStorePath extends Context.Service<TestStorePath, string>()(
   "@cogwork/cli/ledger.test/TestStorePath",
@@ -200,6 +201,7 @@ describe("sqlite RunLedger", () => {
         const ledger = yield* RunLedger.CoreRunLedger;
         const id = runId("happy-1");
         yield* ledger.insertRun(record("happy-1", 1000, { session }));
+        const before = (yield* Metric.value(runLedgerAppendDuration)).count;
         yield* ledger.appendEvent(id, {
           seq: 1,
           type: "TEXT_MESSAGE_CONTENT",
@@ -214,6 +216,7 @@ describe("sqlite RunLedger", () => {
           data: "{}",
           atMillis: 1001,
         });
+        assert.strictEqual((yield* Metric.value(runLedgerAppendDuration)).count, before + 2);
         yield* ledger.setRunSession(id, replacementSession);
         yield* ledger.updateRun(id, {
           status: "succeeded",
