@@ -26,7 +26,7 @@ import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { describe, expect, it } from "vitest";
 import { createDaemonBridgePort, type DaemonBridgePort } from "../../../main/daemon-bridge";
-import type { DaemonRpcBridge } from "../../../shared/ipc";
+import type { DaemonRpcBridge, RpcSessionId } from "../../../shared/ipc";
 import { layerProtocolIpc, makeProtocolIpc, protocolInboxCapacity } from "./protocol";
 
 const Ping = Rpc.make("Ping", { success: Schema.String });
@@ -47,23 +47,23 @@ const serverLayer = (socketPath: string) =>
   );
 
 const makeBridge = (socketPath: string): DaemonRpcBridge & { readonly dispose: () => Promise<void> } => {
-  const dataListeners = new Set<(frame: Uint8Array) => void>();
-  const closedListeners = new Set<(reason: string | null) => void>();
+  const dataListeners = new Set<Parameters<DaemonRpcBridge["onData"]>[0]>();
+  const closedListeners = new Set<Parameters<DaemonRpcBridge["onClosed"]>[0]>();
   const runtime = ManagedRuntime.make(Layer.empty);
   const current = runtime.runSync(
     ScopedRef.make<DaemonBridgePort | null>(() => null).pipe(Scope.provide(runtime.scope)),
   );
 
-  const connect = async () => {
+  const connect = async (sessionId: RpcSessionId) => {
     await runtime.runPromise(
       ScopedRef.set(
         current,
         createDaemonBridgePort(socketPath, {
           onData: (frame) => {
-            for (const listener of dataListeners) listener(frame);
+            for (const listener of dataListeners) listener({ sessionId, frame });
           },
           onClosed: (reason) => {
-            for (const listener of closedListeners) listener(reason);
+            for (const listener of closedListeners) listener({ sessionId, reason });
           },
         }),
       ),
@@ -148,49 +148,65 @@ class FloodBridgeProbe extends Context.Service<
     readonly connectionCount: Effect.Effect<number>;
     readonly initialConnectionReady: Effect.Effect<void>;
     readonly reconnectStarted: Effect.Effect<void>;
+    readonly reconnectReady: Effect.Effect<void>;
     readonly resumeReconnect: Effect.Effect<void>;
+    readonly closeReplacedSession: Effect.Effect<void>;
   }
 >()("@cogwork/desktop/test/FloodBridgeProbe") {
   static readonly layer = Layer.effect(
     FloodBridgeProbe,
     Effect.gen(function* () {
       const connections = yield* Ref.make(0);
-      const connected = yield* Ref.make(false);
+      const connectedSession = yield* Ref.make<RpcSessionId | null>(null);
       const initialConnectionReady = yield* Deferred.make<void>();
+      const initialSession = yield* Deferred.make<RpcSessionId>();
       const reconnectStarted = yield* Deferred.make<void>();
+      const reconnectReady = yield* Deferred.make<void>();
       const resumeReconnect = yield* Deferred.make<void>();
-      const dataListeners = new Set<(frame: Uint8Array) => void>();
+      const dataListeners = new Set<Parameters<DaemonRpcBridge["onData"]>[0]>();
+      const closedListeners = new Set<Parameters<DaemonRpcBridge["onClosed"]>[0]>();
       return {
         bridge: {
-          connect: () =>
+          connect: (sessionId) =>
             Effect.runPromise(
               Ref.updateAndGet(connections, (count) => count + 1).pipe(
                 Effect.flatMap((count) => {
-                  if (count === 1) return Effect.void;
-                  return Deferred.succeed(reconnectStarted, undefined).pipe(
-                    Effect.andThen(Deferred.await(resumeReconnect)),
+                  const waitForReconnect =
+                    count === 1
+                      ? Effect.void
+                      : Deferred.succeed(reconnectStarted, undefined).pipe(
+                          Effect.andThen(Deferred.await(resumeReconnect)),
+                        );
+                  return waitForReconnect.pipe(
+                    Effect.andThen(Ref.set(connectedSession, sessionId)),
+                    Effect.tap(() => Deferred.succeed(initialSession, sessionId)),
+                    Effect.tap(() =>
+                      count === 2 ? Deferred.succeed(reconnectReady, undefined) : Effect.void,
+                    ),
                   );
                 }),
-                Effect.andThen(Ref.set(connected, true)),
                 Effect.tap(() => Deferred.succeed(initialConnectionReady, undefined)),
               ),
             ),
-          disconnect: () => Effect.runPromise(Ref.set(connected, false)),
+          disconnect: () => Effect.runPromise(Ref.set(connectedSession, null)),
           send: () => undefined,
-          onData: (listener: (frame: Uint8Array) => void) => {
+          onData: (listener) => {
             dataListeners.add(listener);
             return () => dataListeners.delete(listener);
           },
-          onClosed: () => () => undefined,
+          onClosed: (listener) => {
+            closedListeners.add(listener);
+            return () => closedListeners.delete(listener);
+          },
         },
         flood: (count: number) =>
-          Ref.get(connected).pipe(
-            Effect.flatMap((active) => {
-              if (!active) return Effect.void;
+          Ref.get(connectedSession).pipe(
+            Effect.flatMap((sessionId) => {
+              if (sessionId === null) return Effect.void;
               return Effect.sync(() => {
                 const frame = new TextEncoder().encode("{}\n");
                 for (const _ of Array.from({ length: count })) {
-                  for (const listener of dataListeners) listener(frame);
+                  for (const listener of dataListeners) listener({ sessionId, frame });
                 }
               });
             }),
@@ -198,7 +214,17 @@ class FloodBridgeProbe extends Context.Service<
         connectionCount: Ref.get(connections),
         initialConnectionReady: Deferred.await(initialConnectionReady),
         reconnectStarted: Deferred.await(reconnectStarted),
+        reconnectReady: Deferred.await(reconnectReady),
         resumeReconnect: Deferred.succeed(resumeReconnect, undefined).pipe(Effect.asVoid),
+        closeReplacedSession: Deferred.await(initialSession).pipe(
+          Effect.flatMap((sessionId) =>
+            Effect.sync(() => {
+              for (const listener of closedListeners) {
+                listener({ sessionId, reason: "replaced session closed" });
+              }
+            }),
+          ),
+        ),
       };
     }),
   );
@@ -264,6 +290,27 @@ describe("IPC RPC protocol", () => {
         yield* flood.reconnectStarted;
         yield* flood.flood(protocolInboxCapacity + 1);
         yield* flood.resumeReconnect;
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust("1 minute");
+        yield* Effect.yieldNow;
+        expect(yield* flood.connectionCount).toBe(2);
+      }).pipe(Effect.provide(FloodBridgeProbe.layer), Effect.provide(TestClock.layer()), Effect.scoped),
+    );
+  });
+
+  it("keeps a replaced session close out of the replacement inbox", async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const flood = yield* FloodBridgeProbe;
+        yield* Layer.build(layerProtocolIpc(flood.bridge));
+        yield* flood.initialConnectionReady;
+        yield* flood.flood(protocolInboxCapacity + 1);
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust("1 minute");
+        yield* flood.reconnectStarted;
+        yield* flood.resumeReconnect;
+        yield* flood.reconnectReady;
+        yield* flood.closeReplacedSession;
         yield* Effect.yieldNow;
         yield* TestClock.adjust("1 minute");
         yield* Effect.yieldNow;

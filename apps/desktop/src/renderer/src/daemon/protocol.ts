@@ -55,6 +55,7 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         gate: initialGate,
         inbox: initialInbox,
         overflow: initialOverflow,
+        sessionId: 0,
       };
 
       const offerIncoming = (message: Incoming) => {
@@ -67,11 +68,13 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         }
         recordProtocolInboxChange(1);
       };
-      const offData = bridge.onData((frame) => {
-        offerIncoming({ _tag: "data", frame });
+      const offData = bridge.onData((message) => {
+        if (message.sessionId !== conn.sessionId) return;
+        offerIncoming({ _tag: "data", frame: message.frame });
       });
-      const offClosed = bridge.onClosed((reason) => {
-        offerIncoming({ _tag: "closed", reason });
+      const offClosed = bridge.onClosed((message) => {
+        if (message.sessionId !== conn.sessionId) return;
+        offerIncoming({ _tag: "closed", reason: message.reason });
       });
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
@@ -117,21 +120,27 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
       yield* Queue.bounded<Incoming>(protocolInboxCapacity).pipe(
         Effect.flatMap((inbox) =>
           Deferred.make<never, RpcClientError>().pipe(
-            Effect.flatMap((overflow) =>
-              Effect.tryPromise({ try: () => bridge.disconnect(), catch: openError }).pipe(
+            Effect.flatMap((overflow) => {
+              const replacedSessionId = conn.sessionId;
+              const sessionId = replacedSessionId + 1;
+              return Effect.sync(() => {
+                conn.parser = serialization.makeUnsafe();
+                conn.inbox = inbox;
+                conn.overflow = overflow;
+                conn.sessionId = sessionId;
+                resetProtocolInboxDepth();
+              }).pipe(
                 Effect.andThen(
-                  Effect.sync(() => {
-                    conn.parser = serialization.makeUnsafe();
-                    conn.inbox = inbox;
-                    conn.overflow = overflow;
-                    resetProtocolInboxDepth();
+                  Effect.tryPromise({
+                    try: () => bridge.disconnect(),
+                    catch: openError,
                   }),
                 ),
-                Effect.andThen(Effect.tryPromise({ try: () => bridge.connect(), catch: openError })),
+                Effect.andThen(Effect.tryPromise({ try: () => bridge.connect(sessionId), catch: openError })),
                 Effect.onExit((exit) => Deferred.done(conn.gate, exit)),
                 Effect.andThen(Effect.raceFirst(consume(inbox), Deferred.await(overflow))),
-              ),
-            ),
+              );
+            }),
           ),
         ),
         Effect.tapError((error) =>
