@@ -1,0 +1,19 @@
+packages/engine/src/external-harness-runtime.ts
+  s_7084ecaf41e3f6::t_763b0e80b67739 269-272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1371e048d25f5a29de60bcec2b0e6560af136235",
+  "prompts": {},
+  "sessions": {
+    "s_7084ecaf41e3f6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fdcd0b9-512e-4e1d-a2b0-2b92be3b1607",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
