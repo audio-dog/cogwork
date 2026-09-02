@@ -115,6 +115,7 @@ export interface ExternalHarnessCapabilities {
 
 export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
   readonly workspaceRoot?: string;
+  readonly instructionProjection?: "workspace" | "system-prompt";
   readonly messages?: (
     request: ExternalHarnessResolvedRequest,
   ) => ReadonlyArray<ModelMessage | AdapterMessage<Adapter>>;
@@ -230,7 +231,9 @@ const harnessWorkspace = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   return {
     ...preparedWorkspace,
     ...(descriptor.transport.workspaceRoot ? { root: descriptor.transport.workspaceRoot } : {}),
-    instructions: workspaceInstructions(request),
+    ...(descriptor.transport.instructionProjection === "system-prompt"
+      ? {}
+      : { instructions: workspaceInstructions(request) }),
     ...(mcp.skills.length > 0 ? { skills: mcp.skills } : {}),
     ...(mcp.hasSecrets ? { secrets: mcp.secrets } : {}),
   } satisfies WorkspaceDefinition;
@@ -423,7 +426,12 @@ const makeChatStream = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   chat({
     adapter,
     messages: [...adapterMessages(descriptor, request)],
-    systemPrompts: [...(descriptor.transport.systemPrompts?.(request) ?? [])],
+    systemPrompts: [
+      ...(descriptor.transport.instructionProjection === "system-prompt"
+        ? [workspaceInstructions(request)]
+        : []),
+      ...(descriptor.transport.systemPrompts?.(request) ?? []),
+    ],
     middleware: [...middleware, ...(descriptor.transport.middleware?.(request) ?? [])],
     abortController,
     modelOptions: descriptor.projectOptions(request),
