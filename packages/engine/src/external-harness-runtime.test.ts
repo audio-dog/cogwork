@@ -633,6 +633,71 @@ describe("external Harness runtime", () => {
       }),
     );
 
+    it.effect("hands MCP to the descriptor and leaves the checkout untouched for native MCP projection", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-native-mcp-" });
+        const probe = new ControlledProbe();
+        const projections: Array<{ readonly skills: number; readonly markerGate: string }> = [];
+        probe.inspect = (options) => {
+          const projection = getWorkspaceProjection(runtimeCapabilities(options));
+          projections.push({
+            skills: projection.skills.length,
+            markerGate: projection.markerPath.split("/").at(-1) ?? "",
+          });
+          return Promise.resolve();
+        };
+        const base = descriptor(terminalEvents, probe);
+        const nativeDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
+          ...base,
+          transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
+        };
+        const plan = RunPlan.make({
+          ...request,
+          mcp: [
+            {
+              identity: "local:repo/mcp/linear.api",
+              name: "linear.api",
+              projectedName: "linear__api__native",
+              endpoint: "https://dot.example.test/mcp",
+              authenticated: true,
+              unavailableReason: null,
+            },
+          ],
+        });
+
+        yield* make([
+          externalHarnessRunner(nativeDescriptor, {
+            authentication: hostAuthentication,
+            sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
+          }),
+        ])
+          .run({
+            plan,
+            session: null,
+            mcpCredentials: new Map([["local:repo/mcp/linear.api", Redacted.make("native-bearer")]]),
+          })
+          .pipe(Stream.runDrain);
+
+        assert.deepStrictEqual(
+          probe.resolved[0]?.request.mcp.map(({ name, endpoint, bearer }) => ({
+            name,
+            endpoint,
+            bearer: bearer === null ? null : Redacted.value(bearer),
+          })),
+          [
+            {
+              name: "linear__api__native",
+              endpoint: "https://dot.example.test/mcp",
+              bearer: "native-bearer",
+            },
+          ],
+        );
+        assert.deepStrictEqual(projections, [{ skills: 0, markerGate: ".git" }]);
+        assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
+      }),
+    );
+
     it.effect("rejects a required MCP projection before the native Harness launches", () =>
       Effect.gen(function* () {
         const created: Array<string> = [];
