@@ -1,0 +1,32 @@
+packages/process-diagnostics/src/process-profiler.test.ts
+  s_e56f2f08236ec0::t_466e66581965fb 3,85-104
+  s_1e9c792070af79::t_36ac4850820672 105-107
+packages/process-diagnostics/src/process-profiler.ts
+  s_e56f2f08236ec0::t_a33c743a51a73b 83,85,87
+  s_e56f2f08236ec0::t_994bf7266615aa 80-82,84,86
+  s_e56f2f08236ec0::t_8e7fd4997258fd 79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8423f2c66aa84aa9a45c21a8a49b41cdf6b68ce2",
+  "prompts": {},
+  "sessions": {
+    "s_1e9c792070af79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dce-8136-7451-91c5-a0226c2b232e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "agent <agent@example.com>"
+    },
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "agent <agent@example.com>"
+    }
+  }
+}
