@@ -33,6 +33,20 @@ export const settingsIndex = [
     keywords: ["close", "hide", "window", "tray", "menu bar", "quit"],
   },
   {
+    id: "profiling",
+    sectionId: "general",
+    title: "Profiling",
+    description: "Record CPU and heap allocation profiles for the engine daemon.",
+    keywords: ["profiling", "cpu profile", "heap profile", "diagnostics", "performance"],
+  },
+  {
+    id: "process-captures",
+    sectionId: "general",
+    title: "Process captures",
+    description: "Capture a heap snapshot or CPU profile from a live Cogwork process.",
+    keywords: ["capture", "heap snapshot", "cpu profile", "daemon", "main process"],
+  },
+  {
     id: "theme",
     sectionId: "appearance",
     title: "Theme",
