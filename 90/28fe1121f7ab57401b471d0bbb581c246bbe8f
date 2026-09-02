@@ -1,0 +1,145 @@
+packages/engine/src/engine.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 331,333,480-487,511-522,1155-1203
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 7,14-20,48,54
+packages/engine/src/daemon.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 22,72,246,254,265-267,299-301,528,533-536
+  s_a1e67f0ab54757::t_5c36c721a62453 537
+packages/engine/src/worktree.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 5,11-14,265
+packages/engine/src/control-store.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 15,25,237-242
+  s_a1e67f0ab54757::t_61ad7fc0f81295 243-245
+apps/cli/src/commands.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 28,297-300,340-348,610-612
+  s_a1e67f0ab54757::t_0aa455b06c57be 613-614
+packages/engine/src/read-model.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 113
+packages/cursor-acp/src/harness.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 391
+packages/engine/src/executor.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 40,101-105,797
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_a1e67f0ab54757::t_5d308ae0382c39 1,4-6,40-44,49-53,59-63,82-99
+packages/engine/src/daemon-event-bus.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 5-7,16-18,36-82
+packages/engine/src/github/client.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 100-122
+apps/desktop/src/shared/ipc.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-2,10,46
+.cursor/hooks.json
+  s_a1e67f0ab54757::t_5d308ae0382c39 6
+packages/engine/src/executor.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 29,1413,1415
+packages/engine/src/reconcile.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 38-40,59,93,111,277
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 6,8,14-21
+packages/engine/src/performance-metrics.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-51
+packages/codex-cli/src/harness.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 7,12,15-18,20,30,34-36,38-41,44,49,51,53-67,72,79,82,91,97-98,100-106,118-126,129,134,148-149,151,154,159,163-174,176-180,185,188,191-192,194-195,198-210,212-213,215-216,218-219,221-225,227,229-237,239-245,247-249,251-265,267-270,272-281,283-301,303-325,327-396,399-400,402-429,431-449,451-467,469-475,477-491,493-496,498-512,514,516-540,542-543,545-561,563-579,581-597,599-620,622-646,648-663,667-697
+packages/engine/src/worktree.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 8,116,118
+apps/desktop/src/renderer/src/components/history-nav.tsx
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-60
+apps/desktop/src/shared/process-health.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-12
+apps/cli/src/commands.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 89
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_a1e67f0ab54757::t_5d308ae0382c39 38,145,149
+patches/@tanstack__ai-codex@0.5.3.patch
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-474
+packages/codex-cli/CONTEXT.md
+  s_a1e67f0ab54757::t_5d308ae0382c39 7-9,14-17,21-22,36-39,43-49
+apps/desktop/src/renderer/src/components/history-nav.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-17
+packages/engine/src/scheduler.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 330,467,470
+apps/cli/src/cli.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 6,30
+apps/desktop/src/main/ipc.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 13,27-28,31,35,47-48,61,79-81,105-113
+packages/engine/src/daemon-event-bus.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 7,9,12-46,79-83,92
+apps/desktop/src/renderer/src/daemon/process-health.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-101
+packages/engine/src/github/client.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 327,588-603,606
+packages/engine/src/external-harness-runtime.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 42,339,353-358,362,976-987,995-996
+packages/contracts/src/daemon.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 15-62,263
+apps/cli/src/status.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 113-115
+packages/contracts/src/process-health.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-40
+apps/desktop/src/preload/index.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 4,19-35
+packages/engine/src/scheduler.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 42-44,328
+apps/cli/src/status.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 30,59-68
+.codex/hooks.json
+  s_a1e67f0ab54757::t_5d308ae0382c39 9,11
+pnpm-workspace.yaml
+  s_a1e67f0ab54757::t_5d308ae0382c39 46
+packages/contracts/src/rpc.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 17,43-44,85,149-153,225
+packages/engine/src/performance-metrics.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-160
+packages/engine/CONTEXT.md
+  s_a1e67f0ab54757::t_5d308ae0382c39 93,97
+packages/engine/src/control-store.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 36,43-47,581-586
+apps/desktop/src/shared/process-health.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-6
+scripts/format-edited-files.mjs
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-90
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_a1e67f0ab54757::t_5d308ae0382c39 18,20
+packages/engine/src/index.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 20
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 14,58,62,68,97,106
+packages/engine/src/recovery.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 227
+packages/codex-cli/src/harness.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 2,4-5,12,16-18,24,28,30-40,43,47-48,50-54,57,68,86-104,111-114,116-126,128-136,143,145-146,150-166,168,171-181,224-229,231-233,236,252,254-255,257-261,263-265,267-268,273-296,300-305,307-330,333-342
+apps/cli/src/ledger.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 22,29,214,229
+packages/engine/src/tools/file-diff-feed.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 5,12-14,85
+apps/desktop/src/renderer/src/daemon/process-health.test.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-45
+apps/cli/src/ledger.ts
+  s_a1e67f0ab54757::t_d3d73822d3ef81 475-491,493-495,497-498
+  s_a1e67f0ab54757::t_5d308ae0382c39 28,34-37,499
+apps/desktop/src/main/process-health.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 1-69
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_a1e67f0ab54757::t_5d308ae0382c39 19,418
+packages/engine/src/external-harness-runtime.ts
+  s_a1e67f0ab54757::t_5d308ae0382c39 37-38,88,117-118,141,152,226-229,233-236,316-352,354,359,369,384,387,429-434,471-475,482,526-527
+packages/codex-cli/package.json
+  s_a1e67f0ab54757::t_5d308ae0382c39 25
+pnpm-lock.yaml
+  s_a1e67f0ab54757::t_5c30450c98c80d 75,326,337-339,6827
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9028fe1121f7ab57401b471d0bbb581c246bbe8f",
+  "prompts": {},
+  "sessions": {
+    "s_a1e67f0ab54757": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f4f-2a84-7350-b7ba-a0cfb8af1de6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
