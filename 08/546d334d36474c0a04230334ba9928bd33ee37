@@ -1,0 +1,41 @@
+CONTEXT-MAP.md
+  s_1e9c792070af79::t_aa7c5d8602ea84 22,48
+packages/claude-code/CONTEXT.md
+  s_1e9c792070af79::t_5c9328d2eebab8 19-22
+  s_1e9c792070af79::t_aa7c5d8602ea84 1-18,23-31
+patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
+  s_1e9c792070af79::t_ecb3d6d6d6140d 2,5-7,10,13
+packages/claude-code/src/harness.test.ts
+  s_1e9c792070af79::t_1e28b6b8c61b04 33-34,291-292
+  s_1e9c792070af79::t_663723ff0fbc9c 9,96
+  s_1e9c792070af79::t_1f607119d6206b 210-211,240-242,424-425,429,431,441,455-458
+  s_1e9c792070af79::t_a3c50e141c47c1 114-127,138,254-255,415-416,426-428,432-437
+packages/claude-code/src/harness.ts
+  s_1e9c792070af79::t_1e28b6b8c61b04 264,271,292-293,327-329,333
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_1e9c792070af79::t_1f607119d6206b 2,43-44,60
+  s_1e9c792070af79::t_f6802d973c7379 40-41,59,61
+packages/claude-code/package.json
+  s_1e9c792070af79::t_663723ff0fbc9c 25
+patches/@tanstack__ai-claude-code@0.6.3.patch
+  s_1e9c792070af79::t_11e5e0758927b4 2,19-116,120-122,126-160,170,172-472
+  s_1e9c792070af79::t_8b75726fd2c4f6 16,161,166,171,473-483
+pnpm-lock.yaml
+  s_1e9c792070af79::t_20a72ebb4051ba 78,80,107-109,333,339,344-346,379,441,493,6889,6935
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "08546d334d36474c0a04230334ba9928bd33ee37",
+  "prompts": {},
+  "sessions": {
+    "s_1e9c792070af79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dce-8136-7451-91c5-a0226c2b232e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

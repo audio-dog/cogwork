@@ -1,0 +1,31 @@
+patches/@tanstack__ai-claude-code@0.6.3.patch
+  s_1e9c792070af79::t_6022b0e9eb254e 1-20,22,24-32,34-67
+  s_1e9c792070af79::t_4fa5f48f6b5d25 21,23,33
+pnpm-workspace.yaml
+  s_1e9c792070af79::t_a11bbd2637a205 48
+  s_1e9c792070af79::t_6d2d8594bddfff 44-45,47
+packages/claude-code/package.json
+  s_1e9c792070af79::t_f9d412921c95e6 26
+  s_1e9c792070af79::t_9903c715db4847 1-25,27-30
+packages/claude-code/tsconfig.json
+  s_1e9c792070af79::t_9903c715db4847 1-9,11-20
+  s_1e9c792070af79::t_f522225fef5d6f 10
+pnpm-lock.yaml
+  s_1e9c792070af79::t_22ae0c9979ee11 18-20,77-78,81,317-329,331-332,334-335,337-342,344-345,347-351,353,2154-2159,6884-6885,6887,7296,7314,7324,7350,7358
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "429e721e638758ec59e811223bb4960193a9d106",
+  "prompts": {},
+  "sessions": {
+    "s_1e9c792070af79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dce-8136-7451-91c5-a0226c2b232e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
