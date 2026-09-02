@@ -11,6 +11,14 @@ export class DaemonAtomRpc extends AtomRpc.Service<DaemonAtomRpc>()("DaemonAtomR
   protocol: layerProtocolIpc(electronDaemonBridge),
 }) {}
 
+export const pullChunkSize = 256;
+
+export const boundPullChunks = <A, E, R>(stream: Stream.Stream<A, E, R>) =>
+  stream.pipe(
+    Stream.chunks,
+    Stream.flatMap((chunk) => Stream.fromIterable(chunk).pipe(Stream.rechunk(pullChunkSize))),
+  );
+
 export const daemonEventAtom = DaemonAtomRpc.runtime.pull(
   Stream.unwrap(DaemonAtomRpc.use((client) => Effect.succeed(client("WatchEvents", undefined)))),
   { disableAccumulation: true },
@@ -18,7 +26,9 @@ export const daemonEventAtom = DaemonAtomRpc.runtime.pull(
 
 export const runActivityAtom = Atom.family((runId: RunId) =>
   DaemonAtomRpc.runtime.pull(
-    Stream.unwrap(DaemonAtomRpc.use((client) => Effect.succeed(client("WatchActivity", { id: runId })))),
+    Stream.unwrap(DaemonAtomRpc.use((client) => Effect.succeed(client("WatchActivity", { id: runId })))).pipe(
+      boundPullChunks,
+    ),
     { disableAccumulation: true },
   ),
 );
