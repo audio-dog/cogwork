@@ -308,6 +308,32 @@ describe("local telemetry", () => {
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 
+  it.live("keeps fresh evidence when expired rows relieve size pressure", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      yield* Effect.void.pipe(Effect.provide(localLayer(storePath)), Effect.scoped);
+      yield* update(
+        storePath,
+        `WITH RECURSIVE rows(n) AS (
+          VALUES(1)
+          UNION ALL
+          SELECT n + 1 FROM rows WHERE n < 450
+        )
+        INSERT INTO metrics (timestamp, name, type, attributes, state)
+        SELECT 0, 'expired-probe-' || n, 'Gauge', '{}', json_quote(hex(randomblob(1000)))
+        FROM rows;
+        INSERT INTO metrics (timestamp, name, type, attributes, state)
+        VALUES (CAST(unixepoch('now') AS INTEGER) * 1000 - 86400000, 'fresh-probe', 'Gauge', '{}', '1');`,
+      );
+
+      yield* Effect.void.pipe(Effect.provide(localLayer(storePath)), Effect.scoped);
+
+      assert.deepEqual(yield* query(storePath, "SELECT name FROM metrics WHERE name = 'fresh-probe'"), [
+        { name: "fresh-probe" },
+      ]);
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
   it.live("prunes expired evidence and enforces the configured page cap", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

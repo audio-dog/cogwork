@@ -297,6 +297,15 @@ const makeStore = Effect.fn("TelemetryStore.make")(function* (options: LocalTele
   const prune = Effect.fn("TelemetryStore.prune")(
     function* () {
       const cutoff = (yield* Clock.currentTimeMillis) - Duration.toMillis(options.retention);
+      yield* sql.withTransaction(
+        Effect.all(
+          [
+            sql`DELETE FROM spans WHERE start < ${cutoff}`,
+            sql`DELETE FROM metrics WHERE timestamp < ${cutoff}`,
+          ],
+          { discard: true },
+        ),
+      );
       const [{ page_count: pages } = { page_count: 0 }] = yield* sql.unsafe<{
         readonly page_count: number;
       }>("PRAGMA page_count");
@@ -304,25 +313,21 @@ const makeStore = Effect.fn("TelemetryStore.make")(function* (options: LocalTele
         readonly freelist_count: number;
       }>("PRAGMA freelist_count");
       const overSizeTarget = pages - freePages >= Math.floor(maxPages * 0.9);
-      yield* sql.withTransaction(
-        Effect.all(
-          [
-            sql`DELETE FROM spans WHERE start < ${cutoff}`,
-            sql`DELETE FROM metrics WHERE timestamp < ${cutoff}`,
-            overSizeTarget
-              ? sql`DELETE FROM spans WHERE rowid IN (
-                  SELECT rowid FROM spans ORDER BY start LIMIT (SELECT MAX(1, COUNT(*) / 10) FROM spans)
-                )`
-              : Effect.void,
-            overSizeTarget
-              ? sql`DELETE FROM metrics WHERE rowid IN (
-                  SELECT rowid FROM metrics ORDER BY timestamp LIMIT (SELECT MAX(1, COUNT(*) / 10) FROM metrics)
-                )`
-              : Effect.void,
-          ],
-          { discard: true },
-        ),
-      );
+      if (overSizeTarget) {
+        yield* sql.withTransaction(
+          Effect.all(
+            [
+              sql`DELETE FROM spans WHERE rowid IN (
+                SELECT rowid FROM spans ORDER BY start LIMIT (SELECT MAX(1, COUNT(*) / 10) FROM spans)
+              )`,
+              sql`DELETE FROM metrics WHERE rowid IN (
+                SELECT rowid FROM metrics ORDER BY timestamp LIMIT (SELECT MAX(1, COUNT(*) / 10) FROM metrics)
+              )`,
+            ],
+            { discard: true },
+          ),
+        );
+      }
       yield* sql.unsafe("PRAGMA wal_checkpoint(PASSIVE)");
     },
     (effect) => writeGate.withPermits(1)(effect).pipe(logWriteFailure("retention")),
