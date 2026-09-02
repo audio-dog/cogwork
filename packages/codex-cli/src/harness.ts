@@ -12,6 +12,7 @@ import {
 import type { SandboxHandle, SandboxHooks } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 
 export type CodexEffort = NonNullable<CodexTextProviderOptions["modelReasoningEffort"]>;
 
@@ -260,6 +261,51 @@ const hostAuthentication = () =>
     secrets: {},
   } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication);
 
+const tomlString = (value: string) =>
+  `"${value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t")}"`;
+
+// Codex splits `--config` keys on every ".", with no quoting escape, so a name outside
+// this alphabet would silently configure the wrong server. The engine's projected names
+// stay inside it; refuse anything else rather than launch misconfigured.
+const codexConfigKeySafe = /^[A-Za-z0-9_-]+$/;
+
+interface CodexMcpProjection {
+  readonly config: Record<string, string>;
+  readonly env: Record<string, string>;
+}
+
+// Codex rejects a literal `bearer_token` for streamable-HTTP servers ("set
+// `bearer_token_env_var`"), so command arguments carry only the URL and an environment
+// variable NAME; the resolved bearer value travels in the child environment alone —
+// never in argv and never in a file under the prepared Worktree. Codex prepends
+// "Bearer " itself, so the variable holds the raw token.
+const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): CodexMcpProjection => {
+  const projected = servers.map((server) => {
+    if (!codexConfigKeySafe.test(server.name)) {
+      throw new Error(`MCP server name is not a safe Codex config key: ${server.name}`);
+    }
+    const environmentName = ExternalHarnessRuntime.mcpBearerEnvironmentName(server.name);
+    return {
+      config: [
+        [`mcp_servers.${server.name}.url`, tomlString(server.endpoint)] as const,
+        ...(server.bearer === null
+          ? []
+          : [[`mcp_servers.${server.name}.bearer_token_env_var`, tomlString(environmentName)] as const]),
+      ],
+      env: server.bearer === null ? [] : [[environmentName, Redacted.value(server.bearer)] as const],
+    };
+  });
+  return {
+    config: Object.fromEntries(projected.flatMap(({ config }) => config)),
+    env: Object.fromEntries(projected.flatMap(({ env }) => env)),
+  };
+};
+
 const codexDescriptor = (
   options: CodexRunnerOptions,
 ): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>, CodexAuthMode> => {
@@ -306,15 +352,19 @@ const codexDescriptor = (
     },
     readiness: () => codexReadiness(executable, scrubEnv),
     sharedGit: "required",
-    makeAdapter: ({ model, authentication, request }) =>
-      makeAdapter(model, {
+    makeAdapter: ({ model, authentication, request }) => {
+      const mcp = codexMcpProjection(request.mcp);
+      return makeAdapter(model, {
         authMode: authentication,
         approvalPolicy: "never",
         codexExecutable: executable,
         ...(request.checkout.sharedGitDirectory
           ? { additionalDirectories: [request.checkout.sharedGitDirectory] }
           : {}),
-      }),
+        ...(Object.keys(mcp.config).length > 0 ? { config: mcp.config } : {}),
+        ...(Object.keys(mcp.env).length > 0 ? { env: mcp.env } : {}),
+      });
+    },
     projectModel: (request) => request.selection.model ?? defaultCodexModel,
     projectOptions: (request) => ({
       ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
@@ -323,8 +373,8 @@ const codexDescriptor = (
     }),
     projectAuthentication: () => "host",
     transport: {
-      workspaceRoot: ".",
       instructionProjection: "system-prompt",
+      mcpProjection: "native",
     },
     diagnostics: codexLaunchDiagnostics,
     turnDiagnostics: codexTurnDiagnostics,
