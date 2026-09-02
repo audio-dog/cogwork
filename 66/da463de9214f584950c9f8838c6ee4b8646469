@@ -1,0 +1,21 @@
+apps/desktop/src/main/ipc.test.ts
+  s_095fcf7dba508a::t_664ba3456f14fc 316-353
+apps/desktop/src/main/ipc.ts
+  s_095fcf7dba508a::t_665629c1d98e11 49-53,58-62,64,67-72,77,92,101,110,114,120,122,132,135,141,146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "66da463de9214f584950c9f8838c6ee4b8646469",
+  "prompts": {},
+  "sessions": {
+    "s_095fcf7dba508a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "00e68960-9b7d-4e82-bbc5-571f328dc0ab",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
