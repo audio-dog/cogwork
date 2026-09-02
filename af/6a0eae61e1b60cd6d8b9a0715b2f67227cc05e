@@ -1,0 +1,32 @@
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_1e9c792070af79::t_21326a8ee01214 47,55-56,74
+  s_1e9c792070af79::t_c4fa3428b2ebdc 1,4-6,57-58
+  s_1e9c792070af79::t_7fac911752b155 48-53
+packages/claude-code/CONTEXT.md
+  s_1e9c792070af79::t_21326a8ee01214 20
+packages/claude-code/src/harness.ts
+  s_1e9c792070af79::t_7fac911752b155 291,300-303
+  s_1e9c792070af79::t_21326a8ee01214 11,290,292-295,298,304-305,315,320-321
+  s_1e9c792070af79::t_0b099d5f912e2f 299
+packages/claude-code/src/harness.test.ts
+  s_1e9c792070af79::t_5897de08b536b8 441
+  s_1e9c792070af79::t_2d2d57fb1c805c 493
+  s_1e9c792070af79::t_21326a8ee01214 248,437-438
+  s_1e9c792070af79::t_c4fa3428b2ebdc 422
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "af6a0eae61e1b60cd6d8b9a0715b2f67227cc05e",
+  "prompts": {},
+  "sessions": {
+    "s_1e9c792070af79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dce-8136-7451-91c5-a0226c2b232e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
