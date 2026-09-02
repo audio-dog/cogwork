@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import {
   makeProcessProfiler,
@@ -78,6 +79,29 @@ describe("ProcessProfiler", () => {
       );
       assert.deepStrictEqual(profile, { nodes: [{ id: 1 }] });
       assert.deepStrictEqual(probe.calls, ["mkdir:/diagnostics", "cpu:start", "cpu:stop", "disconnect"]);
+    }),
+  );
+
+  it.effect("stops CPU profiling when capture is interrupted", () =>
+    Effect.gen(function* () {
+      const probe = makeProbe();
+      const fiber = yield* probe.profiler
+        .capture({
+          _tag: "CpuProfile",
+          directory: "/diagnostics",
+          durationMillis: 30_000,
+        })
+        .pipe(Effect.forkChild);
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(fiber);
+
+      assert.deepStrictEqual(probe.calls, [
+        "mkdir:/diagnostics",
+        "cpu:start",
+        "cpu:stop",
+        "remove:/diagnostics/CPU.42.1234.cpuprofile",
+        "disconnect",
+      ]);
     }),
   );
 

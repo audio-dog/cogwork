@@ -76,9 +76,15 @@ export const makeProcessProfiler = (platform: ProcessProfilerPlatform) => {
     inspector: ProcessInspector,
     durationMillis: number,
   ) {
-    yield* inspector.startCpuProfile;
-    yield* Effect.sleep(durationMillis);
-    const profile = yield* inspector.stopCpuProfile;
+    const stopCpuProfileOnFailure = (exit: Exit.Exit<unknown, ProcessProfileError>) => {
+      if (Exit.isSuccess(exit)) return Effect.void;
+      return inspector.stopCpuProfile.pipe(Effect.ignore);
+    };
+    const profile = yield* Effect.acquireUseRelease(
+      inspector.startCpuProfile.pipe(Effect.onExit(stopCpuProfileOnFailure)),
+      () => Effect.sleep(durationMillis).pipe(Effect.andThen(inspector.stopCpuProfile)),
+      (_, exit) => stopCpuProfileOnFailure(exit),
+    );
     const contents = yield* encodeJson(profile).pipe(Effect.mapError(profileError("encode CPU profile")));
     yield* platform.writeFile(path, contents);
     return path;
