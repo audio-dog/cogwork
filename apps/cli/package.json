@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@cogwork/claude-code": "workspace:*",
     "@cogwork/codex-cli": "workspace:*",
     "@cogwork/contracts": "workspace:*",
     "@cogwork/cursor-acp": "workspace:*",

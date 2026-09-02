@@ -2,6 +2,7 @@ import * as os from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+import { claudeCodeRunner } from "@cogwork/claude-code";
 import { codexRunner } from "@cogwork/codex-cli";
 import { DaemonRpcs, HarnessName } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
@@ -76,11 +77,13 @@ export const transportLayer = (socketPath: string) =>
   );
 
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
+const claudeName = Schema.decodeSync(HarnessName)("claude");
 const codexName = Schema.decodeSync(HarnessName)("codex");
 const providerName = Schema.decodeSync(HarnessName)("provider");
 
 export const harnessRunners = [
   cursorRunner({ name: cursorName }),
+  claudeCodeRunner({ name: claudeName }),
   codexRunner({ name: codexName, environment: process.env }),
   Provider.providerRunner({ name: providerName }),
 ];
