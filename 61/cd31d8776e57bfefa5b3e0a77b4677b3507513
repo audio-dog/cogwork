@@ -1,0 +1,32 @@
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_adbad50efd40b7::t_005351c3c0f2d8 38,43-44,57,65
+  s_2d07494c0cf189::t_d35c8213082034 66-68
+  s_adbad50efd40b7::t_af542248cd1655 11
+  s_adbad50efd40b7::t_e834f7b9f84b06 48-52
+  s_2d07494c0cf189::t_fa812032da365f 1-10,12-37,39-42,45-47,53-56,59-64,69-72
+  s_adbad50efd40b7::t_eb684b08489562 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "61cd31d8776e57bfefa5b3e0a77b4677b3507513",
+  "prompts": {},
+  "sessions": {
+    "s_2d07494c0cf189": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4bfd17ff-2c2c-490c-bd8b-dbddf1405d2d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_adbad50efd40b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3de78da9-460f-46c7-954a-e6f06aa3992b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
