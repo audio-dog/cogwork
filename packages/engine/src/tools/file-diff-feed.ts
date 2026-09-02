@@ -3,11 +3,15 @@ import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Stream from "effect/Stream";
+import createIgnore, { type Ignore } from "ignore";
 import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
 
 export const FILE_DIFF_EVENT = "sandbox.file.diff";
+export const FILE_DIFF_MAX_BYTES = 64 * 1024;
+export const DIFF_TRUNCATION_MARKER = "\n... diff truncated by Cogwork ...\n";
 const diffCommandDeadline = "5 minutes";
+const diffDebounce = "250 millis";
 
 const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 
@@ -89,10 +93,25 @@ export const computeDiff = Effect.fn("Tools.computeDiff")(function* (
     : yield* addPatchFromCurrent(sandbox, rel, event.path);
 });
 
+const decodeUtf8Prefix = (bytes: Uint8Array): string => {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return decodeUtf8Prefix(bytes.subarray(0, bytes.length - 1));
+  }
+};
+
+const boundedDiff = (diff: string) => {
+  const bytes = Buffer.from(diff);
+  if (bytes.length <= FILE_DIFF_MAX_BYTES) return diff;
+  const available = FILE_DIFF_MAX_BYTES - Buffer.byteLength(DIFF_TRUNCATION_MARKER);
+  return `${decodeUtf8Prefix(bytes.subarray(0, available))}${DIFF_TRUNCATION_MARKER}`;
+};
+
 export const fileDiffEvent = (path: string, diff: string): AgUiEvent => ({
   type: "CUSTOM",
   name: FILE_DIFF_EVENT,
-  value: { path, diff },
+  value: { path, diff: boundedDiff(diff) },
 });
 
 export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
@@ -106,7 +125,47 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
 
 const IGNORED_SEGMENTS = [".git", "node_modules", ".repos"];
 
-const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
+const ignoredBySegment = (rel: string) =>
+  rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
+
+const configuredIgnore = Effect.fn("Tools.configuredIgnore")(function* (sandbox: WorktreeSandbox) {
+  const contents = yield* Effect.tryPromise(() =>
+    sandbox.handle.fs.read(`${DEFAULT_WORKSPACE_ROOT}/.gitignore`),
+  ).pipe(Effect.orElseSucceed(() => ""));
+  return createIgnore().add(contents);
+});
+
+const ignored = (matcher: Ignore, rel: string) => ignoredBySegment(rel) || matcher.ignores(rel);
+
+const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
+  stream.pipe(
+    Stream.groupByKey((event) => event.path, { idleTimeToLive: "1 minute" }),
+    Stream.flatMap(([, events]) => events.pipe(Stream.debounce(diffDebounce)), {
+      concurrency: "unbounded",
+    }),
+  );
+
+interface FileDiff {
+  readonly path: string;
+  readonly diff: string;
+}
+
+const computeFileDiff = Effect.fn("Tools.computeFileDiff")(function* (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  event: SandboxFileEvent,
+) {
+  return { path: relTo(event.path), diff: yield* computeDiff(sandbox, baseSha, event) };
+});
+
+const dedupeFileDiff = (previous: ReadonlyMap<string, string>, current: FileDiff) => {
+  if (previous.get(current.path) === current.diff) return [previous, []] as const;
+  if (current.diff === "" && !previous.has(current.path)) return [previous, []] as const;
+  if (current.diff === "") {
+    return [new Map([...previous].filter(([path]) => path !== current.path)), [current]] as const;
+  }
+  return [new Map([...previous, [current.path, current.diff]]), [current]] as const;
+};
 
 // FileSystem.watch reports paths relative to the watched root, and its
 // create/remove classification stats them against the process cwd, so it
@@ -132,15 +191,16 @@ export const watchWorktreeDiffs = (
   sandbox: WorktreeSandbox,
   baseSha: string,
 ): Stream.Stream<AgUiEvent, ToolError, FileSystem.FileSystem> =>
-  FileSystem.FileSystem.pipe(
-    Effect.map((fs) =>
-      fs.watch(sandbox.root, { recursive: true }).pipe(
-        Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
-        Stream.filter((event) => !ignored(event.path)),
-        Stream.mapEffect((event) => classifyWorktreeEvent(sandbox, event.path)),
-        Stream.mapEffect((event) => toFileDiffEvent(sandbox, baseSha, event)),
-        Stream.filter((event): event is AgUiEvent => event !== null),
-      ),
-    ),
-    Stream.unwrap,
-  );
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const matcher = yield* configuredIgnore(sandbox);
+    return fs.watch(sandbox.root, { recursive: true }).pipe(
+      Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
+      Stream.filter((event) => !ignored(matcher, event.path)),
+      debounceByPath,
+      Stream.mapEffect((event) => classifyWorktreeEvent(sandbox, event.path)),
+      Stream.mapEffect((event) => computeFileDiff(sandbox, baseSha, event)),
+      Stream.mapAccum(() => new Map<string, string>(), dedupeFileDiff),
+      Stream.map(({ path, diff }) => fileDiffEvent(path, diff)),
+    );
+  }).pipe(Stream.unwrap);
