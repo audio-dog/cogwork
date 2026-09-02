@@ -1,0 +1,30 @@
+packages/engine/src/tools/file-diff-feed.ts
+  s_32e769f2e6d65f::t_615a89e0ac5a6a 158
+  s_32e769f2e6d65f::t_c4745588bca2c8 6,11-12,14,96-110,114,128-157,159-168,194-206
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_32e769f2e6d65f::t_aca0da49284a2e 242-279,281-308,310-315
+  s_32e769f2e6d65f::t_713585d6af4d2f 280,309
+  s_32e769f2e6d65f::t_0c65d2b48bbc4e 13-21,55-56
+  s_32e769f2e6d65f::t_0cf36fb517c197 201,206,229,232
+  s_32e769f2e6d65f::t_4cc52ebf999b09 190,219
+  s_32e769f2e6d65f::t_37a1136b6633d4 187-189,191-200,202-205,207-218,220-228,230-231,233-241,316-325
+  s_32e769f2e6d65f::t_a4ef2837fcb099 43-54,57-58
+  s_32e769f2e6d65f::t_6a0a7d465893aa 59
+  s_32e769f2e6d65f::t_9578dbe3162b6d 326
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4b800b23c105fea190d55dd811a2c7bd438e6122",
+  "prompts": {},
+  "sessions": {
+    "s_32e769f2e6d65f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f4d-e4c7-7692-991d-bbdeb7956823",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
