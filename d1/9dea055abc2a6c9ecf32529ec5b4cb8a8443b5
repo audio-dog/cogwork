@@ -1,0 +1,21 @@
+apps/desktop/src/main/ipc.test.ts
+  s_471ef6216cbab1::t_8c1e8f64bc1281 82,111,138,146,180,204,234
+apps/desktop/src/main/ipc.ts
+  s_471ef6216cbab1::t_3a6f80992901c2 8,75-78,84-86,88,107-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d19dea055abc2a6c9ecf32529ec5b4cb8a8443b5",
+  "prompts": {},
+  "sessions": {
+    "s_471ef6216cbab1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f50-46c8-71f0-ba6f-7dcd77bb416b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
