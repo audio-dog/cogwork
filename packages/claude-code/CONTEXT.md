@@ -16,6 +16,10 @@ _Avoid_: Credential-store authentication, API-key mode
 The ownership boundary for an opaque Claude session handle. Resume is allowed only in the Sandbox lineage that created the session. The runner declares fork support for later orchestration work but does not fork sessions in this package.
 _Avoid_: Transcript replay, cross-worktree resume
 
+**MCP config projection**:
+The Run's MCP servers travel as one Harness Workspace file skill: a Cogwork-owned `.cogwork-mcp.json` at the checkout root, handed to Claude with `--mcp-config`. The file holds only URLs and `${...}` environment references. The shared runtime resolves each bearer token onto the live Sandbox environment, and the engine removes the file after the Run. A repository's own `.mcp.json` is untouched ambient state.
+_Avoid_: `.mcp.json` (that name belongs to the repository), credential file, adapter patch
+
 **Ambient Claude state**:
 Optional instructions, skills, plugins, hooks, and settings that Claude loads from its user and project sources. The session event records what Claude reports. This state never satisfies required instructions, MCP, or policy checks; those arrive through the Harness Workspace and preflight.
 _Avoid_: Harness Workspace, required capability

@@ -245,6 +245,7 @@ const Capture = Schema.Struct({
   authMode: Schema.String,
   permissionMode: Schema.NullOr(Schema.String),
   systemPrompt: Schema.NullOr(Schema.String),
+  mcpConfigPath: Schema.NullOr(Schema.String),
   mcpConfig: Schema.NullOr(Schema.String),
   mcpBearer: Schema.NullOr(Schema.String),
   apiKey: Schema.NullOr(Schema.String),
@@ -433,11 +434,13 @@ describe("Claude Code Harness", () => {
           assert.isNull(capture.apiKey);
           assert.isNull(capture.authToken);
           assert.notInclude(capture.files, ".mcp.json");
-          assert.notInclude(capture.files.join("\n"), ".tanstack-projected-");
+          assert.strictEqual(capture.mcpConfigPath, ".cogwork-mcp.json");
+          assert.include(capture.files, ".cogwork-mcp.json");
           assert.include(mcpConfig, "https://mcp.example.test/readonly");
           assert.include(mcpConfig, "${COGWORK_MCP_");
           assert.notInclude(mcpConfig, "mcp-test-bearer");
           assert.strictEqual(capture.mcpBearer, "mcp-test-bearer");
+          assert.notInclude(capture.args, "--disallowedTools");
           assert.include(capture.args, "--json-schema");
           assert.strictEqual(capture.agents, "existing repo agents\n");
           assertSingleOccurrence(systemPrompt, "global rules");
@@ -463,10 +466,16 @@ describe("Claude Code Harness", () => {
             providerUsageDetails: { totalCostUsd: 0.01 },
           });
           assert.isFalse(yield* Effect.promise(() => handle.fs.exists("/workspace/.mcp.json")));
+          assert.isFalse(yield* Effect.promise(() => handle.fs.exists("/workspace/.cogwork-mcp.json")));
           assert.strictEqual(
             yield* Effect.promise(() => handle.fs.read("/workspace/AGENTS.md")),
             "existing repo agents\n",
           );
+          const committedPaths = yield* Effect.promise(() =>
+            handle.process.exec("git ls-tree -r --name-only HEAD"),
+          );
+          assert.notInclude(committedPaths.stdout, ".cogwork-mcp.json");
+          assert.notMatch(committedPaths.stdout, /\.tanstack-projected-/);
         }),
     );
 
@@ -480,6 +489,7 @@ describe("Claude Code Harness", () => {
 
         assert.strictEqual(capture.resume, "fake-claude-session-1");
         assert.isFalse(capture.forkSession);
+        assert.notInclude(capture.args.join(" "), ".cogwork-mcp.json");
         assert.include(capture.args, "--disallowedTools");
         assert.include(capture.args.join(" "), "Write,Edit,MultiEdit");
         assert.include(capture.args.join(" "), "NotebookEdit");

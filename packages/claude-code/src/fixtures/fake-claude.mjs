@@ -40,7 +40,12 @@ const valueAfter = (flag) => {
 const firstValueAfter = (...flags) => flags.map(valueAfter).find((value) => value !== null) ?? null;
 const environmentValue = (name) => (name ? (process.env[name] ?? null) : null);
 const agents = await readFile(`${process.cwd()}/AGENTS.md`, "utf8").catch(() => "");
-const mcpConfig = valueAfter("--mcp-config");
+// The first `--mcp-config` value is Cogwork's cwd-relative config file; the
+// adapter's own tool-bridge config arrives as a later occurrence.
+const mcpConfigPath = valueAfter("--mcp-config");
+const mcpConfig = mcpConfigPath
+  ? await readFile(`${process.cwd()}/${mcpConfigPath}`, "utf8").catch(() => null)
+  : null;
 const mcpEnvironmentName = mcpConfig?.match(/\$\{([^}]+)\}/)?.[1] ?? null;
 if (process.argv.includes("--emit-change")) {
   await writeFile(`${process.cwd()}/tracked.txt`, "changed by Claude\n");
@@ -57,6 +62,7 @@ const capture = {
   authMode: process.argv.includes("--bare") ? "bare" : "host",
   permissionMode: valueAfter("--permission-mode"),
   systemPrompt: firstValueAfter("--append-system-prompt", "--system-prompt"),
+  mcpConfigPath,
   mcpConfig,
   mcpBearer: environmentValue(mcpEnvironmentName),
   apiKey: process.env.ANTHROPIC_API_KEY ?? null,
