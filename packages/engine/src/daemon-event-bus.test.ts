@@ -1,4 +1,4 @@
-import { RunId, SchedulerStats, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { DaemonEvent, RunId, SchedulerStats, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -104,7 +104,11 @@ describe("DaemonEventBus", () => {
       const received = yield* Fiber.join(active);
       assert.deepStrictEqual(
         [...received].map((event) =>
-          event._tag === "SchedulerChanged" ? event.scheduler.globalInFlight : -1,
+          DaemonEvent.matchOrElse(
+            event,
+            { SchedulerChanged: ({ scheduler }) => scheduler.globalInFlight },
+            () => -1,
+          ),
         ),
         [0, 1, 2],
       );

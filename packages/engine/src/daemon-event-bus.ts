@@ -1,5 +1,11 @@
-import type { AgUiEvent, DaemonEvent, RunActivity, RunRecord, RunSummary } from "@cogwork/contracts";
-import { agUiCorrelation } from "@cogwork/contracts";
+import {
+  type AgUiEvent,
+  agUiCorrelation,
+  DaemonEvent,
+  type RunActivity,
+  type RunRecord,
+  type RunSummary,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -60,14 +66,13 @@ export const activityOf = (
   event,
 });
 
-type RunActivityEvent = Extract<DaemonEvent, { readonly _tag: "RunActivity" }>;
 type DaemonEventInput = DaemonEvent extends infer Event
   ? Event extends { readonly emittedAtMillis: number }
     ? Omit<Event, "emittedAtMillis">
     : never
   : never;
 
-export const isRunActivity = (event: DaemonEvent): event is RunActivityEvent => event._tag === "RunActivity";
+export const isRunActivity = DaemonEvent.guards.RunActivity;
 
 export const runActivityStream = <E, R>(events: Stream.Stream<DaemonEvent, E, R>) =>
   events.pipe(
