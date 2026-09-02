@@ -6,9 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$(git rev-parse --show-toplevel)\" && pnpm format-and-lint:fix",
+            "command": "cd \"$(git rev-parse --show-toplevel)\" && node scripts/format-edited-files.mjs",
             "timeout": 120,
-            "statusMessage": "Formatting workspace"
+            "statusMessage": "Formatting edited files"
           }
         ]
       }

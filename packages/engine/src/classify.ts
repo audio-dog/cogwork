@@ -116,14 +116,12 @@ const prStage = (pr: ObservedPr) => {
   return null;
 };
 
-const stageFor = (item: ObservedItem) => {
+export const observedStage = (item: ObservedItem) => {
   if (item.pr) return prStage(item.pr);
   if (item.roles.includes("ready-for-agent")) return "implement";
   if (item.roles.includes("needs-triage")) return "triage";
   return null;
 };
-
-export const observedStage = (item: ObservedItem) => item.claim?.stage ?? stageFor(item);
 
 export const maxAttemptsPerStage = 3;
 
@@ -147,7 +145,7 @@ const classifyOne = (
   if (item.claimLabeled) return Outcome.Drop({});
   if (item.roles.includes("needs-info")) return Outcome.NeedsHuman({ reason: "needs-info" });
   if (item.roles.includes("ready-for-human")) return Outcome.NeedsHuman({ reason: "ready-for-human" });
-  const stage = stageFor(item);
+  const stage = observedStage(item);
   if (!stage) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
   const failures = consecutiveFailures(item, stage);

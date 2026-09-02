@@ -153,23 +153,34 @@ const staleNoStage: ObservedItem = {
   pr: null,
 };
 
-const stalledFollowUp: ObservedItem = {
+type ObservedPr = NonNullable<ObservedItem["pr"]>;
+
+const pr = (review: ObservedPr["review"], overrides: Partial<ObservedPr> = {}): ObservedPr => ({
+  number: 1,
+  url: "https://github.com/owner/repo/pull/1",
+  review,
+  checks: "passing",
+  latestHumanCommentAtMillis: null,
+  latestBotTriggerAtMillis: null,
+  fresh: false,
+  baseDivergence: "none",
+  waitingSinceMillis: 0,
+  headRef: "1-ours",
+  followable: true,
+  draft: false,
+  followUp: null,
+  ...overrides,
+});
+
+const claimedWithPr = (review: ObservedPr["review"], overrides: Partial<ObservedPr> = {}) => ({
   ...claimedByUs,
   roles: [],
-  claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "follow-up" },
-  pr: {
-    number: 1,
-    url: "https://github.com/owner/repo/pull/1",
-    review: "pending",
+  pr: pr(review, overrides),
+});
+
+const stalledFollowUp: ObservedItem = {
+  ...claimedWithPr("pending", {
     checks: "failing",
-    latestHumanCommentAtMillis: null,
-    latestBotTriggerAtMillis: null,
-    fresh: false,
-    baseDivergence: "none",
-    waitingSinceMillis: 0,
-    headRef: "1-ours",
-    followable: true,
-    draft: false,
     followUp: {
       checks: "failing",
       humanCommentAtMillis: 0,
@@ -177,18 +188,23 @@ const stalledFollowUp: ObservedItem = {
       noProgress: 3,
       baseDivergence: "none",
     },
-  },
+  }),
+  claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "follow-up" },
 };
 
-const failedAttempt = (atMillis: number): AttemptRecord => ({
-  stage: "implement",
+const failedAttempt = (atMillis: number, stage: AttemptRecord["stage"] = "implement"): AttemptRecord => ({
+  stage,
   outcome: "failed",
   atMillis,
 });
 
-const withAttempts = (item: ObservedItem, count: number): ObservedItem => ({
+const withAttempts = (
+  item: ObservedItem,
+  count: number,
+  stage: AttemptRecord["stage"] = "implement",
+): ObservedItem => ({
   ...item,
-  attempts: Array.from({ length: count }, (_, index) => failedAttempt(index + 1)),
+  attempts: Array.from({ length: count }, (_, index) => failedAttempt(index + 1, stage)),
 });
 
 const okPoll: PollState = { status: "ok" };
@@ -371,7 +387,9 @@ const makeRecoveryLayer = (options: RecoveryOptions, makeIssueTracker: MakeIssue
             Layer.succeed(Executor.Executor, {
               availabilityOf: (_workspace, item) =>
                 Effect.succeed(
-                  options.availability ?? { operation: item.stage, available: true, causes: [] },
+                  options.availability?.operation === item.stage
+                    ? options.availability
+                    : { operation: item.stage, available: true, causes: [] },
                 ),
               refreshAvailability: () => Effect.succeed([]),
               execute: () => Effect.succeed(false),
@@ -392,6 +410,160 @@ const recoveryLayerWithAttemptFailure = (options: RecoveryOptions, failure: Issu
   makeRecoveryLayer(options, (probe) => attemptFailureIssueTracker(probe, failure));
 
 describe("Recovery.recover", () => {
+  it.effect("routes an interrupted implement claim through the current follow-up stage", () =>
+    Effect.gen(function* () {
+      const probe = yield* RecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun(interrupted);
+      yield* recovery.recover();
+      assert.deepStrictEqual(
+        (yield* Ref.get(probe.admitted)).map(({ stage }) => stage),
+        ["follow-up"],
+      );
+      assert.deepStrictEqual(yield* Ref.get(probe.released), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
+    }).pipe(Effect.provide(recoveryLayer({ observed: [claimedWithPr("pending", { checks: "failing" })] }))),
+  );
+
+  it.effect("routes a crashed implement claim through the current follow-up stage", () =>
+    Effect.gen(function* () {
+      const probe = yield* RecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun(interruptedRun);
+      yield* recovery.recover();
+      assert.deepStrictEqual(
+        (yield* Ref.get(probe.admitted)).map(({ stage }) => stage),
+        ["follow-up"],
+      );
+      assert.strictEqual((yield* probe.ledger.getRun(interruptedRun.id))?.status, "crashed");
+      assert.deepStrictEqual(yield* Ref.get(probe.released), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
+    }).pipe(Effect.provide(recoveryLayer({ observed: [claimedWithPr("pending", { checks: "failing" })] }))),
+  );
+
+  it.effect("releases an interrupted implement claim whose current verify stage is unsupported", () =>
+    Effect.gen(function* () {
+      const probe = yield* RecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun(interrupted);
+      yield* recovery.recover();
+      assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
+      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
+    }).pipe(
+      Effect.provide(
+        recoveryLayer({
+          observed: [claimedWithPr("ready")],
+          availability: { operation: "verify", available: false, causes: [] },
+        }),
+      ),
+    ),
+  );
+
+  it.effect("settles and releases a claim whose current PR state has no operation", () =>
+    Effect.gen(function* () {
+      const probe = yield* RecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun(interruptedRun);
+      yield* recovery.recover();
+      assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
+      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
+      assert.strictEqual((yield* probe.ledger.getRun(interruptedRun.id))?.status, "failed");
+    }).pipe(Effect.provide(recoveryLayer({ observed: [claimedWithPr("pending")] }))),
+  );
+
+  it.effect("accounts a terminal run against its actual stage after the current stage changes", () =>
+    Effect.gen(function* () {
+      const probe = yield* RecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun({ ...interrupted, status: "failed" });
+      yield* recovery.recover();
+      assert.deepStrictEqual(
+        (yield* Ref.get(probe.attempts)).map(({ outcome }) => outcome.stage),
+        ["implement"],
+      );
+      assert.deepStrictEqual(yield* Ref.get(probe.handoffs), []);
+    }).pipe(
+      Effect.provide(
+        recoveryLayer({
+          observed: [withAttempts(claimedWithPr("pending", { checks: "failing" }), 2, "follow-up")],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("ignores a terminal run that predates the current claim", () =>
+    Effect.gen(function* () {
+      const probe = yield* RecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun({ ...interrupted, stage: "follow-up", status: "failed" });
+      yield* recovery.recover();
+      assert.deepStrictEqual(
+        (yield* Ref.get(probe.attempts)).map(({ outcome }) => outcome.stage),
+        ["implement"],
+      );
+      assert.deepStrictEqual(yield* Ref.get(probe.handoffs), []);
+    }).pipe(
+      Effect.provide(
+        recoveryLayer({
+          observed: [
+            withAttempts(
+              {
+                ...claimedByUs,
+                claim: { by: "cogwork-bot", claimedAtMillis: 2, stage: "implement" },
+              },
+              2,
+              "follow-up",
+            ),
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("resumes an interrupted run that predates a recovery-refreshed claim", () =>
+    Effect.gen(function* () {
+      const probe = yield* RecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun(interrupted);
+      yield* recovery.recover();
+      assert.deepStrictEqual(
+        (yield* Ref.get(probe.admitted)).map(({ stage }) => stage),
+        ["follow-up"],
+      );
+      assert.deepStrictEqual(yield* Ref.get(probe.released), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
+    }).pipe(
+      Effect.provide(
+        recoveryLayer({
+          observed: [
+            {
+              ...claimedWithPr("pending", { checks: "failing" }),
+              claim: { by: "cogwork-bot", claimedAtMillis: 2, stage: "implement" },
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("attributes a capped crash loop to the stage that crashed after the current stage changes", () =>
+    Effect.gen(function* () {
+      const probe = yield* RecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
+      yield* probe.ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
+      yield* probe.ledger.insertRun(crashedRun("crash-c", 3, "running"));
+      yield* recovery.recover();
+      assert.deepStrictEqual(
+        (yield* Ref.get(probe.handoffs)).map(({ outcome }) => outcome.stage),
+        ["implement"],
+      );
+      assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
+    }).pipe(Effect.provide(recoveryLayer({ observed: [claimedWithPr("pending", { checks: "failing" })] }))),
+  );
+
   it.effect("reschedules an interrupted run while holding its claim and recording no attempt", () =>
     Effect.gen(function* () {
       const probe = yield* RecoveryProbe;

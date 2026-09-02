@@ -1,0 +1,474 @@
+diff --git a/dist/esm/adapters/projection.js b/dist/esm/adapters/projection.js
+index a44d00ac9a6bac96a958ff30e4f0348a035a49fd..d2632a6d843fa5d42d2fa324587fda3eea4dca0f 100644
+--- a/dist/esm/adapters/projection.js
++++ b/dist/esm/adapters/projection.js
+@@ -9,26 +9,21 @@ import { discoverSkillDirs, isSecretRef, resolveGitSkillDir, resolveHarnessCwd }
+ * adapter reads it in its `chatStream` setup and projects those inputs into the
+ * CLI's native format. For Codex that means:
+ *
+-*   - MCP servers   → `[mcp_servers.<name>]` tables in `<root>/.codex/config.toml`
+-*                     (TOML), reusing the same `mcp_servers.*` key shape the
+-*                     adapter already uses to wire the host tool-bridge.
++*   - MCP servers   → `--config mcp_servers.<name>.*` overrides, reusing the
++*                     key shape used by the host tool-bridge.
+ *   - gitSkill repos → linked under codex's skills dir when one exists; Codex
+ *                      has no documented project skills dir, so we warn-and-skip.
+ *   - agentSkill     → no codex primitive pulls a public skill by bare name, so
+ *                      we warn-and-skip rather than invent one.
+ *   - plugins        → Codex has no plugin concept, so we warn-and-skip.
+ *
+-* The secret-bearing MCP config is (re)written on EVERY call, re-resolving
+-* secrets each time, so codex always reads current values and a snapshot can
+-* never serve a stale or rotated secret. Only the safe, idempotent, non-secret
+-* operations (gitSkill links, agentSkill / plugin handling) are guarded by a
+-* one-time marker file under the workspace.
++* MCP config is rebuilt on every call. Secrets use child environment variables,
++* so current values never enter command arguments or the workspace. Static,
++* non-secret operations use the one-time workspace marker.
+ *
+ * Codex specifics (verified against the codex config schema):
+-*   - Codex reads `[mcp_servers.<name>]` from `<root>/.codex/config.toml`, with a
+-*     streamable-HTTP server taking `url` plus optional `http_headers`
+-*     (a literal header table). We write resolved header values directly into
+-*     `http_headers` so a rotated secret re-applies on every projection.
++*   - Codex reads `mcp_servers.<name>` from CLI config overrides. Streamable
++*     HTTP credentials use `bearer_token_env_var` or `env_http_headers`.
+ *   - AGENTS.md is written universally by bootstrap (codex reads it natively),
+ *     so it is NOT rewritten here.
+ */
+@@ -59,55 +54,45 @@ function tomlString(value) {
+ * every header value (SecretRef / bearer / string). Returns `undefined` when
+ * there are no MCP skills so the caller can skip the write.
+ */
+-function buildMcpServers(skills, resolveSecret) {
+-	const servers = {};
+-	let count = 0;
+-	for (const skill of skills) {
+-		if (skill.kind !== "mcp") continue;
+-		count += 1;
+-		const headers = {};
+-		const rawHeaders = skill.config.headers ?? {};
+-		for (const [name, value] of Object.entries(rawHeaders)) headers[name] = resolveHeaderValue(value, resolveSecret);
++function buildMcpServers(skills) {
++	const entries = skills.flatMap((skill) => {
++		if (skill.kind !== "mcp") return [];
+ 		const rawUrl = skill.config["url"];
+ 		const url = typeof rawUrl === "string" ? rawUrl : "";
+-		servers[skill.name] = {
++		return [[skill.name, {
+ 			url,
+-			headers
+-		};
+-	}
+-	return count > 0 ? servers : void 0;
++			headers: skill.config.headers ?? {}
++		}]];
++	});
++	return entries.length > 0 ? Object.fromEntries(entries) : void 0;
+ }
+-/**
+-* Render codex's `[mcp_servers.<name>]` config in TOML. Each server emits a
+-* `url` and, when it has headers, an inline `http_headers` table of resolved
+-* literal values (matching the `mcp_servers.*` key shape the adapter already
+-* uses for the host tool-bridge).
+-*/
+-function renderMcpToml(servers) {
+-	const blocks = [];
+-	for (const [name, server] of Object.entries(servers)) {
+-		const lines = [`[mcp_servers.${name}]`, `url = ${tomlString(server.url)}`];
+-		const headerEntries = Object.entries(server.headers);
+-		if (headerEntries.length > 0) {
+-			const inline = headerEntries.map(([key, value]) => `${tomlString(key)} = ${tomlString(value)}`).join(", ");
+-			lines.push(`http_headers = { ${inline} }`);
+-		}
+-		blocks.push(lines.join("\n"));
+-	}
+-	return `${blocks.join("\n\n")}\n`;
+-}
+-/**
+-* Write codex's `<root>/.codex/config.toml`, re-resolving every secret. This runs on
+-* EVERY projection call (never gated by the marker) so codex always reads the
+-* current secret values and a snapshot can never serve a stale or rotated one.
+-* When there are no MCP skills the write is skipped.
+-*/
+-async function projectMcpServers(handle, projection) {
+-	const servers = buildMcpServers(projection.skills, projection.resolveSecret);
+-	if (servers === void 0) return;
+-	const target = `${projection.root}/.codex/config.toml`;
+-	await handle.fs.mkdir(`${projection.root}/.codex`);
+-	await handle.fs.write(target, renderMcpToml(servers));
++const inlineToml = (entries) => `{ ${entries.map(([key, value]) => `${tomlString(key)} = ${tomlString(value)}`).join(", ")} }`;
++const projectedHeader = (server, header, value, resolveSecret) => {
++	if (typeof value === "string") return { static: [header, value] };
++	if (isSecretRef(value)) return { environment: [header, value.__secretName] };
++	if (header.toLowerCase() === "authorization") return { bearer: value.__bearerRef.__secretName };
++	const environmentName = ["TANSTACK_MCP", server.replace(/[^a-zA-Z0-9_]/g, "_"), header.replace(/[^a-zA-Z0-9_]/g, "_")].join("_");
++	return {
++		environment: [header, environmentName],
++		injected: [environmentName, resolveHeaderValue(value, resolveSecret)]
++	};
++};
++function projectMcpServers(projection) {
++	const servers = buildMcpServers(projection.skills);
++	if (servers === void 0) return { config: {}, env: {} };
++	const projected = Object.entries(servers).map(([name, server]) => ({
++		name,
++		server,
++		headers: Object.entries(server.headers).map(([header, value]) => projectedHeader(name, header, value, projection.resolveSecret))
++	}));
++	const entries = projected.flatMap(({ name, server, headers }) => {
++		const staticHeaders = headers.flatMap((header) => "static" in header ? [header.static] : []);
++		const environmentHeaders = headers.flatMap((header) => "environment" in header ? [header.environment] : []);
++		const bearer = headers.find((header) => "bearer" in header);
++		return [[`mcp_servers.${name}.url`, tomlString(server.url)], ...staticHeaders.length > 0 ? [[`mcp_servers.${name}.http_headers`, inlineToml(staticHeaders)]] : [], ...environmentHeaders.length > 0 ? [[`mcp_servers.${name}.env_http_headers`, inlineToml(environmentHeaders)]] : [], ...bearer && "bearer" in bearer ? [[`mcp_servers.${name}.bearer_token_env_var`, tomlString(bearer.bearer)]] : []];
++	});
++	const env = projected.flatMap(({ headers }) => headers.flatMap((header) => "injected" in header ? [header.injected] : []));
++	return { config: Object.fromEntries(entries), env: Object.fromEntries(env) };
+ }
+ /**
+ * Ensure each cloned `gitSkill` repo is available under codex's project skills
+@@ -168,12 +153,15 @@ function projectPlugins(projection) {
+ * @param projection - The portable workspace inputs from `withSandbox`.
+ */
+ async function projectCodexWorkspace(handle, projection) {
+-	await projectMcpServers(handle, projection);
+-	if (await handle.fs.exists(projection.markerPath)) return;
++	const mcp = projectMcpServers(projection);
++	const projectsStaticFiles = projection.plugins.length > 0 || projection.skills.some((skill) => skill.kind !== "mcp");
++	if (!projectsStaticFiles) return mcp;
++	if (await handle.fs.exists(projection.markerPath)) return mcp;
+ 	await projectGitSkills(handle, projection);
+ 	projectAgentSkills(projection);
+ 	projectPlugins(projection);
+ 	await handle.fs.write(projection.markerPath, "");
++	return mcp;
+ }
+ //#endregion
+ export { projectCodexWorkspace };
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index 35f3ec796b087563e80f03cf4b1b9344f1db6ea6..9edb3af4b16a9d8134c7f99c0834ef526ab91dd2 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -43,7 +43,7 @@ var CodexTextAdapter = class extends BaseTextAdapter {
+ 		return "event";
+ 	}
+ 	/** Mirror @openai/codex-sdk's `codex exec --experimental-json` invocation. */
+-	buildCommand(options, resume, bridge, policyFlags, provider, outputSchemaPath) {
++	buildCommand(options, resume, bridge, policyFlags, provider, outputSchemaPath, workspace) {
+ 		const config = this.adapterConfig;
+ 		const modelOptions = options.modelOptions;
+ 		const exe = config.codexExecutable ?? "codex";
+@@ -62,6 +62,7 @@ var CodexTextAdapter = class extends BaseTextAdapter {
+ 			...reasoning ? { model_reasoning_effort: `"${reasoning}"` } : {},
+ 			...networkAccessEnabled !== void 0 ? { "sandbox_workspace_write.network_access": String(networkAccessEnabled) } : {},
+ 			...config.webSearchMode ? { web_search: `"${config.webSearchMode}"` } : {},
++			...workspace.config,
+ 			...bridge ? {
+ 				[`mcp_servers.${bridge.name}.url`]: `"${bridge.url}"`,
+ 				[`mcp_servers.${bridge.name}.http_headers`]: `{ "Authorization" = "Bearer ${bridge.token}" }`
+@@ -100,7 +101,7 @@ var CodexTextAdapter = class extends BaseTextAdapter {
+ 			cleanupSandbox = sandbox;
+ 			const cwd = this.workdir(options);
+ 			const projection = options.capabilities ? getWorkspaceProjection(options.capabilities, { optional: true }) : void 0;
+-			if (projection) await projectCodexWorkspace(sandbox, projection);
++			const workspace = projection ? await projectCodexWorkspace(sandbox, projection) : { config: {}, env: {} };
+ 			if (options.tools && options.tools.length > 0) bridge = await ((options.capabilities ? getToolBridgeProvisioner(options.capabilities, { optional: true }) : void 0) ?? nodeHttpBridgeProvisioner).provision(options.tools, {
+ 				provider: sandbox.provider,
+ 				context: options.context,
+@@ -119,7 +120,7 @@ var CodexTextAdapter = class extends BaseTextAdapter {
+ 				tempFiles.push(schemaPath);
+ 				outputSchemaArg = schemaFile;
+ 			}
+-			const command = this.buildCommand(options, resume, bridge, mapPolicyToCodexFlags(policy), sandbox.provider, outputSchemaArg);
++			const command = this.buildCommand(options, resume, bridge, mapPolicyToCodexFlags(policy), sandbox.provider, outputSchemaArg, workspace);
+ 			logger.request(`activity=chat provider=codex model=${this.model} sandbox=${sandbox.provider} messages=${options.messages.length} resume=${resume ?? "none"}`, {
+ 				provider: "codex",
+ 				model: this.model
+@@ -137,7 +138,7 @@ var CodexTextAdapter = class extends BaseTextAdapter {
+ 			const rawEvents = spawnNdjson(sandbox, runCommand, {
+ 				cwd,
+ 				...stdinInput !== void 0 ? { input: stdinInput } : {},
+-				...this.adapterConfig.env ? { env: this.adapterConfig.env } : {},
++				...Object.keys(workspace.env).length > 0 || this.adapterConfig.env ? { env: { ...workspace.env, ...this.adapterConfig.env } } : {},
+ 				...options.abortController?.signal ? { signal: options.abortController.signal } : options.request?.signal ? { signal: options.request.signal } : {},
+ 				onNonJsonLine: (line) => logger.provider(`provider=codex non-json line: ${line}`, { chunk: line }),
+ 				...journalOptions === void 0 ? {} : { journal: journalOptions }
+diff --git a/src/adapters/projection.ts b/src/adapters/projection.ts
+index 2bf3a6310faa8bff46dc83c757c9940691825751..3fc2d5504a9a187d2662672b465254931b687f41 100644
+--- a/src/adapters/projection.ts
++++ b/src/adapters/projection.ts
+@@ -7,26 +7,21 @@
+  * adapter reads it in its `chatStream` setup and projects those inputs into the
+  * CLI's native format. For Codex that means:
+  *
+- *   - MCP servers   → `[mcp_servers.<name>]` tables in `<root>/.codex/config.toml`
+- *                     (TOML), reusing the same `mcp_servers.*` key shape the
+- *                     adapter already uses to wire the host tool-bridge.
++ *   - MCP servers   → `--config mcp_servers.<name>.*` overrides, reusing the
++ *                     key shape used by the host tool-bridge.
+  *   - gitSkill repos → linked under codex's skills dir when one exists; Codex
+  *                      has no documented project skills dir, so we warn-and-skip.
+  *   - agentSkill     → no codex primitive pulls a public skill by bare name, so
+  *                      we warn-and-skip rather than invent one.
+  *   - plugins        → Codex has no plugin concept, so we warn-and-skip.
+  *
+- * The secret-bearing MCP config is (re)written on EVERY call, re-resolving
+- * secrets each time, so codex always reads current values and a snapshot can
+- * never serve a stale or rotated secret. Only the safe, idempotent, non-secret
+- * operations (gitSkill links, agentSkill / plugin handling) are guarded by a
+- * one-time marker file under the workspace.
++ * MCP config is rebuilt on every call. Secrets use child environment variables,
++ * so current values never enter command arguments or the workspace. Static,
++ * non-secret operations use the one-time workspace marker.
+  *
+  * Codex specifics (verified against the codex config schema):
+- *   - Codex reads `[mcp_servers.<name>]` from `<root>/.codex/config.toml`, with a
+- *     streamable-HTTP server taking `url` plus optional `http_headers`
+- *     (a literal header table). We write resolved header values directly into
+- *     `http_headers` so a rotated secret re-applies on every projection.
++ *   - Codex reads `mcp_servers.<name>` from CLI config overrides. Streamable
++ *     HTTP credentials use `bearer_token_env_var` or `env_http_headers`.
+  *   - AGENTS.md is written universally by bootstrap (codex reads it natively),
+  *     so it is NOT rewritten here.
+  */
+@@ -83,78 +78,88 @@ function tomlString(value: string): string {
+   return `"${escaped}"`
+ }
+ 
+-/** A codex-format streamable-HTTP MCP server entry with resolved headers. */
+ interface CodexMcpServer {
+   url: string
+-  headers: Record<string, string>
++  headers: Record<string, string | SecretRef | BearerRef>
+ }
+ 
+-/**
+- * Build codex's `mcp_servers` map from the `{ kind: 'mcp' }` skills, resolving
+- * every header value (SecretRef / bearer / string). Returns `undefined` when
+- * there are no MCP skills so the caller can skip the write.
+- */
+ function buildMcpServers(
+   skills: Array<WorkspaceSkill>,
+-  resolveSecret: (ref: SecretRef) => string,
+ ): Record<string, CodexMcpServer> | undefined {
+-  const servers: Record<string, CodexMcpServer> = {}
+-  let count = 0
+-  for (const skill of skills) {
+-    if (skill.kind !== 'mcp') continue
+-    count += 1
+-    const headers: Record<string, string> = {}
+-    const rawHeaders = skill.config.headers ?? {}
+-    for (const [name, value] of Object.entries(rawHeaders)) {
+-      headers[name] = resolveHeaderValue(value, resolveSecret)
+-    }
++  const entries = skills.flatMap((skill) => {
++    if (skill.kind !== 'mcp') return []
+     const rawUrl = skill.config['url']
+     const url = typeof rawUrl === 'string' ? rawUrl : ''
+-    servers[skill.name] = { url, headers }
+-  }
+-  return count > 0 ? servers : undefined
++    return [[skill.name, { url, headers: skill.config.headers ?? {} }] as const]
++  })
++  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+ }
+ 
+-/**
+- * Render codex's `[mcp_servers.<name>]` config in TOML. Each server emits a
+- * `url` and, when it has headers, an inline `http_headers` table of resolved
+- * literal values (matching the `mcp_servers.*` key shape the adapter already
+- * uses for the host tool-bridge).
+- */
+-function renderMcpToml(servers: Record<string, CodexMcpServer>): string {
+-  const blocks: Array<string> = []
+-  for (const [name, server] of Object.entries(servers)) {
+-    const lines: Array<string> = [
+-      `[mcp_servers.${name}]`,
+-      `url = ${tomlString(server.url)}`,
+-    ]
+-    const headerEntries = Object.entries(server.headers)
+-    if (headerEntries.length > 0) {
+-      const inline = headerEntries
+-        .map(([key, value]) => `${tomlString(key)} = ${tomlString(value)}`)
+-        .join(', ')
+-      lines.push(`http_headers = { ${inline} }`)
+-    }
+-    blocks.push(lines.join('\n'))
++const inlineToml = (entries: Array<readonly [string, string]>) =>
++  `{ ${entries.map(([key, value]) => `${tomlString(key)} = ${tomlString(value)}`).join(', ')} }`
++
++const projectedHeader = (
++  server: string,
++  header: string,
++  value: string | SecretRef | BearerRef,
++  resolveSecret: (ref: SecretRef) => string,
++) => {
++  if (typeof value === 'string') return { static: [header, value] as const }
++  if (isSecretRef(value)) return { environment: [header, value.__secretName] as const }
++  if (header.toLowerCase() === 'authorization') {
++    return { bearer: value.__bearerRef.__secretName }
++  }
++  const environmentName = [
++    'TANSTACK_MCP',
++    server.replace(/[^a-zA-Z0-9_]/g, '_'),
++    header.replace(/[^a-zA-Z0-9_]/g, '_'),
++  ].join('_')
++  return {
++    environment: [header, environmentName] as const,
++    injected: [environmentName, resolveHeaderValue(value, resolveSecret)] as const,
+   }
+-  return `${blocks.join('\n\n')}\n`
+ }
+ 
+-/**
+- * Write codex's `<root>/.codex/config.toml`, re-resolving every secret. This runs on
+- * EVERY projection call (never gated by the marker) so codex always reads the
+- * current secret values and a snapshot can never serve a stale or rotated one.
+- * When there are no MCP skills the write is skipped.
+- */
+-async function projectMcpServers(
+-  handle: SandboxHandle,
++export interface CodexWorkspaceProjection {
++  config: Record<string, string>
++  env: Record<string, string>
++}
++
++function projectMcpServers(
+   projection: WorkspaceProjection,
+-): Promise<void> {
+-  const servers = buildMcpServers(projection.skills, projection.resolveSecret)
+-  if (servers === undefined) return
+-  const target = `${projection.root}/.codex/config.toml`
+-  await handle.fs.mkdir(`${projection.root}/.codex`)
+-  await handle.fs.write(target, renderMcpToml(servers))
++): CodexWorkspaceProjection {
++  const servers = buildMcpServers(projection.skills)
++  if (servers === undefined) return { config: {}, env: {} }
++  const projected = Object.entries(servers).map(([name, server]) => ({
++    name,
++    server,
++    headers: Object.entries(server.headers).map(([header, value]) =>
++      projectedHeader(name, header, value, projection.resolveSecret),
++    ),
++  }))
++  const entries = projected.flatMap(({ name, server, headers }) => {
++    const staticHeaders = headers.flatMap((header) => ('static' in header ? [header.static] : []))
++    const environmentHeaders = headers.flatMap((header) =>
++      'environment' in header ? [header.environment] : [],
++    )
++    const bearer = headers.find((header) => 'bearer' in header)
++    return [
++      [`mcp_servers.${name}.url`, tomlString(server.url)] as const,
++      ...(staticHeaders.length > 0
++        ? [[`mcp_servers.${name}.http_headers`, inlineToml(staticHeaders)] as const]
++        : []),
++      ...(environmentHeaders.length > 0
++        ? [[`mcp_servers.${name}.env_http_headers`, inlineToml(environmentHeaders)] as const]
++        : []),
++      ...(bearer && 'bearer' in bearer
++        ? [[`mcp_servers.${name}.bearer_token_env_var`, tomlString(bearer.bearer)] as const]
++        : []),
++    ]
++  })
++  const env = projected.flatMap(({ headers }) =>
++    headers.flatMap((header) => ('injected' in header ? [header.injected] : [])),
++  )
++  return { config: Object.fromEntries(entries), env: Object.fromEntries(env) }
+ }
+ 
+ /**
+@@ -231,9 +236,8 @@ function projectPlugins(projection: WorkspaceProjection): void {
+ 
+ /**
+  * Project a `WorkspaceProjection` into the Codex sandbox. Safe to call on every
+- * `chatStream`. The secret-bearing MCP config is (re)written on every call,
+- * re-resolving secrets, so codex always reads current values and a snapshot can
+- * never serve a stale or rotated secret. The safe, idempotent, non-secret
++ * `chatStream`. MCP config is rebuilt on every call so rotated secrets reapply.
++ * The safe, idempotent, non-secret
+  * operations (gitSkill links, agentSkill / plugin handling) are guarded by a
+  * one-time marker so they run only on the first call after create/restore.
+  *
+@@ -243,17 +247,19 @@ function projectPlugins(projection: WorkspaceProjection): void {
+ export async function projectCodexWorkspace(
+   handle: SandboxHandle,
+   projection: WorkspaceProjection,
+-): Promise<void> {
+-  // Always re-resolve and rewrite the secret-bearing MCP config so rotated
+-  // secrets re-apply and snapshots can't serve stale values.
+-  await projectMcpServers(handle, projection)
++): Promise<CodexWorkspaceProjection> {
++  const mcp = projectMcpServers(projection)
++  const projectsStaticFiles =
++    projection.plugins.length > 0 || projection.skills.some((skill) => skill.kind !== 'mcp')
++  if (!projectsStaticFiles) return mcp
+ 
+   // Gate only the safe, idempotent, non-secret operations on the marker.
+-  if (await handle.fs.exists(projection.markerPath)) return
++  if (await handle.fs.exists(projection.markerPath)) return mcp
+ 
+   await projectGitSkills(handle, projection)
+   projectAgentSkills(projection)
+   projectPlugins(projection)
+ 
+   await handle.fs.write(projection.markerPath, '')
++  return mcp
+ }
+diff --git a/src/adapters/text.ts b/src/adapters/text.ts
+index c5a9a3cac485f5b0477a70da7371ec267787df33..f02f7d2fb88d0c4bd97a62ba63323d59e1c82f33 100644
+--- a/src/adapters/text.ts
++++ b/src/adapters/text.ts
+@@ -22,6 +22,7 @@ import {
+ import { buildPrompt } from '../messages/prompt'
+ import { translateThreadEvents } from '../stream/translate'
+ import { projectCodexWorkspace } from './projection'
++import type { CodexWorkspaceProjection } from './projection'
+ import { mapPolicyToCodexFlags } from './policy-map'
+ import type { CodexPolicyFlags } from './policy-map'
+ import type { HostToolBridge, SandboxHandle } from '@tanstack/ai-sandbox'
+@@ -162,6 +163,7 @@ export class CodexTextAdapter<
+     policyFlags: CodexPolicyFlags,
+     provider: string,
+     outputSchemaPath: string | undefined,
++    workspace: CodexWorkspaceProjection,
+   ): string {
+     const config = this.adapterConfig
+     const modelOptions = options.modelOptions
+@@ -218,6 +220,7 @@ export class CodexTextAdapter<
+       // transport ("bearer_token is not supported for streamable_http"; that field
+       // is only for the stdio transport). Pass the per-run bearer as an HTTP header
+       // instead; the host tool-bridge checks `Authorization: Bearer <token>`.
++      ...workspace.config,
+       ...(bridge
+         ? {
+             [`mcp_servers.${bridge.name}.url`]: `"${bridge.url}"`,
+@@ -292,7 +295,9 @@ export class CodexTextAdapter<
+       const projection = options.capabilities
+         ? getWorkspaceProjection(options.capabilities, { optional: true })
+         : undefined
+-      if (projection) await projectCodexWorkspace(sandbox, projection)
++      const workspace = projection
++        ? await projectCodexWorkspace(sandbox, projection)
++        : { config: {}, env: {} }
+ 
+       if (options.tools && options.tools.length > 0) {
+         const provisioner =
+@@ -339,6 +344,7 @@ export class CodexTextAdapter<
+         mapPolicyToCodexFlags(policy),
+         sandbox.provider,
+         outputSchemaArg,
++        workspace,
+       )
+ 
+       logger.request(
+@@ -386,7 +392,9 @@ export class CodexTextAdapter<
+       const rawEvents = spawnNdjson(sandbox, runCommand, {
+         cwd,
+         ...(stdinInput !== undefined ? { input: stdinInput } : {}),
+-        ...(this.adapterConfig.env ? { env: this.adapterConfig.env } : {}),
++        ...(Object.keys(workspace.env).length > 0 || this.adapterConfig.env
++          ? { env: { ...workspace.env, ...this.adapterConfig.env } }
++          : {}),
+         ...(options.abortController?.signal
+           ? { signal: options.abortController.signal }
+           : options.request?.signal
