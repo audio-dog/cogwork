@@ -118,6 +118,11 @@ const runRecordSelection = {
   endedAt: runs.endedAt,
 };
 
+const runSummarySelection = {
+  ...runRecordSelection,
+  eventCount: runs.eventCount,
+};
+
 const runRecordFromRow = (row: {
   readonly id: string;
   readonly workspace: string;
@@ -146,6 +151,16 @@ const runRecordFromRow = (row: {
   startedAtMillis: row.startedAt,
   endedAtMillis: row.endedAt,
 });
+
+const runSummaryFromRow = (
+  row: Parameters<typeof runRecordFromRow>[0] & { readonly eventCount: number },
+) => ({
+  ...runRecordFromRow(row),
+  eventCount: row.eventCount,
+});
+
+type RunRow = Parameters<typeof runRecordFromRow>[0];
+type RunSummaryRow = Parameters<typeof runSummaryFromRow>[0];
 
 const decodeSummary = Schema.decodeUnknownEffect(RunSummarySchema);
 const decodeRunId = Schema.decodeUnknownEffect(RunIdSchema);
@@ -238,13 +253,19 @@ const make = Effect.fn("ledger.make")(function* () {
       ),
     );
 
-  const readRun = <E>(
-    operation: string,
-    query: () => Effect.Effect<Parameters<typeof runRecordFromRow>[0] | undefined, E>,
-  ) =>
+  const readRun = <E>(operation: string, query: () => Effect.Effect<RunRow | undefined, E>) =>
     swallow(operation, query, () => undefined).pipe(
       Effect.flatMap((row) =>
         row ? decodeOrElse(operation, row.id, decodeRun(runRecordFromRow(row)), null) : Effect.succeed(null),
+      ),
+    );
+
+  const readRunSummary = <E>(operation: string, query: () => Effect.Effect<RunSummaryRow | undefined, E>) =>
+    swallow(operation, query, () => undefined).pipe(
+      Effect.flatMap((row) =>
+        row
+          ? decodeOrElse(operation, row.id, decodeSummary(runSummaryFromRow(row)), null)
+          : Effect.succeed(null),
       ),
     );
 
@@ -259,7 +280,7 @@ const make = Effect.fn("ledger.make")(function* () {
         .get(),
     );
 
-  const service: RunLedger.RunLedgerService = {
+  const service: RunLedger.CoreRunLedgerService = {
     acceptRun: (record: RunRecord, plan: RunPlan) => {
       if (record.id !== plan.id) {
         return runPlanError("accept Run", `Run ${record.id} does not match Plan ${plan.id}`);
@@ -446,11 +467,29 @@ const make = Effect.fn("ledger.make")(function* () {
         at: event.atMillis,
       };
       return write("appendEvent", () =>
-        db
-          .insert(runEvents)
-          .values(values)
-          .onConflictDoUpdate({ target: [runEvents.runId, runEvents.seq], set: values })
-          .run(),
+        sqlClient.withTransaction(
+          Effect.gen(function* () {
+            const inserted = yield* db
+              .insert(runEvents)
+              .values(values)
+              .onConflictDoNothing()
+              .returning({ seq: runEvents.seq })
+              .all();
+            if (inserted.length === 0) {
+              yield* db
+                .update(runEvents)
+                .set(values)
+                .where(and(eq(runEvents.runId, runId), eq(runEvents.seq, event.seq)))
+                .run();
+              return;
+            }
+            yield* db
+              .update(runs)
+              .set({ eventCount: sql`${runs.eventCount} + 1` })
+              .where(eq(runs.id, runId))
+              .run();
+          }),
+        ),
       );
     },
 
@@ -489,15 +528,7 @@ const make = Effect.fn("ledger.make")(function* () {
 
     listRuns: (limit: number) =>
       readRows("listRuns", () =>
-        db
-          .select({
-            ...runRecordSelection,
-            eventCount: sql<number>`(select count(*) from ${runEvents} where ${runEvents.runId} = ${runs.id})`,
-          })
-          .from(runs)
-          .orderBy(desc(runs.startedAt))
-          .limit(limit)
-          .all(),
+        db.select(runSummarySelection).from(runs).orderBy(desc(runs.startedAt)).limit(limit).all(),
       ).pipe(
         Effect.flatMap((rows) =>
           decodeAll(
@@ -505,7 +536,7 @@ const make = Effect.fn("ledger.make")(function* () {
             decodeSummary,
             rows.map((row) => ({
               rowId: row.id,
-              value: { ...runRecordFromRow(row), eventCount: Number(row.eventCount) },
+              value: runSummaryFromRow(row),
             })),
           ),
         ),
@@ -513,10 +544,7 @@ const make = Effect.fn("ledger.make")(function* () {
 
     runningRuns: readRows("runningRuns", () =>
       db
-        .select({
-          ...runRecordSelection,
-          eventCount: sql<number>`(select count(*) from ${runEvents} where ${runEvents.runId} = ${runs.id})`,
-        })
+        .select(runSummarySelection)
         .from(runs)
         .where(eq(runs.status, "running"))
         .orderBy(desc(runs.startedAt))
@@ -528,7 +556,7 @@ const make = Effect.fn("ledger.make")(function* () {
           decodeSummary,
           rows.map((row) => ({
             rowId: row.id,
-            value: { ...runRecordFromRow(row), eventCount: Number(row.eventCount) },
+            value: runSummaryFromRow(row),
           })),
         ),
       ),
@@ -536,6 +564,11 @@ const make = Effect.fn("ledger.make")(function* () {
 
     getRun: (runId: RunId) =>
       readRun("getRun", () => db.select(runRecordSelection).from(runs).where(eq(runs.id, runId)).get()),
+
+    getRunSummary: (runId: RunId) =>
+      readRunSummary("getRunSummary", () =>
+        db.select(runSummarySelection).from(runs).where(eq(runs.id, runId)).get(),
+      ),
 
     events: (runId: RunId) =>
       readRows("events", () =>

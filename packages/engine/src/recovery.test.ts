@@ -287,7 +287,7 @@ interface RecoveryProbeState {
   readonly attempts: Ref.Ref<ReadonlyArray<AttemptCall>>;
   readonly handoffs: Ref.Ref<ReadonlyArray<HandOffCall>>;
   readonly inFlight: Ref.Ref<ReadonlySet<WorkItemIdType>>;
-  readonly ledger: RunLedger.RunLedgerService;
+  readonly ledger: RunLedger.CoreRunLedgerService;
   readonly logs: Queue.Queue<RecoveryLog>;
   readonly notes: Ref.Ref<ReadonlyArray<string>>;
   readonly paused: Ref.Ref<boolean>;
