@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_adbad50efd40b7::t_dde6f527a48d78 77
+  s_adbad50efd40b7::t_60696e425514a5 1-7
+  s_adbad50efd40b7::t_869fbb5d6718d3 71-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a11a8b5bd78154ede80a5529ec03e8e56a3d48bc",
+  "prompts": {},
+  "sessions": {
+    "s_adbad50efd40b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3de78da9-460f-46c7-954a-e6f06aa3992b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
