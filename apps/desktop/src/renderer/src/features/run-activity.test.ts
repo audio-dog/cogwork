@@ -1,11 +1,13 @@
 import { type AgUiEvent, DaemonEvent, type RunActivity } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
-import { describe, expect, it } from "vitest";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import { describe, expect, it, vi } from "vitest";
 import {
   applyRunPreview,
   applyTranscriptActivities,
   foldTranscript,
   makeTranscriptFold,
+  makeTranscriptPump,
   previewMap,
   type RunPreviewState,
 } from "./run-activity";
@@ -141,6 +143,21 @@ describe("applyRunPreview", () => {
 });
 
 describe("foldTranscript", () => {
+  it("pulls each published transcript snapshot once across subscribers", () => {
+    const pump = makeTranscriptPump();
+    const pull = vi.fn();
+    const refresh = vi.fn();
+    const first = AsyncResult.success({ done: false, entries: [] });
+    const second = AsyncResult.success({ done: false, entries: [] });
+
+    pump(first, pull, refresh);
+    pump(first, pull, refresh);
+    pump(second, pull, refresh);
+
+    expect(pull).toHaveBeenCalledTimes(2);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("replays chunks once and matches a one-pass transcript", () => {
     const activities = [
       runActivity(0, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "hello " }),

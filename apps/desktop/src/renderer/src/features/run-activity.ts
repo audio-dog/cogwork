@@ -316,6 +316,16 @@ interface TranscriptSnapshot {
 
 type TranscriptResult = AsyncResult.AsyncResult<TranscriptSnapshot, ActivityError>;
 
+export const makeTranscriptPump = () => {
+  const cell: { source: TranscriptResult | null } = { source: null };
+  return (current: TranscriptResult, pull: () => void, refresh: () => void) => {
+    if (current.waiting || current === cell.source) return;
+    cell.source = current;
+    if (current._tag === "Failure" && streamReconnectable(current.cause)) return refresh();
+    if (current._tag === "Success" && !current.value.done) pull();
+  };
+};
+
 interface TranscriptCell {
   fold: TranscriptFold;
   source: ActivityResult | null;
@@ -368,29 +378,28 @@ const applyActivityResult = (cell: TranscriptCell, current: ActivityResult) => {
   return cell.result;
 };
 
-const runTranscriptAtom = Atom.family((runId: RunId) => {
+const runTranscript = Atom.family((runId: RunId) => {
   const cell: TranscriptCell = {
     fold: makeTranscriptFold(),
     source: null,
     result: AsyncResult.initial(),
   };
-  return Atom.map(runActivityAtom(runId), (result) => applyActivityResult(cell, result));
+  return {
+    atom: Atom.map(runActivityAtom(runId), (result) => applyActivityResult(cell, result)),
+    pump: makeTranscriptPump(),
+  };
 });
 
 export function useRunTranscript(runId: RunId) {
-  const atom = runTranscriptAtom(runId);
+  const transcript = runTranscript(runId);
+  const atom = transcript.atom;
   const result = useAtomValue(atom);
   const pull = useAtomSet(atom);
   const refresh = useAtomRefresh(atom);
 
   const pump = useCallback(
-    (current: TranscriptResult) => {
-      if (current._tag === "Failure" && !current.waiting && streamReconnectable(current.cause)) {
-        return refresh();
-      }
-      if (current._tag === "Success" && !current.waiting && !current.value.done) pull();
-    },
-    [pull, refresh],
+    (current: TranscriptResult) => transcript.pump(current, pull, refresh),
+    [pull, refresh, transcript],
   );
 
   useAtomSubscribe(atom, pump, { immediate: true });
