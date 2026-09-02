@@ -878,13 +878,22 @@ layer(NodeServices.layer)((it) => {
       yield* storeAt(storePath);
       yield* poke(
         storePath,
-        "INSERT INTO run_events VALUES ('expired', 0, 'RUN_STARTED', NULL, '{}', 0); INSERT INTO run_events VALUES ('current', 0, 'RUN_STARTED', NULL, '{}', 9999999999999)",
+        `INSERT INTO runs (id, workspace, work_item, stage, harness, status, started_at, event_count)
+         VALUES ('expired', 'gh', '#1', 'triage', 'cursor', 'succeeded', 0, 9),
+                ('current', 'gh', '#2', 'triage', 'cursor', 'running', 1, 9);
+         INSERT INTO run_events (run_id, seq, type, name, data, at)
+         VALUES ('expired', 0, 'RUN_STARTED', NULL, '{}', 0),
+                ('current', 0, 'RUN_STARTED', NULL, '{}', 9999999999999);`,
       );
 
       yield* TestClock.setTime(retentionWindowMillis + 1);
       yield* storeAt(storePath);
       assert.deepStrictEqual(yield* query(storePath, "SELECT run_id FROM run_events ORDER BY run_id"), [
         { run_id: "current" },
+      ]);
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id, event_count FROM runs ORDER BY id"), [
+        { id: "current", event_count: 1 },
+        { id: "expired", event_count: 0 },
       ]);
     }),
   );
