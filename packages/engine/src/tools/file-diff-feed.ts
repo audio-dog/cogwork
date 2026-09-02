@@ -4,12 +4,16 @@ import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
 
 export const FILE_DIFF_EVENT = "sandbox.file.diff";
+export const fileDiffExecDuration = Metric.timer("cogwork_file_diff_git_diff_exec_duration", {
+  description: "Time spent executing git diff for a file event.",
+});
 const fileDiffMaxBytes = 64 * 1024;
 const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
 const diffCommandDeadline = "5 minutes";
@@ -89,7 +93,7 @@ export const computeDiff = Effect.fn("Tools.computeDiff")(function* (
     return yield* addPatchFromCurrent(sandbox, rel, event.path);
   }
   const diffCommand = `git diff ${quote(baseSha)} -- ${quote(rel)}`;
-  const diffed = yield* exec(sandbox, diffCommand);
+  const diffed = yield* exec(sandbox, diffCommand).pipe(Effect.trackDuration(fileDiffExecDuration));
   if (diffed.exitCode !== 0) {
     return yield* execFailure(diffCommand, rel, diffed);
   }
@@ -245,6 +249,7 @@ const streamDiff = Effect.fn("Tools.streamDiff")(function* (
       duration: diffCommandDeadline,
       orElse: () => Effect.fail(toolError("timeout", `diff command timed out after ${diffCommandDeadline}`)),
     }),
+    Effect.trackDuration(fileDiffExecDuration),
   );
   if (!acceptedExitCodes.has(result.exitCode)) {
     return yield* execFailure(command, rel, {

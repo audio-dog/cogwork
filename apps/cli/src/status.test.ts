@@ -27,6 +27,7 @@ const status = (over: Partial<DaemonStatus> = {}): DaemonStatus => ({
   health: "running",
   startedAtMillis: 0,
   uptimeMillis: 1000,
+  eventBusDroppedEvents: 0,
   scheduler: {
     scheduling: "running",
     globalInFlight: 0,
@@ -55,6 +56,16 @@ const controlStore: ControlStore = {
 };
 
 describe("formatStatus", () => {
+  it("shows daemon event bus loss", () => {
+    const output = formatStatus(status({ eventBusDroppedEvents: 17 }));
+
+    assert.include(output, "event bus: 17 dropped events");
+  });
+
+  it("stays silent when the daemon event bus has not lost events", () => {
+    assert.notInclude(formatStatus(status()), "event bus:");
+  });
+
   it("shows stored rows and labels every daemon-derived section offline", () => {
     const output = formatOfflineStatus(controlStore);
 

@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Queue from "effect/Queue";
@@ -16,6 +17,7 @@ import {
   computeDiff,
   FILE_DIFF_EVENT,
   fileDiffEvent,
+  fileDiffExecDuration,
   toFileDiffEvent,
   watchWorktreeDiffs,
 } from "./file-diff-feed";
@@ -107,11 +109,13 @@ describe("file diff feed", () => {
       const sandbox = yield* openSandbox();
       const baseSha = yield* resolveBaseSha(sandbox);
       yield* writeFile(sandbox, { path: "added.ts", content: "export const x = 1;\n" });
+      const before = (yield* Metric.value(fileDiffExecDuration)).count;
       const event = yield* toFileDiffEvent(sandbox, baseSha, {
         type: "create",
         path: "/workspace/added.ts",
         timestamp: 0,
       });
+      assert.strictEqual((yield* Metric.value(fileDiffExecDuration)).count, before + 1);
       if (event === null) return assert.fail("expected a diff event");
       assert.strictEqual(event.name, FILE_DIFF_EVENT);
       const value = yield* decodeDiffValue(event.value);
@@ -308,6 +312,7 @@ describe("file diff feed", () => {
       const calls = yield* ExecCalls;
       const sandbox = yield* withExecProbe(original);
       const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const before = (yield* Metric.value(fileDiffExecDuration)).count;
       const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
         Stream.take(1),
         Stream.runHead,
@@ -317,6 +322,7 @@ describe("file diff feed", () => {
       yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
       yield* Queue.offerAll(events, fileEvents);
       const commands = yield* settleDiff(calls);
+      assert.strictEqual((yield* Metric.value(fileDiffExecDuration)).count, before + 1);
       const head = yield* Fiber.join(fiber);
       if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
       assert.isAtMost(commands.length, fileEvents.length / 10);
