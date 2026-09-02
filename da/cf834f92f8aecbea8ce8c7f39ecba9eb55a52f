@@ -1,0 +1,19 @@
+.github/workflows/pull-request.yml
+  s_1129a666bfef13::t_df9487132de66b 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dacf834f92f8aecbea8ce8c7f39ecba9eb55a52f",
+  "prompts": {},
+  "sessions": {
+    "s_1129a666bfef13": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a07198a2-464f-4cdd-8b49-57344b557234",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
