@@ -495,6 +495,7 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
       (calls): IssueTrackerService => ({
         rateLimitScope: () => null,
         observe: () => Effect.succeed([]),
+        createIssue: () => Effect.void,
         claim: (_workspace, itemId) => {
           const recorded = record(calls, { method: "claim", item: itemId });
           if (!claimFailure) return recorded;

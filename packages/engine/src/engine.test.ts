@@ -93,6 +93,7 @@ const rateLimitHits = Metric.counter("cogwork_reconcile_rate_limit_hits_total", 
 const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
+  createIssue: () => Effect.void,
   claim: () => Effect.void,
   release: () => Effect.void,
   note: () => Effect.void,
