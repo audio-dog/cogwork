@@ -1,0 +1,54 @@
+packages/engine/src/executor.test.ts
+  s_d83326dc1387b5::t_a0c7673d648dad 52
+  s_3b2797229e7a7f::t_77175c97e12800 645
+  s_d83326dc1387b5::t_6fd59bece06dc9 626-627,630,632,647,649,2108,2144
+  s_3b2797229e7a7f::t_db3a3ef84531ce 2110-2111,2113-2128,2131-2134,2139-2142
+  s_d83326dc1387b5::t_b7627da19c4c39 633
+  s_3b2797229e7a7f::t_f2819acc563ace 2135-2138
+  s_d83326dc1387b5::t_61e6104112be74 628-629,637,646
+  s_3b2797229e7a7f::t_f2b30838879071 2129
+  s_3b2797229e7a7f::t_899f8f5af57d47 2093-2106
+  s_d83326dc1387b5::t_569f8ebd0de047 1134-1138,1141,1329-1330,2107,2143
+  s_3b2797229e7a7f::t_1e74c60806b8a1 2112
+  s_d83326dc1387b5::t_6c8459c7fcb46f 79,631,636,648
+  s_d83326dc1387b5::t_a35f3e21471f60 650
+  s_d83326dc1387b5::t_3a06920f1c5e6f 1331
+  s_3b2797229e7a7f::t_021314e7a03289 2130
+  s_d83326dc1387b5::t_69678174914878 2145
+  s_d83326dc1387b5::t_7957bc376d7cb5 2109
+packages/engine/src/executor.ts
+  s_d83326dc1387b5::t_dbf77dad417110 1562
+  s_3b2797229e7a7f::t_3c26484e37ba2e 1548-1552,1559
+  s_3b2797229e7a7f::t_899f8f5af57d47 1553-1555,1560,1563
+  s_3b2797229e7a7f::t_91d1d6836d83d5 1556-1557
+  s_d83326dc1387b5::t_6bfe822f892e55 1255-1259,1265-1266
+  s_d83326dc1387b5::t_188a984c30a6e9 1268-1276
+  s_d83326dc1387b5::t_6c8459c7fcb46f 106-107,1267,1281,1561
+  s_d83326dc1387b5::t_f581d1cecba134 1277-1278
+  s_3b2797229e7a7f::t_d8c8de86c55066 1558
+  s_3b2797229e7a7f::t_423561d8ab2c62 1564
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "86c762d51c14b73a55709cf0194c0140e7279581",
+  "prompts": {},
+  "sessions": {
+    "s_3b2797229e7a7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-870e-7e43-944b-1bfa27568142",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_d83326dc1387b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638f-84de-7a11-9905-c01962b7d554",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
