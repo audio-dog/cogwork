@@ -11,6 +11,7 @@ import {
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 
 export interface ClaudeCodeRunnerOptions {
   readonly name: HarnessName;
@@ -275,19 +276,19 @@ const turnDiagnostics = (cause: unknown) => {
   return harnessError("turn", true, message);
 };
 
-const mcpServerEntry = (server: ExternalHarnessRuntime.ProjectedMcpServer) =>
-  [
+const mcpServerEntry = (server: Harness.ResolvedMcpSkill) => {
+  const environmentName = ExternalHarnessRuntime.mcpBearerEnvironmentName(server.name);
+  return [
     server.name,
     {
       type: "http",
-      url: server.url,
-      ...(server.bearerEnvironment === null
-        ? {}
-        : { headers: { Authorization: `Bearer \${${server.bearerEnvironment}}` } }),
+      url: server.endpoint,
+      ...(server.bearer === null ? {} : { headers: { Authorization: `Bearer \${${environmentName}}` } }),
     },
   ] as const;
+};
 
-const inlineMcpConfig = (servers: ReadonlyArray<ExternalHarnessRuntime.ProjectedMcpServer>) => {
+const inlineMcpConfig = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
   if (servers.length === 0) return "";
   return JSON.stringify({ mcpServers: Object.fromEntries(servers.map(mcpServerEntry)) }).replaceAll(
     " ",
@@ -295,13 +296,22 @@ const inlineMcpConfig = (servers: ReadonlyArray<ExternalHarnessRuntime.Projected
   );
 };
 
-const mcpProjection = () => [];
+const mcpEnvironmentEntry = (server: Harness.ResolvedMcpSkill) => {
+  if (server.bearer === null) return [];
+  const environmentName = ExternalHarnessRuntime.mcpBearerEnvironmentName(server.name);
+  return [[environmentName, Redacted.value(server.bearer)] as const];
+};
+
+const mcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>) => ({
+  config: inlineMcpConfig(servers),
+  env: Object.fromEntries(servers.flatMap(mcpEnvironmentEntry)),
+});
 
 const adapterConfig = (
   executable: string,
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
 ) => {
-  const mcpConfig = inlineMcpConfig(request.mcpServers);
+  const mcp = mcpProjection(request.mcp);
   return {
     authMode: "host",
     permissionMode: "default",
@@ -312,7 +322,8 @@ const adapterConfig = (
     // strings, so the post-run `git -C <cwd> diff` only sees the prepared
     // checkout when cwd already resolves there.
     cwd: ".",
-    claudeExecutable: mcpConfig.length > 0 ? `${executable} --mcp-config ${mcpConfig}` : executable,
+    claudeExecutable: mcp.config.length > 0 ? `${executable} --mcp-config ${mcp.config}` : executable,
+    env: mcp.env,
     // Upstream maps a write-deny policy to Write/Edit/MultiEdit but misses
     // NotebookEdit; close that write path for read-only Operations.
     ...(request.policy === "read-only" ? { disallowedTools: ["NotebookEdit"] } : {}),
@@ -367,7 +378,7 @@ const descriptor = (
     projectModel: (request) => request.selection.model ?? "sonnet",
     projectOptions: providerOptions,
     projectAuthentication: () => "host",
-    transport: { workspaceRoot: ".", instructionProjection: "system-prompt", mcpProjection },
+    transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
     diagnostics: turnDiagnostics,
   };
 };

@@ -16,7 +16,7 @@ import type {
   SandboxProvider,
   WorkspaceDefinition,
 } from "@tanstack/ai-sandbox";
-import { fileSkill, getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
+import { getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -31,7 +31,6 @@ import {
   type ExternalHarnessAuthentication,
   type ExternalHarnessDescriptor,
   externalHarnessRunner,
-  type ProjectedMcpServer,
 } from "./external-harness-runtime";
 import {
   fullHarnessExecution,
@@ -634,61 +633,33 @@ describe("external Harness runtime", () => {
       }),
     );
 
-    it.effect("lets a descriptor project MCP into its native form with secrets on the live Sandbox", () =>
+    it.effect("hands MCP to the descriptor and leaves the checkout untouched for native MCP projection", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-harness-mcp-transport-" });
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-native-mcp-" });
         const probe = new ControlledProbe();
-        const projected: Array<ReadonlyArray<ProjectedMcpServer>> = [];
-        const liveBearers: Array<string> = [];
-        const projectedFiles: Array<string> = [];
+        const projections: Array<{ readonly skills: number; readonly markerGate: string }> = [];
         probe.inspect = (options) => {
-          const capabilities = runtimeCapabilities(options);
-          const sandbox = getSandbox(capabilities);
-          const projection = getWorkspaceProjection(capabilities);
-          assert.lengthOf(
-            projection.skills.filter((skill) => skill.kind === "mcp"),
-            0,
-          );
-          const environment = projected[0]?.find(({ name }) => name === "linear")?.bearerEnvironment;
-          return Promise.all([
-            sandbox.process.exec(
-              `node -e 'process.stdout.write(process.env[process.argv[1]] ?? "")' '${environment ?? ""}'`,
-            ),
-            sandbox.fs.read(".controlled-mcp.json"),
-          ]).then(([{ stdout }, file]) => {
-            liveBearers.push(stdout);
-            projectedFiles.push(file);
+          const projection = getWorkspaceProjection(runtimeCapabilities(options));
+          projections.push({
+            skills: projection.skills.length,
+            markerGate: projection.markerPath.split("/").at(-1) ?? "",
           });
+          return Promise.resolve();
         };
         const base = descriptor(terminalEvents, probe);
-        const controlledDescriptor = {
+        const nativeDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
           ...base,
-          transport: {
-            ...base.transport,
-            mcpProjection: (servers: ReadonlyArray<ProjectedMcpServer>) => {
-              projected.push(servers);
-              return [fileSkill({ path: ".controlled-mcp.json", content: JSON.stringify(servers) })];
-            },
-          },
+          transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
         };
         const plan = RunPlan.make({
           ...request,
-          sandbox: { ...request.sandbox, workspace: checkout },
           mcp: [
             {
-              identity: "local:repo/mcp/public.mcp",
-              name: "public.mcp",
-              projectedName: "public.mcp",
-              endpoint: "https://public.example.test/mcp",
-              authenticated: false,
-              unavailableReason: null,
-            },
-            {
-              identity: "local:repo/mcp/linear",
-              name: "linear",
-              projectedName: "linear",
-              endpoint: "https://linear.example.test/mcp",
+              identity: "local:repo/mcp/linear.api",
+              name: "linear.api",
+              projectedName: "linear__api__native",
+              endpoint: "https://dot.example.test/mcp",
               authenticated: true,
               unavailableReason: null,
             },
@@ -696,7 +667,7 @@ describe("external Harness runtime", () => {
         });
 
         yield* make([
-          externalHarnessRunner(controlledDescriptor, {
+          externalHarnessRunner(nativeDescriptor, {
             authentication: hostAuthentication,
             sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
           }),
@@ -704,24 +675,26 @@ describe("external Harness runtime", () => {
           .run({
             plan,
             session: null,
-            mcpCredentials: new Map([["local:repo/mcp/linear", Redacted.make("transport-bearer")]]),
+            mcpCredentials: new Map([["local:repo/mcp/linear.api", Redacted.make("native-bearer")]]),
           })
-          .pipe(Stream.runCollect);
+          .pipe(Stream.runDrain);
 
-        const servers = projected[0] ?? [];
         assert.deepStrictEqual(
-          servers.map(({ name, url }) => ({ name, url })),
+          probe.resolved[0]?.request.mcp.map(({ name, endpoint, bearer }) => ({
+            name,
+            endpoint,
+            bearer: bearer === null ? null : Redacted.value(bearer),
+          })),
           [
-            { name: "public.mcp", url: "https://public.example.test/mcp" },
-            { name: "linear", url: "https://linear.example.test/mcp" },
+            {
+              name: "linear__api__native",
+              endpoint: "https://dot.example.test/mcp",
+              bearer: "native-bearer",
+            },
           ],
         );
-        assert.isNull(servers[0]?.bearerEnvironment);
-        assert.match(servers[1]?.bearerEnvironment ?? "", /^COGWORK_MCP_/);
-        assert.deepStrictEqual(liveBearers, ["transport-bearer"]);
-        assert.include(projectedFiles[0] ?? "", "https://linear.example.test/mcp");
-        assert.notInclude(projectedFiles[0] ?? "", "transport-bearer");
-        assert.isFalse(yield* fs.exists(`${checkout}/.controlled-mcp.json`));
+        assert.deepStrictEqual(projections, [{ skills: 0, markerGate: ".git" }]);
+        assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
       }),
     );
 

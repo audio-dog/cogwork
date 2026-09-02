@@ -699,6 +699,14 @@ const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
   yield* sql`DELETE FROM run_events WHERE at < ${now - Duration.toMillis(maximumRunEventAge)}`;
+  yield* sql`
+    UPDATE runs
+    SET event_count = (
+      SELECT count(*)
+      FROM run_events
+      WHERE run_events.run_id = runs.id
+    )
+  `;
 });
 
 const seedDaemonLimits = Effect.fn("ControlStore.seedDaemonLimits")(function* () {

@@ -24,13 +24,16 @@ import {
   createSecrets,
   defineSandbox,
   defineWorkspace,
+  getSandbox,
   mcpSkill,
+  ProjectionCapability,
+  provideWorkspaceProjection,
+  resolveHarnessCwd,
   type SandboxHooks,
   type SandboxPolicy,
   type SandboxProvider,
   type Secrets,
   type WorkspaceDefinition,
-  type WorkspaceSkill,
   withSandbox,
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
@@ -101,7 +104,6 @@ export interface ExternalHarnessResolvedRequest {
   readonly instructions: ReadonlyArray<RunPlanInstruction>;
   readonly operatingInstructions: RunPlanOperatingInstructions;
   readonly mcp: ReadonlyArray<ResolvedMcpSkill>;
-  readonly mcpServers: ReadonlyArray<ProjectedMcpServer>;
   readonly secrets: ExternalHarnessSecrets;
   readonly checkout: ExternalHarnessCheckout;
   readonly prompt: ReadonlyArray<RunPlanMessage>;
@@ -115,28 +117,14 @@ export interface ExternalHarnessCapabilities {
   readonly planMiddleware: HarnessRunner["planMiddleware"];
 }
 
-export interface ProjectedMcpServer {
-  readonly name: string;
-  readonly url: string;
-  /**
-   * Live-Sandbox environment variable that holds the raw bearer token, or null
-   * for a public server. The runtime always resolves the token onto the Sandbox
-   * environment, so a descriptor projection may reference the variable without
-   * ever seeing the value.
-   */
-  readonly bearerEnvironment: string | null;
-}
-
 export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
-  readonly workspaceRoot?: string;
   readonly instructionProjection?: "workspace" | "system-prompt";
   /**
-   * Replaces the default `mcpSkill` Workspace entries when the installed
-   * adapter's own MCP projection cannot keep credentials out of the checkout.
-   * A descriptor may instead consume `request.mcpServers` directly and return
-   * no Workspace skills.
+   * `"native"` promises the descriptor delivers `request.mcp` itself through its
+   * adapter's own transport (Codex: documented `config`/`env` passthrough), so the
+   * runtime keeps MCP servers and their secrets out of the Harness Workspace.
    */
-  readonly mcpProjection?: (servers: ReadonlyArray<ProjectedMcpServer>) => ReadonlyArray<WorkspaceSkill>;
+  readonly mcpProjection?: "workspace" | "native";
   readonly messages?: (
     request: ExternalHarnessResolvedRequest,
   ) => ReadonlyArray<ModelMessage | AdapterMessage<Adapter>>;
@@ -217,8 +205,11 @@ const validateSandboxProvider = <Adapter extends AnyTextAdapter, NativeAuthentic
   if (!missingCapability) return Effect.void;
   return Effect.fail(incompatibleSandbox(descriptor.name, missingCapability.label));
 };
-const mcpSecretName = (name: string) =>
-  `COGWORK_MCP_${createHash("sha256").update(name).digest("hex").toUpperCase()}_BEARER`;
+// Hex-hashed so the name is a valid environment identifier for any projected server name,
+// and so a rotated credential never changes the name the harness is configured with. Shared
+// with native MCP projection (the Codex descriptor), whose config references this name.
+export const mcpBearerEnvironmentName = (server: string) =>
+  `COGWORK_MCP_${createHash("sha256").update(server).digest("hex").toUpperCase()}_BEARER`;
 
 const workspaceInstructions = (request: ExternalHarnessResolvedRequest) =>
   [
@@ -227,31 +218,20 @@ const workspaceInstructions = (request: ExternalHarnessResolvedRequest) =>
   ].join("\n\n");
 
 const mcpSkillConfig = (secrets: Secrets, server: ResolvedMcpSkill) => {
-  const secret = server.bearer === null ? undefined : secrets[mcpSecretName(server.name)];
+  const secret = server.bearer === null ? undefined : secrets[mcpBearerEnvironmentName(server.name)];
   if (!secret) return { url: server.endpoint };
   return { url: server.endpoint, headers: { Authorization: bearer(secret) } };
 };
 
 const mcpSecretEntry = ({ name, bearer: secret }: ResolvedMcpSkill) => {
   if (secret === null) return [];
-  return [[mcpSecretName(name), Redacted.value(secret)] satisfies readonly [string, string]];
+  return [[mcpBearerEnvironmentName(name), Redacted.value(secret)] satisfies readonly [string, string]];
 };
 
-const projectedMcpServer = (server: ResolvedMcpSkill): ProjectedMcpServer => ({
-  name: server.name,
-  url: server.endpoint,
-  bearerEnvironment: server.bearer === null ? null : mcpSecretName(server.name),
-});
-
-const mcpWorkspaceProjection = (
-  transport: Pick<ExternalHarnessTransport<AnyTextAdapter>, "mcpProjection">,
-  request: ExternalHarnessResolvedRequest,
-) => {
+const mcpWorkspaceProjection = (request: ExternalHarnessResolvedRequest) => {
   const secretValues = Object.fromEntries(request.mcp.flatMap(mcpSecretEntry));
   const secrets = createSecrets(secretValues);
-  const skills = transport.mcpProjection
-    ? [...transport.mcpProjection(request.mcpServers)]
-    : request.mcp.map((server) => mcpSkill(server.name, mcpSkillConfig(secrets, server)));
+  const skills = request.mcp.map((server) => mcpSkill(server.name, mcpSkillConfig(secrets, server)));
   return { secrets, skills, hasSecrets: Object.keys(secretValues).length > 0 };
 };
 
@@ -259,17 +239,48 @@ const harnessWorkspace = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
   request: ExternalHarnessResolvedRequest,
 ) => {
-  const mcp = mcpWorkspaceProjection(descriptor.transport, request);
+  const mcp = descriptor.transport.mcpProjection === "native" ? null : mcpWorkspaceProjection(request);
   return {
     ...preparedWorkspace,
-    ...(descriptor.transport.workspaceRoot ? { root: descriptor.transport.workspaceRoot } : {}),
     ...(descriptor.transport.instructionProjection === "system-prompt"
       ? {}
       : { instructions: workspaceInstructions(request) }),
-    ...(mcp.skills.length > 0 ? { skills: mcp.skills } : {}),
-    ...(mcp.hasSecrets ? { secrets: mcp.secrets } : {}),
+    ...(mcp !== null && mcp.skills.length > 0 ? { skills: mcp.skills } : {}),
+    ...(mcp?.hasSecrets ? { secrets: mcp.secrets } : {}),
   } satisfies WorkspaceDefinition;
 };
+
+const projectsWorkspaceMembers = (definition: WorkspaceDefinition) =>
+  definition.instructions !== undefined ||
+  definition.skills !== undefined ||
+  definition.secrets !== undefined;
+
+// `withSandbox` always hands the adapter a Workspace projection, and every adapter's
+// projection pass then writes a one-time marker file into the checkout — a file the agent
+// can commit from a prepared Worktree. When the Workspace has no members to project,
+// re-provide the projection (capability provides are last-wins by contract) with the
+// marker gate already satisfied: `.git` exists in every prepared checkout, so the
+// adapter's pass returns before touching the Worktree.
+const satisfiedProjection = (): ChatMiddleware => ({
+  name: "cogwork-workspace-already-projected",
+  provides: [ProjectionCapability],
+  setup: (context) => {
+    const root = resolveHarnessCwd(getSandbox(context));
+    // The duplicate-provide warning exists to catch accidental overwrites; this overwrite
+    // is the point, and the warning would otherwise land in the daemon log on every such
+    // launch. This middleware is the last provider in the chain, so muting loses nothing.
+    context.capabilities.setOnDuplicate(() => {});
+    provideWorkspaceProjection(context, {
+      skills: [],
+      plugins: [],
+      resolveSecret: () => {
+        throw new Error("this run projects no Workspace members, so no secret can be resolved");
+      },
+      markerPath: `${root}/.git`,
+      root,
+    });
+  },
+});
 
 const requiredWorkspaceMembers = (request: ExternalHarnessResolvedRequest) => {
   const base = ["Instructions", "Messages", "Sandbox"] satisfies HarnessRunner["projectedMembers"];
@@ -389,7 +400,6 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
 ) {
   const resumeHandle = yield* resolveResumeHandle(request.session);
   const gitDirectory = yield* sharedGitDirectory(descriptor, request.plan.sandbox.workspace);
-  const mcp = resolvedMcpSkills(request);
   return {
     identity: { run: request.plan.id, session: request.session, resumeHandle },
     selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
@@ -397,8 +407,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     policy: request.plan.harness.profile,
     instructions: request.plan.instructions,
     operatingInstructions: request.plan.operatingInstructions,
-    mcp,
-    mcpServers: mcp.map(projectedMcpServer),
+    mcp: resolvedMcpSkills(request),
     secrets: { mcp: request.mcpCredentials },
     checkout: { path: request.plan.sandbox.workspace, sharedGitDirectory: gitDirectory },
     prompt: request.plan.messages,
@@ -422,31 +431,6 @@ const resolveExternalLaunch = Effect.fn("ExternalHarnessRuntime.resolveLaunch")(
   const policy = yield* inputs.sandboxPolicy?.(resolved) ?? Effect.succeed(null);
   return { resolved, provider, workspaceDefinition, policy };
 });
-
-// A descriptor-projected native config file must not outlive its Run: the
-// prepared checkout is a real working tree, and a later Run's agent could
-// otherwise find the file and commit it. Skill paths resolve against the
-// checkout, which holds only while the descriptor's workspaceRoot maps onto
-// the prepared checkout — true for every local-process descriptor today.
-const removeProjectedWorkspaceFiles = Effect.fn("ExternalHarnessRuntime.removeProjectedWorkspaceFiles")(
-  (checkoutPath: string, workspace: WorkspaceDefinition) =>
-    Effect.gen(function* () {
-      const files = (workspace.skills ?? []).flatMap((skill) => (skill.kind === "file" ? [skill.path] : []));
-      if (files.length === 0) return;
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      yield* Effect.forEach(files, (file) =>
-        fs.remove(path.resolve(checkoutPath, file), { force: true }).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("projected Workspace file removal failed", {
-              path: path.resolve(checkoutPath, file),
-              message: error.message,
-            }),
-          ),
-        ),
-      );
-    }).pipe(Effect.provide(Path.layer)),
-);
 
 const outputCharacters = (event: AgUiEvent) =>
   AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) || AgUiEvent.guards.REASONING_MESSAGE_CONTENT(event)
@@ -542,7 +526,11 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
     ...(inputs.fileHooks ? { hooks: inputs.fileHooks } : {}),
   });
   const abortController = new AbortController();
-  const stream = makeChatStream(descriptor, request, adapter, [withSandbox(sandbox)], abortController);
+  const middleware = [
+    withSandbox(sandbox),
+    ...(projectsWorkspaceMembers(workspaceDefinition) ? [] : [satisfiedProjection()]),
+  ];
+  const stream = makeChatStream(descriptor, request, adapter, middleware, abortController);
   return { abortController, stream };
 };
 
@@ -585,8 +573,6 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                   ).pipe(Stream.ensuring(Effect.sync(() => opened.abortController.abort()))),
-                ).pipe(
-                  Stream.ensuring(removeProjectedWorkspaceFiles(resolved.checkout.path, workspaceDefinition)),
                 ),
               ),
             ),

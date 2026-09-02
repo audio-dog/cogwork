@@ -73,6 +73,8 @@ const drainGraceFlag = Flag.integer("drain-grace").pipe(
   Flag.withDefault(Duration.toSeconds(defaultDrainGrace)),
 );
 
+const telemetryFlag = Flag.choice("telemetry", ["on", "off"]).pipe(Flag.withDefault("on"));
+
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
 
 const watchIdFlag = Flag.string("id").pipe(
@@ -268,7 +270,7 @@ export const schedulingActions = {
 } as const satisfies Record<"pause" | "resume", SchedulingState>;
 
 const runDaemon = Effect.fn("commands.runDaemon")(
-  function* (options: DaemonOptions) {
+  function* (options: DaemonOptions & { readonly telemetryEnabled: boolean }) {
     const registry = yield* (yield* Registry.WorkspaceRegistry).state;
     yield* Effect.logInfo("cogwork daemon started", {
       socket: options.socketPath,
@@ -296,7 +298,16 @@ const runDaemon = Effect.fn("commands.runDaemon")(
   (effect, options) =>
     effect.pipe(
       Effect.scoped,
-      Effect.provide(Layer.mergeAll(serverLayer(options), telemetryLayer, Metric.enableRuntimeMetricsLayer)),
+      Effect.provide(
+        Layer.mergeAll(
+          serverLayer(options),
+          telemetryLayer({
+            enabled: options.telemetryEnabled,
+            maintenanceInterval: options.pollIntervalMillis,
+          }),
+          Metric.enableRuntimeMetricsLayer,
+        ),
+      ),
     ),
 );
 
@@ -582,14 +593,16 @@ export const daemonCommand = Command.make("daemon", {
   credentials: credentialsFlag,
   pollInterval: pollIntervalFlag,
   drainGrace: drainGraceFlag,
+  telemetry: telemetryFlag,
 }).pipe(
-  Command.withHandler(({ socket, controlStore, credentials, pollInterval, drainGrace }) =>
+  Command.withHandler(({ socket, controlStore, credentials, pollInterval, drainGrace, telemetry }) =>
     runDaemon({
       socketPath: socket,
       controlStorePath: controlStore,
       credentialsPath: credentials,
       pollIntervalMillis: Duration.toMillis(Duration.seconds(pollInterval)),
       drainGraceMillis: Duration.toMillis(Duration.seconds(drainGrace)),
+      telemetryEnabled: telemetry === "on",
     }),
   ),
 );
