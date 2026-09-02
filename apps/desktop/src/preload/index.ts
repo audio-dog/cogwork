@@ -16,6 +16,7 @@ const bridge: CogworkBridge = {
   onEngineStatus: (listener) => subscribe(IpcChannel.engineStatusChanged, listener),
   getWindowPreferences: () => ipcRenderer.invoke(IpcChannel.getWindowPreferences),
   setWindowPreferences: (preferences) => ipcRenderer.invoke(IpcChannel.setWindowPreferences, preferences),
+  captureProcessProfile: (capture) => ipcRenderer.invoke(IpcChannel.captureProcessProfile, capture),
   rpc: {
     connect: () => ipcRenderer.invoke(IpcChannel.rpcConnect),
     send: (frame) => ipcRenderer.send(IpcChannel.rpcSend, frame),
