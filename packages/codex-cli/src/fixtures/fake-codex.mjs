@@ -1,5 +1,9 @@
+import { execFile } from "node:child_process";
 import { once } from "node:events";
 import { access, readFile, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
+
+const exec = promisify(execFile);
 
 const probeDelayArgument = process.argv.find((argument) => argument.startsWith("--fake-probe-delay="));
 const probeDelay = Number(probeDelayArgument?.slice("--fake-probe-delay=".length) ?? 0);
@@ -42,6 +46,10 @@ const hasCodexConfig = await access(`${process.cwd()}/.codex/config.toml`).then(
   () => true,
   () => false,
 );
+if (process.argv.includes("--commit-projection")) {
+  await exec("git", ["add", "-A"], { cwd: process.cwd() });
+  await exec("git", ["commit", "--allow-empty", "-m", "fake codex commit"], { cwd: process.cwd() });
+}
 if (mcpBearer && mcpFile) await writeFile(mcpFile, mcpBearer);
 const capture = JSON.stringify({
   args: process.argv.slice(2),

@@ -332,10 +332,17 @@ describe("codexRunner", () => {
             const handle = yield* createSandbox();
             const checkoutPath = yield* initializeRepository(handle);
             const fs = yield* FileSystem.FileSystem;
+            yield* fs.writeFileString(`${checkoutPath}/AGENTS.md`, "original repo instructions\n");
+            const baseline = yield* Effect.promise(() =>
+              handle.process.exec("git add AGENTS.md && git commit -m 'add repo instructions'"),
+            );
+            assert.strictEqual(baseline.exitCode, 0);
             const capturePath = yield* fs.makeTempFileScoped({ prefix: "codex-mcp-capture-" });
             const harness = Harness.make([
               runner({
-                codexExecutable: fakeCodexExecutable(` --capture-mcp-file ${capturePath}`),
+                codexExecutable: fakeCodexExecutable(
+                  ` --capture-mcp-file ${capturePath} --commit-projection`,
+                ),
               }),
             ]);
             const first = yield* collectEvents(
@@ -352,20 +359,41 @@ describe("codexRunner", () => {
             assert.strictEqual(yield* fs.readFileString(capturePath), "rotated-secret");
 
             const capture = yield* structuredCapture(rotated);
-            const agents = yield* fs.readFileString(`${checkoutPath}/AGENTS.md`);
             const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))([
               ...first,
               ...rotated,
             ]);
 
-            assert.include(agents, "global rules");
-            assert.include(agents, "repo rules");
-            assert.include(agents, "Mandatory Operating Instructions: /operating-instructions/implement");
-            assert.strictEqual(capture.prompt, "implement the issue");
-            assert.isTrue(capture.hasCodexConfig);
+            assert.include(capture.prompt, "global rules");
+            assert.include(capture.prompt, "repo rules");
+            assert.include(
+              capture.prompt,
+              "Mandatory Operating Instructions: /operating-instructions/implement",
+            );
+            assert.include(capture.prompt, "implement the issue");
+            assert.isFalse(capture.hasCodexConfig);
+            assert.include(capture.args.join("\n"), "bearer_token_env_var");
+            assert.notInclude(capture.args.join("\n"), "rotated-secret");
             assert.isFalse(yield* fs.exists(`${checkoutPath}/.codex/config.toml`));
             assert.notInclude(serializedEvents, "first-secret");
             assert.notInclude(serializedEvents, "rotated-secret");
+            assert.strictEqual(
+              yield* fs.readFileString(`${checkoutPath}/AGENTS.md`),
+              "original repo instructions\n",
+            );
+            const committedAgents = yield* Effect.promise(() =>
+              handle.process.exec("git show HEAD:AGENTS.md"),
+            );
+            const committedPaths = yield* Effect.promise(() =>
+              handle.process.exec("git ls-tree -r --name-only HEAD"),
+            );
+            const secretHistory = yield* Effect.promise(() =>
+              handle.process.exec("git log --all -G'first-secret|rotated-secret' --format=%H"),
+            );
+            assert.strictEqual(committedAgents.stdout, "original repo instructions\n");
+            assert.notInclude(committedPaths.stdout, ".codex/config.toml");
+            assert.notMatch(committedPaths.stdout, /\.tanstack-projected-/);
+            assert.strictEqual(secretHistory.stdout, "");
           }),
         ),
       10_000,

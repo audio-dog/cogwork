@@ -1,6 +1,5 @@
 import type { HarnessName } from "@cogwork/contracts";
 import { ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
-import type { ChatMiddleware, ChatMiddlewareContext } from "@tanstack/ai";
 import {
   CODEX_MODELS,
   type CodexAuthMode,
@@ -10,7 +9,7 @@ import {
   type CodexTextProviderOptions,
   codexText,
 } from "@tanstack/ai-codex";
-import { getSandbox, type SandboxHandle, type SandboxHooks } from "@tanstack/ai-sandbox";
+import type { SandboxHandle, SandboxHooks } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 
@@ -255,16 +254,6 @@ const hostAuthentication = () =>
     secrets: {},
   } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication);
 
-const removeCodexMcpConfig = (context: ChatMiddlewareContext) =>
-  getSandbox(context, { optional: true })?.fs.remove(".codex/config.toml") ?? Promise.resolve();
-
-const transientCodexConfig: ChatMiddleware = {
-  name: "codex-transient-config",
-  onFinish: removeCodexMcpConfig,
-  onAbort: removeCodexMcpConfig,
-  onError: removeCodexMcpConfig,
-};
-
 const codexDescriptor = (
   options: CodexRunnerOptions,
 ): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>, CodexAuthMode> => {
@@ -331,7 +320,7 @@ const codexDescriptor = (
     projectAuthentication: () => "host",
     transport: {
       workspaceRoot: ".",
-      middleware: () => [transientCodexConfig],
+      instructionProjection: "system-prompt",
     },
     diagnostics: codexLaunchDiagnostics,
     turnDiagnostics: codexTurnDiagnostics,
