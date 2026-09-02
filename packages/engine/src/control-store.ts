@@ -747,7 +747,7 @@ const prepareStoreForRenameBackup = Effect.fn("ControlStore.prepareStoreForRenam
   const [journalMode] = yield* sql
     .unsafe<SqliteJournalMode>("PRAGMA journal_mode=DELETE;")
     .pipe(Effect.mapError(walBackupFailure));
-  if (journalMode?.journal_mode.toLowerCase() === "delete") return;
+  if (journalMode?.journal_mode === "delete") return;
   return yield* new ControlStoreBootError({
     message: "Control store WAL journal mode remained active before backup",
   });
@@ -824,6 +824,20 @@ const withSchemaPreflightLock = <A, E, R>(storePath: string, effect: Effect.Effe
       }),
   );
 
+const bootFailureMessage = (cause: Cause.Cause<unknown>) => {
+  if (!Cause.hasFails(cause)) return Cause.pretty(cause);
+  return messageOf(Cause.squash(cause));
+};
+
+const recoverSchemaPreflightFailure = (cause: Cause.Cause<unknown>) => {
+  if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+  return Effect.succeed(
+    new ControlStoreBootError({
+      message: `Control store schema preflight failed: ${bootFailureMessage(cause)}`,
+    }),
+  );
+};
+
 const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
   (storePath: string, options: ControlStoreClientOptions) =>
     withSchemaPreflightLock(
@@ -840,15 +854,7 @@ const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
         Effect.flatMap((requiresBackup) => backupRenameShapedStoreIfRequired(storePath, requiresBackup)),
         Effect.as<ControlStoreBootError | null>(null),
       ),
-    ).pipe(
-      Effect.catch((error) =>
-        Effect.succeed(
-          new ControlStoreBootError({
-            message: `Control store schema preflight failed: ${messageOf(error)}`,
-          }),
-        ),
-      ),
-    ),
+    ).pipe(Effect.catchCause(recoverSchemaPreflightFailure)),
 );
 
 const unavailable = (message: string): ControlStoreService => {
@@ -874,11 +880,6 @@ export const ControlStore = Context.Reference<ControlStoreService>(
   "@cogwork/engine/control-store/ControlStore",
   { defaultValue: () => unavailable("Control store did not boot") },
 );
-
-const bootFailureMessage = (cause: Cause.Cause<unknown>) => {
-  if (!Cause.hasFails(cause)) return Cause.pretty(cause);
-  return messageOf(Cause.squash(cause));
-};
 
 const recoverBootFailure = (cause: Cause.Cause<unknown>) => {
   if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;

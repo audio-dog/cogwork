@@ -354,6 +354,34 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("fails closed on a schema preflight defect and leaves the store untouched", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { dir, storePath } = yield* temporaryStore();
+      yield* poke(
+        storePath,
+        `${createStatements.join("\n")}
+         CREATE TABLE extra_data (value TEXT NOT NULL);
+         INSERT INTO extra_data VALUES ('kept');`,
+      );
+      pushSchemaMock.mockResolvedValueOnce({
+        get sqlStatements() {
+          throw new Error("unexpected preflight defect");
+        },
+        hints: [],
+        apply: () => Promise.resolve(),
+      });
+
+      const store = yield* storeAt(storePath);
+      const backups = controlStoreBackups(yield* fs.readDirectory(dir));
+
+      assert.strictEqual(store.health, "unavailable");
+      assert.isTrue(store.health === "unavailable" && store.message.includes("unexpected preflight defect"));
+      assert.deepStrictEqual(yield* query(storePath, "SELECT value FROM extra_data"), [{ value: "kept" }]);
+      assert.strictEqual(backups.length, 0);
+    }),
+  );
+
   it.effect("backs up a rename-shaped store and converges a fresh store", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
