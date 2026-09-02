@@ -1,0 +1,19 @@
+pnpm-lock.yaml
+  s_7084ecaf41e3f6::t_dc154f761ec2a3 325,6835
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dc090b95b512cd3e73efa0a1d907e0d1b28aa838",
+  "prompts": {},
+  "sessions": {
+    "s_7084ecaf41e3f6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fdcd0b9-512e-4e1d-a2b0-2b92be3b1607",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
