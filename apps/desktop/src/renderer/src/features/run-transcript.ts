@@ -224,8 +224,8 @@ export type TranscriptRow =
   | { readonly kind: "note"; readonly key: string; readonly text: string }
   | { readonly kind: "error"; readonly key: string; readonly message: string };
 
-const groupEntries = (entries: readonly TranscriptEntry[]) =>
-  entries.reduce<TranscriptEntry[][]>((groups, entry) => {
+const groupEntries = (entries: Iterable<TranscriptEntry>) =>
+  Array.from(entries).reduce<TranscriptEntry[][]>((groups, entry) => {
     const group = groups.at(-1);
     if (isStep(entry) && group?.every(isStep)) group.push(entry);
     else groups.push([entry]);
@@ -253,7 +253,7 @@ const toRow = (group: readonly TranscriptEntry[], runComplete: boolean): Transcr
   };
 };
 
-export const transcriptRows = (entries: readonly TranscriptEntry[], runComplete: boolean) =>
+export const transcriptRows = (entries: Iterable<TranscriptEntry>, runComplete: boolean) =>
   groupEntries(entries).flatMap((group) => toRow(group, runComplete) ?? []);
 
 const terminalLine: Partial<Record<RunStatus, string>> = {
@@ -287,5 +287,5 @@ export const runLine = (rows: readonly TranscriptRow[], status: RunStatus) => {
   return workLine(last.steps);
 };
 
-export const statusLine = (entries: ReadonlyArray<TranscriptEntry>, status: RunStatus) =>
+export const statusLine = (entries: Iterable<TranscriptEntry>, status: RunStatus) =>
   runLine(transcriptRows(entries, status !== "running"), status);
