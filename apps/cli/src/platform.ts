@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import type * as PlatformError from "effect/PlatformError";
+import * as Record from "effect/Record";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
@@ -71,16 +72,15 @@ const parseDivergence = (stdout: string) => {
 
 const gitCommandDeadline = "5 minutes";
 
-const operationMarkers: ReadonlyArray<{
-  readonly operation: Git.GitOperation;
-  readonly marker: string;
-}> = [
-  { operation: "merge", marker: "MERGE_HEAD" },
-  { operation: "rebase", marker: "REBASE_HEAD" },
-  { operation: "rebase", marker: "rebase-merge" },
-  { operation: "rebase", marker: "rebase-apply/rebasing" },
-  { operation: "cherry-pick", marker: "CHERRY_PICK_HEAD" },
-];
+interface GitOperationState {
+  readonly statePaths: readonly [string, ...ReadonlyArray<string>];
+}
+
+const gitOperationStates = {
+  merge: { statePaths: ["MERGE_HEAD"] },
+  rebase: { statePaths: ["rebase-merge", "rebase-apply/rebasing"] },
+  "cherry-pick": { statePaths: ["CHERRY_PICK_HEAD"] },
+} satisfies { readonly [Operation in Git.GitOperation]: GitOperationState };
 
 export const gitLayer = Layer.effect(
   Git.Git,
@@ -112,19 +112,19 @@ export const gitLayer = Layer.effect(
       );
     };
 
-    const operationMarkerExists = Effect.fn("Git.operationMarkerExists")(function* (
+    const operationStatePathExists = Effect.fn("Git.operationStatePathExists")(function* (
       worktreePath: string,
-      marker: string,
+      statePath: string,
     ) {
-      const value = yield* runGit(worktreePath, ["rev-parse", "--git-path", marker]);
-      const markerPath = path.resolve(worktreePath, value.trim());
-      return yield* fs.exists(markerPath).pipe(
+      const value = yield* runGit(worktreePath, ["rev-parse", "--git-path", statePath]);
+      const resolvedStatePath = path.resolve(worktreePath, value.trim());
+      return yield* fs.exists(resolvedStatePath).pipe(
         Effect.catch(
           recoverNotFound(
             false,
             (cause) =>
               new Git.GitError({
-                command: `git rev-parse --git-path ${marker}`,
+                command: `git rev-parse --git-path ${statePath}`,
                 message: describe(cause),
               }),
           ),
@@ -133,14 +133,16 @@ export const gitLayer = Layer.effect(
     });
 
     const operationInProgress = Effect.fn("Git.operationInProgress")(function* (worktreePath: string) {
-      const found = yield* Effect.findFirst(operationMarkers, ({ marker }) =>
-        operationMarkerExists(worktreePath, marker),
+      const found = yield* Effect.findFirst(Record.toEntries(gitOperationStates), ([, state]) =>
+        Effect.findFirst(state.statePaths, (statePath) =>
+          operationStatePathExists(worktreePath, statePath),
+        ).pipe(Effect.map(Option.isSome)),
       );
       if (Option.isNone(found)) return null;
       const unmergedPaths = yield* runGit(worktreePath, ["diff", "--name-only", "--diff-filter=U"]).pipe(
         Effect.map((stdout) => stdout.split("\n").filter(Boolean)),
       );
-      return { operation: found.value.operation, unmergedPaths } satisfies Git.GitOperationInProgress;
+      return { operation: found.value[0], unmergedPaths } satisfies Git.GitOperationInProgress;
     });
 
     return {
