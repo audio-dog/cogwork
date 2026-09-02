@@ -26,7 +26,13 @@ export interface CodexRunnerOptions {
 }
 
 const codexEfforts = ["minimal", "low", "medium", "high"] as const satisfies ReadonlyArray<CodexEffort>;
-const defaultCodexModel = CODEX_MODELS[0];
+
+// Cogwork owns this list because nobody else can. Codex CLI forwards any model id its backend
+// accepts, so `CODEX_MODELS` is an autocomplete hint upstream, not the set one host reaches — a
+// package cannot know which ids one account is entitled to. Extend it when Codex ships a model.
+const currentCodexModels = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const;
+const codexModels: ReadonlyArray<CodexModel> = [...currentCodexModels, ...CODEX_MODELS];
+const defaultCodexModel = codexModels[0];
 const defaultCodexEffort = "high" satisfies CodexEffort;
 const codexAdapterVersion = "0.5.3";
 const codexVersionRequirement = ">=0.149.0";
@@ -223,7 +229,7 @@ const selectedEffort = (effort: string | null) => {
 };
 
 const catalogOptions = {
-  models: CODEX_MODELS.map((model) => ({ value: model, label: model })),
+  models: codexModels.map((model) => ({ value: model, label: model })),
   efforts: codexEfforts.map((effort) => ({ value: effort, label: effort })),
 };
 
@@ -291,10 +297,8 @@ const codexDescriptor = (
     },
     authentication: { mode: "host", reference: "Codex host login" },
     catalogSources: {
-      runtime: Harness.staticCatalogSource(catalogOptions, {
-        source: "tanstack-runtime",
-        packageVersion: codexAdapterVersion,
-      }),
+      // No runtime source: nothing here reads the Runtime host, so claiming `tanstack-runtime`
+      // provenance made a stale pin out of every model the shipped package had not heard of.
       fallback: Harness.staticCatalogSource(catalogOptions, {
         source: "cogwork-fallback",
         fallbackVersion: `codex-${codexAdapterVersion}`,

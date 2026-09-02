@@ -246,7 +246,7 @@ const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkil
 
 describe("codexRunner", () => {
   it.layer(services)((it) => {
-    it.effect("projects TanStack catalog metadata and honest native capabilities", () =>
+    it.effect("offers the host model catalog and honest native capabilities", () =>
       Effect.gen(function* () {
         const codex = runner();
         const harness = Harness.make([codex]);
@@ -254,15 +254,15 @@ describe("codexRunner", () => {
 
         assert.deepStrictEqual(
           catalog.models.map(({ value }) => value),
-          [...CODEX_MODELS],
+          ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", ...CODEX_MODELS],
         );
         assert.deepStrictEqual(
           catalog.efforts?.map(({ value }) => value),
           ["minimal", "low", "medium", "high"],
         );
         assert.deepStrictEqual(catalog.provenance, {
-          source: "tanstack-runtime",
-          packageVersion: "0.5.3",
+          source: "cogwork-fallback",
+          fallbackVersion: "codex-0.5.3",
         });
         assert.strictEqual(codex.sessionKind, "opaque-handle");
         assert.deepStrictEqual(codex.authentication, {
