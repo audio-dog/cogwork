@@ -1,0 +1,22 @@
+packages/engine/src/tools/owned-tools.test.ts
+  s_e70165fbabed53::t_e855e72678d9d5 33,50
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_e70165fbabed53::t_1e6411546eded5 413-415
+  s_e70165fbabed53::t_e855e72678d9d5 32,63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e7c6dde1be815158a6f063da5520c1f84497ab9d",
+  "prompts": {},
+  "sessions": {
+    "s_e70165fbabed53": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0635d-8eff-7d22-a6c4-b5301e70f386",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
