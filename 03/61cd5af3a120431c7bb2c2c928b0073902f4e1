@@ -1,0 +1,29 @@
+packages/engine/src/event-publisher.test.ts
+  s_0a5f6da99397f7::t_841772aa28803a 602-604
+  s_0a5f6da99397f7::t_822f07ec3b992c 6,20,479,564-566,568,627,668-670,672,690-692,702-703,730-732,738-741
+  s_d83326dc1387b5::t_d4c01997f87f48 625-626
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0361cd5af3a120431c7bb2c2c928b0073902f4e1",
+  "prompts": {},
+  "sessions": {
+    "s_0a5f6da99397f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638f-b3ac-77f3-a98c-c1184a53eed8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d83326dc1387b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638f-84de-7a11-9905-c01962b7d554",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
