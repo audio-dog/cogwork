@@ -6,6 +6,7 @@ import {
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   connectionIdOf,
+  DaemonEvent,
   type DaemonLimitUpdate,
   DaemonRpcs,
   HarnessName,
@@ -22,6 +23,7 @@ import {
   WorkspaceConfig,
   WorkspaceId,
   WorkspaceRegistration,
+  WorkspaceState,
 } from "@cogwork/contracts";
 
 import { assert, describe, it } from "@effect/vitest";
@@ -506,7 +508,7 @@ describe("CancelRun", () => {
       ]);
 
       const [published] = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.filter((event) => event._tag === "ItemChanged"),
+        Stream.filter(DaemonEvent.guards.ItemChanged),
         Stream.take(1),
         Stream.runCollect,
       );
@@ -780,7 +782,10 @@ describe("Reclassify", () => {
         Stream.runCollect,
       );
       assert.strictEqual(published?._tag, "ItemChanged");
-      if (published?._tag === "ItemChanged") assert.strictEqual(published.item._tag, "Eligible");
+      if (!published || !DaemonEvent.guards.ItemChanged(published)) {
+        return assert.fail("expected ItemChanged");
+      }
+      assert.isTrue(ClassifiedItem.guards.Eligible(published.item));
     }).pipe(Effect.provide(daemonLayer(recordingTracker([item], calls))), Effect.scoped);
   });
 
@@ -1055,7 +1060,7 @@ describe("SetScheduling", () => {
       yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("example"), id: id("AUD-1") });
 
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.takeUntil(DaemonEvent.guards.ItemRemoved),
         Stream.runCollect,
       );
       assert.deepStrictEqual(
@@ -1089,8 +1094,9 @@ describe("SetDaemonLimit", () => {
       const [controlStoreChanged, schedulerChanged] = published;
 
       assert.strictEqual(controlStoreChanged?._tag, "ControlStoreChanged");
-      if (controlStoreChanged?._tag !== "ControlStoreChanged")
+      if (!controlStoreChanged || !DaemonEvent.guards.ControlStoreChanged(controlStoreChanged)) {
         return assert.fail("expected ControlStoreChanged");
+      }
       assert.deepStrictEqual(controlStoreChanged.controlStore, returned);
       assert.deepStrictEqual(returned.daemonLimits, {
         globalConcurrency: 8,
@@ -1099,7 +1105,9 @@ describe("SetDaemonLimit", () => {
         revision: 1,
       });
       assert.strictEqual(schedulerChanged?._tag, "SchedulerChanged");
-      if (schedulerChanged?._tag !== "SchedulerChanged") return assert.fail("expected SchedulerChanged");
+      if (!schedulerChanged || !DaemonEvent.guards.SchedulerChanged(schedulerChanged)) {
+        return assert.fail("expected SchedulerChanged");
+      }
       assert.strictEqual(schedulerChanged.scheduler.globalLimit, 8);
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
@@ -1117,7 +1125,7 @@ describe("SetDaemonLimit", () => {
       const scheduler = yield* Scheduler.Scheduler;
       yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("example"), id: id("AUD-1") });
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.takeUntil(DaemonEvent.guards.ItemRemoved),
         Stream.runCollect,
       );
 
@@ -1166,7 +1174,9 @@ describe("SetOperationSetting", () => {
       );
 
       assert.strictEqual(published?._tag, "ControlStoreChanged");
-      if (published?._tag !== "ControlStoreChanged") return assert.fail("expected ControlStoreChanged");
+      if (!published || !DaemonEvent.guards.ControlStoreChanged(published)) {
+        return assert.fail("expected ControlStoreChanged");
+      }
       assert.deepStrictEqual(published.controlStore, returned);
       if (modelUpdate._tag !== "Set") return assert.fail("expected set update");
       assert.deepStrictEqual(returned.operationSettings, [modelUpdate.row]);
@@ -1220,7 +1230,9 @@ describe("SetContributionSetting", () => {
       );
 
       assert.strictEqual(published?._tag, "ControlStoreChanged");
-      if (published?._tag !== "ControlStoreChanged") return assert.fail("expected ControlStoreChanged");
+      if (!published || !DaemonEvent.guards.ControlStoreChanged(published)) {
+        return assert.fail("expected ControlStoreChanged");
+      }
       assert.deepStrictEqual(published.controlStore, returned);
       assert.strictEqual(returned.contributionSettings[0]?.diagnostic?._tag, "Dangling");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
@@ -1334,11 +1346,11 @@ describe("RegisterWorkspace", () => {
       yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
 
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.takeUntil(DaemonEvent.guards.ItemRemoved),
         Stream.runCollect,
       );
       assert.strictEqual(workspace._tag, "Registered");
-      if (workspace._tag === "Registered") {
+      if (WorkspaceState.guards.Registered(workspace)) {
         assert.strictEqual(workspace.name, "0198f16a-21d7-7000-8000-000000000001");
         assert.strictEqual(workspace.displayName, "acme");
       }
@@ -1362,7 +1374,7 @@ describe("RegisterWorkspace", () => {
       yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
 
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.takeUntil(DaemonEvent.guards.ItemRemoved),
         Stream.runCollect,
       );
       assert.deepStrictEqual(workspace, {
@@ -1406,7 +1418,7 @@ describe("RegisterWorkspace", () => {
 
       yield* client.RegisterWorkspace({ registration: acmeRegistration });
       const [published] = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.filter((event) => event._tag === "ControlStoreChanged"),
+        Stream.filter(DaemonEvent.guards.ControlStoreChanged),
         Stream.take(1),
         Stream.runCollect,
       );
@@ -1592,12 +1604,12 @@ describe("workspace lifecycle commands", () => {
       const subscription = yield* bus.subscribe();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
-      if (registered._tag !== "Registered") return assert.fail("expected registration");
+      if (!WorkspaceState.guards.Registered(registered)) return assert.fail("expected registration");
 
       const deregistered = yield* client.DeregisterWorkspace({ workspace: registered.name });
       yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.takeUntil(DaemonEvent.guards.ItemRemoved),
         Stream.runCollect,
       );
 
@@ -1606,7 +1618,7 @@ describe("workspace lifecycle commands", () => {
         [...events].map((event) => event._tag),
         ["WorkspaceChanged", "ControlStoreChanged", "WorkspaceRemoved", "ControlStoreChanged", "ItemRemoved"],
       );
-      const controlStoreChanged = [...events].find((event) => event._tag === "ControlStoreChanged");
+      const controlStoreChanged = [...events].find(DaemonEvent.guards.ControlStoreChanged);
       assert.deepStrictEqual(controlStoreChanged?.controlStore, afterDeregister);
     }).pipe(
       Effect.provide(
@@ -1628,7 +1640,7 @@ describe("workspace lifecycle commands", () => {
       const subscription = yield* bus.subscribe();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
-      if (registered._tag !== "Registered") return assert.fail("expected registration");
+      if (!WorkspaceState.guards.Registered(registered)) return assert.fail("expected registration");
 
       const rebound = yield* client.RebindWorkspace({
         workspace: registered.name,
@@ -1637,7 +1649,10 @@ describe("workspace lifecycle commands", () => {
       const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(4), Stream.runCollect);
 
       assert.strictEqual(rebound._tag, "Registered");
-      assert.strictEqual(rebound._tag === "Registered" ? rebound.checkoutPath : null, "/repos/moved-acme");
+      assert.strictEqual(
+        WorkspaceState.guards.Registered(rebound) ? rebound.checkoutPath : null,
+        "/repos/moved-acme",
+      );
       assert.deepStrictEqual(
         [...events].map((event) => event._tag),
         ["WorkspaceChanged", "ControlStoreChanged", "WorkspaceChanged", "ControlStoreChanged"],
@@ -1654,7 +1669,7 @@ describe("workspace lifecycle commands", () => {
     return Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const registeredState = yield* client.RegisterWorkspace({ registration: acmeRegistration });
-      if (registeredState._tag !== "Registered") return assert.fail("expected registration");
+      if (!WorkspaceState.guards.Registered(registeredState)) return assert.fail("expected registration");
 
       const registry = yield* Registry.WorkspaceRegistry;
       const registeredWorkspace = (yield* registry.state).workspaces.at(0);
@@ -1681,7 +1696,7 @@ describe("workspace lifecycle commands", () => {
       yield* client.CancelRun({ runId: rid("run-1") });
       yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.takeUntil(DaemonEvent.guards.ItemRemoved),
         Stream.runCollect,
       );
 
@@ -1690,7 +1705,7 @@ describe("workspace lifecycle commands", () => {
         { workItem: id("AUD-1"), outcome: { stage: "implement", note: undefined } },
       ]);
       assert.deepStrictEqual(recorded.released, [id("AUD-1")]);
-      assert.isFalse([...events].some((event) => event._tag === "ItemChanged"));
+      assert.isFalse([...events].some(DaemonEvent.guards.ItemChanged));
     }).pipe(
       Effect.provide(
         daemonLayer(recordingTracker([], calls), schedulerStub(), controlStoreStub(), registries),
@@ -1718,15 +1733,13 @@ describe("Plugin lifecycle commands", () => {
       yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
 
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.takeUntil(DaemonEvent.guards.ItemRemoved),
         Stream.runCollect,
       );
-      const snapshots = [...events]
-        .filter((event) => event._tag === "PluginsChanged")
-        .map((event) => ({
-          plugins: event.plugins.plugins.map((plugin) => plugin.pluginId),
-          notices: event.notices,
-        }));
+      const snapshots = [...events].filter(DaemonEvent.guards.PluginsChanged).map((event) => ({
+        plugins: event.plugins.plugins.map((plugin) => plugin.pluginId),
+        notices: event.notices,
+      }));
       assert.deepStrictEqual(snapshots, [
         { plugins: ["github", "linear"], notices: ["linear notice"] },
         { plugins: ["github", "linear"], notices: [] },
