@@ -1,0 +1,29 @@
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_7084ecaf41e3f6::t_4243b7bed6df8e 40-49
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_7084ecaf41e3f6::t_8bd2f91551eb77 20-22
+packages/codex-cli/src/harness.ts
+  s_7084ecaf41e3f6::t_1e2cdf401628f7 271,276-288,293-308
+  s_7084ecaf41e3f6::t_790659b8785a35 355-357,364-367
+  s_7084ecaf41e3f6::t_3ed38df8275299 377
+  s_7084ecaf41e3f6::t_f9be335d4281cb 15
+  s_7084ecaf41e3f6::t_3d8aa50b3af3e7 264-270,272-275,289-292
+packages/codex-cli/CONTEXT.md
+  s_7084ecaf41e3f6::t_6e5732d64a0365 43-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ed130c9889c677b28bb4b8520448758eddcedccb",
+  "prompts": {},
+  "sessions": {
+    "s_7084ecaf41e3f6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fdcd0b9-512e-4e1d-a2b0-2b92be3b1607",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
