@@ -48,7 +48,7 @@ const missingExecutableCodes = new Set(["ENOENT", "EACCES"]);
 const missingExecutableExitCodes = new Set([126, 127]);
 const missingLoginPattern = /not (?:logged|signed) in|claude (?:auth )?login/i;
 const rejectedApiKeyPattern =
-  /(?:claude|anthropic).{0,80}(?:api[- ]?key|x-api-key|authentication_error|invalid (?:credential|key))|(?:api[- ]?key|x-api-key|authentication_error|invalid (?:credential|key)).{0,80}(?:claude|anthropic)/i;
+  /\bauthentication_error\b|\binvalid x-api-key\b|(?:claude|anthropic).{0,80}(?:api[- ]?key|x-api-key|invalid (?:credential|key))|(?:api[- ]?key|x-api-key|invalid (?:credential|key)).{0,80}(?:claude|anthropic)/i;
 const authenticationProfiles = {
   host: {
     binding: { mode: "host", reference: "Claude Code host login on this Runtime Host" },

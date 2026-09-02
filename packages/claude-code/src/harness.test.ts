@@ -728,6 +728,20 @@ describe("Claude Code Harness", () => {
       }),
     );
 
+    it.effect("classifies an unqualified Anthropic authentication error as a rejected BYOK key", () =>
+      Effect.gen(function* () {
+        const { handle, harness } = yield* makeLiveHarness(
+          " --unqualified-api-key-run-error",
+          byokAuthentication,
+        );
+        const error = yield* harness.run(makeRequest(handle.id)).pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "credential");
+        assert.isFalse(error.retryable);
+        assert.include(error.message, "cogwork login key --provider anthropic");
+      }),
+    );
+
     it.effect("keeps MCP API-key failures independent from Anthropic BYOK", () =>
       Effect.gen(function* () {
         const { handle, harness } = yield* makeLiveHarness(" --mcp-api-key-run-error", byokAuthentication);

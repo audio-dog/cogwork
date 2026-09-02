@@ -108,6 +108,7 @@ const runErrorMessage = [
   ["--authentication-run-error", "MCP server authentication failed"],
   ["--mcp-api-key-run-error", "MCP server invalid API key"],
   ["--api-key-run-error", `Claude API key rejected: ${apiKey}`],
+  ["--unqualified-api-key-run-error", "authentication_error: invalid x-api-key"],
 ].find(([flag]) => process.argv.includes(flag))?.[1];
 
 if (runErrorMessage) {
