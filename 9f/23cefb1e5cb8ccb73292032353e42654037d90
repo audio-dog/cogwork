@@ -1,0 +1,20 @@
+apps/desktop/src/main/index.ts
+  s_e56f2f08236ec0::t_0a22bdd8da901d 108-111,138
+  s_e56f2f08236ec0::t_1679ea5b32640b 139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9f23cefb1e5cb8ccb73292032353e42654037d90",
+  "prompts": {},
+  "sessions": {
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "agent <agent@example.com>"
+    }
+  }
+}
