@@ -127,14 +127,18 @@ const resolveWatchTargetFrom = (runs: ReadonlyArray<RunRecord>, workItem: WorkIt
   );
 };
 
-const summaryOf = (events: ReadonlyMap<string, ReadonlyArray<RunEvent>>) => (run: RunRecord) => ({
+type MemoryEvents = ReadonlyMap<RunId, ReadonlyArray<RunEvent>>;
+
+const eventCountOf = (events: MemoryEvents, runId: RunId) => events.get(runId)?.length ?? 0;
+
+const summaryOf = (events: MemoryEvents) => (run: RunRecord) => ({
   ...run,
-  eventCount: events.get(run.id)?.length ?? 0,
+  eventCount: eventCountOf(events, run.id),
 });
 
 const summarize = (
   runs: ReadonlyArray<RunRecord>,
-  events: ReadonlyMap<string, ReadonlyArray<RunEvent>>,
+  events: MemoryEvents,
   limit: number,
 ): ReadonlyArray<RunSummary> =>
   [...runs]
@@ -142,23 +146,18 @@ const summarize = (
     .slice(0, limit)
     .map(summaryOf(events));
 
-const summarizeRunning = (
-  runs: ReadonlyArray<RunRecord>,
-  events: ReadonlyMap<string, ReadonlyArray<RunEvent>>,
-) =>
+const summarizeRunning = (runs: ReadonlyArray<RunRecord>, events: MemoryEvents) =>
   [...runs]
     .filter((run) => run.status === "running")
     .sort((a, b) => b.startedAtMillis - a.startedAtMillis)
     .map(summaryOf(events));
 
-const sortedEvents = (
-  events: ReadonlyMap<string, ReadonlyArray<RunEvent>>,
-  runId: RunId,
-): ReadonlyArray<RunEvent> => [...(events.get(runId) ?? [])].sort((a, b) => a.seq - b.seq);
+const sortedEvents = (events: MemoryEvents, runId: RunId): ReadonlyArray<RunEvent> =>
+  [...(events.get(runId) ?? [])].sort((a, b) => a.seq - b.seq);
 
 const eventsForSession = (
   runs: ReadonlyArray<RunRecord>,
-  events: ReadonlyMap<string, ReadonlyArray<RunEvent>>,
+  events: MemoryEvents,
   session: SessionId,
 ): ReadonlyArray<RunEvent> =>
   [...runs]
@@ -171,7 +170,7 @@ const withHandle = (session: Session, handle: string): Session =>
 
 export const makeMemory = Effect.gen(function* () {
   const runsRef = yield* Ref.make<ReadonlyArray<RunRecord>>([]);
-  const eventsRef = yield* Ref.make<ReadonlyMap<string, ReadonlyArray<RunEvent>>>(new Map());
+  const eventsRef = yield* Ref.make<MemoryEvents>(new Map());
   const sessionsRef = yield* Ref.make<ReadonlyMap<string, Session>>(new Map());
   const plansRef = yield* Ref.make<ReadonlyMap<string, RunPlan>>(new Map());
 
@@ -285,11 +284,19 @@ export const makeMemory = Effect.gen(function* () {
     ),
     getRun: (runId: RunId) =>
       Effect.map(Ref.get(runsRef), (runs) => runs.find((run) => run.id === runId) ?? null),
+    getRunSummary: (runId: RunId) =>
+      Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
+        Effect.map(([runs, events]) => {
+          const run = runs.find((candidate) => candidate.id === runId);
+          return run ? summaryOf(events)(run) : null;
+        }),
+      ),
     events: (runId: RunId) => Effect.map(Ref.get(eventsRef), (events) => sortedEvents(events, runId)),
   } as const;
 });
 
-export type RunLedgerService = Effect.Success<typeof makeMemory>;
+export type CoreRunLedgerService = Effect.Success<typeof makeMemory>;
+export type RunLedgerService = Omit<CoreRunLedgerService, "getRunSummary">;
 
 export const handleOf = (ledger: RunLedgerService, session: SessionId | null) =>
   session ? Effect.map(ledger.getSession(session), sessionHandle) : Effect.succeed(null);
@@ -298,20 +305,20 @@ export class RunLedger extends Context.Service<RunLedger, RunLedgerService>()(
   "@cogwork/engine/run-ledger/RunLedger",
 ) {}
 
-export class CoreRunLedger extends Context.Service<CoreRunLedger, RunLedgerService>()(
+export class CoreRunLedger extends Context.Service<CoreRunLedger, CoreRunLedgerService>()(
   "@cogwork/engine/run-ledger/CoreRunLedger",
 ) {}
 
-const withRunChangedPublishing = (core: RunLedgerService, bus: DaemonEventBusService) => {
+const withRunChangedPublishing = (core: CoreRunLedgerService, bus: DaemonEventBusService) => {
+  const { getRunSummary, ...ledger } = core;
   const publish = Effect.fn("RunLedger.publishRunChanged")(function* (runId: RunId) {
-    const run = yield* core.getRun(runId);
+    const run = yield* getRunSummary(runId);
     if (run === null) return;
-    const events = yield* core.events(runId);
-    yield* bus.publishRun({ ...run, eventCount: events.length });
+    yield* bus.publishRun(run);
   });
   const publishAll = (runIds: ReadonlyArray<RunId>) => Effect.forEach(runIds, publish, { discard: true });
   return {
-    ...core,
+    ...ledger,
     acceptRun: (record: RunRecord, plan: RunPlan) =>
       Effect.andThen(core.acceptRun(record, plan), publish(record.id)).pipe(Effect.asVoid),
     insertRun: (record: RunRecord) => Effect.andThen(core.insertRun(record), publish(record.id)),
