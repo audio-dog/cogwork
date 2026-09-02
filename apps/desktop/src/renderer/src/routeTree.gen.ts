@@ -20,7 +20,6 @@ import { Route as SettingsSplatRouteImport } from './routes/settings/$'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
 import { Route as SettingsSchedulingRouteImport } from './routes/settings/scheduling'
-import { Route as SettingsSupRouteImport } from './routes/settings/sup'
 import { Route as AppCustomizeIndexRouteImport } from './routes/_app/customize/index'
 import { Route as AppCustomizeFacetRouteImport } from './routes/_app/customize/$facet'
 import { Route as AppWorkspacesWorkspaceIdRouteImport } from './routes/_app/workspaces/$workspaceId'
@@ -80,11 +79,6 @@ const SettingsSchedulingRoute = SettingsSchedulingRouteImport.update({
   path: '/scheduling',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
-const SettingsSupRoute = SettingsSupRouteImport.update({
-  id: '/sup',
-  path: '/sup',
-  getParentRoute: () => SettingsRouteRoute,
-} as any)
 const AppCustomizeIndexRoute = AppCustomizeIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -118,7 +112,6 @@ export interface FileRoutesByFullPath {
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
-  '/settings/sup': typeof SettingsSupRoute
   '/settings/': typeof SettingsIndexRoute
   '/customize/$facet': typeof AppCustomizeFacetRoute
   '/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
@@ -132,7 +125,6 @@ export interface FileRoutesByTo {
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
-  '/settings/sup': typeof SettingsSupRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/customize/$facet': typeof AppCustomizeFacetRoute
@@ -151,7 +143,6 @@ export interface FileRoutesById {
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
-  '/settings/sup': typeof SettingsSupRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/_app/customize/$facet': typeof AppCustomizeFacetRoute
@@ -171,7 +162,6 @@ export interface FileRouteTypes {
     | '/settings/appearance'
     | '/settings/general'
     | '/settings/scheduling'
-    | '/settings/sup'
     | '/settings/'
     | '/customize/$facet'
     | '/workspaces/$workspaceId'
@@ -185,7 +175,6 @@ export interface FileRouteTypes {
     | '/settings/appearance'
     | '/settings/general'
     | '/settings/scheduling'
-    | '/settings/sup'
     | '/'
     | '/settings'
     | '/customize/$facet'
@@ -203,7 +192,6 @@ export interface FileRouteTypes {
     | '/settings/appearance'
     | '/settings/general'
     | '/settings/scheduling'
-    | '/settings/sup'
     | '/_app/'
     | '/settings/'
     | '/_app/customize/$facet'
@@ -296,13 +284,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsSchedulingRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
-    '/settings/sup': {
-      id: '/settings/sup'
-      path: '/sup'
-      fullPath: '/settings/sup'
-      preLoaderRoute: typeof SettingsSupRouteImport
-      parentRoute: typeof SettingsRouteRoute
-    }
     '/_app/customize/': {
       id: '/_app/customize/'
       path: '/'
@@ -374,7 +355,6 @@ interface SettingsRouteRouteChildren {
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsSchedulingRoute: typeof SettingsSchedulingRoute
-  SettingsSupRoute: typeof SettingsSupRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
@@ -383,7 +363,6 @@ const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsSchedulingRoute: SettingsSchedulingRoute,
-  SettingsSupRoute: SettingsSupRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 
