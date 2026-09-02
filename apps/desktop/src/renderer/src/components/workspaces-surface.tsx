@@ -3,7 +3,7 @@ import {
   type ConnectionSystem,
   maxSchedulerLimit,
   type WorkspaceId,
-  type WorkspaceState,
+  WorkspaceState,
 } from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
@@ -259,23 +259,22 @@ function LinearRegistrationFields({
 }
 
 function RegistrationOutcome({ outcome }: { readonly outcome: WorkspaceState }) {
-  if (outcome._tag !== "Failed") {
-    return (
+  return WorkspaceState.match(outcome, {
+    Registered: (registered) => (
       <Alert>
         <RiGitRepositoryLine />
         <AlertTitle>Workspace registered</AlertTitle>
-        <AlertDescription>{outcome.displayName ?? outcome.name} is now registered.</AlertDescription>
+        <AlertDescription>{registered.displayName ?? registered.name} is now registered.</AlertDescription>
       </Alert>
-    );
-  }
-
-  return (
-    <Alert variant="destructive">
-      <RiAlertLine />
-      <AlertTitle>Workspace input failed</AlertTitle>
-      <AlertDescription>{outcome.message}</AlertDescription>
-    </Alert>
-  );
+    ),
+    Failed: ({ message }) => (
+      <Alert variant="destructive">
+        <RiAlertLine />
+        <AlertTitle>Workspace input failed</AlertTitle>
+        <AlertDescription>{message}</AlertDescription>
+      </Alert>
+    ),
+  });
 }
 
 function WorkspaceActions({
@@ -418,15 +417,17 @@ function RegisterWorkspaceDialog() {
   );
 }
 
-const workspaceIdentity = (workspace: WorkspaceState) => {
-  if (workspace._tag === "Registered") return workspace.name;
-  return workspace.name ?? null;
-};
+const workspaceIdentity = (workspace: WorkspaceState) =>
+  WorkspaceState.match<WorkspaceId | null>(workspace, {
+    Registered: ({ name }) => name,
+    Failed: ({ name }) => name ?? null,
+  });
 
-const workspaceLabel = (workspace: WorkspaceState) => {
-  if (workspace._tag === "Registered") return workspace.displayName ?? workspace.name;
-  return workspace.displayName ?? workspace.name ?? workspace.source;
-};
+const workspaceLabel = (workspace: WorkspaceState) =>
+  WorkspaceState.match(workspace, {
+    Registered: ({ displayName, name }) => displayName ?? name,
+    Failed: ({ displayName, name, source }) => displayName ?? name ?? source,
+  });
 
 function RegistryEmpty({
   icon: Icon,
@@ -598,8 +599,8 @@ function DeregisterWorkspaceDialog({
 function WorkspaceRow({ workspace }: { readonly workspace: WorkspaceState }) {
   const identity = workspaceIdentity(workspace);
   const label = workspaceLabel(workspace);
-  if (workspace._tag === "Failed") {
-    return (
+  return WorkspaceState.match(workspace, {
+    Failed: ({ message, source }) => (
       <Item variant="outline" className="items-start">
         <ItemMedia variant="icon">
           <RiAlertLine />
@@ -609,30 +610,29 @@ function WorkspaceRow({ workspace }: { readonly workspace: WorkspaceState }) {
             {label}
             <Badge variant="destructive">Input failed</Badge>
           </ItemTitle>
-          <ItemDescription>{workspace.message}</ItemDescription>
-          <span className="font-mono text-xs text-muted-foreground">{workspace.source}</span>
+          <ItemDescription>{message}</ItemDescription>
+          <span className="font-mono text-xs text-muted-foreground">{source}</span>
         </ItemContent>
         {identity ? <WorkspaceActions workspace={identity} label={label} /> : null}
       </Item>
-    );
-  }
-
-  return (
-    <Item variant="outline" className="items-start">
-      <ItemMedia variant="icon">
-        <RiGitRepositoryLine />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>
-          {label}
-          <Badge variant="outline">{workspace.name}</Badge>
-          <Badge variant="secondary">{workspace.issueTracker}</Badge>
-        </ItemTitle>
-        <ItemDescription>{workspace.checkoutPath}</ItemDescription>
-      </ItemContent>
-      <WorkspaceActions workspace={workspace.name} label={label} className="flex-col items-end" />
-    </Item>
-  );
+    ),
+    Registered: ({ name, issueTracker, checkoutPath }) => (
+      <Item variant="outline" className="items-start">
+        <ItemMedia variant="icon">
+          <RiGitRepositoryLine />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>
+            {label}
+            <Badge variant="outline">{name}</Badge>
+            <Badge variant="secondary">{issueTracker}</Badge>
+          </ItemTitle>
+          <ItemDescription>{checkoutPath}</ItemDescription>
+        </ItemContent>
+        <WorkspaceActions workspace={name} label={label} className="flex-col items-end" />
+      </Item>
+    ),
+  });
 }
 
 function RegistryStatus() {
