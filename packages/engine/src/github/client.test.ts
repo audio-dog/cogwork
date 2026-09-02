@@ -97,6 +97,29 @@ const transientWrite = (
 };
 
 describe("GitHub client", () => {
+  it.effect("lists every open issue across GitHub pages", () => {
+    const issue = (number: number) => ({ number, title: `issue ${number}`, labels: [] });
+    const firstPage = Array.from({ length: 100 }, (_, index) => issue(index + 1));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [issue(101)]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const issues = yield* client.listIssues(repo);
+      assert.strictEqual(issues.length, 101);
+      assert.strictEqual(issues.at(-1)?.number, 101);
+      assert.deepStrictEqual(
+        fetch.mock.calls.map(([input]) =>
+          new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
+        ),
+        ["1", "2"],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("creates an issue with its body and labels", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(

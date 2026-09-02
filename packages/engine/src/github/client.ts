@@ -330,6 +330,7 @@ const permanentAttemptError = (error: IssueTrackerError) =>
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const transientAttemptDeadline = "30 seconds";
 const paginationDeadline = "5 minutes";
+const pageSize = 100;
 
 const withTransientRetry = <A, R>(attempt: Effect.Effect<A, GitHubAttemptError, R>) =>
   attempt.pipe(
@@ -634,10 +635,25 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return yield* withPaginationDeadline(collectClosingReferencePages(repo));
   });
 
+  const collectIssuePages: (
+    repo: GitHubRepoRef,
+    page?: number,
+  ) => Effect.Effect<ReadonlyArray<RawIssue>, IssueTrackerError> = Effect.fn("github.collectIssuePages")(
+    function* (repo, page = 1) {
+      const json = yield* fetchJson(
+        repo,
+        repoPath(repo, `/issues?state=open&per_page=${pageSize}&page=${page}`),
+      );
+      const current = yield* parseIssues(repo, json);
+      if (current.length < pageSize) return current;
+      const remaining = yield* collectIssuePages(repo, page + 1);
+      return [...current, ...remaining];
+    },
+  );
+
   return {
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
-      const json = yield* fetchJson(repo, repoPath(repo, "/issues?state=open&per_page=100"));
-      return yield* parseIssues(repo, json);
+      return yield* withPaginationDeadline(collectIssuePages(repo));
     }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(

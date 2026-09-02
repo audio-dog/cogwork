@@ -4,8 +4,45 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as PubSub from "effect/PubSub";
+import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+
+const capacity = 1024;
+const droppedEventsMetric = Metric.counter("cogwork_daemon_event_bus_dropped_events_total", {
+  description: "Daemon events evicted before every subscriber consumed them.",
+});
+
+const logDropStart = (count: number) => {
+  if (count !== 1) return Effect.void;
+  return Effect.logWarning("Daemon event bus started dropping events", {
+    capacity,
+    droppedEvents: count,
+  });
+};
+
+const recordDrop = (droppedEvents: Ref.Ref<number>) =>
+  Ref.updateAndGet(droppedEvents, (current) => current + 1).pipe(
+    Effect.tap(() => Metric.update(droppedEventsMetric, 1)),
+    Effect.tap(logDropStart),
+    Effect.asVoid,
+  );
+
+class ObservedSlidingStrategy<A> extends PubSub.SlidingStrategy<A> {
+  constructor(readonly onDrop: Effect.Effect<void>) {
+    super();
+  }
+
+  override handleSurplus(
+    pubsub: PubSub.PubSub.Atomic<A>,
+    subscribers: PubSub.PubSub.Subscribers<A>,
+    elements: Iterable<A>,
+    isShutdown: Parameters<PubSub.SlidingStrategy<A>["handleSurplus"]>[3],
+  ) {
+    return super.handleSurplus(pubsub, subscribers, elements, isShutdown).pipe(Effect.tap(() => this.onDrop));
+  }
+}
 
 export const activityOf = (
   record: Pick<RunRecord, "id" | "workspace" | "workItem" | "stage">,
@@ -39,8 +76,11 @@ export const runActivityStream = <E, R>(events: Stream.Stream<DaemonEvent, E, R>
   );
 
 export const make = Effect.gen(function* () {
-  // Sliding, not bounded: a stuck subscriber drops its oldest events instead of backpressuring publishers.
-  const pubsub = yield* PubSub.sliding<DaemonEvent>(1024);
+  const droppedEvents = yield* Ref.make(0);
+  const pubsub = yield* PubSub.make<DaemonEvent>({
+    atomicPubSub: () => PubSub.makeAtomicBounded(capacity),
+    strategy: () => new ObservedSlidingStrategy(recordDrop(droppedEvents)),
+  });
   const publish = (event: DaemonEventInput) =>
     Effect.flatMap(Clock.currentTimeMillis, (emittedAtMillis) =>
       PubSub.publish(pubsub, { ...event, emittedAtMillis }),
@@ -49,6 +89,7 @@ export const make = Effect.gen(function* () {
     publish,
     publishActivity: (activity: RunActivity) => publish({ _tag: "RunActivity", activity }),
     publishRun: (run: RunSummary) => publish({ _tag: "RunChanged", run }),
+    droppedEvents: Ref.get(droppedEvents),
     subscribe: () => PubSub.subscribe(pubsub),
     events: Stream.fromPubSub(pubsub),
     activity: runActivityStream(Stream.fromPubSub(pubsub)),

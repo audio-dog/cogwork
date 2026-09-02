@@ -39,6 +39,7 @@ import {
   make,
   staticCatalogSource,
 } from "./harness";
+import { messageFromUnknown } from "./provider-bridge";
 import { SessionStore } from "./session-store";
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
@@ -335,6 +336,7 @@ const descriptor = (
       },
       diagnostics: [],
     }),
+  sharedGit: "none",
   makeAdapter: (resolved) => {
     probe.resolved.push(resolved);
     return new ControlledAdapter(() => toAsyncIterable(chunks), probe);
@@ -349,9 +351,15 @@ const descriptor = (
   transport: {},
   diagnostics: (cause) =>
     new HarnessError({
+      reason: "launch",
+      retryable: false,
+      message: messageFromUnknown(cause),
+    }),
+  turnDiagnostics: (cause) =>
+    new HarnessError({
       reason: "turn",
       retryable: true,
-      message: cause instanceof Error ? cause.message : JSON.stringify(cause),
+      message: messageFromUnknown(cause),
     }),
   estimateUsage: (_resolved, event, characters) =>
     event.type === EventType.RUN_FINISHED
@@ -835,12 +843,6 @@ describe("external Harness runtime", () => {
           makeAdapter: () => {
             throw nativeFailure;
           },
-          diagnostics: (cause) =>
-            new HarnessError({
-              reason: "launch",
-              retryable: false,
-              message: cause === nativeFailure ? nativeFailure.message : "unexpected failure",
-            }),
         };
         const harness = makeHarness(controlledDescriptor, created);
         const error = yield* harness
@@ -971,27 +973,18 @@ describe("external Harness runtime", () => {
         const created: Array<string> = [];
         const seen: Array<{ readonly [key: string]: unknown; readonly type: string }> = [];
         const harness = makeHarness(
-          {
-            ...descriptor(
-              [
-                { type: EventType.RUN_STARTED, threadId: "session-147", runId: "run-external-test" },
-                {
-                  type: EventType.RUN_ERROR,
-                  message: "controlled turn failed",
-                  code: "CONTROLLED_FAILURE",
-                  metadata: { controlled: { retryAfter: 3 } },
-                },
-              ],
-              probe,
-            ),
-            diagnostics: (cause) => {
-              const message =
-                typeof cause === "object" && cause && "message" in cause
-                  ? String(cause.message)
-                  : "unexpected failure";
-              return new HarnessError({ reason: "launch", retryable: false, message });
-            },
-          },
+          descriptor(
+            [
+              { type: EventType.RUN_STARTED, threadId: "session-147", runId: "run-external-test" },
+              {
+                type: EventType.RUN_ERROR,
+                message: "controlled turn failed",
+                code: "CONTROLLED_FAILURE",
+                metadata: { controlled: { retryAfter: 3 } },
+              },
+            ],
+            probe,
+          ),
           created,
         );
         const error = yield* harness.run({ plan: request, session: null, mcpCredentials: new Map() }).pipe(
@@ -999,8 +992,8 @@ describe("external Harness runtime", () => {
           Effect.flip,
         );
 
-        assert.strictEqual(error.reason, "launch");
-        assert.strictEqual(error.retryable, false);
+        assert.strictEqual(error.reason, "turn");
+        assert.strictEqual(error.retryable, true);
         assert.strictEqual(error.message, "controlled turn failed");
         assert.strictEqual(seen[1]?.type, EventType.RUN_ERROR);
         assert.strictEqual(seen[1]?.code, "CONTROLLED_FAILURE");

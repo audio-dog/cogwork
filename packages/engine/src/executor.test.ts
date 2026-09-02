@@ -26,6 +26,7 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Metric from "effect/Metric";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
@@ -1410,7 +1411,9 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
+      const before = (yield* Metric.value(Executor.harnessEventFoldDuration)).count;
       yield* execute(executor, workspace, triageItem);
+      assert.isAbove((yield* Metric.value(Executor.harnessEventFoldDuration)).count, before);
 
       const log = yield* Ref.get(calls);
       const triaged = log.find((c) => c.method === "triaged");
