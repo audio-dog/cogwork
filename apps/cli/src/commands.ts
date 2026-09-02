@@ -36,6 +36,7 @@ import * as Flag from "effect/unstable/cli/Flag";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { SocketErrorReason, SocketOpenError } from "effect/unstable/socket/Socket";
 import { defaultControlStorePath, defaultCredentialsPath, defaultSocketPath } from "./paths";
+import { installProcessProfileIpc } from "./process-profile-ipc";
 import { clientLayer, type DaemonOptions, type DaemonRpcTimeout, makeDaemonClient, serverLayer } from "./rpc";
 import { formatDaemonLimits, formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
 import { secondStopSignal } from "./stop-signal";
@@ -285,6 +286,7 @@ const runDaemon = Effect.fn("commands.runDaemon")(
         }),
       { discard: true },
     );
+    yield* installProcessProfileIpc();
     yield* Daemon.bootstrap;
     const abort = yield* secondStopSignal;
     yield* Daemon.heartbeats({
