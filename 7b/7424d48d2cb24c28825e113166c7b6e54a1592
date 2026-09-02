@@ -1,0 +1,47 @@
+CONTEXT-MAP.md
+  s_1e9c792070af79::t_aa7c5d8602ea84 22,48
+packages/claude-code/CONTEXT.md
+  s_1e9c792070af79::t_5c9328d2eebab8 19-22
+  s_1e9c792070af79::t_aa7c5d8602ea84 1-18,23-31
+patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
+  s_1e9c792070af79::t_ecb3d6d6d6140d 2,5-7,10,13
+packages/claude-code/src/harness.test.ts
+  s_1e9c792070af79::t_1e28b6b8c61b04 33-34
+  s_1e9c792070af79::t_663723ff0fbc9c 9,98
+  s_1e9c792070af79::t_1f607119d6206b 212-213,247-249,375
+  s_1e9c792070af79::t_a3c50e141c47c1 116-129,140,261-262
+  s_1e9c792070af79::t_74f97529b7d234 22,231-235
+  s_1e9c792070af79::t_64449a5593eaa5 66-69,71-72,286-289,291-310,312-315,317-327,329,331-338,340-347,349-351,353-374,377-390,392-468,470-478,480-482,484,486-498,500-504,506-540
+packages/claude-code/src/harness.ts
+  s_1e9c792070af79::t_1e28b6b8c61b04 278,285,305-306,330-332,336
+  s_1e9c792070af79::t_74f97529b7d234 256-270,328
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_1e9c792070af79::t_1f607119d6206b 2,43-44,60
+  s_1e9c792070af79::t_f6802d973c7379 40-41,59,61
+packages/claude-code/package.json
+  s_1e9c792070af79::t_663723ff0fbc9c 25
+patches/@tanstack__ai-claude-code@0.6.3.patch
+  s_1e9c792070af79::t_11e5e0758927b4 2,19-116,120-122,126-160,170,172-173,175-181,183,199-325,327-334,336-343,345-360,362-386,388-395,397-404
+  s_1e9c792070af79::t_8b75726fd2c4f6 16,161,166,406-415
+  s_1e9c792070af79::t_da1d1c9e0a621a 174,182,198,326,335,344,361,387,396,405
+  s_1e9c792070af79::t_7f0253d8e5c5e5 171,184-197
+pnpm-lock.yaml
+  s_1e9c792070af79::t_20a72ebb4051ba 80,107-109,339,344-346,379,441,493,6935
+  s_1e9c792070af79::t_5c83f6d537a845 78,333,6889
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7b7424d48d2cb24c28825e113166c7b6e54a1592",
+  "prompts": {},
+  "sessions": {
+    "s_1e9c792070af79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dce-8136-7451-91c5-a0226c2b232e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
