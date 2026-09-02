@@ -44,5 +44,4 @@ catalogs:
 
 patchedDependencies:
   '@tanstack/ai-codex@0.5.3': patches/@tanstack__ai-codex@0.5.3.patch
-  '@tanstack/ai-claude-code@0.6.3': patches/@tanstack__ai-claude-code@0.6.3.patch
   '@tanstack/ai-sandbox-local-process@0.2.4': patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
