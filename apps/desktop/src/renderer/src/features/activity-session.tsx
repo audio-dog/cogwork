@@ -1,8 +1,8 @@
 import {
   applyDaemonEvent,
   type Board,
-  type ClassifiedItem,
-  type DaemonEvent,
+  ClassifiedItem,
+  DaemonEvent,
   initialBoard,
   type RunId,
   type RunStatus,
@@ -10,7 +10,7 @@ import {
   type SchedulerStats,
   type WorkItemId,
   type WorkspaceId,
-  type WorkspaceState,
+  WorkspaceState,
 } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomSubscribe } from "@effect/atom-react";
 import type * as Atom from "effect/unstable/reactivity/Atom";
@@ -116,14 +116,13 @@ const settledRun = (board: Board, runId: RunId) => {
 };
 const stamp = (event: DaemonEvent, arrival: number) => event.emittedAtMillis ?? arrival;
 
-const classifiedState = (
-  item: ClassifiedItem,
-): { readonly text: string; readonly severity: ActivitySeverity } => {
-  if (item._tag === "Eligible") return { text: "eligible", severity: "info" };
-  if (item._tag === "Claimed") return { text: "claimed", severity: "info" };
-  if (item._tag === "Blocked") return { text: `blocked · ${item.openBlockers} open`, severity: "warn" };
-  return { text: "needs a person", severity: "warn" };
-};
+const classifiedState = (item: ClassifiedItem) =>
+  ClassifiedItem.match<{ readonly text: string; readonly severity: ActivitySeverity }>(item, {
+    Eligible: () => ({ text: "eligible", severity: "info" }),
+    Claimed: () => ({ text: "claimed", severity: "info" }),
+    Blocked: ({ openBlockers }) => ({ text: `blocked · ${openBlockers} open`, severity: "warn" }),
+    NeedsHuman: () => ({ text: "needs a person", severity: "warn" }),
+  });
 
 export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
   running: "info",
@@ -135,96 +134,99 @@ export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
 };
 
 const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): ActivityRow | null => {
-  if (
-    event._tag === "SeedEnd" ||
-    event._tag === "RunActivity" ||
-    event._tag === "ControlStoreChanged" ||
-    event._tag === "PluginsChanged" ||
-    event._tag === "ConnectionsChanged"
-  )
-    return null;
   const atMillis = stamp(event, arrival);
-  if (event._tag === "ItemChanged") {
-    const state = classifiedState(event.item);
-    return {
-      id: rowId(ordinal),
-      kind: "item",
-      atMillis,
-      label: activityLabels.item,
-      summary: `${event.item.title} → ${state.text}`,
-      severity: state.severity,
-      entity: { type: "item", id: event.item.id, workspace: event.workspace },
-      raw: pretty(event.item),
-      lowSignal: event.item._tag === "Eligible",
-    };
-  }
-  if (event._tag === "ItemRemoved")
-    return {
+  return DaemonEvent.match<ActivityRow | null>(event, {
+    SeedEnd: () => null,
+    RunActivity: () => null,
+    ControlStoreChanged: () => null,
+    PluginsChanged: () => null,
+    ConnectionsChanged: () => null,
+    ItemChanged: ({ item, workspace }) => {
+      const state = classifiedState(item);
+      return {
+        id: rowId(ordinal),
+        kind: "item",
+        atMillis,
+        label: activityLabels.item,
+        summary: `${item.title} → ${state.text}`,
+        severity: state.severity,
+        entity: { type: "item", id: item.id, workspace },
+        raw: pretty(item),
+        lowSignal: ClassifiedItem.guards.Eligible(item),
+      };
+    },
+    ItemRemoved: ({ workspace, id }) => ({
       id: rowId(ordinal),
       kind: "item-removed",
       atMillis,
       label: activityLabels["item-removed"],
-      summary: `${event.id} removed`,
+      summary: `${id} removed`,
       severity: "info",
-      entity: { type: "item", id: event.id, workspace: event.workspace },
-      raw: pretty({ workspace: event.workspace, id: event.id }),
+      entity: { type: "item", id, workspace },
+      raw: pretty({ workspace, id }),
       lowSignal: true,
-    };
-  if (event._tag === "RunChanged")
-    return {
+    }),
+    RunChanged: ({ run }) => ({
       id: rowId(ordinal),
       kind: "run",
       atMillis,
       label: activityLabels.run,
-      summary: `${event.run.workItem} · run ${event.run.status}`,
-      severity: runStatusSeverity[event.run.status],
-      entity: { type: "run", id: event.run.id, workspace: event.run.workspace, workItem: event.run.workItem },
-      raw: pretty(event.run),
+      summary: `${run.workItem} · run ${run.status}`,
+      severity: runStatusSeverity[run.status],
+      entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem },
+      raw: pretty(run),
       lowSignal: false,
-    };
-  if (event._tag === "WorkspaceRemoved")
-    return {
+    }),
+    WorkspaceRemoved: ({ workspace }) => ({
       id: rowId(ordinal),
       kind: "workspace",
       atMillis,
       label: activityLabels.workspace,
-      summary: `${event.workspace} deregistered`,
+      summary: `${workspace} deregistered`,
       severity: "info",
       entity: null,
-      raw: pretty({ workspace: event.workspace }),
+      raw: pretty({ workspace }),
       lowSignal: false,
-    };
-  if (event._tag === "WorkspaceChanged") {
-    const workspace: WorkspaceState = event.workspace;
-    const failed = workspace._tag === "Failed";
-    return {
-      id: rowId(ordinal),
-      kind: "workspace",
-      atMillis,
-      label: activityLabels.workspace,
-      summary: failed
-        ? `${workspace.source} failed · ${workspace.message}`
-        : `${workspace.name} registered · ${workspace.issueTracker}`,
-      severity: failed ? "error" : "info",
-      entity: null,
-      raw: pretty(workspace),
-      lowSignal: false,
-    };
-  }
-  const paused = event.scheduler.scheduling === "paused";
-  return {
-    id: rowId(ordinal),
-    kind: "scheduler",
-    atMillis,
-    label: activityLabels.scheduler,
-    summary: paused
-      ? `paused · ${event.scheduler.globalInFlight}/${event.scheduler.globalLimit} in flight`
-      : `${event.scheduler.globalInFlight}/${event.scheduler.globalLimit} in flight · budget ${event.scheduler.dailyBudgetUsed}/${event.scheduler.dailyBudgetLimit}`,
-    severity: paused ? "warn" : "info",
-    entity: null,
-    raw: pretty(event.scheduler),
-    lowSignal: !paused,
-  };
+    }),
+    WorkspaceChanged: ({ workspace }) => {
+      const change = WorkspaceState.match<Pick<ActivityRow, "summary" | "severity">>(workspace, {
+        Failed: ({ source, message }) => ({
+          summary: `${source} failed · ${message}`,
+          severity: "error",
+        }),
+        Registered: ({ name, issueTracker }) => ({
+          summary: `${name} registered · ${issueTracker}`,
+          severity: "info",
+        }),
+      });
+      return {
+        id: rowId(ordinal),
+        kind: "workspace",
+        atMillis,
+        label: activityLabels.workspace,
+        ...change,
+        entity: null,
+        raw: pretty(workspace),
+        lowSignal: false,
+      };
+    },
+    SchedulerChanged: ({ scheduler }) => {
+      const paused = scheduler.scheduling === "paused";
+      return {
+        id: rowId(ordinal),
+        kind: "scheduler",
+        atMillis,
+        label: activityLabels.scheduler,
+        summary: paused
+          ? `paused · ${scheduler.globalInFlight}/${scheduler.globalLimit} in flight`
+          : `${scheduler.globalInFlight}/${scheduler.globalLimit} in flight · budget ${scheduler.dailyBudgetUsed}/${scheduler.dailyBudgetLimit}`,
+        severity: paused ? "warn" : "info",
+        entity: null,
+        raw: pretty(scheduler),
+        lowSignal: !paused,
+      };
+    },
+  });
 };
 
 export const initialActivitySession: ActivitySession = {
@@ -250,16 +252,16 @@ export const ingestDaemonEvent = (
   event: DaemonEvent,
   arrival: number,
 ): ActivitySession => {
-  if (event._tag === "SeedEnd") return { ...session, seed: false };
+  if (DaemonEvent.guards.SeedEnd(event)) return { ...session, seed: false };
   const nextOrdinal = session.ordinal + 1;
   const row = session.seed ? null : decodeEvent(event, arrival, nextOrdinal);
   const board = applyDaemonEvent(session.board, event);
   const updatedPreviews =
-    event._tag === "RunActivity" && !settledRun(board, event.activity.runId)
+    DaemonEvent.guards.RunActivity(event) && !settledRun(board, event.activity.runId)
       ? applyRunPreview(session.previews, event.activity)
       : session.previews;
   const previews =
-    event._tag === "RunChanged" && terminal(event.run.status)
+    DaemonEvent.guards.RunChanged(event) && terminal(event.run.status)
       ? withoutRunPreview(updatedPreviews, event.run.id)
       : updatedPreviews;
   return {
