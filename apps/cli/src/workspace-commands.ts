@@ -1,4 +1,4 @@
-import { WorkspaceId, WorkspaceRegistration, type WorkspaceState } from "@cogwork/contracts";
+import { WorkspaceId, WorkspaceRegistration, WorkspaceState } from "@cogwork/contracts";
 import { Git } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -37,15 +37,15 @@ const captureRemote = Effect.fn("workspace.captureRemote")(function* (registrati
   return { ...registration, ...(gitRemote ? { gitRemote } : {}) };
 });
 
-export const formatRegistrationResult = (displayName: string, workspace: WorkspaceState) => {
-  if (workspace._tag === "Registered") {
-    return `Registered ${workspace.displayName ?? workspace.name} as ${workspace.name}.`;
-  }
-  if (workspace.name === undefined) {
-    return `Workspace input failed for ${workspace.source}: ${workspace.message}`;
-  }
-  return `Registered ${displayName} as ${workspace.name}, but Workspace input failed: ${workspace.message}`;
-};
+export const formatRegistrationResult = (requestedName: string, workspace: WorkspaceState) =>
+  WorkspaceState.match(workspace, {
+    Registered: (registered) =>
+      `Registered ${registered.displayName ?? registered.name} as ${registered.name}.`,
+    Failed: (failed) =>
+      failed.name === undefined
+        ? `Workspace input failed for ${failed.source}: ${failed.message}`
+        : `Registered ${requestedName} as ${failed.name}, but Workspace input failed: ${failed.message}`,
+  });
 
 const runRegister = Effect.fn("workspace.register")(function* (options: {
   readonly socket: string;
@@ -55,7 +55,7 @@ const runRegister = Effect.fn("workspace.register")(function* (options: {
   const client = yield* makeDaemonClient();
   const workspace = yield* client.RegisterWorkspace({ registration });
   const message = formatRegistrationResult(registration.name, workspace);
-  if (workspace._tag === "Failed") return yield* Console.error(message);
+  if (WorkspaceState.guards.Failed(workspace)) return yield* Console.error(message);
   yield* Console.log(message);
 });
 
@@ -69,13 +69,17 @@ export const registerWorkspace = Effect.fn("workspace.registerWithLayers")(funct
   );
 });
 
-export const formatRebindResult = (workspace: WorkspaceState) => {
-  if (workspace._tag === "Failed") {
-    return `Re-bound ${workspace.displayName ?? workspace.name ?? workspace.source}, but Workspace input failed: ${workspace.message}`;
-  }
-  const identity = workspace.displayName ? `${workspace.displayName} (${workspace.name})` : workspace.name;
-  return `Re-bound ${identity} to ${workspace.checkoutPath}.`;
-};
+export const formatRebindResult = (workspace: WorkspaceState) =>
+  WorkspaceState.match(workspace, {
+    Failed: (failed) =>
+      `Re-bound ${failed.displayName ?? failed.name ?? failed.source}, but Workspace input failed: ${failed.message}`,
+    Registered: (registered) => {
+      const identity = registered.displayName
+        ? `${registered.displayName} (${registered.name})`
+        : registered.name;
+      return `Re-bound ${identity} to ${registered.checkoutPath}.`;
+    },
+  });
 
 const runDeregister = Effect.fn("workspace.deregister")(function* (options: {
   readonly socket: string;
@@ -96,7 +100,7 @@ const runRebind = Effect.fn("workspace.rebind")(function* (options: {
   const client = yield* makeDaemonClient();
   const rebound = yield* client.RebindWorkspace({ workspace, checkoutPath: options.checkout });
   const message = formatRebindResult(rebound);
-  if (rebound._tag === "Failed") return yield* Console.error(message);
+  if (WorkspaceState.guards.Failed(rebound)) return yield* Console.error(message);
   yield* Console.log(message);
 });
 

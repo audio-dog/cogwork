@@ -6,6 +6,7 @@ import {
   DaemonRpcs,
   defaultControlStore,
   localOwner,
+  PollState,
   Principal,
   PrincipalMiddleware,
   type RunActivity,
@@ -442,7 +443,9 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
     .map((workspace) => ({ workspace, state: stateByName.get(workspace.config.name) }))
     .filter(
       (entry): entry is ReconcilableWorkspace =>
-        entry.workspace.config.worktrees !== undefined && entry.state?.poll.status === "ok",
+        entry.workspace.config.worktrees !== undefined &&
+        entry.state !== undefined &&
+        PollState.guards.ok(entry.state.poll),
     );
   yield* Effect.forEach(
     reconcilable,

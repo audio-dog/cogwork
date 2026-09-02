@@ -1,11 +1,12 @@
-import type {
-  ControlStore,
-  DaemonLimitUpdate,
-  RunPlanObservation,
-  WorkItemId,
-  WorkspaceId,
+import {
+  byStageThenPriority as byStageThenPriorityOf,
+  type ControlStore,
+  type DaemonLimitUpdate,
+  PollState,
+  type RunPlanObservation,
+  type WorkItemId,
+  type WorkspaceId,
 } from "@cogwork/contracts";
-import { byStageThenPriority as byStageThenPriorityOf } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -244,7 +245,7 @@ const candidatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot, conf
     observedAtMillis: snapshot.observedAtMillis,
   };
   return snapshot.workspaces.flatMap((state): ReadonlyArray<Candidate> => {
-    const workspace = state.poll.status === "ok" ? byName.get(state.name) : undefined;
+    const workspace = PollState.guards.ok(state.poll) ? byName.get(state.name) : undefined;
     if (!workspace) return [];
     return state.eligible
       .filter((work) => operationStages.some((operation) => operation === work.stage))

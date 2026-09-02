@@ -2,6 +2,7 @@ import {
   AgUiEvent,
   ConnectionId,
   type ContributionSettingRow,
+  DaemonEvent,
   DeclaredVersion,
   defaultControlStore,
   HarnessName,
@@ -3453,10 +3454,12 @@ describe("Executor.execute", () => {
       yield* execute(executor, workspace, triageItem);
 
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "succeeded"),
+        Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "succeeded"),
         Stream.runCollect,
       );
-      const runChanges = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+      const runChanges = [...events].flatMap((event) =>
+        DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
+      );
       assert.deepStrictEqual(
         runChanges.map((run) => run.status),
         ["running", "succeeded"],

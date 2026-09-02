@@ -1,9 +1,9 @@
-import type {
-  ControlStore,
-  DaemonStatus,
+import {
+  type ControlStore,
+  type DaemonStatus,
   PollState,
-  SchedulerStats,
-  WorkspaceInfo,
+  type SchedulerStats,
+  type WorkspaceInfo,
 } from "@cogwork/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
@@ -32,11 +32,12 @@ const pauseQualifier = (poll: Extract<PollState, { readonly status: "paused" }>)
   return ` (self-healing, retrying after ${isoOrMillis(poll.retryAtMillis)})`;
 };
 
-const formatPoll = (poll: PollState) => {
-  if (poll.status === "ok") return [];
-  if (poll.status === "pending") return ["      poll: not yet run"];
-  return [`      paused: ${poll.reason}${pauseQualifier(poll)} — ${poll.message}`];
-};
+const formatPoll = (poll: PollState) =>
+  PollState.match(poll, {
+    ok: () => [],
+    pending: () => ["      poll: not yet run"],
+    paused: (paused) => [`      paused: ${paused.reason}${pauseQualifier(paused)} — ${paused.message}`],
+  });
 
 const workspaceLabel = (workspace: { readonly name?: string; readonly displayName?: string }) => {
   if (workspace.name === undefined) return workspace.displayName ?? "";

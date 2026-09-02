@@ -1,13 +1,13 @@
-import type {
-  BlockedItem,
-  ClaimedItem,
-  ConnectionId,
-  NeedsHumanItem,
-  OperationAvailability,
-  PollPauseReason,
+import {
+  type BlockedItem,
+  type ClaimedItem,
+  type ConnectionId,
+  type NeedsHumanItem,
+  type OperationAvailability,
+  type PollPauseReason,
   PollState,
-  WorkspaceId,
-  WorkspaceRegistrationError,
+  type WorkspaceId,
+  type WorkspaceRegistrationError,
 } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -300,7 +300,7 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
       workspaces: state.workspaces.length,
       failures: state.failures.length,
       pendingWork: states.reduce((total, state) => total + state.eligible.length, 0),
-      paused: states.filter((state) => state.poll.status === "paused").length,
+      paused: states.filter((state) => PollState.guards.paused(state.poll)).length,
     };
   });
 
