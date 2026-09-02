@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_fdc0237d304693::t_a031cb6282b3f9 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2d47066bc7b1ca2068eb3f3432e7a93aea0345a4",
+  "prompts": {},
+  "sessions": {
+    "s_fdc0237d304693": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638f-ae8a-7480-bd7a-18d3079a8e44",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
