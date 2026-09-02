@@ -30,6 +30,7 @@ import {
   type SandboxProvider,
   type Secrets,
   type WorkspaceDefinition,
+  type WorkspaceSkill,
   withSandbox,
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
@@ -113,9 +114,27 @@ export interface ExternalHarnessCapabilities {
   readonly planMiddleware: HarnessRunner["planMiddleware"];
 }
 
+export interface ProjectedMcpServer {
+  readonly name: string;
+  readonly url: string;
+  /**
+   * Live-Sandbox environment variable that holds the raw bearer token, or null
+   * for a public server. The runtime always resolves the token onto the Sandbox
+   * environment, so a descriptor projection may reference the variable without
+   * ever seeing the value.
+   */
+  readonly bearerEnvironment: string | null;
+}
+
 export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
   readonly workspaceRoot?: string;
   readonly instructionProjection?: "workspace" | "system-prompt";
+  /**
+   * Replaces the default `mcpSkill` Workspace entries when the installed
+   * adapter's own MCP projection cannot keep credentials out of the checkout.
+   * The returned skills still travel through the one Harness Workspace.
+   */
+  readonly mcpProjection?: (servers: ReadonlyArray<ProjectedMcpServer>) => ReadonlyArray<WorkspaceSkill>;
   readonly messages?: (
     request: ExternalHarnessResolvedRequest,
   ) => ReadonlyArray<ModelMessage | AdapterMessage<Adapter>>;
@@ -216,10 +235,21 @@ const mcpSecretEntry = ({ name, bearer: secret }: ResolvedMcpSkill) => {
   return [[mcpSecretName(name), Redacted.value(secret)] satisfies readonly [string, string]];
 };
 
-const mcpWorkspaceProjection = (request: ExternalHarnessResolvedRequest) => {
+const projectedMcpServer = (server: ResolvedMcpSkill): ProjectedMcpServer => ({
+  name: server.name,
+  url: server.endpoint,
+  bearerEnvironment: server.bearer === null ? null : mcpSecretName(server.name),
+});
+
+const mcpWorkspaceProjection = (
+  transport: Pick<ExternalHarnessTransport<AnyTextAdapter>, "mcpProjection">,
+  request: ExternalHarnessResolvedRequest,
+) => {
   const secretValues = Object.fromEntries(request.mcp.flatMap(mcpSecretEntry));
   const secrets = createSecrets(secretValues);
-  const skills = request.mcp.map((server) => mcpSkill(server.name, mcpSkillConfig(secrets, server)));
+  const skills = transport.mcpProjection
+    ? [...transport.mcpProjection(request.mcp.map(projectedMcpServer))]
+    : request.mcp.map((server) => mcpSkill(server.name, mcpSkillConfig(secrets, server)));
   return { secrets, skills, hasSecrets: Object.keys(secretValues).length > 0 };
 };
 
@@ -227,7 +257,7 @@ const harnessWorkspace = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
   request: ExternalHarnessResolvedRequest,
 ) => {
-  const mcp = mcpWorkspaceProjection(request);
+  const mcp = mcpWorkspaceProjection(descriptor.transport, request);
   return {
     ...preparedWorkspace,
     ...(descriptor.transport.workspaceRoot ? { root: descriptor.transport.workspaceRoot } : {}),
@@ -389,6 +419,31 @@ const resolveExternalLaunch = Effect.fn("ExternalHarnessRuntime.resolveLaunch")(
   return { resolved, provider, workspaceDefinition, policy };
 });
 
+// A descriptor-projected native config file must not outlive its Run: the
+// prepared checkout is a real working tree, and a later Run's agent could
+// otherwise find the file and commit it. Skill paths resolve against the
+// checkout, which holds only while the descriptor's workspaceRoot maps onto
+// the prepared checkout — true for every local-process descriptor today.
+const removeProjectedWorkspaceFiles = Effect.fn("ExternalHarnessRuntime.removeProjectedWorkspaceFiles")(
+  (checkoutPath: string, workspace: WorkspaceDefinition) =>
+    Effect.gen(function* () {
+      const files = (workspace.skills ?? []).flatMap((skill) => (skill.kind === "file" ? [skill.path] : []));
+      if (files.length === 0) return;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      yield* Effect.forEach(files, (file) =>
+        fs.remove(path.resolve(checkoutPath, file), { force: true }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("projected Workspace file removal failed", {
+              path: path.resolve(checkoutPath, file),
+              message: error.message,
+            }),
+          ),
+        ),
+      );
+    }).pipe(Effect.provide(Path.layer)),
+);
+
 const outputCharacters = (event: AgUiEvent) =>
   AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) || AgUiEvent.guards.REASONING_MESSAGE_CONTENT(event)
     ? (event.delta?.length ?? 0)
@@ -526,6 +581,8 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                   ).pipe(Stream.ensuring(Effect.sync(() => opened.abortController.abort()))),
+                ).pipe(
+                  Stream.ensuring(removeProjectedWorkspaceFiles(resolved.checkout.path, workspaceDefinition)),
                 ),
               ),
             ),

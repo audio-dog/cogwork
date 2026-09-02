@@ -16,7 +16,7 @@ import type {
   SandboxProvider,
   WorkspaceDefinition,
 } from "@tanstack/ai-sandbox";
-import { getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
+import { fileSkill, getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -31,6 +31,7 @@ import {
   type ExternalHarnessAuthentication,
   type ExternalHarnessDescriptor,
   externalHarnessRunner,
+  type ProjectedMcpServer,
 } from "./external-harness-runtime";
 import {
   fullHarnessExecution,
@@ -630,6 +631,97 @@ describe("external Harness runtime", () => {
         assert.notInclude(agents, "first-dash-bearer");
         assert.notInclude(agents, "rotated-dot-bearer");
         assert.notInclude(agents, "rotated-dash-bearer");
+      }),
+    );
+
+    it.effect("lets a descriptor project MCP into its native form with secrets on the live Sandbox", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-harness-mcp-transport-" });
+        const probe = new ControlledProbe();
+        const projected: Array<ReadonlyArray<ProjectedMcpServer>> = [];
+        const liveBearers: Array<string> = [];
+        const projectedFiles: Array<string> = [];
+        probe.inspect = (options) => {
+          const capabilities = runtimeCapabilities(options);
+          const sandbox = getSandbox(capabilities);
+          const projection = getWorkspaceProjection(capabilities);
+          assert.lengthOf(
+            projection.skills.filter((skill) => skill.kind === "mcp"),
+            0,
+          );
+          const environment = projected[0]?.find(({ name }) => name === "linear")?.bearerEnvironment;
+          return Promise.all([
+            sandbox.process.exec(
+              `node -e 'process.stdout.write(process.env[process.argv[1]] ?? "")' '${environment ?? ""}'`,
+            ),
+            sandbox.fs.read(".controlled-mcp.json"),
+          ]).then(([{ stdout }, file]) => {
+            liveBearers.push(stdout);
+            projectedFiles.push(file);
+          });
+        };
+        const base = descriptor(terminalEvents, probe);
+        const controlledDescriptor = {
+          ...base,
+          transport: {
+            ...base.transport,
+            mcpProjection: (servers: ReadonlyArray<ProjectedMcpServer>) => {
+              projected.push(servers);
+              return [fileSkill({ path: ".controlled-mcp.json", content: JSON.stringify(servers) })];
+            },
+          },
+        };
+        const plan = RunPlan.make({
+          ...request,
+          sandbox: { ...request.sandbox, workspace: checkout },
+          mcp: [
+            {
+              identity: "local:repo/mcp/public.mcp",
+              name: "public.mcp",
+              projectedName: "public.mcp",
+              endpoint: "https://public.example.test/mcp",
+              authenticated: false,
+              unavailableReason: null,
+            },
+            {
+              identity: "local:repo/mcp/linear",
+              name: "linear",
+              projectedName: "linear",
+              endpoint: "https://linear.example.test/mcp",
+              authenticated: true,
+              unavailableReason: null,
+            },
+          ],
+        });
+
+        yield* make([
+          externalHarnessRunner(controlledDescriptor, {
+            authentication: hostAuthentication,
+            sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
+          }),
+        ])
+          .run({
+            plan,
+            session: null,
+            mcpCredentials: new Map([["local:repo/mcp/linear", Redacted.make("transport-bearer")]]),
+          })
+          .pipe(Stream.runCollect);
+
+        const servers = projected[0] ?? [];
+        assert.deepStrictEqual(
+          servers.map(({ name, url }) => ({ name, url })),
+          [
+            { name: "public.mcp", url: "https://public.example.test/mcp" },
+            { name: "linear", url: "https://linear.example.test/mcp" },
+          ],
+        );
+        assert.isNull(servers[0]?.bearerEnvironment);
+        assert.match(servers[1]?.bearerEnvironment ?? "", /^COGWORK_MCP_/);
+        assert.deepStrictEqual(liveBearers, ["transport-bearer"]);
+        assert.include(projectedFiles[0] ?? "", "https://linear.example.test/mcp");
+        assert.notInclude(projectedFiles[0] ?? "", "transport-bearer");
+        assert.isFalse(yield* fs.exists(`${checkout}/.controlled-mcp.json`));
       }),
     );
 
