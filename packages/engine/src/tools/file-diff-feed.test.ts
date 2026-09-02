@@ -12,9 +12,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import {
   computeDiff,
-  DIFF_TRUNCATION_MARKER,
   FILE_DIFF_EVENT,
-  FILE_DIFF_MAX_BYTES,
   fileDiffEvent,
   toFileDiffEvent,
   watchWorktreeDiffs,
@@ -24,6 +22,8 @@ import { resolveBaseSha, type WorktreeSandbox } from "./sandbox";
 
 const DiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String });
 const decodeDiffValue = Schema.decodeUnknownEffect(DiffValue);
+const fileDiffMaxBytes = 64 * 1024;
+const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
 
 const openSandbox = Effect.fn("file-diff-feed.test.openSandbox")(function* () {
   const handle = yield* Effect.acquireRelease(
@@ -294,7 +294,7 @@ describe("file diff feed", () => {
           Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
           Effect.forkChild,
         );
-        const sharedPrefix = "a".repeat(FILE_DIFF_MAX_BYTES);
+        const sharedPrefix = "a".repeat(fileDiffMaxBytes);
         yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
 
         yield* writeFile(sandbox, { path: "seed.txt", content: `${sharedPrefix}first\n` });
@@ -310,17 +310,17 @@ describe("file diff feed", () => {
         const shipped = yield* Fiber.join(fiber);
         assert.lengthOf(shipped, 2);
         const values = yield* Effect.forEach(shipped, (event) => decodeDiffValue(event.value));
-        assert.isTrue(values.every((value) => value.diff.endsWith(DIFF_TRUNCATION_MARKER)));
+        assert.isTrue(values.every((value) => value.diff.endsWith(diffTruncationMarker)));
       }),
     20000,
   );
 
   it.effect("caps diff payload bytes and appends a truncation marker", () =>
     Effect.gen(function* () {
-      const event = fileDiffEvent("large.txt", "🙂".repeat(FILE_DIFF_MAX_BYTES));
+      const event = fileDiffEvent("large.txt", "🙂".repeat(fileDiffMaxBytes));
       const value = yield* decodeDiffValue(event.value);
-      assert.isAtMost(Buffer.byteLength(value.diff), FILE_DIFF_MAX_BYTES);
-      assert.isTrue(value.diff.endsWith(DIFF_TRUNCATION_MARKER));
+      assert.isAtMost(Buffer.byteLength(value.diff), fileDiffMaxBytes);
+      assert.isTrue(value.diff.endsWith(diffTruncationMarker));
     }),
   );
 

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AgUiEvent } from "@cogwork/contracts";
 import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
@@ -8,10 +9,11 @@ import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
 
 export const FILE_DIFF_EVENT = "sandbox.file.diff";
-export const FILE_DIFF_MAX_BYTES = 64 * 1024;
-export const DIFF_TRUNCATION_MARKER = "\n... diff truncated by Cogwork ...\n";
+const fileDiffMaxBytes = 64 * 1024;
+const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
 const diffCommandDeadline = "5 minutes";
 const diffDebounce = "250 millis";
+const debouncedPathConcurrency = 32;
 
 const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 
@@ -103,9 +105,9 @@ const decodeUtf8Prefix = (bytes: Uint8Array): string => {
 
 const boundedDiff = (diff: string) => {
   const bytes = Buffer.from(diff);
-  if (bytes.length <= FILE_DIFF_MAX_BYTES) return diff;
-  const available = FILE_DIFF_MAX_BYTES - Buffer.byteLength(DIFF_TRUNCATION_MARKER);
-  return `${decodeUtf8Prefix(bytes.subarray(0, available))}${DIFF_TRUNCATION_MARKER}`;
+  if (bytes.length <= fileDiffMaxBytes) return diff;
+  const available = fileDiffMaxBytes - Buffer.byteLength(diffTruncationMarker);
+  return `${decodeUtf8Prefix(bytes.subarray(0, available))}${diffTruncationMarker}`;
 };
 
 export const fileDiffEvent = (path: string, diff: string): AgUiEvent => ({
@@ -139,15 +141,16 @@ const ignored = (matcher: Ignore, rel: string) => ignoredBySegment(rel) || match
 
 const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
   stream.pipe(
-    Stream.groupByKey((event) => event.path, { idleTimeToLive: "1 minute" }),
+    Stream.groupByKey((event) => event.path, { idleTimeToLive: diffDebounce }),
     Stream.flatMap(([, events]) => events.pipe(Stream.debounce(diffDebounce)), {
-      concurrency: "unbounded",
+      concurrency: debouncedPathConcurrency,
     }),
   );
 
 interface FileDiff {
   readonly path: string;
   readonly diff: string;
+  readonly fingerprint: string;
 }
 
 const computeFileDiff = Effect.fn("Tools.computeFileDiff")(function* (
@@ -155,16 +158,21 @@ const computeFileDiff = Effect.fn("Tools.computeFileDiff")(function* (
   baseSha: string,
   event: SandboxFileEvent,
 ) {
-  return { path: relTo(event.path), diff: yield* computeDiff(sandbox, baseSha, event) };
+  const diff = yield* computeDiff(sandbox, baseSha, event);
+  return {
+    path: relTo(event.path),
+    diff: boundedDiff(diff),
+    fingerprint: createHash("sha256").update(diff).digest("base64"),
+  };
 });
 
 const dedupeFileDiff = (previous: ReadonlyMap<string, string>, current: FileDiff) => {
-  if (previous.get(current.path) === current.diff) return [previous, []] as const;
+  if (previous.get(current.path) === current.fingerprint) return [previous, []] as const;
   if (current.diff === "" && !previous.has(current.path)) return [previous, []] as const;
   if (current.diff === "") {
     return [new Map([...previous].filter(([path]) => path !== current.path)), [current]] as const;
   }
-  return [new Map([...previous, [current.path, current.diff]]), [current]] as const;
+  return [new Map([...previous, [current.path, current.fingerprint]]), [current]] as const;
 };
 
 // FileSystem.watch reports paths relative to the watched root, and its
