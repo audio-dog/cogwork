@@ -53,7 +53,11 @@ export const resolveEngineCommand = (input: ResolveEngineCommandInput): EngineCo
   }
 
   const cliDir = join(input.baseDir, "apps", "cli");
-  const tsx = join(cliDir, "node_modules", ".bin", "tsx");
+  const tsx = join(cliDir, "node_modules", "tsx", "dist", "cli.mjs");
   const cliEntry = join(cliDir, "src", "main.ts");
-  return { command: tsx, args: [...diagnostics, cliEntry, ...args], cwd: cliDir };
+  return {
+    command: input.nodeBinary ?? "node",
+    args: [...diagnostics, tsx, cliEntry, ...args],
+    cwd: cliDir,
+  };
 };

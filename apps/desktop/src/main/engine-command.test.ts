@@ -13,16 +13,17 @@ describe("resolveEngineCommand", () => {
     expect(budgets.terminateTimeoutMillis).toBeGreaterThan(budgets.drainGraceSeconds * 1_000);
   });
 
-  it("runs the CLI daemon through the CLI's own tsx in development", () => {
+  it("starts development diagnostics before the CLI's tsx loader", () => {
     const baseDir = "/repo";
     const cliDir = join(baseDir, "apps", "cli");
     const command = resolveEngineCommand({ socketPath, packaged: false, baseDir });
 
-    expect(command.command).toBe(join(cliDir, "node_modules", ".bin", "tsx"));
+    expect(command.command).toBe("node");
     expect(command.args).toEqual([
       "--report-on-fatalerror",
       "--diagnostic-dir=/home/me/.cogwork",
       "--heapsnapshot-near-heap-limit=3",
+      join(cliDir, "node_modules", "tsx", "dist", "cli.mjs"),
       join(cliDir, "src", "main.ts"),
       "daemon",
       "--socket",
