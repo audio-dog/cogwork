@@ -1,0 +1,35 @@
+packages/engine/src/issue-tracker.test.ts
+  s_1e1e3ff9f08ccc::t_519b6b806fcd31 25
+packages/engine/src/commands.test.ts
+  s_1e1e3ff9f08ccc::t_8c12f4eb03077b 173
+packages/engine/src/executor.test.ts
+  s_1e1e3ff9f08ccc::t_8c12f4eb03077b 498
+packages/engine/src/issue-tracker.ts
+  s_1e1e3ff9f08ccc::t_519b6b806fcd31 26-31
+  s_1e1e3ff9f08ccc::t_0a98e1988f9d75 132-133
+  s_1e1e3ff9f08ccc::t_c72bc803865881 134
+packages/engine/src/observe.test.ts
+  s_1e1e3ff9f08ccc::t_8c12f4eb03077b 52
+packages/engine/src/engine.test.ts
+  s_1e1e3ff9f08ccc::t_8c12f4eb03077b 96
+packages/engine/src/recovery.test.ts
+  s_1e1e3ff9f08ccc::t_8c12f4eb03077b 334
+packages/engine/src/event-publisher.test.ts
+  s_1e1e3ff9f08ccc::t_8c12f4eb03077b 225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "82129aff755c48a7375577e14ed3b9c24252d92f",
+  "prompts": {},
+  "sessions": {
+    "s_1e1e3ff9f08ccc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f42-20eb-73a3-8a09-508564737f2a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
