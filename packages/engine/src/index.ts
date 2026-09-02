@@ -17,6 +17,7 @@ export { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 export * as Linear from "./linear";
 export * as McpSkill from "./mcp-skill";
 export * as ModelCatalog from "./model-catalog";
+export * as PerformanceMetrics from "./performance-metrics";
 export * as Playbook from "./playbook";
 export * as Plugin from "./plugin";
 export * as HarnessBridge from "./provider-bridge";

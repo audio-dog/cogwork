@@ -2,10 +2,15 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Schema from "effect/Schema";
 import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
 import type { RegisteredWorkspace } from "./projector";
 import { WorktreeFs } from "./worktree-fs";
+
+export const worktreeEnsureDuration = Metric.timer("cogwork_worktree_ensure_duration", {
+  description: "Time to ensure a worktree is ready for a Run.",
+});
 
 export class WorktreeDivergedError extends Schema.TaggedError<WorktreeDivergedError>()(
   "WorktreeDivergedError",
@@ -257,7 +262,7 @@ export const make = Effect.gen(function* () {
     else yield* logMissingRemote(remote, branch);
     yield* runSetup(repoPath, worktreePath, config);
     return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
-  });
+  }, Effect.trackDuration(worktreeEnsureDuration));
 
   const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {
     return yield* managed(workspace.config.checkoutPath, workspace.config.worktrees);

@@ -26,7 +26,6 @@ import { ControlStore } from "./control-store";
 import * as Cooldown from "./cooldown";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { Executor } from "./executor";
-
 import { IssueTracker, type IssueTrackerError, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
@@ -35,6 +34,9 @@ import { SourceControlProvider } from "./source-control";
 
 const rateLimitHits = Metric.counter("cogwork_reconcile_rate_limit_hits_total", {
   description: "Rate-limit responses observed while polling issue trackers.",
+});
+export const reconcilePollDuration = Metric.timer("cogwork_reconcile_poll_duration", {
+  description: "Time to poll and classify one workspace.",
 });
 
 const submitTimeout = "30 seconds";
@@ -272,7 +274,7 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
         onSuccess: () => pollReadyWorkspace(workspace),
       }),
     );
-  });
+  }, Effect.trackDuration(reconcilePollDuration));
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* () {
     const state = yield* registry.refresh;

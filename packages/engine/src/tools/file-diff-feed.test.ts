@@ -4,13 +4,20 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import { computeDiff, FILE_DIFF_EVENT, toFileDiffEvent, watchWorktreeDiffs } from "./file-diff-feed";
+import {
+  computeDiff,
+  FILE_DIFF_EVENT,
+  fileDiffExecDuration,
+  toFileDiffEvent,
+  watchWorktreeDiffs,
+} from "./file-diff-feed";
 import { writeFile } from "./owned-tools";
 import { resolveBaseSha, type WorktreeSandbox } from "./sandbox";
 
@@ -38,11 +45,13 @@ describe("file diff feed", () => {
       const sandbox = yield* openSandbox();
       const baseSha = yield* resolveBaseSha(sandbox);
       yield* writeFile(sandbox, { path: "added.ts", content: "export const x = 1;\n" });
+      const before = (yield* Metric.value(fileDiffExecDuration)).count;
       const event = yield* toFileDiffEvent(sandbox, baseSha, {
         type: "create",
         path: "/workspace/added.ts",
         timestamp: 0,
       });
+      assert.strictEqual((yield* Metric.value(fileDiffExecDuration)).count, before + 1);
       if (event === null) return assert.fail("expected a diff event");
       assert.strictEqual(event.name, FILE_DIFF_EVENT);
       const value = yield* decodeDiffValue(event.value);
