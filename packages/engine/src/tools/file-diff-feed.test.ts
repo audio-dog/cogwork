@@ -324,6 +324,44 @@ describe("file diff feed", () => {
     }).pipe(Effect.provide(ExecCalls.layer)),
   );
 
+  it.effect("does not ship empty diffs when a file returns to baseline", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const baseSha = yield* resolveBaseSha(original);
+      const calls = yield* ExecCalls;
+      const sandbox = yield* withExecProbe(original);
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const shipped = yield* Queue.unbounded<ReturnType<typeof fileDiffEvent>>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+        Stream.runForEach((event) => Queue.offer(shipped, event)),
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+
+      yield* writeFile(sandbox, { path: "seed.txt", content: "first\n" });
+      yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
+      yield* settleDiff(calls);
+      const first = yield* Queue.take(shipped);
+
+      yield* writeFile(sandbox, { path: "seed.txt", content: "seed\n" });
+      yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
+      yield* settleDiff(calls);
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      assert.isTrue(Option.isNone(yield* Queue.poll(shipped)));
+
+      yield* writeFile(sandbox, { path: "seed.txt", content: "first\n" });
+      yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
+      yield* settleDiff(calls);
+      const repeated = yield* Queue.take(shipped);
+      yield* Fiber.interrupt(fiber);
+
+      const values = yield* Effect.forEach([first, repeated], (event) => decodeDiffValue(event.value));
+      assert.isTrue(values.every((value) => value.diff !== ""));
+      assert.include(values[1].diff, "+first");
+    }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
   it.effect("ships a second large diff when the raw diff changes past the cap", () =>
     Effect.gen(function* () {
       const original = yield* openSandbox();

@@ -366,11 +366,13 @@ const computeFileDiff = Effect.fn("Tools.computeFileDiff")(function* (
 });
 
 const dedupeFileDiff = (previous: ReadonlyMap<string, string>, current: FileDiff) => {
-  if (previous.get(current.path) === current.fingerprint) return [previous, []] as const;
-  if (current.diff === "" && !previous.has(current.path)) return [previous, []] as const;
   if (current.diff === "") {
-    return [new Map([...previous].filter(([path]) => path !== current.path)), [current]] as const;
+    const remaining = previous.has(current.path)
+      ? new Map([...previous].filter(([path]) => path !== current.path))
+      : previous;
+    return [remaining, []] as const;
   }
+  if (previous.get(current.path) === current.fingerprint) return [previous, []] as const;
   return [new Map([...previous, [current.path, current.fingerprint]]), [current]] as const;
 };
 
