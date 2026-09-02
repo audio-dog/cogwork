@@ -73,6 +73,19 @@ const trackedAtBase = Effect.fn("Tools.trackedAtBase")(function* (
   return result.stdout.trim() !== "";
 });
 
+const directoryAtBase = Effect.fn("Tools.directoryAtBase")(function* (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  rel: string,
+) {
+  const command = `git ls-tree ${quote(baseSha)} -- ${quote(rel)}`;
+  const result = yield* exec(sandbox, command);
+  if (result.exitCode !== 0) {
+    return yield* execFailure(command, rel, result);
+  }
+  return result.stdout.startsWith("040000 tree ");
+});
+
 const addPatchFromCurrent = Effect.fn("Tools.addPatchFromCurrent")(function* (
   sandbox: WorktreeSandbox,
   rel: string,
@@ -360,6 +373,9 @@ const computeFileDiff = Effect.fn("Tools.computeFileDiff")(function* (
   const path = relTo(event.path);
   if (event.type === "delete" && baseSha === "") return { path, ...emptyDiff() };
   if (baseSha === "") return { path, ...(yield* streamAddPatch(sandbox, path)) };
+  if (event.type === "delete" && (yield* directoryAtBase(sandbox, baseSha, path))) {
+    return { path, ...emptyDiff() };
+  }
   const command = `git diff ${quote(baseSha)} -- ${quote(path)}`;
   const trackedDiff = yield* streamDiff(sandbox, command, path, new Set([0]));
   if (trackedDiff.diff !== "") return { path, ...trackedDiff };
