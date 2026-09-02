@@ -1,4 +1,7 @@
 import { ContextFs, Git, WorktreeFs } from "@cogwork/engine";
+import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
 import * as Cause from "effect/Cause";
@@ -18,7 +21,6 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { contextFsLayer, gitLayer, worktreeFsLayer } from "./platform";
 
-const testLayer = gitLayer.pipe(Layer.provideMerge(NodeServices.layer));
 const interruptionGate = Latch.makeUnsafe();
 
 const gitFixtureEnvironment = {
@@ -29,6 +31,38 @@ const gitFixtureEnvironment = {
   GIT_COMMITTER_NAME: "cogwork-test",
   GIT_COMMITTER_EMAIL: "cogwork-test@invalid",
 };
+
+const withGitFixtureEnvironment = (command: ChildProcess.Command) => {
+  if (!ChildProcess.isStandardCommand(command)) return ChildProcess.setEnv(command, gitFixtureEnvironment);
+  return ChildProcess.make(command.command, command.args, {
+    ...command.options,
+    env: { ...command.options.env, ...gitFixtureEnvironment },
+    extendEnv: true,
+  });
+};
+
+const testLayer: Layer.Layer<
+  Git.Git | ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+> = gitLayer.pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(
+      Layer.effect(
+        ChildProcessSpawner.ChildProcessSpawner,
+        Effect.map(ChildProcessSpawner.ChildProcessSpawner, (spawner) =>
+          ChildProcessSpawner.make((command) => spawner.spawn(withGitFixtureEnvironment(command))),
+        ),
+      ).pipe(
+        Layer.provide(
+          NodeChildProcessSpawner.layer.pipe(
+            Layer.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer)),
+          ),
+        ),
+      ),
+      NodeFileSystem.layer,
+      NodePath.layer,
+    ),
+  ),
+);
 
 const processHandle = (
   exitCode: Effect.Effect<ChildProcessSpawner.ExitCode>,
@@ -181,7 +215,13 @@ const executeFixtureCommand = Effect.fn("test.executeFixtureCommand")(function* 
   return yield* Effect.die(new Error(`fixture failed (${exitCode}) in ${cwd}: ${script}`));
 });
 
-const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwd: string, script: string) {
+const shellArguments = (fixtureRoot: string, cwdOrScript: string, script?: string) => {
+  if (script === undefined) return { cwd: fixtureRoot, script: cwdOrScript };
+  return { cwd: cwdOrScript, script };
+};
+
+const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwdOrScript: string, command?: string) {
+  const { cwd, script } = shellArguments(fixtureRoot, cwdOrScript, command);
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
