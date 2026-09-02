@@ -1,3 +1,5 @@
+import type { DesktopProcessHealthSample } from "@cogwork/contracts";
+
 export type EngineStatus = "starting" | "running" | "adopted" | "stopped" | "failed";
 
 export const IpcChannel = {
@@ -5,6 +7,7 @@ export const IpcChannel = {
   setEngineEnabled: "cogwork:set-engine-enabled",
   engineStatusChanged: "cogwork:engine-status-changed",
   getWindowPreferences: "cogwork:get-window-preferences",
+  getMainProcessHealth: "cogwork:get-main-process-health",
   setWindowPreferences: "cogwork:set-window-preferences",
   rpcConnect: "cogwork:rpc-connect",
   rpcSend: "cogwork:rpc-send",
@@ -40,6 +43,7 @@ export interface CogworkBridge {
   readonly setEngineEnabled: (enabled: boolean) => Promise<EngineStatus>;
   readonly onEngineStatus: (listener: (status: EngineStatus) => void) => () => void;
   readonly getWindowPreferences: () => Promise<WindowPreferences>;
+  readonly getProcessHealth: () => Promise<ReadonlyArray<DesktopProcessHealthSample>>;
   readonly setWindowPreferences: (preferences: WindowPreferences) => Promise<WindowPreferences>;
   readonly rpc: DaemonRpcBridge;
   readonly reportError: (report: RendererErrorReport) => void;

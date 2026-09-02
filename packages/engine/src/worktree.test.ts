@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import {
@@ -112,7 +113,9 @@ describe("Worktree.ensure", () => {
         Worktree.make,
         provide(fakeGit(recorder, {}), fakeFs(recorder, {})),
       );
+      const before = (yield* Metric.value(Worktree.worktreeEnsureDuration)).count;
       const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item);
+      assert.strictEqual((yield* Metric.value(Worktree.worktreeEnsureDuration)).count, before + 1);
       assert.strictEqual(result.created, true);
       assert.strictEqual(result.branch, "13-worktree-lifecycle");
       assert.strictEqual(result.path, "/repo.worktrees/13-worktree-lifecycle");
