@@ -6,20 +6,14 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
 import { activityOf, DaemonEventBus } from "./daemon-event-bus";
+import { decodeStoredRunEvent, encodeStoredRunEvent } from "./run-event-codec";
 import { RunLedger, RunLedgerError } from "./run-ledger";
 
 // The harness hands back a session handle as untrusted output, and it is later echoed verbatim into a
 // fenced shell block in the human handoff comment. Whitespace or a backtick would break out of that
 // fence, so a handle carrying either is refused rather than stored.
 const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : null);
-
-// The encode/decode between a harness event and a run event's stored payload is the recorder's
-// private detail. Nothing outside this module touches it, so live and replayed activity can only
-// ever agree.
-const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
-const decodeEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
 
 const optionalString = (value: unknown) => (typeof value === "string" ? value : null);
 
@@ -66,7 +60,7 @@ export const make = Effect.gen(function* () {
   });
 
   const record = Effect.fn("RunRecorder.record")(function* (run: RunRecord, event: AgUiEvent) {
-    const data = yield* encodeJson(event).pipe(
+    const data = yield* encodeStoredRunEvent(event).pipe(
       Effect.mapError((error) =>
         RunLedgerError.make({
           operation: "encode run event",
@@ -98,7 +92,7 @@ export const make = Effect.gen(function* () {
   const replay = Effect.fn("RunRecorder.replay")(function* (run: RunRecord) {
     const events = yield* ledger.events(run.id);
     return yield* Effect.forEach(events, (event) =>
-      decodeEvent(event.data).pipe(
+      decodeStoredRunEvent(event.data).pipe(
         Effect.map((decoded) => activityOf(run, event.seq, event.atMillis, decoded)),
         Effect.option,
       ),
@@ -109,9 +103,9 @@ export const make = Effect.gen(function* () {
   // session, oldest first — so the session store never decodes a run event itself.
   const sessionEvents = Effect.fn("RunRecorder.sessionEvents")(function* (session: SessionId) {
     const events = yield* ledger.sessionEvents(session);
-    return yield* Effect.forEach(events, (event) => decodeEvent(event.data).pipe(Effect.option)).pipe(
-      Effect.map(Arr.getSomes),
-    );
+    return yield* Effect.forEach(events, (event) =>
+      decodeStoredRunEvent(event.data).pipe(Effect.option),
+    ).pipe(Effect.map(Arr.getSomes));
   });
 
   return { record, replay, sessionEvents } as const;

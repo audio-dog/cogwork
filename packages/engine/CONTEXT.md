@@ -66,7 +66,7 @@ The unit that runs one candidate end to end: claim, worktree, resolve its operat
 _Avoid_: Runner, worker, harness
 
 **Run recorder**:
-The one seam a run's harness events cross between the harness runner and everything that reads them. Recording is one act with four parts: assign the event's sequence, encode it as a run event, append it to the run ledger (capturing an opaque session handle when one rides the event), and publish the same moment as run activity. Reads come back through the same seam — a settled run replays as run activity for the drill-in, and a session's events decode for the transcript fold — so live and replayed activity are identical by construction. The encoding between harness event and run event is its private detail; no other module decodes a run event's payload.
+The one seam a run's harness events cross between the harness runner and everything that reads them. Recording is one act with four parts: assign the event's sequence, encode it as a run event, append it to the run ledger (capturing an opaque session handle when one rides the event), and publish the same moment as run activity. Reads come back through the same seam — a settled run replays as run activity for the drill-in, and a session's events decode for the transcript fold — so live and replayed activity are identical by construction. The recorded-event codec is shared only with the replay harness, which needs the same decode boundary.
 _Avoid_: Run ledger (the store it writes to), daemon event bus (the transport it publishes on), event log, persistence (the TanStack adapter the session store hands the provider runner)
 
 **Session store**:
@@ -234,7 +234,7 @@ Deterministic engine code that watches the telemetry store's health signals and,
 _Avoid_: Detector, watchdog, monitor (a Datadog-style alert rule), triage (the stage that verifies what the sensor files)
 
 **Replay runner**:
-A harness runner that streams a recorded run's exported events at recorded speed through the whole real pipeline, giving repeatable load for before/after measurement without spawning an agent. A fixture in, the same recorder/ledger/bus/IPC path as a live run out.
+A measurement-only harness runner that decodes an exported Run fixture and streams its recorded AG-UI events at recorded speed or a selected multiplier. It enters through the normal harness seam, so downstream recorder, ledger, bus, transport, and clients are measured without starting an agent subprocess or doing worktree I/O. Count stability is the correctness gate; timing comparison needs at least 10 warm-ups, 10 paired samples, and a confidence interval that excludes no-change.
 _Avoid_: Fake runner (a test double asserting behavior; this one generates load), simulator, benchmark (the measurement around it, not the runner)
 
 **Signal**:
