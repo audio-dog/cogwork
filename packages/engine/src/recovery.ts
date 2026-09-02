@@ -1,12 +1,12 @@
-import type {
-  AvailabilityCause,
-  LifecycleStage,
+import {
+  type AvailabilityCause,
+  type LifecycleStage,
   PollState,
-  RunPlanObservation,
-  SessionId,
-  WorkspaceId,
+  type RunPlanObservation,
+  type SessionId,
+  sessionHandle,
+  type WorkspaceId,
 } from "@cogwork/contracts";
-import { sessionHandle } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -262,7 +262,11 @@ export const make = Effect.gen(function* () {
   });
 
   const pollDetail = (poll: PollState) =>
-    poll.status === "paused" ? { poll: poll.status, reason: poll.reason } : { poll: poll.status };
+    PollState.match(poll, {
+      ok: () => ({ poll: "ok" }),
+      pending: () => ({ poll: "pending" }),
+      paused: ({ reason }) => ({ poll: "paused", reason }),
+    });
 
   const recoverOrphan = Effect.fn("Recovery.recoverOrphan")(function* (
     workspace: RegisteredWorkspace,
@@ -297,7 +301,7 @@ export const make = Effect.gen(function* () {
     recoverObserved: typeof recoverWorkspace,
     observation: RunPlanObservation,
   ) => {
-    if (state.poll.status !== "ok") {
+    if (!PollState.guards.ok(state.poll)) {
       return Effect.logWarning("claim recovery deferred; workspace poll is not ok", {
         ...pollDetail(state.poll),
       }).pipe(Effect.map(() => null));
