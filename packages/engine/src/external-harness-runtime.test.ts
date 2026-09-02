@@ -1,4 +1,12 @@
-import { HarnessName, RunId, RunPlan, SessionId } from "@cogwork/contracts";
+import {
+  HarnessName,
+  RunId,
+  RunPlan,
+  type RunRecord,
+  SessionId,
+  WorkItemId,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import {
@@ -16,7 +24,7 @@ import type {
   SandboxProvider,
   WorkspaceDefinition,
 } from "@tanstack/ai-sandbox";
-import { getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
+import { createSecrets, getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -40,11 +48,17 @@ import {
   staticCatalogSource,
 } from "./harness";
 import { messageFromUnknown } from "./provider-bridge";
+import * as RunLedger from "./run-ledger";
+import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
 const resumedSession = Schema.decodeSync(SessionId)("sess-external-147");
 const secondCheckoutRunId = Schema.decodeSync(RunId)("run-second-checkout");
+const secretWorkspace = Schema.decodeSync(WorkspaceId)("workspace-secret-test");
+const secretWorkItem = Schema.decodeSync(WorkItemId)("#153");
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 interface ControlledOptions {
   readonly effort: string;
@@ -832,6 +846,71 @@ describe("external Harness runtime", () => {
         }
         assert.strictEqual(outputSchema.additionalProperties, false);
       }),
+    );
+
+    it.effect("scrubs secrets before output, Workspace serialization, and persistence", () =>
+      Effect.gen(function* () {
+        const secret = "anthropic-test-key-secret";
+        const probe = new ControlledProbe();
+        const workspaces: Array<WorkspaceDefinition> = [];
+        const harness = makeHarness(
+          descriptor(
+            [
+              { type: EventType.RUN_STARTED, threadId: "RUN", runId: "RUN" },
+              {
+                type: EventType.CUSTOM,
+                name: "RUN",
+                value: { message: `rejected RUN and ${secret}` },
+              },
+              {
+                type: EventType.CUSTOM,
+                name: "structured-output.complete",
+                value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
+              },
+              { type: EventType.RUN_FINISHED, threadId: "RUN", runId: "RUN" },
+            ],
+            probe,
+          ),
+          [],
+          [],
+          {
+            authentication: Effect.succeed({
+              mode: "host",
+              secrets: createSecrets({ LONG_KEY: secret, SHORT_KEY: "RUN" }),
+            }),
+            workspaces,
+          },
+        );
+        const output = yield* harness
+          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runCollect);
+
+        assert.strictEqual(output[0]?.type, EventType.RUN_STARTED);
+        assert.strictEqual(output[0]?.threadId, "RUN");
+        assert.strictEqual(output[1]?.name, "RUN");
+        assert.deepStrictEqual(output[1]?.value, {
+          message: "rejected [redacted] and [redacted]",
+        });
+        assert.notInclude(yield* encodeJson(workspaces), secret);
+
+        const record: RunRecord = {
+          id: request.id,
+          workspace: secretWorkspace,
+          workItem: secretWorkItem,
+          stage: "implement",
+          harness: name,
+          branch: null,
+          session: null,
+          usage: null,
+          status: "running",
+          startedAtMillis: 1,
+          endedAtMillis: null,
+        };
+        const recorder = yield* RunRecorder;
+        yield* Effect.forEach(output, (event) => recorder.record(record, event));
+        const persisted = yield* (yield* RunLedger.RunLedger).events(record.id);
+        assert.notInclude(yield* encodeJson(persisted), secret);
+      }).pipe(Effect.provide(engineTestLayer())),
     );
 
     it.effect("resolves the native session handle before descriptor projection", () =>

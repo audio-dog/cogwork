@@ -268,6 +268,19 @@ const writesWorkspaceFiles = (definition: WorkspaceDefinition) =>
 const workspaceSecretValues = (definition: WorkspaceDefinition) =>
   definition.secrets ? Object.values(resolveAllSecrets(definition.secrets)) : [];
 
+const eventMetadataFields = new Set([
+  "type",
+  "threadId",
+  "runId",
+  "messageId",
+  "toolCallId",
+  "name",
+  "toolCallName",
+  "stepName",
+  "finishReason",
+  "role",
+]);
+
 const scrubValue = (value: unknown, secrets: ReadonlyArray<string>): unknown => {
   if (typeof value === "string") return scrubSecrets(value, secrets);
   if (Array.isArray(value)) return value.map((entry) => scrubValue(entry, secrets));
@@ -275,8 +288,16 @@ const scrubValue = (value: unknown, secrets: ReadonlyArray<string>): unknown => 
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, scrubValue(entry, secrets)]));
 };
 
-const scrubEvent = (event: AgUiEvent, secrets: ReadonlyArray<string>) =>
-  secrets.length === 0 ? event : Schema.decodeUnknownSync(AgUiEvent)(scrubValue(event, secrets));
+const scrubEvent = (event: AgUiEvent, secrets: ReadonlyArray<string>) => {
+  if (secrets.length === 0) return event;
+  const scrubbed = Object.fromEntries(
+    Object.entries(event).map(([key, value]) => [
+      key,
+      eventMetadataFields.has(key) ? value : scrubValue(value, secrets),
+    ]),
+  );
+  return Schema.decodeUnknownSync(AgUiEvent)(scrubbed);
+};
 
 const scrubHarnessError = (error: HarnessError, secrets: ReadonlyArray<string>) =>
   secrets.length === 0
