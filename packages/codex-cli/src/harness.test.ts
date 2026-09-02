@@ -27,13 +27,15 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { type CodexRunnerOptions, codexRunner } from "./harness";
+import { type CodexRunnerOptions, codexRunner, defaultCodexModel } from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const session = Schema.decodeSync(SessionId)("session-1");
 const runId = Schema.decodeSync(RunId)("run-codex-test");
 const workItemId = Schema.decodeSync(WorkItemId)("#150");
-const defaultModel = CODEX_MODELS[0];
+// The runner's own default: the live probe runs against the real backend, and the stale
+// upstream CODEX_MODELS pin is not accepted by a ChatGPT account.
+const defaultModel = defaultCodexModel;
 
 const instructions = [
   { kind: "rules" as const, source: "/home/.agents/rules/global.md", content: "global rules" },
@@ -664,36 +666,40 @@ describe("codexRunner", () => {
       }),
     );
 
-    it.effect("runs the opt-in authenticated linked-Worktree compatibility probe", () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const enabled = yield* Config.string("COGWORK_LIVE_CODEX_PROBE").pipe(Config.withDefault("0"));
-          if (enabled !== "1") return;
-          const handle = yield* createSandbox();
-          const { checkoutPath } = yield* linkedWorktree(handle);
-          const harness = Harness.make([
-            codexRunner({ name, environment: process.env, codexExecutable: "codex" }),
-          ]);
-          const events = yield* collectEvents(
-            harness.run(
-              makeRequest({
-                checkoutPath,
-                session: null,
-                prompt:
-                  "Create codex-probe.txt, add it to Git, and commit it with message codex linked worktree probe. Return the required implement result. Do not open a pull request.",
-              }),
-            ),
-          );
+    it.effect(
+      "runs the opt-in authenticated linked-Worktree compatibility probe",
+      () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const enabled = yield* Config.string("COGWORK_LIVE_CODEX_PROBE").pipe(Config.withDefault("0"));
+            if (enabled !== "1") return;
+            const handle = yield* createSandbox();
+            const { checkoutPath } = yield* linkedWorktree(handle);
+            const harness = Harness.make([
+              codexRunner({ name, environment: process.env, codexExecutable: "codex" }),
+            ]);
+            const events = yield* collectEvents(
+              harness.run(
+                makeRequest({
+                  checkoutPath,
+                  session: null,
+                  prompt:
+                    "Create codex-probe.txt, add it to Git, and commit it with message codex linked worktree probe. Return the required implement result. Do not open a pull request.",
+                }),
+              ),
+            );
 
-          assert.lengthOf(structuredCompletions(events), 1);
-          yield* Schema.decodeUnknownEffect(ImplementStageResult)(structuredCompletions(events)[0]?.object);
-          const commit = yield* Effect.promise(() =>
-            handle.process.exec(`git -C ${checkoutPath} log -1 --format=%s`),
-          );
-          assert.strictEqual(commit.exitCode, 0);
-          assert.strictEqual(commit.stdout.trim(), "codex linked worktree probe");
-        }),
-      ),
+            assert.lengthOf(structuredCompletions(events), 1);
+            yield* Schema.decodeUnknownEffect(ImplementStageResult)(structuredCompletions(events)[0]?.object);
+            const commit = yield* Effect.promise(() =>
+              handle.process.exec(`git -C ${checkoutPath} log -1 --format=%s`),
+            );
+            assert.strictEqual(commit.exitCode, 0);
+            assert.strictEqual(commit.stdout.trim(), "codex linked worktree probe");
+          }),
+        ),
+      // A real Codex implement turn plus a commit; the 5-second vitest default can never fit it.
+      600_000,
     );
   });
 });
