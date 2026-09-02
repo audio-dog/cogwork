@@ -212,6 +212,30 @@ describe("EngineSupervisor", () => {
     });
   });
 
+  it("reports close details when the daemon exits during profile capture", async () => {
+    const child = new FakeChild();
+
+    await withSupervisor(options({ maxRestarts: 0, spawn: () => child }), async (runtime, supervisor) => {
+      await runtime.runPromise(supervisor.start);
+      const capture = runtime.runPromise(
+        supervisor.captureProfile({
+          _tag: "HeapSnapshot",
+          directory: "/diagnostics",
+        }),
+      );
+      const failed = expect(capture).rejects.toMatchObject({
+        operation: "capture daemon profile",
+        cause: "Engine closed during profile capture (code 137, signal SIGKILL)",
+      });
+      await yieldUntil(runtime, () => child.messages.length === 1);
+      child.stdout.end();
+      child.stderr.end();
+      child.emit("close", 137, "SIGKILL");
+
+      await failed;
+    });
+  });
+
   it("removes the profile listener when sending fails", async () => {
     const child = new FakeChild();
     child.onSend = (_message, callback) => queueMicrotask(() => callback?.(new Error("send failed")));

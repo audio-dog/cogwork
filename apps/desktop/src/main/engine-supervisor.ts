@@ -56,6 +56,9 @@ interface EngineClose {
   readonly signal: NodeJS.Signals | null;
 }
 
+const describeProfileClose = (closed: EngineClose) =>
+  `Engine closed during profile capture (code ${closed.code ?? "none"}, signal ${closed.signal ?? "none"})`;
+
 interface OwnedChild {
   readonly child: EngineChild;
   readonly closed: Deferred.Deferred<EngineClose>;
@@ -258,7 +261,10 @@ const captureChildProfile = Effect.fn("EngineSupervisor.captureProfile")(functio
     response,
     Deferred.await(owned.closed).pipe(
       Effect.flatMap((closed) =>
-        ProcessProfileError.make({ operation: "capture daemon profile", cause: closed }),
+        ProcessProfileError.make({
+          operation: "capture daemon profile",
+          cause: describeProfileClose(closed),
+        }),
       ),
     ),
   ).pipe(
