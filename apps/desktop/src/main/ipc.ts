@@ -46,26 +46,35 @@ const decodeProfileCapture = Schema.decodeUnknownOption(ProcessProfileCapture);
 const profileCaptureCooldownMillis = 60_000;
 const profileCaptureTimeout = "2 minutes";
 
-const profileFailure = (cause: string) =>
-  ProcessProfileError.make({
-    operation: "capture process profile",
-    cause,
-  });
+const diagnosticsFailure = (operation: string) => (cause: unknown) =>
+  ProcessProfileError.make({ operation, cause });
+
+const captureFailure = diagnosticsFailure("capture process profile");
+const preferencesFailure = diagnosticsFailure("change desktop preferences");
 
 const rendererProfileError = (error: ProcessProfileError) =>
   new Error(`${error.operation}: ${String(error.cause)}`);
 
-const authorizeDiagnostics = (deps: IpcDeps, sender: WebContents) => {
+const authorizeDiagnostics = (
+  deps: IpcDeps,
+  sender: WebContents,
+  fail: (cause: unknown) => ProcessProfileError,
+) => {
   if (deps.isTrustedSender(sender)) return Effect.void;
-  return profileFailure("Diagnostics are unavailable from this renderer");
+  return fail("Diagnostics are unavailable from this renderer");
 };
 
-const restartSupervisorIfActive = Effect.fn("DesktopIpc.restartSupervisorIfActive")(function* (
+// Profiling flags reach the daemon only on an owned spawn's argv. A restart therefore changes
+// nothing for an adopted daemon, which another process launched, and only churns the reported
+// status through stopped and back to adopted.
+const isOwnedStatus = (status: EngineStatus) => status === "starting" || status === "running";
+
+const restartSupervisorIfOwned = Effect.fn("DesktopIpc.restartSupervisorIfOwned")(function* (
   supervisor: EngineSupervisorService,
   saved: WindowPreferences,
 ) {
   const status = yield* SubscriptionRef.get(supervisor.status);
-  if (status === "stopped" || status === "failed") return saved;
+  if (!isOwnedStatus(status)) return saved;
   yield* supervisor.stop;
   yield* supervisor.start;
   return saved;
@@ -80,7 +89,7 @@ const captureProfile = Effect.fn("DesktopIpc.captureProfile")(function* (
   deps: IpcDeps,
   capture: ProcessProfileCapture,
 ) {
-  if (!deps.windowPreferences.get().profiling) return yield* profileFailure("Profiling is disabled");
+  if (!deps.windowPreferences.get().profiling) return yield* captureFailure("Profiling is disabled");
   const captureEffect = ProcessProfileCapture.match(capture, {
     DaemonHeapSnapshot: () => deps.supervisor.captureProfile(heapSnapshotInput(deps.diagnosticsDirectory)),
     DaemonCpuProfile: () => deps.supervisor.captureProfile(cpuProfileInput(deps.diagnosticsDirectory)),
@@ -89,9 +98,7 @@ const captureProfile = Effect.fn("DesktopIpc.captureProfile")(function* (
   });
   return yield* captureEffect.pipe(
     Effect.timeout(profileCaptureTimeout),
-    Effect.catchTag("TimeoutError", (cause) =>
-      ProcessProfileError.make({ operation: "capture process profile", cause }),
-    ),
+    Effect.catchTag("TimeoutError", (cause) => captureFailure(cause)),
   );
 });
 
@@ -100,19 +107,19 @@ const makeCaptureProfileHandler = (deps: IpcDeps) => {
   const lastStartedAt = Ref.makeUnsafe(0);
   const runCapture = Effect.fn("DesktopIpc.runLimitedCapture")(function* (input: unknown) {
     const capture = Option.getOrNull(decodeProfileCapture(input));
-    if (!capture) return yield* profileFailure("Invalid process profile request");
+    if (!capture) return yield* captureFailure("Invalid process profile request");
     const now = yield* Clock.currentTimeMillis;
     const previous = yield* Ref.get(lastStartedAt);
     if (now - previous < profileCaptureCooldownMillis) {
-      return yield* profileFailure("Wait before starting another process profile");
+      return yield* captureFailure("Wait before starting another process profile");
     }
     yield* Ref.set(lastStartedAt, now);
     return yield* captureProfile(deps, capture);
   });
   return Effect.fn("DesktopIpc.captureProfileHandler")(function* (sender: WebContents, input: unknown) {
-    yield* authorizeDiagnostics(deps, sender);
+    yield* authorizeDiagnostics(deps, sender, captureFailure);
     const result = yield* gate.withPermitsIfAvailable(1)(runCapture(input));
-    if (Option.isNone(result)) return yield* profileFailure("A process profile is already running");
+    if (Option.isNone(result)) return yield* captureFailure("A process profile is already running");
     return result.value;
   });
 };
@@ -122,21 +129,21 @@ const setWindowPreferences = Effect.fn("DesktopIpc.setWindowPreferences")(functi
   sender: WebContents,
   input: unknown,
 ) {
-  yield* authorizeDiagnostics(deps, sender);
+  yield* authorizeDiagnostics(deps, sender, preferencesFailure);
   const preferences = Option.getOrNull(decodePreferences(input));
   if (!preferences || (preferences.closeToHide === undefined && preferences.profiling === undefined)) {
-    return yield* profileFailure("Invalid desktop preferences");
+    return yield* preferencesFailure("Invalid desktop preferences");
   }
   const previous = deps.windowPreferences.get();
   if (preferences.profiling === true && !previous.profiling) {
     const status = yield* SubscriptionRef.get(deps.supervisor.status);
     if (status === "adopted") {
-      return yield* profileFailure("Stop the standalone daemon before enabling profiling");
+      return yield* preferencesFailure("Stop the standalone daemon before enabling profiling");
     }
   }
   const saved = deps.windowPreferences.set(preferences);
   if (previous.profiling === saved.profiling) return saved;
-  return yield* restartSupervisorIfActive(deps.supervisor, saved);
+  return yield* restartSupervisorIfOwned(deps.supervisor, saved);
 });
 
 // `WebContents.isDestroyed()` stays false after a GPU/renderer crash or during a reload, yet the

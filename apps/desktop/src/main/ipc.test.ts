@@ -313,6 +313,44 @@ it("rejects profiling for an adopted standalone daemon", async () => {
   }
 });
 
+it("leaves an adopted standalone daemon alone when profiling is disabled", async () => {
+  const start = vi.fn();
+  const stop = vi.fn();
+  const adoptedSupervisor = {
+    ...supervisor,
+    status: Effect.runSync(SubscriptionRef.make<EngineStatus>("adopted")),
+    start: Effect.sync(start),
+    stop: Effect.sync(stop),
+  };
+  const runtime = ManagedRuntime.make(Layer.succeed(EngineSupervisor, adoptedSupervisor));
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      supervisor: adoptedSupervisor,
+      windowPreferences: {
+        get: () => ({ closeToHide: true, profiling: true }),
+        set: (preferences: { readonly profiling?: boolean }) => ({
+          closeToHide: true,
+          profiling: preferences.profiling ?? true,
+        }),
+      },
+    });
+    const update = ipc.handlers.get(IpcChannel.setWindowPreferences);
+    if (!update) throw new Error("Window preferences handler was not registered");
+
+    expect(await update({ sender }, { profiling: false })).toEqual({
+      closeToHide: true,
+      profiling: false,
+    });
+    expect(stop).not.toHaveBeenCalled();
+    expect(start).not.toHaveBeenCalled();
+  } finally {
+    await runtime.dispose();
+  }
+});
+
 it("captures profiles from the main process and owned daemon", async () => {
   const runtime = makeRuntime();
   const sender = new FakeSender();
