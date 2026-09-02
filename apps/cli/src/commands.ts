@@ -25,6 +25,7 @@ import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
@@ -298,12 +299,13 @@ const runDaemon = Effect.fn("commands.runDaemon")(
     effect.pipe(
       Effect.scoped,
       Effect.provide(
-        Layer.merge(
+        Layer.mergeAll(
           serverLayer(options),
           telemetryLayer({
             enabled: options.telemetryEnabled,
             maintenanceInterval: options.pollIntervalMillis,
           }),
+          Metric.enableRuntimeMetricsLayer,
         ),
       ),
     ),
@@ -342,6 +344,15 @@ const runRuns = Effect.fn("commands.runRuns")(
     const client = yield* makeDaemonClient();
     const runs = yield* client.ListRuns();
     yield* Console.log(formatRuns(runs));
+  },
+  (effect, options) => overSocket(effect, options.socketPath),
+);
+
+const runMetrics = Effect.fn("commands.runMetrics")(
+  function* (_options: { readonly socketPath: string }) {
+    const client = yield* makeDaemonClient();
+    const metrics = yield* client.GetMetrics();
+    yield* Console.log(metrics === "" ? "(no metrics recorded)" : metrics);
   },
   (effect, options) => overSocket(effect, options.socketPath),
 );
@@ -607,6 +618,11 @@ export const statusCommand = Command.make("status", {
 
 export const runsCommand = Command.make("runs", { socket: socketFlag }).pipe(
   Command.withHandler(({ socket }) => runRuns({ socketPath: socket })),
+);
+
+export const metricsCommand = Command.make("metrics", { socket: socketFlag }).pipe(
+  Command.withDescription("Dump live daemon metrics"),
+  Command.withHandler(({ socket }) => runMetrics({ socketPath: socket })),
 );
 
 export const runEventsCommand = Command.make("run-events", { socket: socketFlag, id: runIdFlag }).pipe(

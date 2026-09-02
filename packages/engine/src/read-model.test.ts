@@ -110,6 +110,7 @@ const state: WorkspaceReconcileState = {
   blocked: [blockedWithPr, blockedNoPr],
   needsHuman: [needsHumanWithPr, needsHumanNoPr],
   observed: [],
+  observedCount: 0,
   availability: [
     {
       operation: "implement",
