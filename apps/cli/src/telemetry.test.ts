@@ -3,6 +3,7 @@ import * as Resource from "@effect/opentelemetry/Resource";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -274,11 +275,12 @@ describe("local telemetry", () => {
   it.live("drops excess spans instead of growing the in-memory buffer", () =>
     Effect.gen(function* () {
       const storePath = yield* temporaryStore();
+      const baseStartTime = yield* Clock.currentTimeNanos;
       yield* Tracer.Tracer.pipe(
         Effect.flatMap((tracer) =>
           Effect.sync(() => {
             Array.from({ length: 10_001 }, (_, index) => index).forEach((index) => {
-              const startTime = BigInt(index);
+              const startTime = baseStartTime + BigInt(index);
               tracer
                 .span({
                   name: `Telemetry.buffer.${index}`,
@@ -304,6 +306,10 @@ describe("local telemetry", () => {
           "SELECT json_extract(state, '$.count') AS count FROM metrics WHERE name = 'cogwork_telemetry_spans_dropped_total' ORDER BY timestamp DESC LIMIT 1",
         ),
         [{ count: 1 }],
+      );
+      assert.deepEqual(
+        yield* query(storePath, "SELECT COUNT(*) AS count FROM spans WHERE name LIKE 'Telemetry.buffer.%'"),
+        [{ count: 10_000 }],
       );
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );

@@ -1,4 +1,7 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import { lt, sql } from "drizzle-orm";
+import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node";
+import { check, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import type * as Context from "effect/Context";
@@ -14,11 +17,13 @@ import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 import * as Semaphore from "effect/Semaphore";
 import * as Tracer from "effect/Tracer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 const pageSize = 4096;
 const spanBatchSize = 1000;
 const spanBufferCapacity = 10_000;
+const sqliteBindParameterLimit = 999;
+const spanInsertChunkSize = Math.floor(sqliteBindParameterLimit / 8);
+const metricInsertChunkSize = Math.floor(sqliteBindParameterLimit / 5);
 
 const rowsWritten = Metric.counter("cogwork_telemetry_rows_written_total", {
   description: "Rows written to the local telemetry store.",
@@ -57,6 +62,42 @@ export interface LocalTelemetryOptions {
   readonly sizeCapBytes: number;
 }
 
+const spanTable = sqliteTable(
+  "spans",
+  {
+    name: text("name").notNull(),
+    traceId: text("trace_id").notNull(),
+    spanId: text("span_id").notNull(),
+    parent: text("parent"),
+    start: integer("start").notNull(),
+    duration: real("duration").notNull(),
+    exit: text("exit").notNull(),
+    attributes: text("attributes").notNull(),
+  },
+  (table) => [
+    check("spans_attributes_json", sql`json_valid(${table.attributes})`),
+    index("spans_name_start").on(table.name, table.start),
+    index("spans_start").on(table.start),
+  ],
+);
+
+const metricTable = sqliteTable(
+  "metrics",
+  {
+    timestamp: integer("timestamp").notNull(),
+    name: text("name").notNull(),
+    type: text("type").notNull(),
+    attributes: text("attributes").notNull(),
+    state: text("state").notNull(),
+  },
+  (table) => [
+    check("metrics_attributes_json", sql`json_valid(${table.attributes})`),
+    check("metrics_state_json", sql`json_valid(${table.state})`),
+    index("metrics_name_timestamp").on(table.name, table.timestamp),
+    index("metrics_timestamp").on(table.timestamp),
+  ],
+);
+
 const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS spans (
     name TEXT NOT NULL,
@@ -66,7 +107,7 @@ const schemaStatements = [
     start INTEGER NOT NULL,
     duration REAL NOT NULL,
     exit TEXT NOT NULL,
-    attributes TEXT NOT NULL CHECK (json_valid(attributes))
+    attributes TEXT NOT NULL CONSTRAINT spans_attributes_json CHECK (json_valid(attributes))
   )`,
   "CREATE INDEX IF NOT EXISTS spans_name_start ON spans (name, start)",
   "CREATE INDEX IF NOT EXISTS spans_start ON spans (start)",
@@ -74,8 +115,8 @@ const schemaStatements = [
     timestamp INTEGER NOT NULL,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
-    attributes TEXT NOT NULL CHECK (json_valid(attributes)),
-    state TEXT NOT NULL CHECK (json_valid(state))
+    attributes TEXT NOT NULL CONSTRAINT metrics_attributes_json CHECK (json_valid(attributes)),
+    state TEXT NOT NULL CONSTRAINT metrics_state_json CHECK (json_valid(state))
   )`,
   "CREATE INDEX IF NOT EXISTS metrics_name_timestamp ON metrics (name, timestamp)",
   "CREATE INDEX IF NOT EXISTS metrics_timestamp ON metrics (timestamp)",
@@ -116,6 +157,11 @@ const formatJson = (value: unknown, fallback: string) => {
     return fallback;
   }
 };
+
+const chunksOf = <A>(values: ReadonlyArray<A>, size: number) =>
+  Array.from({ length: Math.ceil(values.length / size) }, (_, index) =>
+    values.slice(index * size, (index + 1) * size),
+  );
 
 const snapshotAttribute = (value: unknown) => {
   try {
@@ -235,13 +281,13 @@ const makeTracer = (
   });
 
 const makeStore = Effect.fn("TelemetryStore.make")(function* (options: LocalTelemetryOptions) {
-  const sql = yield* SqlClient.SqlClient;
+  const db = yield* SQLiteNodeDrizzle.makeWithDefaults();
   const fs = yield* FileSystem.FileSystem;
   const writeGate = Semaphore.makeUnsafe(1);
   const maxPages = Math.max(1, Math.floor(options.sizeCapBytes / pageSize));
-  yield* sql.unsafe(`PRAGMA page_size = ${pageSize}`);
-  yield* sql.unsafe(`PRAGMA max_page_count = ${maxPages}`);
-  yield* Effect.forEach(schemaStatements, (statement) => sql.unsafe(statement), { discard: true });
+  yield* db.run(`PRAGMA page_size = ${pageSize}`);
+  yield* db.run(`PRAGMA max_page_count = ${maxPages}`);
+  yield* Effect.forEach(schemaStatements, (statement) => db.run(statement), { discard: true });
   yield* fs.chmod(options.storePath, 0o600);
 
   const instrumentWrite =
@@ -258,13 +304,14 @@ const makeStore = Effect.fn("TelemetryStore.make")(function* (options: LocalTele
   const writeSpans = Effect.fn("TelemetryStore.writeSpans")(
     function* (spans: ReadonlyArray<SpanRow>) {
       if (spans.length === 0) return;
-      yield* sql.withTransaction(
+      const rows = spans.map((span) => ({
+        ...span,
+        attributes: formatJson(span.attributes, "{}"),
+      }));
+      yield* db.transaction((tx) =>
         Effect.forEach(
-          spans,
-          (span) => sql`
-          INSERT INTO spans (name, trace_id, span_id, parent, start, duration, exit, attributes)
-          VALUES (${span.name}, ${span.traceId}, ${span.spanId}, ${span.parent}, ${span.start}, ${span.duration}, ${span.exit}, ${formatJson(span.attributes, "{}")})
-        `,
+          chunksOf(rows, spanInsertChunkSize),
+          (chunk) => tx.insert(spanTable).values(chunk).run(),
           { discard: true },
         ),
       );
@@ -275,13 +322,10 @@ const makeStore = Effect.fn("TelemetryStore.make")(function* (options: LocalTele
   const writeMetrics = Effect.fn("TelemetryStore.writeMetrics")(
     function* (metrics: ReadonlyArray<MetricRow>) {
       if (metrics.length === 0) return;
-      yield* sql.withTransaction(
+      yield* db.transaction((tx) =>
         Effect.forEach(
-          metrics,
-          (metric) => sql`
-          INSERT INTO metrics (timestamp, name, type, attributes, state)
-          VALUES (${metric.timestamp}, ${metric.name}, ${metric.type}, ${metric.attributes}, ${metric.state})
-        `,
+          chunksOf(metrics, metricInsertChunkSize),
+          (chunk) => tx.insert(metricTable).values(chunk).run(),
           { discard: true },
         ),
       );
@@ -297,38 +341,49 @@ const makeStore = Effect.fn("TelemetryStore.make")(function* (options: LocalTele
   const prune = Effect.fn("TelemetryStore.prune")(
     function* () {
       const cutoff = (yield* Clock.currentTimeMillis) - Duration.toMillis(options.retention);
-      yield* sql.withTransaction(
-        Effect.all(
-          [
-            sql`DELETE FROM spans WHERE start < ${cutoff}`,
-            sql`DELETE FROM metrics WHERE timestamp < ${cutoff}`,
-          ],
-          { discard: true },
-        ),
+      yield* db.transaction((tx) =>
+        tx
+          .delete(spanTable)
+          .where(lt(spanTable.start, cutoff))
+          .run()
+          .pipe(Effect.andThen(tx.delete(metricTable).where(lt(metricTable.timestamp, cutoff)).run())),
       );
-      const [{ page_count: pages } = { page_count: 0 }] = yield* sql.unsafe<{
+      const [{ page_count: pages } = { page_count: 0 }] = yield* db.all<{
         readonly page_count: number;
-      }>("PRAGMA page_count");
-      const [{ freelist_count: freePages } = { freelist_count: 0 }] = yield* sql.unsafe<{
+      }>(sql.raw("PRAGMA page_count"));
+      const [{ freelist_count: freePages } = { freelist_count: 0 }] = yield* db.all<{
         readonly freelist_count: number;
-      }>("PRAGMA freelist_count");
+      }>(sql.raw("PRAGMA freelist_count"));
       const overSizeTarget = pages - freePages >= Math.floor(maxPages * 0.9);
       if (overSizeTarget) {
-        yield* sql.withTransaction(
-          Effect.all(
-            [
-              sql`DELETE FROM spans WHERE rowid IN (
-                SELECT rowid FROM spans ORDER BY start LIMIT (SELECT MAX(1, COUNT(*) / 10) FROM spans)
+        yield* db.transaction((tx) =>
+          tx
+            .delete(spanTable)
+            .where(
+              sql`rowid IN (
+                SELECT rowid FROM ${spanTable}
+                ORDER BY ${spanTable.start}
+                LIMIT (SELECT MAX(1, COUNT(*) / 10) FROM ${spanTable})
               )`,
-              sql`DELETE FROM metrics WHERE rowid IN (
-                SELECT rowid FROM metrics ORDER BY timestamp LIMIT (SELECT MAX(1, COUNT(*) / 10) FROM metrics)
-              )`,
-            ],
-            { discard: true },
-          ),
+            )
+            .run()
+            .pipe(
+              Effect.andThen(
+                tx
+                  .delete(metricTable)
+                  .where(
+                    sql`rowid IN (
+                      SELECT rowid FROM ${metricTable}
+                      ORDER BY ${metricTable.timestamp}
+                      LIMIT (SELECT MAX(1, COUNT(*) / 10) FROM ${metricTable})
+                    )`,
+                  )
+                  .run(),
+              ),
+            ),
         );
       }
-      yield* sql.unsafe("PRAGMA wal_checkpoint(PASSIVE)");
+      yield* db.run(sql.raw("PRAGMA wal_checkpoint(PASSIVE)"));
     },
     (effect) => writeGate.withPermits(1)(effect).pipe(logWriteFailure("retention")),
   );
