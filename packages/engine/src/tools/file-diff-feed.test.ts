@@ -28,7 +28,7 @@ const fileDiffMaxBytes = 64 * 1024;
 const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
 
 class ExecCalls extends Context.Service<ExecCalls, Queue.Queue<string>>()(
-  "@cogwork/engine/file-diff-feed.test/ExecCalls",
+  "@cogwork/engine/tools/file-diff-feed.test/ExecCalls",
 ) {
   static readonly layer = Layer.effect(ExecCalls, Queue.unbounded<string>());
 }
@@ -56,17 +56,15 @@ const withExecProbe = Effect.fn("file-diff-feed.test.withExecProbe")(function* (
       return result;
     });
   };
-  const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = async (command, options) => {
-    const process = await sandbox.handle.process.spawn(command, options);
-    return {
+  const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = (command, options) =>
+    sandbox.handle.process.spawn(command, options).then((process) => ({
       ...process,
       wait: () =>
         process.wait().then((exitCode) => {
           Queue.offerUnsafe(calls, command);
           return exitCode;
         }),
-    };
-  };
+    }));
   return {
     ...sandbox,
     handle: {

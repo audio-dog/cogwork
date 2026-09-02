@@ -126,38 +126,53 @@ interface DiffOutput {
   readonly fingerprint: string;
 }
 
-const readDiffOutput = async (
+const readDiffOutput = (
   chunks: AsyncIterator<string>,
   hash: Hash,
   prefix: Uint8Array = new Uint8Array(),
   byteLength = 0,
-): Promise<DiffOutput> => {
-  const next = await chunks.next();
-  if (next.done) return { prefix, byteLength, fingerprint: hash.digest("base64") };
-  const bytes = Buffer.from(next.value);
-  hash.update(bytes);
-  return readDiffOutput(
-    chunks,
-    hash,
-    appendPrefix(prefix, bytes, fileDiffMaxBytes),
-    byteLength + bytes.length,
+): Effect.Effect<DiffOutput, ToolError> =>
+  Effect.tryPromise({
+    try: () => chunks.next(),
+    catch: (cause) => toolError("exec-failed", `process stream failed: ${String(cause)}`),
+  }).pipe(
+    Effect.flatMap((next) => {
+      if (next.done) {
+        return Effect.succeed({ prefix, byteLength, fingerprint: hash.digest("base64") });
+      }
+      const bytes = Buffer.from(next.value);
+      hash.update(bytes);
+      return readDiffOutput(
+        chunks,
+        hash,
+        appendPrefix(prefix, bytes, fileDiffMaxBytes),
+        byteLength + bytes.length,
+      );
+    }),
   );
-};
 
-const readStderr = async (
+const readStderr = (
   chunks: AsyncIterator<string>,
   prefix: Uint8Array = new Uint8Array(),
-): Promise<string> => {
-  const next = await chunks.next();
-  if (next.done) return new TextDecoder().decode(prefix);
-  return readStderr(chunks, appendPrefix(prefix, Buffer.from(next.value), stderrMaxBytes));
-};
+): Effect.Effect<string, ToolError> =>
+  Effect.tryPromise({
+    try: () => chunks.next(),
+    catch: (cause) => toolError("exec-failed", `process stream failed: ${String(cause)}`),
+  }).pipe(
+    Effect.flatMap((next) =>
+      next.done
+        ? Effect.succeed(new TextDecoder().decode(prefix))
+        : readStderr(chunks, appendPrefix(prefix, Buffer.from(next.value), stderrMaxBytes)),
+    ),
+  );
 
-const readText = async (chunks: AsyncIterator<string>, text = ""): Promise<string> => {
-  const next = await chunks.next();
-  if (next.done) return text;
-  return readText(chunks, `${text}${next.value}`);
-};
+const readText = (chunks: AsyncIterator<string>, text = ""): Effect.Effect<string, ToolError> =>
+  Effect.tryPromise({
+    try: () => chunks.next(),
+    catch: (cause) => toolError("exec-failed", `process stream failed: ${String(cause)}`),
+  }).pipe(
+    Effect.flatMap((next) => (next.done ? Effect.succeed(text) : readText(chunks, `${text}${next.value}`))),
+  );
 
 const diffFromOutput = (output: DiffOutput) => {
   if (output.byteLength <= fileDiffMaxBytes) return new TextDecoder().decode(output.prefix);
@@ -210,17 +225,17 @@ const streamDiff = Effect.fn("Tools.streamDiff")(function* (
   const result = yield* Effect.scoped(
     Effect.gen(function* () {
       const { process, completed, exit } = yield* acquireProcess(sandbox, command);
-      const collected = yield* Effect.tryPromise({
-        try: async () => {
-          const [stdout, stderr, exitCode] = await Promise.all([
-            readDiffOutput(process.stdout[Symbol.asyncIterator](), createHash("sha256")),
-            readStderr(process.stderr[Symbol.asyncIterator]()),
-            exit,
-          ]);
-          return { stdout, stderr, exitCode };
+      const collected = yield* Effect.all(
+        {
+          stdout: readDiffOutput(process.stdout[Symbol.asyncIterator](), createHash("sha256")),
+          stderr: readStderr(process.stderr[Symbol.asyncIterator]()),
+          exitCode: Effect.tryPromise({
+            try: () => exit,
+            catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
+          }),
         },
-        catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
-      });
+        { concurrency: "unbounded" },
+      );
       yield* Deferred.succeed(completed, undefined);
       return collected;
     }),
@@ -277,56 +292,29 @@ const configuredIgnoredEvents = Effect.fn("Tools.configuredIgnoredEvents")(funct
   const command = "git check-ignore -z --stdin";
   const result = yield* Effect.scoped(
     Effect.gen(function* () {
-      const { process, completed, exit } = yield* Effect.acquireRelease(
-        Effect.tryPromise({
-          try: (signal) => sandbox.handle.process.spawn(command, { signal }),
-          catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
-        }).pipe(
-          Effect.flatMap((process) =>
-            Deferred.make<void>().pipe(
-              Effect.map((completed) => ({ process, completed, exit: process.wait() })),
-            ),
-          ),
-        ),
-        ({ process, completed, exit }) =>
-          Deferred.poll(completed).pipe(
-            Effect.flatMap(
-              Option.match({
-                onNone: () =>
-                  Effect.tryPromise(() => process.kill("SIGTERM")).pipe(
-                    Effect.ignore,
-                    Effect.andThen(Effect.tryPromise(() => exit)),
-                    Effect.timeoutOrElse({
-                      duration: processReleaseDeadline,
-                      orElse: () =>
-                        Effect.tryPromise(() => process.kill("SIGKILL")).pipe(
-                          Effect.ignore,
-                          Effect.andThen(Effect.tryPromise(() => exit)),
-                          Effect.timeout(processReleaseDeadline),
-                          Effect.ignore,
-                        ),
-                    }),
-                    Effect.ignore,
-                  ),
-                onSome: () => Effect.void,
+      const { process, completed, exit } = yield* acquireProcess(sandbox, command);
+      const collected = yield* Effect.all(
+        {
+          stdout: readText(process.stdout[Symbol.asyncIterator]()),
+          stderr: readStderr(process.stderr[Symbol.asyncIterator]()),
+          exitCode: Effect.tryPromise({
+            try: () => exit,
+            catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
+          }),
+          input: Effect.tryPromise({
+            try: () => process.stdin.write(`${paths.join("\0")}\0`),
+            catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
+          }).pipe(
+            Effect.andThen(
+              Effect.tryPromise({
+                try: () => process.stdin.end(),
+                catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
               }),
             ),
           ),
-      );
-      const collected = yield* Effect.tryPromise({
-        try: async () => {
-          const stdout = readText(process.stdout[Symbol.asyncIterator]());
-          const stderr = readStderr(process.stderr[Symbol.asyncIterator]());
-          await process.stdin.write(`${paths.join("\0")}\0`);
-          await process.stdin.end();
-          return {
-            stdout: await stdout,
-            stderr: await stderr,
-            exitCode: await exit,
-          };
         },
-        catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
-      });
+        { concurrency: "unbounded" },
+      );
       yield* Deferred.succeed(completed, undefined);
       return collected;
     }),
