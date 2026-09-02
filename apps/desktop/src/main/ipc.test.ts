@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime, SubscriptionRef } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
-import { type EngineStatus, IpcChannel } from "../shared/ipc";
+import { type EngineStatus, IpcChannel, type WindowPreferences } from "../shared/ipc";
 import { EngineSupervisor, type EngineSupervisorService } from "./engine-supervisor";
 
 type IpcHandler = (...args: readonly unknown[]) => unknown;
@@ -291,6 +291,39 @@ it("persists profiling through the shared desktop preferences", async () => {
       profiling: true,
     });
     expect(set).toHaveBeenCalledWith({ profiling: true });
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("restores profiling preferences when the engine restart fails", async () => {
+  const failedSupervisor = {
+    ...supervisor,
+    status: Effect.runSync(SubscriptionRef.make<EngineStatus>("running")),
+    start: Effect.die("restart failed"),
+  };
+  const runtime = ManagedRuntime.make(Layer.succeed(EngineSupervisor, failedSupervisor));
+  const cache: { current: WindowPreferences } = {
+    current: { closeToHide: true, profiling: false },
+  };
+  const set = vi.fn((preferences: Partial<WindowPreferences>) => {
+    cache.current = { ...cache.current, ...preferences };
+    return cache.current;
+  });
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({
+      ...deps("/tmp/test.sock", runtime),
+      supervisor: failedSupervisor,
+      windowPreferences: { get: () => cache.current, set },
+    });
+    const update = ipc.handlers.get(IpcChannel.setWindowPreferences);
+    if (!update) throw new Error("Window preferences handler was not registered");
+
+    await expect(update({ sender }, { profiling: true })).rejects.toThrow("restart failed");
+    expect(cache.current).toEqual({ closeToHide: true, profiling: false });
+    expect(set).toHaveBeenLastCalledWith({ closeToHide: true, profiling: false });
   } finally {
     await runtime.dispose();
   }

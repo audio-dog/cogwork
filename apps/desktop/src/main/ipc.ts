@@ -139,7 +139,9 @@ const setWindowPreferences = Effect.fn("DesktopIpc.setWindowPreferences")(functi
   }
   const saved = deps.windowPreferences.set(preferences);
   if (previous.profiling === saved.profiling) return saved;
-  return yield* restartSupervisorIfOwned(deps.supervisor, saved);
+  return yield* restartSupervisorIfOwned(deps.supervisor, saved).pipe(
+    Effect.onError(() => Effect.sync(() => deps.windowPreferences.set(previous))),
+  );
 });
 
 // `WebContents.isDestroyed()` stays false after a GPU/renderer crash or during a reload, yet the
