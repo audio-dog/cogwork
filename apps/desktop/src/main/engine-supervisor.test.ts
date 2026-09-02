@@ -19,7 +19,7 @@ class FakeChild extends EventEmitter implements EngineChild {
   readonly stderr = new PassThrough();
   readonly signals: NodeJS.Signals[] = [];
   readonly messages: unknown[] = [];
-  onSend: (message: unknown) => unknown = () => undefined;
+  onSend: (message: unknown, callback?: (error: Error | null) => void) => unknown = () => undefined;
 
   constructor(private readonly exitOnSignal: NodeJS.Signals | null = "SIGTERM") {
     super();
@@ -31,9 +31,9 @@ class FakeChild extends EventEmitter implements EngineChild {
     return true;
   }
 
-  send(message: unknown) {
+  send(message: unknown, callback?: (error: Error | null) => void) {
     this.messages.push(message);
-    this.onSend(message);
+    this.onSend(message, callback);
     return true;
   }
 }
@@ -208,6 +208,25 @@ describe("EngineSupervisor", () => {
 
       expect(path).toBe("/diagnostics/CPU.1234.cpuprofile");
       expect(child.messages).toHaveLength(1);
+      expect(child.listenerCount("message")).toBe(0);
+    });
+  });
+
+  it("removes the profile listener when sending fails", async () => {
+    const child = new FakeChild();
+    child.onSend = (_message, callback) => queueMicrotask(() => callback?.(new Error("send failed")));
+
+    await withSupervisor(options({ spawn: () => child }), async (runtime, supervisor) => {
+      await runtime.runPromise(supervisor.start);
+      const exit = await runtime.runPromiseExit(
+        supervisor.captureProfile({
+          _tag: "HeapSnapshot",
+          directory: "/diagnostics",
+        }),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(child.listenerCount("message")).toBe(0);
     });
   });
 

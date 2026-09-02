@@ -220,15 +220,19 @@ const captureChildProfile = Effect.fn("EngineSupervisor.captureProfile")(functio
     input,
   });
   const response = Effect.callback<string, ProcessProfileError>((resume) => {
+    const complete = (result: Effect.Effect<string, ProcessProfileError>) => {
+      owned.child.off("message", onMessage);
+      resume(result);
+    };
     const onMessage = (message: unknown) => {
       Option.match(decodeProfileResponse(message), {
         onNone: () => undefined,
         onSome: (decoded) => {
           if (decoded.requestId !== request.requestId) return;
           ProcessProfileResponse.match(decoded, {
-            ProcessProfileCompleted: ({ path }) => resume(Effect.succeed(path)),
+            ProcessProfileCompleted: ({ path }) => complete(Effect.succeed(path)),
             ProcessProfileFailed: ({ message }) =>
-              resume(
+              complete(
                 Effect.fail(
                   ProcessProfileError.make({ operation: "capture daemon profile", cause: message }),
                 ),
@@ -241,12 +245,12 @@ const captureChildProfile = Effect.fn("EngineSupervisor.captureProfile")(functio
     try {
       owned.child.send(request, (error) => {
         if (!error) return;
-        resume(
+        complete(
           Effect.fail(ProcessProfileError.make({ operation: "send daemon profile request", cause: error })),
         );
       });
     } catch (cause) {
-      resume(Effect.fail(ProcessProfileError.make({ operation: "send daemon profile request", cause })));
+      complete(Effect.fail(ProcessProfileError.make({ operation: "send daemon profile request", cause })));
     }
     return Effect.sync(() => owned.child.off("message", onMessage));
   });
