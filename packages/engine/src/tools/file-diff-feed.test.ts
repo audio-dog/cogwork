@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
+import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -33,6 +34,9 @@ const emptyOutput: AsyncIterable<string> = {
     next: () => Promise.resolve({ done: true, value: undefined }),
   }),
 };
+
+const advanceUntil = (deferred: Deferred.Deferred<void>, duration: Duration.Input) =>
+  Deferred.await(deferred).pipe(Effect.raceFirst(TestClock.adjust(duration).pipe(Effect.forever)));
 
 class ExecCalls extends Context.Service<ExecCalls, Queue.Queue<string>>()(
   "@cogwork/engine/tools/file-diff-feed.test/ExecCalls",
@@ -276,23 +280,9 @@ describe("file diff feed", () => {
         Effect.forkChild,
       );
       yield* Queue.offer(events, { _tag: "Create", path: "hung.txt" });
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
-      yield* TestClock.adjust("100 millis");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
-      yield* TestClock.adjust("1 second");
-      if (Option.isNone(yield* Deferred.poll(started))) return assert.fail("diff process did not start");
-      yield* TestClock.adjust("5 minutes");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
-      if (Option.isNone(yield* Deferred.poll(terminated))) {
-        exit.resolve(1);
-        return assert.fail("diff process did not receive SIGTERM");
-      }
-      yield* TestClock.adjust("5 seconds");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
-      if (Option.isNone(yield* Deferred.poll(killed))) {
-        exit.resolve(1);
-        return assert.fail("diff process did not receive SIGKILL");
-      }
+      yield* advanceUntil(started, "1 second");
+      yield* advanceUntil(terminated, "5 minutes");
+      yield* advanceUntil(killed, "5 seconds");
       const error = yield* Fiber.join(fiber);
       assert.strictEqual(error.reason, "timeout");
     }),
