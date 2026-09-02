@@ -1,0 +1,35 @@
+packages/process-diagnostics/src/process-profiler.ts
+  s_e56f2f08236ec0::t_5473a7538f49b5 179-183
+  s_e56f2f08236ec0::t_ecaeab015e3012 23
+  s_e56f2f08236ec0::t_dafe4c5766e03a 1-7,9,20-22,24-46,48,54-57,60-61,64,70,72-75,87-95,97-109,114-118,123-124,138-146,148-154,184-186
+  s_e56f2f08236ec0::t_ff8688a3a91045 63
+  s_e56f2f08236ec0::t_2c11978c78fe75 155-156,158-159,161-164,166-178
+  s_e56f2f08236ec0::t_e2e99da265afcc 8,157,160,165
+  s_e56f2f08236ec0::t_644f15fa40452d 125-137,147
+  s_e56f2f08236ec0::t_cfafcd32e8e2c7 58-59,96,110-113,119-122
+  s_e56f2f08236ec0::t_5eee8f97b44a41 18-19
+  s_e56f2f08236ec0::t_613ca02dd9e9d3 10-17,47,49-53,62,65-69,71,76-86
+packages/process-diagnostics/src/process-profiler.test.ts
+  s_e56f2f08236ec0::t_86f86ea4841ae0 46,60
+  s_e56f2f08236ec0::t_0157a9602b0513 26
+  s_e56f2f08236ec0::t_af60c56024b71e 66
+  s_e56f2f08236ec0::t_ecaeab015e3012 67-69
+  s_e56f2f08236ec0::t_92e33cd7c268b7 3,24
+  s_e56f2f08236ec0::t_441d9711ffce85 1-2,4-23,25,27-45,47-59,61-65,70-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "20c21e2d9813f844e74a3f71564cec8bd471d7bf",
+  "prompts": {},
+  "sessions": {
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
