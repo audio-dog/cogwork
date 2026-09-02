@@ -89,12 +89,14 @@ const writeFixture = Effect.fn("replay.writeFixture")(function* (options: {
   const directory = path.dirname(options.output);
   const pending = path.join(directory, `.${path.basename(options.output)}.${randomUUID()}.pending`);
   yield* withReplayFileDeadline(
-    fs.makeDirectory(directory, { recursive: true }).pipe(
-      Effect.andThen(fs.writeFileString(pending, `${encoded}\n`, { flag: "w", mode: fixtureFileMode })),
-      Effect.andThen(fs.chmod(pending, fixtureFileMode)),
-      Effect.andThen(fs.rename(pending, options.output)),
-      Effect.onError(() => fs.remove(pending, { force: true }).pipe(Effect.ignore)),
-    ),
+    fs
+      .makeDirectory(directory, { recursive: true })
+      .pipe(
+        Effect.andThen(fs.writeFileString(pending, `${encoded}\n`, { flag: "w", mode: fixtureFileMode })),
+        Effect.andThen(fs.chmod(pending, fixtureFileMode)),
+        Effect.andThen(fs.rename(pending, options.output)),
+        Effect.ensuring(fs.remove(pending, { force: true }).pipe(Effect.ignore)),
+      ),
     `Timed out while writing ${options.output}`,
     () => replayFileFailure(`Could not write ${options.output}`),
   );
