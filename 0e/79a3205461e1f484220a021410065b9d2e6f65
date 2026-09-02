@@ -1,0 +1,31 @@
+apps/desktop/src/main/ipc.test.ts
+  s_e56f2f08236ec0::t_c4103063ab4413 8,299-326
+  s_e56f2f08236ec0::t_c16e0085596fbe 327-329
+  s_4d71ea6aeefd55::t_482f00f867fa74 330-331
+apps/desktop/src/main/ipc.ts
+  s_e56f2f08236ec0::t_54010e67501fc4 142-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0e79a3205461e1f484220a021410065b9d2e6f65",
+  "prompts": {},
+  "sessions": {
+    "s_4d71ea6aeefd55": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0636d-b5fb-7333-a8b8-eb2bec8905e4",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
