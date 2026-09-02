@@ -1,7 +1,16 @@
 import { type AgUiEvent, DaemonEvent, type RunActivity } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
-import { describe, expect, it } from "vitest";
-import { applyRunPreview, foldTranscript, previewMap, type RunPreviewState } from "./run-activity";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import { describe, expect, it, vi } from "vitest";
+import {
+  applyRunPreview,
+  applyTranscriptActivities,
+  foldTranscript,
+  makeTranscriptFold,
+  makeTranscriptPump,
+  previewMap,
+  type RunPreviewState,
+} from "./run-activity";
 
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
@@ -134,6 +143,62 @@ describe("applyRunPreview", () => {
 });
 
 describe("foldTranscript", () => {
+  it("pulls each published transcript snapshot once across subscribers", () => {
+    const pump = makeTranscriptPump();
+    const pull = vi.fn();
+    const refresh = vi.fn();
+    const first = AsyncResult.success({ done: false, entries: [] });
+    const second = AsyncResult.success({ done: false, entries: [] });
+
+    pump(first, pull, refresh);
+    pump(first, pull, refresh);
+    pump(second, pull, refresh);
+
+    expect(pull).toHaveBeenCalledTimes(2);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("replays chunks once and matches a one-pass transcript", () => {
+    const activities = [
+      runActivity(0, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "hello " }),
+      runActivity(1, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "world" }),
+      runActivity(2, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
+      runActivity(3, { type: "TOOL_CALL_RESULT", toolCallId: "t1", result: "contents" }),
+    ];
+    const incremental = activities.reduce<ReturnType<typeof makeTranscriptFold>>(
+      (fold, next) => applyTranscriptActivities(fold, [next]),
+      makeTranscriptFold(),
+    );
+
+    expect(Array.from(incremental.entries)).toEqual(foldTranscript(activities));
+  });
+
+  it("ignores already-folded history when a later chunk overlaps it", () => {
+    const activities = [
+      runActivity(0, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "hello " }),
+      runActivity(1, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "world" }),
+      runActivity(2, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
+    ];
+    const first = applyTranscriptActivities(makeTranscriptFold(), activities.slice(0, 2));
+    const incremental = applyTranscriptActivities(first, activities.slice(1));
+
+    expect(Array.from(incremental.entries)).toEqual(foldTranscript(activities));
+  });
+
+  it("keeps published entries unchanged when a later chunk extends them", () => {
+    const first = applyTranscriptActivities(makeTranscriptFold(), [
+      runActivity(0, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "hello " }),
+    ]);
+
+    const second = applyTranscriptActivities(first, [
+      runActivity(1, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "world" }),
+    ]);
+
+    expect(Array.from(first.entries)).toEqual([{ kind: "text", key: "text:m1", text: "hello " }]);
+    expect(second.entries).not.toBe(first.entries);
+    expect(Array.from(second.entries)).toEqual([{ kind: "text", key: "text:m1", text: "hello world" }]);
+  });
+
   it("marks a tool call done when its result arrives", () => {
     const entries = foldTranscript([
       runActivity(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),

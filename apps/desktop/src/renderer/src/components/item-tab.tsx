@@ -38,7 +38,7 @@ import {
   selectedRunForItem,
   subTabs,
 } from "../features/item-tab";
-import { useRunActivity } from "../features/run-activity";
+import { useRunTranscript } from "../features/run-activity";
 import { statusLine } from "../features/run-transcript";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
@@ -385,9 +385,9 @@ function RunningAffordance({ run }: { run: RunSummary }) {
   const {
     actions: { setSubTab },
   } = useItemTab();
-  const result = useRunActivity(run.id);
-  const activities = result._tag === "Success" ? result.value.items : [];
-  const line = statusLine(activities, run.status);
+  const result = useRunTranscript(run.id);
+  const entries = result._tag === "Success" ? result.value.entries : [];
+  const line = statusLine(entries, run.status);
   return (
     <button
       type="button"

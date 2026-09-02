@@ -3,23 +3,44 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import * as AtomRpc from "effect/unstable/reactivity/AtomRpc";
+import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { electronDaemonBridge } from "./electron-bridge";
+import { reportDesktopProcessHealth } from "./process-health";
 import { layerProtocolIpc } from "./protocol";
 
 export class DaemonAtomRpc extends AtomRpc.Service<DaemonAtomRpc>()("DaemonAtomRpc", {
   group: DaemonRpcs,
   protocol: layerProtocolIpc(electronDaemonBridge),
+  makeEffect: Effect.gen(function* () {
+    const client = yield* RpcClient.make(DaemonRpcs, { flatten: true });
+    yield* reportDesktopProcessHealth(
+      () => window.cogwork.getProcessHealth(),
+      (samples) => client("ReportProcessHealth", { samples }),
+    ).pipe(Effect.forkScoped);
+    return client;
+  }),
 }) {}
+
+export const pullChunkSize = 256;
+
+export const boundPullChunks = <A, E, R>(stream: Stream.Stream<A, E, R>) =>
+  stream.pipe(
+    Stream.chunks,
+    Stream.flatMap((chunk) => Stream.fromIterable(chunk).pipe(Stream.rechunk(pullChunkSize))),
+  );
 
 export const daemonEventAtom = DaemonAtomRpc.runtime.pull(
   Stream.unwrap(DaemonAtomRpc.use((client) => Effect.succeed(client("WatchEvents", undefined)))),
   { disableAccumulation: true },
 );
 
-// `query` keys its atom by object identity, so calling it inline per render would rebuild the stream
-// each time; the family hands out one stable pull atom per run.
 export const runActivityAtom = Atom.family((runId: RunId) =>
-  DaemonAtomRpc.query("WatchActivity", { id: runId }),
+  DaemonAtomRpc.runtime.pull(
+    Stream.unwrap(DaemonAtomRpc.use((client) => Effect.succeed(client("WatchActivity", { id: runId })))).pipe(
+      boundPullChunks,
+    ),
+    { disableAccumulation: true },
+  ),
 );
 
 export const cancelRunAtom = DaemonAtomRpc.mutation("CancelRun");

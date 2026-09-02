@@ -97,6 +97,93 @@ const transientWrite = (
 };
 
 describe("GitHub client", () => {
+  it.effect("lists every open issue across GitHub pages", () => {
+    const issue = (number: number) => ({ number, title: `issue ${number}`, labels: [] });
+    const firstPage = Array.from({ length: 100 }, (_, index) => issue(index + 1));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [issue(101)]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const issues = yield* client.listIssues(repo);
+      assert.strictEqual(issues.length, 101);
+      assert.strictEqual(issues.at(-1)?.number, 101);
+      assert.deepStrictEqual(
+        fetch.mock.calls.map(([input]) =>
+          new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
+        ),
+        ["1", "2"],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("creates an issue with its body and labels", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse({ number: 415, labels: [{ name: "needs-triage" }, { name: "origin:selfperf" }] }, 201),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      yield* client.createIssue(repo, {
+        title: "Daemon event loop delay is high",
+        body: "Signal: event-loop-delay",
+        labels: ["needs-triage", "origin:selfperf"],
+      });
+
+      assert.strictEqual(fetch.mock.calls.length, 1);
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.method, "POST");
+      assert.strictEqual(request.url, "https://api.github.com/repos/colonylabs/cogwork/issues");
+      assert.strictEqual(request.headers.get("authorization"), "Bearer test-token");
+      assert.deepStrictEqual(yield* Effect.promise(() => request.json()), {
+        title: "Daemon event loop delay is high",
+        body: "Signal: event-loop-delay",
+        labels: ["needs-triage", "origin:selfperf"],
+      });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("applies labels that GitHub silently drops during issue creation", () => {
+    const response = vi
+      .fn<() => Response>()
+      .mockReturnValueOnce(jsonResponse({ number: 415, labels: [] }, 201))
+      .mockReturnValue(jsonResponse([]));
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response()));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      yield* client.createIssue(repo, {
+        title: "Daemon event loop delay is high",
+        body: "Signal: event-loop-delay",
+        labels: ["needs-triage", "origin:selfperf"],
+      });
+
+      assert.strictEqual(fetch.mock.calls.length, 3);
+      const requests = fetch.mock.calls.map(([input, init]) => new Request(input, init));
+      assert.deepStrictEqual(
+        requests.map((request) => request.url),
+        [
+          "https://api.github.com/repos/colonylabs/cogwork/issues",
+          "https://api.github.com/repos/colonylabs/cogwork/issues/415/labels",
+          "https://api.github.com/repos/colonylabs/cogwork/issues/415/labels",
+        ],
+      );
+      assert.deepStrictEqual(yield* Effect.promise(() => requests[1]?.json()), {
+        labels: ["needs-triage"],
+      });
+      assert.deepStrictEqual(yield* Effect.promise(() => requests[2]?.json()), {
+        labels: ["origin:selfperf"],
+      });
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("retries a comment write after a hanging attempt reaches its deadline", () => {
     const onAbort = vi.fn();
     const fetch = vi.fn<typeof globalThis.fetch>((_input, init) => {
@@ -143,9 +230,44 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("does not fail an accepted issue creation whose response body stalls", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(hangingResponse("{", 201)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(
+        client.createIssue(repo, {
+          title: "Daemon event loop delay is high",
+          body: "Signal: event-loop-delay",
+          labels: ["needs-triage", "origin:selfperf"],
+        }),
+      );
+      yield* TestClock.adjust("1 minute");
+      assert.strictEqual(fetch.mock.calls.length, 1);
+      yield* Fiber.join(operation);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("retries a transient label removal", () =>
     transientWrite(503, (client) => client.removeLabel(repo, 287, "cogwork:claimed")),
   );
+
+  it.effect("does not replay a transient issue creation failure", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, 503)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(
+        client.createIssue(repo, {
+          title: "Daemon event loop delay is high",
+          body: "Signal: event-loop-delay",
+          labels: ["needs-triage", "origin:selfperf"],
+        }),
+      );
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(fetch.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
 
   it.effect("retries a write rejected with a transient HTTP status", () =>
     transientWrite(408, (client) => client.createComment(repo, 287, "claim")),

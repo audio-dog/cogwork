@@ -11,6 +11,7 @@ import type { FromServerEncoded } from "effect/unstable/rpc/RpcMessage";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import { SocketCloseError, SocketOpenError } from "effect/unstable/socket/Socket";
 import type { DaemonRpcBridge } from "../../../shared/ipc";
+import { recordProtocolInboxChange, resetProtocolInboxDepth } from "./process-health";
 
 type Incoming =
   | { readonly _tag: "data"; readonly frame: Uint8Array }
@@ -34,6 +35,7 @@ const isReconnectable = (error: RpcClientError) =>
   error.reason._tag === "SocketOpenError" || error.reason._tag === "SocketCloseError";
 
 const connectionGateTimeout = "30 seconds";
+export const protocolInboxCapacity = 1_024;
 const reconnectSchedule = () =>
   Schedule.exponential("500 millis", 2).pipe(
     Schedule.jittered,
@@ -46,22 +48,39 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
       const serialization = yield* RpcSerialization.RpcSerialization;
       const requestClientMap = new Map<string | number, number>();
       const initialGate = yield* Deferred.make<void, RpcClientError>();
+      const initialInbox = yield* Queue.bounded<Incoming>(protocolInboxCapacity);
+      const initialOverflow = yield* Deferred.make<never, RpcClientError>();
       const conn = {
         parser: serialization.makeUnsafe(),
         gate: initialGate,
+        inbox: initialInbox,
+        overflow: initialOverflow,
+        sessionId: 0,
       };
 
-      const inbox = yield* Queue.unbounded<Incoming>();
-      const offData = bridge.onData((frame) => {
-        Queue.offerUnsafe(inbox, { _tag: "data", frame });
+      const offerIncoming = (message: Incoming) => {
+        if (!Queue.offerUnsafe(conn.inbox, message)) {
+          Deferred.doneUnsafe(
+            conn.overflow,
+            Effect.fail(closeError(`renderer protocol inbox exceeded ${protocolInboxCapacity} frames`)),
+          );
+          return;
+        }
+        recordProtocolInboxChange(1);
+      };
+      const offData = bridge.onData((message) => {
+        if (message.sessionId !== conn.sessionId) return;
+        offerIncoming({ _tag: "data", frame: message.frame });
       });
-      const offClosed = bridge.onClosed((reason) => {
-        Queue.offerUnsafe(inbox, { _tag: "closed", reason });
+      const offClosed = bridge.onClosed((message) => {
+        if (message.sessionId !== conn.sessionId) return;
+        offerIncoming({ _tag: "closed", reason: message.reason });
       });
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
           offData();
           offClosed();
+          resetProtocolInboxDepth();
         }),
       );
 
@@ -89,19 +108,41 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
           Effect.catchTag("RpcClientError", (error) => broadcast({ _tag: "ClientProtocolError", error })),
         );
 
-      const consume: Effect.Effect<never, RpcClientError> = Queue.take(inbox).pipe(
-        Effect.flatMap((message) =>
-          message._tag === "closed" ? Effect.fail(closeError(message.reason)) : processFrame(message.frame),
-        ),
-        Effect.forever,
-      );
+      const consume = (inbox: Queue.Queue<Incoming>) =>
+        Queue.take(inbox).pipe(
+          Effect.tap(() => Effect.sync(() => recordProtocolInboxChange(-1))),
+          Effect.flatMap((message) =>
+            message._tag === "closed" ? Effect.fail(closeError(message.reason)) : processFrame(message.frame),
+          ),
+          Effect.forever,
+        );
 
-      yield* Effect.sync(() => {
-        conn.parser = serialization.makeUnsafe();
-      }).pipe(
-        Effect.andThen(Effect.tryPromise({ try: () => bridge.connect(), catch: openError })),
-        Effect.onExit((exit) => Deferred.done(conn.gate, exit)),
-        Effect.andThen(consume),
+      yield* Queue.bounded<Incoming>(protocolInboxCapacity).pipe(
+        Effect.flatMap((inbox) =>
+          Deferred.make<never, RpcClientError>().pipe(
+            Effect.flatMap((overflow) => {
+              const replacedSessionId = conn.sessionId;
+              const sessionId = replacedSessionId + 1;
+              return Effect.sync(() => {
+                conn.parser = serialization.makeUnsafe();
+                conn.inbox = inbox;
+                conn.overflow = overflow;
+                conn.sessionId = sessionId;
+                resetProtocolInboxDepth();
+              }).pipe(
+                Effect.andThen(
+                  Effect.tryPromise({
+                    try: () => bridge.disconnect(),
+                    catch: openError,
+                  }),
+                ),
+                Effect.andThen(Effect.tryPromise({ try: () => bridge.connect(sessionId), catch: openError })),
+                Effect.onExit((exit) => Deferred.done(conn.gate, exit)),
+                Effect.andThen(Effect.raceFirst(consume(inbox), Deferred.await(overflow))),
+              );
+            }),
+          ),
+        ),
         Effect.tapError((error) =>
           broadcast({ _tag: "ClientProtocolError", error }).pipe(
             Effect.andThen(Deferred.make<void, RpcClientError>()),

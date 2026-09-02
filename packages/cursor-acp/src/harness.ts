@@ -388,6 +388,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     authentication: { mode: "host", reference: "Cursor host login" },
     catalogSources: { fallback: generatedCatalog },
     readiness: () => cursorReadiness(agentBin),
+    sharedGit: "none",
     makeAdapter: ({ model }) => adapter(model),
     projectModel: (request) => selectedCursorModel(request, defaultModel),
     projectOptions: (request) => cursorModelOptions(request.identity.resumeHandle, request.selection.effort),

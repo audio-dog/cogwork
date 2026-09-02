@@ -86,6 +86,7 @@ const unavailableStoreStatus: DaemonStatus = {
   health: "store-unavailable",
   startedAtMillis: 0,
   uptimeMillis: 1000,
+  eventBusDroppedEvents: 0,
   scheduler: {
     scheduling: "paused",
     globalInFlight: 0,

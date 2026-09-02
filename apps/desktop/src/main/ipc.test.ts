@@ -95,7 +95,7 @@ it("closes a renderer's socket when the renderer is destroyed", async () => {
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     if (!connect) throw new Error("RPC connect handler was not registered");
 
-    await connect({ sender });
+    await connect({ sender }, 1);
     await accepted.promise;
     sender.emit("destroyed");
     await closed.promise;
@@ -124,7 +124,7 @@ it("resolves connect with a value Electron can clone across IPC", async () => {
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     if (!connect) throw new Error("RPC connect handler was not registered");
 
-    const resolved = await connect({ sender });
+    const resolved = await connect({ sender }, 1);
 
     expect(() => structuredClone(resolved)).not.toThrow();
   } finally {
@@ -151,7 +151,7 @@ it("replaces a renderer's socket when it connects again", async () => {
     const send = ipc.listeners.get(IpcChannel.rpcSend);
     if (!connect || !send) throw new Error("RPC handlers were not registered");
 
-    await connect({ sender });
+    await connect({ sender }, 1);
     const firstReceived = once(frames, "frame");
     send({ sender }, "first");
     const [firstEvent] = await firstReceived;
@@ -159,7 +159,7 @@ it("replaces a renderer's socket when it connects again", async () => {
       throw new Error("First frame did not identify its socket");
     }
     const firstClosed = once(firstEvent.socket, "close");
-    await connect({ sender });
+    await connect({ sender }, 2);
     await firstClosed;
     const replacementReceived = once(frames, "frame");
     send({ sender }, "replacement");
@@ -178,6 +178,35 @@ it("replaces a renderer's socket when it connects again", async () => {
   }
 });
 
+it("closes a renderer's socket before its reconnect", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cf-ipc-"));
+  const socketPath = join(dir, "daemon.sock");
+  const accepted = Promise.withResolvers<net.Socket>();
+  const server = net.createServer((socket) => accepted.resolve(socket));
+  await listen(server, socketPath);
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+
+  try {
+    registerIpc(deps(socketPath, runtime));
+    const connect = ipc.handlers.get(IpcChannel.rpcConnect);
+    const disconnect = ipc.handlers.get(IpcChannel.rpcDisconnect);
+    if (!connect || !disconnect) throw new Error("RPC session handlers were not registered");
+
+    await connect({ sender }, 1);
+    const socket = await accepted.promise;
+    const closed = once(socket, "close");
+    await disconnect({ sender });
+    await closed;
+
+    expect(socket.destroyed).toBe(true);
+  } finally {
+    await runtime.dispose();
+    await closeServer(server);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 it("interrupts a pending connection when the renderer is destroyed", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cf-ipc-"));
   const runtime = makeRuntime();
@@ -188,7 +217,7 @@ it("interrupts a pending connection when the renderer is destroyed", async () =>
     const connect = ipc.handlers.get(IpcChannel.rpcConnect);
     if (!connect) throw new Error("RPC connect handler was not registered");
 
-    const pending = connect({ sender });
+    const pending = connect({ sender }, 1);
     await Promise.resolve();
     expect(sender.listenerCount("destroyed")).toBe(1);
     sender.emit("destroyed");
@@ -218,7 +247,7 @@ it("drops renderer frames until its daemon connection is ready", async () => {
     const send = ipc.listeners.get(IpcChannel.rpcSend);
     if (!connect || !send) throw new Error("RPC handlers were not registered");
 
-    const pending = connect({ sender });
+    const pending = connect({ sender }, 1);
     send({ sender }, "early");
     await listen(server, socketPath);
     await pending;

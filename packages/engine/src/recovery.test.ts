@@ -224,6 +224,7 @@ const snapshotOf = (
       blocked: [],
       needsHuman: [],
       observed,
+      observedCount: observed.length,
       availability: [],
     },
   ],
@@ -287,7 +288,7 @@ interface RecoveryProbeState {
   readonly attempts: Ref.Ref<ReadonlyArray<AttemptCall>>;
   readonly handoffs: Ref.Ref<ReadonlyArray<HandOffCall>>;
   readonly inFlight: Ref.Ref<ReadonlySet<WorkItemIdType>>;
-  readonly ledger: RunLedger.RunLedgerService;
+  readonly ledger: RunLedger.CoreRunLedgerService;
   readonly logs: Queue.Queue<RecoveryLog>;
   readonly notes: Ref.Ref<ReadonlyArray<string>>;
   readonly paused: Ref.Ref<boolean>;
@@ -331,6 +332,7 @@ const issueTrackerStub = (probe: RecoveryProbeState) =>
   ({
     rateLimitScope: () => null,
     observe: () => Effect.succeed([]),
+    createIssue: () => Effect.void,
     claim: () => Effect.void,
     release: (_workspace, item) => Ref.update(probe.released, (items) => [...items, item]),
     note: (_workspace, _item, detail) => Ref.update(probe.notes, (notes) => [...notes, detail]),

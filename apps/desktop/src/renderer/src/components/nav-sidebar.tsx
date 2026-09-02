@@ -35,6 +35,7 @@ import type { ComponentType } from "react";
 import { useBoard } from "../features/activity-session";
 import { registeredWorkspaces } from "../features/feed";
 import { useChromeStore } from "../store/chrome";
+import { HistoryNav } from "./history-nav";
 import { useTheme } from "./theme-provider";
 
 interface View {
@@ -141,10 +142,11 @@ export function AppSidebar() {
     <TooltipProvider>
       <Sidebar collapsible="offcanvas">
         <SidebarHeader className="@container/sidebar-header h-11 shrink-0 flex-row items-center px-3 py-0 [-webkit-app-region:drag]">
+          <HistoryNav />
           <Link
             aria-label="cogwork home"
             to="/"
-            className="ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md tracking-tight outline-hidden ring-ring @min-[15.75rem]/sidebar-header:flex focus-visible:ring-2 [-webkit-app-region:no-drag]"
+            className="hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md tracking-tight outline-hidden ring-ring @min-[15.75rem]/sidebar-header:flex focus-visible:ring-2 [-webkit-app-region:no-drag]"
           >
             <span className="truncate text-sm font-semibold">cog</span>
             <span className="truncate text-sm font-medium text-muted-foreground">work</span>
