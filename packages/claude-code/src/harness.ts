@@ -1,5 +1,5 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
+import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
 import {
   CLAUDE_CODE_MODELS,
   type ClaudeCodeModel,
@@ -8,13 +8,15 @@ import {
   type ClaudeCodeTextProviderOptions,
   claudeCodeText,
 } from "@tanstack/ai-claude-code";
-import type { SandboxHandle } from "@tanstack/ai-sandbox";
+import { claudeCodeByok } from "@tanstack/ai-claude-code/byok";
+import { createSecrets, type SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
 export interface ClaudeCodeRunnerOptions {
   readonly name: HarnessName;
+  readonly authentication: { readonly mode: "host" } | { readonly mode: "byok" };
   readonly claudeExecutable?: string;
 }
 
@@ -30,6 +32,22 @@ const supportedClaudeMajor = 2;
 const versionRequirement = `>=${supportedClaudeMajor}.0.0 <${supportedClaudeMajor + 1}.0.0`;
 const commandDeadline = "5 seconds";
 const anthropicEnvironment = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
+const authenticationBindings = {
+  host: { mode: "host", reference: "Claude Code host login on this Runtime Host" },
+  byok: { mode: "byok", reference: "Anthropic provider key in the Credential store" },
+} as const;
+type ClaudeAuthenticationMode = keyof typeof authenticationBindings;
+const requiredEnvironmentName = (names: ReadonlyArray<string> | undefined) => {
+  const name = names?.[0];
+  if (name) return name;
+  throw new Error("Claude Code BYOK declares no API-key environment name");
+};
+const anthropicApiKeyEnvironment = requiredEnvironmentName(claudeCodeByok.env);
+const anthropicProviderAccount = {
+  provider: "anthropic",
+  envVars: [anthropicApiKeyEnvironment],
+} as const;
+const nativeAuthenticationMode = "host" as const;
 const missingExecutableCodes = new Set(["ENOENT", "EACCES"]);
 const missingExecutableExitCodes = new Set([126, 127]);
 const missingLoginPattern = /not (?:logged|signed) in|claude (?:auth )?login/i;
@@ -76,8 +94,8 @@ const destroyProbeSandbox = (sandbox: SandboxHandle) =>
     Effect.ignore,
   );
 
-const withProbeSandbox = <Value>(
-  use: (sandbox: SandboxHandle) => Effect.Effect<Value, Harness.HarnessError>,
+const withProbeSandbox = <Value, Requirements>(
+  use: (sandbox: SandboxHandle) => Effect.Effect<Value, Harness.HarnessError, Requirements>,
 ) => Effect.scoped(Effect.acquireUseRelease(createProbeSandbox(), use, destroyProbeSandbox));
 
 const claudeCommand = Effect.fn("ClaudeCode.command")(
@@ -131,15 +149,17 @@ const versionParts = (version: string) => {
 
 const versionCompatible = (version: string) => versionParts(version)?.[0] === supportedClaudeMajor;
 
-const setupGuidance = (error: Harness.HarnessError) => {
+const setupGuidance = (mode: ClaudeAuthenticationMode, error: Harness.HarnessError) => {
   if (error.reason === "missing-harness") {
+    const nextStep =
+      mode === "host" ? "Install Claude Code, then run `claude auth login`." : "Install Claude Code.";
     return harnessError(
       error.reason,
       error.retryable,
-      `Claude Code could not start. Install Claude Code, then run \`claude auth login\`. (${error.message})`,
+      `Claude Code could not start. ${nextStep} (${error.message})`,
     );
   }
-  if (error.reason === "credential" || missingLoginPattern.test(error.message)) {
+  if (mode === "host" && (error.reason === "credential" || missingLoginPattern.test(error.message))) {
     return harnessError(
       "credential",
       false,
@@ -149,7 +169,7 @@ const setupGuidance = (error: Harness.HarnessError) => {
   return error;
 };
 
-const readinessFromFailure = (error: Harness.HarnessError) => {
+const readinessFromFailure = (mode: ClaudeAuthenticationMode, error: Harness.HarnessError) => {
   const installationStatus = error.reason === "missing-harness" ? "missing" : "unknown";
   const authenticationStatus = error.reason === "credential" ? "unavailable" : "unknown";
   return {
@@ -157,7 +177,7 @@ const readinessFromFailure = (error: Harness.HarnessError) => {
     installation: { status: installationStatus, version: null },
     compatibility: { status: "unknown", requirement: versionRequirement },
     authentication: {
-      mode: "host",
+      mode,
       status: authenticationStatus,
       diagnostic: error.message,
     },
@@ -165,7 +185,14 @@ const readinessFromFailure = (error: Harness.HarnessError) => {
   } satisfies Harness.HarnessReadiness;
 };
 
-const readinessFromVersion = (version: string, authenticationError: Harness.HarnessError | null) => {
+const availableAuthenticationDiagnostic = (mode: ClaudeAuthenticationMode) =>
+  mode === "host" ? "Claude Code host login is available" : "Anthropic provider key is available";
+
+const readinessFromVersion = (
+  mode: ClaudeAuthenticationMode,
+  version: string,
+  authenticationError: Harness.HarnessError | null,
+) => {
   const compatible = versionCompatible(version);
   const authenticated = authenticationError === null;
   const incompatibilityDiagnostic = `Claude Code ${version || "unknown"} is unsupported. Update Claude Code to ${versionRequirement}.`;
@@ -187,9 +214,9 @@ const readinessFromVersion = (version: string, authenticationError: Harness.Harn
       requirement: versionRequirement,
     },
     authentication: {
-      mode: "host",
+      mode,
       status: authenticated ? "available" : "unavailable",
-      diagnostic: authenticationError?.message ?? "Claude Code host login is available",
+      diagnostic: authenticationError?.message ?? availableAuthenticationDiagnostic(mode),
     },
     diagnostics,
   } satisfies Harness.HarnessReadiness;
@@ -198,29 +225,50 @@ const readinessFromVersion = (version: string, authenticationError: Harness.Harn
 const readVersion = (sandbox: SandboxHandle, executable: string) =>
   successfulCommandOutput(sandbox, executable, "--version", installationExitError);
 
-const probeAuthentication = (sandbox: SandboxHandle, executable: string) =>
+const probeHostAuthentication = (sandbox: SandboxHandle, executable: string) =>
   successfulCommand(sandbox, executable, "auth status --json", authenticationExitError).pipe(
     Effect.map(() => null),
-    Effect.catch((error) => Effect.succeed(setupGuidance(error))),
+    Effect.catch((error) => Effect.succeed(setupGuidance("host", error))),
   );
 
-const probeReadiness = Effect.fn("ClaudeCode.readiness")((executable: string) =>
-  withProbeSandbox((sandbox) =>
-    Effect.gen(function* () {
-      const version = yield* readVersion(sandbox, executable);
-      const authenticationError = yield* probeAuthentication(sandbox, executable);
-      return { version, authenticationError };
-    }),
-  ).pipe(Effect.mapError(setupGuidance)),
+const byokCredentialError = (error: CredentialStore.CredentialError) =>
+  harnessError(
+    "credential",
+    false,
+    `Claude Code API-key authentication is unavailable. Store an Anthropic key with \`cogwork login key --provider anthropic\`, then retry. (${error.message})`,
+  );
+
+const probeByokAuthentication = Effect.fn("ClaudeCode.probeByokAuthentication")(function* () {
+  const credentials = yield* CredentialStore.CredentialStore;
+  return yield* credentials.providerKey(anthropicProviderAccount).pipe(
+    Effect.map(() => null),
+    Effect.catch((error) => Effect.succeed(byokCredentialError(error))),
+  );
+});
+
+const probeAuthentication = (mode: ClaudeAuthenticationMode, sandbox: SandboxHandle, executable: string) =>
+  mode === "host" ? probeHostAuthentication(sandbox, executable) : probeByokAuthentication();
+
+const probeReadiness = Effect.fn("ClaudeCode.readiness")(
+  (executable: string, mode: ClaudeAuthenticationMode) =>
+    withProbeSandbox((sandbox) =>
+      Effect.gen(function* () {
+        const version = yield* readVersion(sandbox, executable);
+        const authenticationError = yield* probeAuthentication(mode, sandbox, executable);
+        return { version, authenticationError };
+      }),
+    ).pipe(Effect.mapError((error) => setupGuidance(mode, error))),
 );
 
-const claudeReadiness = Effect.fn("ClaudeCode.readinessResult")((executable: string) =>
-  probeReadiness(executable).pipe(
-    Effect.match({
-      onFailure: readinessFromFailure,
-      onSuccess: ({ version, authenticationError }) => readinessFromVersion(version, authenticationError),
-    }),
-  ),
+const claudeReadiness = Effect.fn("ClaudeCode.readinessResult")(
+  (executable: string, mode: ClaudeAuthenticationMode) =>
+    probeReadiness(executable, mode).pipe(
+      Effect.match({
+        onFailure: (error) => readinessFromFailure(mode, error),
+        onSuccess: ({ version, authenticationError }) =>
+          readinessFromVersion(mode, version, authenticationError),
+      }),
+    ),
 );
 
 const modelLabel = (model: string) =>
@@ -269,10 +317,12 @@ export const claudeCodeCatalogSources = (
   ),
 });
 
-const turnDiagnostics = (cause: unknown) => {
+const turnDiagnostics = (mode: ClaudeAuthenticationMode, cause: unknown) => {
   const message = HarnessBridge.messageFromUnknown(cause);
-  if (isMissingExecutableCause(cause)) return setupGuidance(missingHarnessError(message));
-  if (missingLoginPattern.test(message)) return setupGuidance(harnessError("credential", false, message));
+  if (isMissingExecutableCause(cause)) return setupGuidance(mode, missingHarnessError(message));
+  if (mode === "host" && missingLoginPattern.test(message)) {
+    return setupGuidance(mode, harnessError("credential", false, message));
+  }
   return harnessError("turn", true, message);
 };
 
@@ -296,15 +346,8 @@ const inlineMcpConfig = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
   );
 };
 
-const mcpEnvironmentEntry = (server: Harness.ResolvedMcpSkill) => {
-  if (server.bearer === null) return [];
-  const environmentName = ExternalHarnessRuntime.mcpBearerEnvironmentName(server.name);
-  return [[environmentName, Redacted.value(server.bearer)] as const];
-};
-
 const mcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>) => ({
   config: inlineMcpConfig(servers),
-  env: Object.fromEntries(servers.flatMap(mcpEnvironmentEntry)),
 });
 
 const adapterConfig = (
@@ -313,7 +356,7 @@ const adapterConfig = (
 ) => {
   const mcp = mcpProjection(request.mcp);
   return {
-    authMode: "host",
+    authMode: nativeAuthenticationMode,
     settingSources: ["user", "project"],
     emitDiff: true,
     // "." instead of the adapter's virtual `/workspace` default: the Sandbox
@@ -322,7 +365,6 @@ const adapterConfig = (
     // checkout when cwd already resolves there.
     cwd: ".",
     claudeExecutable: mcp.config.length > 0 ? `${executable} --mcp-config ${mcp.config}` : executable,
-    env: mcp.env,
     // Upstream maps a write-deny policy to Write/Edit/MultiEdit but misses
     // NotebookEdit; close that write path for read-only Operations.
     ...(request.policy === "read-only" ? { disallowedTools: ["NotebookEdit"] } : {}),
@@ -332,7 +374,7 @@ const adapterConfig = (
 
 const providerOptions = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
   ({
-    authMode: "host",
+    authMode: nativeAuthenticationMode,
     ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
   }) satisfies ClaudeCodeTextProviderOptions;
 
@@ -346,7 +388,7 @@ const descriptor = (
     capabilities: {
       execution: Harness.fullHarnessExecution,
       profile: {
-        authenticationModes: ["host"],
+        authenticationModes: ["host", "byok"],
         session: { affinity: "sandbox-lineage", fork: true, humanAttach: false },
         structuredOutput: "native",
         policyFidelity: "profile-only",
@@ -369,28 +411,49 @@ const descriptor = (
       ],
       planMiddleware: ["sandbox"],
     },
-    authentication: { mode: "host", reference: "Claude Code host login on this Runtime Host" },
+    authentication: authenticationBindings[options.authentication.mode],
     catalogSources: claudeCodeCatalogSources(executable),
-    readiness: () => claudeReadiness(executable),
+    readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
     makeAdapter: ({ model, request }) => claudeCodeText(model, adapterConfig(executable, request)),
     projectModel: (request) => request.selection.model ?? "sonnet",
     projectOptions: providerOptions,
-    projectAuthentication: () => "host",
+    projectAuthentication: () => nativeAuthenticationMode,
     transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
-    diagnostics: turnDiagnostics,
+    diagnostics: (cause) => turnDiagnostics(options.authentication.mode, cause),
   };
 };
 
-export const claudeCodeRunner = (options: ClaudeCodeRunnerOptions) => {
-  const sandboxProvider = ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({
-    scrubEnv: anthropicEnvironment,
+const resolvedAuthentication = Effect.fn("ClaudeCode.resolveAuthentication")(function* (
+  mode: ClaudeAuthenticationMode,
+) {
+  if (mode === "host") {
+    return {
+      mode,
+      secrets: createSecrets({}),
+    } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication;
+  }
+  const credentials = yield* CredentialStore.CredentialStore;
+  const credential = yield* credentials
+    .providerKey(anthropicProviderAccount)
+    .pipe(Effect.mapError(byokCredentialError));
+  return {
+    mode,
+    secrets: createSecrets({ [anthropicApiKeyEnvironment]: Redacted.value(credential.key) }),
+  } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication;
+});
+
+const sandboxProviderFor = (mode: ClaudeAuthenticationMode) =>
+  ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({
+    scrubEnv: mode === "host" ? anthropicEnvironment : ["ANTHROPIC_AUTH_TOKEN"],
   });
+
+export const claudeCodeRunner = (options: ClaudeCodeRunnerOptions) => {
   return ExternalHarnessRuntime.externalHarnessRunner(descriptor(options), {
-    authentication: () => Effect.succeed({ mode: "host", secrets: {} }),
+    authentication: () => resolvedAuthentication(options.authentication.mode),
     sandboxProvider: (request) =>
       Harness.validateCheckoutDirectory(options.name, request.checkout.path).pipe(
-        Effect.andThen(sandboxProvider(request)),
+        Effect.andThen(sandboxProviderFor(request.authentication.mode)(request)),
       ),
     sandboxPolicy: (request) => Effect.succeed(Tools.policyForProfile(request.policy)),
   });

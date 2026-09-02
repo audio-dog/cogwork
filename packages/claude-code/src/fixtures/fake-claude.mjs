@@ -52,6 +52,8 @@ const readMcpConfig = () => {
 };
 const mcpConfig = await readMcpConfig();
 const mcpEnvironmentName = mcpConfig?.match(/\$\{([^}]+)\}/)?.[1] ?? null;
+const apiKey = process.env.ANTHROPIC_API_KEY ?? null;
+const mcpBearer = environmentValue(mcpEnvironmentName);
 if (process.argv.includes("--commit-mcp-config") && mcpConfigArgument && !mcpConfigArgument.startsWith("{")) {
   await run("git", ["add", "-f", mcpConfigArgument], { cwd: process.cwd() });
   await run("git", ["commit", "-m", "commit projected MCP config"], { cwd: process.cwd() });
@@ -73,8 +75,11 @@ const capture = {
   systemPrompt: firstValueAfter("--append-system-prompt", "--system-prompt"),
   mcpConfigArgument,
   mcpConfig,
-  mcpBearer: environmentValue(mcpEnvironmentName),
-  apiKey: process.env.ANTHROPIC_API_KEY ?? null,
+  mcpBearer,
+  mcpBearerPresent: mcpBearer !== null,
+  apiKey,
+  apiKeyPresent: apiKey !== null,
+  apiKeyVersion: apiKey?.match(/-(one|two)$/)?.[1] ?? null,
   authToken: process.env.ANTHROPIC_AUTH_TOKEN ?? null,
 };
 const sessionId = capture.resume ?? "fake-claude-session-1";
@@ -101,6 +106,7 @@ if (process.argv.includes("--hang")) {
 const runErrorMessage = [
   ["--run-error", "Claude turn failed"],
   ["--authentication-run-error", "MCP server authentication failed"],
+  ["--api-key-run-error", `Claude API key rejected: ${apiKey}`],
 ].find(([flag]) => process.argv.includes(flag))?.[1];
 
 if (runErrorMessage) {

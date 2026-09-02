@@ -1,6 +1,6 @@
 # Claude Code (harness adapter)
 
-The Claude-specific [harness runner](../engine/CONTEXT.md). It implements the engine harness contract through the installed, already-authenticated Claude Code CLI with TanStack AI's Claude Code adapter. The engine knows nothing about Claude Code; this package knows nothing about scheduling.
+The Claude-specific [harness runner](../engine/CONTEXT.md). It implements the engine harness contract through the installed Claude Code CLI with TanStack AI's Claude Code adapter. The engine knows nothing about Claude Code; this package knows nothing about scheduling.
 
 ## Language
 
@@ -10,7 +10,11 @@ _Avoid_: Anthropic provider runner, Claude API runner
 
 **Host login**:
 Authentication owned by the Claude Code installation on the Runtime Host. Cogwork never injects an API key or auth token. The local Sandbox provider removes inherited `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` values before every child process starts.
-_Avoid_: Credential-store authentication, API-key mode
+_Avoid_: Anthropic BYOK, inferred authentication
+
+**Anthropic BYOK**:
+Authentication owned by the principal through the Credential store. The runner resolves a fresh Anthropic provider key for each Run and projects it as an `ANTHROPIC_API_KEY` `SecretRef` into only the live Sandbox. The Claude adapter stays in host mode so it cannot copy ambient daemon credentials; the Sandbox receives only the explicit Run secret and removes inherited `ANTHROPIC_AUTH_TOKEN` values. A missing key fails before launch with the operator command that stores one. It never falls back to Host login.
+_Avoid_: Claude Code API-key mode, ambient environment authentication, Host login fallback
 
 **Sandbox lineage**:
 The ownership boundary for an opaque Claude session handle. Resume is allowed only in the Sandbox lineage that created the session. The runner declares fork support for later orchestration work but does not fork sessions in this package.
@@ -25,7 +29,7 @@ Optional instructions, skills, plugins, hooks, and settings that Claude loads fr
 _Avoid_: Harness Workspace, required capability
 
 **Setup handoff**:
-Readiness checks installation, supported CLI version, and host login independently. A missing or logged-out Claude Code installation makes only this Harness unavailable and gives the operator a `claude auth login` path. Other registered Harnesses remain usable.
+Readiness checks installation, supported CLI version, and the runner's explicit authentication binding independently. Host login checks `claude auth status` and gives the operator a `claude auth login` path. Anthropic BYOK checks the Credential store and gives the operator a `cogwork login key --provider anthropic` path. A failed binding never tries the other mode. An unavailable Claude Code runner does not block other registered Harnesses.
 _Avoid_: Daemon startup check, provider fallback
 
 **Stage-result interface**:

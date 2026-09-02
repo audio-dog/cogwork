@@ -16,13 +16,16 @@ import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { claudeCodeCatalogSources, claudeCodeRunner } from "./harness";
+import { type ClaudeCodeRunnerOptions, claudeCodeCatalogSources, claudeCodeRunner } from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("claude");
 const companionName = Schema.decodeSync(HarnessName)("companion");
+const hostAuthentication = { mode: "host" } as const;
+const byokAuthentication = { mode: "byok" } as const;
 
 const companionRunner = {
   name: companionName,
@@ -79,24 +82,60 @@ const sessionStore: SessionStore.SessionStoreService = {
   mint: () => Effect.die("unexpected Session mint"),
 };
 
-const harnessLayer = Layer.mergeAll(
+const credentialStore = (
+  providerKey: CredentialStore.CredentialStoreService["providerKey"],
+): CredentialStore.CredentialStoreService => ({
+  bearerToken: () => Effect.die("unexpected bearer lookup"),
+  resolveSource: () => Effect.die("unexpected credential source resolution"),
+  persist: () => Effect.die("unexpected credential persistence"),
+  invalidate: () => Effect.die("unexpected credential invalidation"),
+  providerKey,
+  persistProviderKey: () => Effect.die("unexpected provider key persistence"),
+  configureConnection: () => Effect.die("unexpected Connection configuration"),
+  removeConnection: () => Effect.die("unexpected Connection removal"),
+});
+
+const runtimeLayer = Layer.mergeAll(
   Layer.succeed(SessionStore.SessionStore, sessionStore),
   Layer.succeed(ContextAssembler.ContextAssembler, {
     assemble: () => Effect.die("unexpected context assembly"),
     cleanup: () => Effect.die("unexpected context cleanup"),
   }),
-  Layer.succeed(CredentialStore.CredentialStore, {
-    bearerToken: () => Effect.die("unexpected bearer lookup"),
-    resolveSource: () => Effect.die("unexpected credential source resolution"),
-    persist: () => Effect.die("unexpected credential persistence"),
-    invalidate: () => Effect.die("unexpected credential invalidation"),
-    providerKey: () => Effect.die("unexpected provider key lookup"),
-    persistProviderKey: () => Effect.die("unexpected provider key persistence"),
-    configureConnection: () => Effect.die("unexpected Connection configuration"),
-    removeConnection: () => Effect.die("unexpected Connection removal"),
-  }),
   NodeFileSystem.layer,
   FetchHttpClient.layer,
+);
+
+const harnessLayer = Layer.merge(
+  runtimeLayer,
+  Layer.succeed(
+    CredentialStore.CredentialStore,
+    credentialStore(() => Effect.die("unexpected provider key lookup")),
+  ),
+);
+
+const byokHarnessLayer = Layer.merge(
+  runtimeLayer,
+  Layer.succeed(
+    CredentialStore.CredentialStore,
+    credentialStore(() =>
+      Effect.succeed({ source: "stored-key", key: Redacted.make("anthropic-test-key-one") }),
+    ),
+  ),
+);
+
+const missingByokHarnessLayer = Layer.merge(
+  runtimeLayer,
+  Layer.succeed(
+    CredentialStore.CredentialStore,
+    credentialStore(() =>
+      Effect.fail(
+        new CredentialStore.CredentialError({
+          account: "anthropic",
+          message: "no api key for anthropic: ANTHROPIC_API_KEY is unset or empty",
+        }),
+      ),
+    ),
+  ),
 );
 
 const fakeClaudeExecutable = (args = "") =>
@@ -168,7 +207,7 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
       connections: [],
       messages: [{ role: "user", content: "implement the issue" }],
       workContext: {
-        reference: { workItem: "#152", url: null },
+        reference: { workItem: "#153", url: null },
         facts: {
           roles: ["ready-for-agent"],
           assignees: [],
@@ -199,7 +238,10 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
   };
 };
 
-const makeLiveHarness = (args = "") =>
+const makeLiveHarness = (
+  args = "",
+  authentication: ClaudeCodeRunnerOptions["authentication"] = hostAuthentication,
+) =>
   Effect.acquireRelease(createTestSandbox(), destroyTestSandbox).pipe(
     Effect.tap((handle) =>
       Effect.promise(() =>
@@ -218,7 +260,13 @@ const makeLiveHarness = (args = "") =>
     ),
     Effect.map((handle) => ({
       handle,
-      harness: Harness.make([claudeCodeRunner({ name, claudeExecutable: fakeClaudeExecutable(args) })]),
+      harness: Harness.make([
+        claudeCodeRunner({
+          name,
+          authentication,
+          claudeExecutable: fakeClaudeExecutable(args),
+        }),
+      ]),
     })),
   );
 
@@ -229,7 +277,7 @@ const sessionHandles = (events: ReadonlyArray<Harness.AgUiEvent>) =>
   events.flatMap((event) => (agUiIsSessionHandleEvent(event) ? [event.value.sessionId] : []));
 
 const runnerWithoutRuntimeCatalog = (claudeExecutable: string) => ({
-  ...claudeCodeRunner({ name, claudeExecutable }),
+  ...claudeCodeRunner({ name, authentication: hostAuthentication, claudeExecutable }),
   catalogSources: claudeCodeCatalogSources(claudeExecutable, []),
 });
 
@@ -248,7 +296,10 @@ const Capture = Schema.Struct({
   mcpConfigArgument: Schema.NullOr(Schema.String),
   mcpConfig: Schema.NullOr(Schema.String),
   mcpBearer: Schema.NullOr(Schema.String),
+  mcpBearerPresent: Schema.Boolean,
   apiKey: Schema.NullOr(Schema.String),
+  apiKeyPresent: Schema.Boolean,
+  apiKeyVersion: Schema.NullOr(Schema.String),
   authToken: Schema.NullOr(Schema.String),
 });
 
@@ -256,6 +307,13 @@ const captureFrom = (events: ReadonlyArray<Harness.AgUiEvent>) => {
   const object = structuredObjects(events)[0];
   if (!object) return Effect.die("fake Claude emitted no structured result");
   return Schema.decodeUnknownEffect(Capture)(object);
+};
+
+const containsString = (value: unknown, expected: string): boolean => {
+  if (typeof value === "string") return value.includes(expected);
+  if (Array.isArray(value)) return value.some((entry) => containsString(entry, expected));
+  if (typeof value !== "object" || value === null) return false;
+  return Object.values(value).some((entry) => containsString(entry, expected));
 };
 
 const captureRunFailure = (args: string) =>
@@ -296,18 +354,23 @@ const withInheritedAnthropicEnvironment = <Value, Error, Requirements>(
 
 describe("Claude Code Harness", () => {
   it.layer(harnessLayer)((it) => {
-    it.effect("registers the host-authenticated Claude Code descriptor", () =>
+    it.effect("registers an explicit Claude authentication binding", () =>
       Effect.sync(() => {
-        const runner = claudeCodeRunner({ name });
+        const hostRunner = claudeCodeRunner({ name, authentication: hostAuthentication });
+        const byokRunner = claudeCodeRunner({ name, authentication: byokAuthentication });
 
-        assert.strictEqual(runner.name, name);
-        assert.strictEqual(runner.sessionKind, "opaque-handle");
-        assert.deepStrictEqual(runner.authentication, {
+        assert.strictEqual(hostRunner.name, name);
+        assert.strictEqual(hostRunner.sessionKind, "opaque-handle");
+        assert.deepStrictEqual(hostRunner.authentication, {
           mode: "host",
           reference: "Claude Code host login on this Runtime Host",
         });
-        assert.deepStrictEqual(runner.capabilities, {
-          authenticationModes: ["host"],
+        assert.deepStrictEqual(byokRunner.authentication, {
+          mode: "byok",
+          reference: "Anthropic provider key in the Credential store",
+        });
+        assert.deepStrictEqual(hostRunner.capabilities, {
+          authenticationModes: ["host", "byok"],
           session: { affinity: "sandbox-lineage", fork: true, humanAttach: false },
           structuredOutput: "native",
           policyFidelity: "profile-only",
@@ -323,7 +386,7 @@ describe("Claude Code Harness", () => {
 
     it.effect("prefers TanStack runtime model metadata and exposes no unsupported effort", () =>
       Effect.gen(function* () {
-        const harness = Harness.make([claudeCodeRunner({ name })]);
+        const harness = Harness.make([claudeCodeRunner({ name, authentication: hostAuthentication })]);
         const catalog = yield* harness.catalog(name);
 
         assert.deepStrictEqual(
@@ -369,19 +432,23 @@ describe("Claude Code Harness", () => {
       Effect.gen(function* () {
         const missing = yield* claudeCodeRunner({
           name,
+          authentication: hostAuthentication,
           claudeExecutable: "missing-claude-code-152",
         }).readiness();
         const outdated = yield* claudeCodeRunner({
           name,
+          authentication: hostAuthentication,
           claudeExecutable: fakeClaudeExecutable(" --fake-version=1.9.0-old"),
         }).readiness();
         const loggedOut = yield* claudeCodeRunner({
           name,
+          authentication: hostAuthentication,
           claudeExecutable: fakeClaudeExecutable(" --not-authenticated"),
         }).readiness();
         const scrubbed = yield* withInheritedAnthropicEnvironment(
           claudeCodeRunner({
             name,
+            authentication: hostAuthentication,
             claudeExecutable: fakeClaudeExecutable(" --require-clean-environment"),
           }).readiness(),
         );
@@ -404,7 +471,11 @@ describe("Claude Code Harness", () => {
     it.effect("keeps another Harness ready when Claude Code is unavailable", () =>
       Effect.gen(function* () {
         const harness = Harness.make([
-          claudeCodeRunner({ name, claudeExecutable: "missing-claude-code-152" }),
+          claudeCodeRunner({
+            name,
+            authentication: hostAuthentication,
+            claudeExecutable: "missing-claude-code-152",
+          }),
           companionRunner,
         ]);
         const claude = yield* harness.readiness(name);
@@ -440,7 +511,8 @@ describe("Claude Code Harness", () => {
           assert.include(mcpConfig, "${COGWORK_MCP_");
           assert.include(mcpConfig, "Bearer\\u0020${COGWORK_MCP_");
           assert.notInclude(mcpConfig, "mcp-test-bearer");
-          assert.strictEqual(capture.mcpBearer, "mcp-test-bearer");
+          assert.strictEqual(capture.mcpBearer, "[redacted]");
+          assert.isTrue(capture.mcpBearerPresent);
           assert.notInclude(capture.args, "--disallowedTools");
           assert.include(capture.args, "--json-schema");
           assert.strictEqual(capture.agents, "existing repo agents\n");
@@ -452,6 +524,7 @@ describe("Claude Code Harness", () => {
             "Mandatory Operating Instructions: /home/operating-instructions/implement-agent",
           );
           assert.lengthOf(structuredObjects(events), 1);
+          assert.isFalse(containsString(events, "mcp-test-bearer"));
           assert.deepStrictEqual(sessionHandles(events), ["fake-claude-session-1"]);
           assert.isNull(capture.resume);
           assert.isTrue(events.some((event) => event.type === "REASONING_MESSAGE_CONTENT"));
@@ -545,7 +618,7 @@ describe("Claude Code Harness", () => {
           const enabled = yield* Config.string("COGWORK_LIVE_CLAUDE_PROBE").pipe(Config.withDefault("0"));
           if (enabled !== "1") return;
           const handle = yield* Effect.acquireRelease(createTestSandbox(), destroyTestSandbox);
-          const harness = Harness.make([claudeCodeRunner({ name })]);
+          const harness = Harness.make([claudeCodeRunner({ name, authentication: hostAuthentication })]);
           const fresh = yield* harness
             .run(makeRequest(handle.id))
             .pipe(Stream.runCollect, Effect.timeout("2 minutes"));
@@ -563,6 +636,126 @@ describe("Claude Code Harness", () => {
           assert.isTrue(sessionHandles(resumed).length > 0);
           assert.lengthOf(structuredObjects(resumed), 1);
         }),
+    );
+  });
+
+  it.layer(byokHarnessLayer)((it) => {
+    it.effect("reports BYOK availability without requiring host login", () =>
+      Effect.gen(function* () {
+        const readiness = yield* claudeCodeRunner({
+          name,
+          authentication: byokAuthentication,
+          claudeExecutable: fakeClaudeExecutable(" --not-authenticated"),
+        }).readiness();
+
+        assert.strictEqual(readiness.operational.status, "ready");
+        assert.deepStrictEqual(readiness.authentication, {
+          mode: "byok",
+          status: "available",
+          diagnostic: "Anthropic provider key is available",
+        });
+      }),
+    );
+
+    it.effect("injects and scrubs BYOK beside an MCP bearer", () =>
+      Effect.gen(function* () {
+        const { handle, harness } = yield* makeLiveHarness("", byokAuthentication);
+        const events = yield* withInheritedAnthropicEnvironment(
+          harness.run(makeRequest(handle.id, { mcp: true })).pipe(Stream.runCollect),
+        );
+        const capture = yield* captureFrom(events);
+
+        assert.strictEqual(capture.authMode, "host");
+        assert.strictEqual(capture.apiKey, "[redacted]");
+        assert.isTrue(capture.apiKeyPresent);
+        assert.strictEqual(capture.apiKeyVersion, "one");
+        assert.isNull(capture.authToken);
+        assert.strictEqual(capture.mcpBearer, "[redacted]");
+        assert.isTrue(capture.mcpBearerPresent);
+        assert.isFalse(containsString(events, "anthropic-test-key-one"));
+        assert.isFalse(containsString(events, "mcp-test-bearer"));
+        assert.notInclude(capture.args.join(" "), "anthropic-test-key-one");
+        assert.notInclude(capture.files.join(" "), "anthropic-test-key-one");
+      }),
+    );
+
+    it.effect("resolves the Anthropic credential again for each Run", () =>
+      Effect.gen(function* () {
+        const version = yield* Ref.make<"one" | "two">("one");
+        const rotatingStore = credentialStore(() =>
+          Ref.get(version).pipe(
+            Effect.map((current) => ({
+              source: "stored-key" as const,
+              key: Redacted.make(`anthropic-test-key-${current}`),
+            })),
+          ),
+        );
+        const { handle, harness } = yield* makeLiveHarness("", byokAuthentication);
+        const first = yield* harness
+          .run(makeRequest(handle.id))
+          .pipe(Stream.runCollect, Effect.provideService(CredentialStore.CredentialStore, rotatingStore));
+        yield* Ref.set(version, "two");
+        const second = yield* harness
+          .run(makeRequest(handle.id))
+          .pipe(Stream.runCollect, Effect.provideService(CredentialStore.CredentialStore, rotatingStore));
+        const captures = [yield* captureFrom(first), yield* captureFrom(second)];
+
+        assert.deepStrictEqual(
+          captures.map(({ apiKeyVersion }) => apiKeyVersion),
+          ["one", "two"],
+        );
+        assert.isTrue(captures.every(({ apiKey }) => apiKey === "[redacted]"));
+      }),
+    );
+
+    it.effect("scrubs rejected BYOK from events and diagnostics without falling back", () =>
+      Effect.gen(function* () {
+        const { handle, harness } = yield* makeLiveHarness(" --api-key-run-error", byokAuthentication);
+        const seen = yield* Ref.make<ReadonlyArray<Harness.AgUiEvent>>([]);
+        const error = yield* harness.run(makeRequest(handle.id)).pipe(
+          Stream.tap((event) => Ref.update(seen, (events) => [...events, event])),
+          Stream.runDrain,
+          Effect.flip,
+        );
+        const events = yield* Ref.get(seen);
+
+        assert.include(error.message, "[redacted]");
+        assert.notInclude(error.message, "anthropic-test-key-one");
+        assert.isTrue(containsString(events, "[redacted]"));
+        assert.isFalse(containsString(events, "anthropic-test-key-one"));
+      }),
+    );
+  });
+
+  it.layer(missingByokHarnessLayer)((it) => {
+    it.effect("reports a missing selected BYOK credential as actionable setup failure", () =>
+      Effect.gen(function* () {
+        const runner = claudeCodeRunner({
+          name,
+          authentication: byokAuthentication,
+          claudeExecutable: fakeClaudeExecutable(),
+        });
+        const readiness = yield* runner.readiness();
+        const error = yield* Harness.make([runner]).preflight(name, "full", "sonnet").pipe(Effect.flip);
+
+        assert.strictEqual(readiness.operational.status, "unavailable");
+        assert.isFalse(readiness.operational.retryable);
+        assert.strictEqual(readiness.authentication.mode, "byok");
+        assert.strictEqual(readiness.authentication.status, "unavailable");
+        assert.include(readiness.authentication.diagnostic, "cogwork login key --provider anthropic");
+        assert.strictEqual(error.reason, "credential");
+        assert.isFalse(error.retryable);
+        assert.include(error.message, "cogwork login key --provider anthropic");
+        const launchError = yield* runner
+          .preflight(
+            Harness.HarnessPreflightInput.Launch({
+              request: makeRequest("/missing-byok-checkout"),
+            }),
+          )
+          .pipe(Effect.flip);
+        assert.strictEqual(launchError.reason, "credential");
+        assert.include(launchError.message, "cogwork login key --provider anthropic");
+      }),
     );
   });
 });
