@@ -162,6 +162,35 @@ it("replaces a renderer's socket when it connects again", async () => {
   }
 });
 
+it("closes a renderer's socket before its reconnect", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cf-ipc-"));
+  const socketPath = join(dir, "daemon.sock");
+  const accepted = Promise.withResolvers<net.Socket>();
+  const server = net.createServer((socket) => accepted.resolve(socket));
+  await listen(server, socketPath);
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({ socketPath, supervisor, windowPreferences, runtime });
+    const connect = ipc.handlers.get(IpcChannel.rpcConnect);
+    const disconnect = ipc.handlers.get(IpcChannel.rpcDisconnect);
+    if (!connect || !disconnect) throw new Error("RPC session handlers were not registered");
+
+    await connect({ sender });
+    const socket = await accepted.promise;
+    const closed = once(socket, "close");
+    await disconnect({ sender });
+    await closed;
+
+    expect(socket.destroyed).toBe(true);
+  } finally {
+    await runtime.dispose();
+    await closeServer(server);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 it("interrupts a pending connection when the renderer is destroyed", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cf-ipc-"));
   const runtime = makeRuntime();

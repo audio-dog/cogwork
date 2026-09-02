@@ -91,6 +91,7 @@ export const registerIpc = (deps: IpcDeps) => {
   });
 
   ipcMain.handle(IpcChannel.rpcConnect, (event) => deps.runtime.runPromise(openSession(event.sender)));
+  ipcMain.handle(IpcChannel.rpcDisconnect, (event) => deps.runtime.runPromise(closeSession(event.sender)));
   ipcMain.on(IpcChannel.rpcSend, (event, frame: string) => {
     const session = sessions.get(event.sender);
     if (!session?.port) return;
