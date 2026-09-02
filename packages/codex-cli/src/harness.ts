@@ -31,8 +31,8 @@ const codexEfforts = ["minimal", "low", "medium", "high"] as const satisfies Rea
 // accepts, so `CODEX_MODELS` is an autocomplete hint upstream, not the set one host reaches — a
 // package cannot know which ids one account is entitled to. Extend it when Codex ships a model.
 const currentCodexModels = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const;
-const defaultCodexModel = currentCodexModels[0];
 const codexModels: ReadonlyArray<CodexModel> = [...currentCodexModels, ...CODEX_MODELS];
+const defaultCodexModel = currentCodexModels[0];
 const defaultCodexEffort = "high" satisfies CodexEffort;
 const codexAdapterVersion = "0.5.3";
 const codexVersionRequirement = ">=0.149.0";
