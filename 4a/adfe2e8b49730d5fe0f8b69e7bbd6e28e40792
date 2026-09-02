@@ -1,0 +1,23 @@
+packages/engine/src/tools/owned-tools.test.ts
+  s_e70165fbabed53::t_ae603e07a59c9d 33-40,49
+  s_e70165fbabed53::t_e4025d9a0f6e1d 50-51
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_e70165fbabed53::t_ae603e07a59c9d 32-39,62
+  s_e70165fbabed53::t_b24d635cc2689c 63-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4aadfe2e8b49730d5fe0f8b69e7bbd6e28e40792",
+  "prompts": {},
+  "sessions": {
+    "s_e70165fbabed53": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0635d-8eff-7d22-a6c4-b5301e70f386",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
