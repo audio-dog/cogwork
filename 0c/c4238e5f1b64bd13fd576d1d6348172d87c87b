@@ -1,0 +1,20 @@
+patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
+  s_1e9c792070af79::t_7063bf475d0654 17,20,27-29
+  s_1e9c792070af79::t_039f4ff8d53f22 1-16,18-19,21-26,30-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0cc4238e5f1b64bd13fd576d1d6348172d87c87b",
+  "prompts": {},
+  "sessions": {
+    "s_1e9c792070af79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dce-8136-7451-91c5-a0226c2b232e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
