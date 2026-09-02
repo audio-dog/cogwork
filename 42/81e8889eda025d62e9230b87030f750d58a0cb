@@ -1,0 +1,52 @@
+packages/claude-code/src/harness.ts
+  s_8bc8c2d33b667c::t_fb01ba4120a663 19,35-38,391,414
+  s_8bc8c2d33b667c::t_d7ae127547db14 40-49,97-98,442
+  s_8bc8c2d33b667c::t_fed41013ae9248 446-448,450-451,456
+  s_8bc8c2d33b667c::t_dd601761b4345b 2,11,39,152,154-155,159,162,172,180,188-195,217,219,228,231,234-243,245-260,263-271,320,322-325,416,423
+  s_8bc8c2d33b667c::t_a3746b7e26f598 244
+  s_8bc8c2d33b667c::t_ba4ca316029ca6 12,50,359,377,421,427-441,443-444,453
+  s_8bc8c2d33b667c::t_2165ec0c837bb9 445
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_8bc8c2d33b667c::t_341925031a8660 55-56,78-82,109
+packages/claude-code/CONTEXT.md
+  s_8bc8c2d33b667c::t_0ebed4e91a6ae8 3,13-17,32
+packages/claude-code/src/harness.test.ts
+  s_8bc8c2d33b667c::t_37027204691889 659-674,677-685,687-692,702-719,721-723,726-727,749-757,759
+  s_8bc8c2d33b667c::t_375b37534a1026 686
+  s_8bc8c2d33b667c::t_9204ae5f3850c6 27-28,263-265,267-269,280,357,359-360,362-364,368-373,389,435,440,445,451,474-478,621
+  s_8bc8c2d33b667c::t_a37d553d38a7d8 19,266,299,301-302,514-515
+  s_8bc8c2d33b667c::t_d7ae127547db14 241-244,312-316,527,675-676,720,724-725
+  s_8bc8c2d33b667c::t_5b796229758c8f 85-98,108-139,641-658,728-748,758,760
+  s_8bc8c2d33b667c::t_dd2ac26b3ea3b5 210
+  s_8bc8c2d33b667c::t_03333c810adcd8 694-695,698-699
+  s_8bc8c2d33b667c::t_a3746b7e26f598 693,697,701
+  s_8bc8c2d33b667c::t_ce48d2b5f305ce 140
+  s_8bc8c2d33b667c::t_37bd574604d7bd 317-318
+  s_8bc8c2d33b667c::t_cb15c94d1ec5de 696
+  s_8bc8c2d33b667c::t_cf7d8f9cd48601 700
+  s_1680d91613eb34::t_4fa09dfee06942 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4281e8889eda025d62e9230b87030f750d58a0cb",
+  "prompts": {},
+  "sessions": {
+    "s_1680d91613eb34": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a063f3-7433-7c82-9c89-e3d2072bacfd",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8bc8c2d33b667c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0638c-1f6e-7753-9601-dfac58747a5e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
