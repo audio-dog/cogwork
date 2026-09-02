@@ -153,7 +153,6 @@ describe("foldTranscript", () => {
     for (const next of activities) applyTranscriptActivities(incremental, [next]);
 
     expect(incremental.entries).toEqual(foldTranscript(activities));
-    expect(incremental.appliedEventCount).toBe(activities.length);
   });
 
   it("ignores already-folded history when a later chunk overlaps it", () => {
@@ -168,7 +167,6 @@ describe("foldTranscript", () => {
     applyTranscriptActivities(incremental, activities.slice(1));
 
     expect(incremental.entries).toEqual(foldTranscript(activities));
-    expect(incremental.appliedEventCount).toBe(activities.length);
   });
 
   it("marks a tool call done when its result arrives", () => {

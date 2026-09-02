@@ -5,11 +5,13 @@ import {
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
-import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import * as Atom from "effect/unstable/reactivity/Atom";
+import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { useCallback } from "react";
 import { runActivityAtom } from "../daemon/atoms";
 
@@ -168,14 +170,12 @@ export type TranscriptEntry =
 interface TranscriptFold {
   readonly entries: TranscriptEntry[];
   readonly byKey: Map<string, TranscriptEntry>;
-  appliedEventCount: number;
   lastSeq: number | null;
 }
 
-export const makeTranscriptFold = (): TranscriptFold => ({
+export const makeTranscriptFold = () => ({
   entries: [],
   byKey: new Map(),
-  appliedEventCount: 0,
   lastSeq: null,
 });
 
@@ -272,7 +272,6 @@ export const applyTranscriptActivities = (state: TranscriptFold, activities: Rea
     if (state.lastSeq !== null && activity.seq <= state.lastSeq) continue;
     foldTranscriptActivity(state, activity);
     state.lastSeq = activity.seq;
-    state.appliedEventCount += 1;
   }
   return state;
 };
@@ -288,7 +287,6 @@ type ActivityError = ActivityResult extends AsyncResult.AsyncResult<unknown, inf
 interface TranscriptSnapshot {
   readonly done: boolean;
   readonly entries: ReadonlyArray<TranscriptEntry>;
-  readonly appliedEventCount: number;
 }
 
 type TranscriptResult = AsyncResult.AsyncResult<TranscriptSnapshot, ActivityError>;
@@ -305,6 +303,20 @@ const resetTranscriptCell = (cell: TranscriptCell, result: TranscriptResult) => 
   return result;
 };
 
+const streamCompleted = (cause: Cause.Cause<ActivityError>) =>
+  Option.exists(Cause.findErrorOption(cause), Cause.isNoSuchElementError);
+
+const streamReconnectable = (cause: Cause.Cause<ActivityError>) =>
+  Option.exists(Cause.findErrorOption(cause), (error) => {
+    if (!(error instanceof RpcClientError)) return false;
+    return error.reason._tag === "SocketOpenError" || error.reason._tag === "SocketCloseError";
+  });
+
+const completeTranscriptCell = (cell: TranscriptCell) => {
+  cell.result = AsyncResult.success({ done: true, entries: cell.fold.entries });
+  return cell.result;
+};
+
 const applyActivityResult = (cell: TranscriptCell, current: ActivityResult) => {
   if (current === cell.source) return cell.result;
   cell.source = current;
@@ -312,6 +324,7 @@ const applyActivityResult = (cell: TranscriptCell, current: ActivityResult) => {
     return resetTranscriptCell(cell, AsyncResult.initial<TranscriptSnapshot, ActivityError>(current.waiting));
   }
   if (current._tag === "Failure") {
+    if (streamCompleted(current.cause)) return completeTranscriptCell(cell);
     return resetTranscriptCell(
       cell,
       AsyncResult.failure<TranscriptSnapshot, ActivityError>(current.cause, {
@@ -324,7 +337,6 @@ const applyActivityResult = (cell: TranscriptCell, current: ActivityResult) => {
     {
       done: current.value.done,
       entries: cell.fold.entries,
-      appliedEventCount: cell.fold.appliedEventCount,
     },
     current,
   );
@@ -344,12 +356,16 @@ export function useRunTranscript(runId: RunId) {
   const atom = runTranscriptAtom(runId);
   const result = useAtomValue(atom);
   const pull = useAtomSet(atom);
+  const refresh = useAtomRefresh(atom);
 
   const pump = useCallback(
     (current: TranscriptResult) => {
+      if (current._tag === "Failure" && !current.waiting && streamReconnectable(current.cause)) {
+        return refresh();
+      }
       if (current._tag === "Success" && !current.waiting && !current.value.done) pull();
     },
-    [pull],
+    [pull, refresh],
   );
 
   useAtomSubscribe(atom, pump, { immediate: true });
