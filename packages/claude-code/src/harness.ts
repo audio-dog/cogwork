@@ -31,7 +31,7 @@ const commandDeadline = "5 seconds";
 const anthropicEnvironment = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
 const missingExecutableCodes = new Set(["ENOENT", "EACCES"]);
 const missingExecutableExitCodes = new Set([126, 127]);
-const missingLoginPattern = /not (?:logged|signed) in|claude (?:auth )?login|authentication/i;
+const missingLoginPattern = /not (?:logged|signed) in|claude (?:auth )?login/i;
 const modelPattern = /['"]((?:claude-[a-z0-9-]+)|opus|sonnet|haiku|fable)['"]/gi;
 
 const isMissingExecutableCause = (cause: unknown, seen: ReadonlySet<object> = new Set()): boolean => {

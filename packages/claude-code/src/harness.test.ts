@@ -257,6 +257,17 @@ const captureFrom = (events: ReadonlyArray<Harness.AgUiEvent>) => {
   return Schema.decodeUnknownEffect(Capture)(object);
 };
 
+const captureRunFailure = (args: string) =>
+  Effect.gen(function* () {
+    const { handle, harness } = yield* makeLiveHarness(args);
+    const seen: Array<Harness.AgUiEvent> = [];
+    const error = yield* harness.run(makeRequest(handle.id)).pipe(
+      Stream.runForEach((event) => Effect.sync(() => seen.push(event))),
+      Effect.flip,
+    );
+    return { error, seen };
+  });
+
 const occurrences = (content: string, expected: string) => content.split(expected).length - 1;
 const assertSingleOccurrence = (content: string | null, expected: string) =>
   assert.strictEqual(occurrences(content ?? "", expected), 1);
@@ -497,17 +508,22 @@ describe("Claude Code Harness", () => {
 
     it.effect("maps native Claude failures into retryable turn diagnostics", () =>
       Effect.gen(function* () {
-        const { handle, harness } = yield* makeLiveHarness(" --run-error");
-        const seen: Array<Harness.AgUiEvent> = [];
-        const error = yield* harness.run(makeRequest(handle.id)).pipe(
-          Stream.runForEach((event) => Effect.sync(() => seen.push(event))),
-          Effect.flip,
-        );
+        const { error, seen } = yield* captureRunFailure(" --run-error");
 
         assert.strictEqual(error.reason, "turn");
         assert.isTrue(error.retryable);
         assert.include(error.message, "Claude turn failed");
         assert.isTrue(seen.some((event) => event.type === "RUN_ERROR"));
+      }),
+    );
+
+    it.effect("keeps service authentication failures retryable", () =>
+      Effect.gen(function* () {
+        const { error } = yield* captureRunFailure(" --authentication-run-error");
+
+        assert.strictEqual(error.reason, "turn");
+        assert.isTrue(error.retryable);
+        assert.include(error.message, "MCP server authentication failed");
       }),
     );
 

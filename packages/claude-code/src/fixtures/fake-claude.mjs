@@ -83,9 +83,14 @@ if (process.argv.includes("--hang")) {
   process.exit(0);
 }
 
-if (process.argv.includes("--run-error")) {
+const runErrorMessage = [
+  ["--run-error", "Claude turn failed"],
+  ["--authentication-run-error", "MCP server authentication failed"],
+].find(([flag]) => process.argv.includes(flag))?.[1];
+
+if (runErrorMessage) {
   process.stdout.write(
-    `${[init, { type: "result", subtype: "error_during_execution", errors: ["Claude turn failed"] }]
+    `${[init, { type: "result", subtype: "error_during_execution", errors: [runErrorMessage] }]
       .map((event) => JSON.stringify(event))
       .join("\n")}\n`,
   );
