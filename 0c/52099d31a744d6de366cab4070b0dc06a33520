@@ -1,0 +1,23 @@
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_e56f2f08236ec0::t_9ed31616287828 215-235,237-238
+  s_e56f2f08236ec0::t_58cd0692f3e673 236
+apps/desktop/src/main/engine-supervisor.ts
+  s_e56f2f08236ec0::t_49cdef2a311282 59-61,264-265,267
+  s_e56f2f08236ec0::t_dc1f36e6353521 266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0c52099d31a744d6de366cab4070b0dc06a33520",
+  "prompts": {},
+  "sessions": {
+    "s_e56f2f08236ec0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-8772-7831-b918-01c9f0d8ca0c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
