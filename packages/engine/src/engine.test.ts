@@ -1152,6 +1152,34 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.failures[0]?.name, "broken");
       assert.strictEqual(status.failures[0]?.displayName, "Broken workspace");
       assert.isAtLeast(status.uptimeMillis, 0);
+      assert.strictEqual(status.eventBusDroppedEvents, 0);
+    }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+
+  it.effect("reports daemon event bus loss", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* bus.subscribe();
+      yield* Effect.forEach(
+        Array.from({ length: 1025 }, (_, i) => i),
+        (i) =>
+          bus.publish({
+            _tag: "SchedulerChanged",
+            scheduler: {
+              scheduling: "running",
+              globalInFlight: i,
+              globalLimit: 4,
+              perWorkspaceLimit: 4,
+              dailyBudgetUsed: 7,
+              dailyBudgetLimit: 50,
+              perWorkspace: [],
+            },
+          }),
+        { discard: true },
+      );
+
+      assert.strictEqual((yield* client.GetStatus()).eventBusDroppedEvents, 1);
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 

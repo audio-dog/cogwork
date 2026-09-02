@@ -260,6 +260,7 @@ export const DaemonStatus = Schema.Struct({
   health: DaemonHealth,
   startedAtMillis: Schema.Natural,
   uptimeMillis: Schema.Natural,
+  eventBusDroppedEvents: Schema.Natural,
   scheduler: SchedulerStats,
   workspaces: Schema.Array(WorkspaceInfo),
   failures: Schema.Array(WorkspaceFailureInfo),
