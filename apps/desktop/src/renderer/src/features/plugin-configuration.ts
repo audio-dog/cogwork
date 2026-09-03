@@ -1,4 +1,10 @@
-import type { Board, ControlStore, PluginItem, PluginOverview } from "@cogwork/contracts";
+import {
+  type Board,
+  ContributionSettingScope,
+  type ControlStore,
+  type PluginItem,
+  type PluginOverview,
+} from "@cogwork/contracts";
 import type * as Cause from "effect/Cause";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import type {
@@ -63,9 +69,11 @@ export const pluginSurfaceOf = <E>(
 });
 
 const scopeOf = (setting: ControlStore["contributionSettings"][number]): ScopeRef =>
-  setting.scope._tag === "SettingsProfile"
-    ? { kind: "settings-profile" }
-    : { kind: "private-overlay", workspaceId: setting.scope.workspace };
+  ContributionSettingScope.match(setting.scope, {
+    SettingsProfile: () => ({ kind: "settings-profile" }) satisfies ScopeRef,
+    PrivateWorkspaceOverlay: ({ workspace }) =>
+      ({ kind: "private-overlay", workspaceId: workspace }) satisfies ScopeRef,
+  });
 
 const settingApplies = (
   setting: ControlStore["contributionSettings"][number],
@@ -73,8 +81,10 @@ const settingApplies = (
   workspace: WorkspaceId | undefined,
 ) => {
   if (setting.contribution.id !== contributionId) return false;
-  if (setting.scope._tag === "SettingsProfile") return true;
-  return setting.scope.workspace === workspace;
+  return ContributionSettingScope.match(setting.scope, {
+    SettingsProfile: () => true,
+    PrivateWorkspaceOverlay: ({ workspace: scopeWorkspace }) => scopeWorkspace === workspace,
+  });
 };
 
 const contributionWorkspaces = (
@@ -108,7 +118,10 @@ const contributionOf = (
     .map((setting) => ({
       scope: scopeOf(setting),
       value: setting.enabled,
-      source: setting.scope._tag === "SettingsProfile" ? "Control store" : "Private overlay",
+      source: ContributionSettingScope.match(setting.scope, {
+        SettingsProfile: () => "Control store",
+        PrivateWorkspaceOverlay: () => "Private overlay",
+      }),
       ...(setting.diagnostic
         ? {
             diagnostic: {
