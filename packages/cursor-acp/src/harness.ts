@@ -34,13 +34,13 @@ const missingCursorExecutable = /ENOENT|EACCES|command not found/i;
 const cursorVersionRequirement = ">=2026.08.11";
 const minimumCursorVersion = [2026, 8, 11] as const;
 
-const versionAtLeast = (actual: ReadonlyArray<number>, minimum: ReadonlyArray<number>) =>
-  (actual.map((part, index) => Math.sign(part - (minimum[index] ?? 0))).find((part) => part !== 0) ?? 0) >= 0;
-
 const cursorVersionCompatible = (version: string) => {
   const match = version.match(/\b(\d{4})\.(\d{2})\.(\d{2})\b/);
   if (!match) return false;
-  return versionAtLeast([Number(match[1]), Number(match[2]), Number(match[3])], minimumCursorVersion);
+  return HarnessBridge.versionAtLeast(
+    [Number(match[1]), Number(match[2]), Number(match[3])],
+    minimumCursorVersion,
+  );
 };
 
 const cursorProbeError = (cause: unknown) => {
@@ -351,13 +351,15 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     openTransport: openCursorTransport(agentBin),
     planEventName: `${options.name}.plan`,
     authMode: "host",
+    permissionMode: "default",
+    permissions: "headless",
   });
   const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter, "host"> = {
     name: options.name,
     sessionKind: "opaque-handle",
     capabilities: {
       execution: {
-        nonInteractive: false,
+        nonInteractive: true,
         worktreeConfined: false,
         profiles: [],
       },

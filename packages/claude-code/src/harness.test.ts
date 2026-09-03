@@ -2,10 +2,11 @@ import {
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   HarnessName,
+  LifecycleStage,
   RunPlan,
   SessionId,
 } from "@cogwork/contracts";
-import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import { CLAUDE_CODE_MODELS, type ClaudeCodeTextProviderOptions } from "@tanstack/ai-claude-code";
@@ -161,6 +162,7 @@ const destroyTestSandbox = (sandbox: SandboxHandle) =>
 interface RequestOverrides {
   readonly session?: SessionId | null;
   readonly profile?: "read-only" | "full";
+  readonly operation?: LifecycleStage;
   readonly mcp?: boolean;
 }
 
@@ -187,12 +189,13 @@ const outputSchema = {
 } as const;
 
 const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => {
-  const profile = overrides.profile ?? "full";
+  const operation = overrides.operation ?? (overrides.profile === "read-only" ? "triage" : "implement");
+  const profile = overrides.profile ?? OperationPolicy.operationPolicyProfile(operation);
   const mcp = mcpSelection(overrides.mcp);
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-claude-test",
-      operation: profile === "full" ? "implement" : "triage",
+      operation,
       harness: { name, model: "sonnet", effort: null, profile },
       instructions: [
         { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
@@ -300,6 +303,7 @@ const Capture = Schema.Struct({
   cwd: Schema.String,
   files: Schema.Array(Schema.String),
   settingSources: Schema.NullOr(Schema.String),
+  settings: Schema.NullOr(Schema.String),
   resume: Schema.NullOr(Schema.String),
   forkSession: Schema.Boolean,
   authMode: Schema.String,
@@ -314,6 +318,17 @@ const Capture = Schema.Struct({
   apiKeyVersion: Schema.NullOr(Schema.String),
   authToken: Schema.NullOr(Schema.String),
 });
+
+const NativeSandboxSettings = Schema.fromJsonString(
+  Schema.Struct({
+    sandbox: Schema.Struct({
+      enabled: Schema.Boolean,
+      failIfUnavailable: Schema.Boolean,
+      allowUnsandboxedCommands: Schema.Boolean,
+      autoAllowBashIfSandboxed: Schema.Boolean,
+    }),
+  }),
+);
 
 const captureFrom = (events: ReadonlyArray<Harness.AgUiEvent>) => {
   const object = structuredObjects(events)[0];
@@ -342,6 +357,23 @@ const captureRunFailure = (args: string) =>
 const occurrences = (content: string, expected: string) => content.split(expected).length - 1;
 const assertSingleOccurrence = (content: string | null, expected: string) =>
   assert.strictEqual(occurrences(content ?? "", expected), 1);
+
+const capturedDisallowedTools = (capture: typeof Capture.Type) => {
+  const index = capture.args.indexOf("--disallowedTools");
+  if (index < 0) return [];
+  return capture.args.at(index + 1)?.split(",") ?? [];
+};
+
+const captureOperation = (operation: LifecycleStage) =>
+  Effect.scoped(
+    makeLiveHarness().pipe(
+      Effect.flatMap(({ handle, harness }) =>
+        harness.run(makeRequest(handle.id, { operation })).pipe(Stream.runCollect),
+      ),
+      Effect.flatMap(captureFrom),
+      Effect.map((capture) => [operation, capture] satisfies [LifecycleStage, typeof Capture.Type]),
+    ),
+  );
 
 const restoreEnvironment = (name: string, value: string | undefined) => {
   if (value === undefined) return Reflect.deleteProperty(process.env, name);
@@ -450,7 +482,7 @@ describe("Claude Code Harness", () => {
         const outdated = yield* claudeCodeRunner({
           name,
           authentication: hostAuthentication,
-          claudeExecutable: fakeClaudeExecutable(" --fake-version=1.9.0-old"),
+          claudeExecutable: fakeClaudeExecutable(" --fake-version=2.1.82-old"),
         }).readiness();
         const loggedOut = yield* claudeCodeRunner({
           name,
@@ -498,75 +530,77 @@ describe("Claude Code Harness", () => {
       }),
     );
 
-    it.effect(
-      "runs host auth with ambient settings, mandatory Workspace projection, native events, and usage",
-      () =>
-        Effect.gen(function* () {
-          const { handle, harness } = yield* makeLiveHarness(" --emit-change --commit-mcp-config");
-          const events = yield* withInheritedAnthropicEnvironment(
-            harness.run(makeRequest(handle.id, { mcp: true })).pipe(Stream.runCollect),
-          );
-          const capture = yield* captureFrom(events);
-          const mcpConfig = capture.mcpConfig ?? "";
-          const systemPrompt = capture.systemPrompt ?? "";
+    it.effect("runs host auth with mandatory Workspace projection, native events, and usage", () =>
+      Effect.gen(function* () {
+        const { handle, harness } = yield* makeLiveHarness(" --emit-change --commit-mcp-config");
+        const events = yield* withInheritedAnthropicEnvironment(
+          harness.run(makeRequest(handle.id, { mcp: true })).pipe(Stream.runCollect),
+        );
+        const capture = yield* captureFrom(events);
+        const mcpConfig = capture.mcpConfig ?? "";
+        const systemPrompt = capture.systemPrompt ?? "";
 
-          assert.strictEqual(capture.settingSources, "user,project");
-          assert.notInclude(capture.settingSources ?? "", "local");
-          assert.strictEqual(capture.authMode, "host");
-          assert.strictEqual(capture.permissionMode, "bypassPermissions");
-          assert.isNull(capture.apiKey);
-          assert.isNull(capture.authToken);
-          assert.notInclude(capture.files, ".mcp.json");
-          assert.match(capture.mcpConfigArgument ?? "", /^\{"mcpServers":/);
-          assert.notInclude(capture.files, ".cogwork-mcp.json");
-          assert.include(mcpConfig, "https://mcp.example.test/readonly");
-          assert.include(mcpConfig, "${COGWORK_MCP_");
-          assert.include(mcpConfig, "Bearer\\u0020${COGWORK_MCP_");
-          assert.notInclude(mcpConfig, "mcp-test-bearer");
-          assert.strictEqual(capture.mcpBearer, "[redacted]");
-          assert.isTrue(capture.mcpBearerPresent);
-          assert.notInclude(capture.args, "--disallowedTools");
-          assert.include(capture.args, "--json-schema");
-          assert.strictEqual(capture.agents, "existing repo agents\n");
-          assertSingleOccurrence(systemPrompt, "global rules");
-          assertSingleOccurrence(systemPrompt, "repo rules");
-          assertSingleOccurrence(systemPrompt, "Operating Instructions rules");
-          assertSingleOccurrence(
-            systemPrompt,
-            "Mandatory Operating Instructions: /home/operating-instructions/implement-agent",
-          );
-          assert.lengthOf(structuredObjects(events), 1);
-          assert.isFalse(containsString(events, "mcp-test-bearer"));
-          assert.deepStrictEqual(sessionHandles(events), ["fake-claude-session-1"]);
-          assert.isNull(capture.resume);
-          assert.deepNestedInclude(
-            events.find((event) => event.type === "RUN_STARTED"),
-            { runId: "run-claude-test", threadId: freshSession },
-          );
-          assert.isTrue(events.some((event) => event.type === "REASONING_MESSAGE_CONTENT"));
-          assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
-          assert.isTrue(events.some((event) => event.type === "TOOL_CALL_START"));
-          assert.isTrue(events.some((event) => event.type === "TOOL_CALL_RESULT"));
-          assert.isTrue(events.some((event) => event.type === "CUSTOM" && event.name === "file.changed"));
-          const finished = events.find((event) => event.type === "RUN_FINISHED");
-          assert.deepNestedInclude(finished?.usage, {
-            promptTokens: 13,
-            completionTokens: 8,
-            totalTokens: 21,
-            providerUsageDetails: { totalCostUsd: 0.01 },
-          });
-          assert.isFalse(yield* Effect.promise(() => handle.fs.exists("/workspace/.mcp.json")));
-          assert.isFalse(yield* Effect.promise(() => handle.fs.exists("/workspace/.cogwork-mcp.json")));
-          assert.strictEqual(
-            yield* Effect.promise(() => handle.fs.read("/workspace/AGENTS.md")),
-            "existing repo agents\n",
-          );
-          const committedPaths = yield* Effect.promise(() =>
-            handle.process.exec("git ls-tree -r --name-only HEAD"),
-          );
-          assert.notInclude(committedPaths.stdout, ".cogwork-mcp.json");
-          assert.notMatch(committedPaths.stdout, /\.tanstack-projected-/);
-        }),
+        assert.strictEqual(capture.settingSources, "");
+        assert.strictEqual(capture.authMode, "host");
+        assert.strictEqual(capture.permissionMode, "bypassPermissions");
+        assert.isNull(capture.apiKey);
+        assert.isNull(capture.authToken);
+        assert.notInclude(capture.files, ".mcp.json");
+        assert.match(capture.mcpConfigArgument ?? "", /^\{"mcpServers":/);
+        assert.notInclude(capture.files, ".cogwork-mcp.json");
+        assert.include(mcpConfig, "https://mcp.example.test/readonly");
+        assert.include(mcpConfig, "${COGWORK_MCP_");
+        assert.include(mcpConfig, "Bearer\\u0020${COGWORK_MCP_");
+        assert.notInclude(mcpConfig, "mcp-test-bearer");
+        assert.strictEqual(capture.mcpBearer, "[redacted]");
+        assert.isTrue(capture.mcpBearerPresent);
+        assert.deepStrictEqual(capturedDisallowedTools(capture), [
+          "Write",
+          "Edit",
+          "MultiEdit",
+          "NotebookEdit",
+        ]);
+        assert.include(capture.args, "--json-schema");
+        assert.strictEqual(capture.agents, "existing repo agents\n");
+        assertSingleOccurrence(systemPrompt, "global rules");
+        assertSingleOccurrence(systemPrompt, "repo rules");
+        assertSingleOccurrence(systemPrompt, "Operating Instructions rules");
+        assertSingleOccurrence(
+          systemPrompt,
+          "Mandatory Operating Instructions: /home/operating-instructions/implement-agent",
+        );
+        assert.lengthOf(structuredObjects(events), 1);
+        assert.isFalse(containsString(events, "mcp-test-bearer"));
+        assert.deepStrictEqual(sessionHandles(events), ["fake-claude-session-1"]);
+        assert.isNull(capture.resume);
+        assert.deepNestedInclude(
+          events.find((event) => event.type === "RUN_STARTED"),
+          { runId: "run-claude-test", threadId: freshSession },
+        );
+        assert.isTrue(events.some((event) => event.type === "REASONING_MESSAGE_CONTENT"));
+        assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
+        assert.isTrue(events.some((event) => event.type === "TOOL_CALL_START"));
+        assert.isTrue(events.some((event) => event.type === "TOOL_CALL_RESULT"));
+        assert.isTrue(events.some((event) => event.type === "CUSTOM" && event.name === "file.changed"));
+        const finished = events.find((event) => event.type === "RUN_FINISHED");
+        assert.deepNestedInclude(finished?.usage, {
+          promptTokens: 13,
+          completionTokens: 8,
+          totalTokens: 21,
+          providerUsageDetails: { totalCostUsd: 0.01 },
+        });
+        assert.isFalse(yield* Effect.promise(() => handle.fs.exists("/workspace/.mcp.json")));
+        assert.isFalse(yield* Effect.promise(() => handle.fs.exists("/workspace/.cogwork-mcp.json")));
+        assert.strictEqual(
+          yield* Effect.promise(() => handle.fs.read("/workspace/AGENTS.md")),
+          "existing repo agents\n",
+        );
+        const committedPaths = yield* Effect.promise(() =>
+          handle.process.exec("git ls-tree -r --name-only HEAD"),
+        );
+        assert.notInclude(committedPaths.stdout, ".cogwork-mcp.json");
+        assert.notMatch(committedPaths.stdout, /\.tanstack-projected-/);
+      }),
     );
 
     it.effect("projects read-only policy and resumes only the owning Sandbox lineage without forking", () =>
@@ -587,8 +621,36 @@ describe("Claude Code Harness", () => {
         assert.include(capture.args, "--disallowedTools");
         assert.include(capture.args.join(" "), "Write,Edit,MultiEdit");
         assert.include(capture.args.join(" "), "NotebookEdit");
+        assert.include(capturedDisallowedTools(capture), "Bash");
         assert.strictEqual(capture.permissionMode, "acceptEdits");
         assert.include(capture.args, "--permission-prompt-tool");
+      }),
+    );
+
+    it.effect("projects every Operation into a non-interactive native Sandbox posture", () =>
+      Effect.gen(function* () {
+        const captures = yield* Effect.forEach(LifecycleStage.literals, captureOperation);
+
+        for (const [operation, capture] of captures) {
+          const settings = yield* Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings);
+          const readOnly = OperationPolicy.operationPolicyProfile(operation) === "read-only";
+          const disallowed = capturedDisallowedTools(capture);
+
+          assert.deepStrictEqual(settings.sandbox, {
+            enabled: true,
+            failIfUnavailable: true,
+            allowUnsandboxedCommands: false,
+            autoAllowBashIfSandboxed: !readOnly,
+          });
+          assert.strictEqual(capture.settingSources, "");
+          assert.strictEqual(capture.permissionMode, readOnly ? "acceptEdits" : "bypassPermissions");
+          assert.deepStrictEqual(
+            disallowed,
+            readOnly
+              ? ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]
+              : ["Write", "Edit", "MultiEdit", "NotebookEdit"],
+          );
+        }
       }),
     );
 

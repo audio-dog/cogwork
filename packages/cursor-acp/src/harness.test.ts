@@ -3,11 +3,12 @@ import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
   HarnessName,
+  LifecycleStage,
   RunPlan,
   SessionId,
   stageResultJsonSchema,
 } from "@cogwork/contracts";
-import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
 import { assert, describe, it, layer } from "@effect/vitest";
 import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -79,16 +80,22 @@ const harnessRunnerLayer = Layer.mergeAll(
   FetchHttpClient.layer,
 );
 
-const request = (checkoutPath: string) =>
-  ({
+const request = (checkoutPath: string, operation: LifecycleStage = "triage") => {
+  const profile = OperationPolicy.operationPolicyProfile(operation);
+  return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-cursor-test",
-      operation: "triage",
-      harness: { name: cursorName, model: "auto", effort: null, profile: "read-only" },
+      operation,
+      harness: {
+        name: cursorName,
+        model: "auto",
+        effort: null,
+        profile,
+      },
       instructions: [],
       operatingInstructions: {
-        name: "triage-agent",
-        path: "/operating-instructions/triage-agent",
+        name: `${operation}-agent`,
+        path: `/operating-instructions/${operation}-agent`,
         resources: [],
       },
       tools: [],
@@ -99,7 +106,7 @@ const request = (checkoutPath: string) =>
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput:
-        stageResultJsonSchema("triage")?.["~standard"].jsonSchema.input({
+        stageResultJsonSchema(operation)?.["~standard"].jsonSchema.input({
           target: "draft-2020-12",
         }) ?? null,
       connections: [],
@@ -109,7 +116,7 @@ const request = (checkoutPath: string) =>
         facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
         observation: { generation: 1, observedAtMillis: 1 },
       },
-      sandbox: { workspace: checkoutPath, policy: "read-only" },
+      sandbox: { workspace: checkoutPath, policy: profile },
       persistence: { sessionKind: "opaque-handle" },
       provenance: {
         resolution: [],
@@ -121,7 +128,8 @@ const request = (checkoutPath: string) =>
     }),
     session: freshSessionId,
     mcpCredentials: new Map(),
-  }) satisfies Harness.HarnessRequest;
+  } satisfies Harness.HarnessRequest;
+};
 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
@@ -287,10 +295,26 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
     assert.strictEqual(runner.capabilities.fileEventFidelity, "none");
     assert.isFalse(runner.capabilities.journal);
     assert.isFalse(runner.capabilities.takeover);
-    assert.isFalse(runner.execution.nonInteractive);
+    assert.isTrue(runner.execution.nonInteractive);
     assert.isFalse(runner.execution.worktreeConfined);
     assert.deepStrictEqual(runner.execution.profiles, []);
   });
+
+  it.effect("rejects every Operation before launching a Cursor process", () =>
+    Effect.gen(function* () {
+      const harness = Harness.make([
+        cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-policy-test" }),
+      ]);
+      const errors = yield* Effect.forEach(LifecycleStage.literals, (operation) =>
+        harness.run(request("/tmp", operation)).pipe(Stream.runDrain, Effect.flip),
+      );
+
+      for (const error of errors) {
+        assert.strictEqual(error.reason, "policy");
+        assert.include(error.message, "worktree confinement");
+      }
+    }),
+  );
 
   it.effect("uses host login and the shared mandatory Workspace projection", () =>
     Effect.gen(function* () {
