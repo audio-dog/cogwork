@@ -1,0 +1,81 @@
+packages/engine/src/harness-overview.test.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-190
+packages/engine/src/engine.test.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 50,1131
+apps/desktop/CONTEXT.md
+  s_330b4caffc139b::t_8b7407ed6a32b0 185-194
+packages/contracts/CONTEXT.md
+  s_330b4caffc139b::t_8b7407ed6a32b0 366-373
+apps/desktop/src/renderer/src/features/harness-presentation.test.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-14
+apps/desktop/src/renderer/src/features/settings-catalog.test.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 54
+packages/engine/src/provider-runner.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 153
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 86-89
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-77
+apps/desktop/src/renderer/src/components/harness-glyph.tsx
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-26
+packages/claude-code/src/harness.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 56,65,448
+packages/engine/src/commands.test.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 62,371
+packages/engine/src/external-harness-runtime.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 165-166,690
+apps/desktop/src/renderer/src/components/settings-harnesses.tsx
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-328
+packages/engine/src/harness.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 229-234,247-249,451-452
+packages/contracts/src/index.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 9
+apps/desktop/src/renderer/src/features/harness-catalog.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 3,24-25,31-32,46-47
+packages/engine/src/daemon.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 64,276-277
+  s_330b4caffc139b::t_acf07952e78e54 278
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1,12,19,77-110
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_330b4caffc139b::t_8b7407ed6a32b0 54
+apps/desktop/src/renderer/src/features/harness-presentation.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-18
+packages/engine/src/event-publisher.test.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 57,524
+packages/engine/src/harness-overview.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-89
+apps/desktop/src/renderer/src/routes/settings/harnesses.tsx
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-6
+packages/engine/src/testing/harness-probe-layer.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-36
+packages/contracts/src/harness.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-42
+packages/engine/src/daemon-composition.test.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 7,126-127,287-297
+  s_330b4caffc139b::t_0546cccf2fadcd 298-299
+packages/codex-cli/src/harness.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 345
+apps/desktop/src/renderer/src/features/harnesses-view.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 1-63
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 22,78-82,120,134,153,173,187,205,292-298,376,385
+packages/contracts/src/rpc.ts
+  s_330b4caffc139b::t_8b7407ed6a32b0 23,61-64,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5f26a8b3d8e30cebed93319a272c893d77393839",
+  "prompts": {},
+  "sessions": {
+    "s_330b4caffc139b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ef9e7d2-206d-4a38-87e4-9f3fab2eb473",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
