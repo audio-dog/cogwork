@@ -1,0 +1,53 @@
+configs/lint/tests/rules.test.mjs
+  s_330c88d3939c54::t_b65d023f687761 173-183,185-192
+  s_330c88d3939c54::t_21b9abfa4ecf15 245-262,285-289
+  s_330c88d3939c54::t_35aededb942347 222-225
+  s_330c88d3939c54::t_90bb07f3bc44d5 48,90,158,170,212,218
+  s_330c88d3939c54::t_991985aea47835 184
+configs/lint/tests/fixtures/no-effect-side-effect-wrapper-zip-right/invalid-example.ts
+  s_330c88d3939c54::t_8e817f6206390b 1-2
+  s_330c88d3939c54::t_ed68cccbae8b55 3-6
+configs/lint/tests/fixtures/no-match-effect-branch-option/valid-example.ts
+  s_330c88d3939c54::t_8e817f6206390b 1-4
+configs/lint/tests/fixtures/no-match-effect-branch-option/invalid-example.ts
+  s_330c88d3939c54::t_8e817f6206390b 1-7
+configs/lint/tests/fixtures/no-effect-side-effect-wrapper-zip-right/valid-example.ts
+  s_330c88d3939c54::t_8e817f6206390b 1-2
+  s_330c88d3939c54::t_ed68cccbae8b55 3
+packages/ui/src/hooks/use-mobile.ts
+  s_330c88d3939c54::t_90bb07f3bc44d5 8
+configs/lint/no-effect-ladder.grit
+  s_330c88d3939c54::t_90bb07f3bc44d5 1-16
+biome.json
+  s_330c88d3939c54::t_90bb07f3bc44d5 39-42,80,85
+configs/lint/tests/fixtures/no-flatmap-ladder-flatten/invalid-example.ts
+  s_330c88d3939c54::t_8e817f6206390b 1-4
+apps/desktop/src/renderer/src/components/theme-provider.tsx
+  s_330c88d3939c54::t_90bb07f3bc44d5 116,149,178
+configs/lint/no-side-effect-in-state-updater.grit
+  s_330c88d3939c54::t_90bb07f3bc44d5 1-36
+configs/lint/no-flatmap-ladder.grit
+  s_330c88d3939c54::t_90bb07f3bc44d5 1-20
+packages/ui/src/components/sidebar.tsx
+  s_330c88d3939c54::t_90bb07f3bc44d5 86
+configs/lint/tests/fixtures/no-flatmap-ladder-flatten/valid-example.ts
+  s_330c88d3939c54::t_8e817f6206390b 1-4
+configs/lint/no-use-effect.grit
+  s_330c88d3939c54::t_90bb07f3bc44d5 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "135d615cca60aa1e934230b9e6c5aff2da45552a",
+  "prompts": {},
+  "sessions": {
+    "s_330c88d3939c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea7438ab-7eb0-4f94-b042-61420f9a63df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
