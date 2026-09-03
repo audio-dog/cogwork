@@ -9,10 +9,12 @@ import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
+import { Diagnostic, McpReadiness } from "./configuration-model";
 import { placeholderConfiguration } from "./configuration-placeholder";
 import { resolveEnablement, viewOf } from "./configuration-resolve";
 import {
   configurationWithPlugins,
+  PluginDetailState,
   pluginDetailOf,
   pluginOverviewOf,
   pluginQueryFailure,
@@ -82,7 +84,7 @@ describe("configurationWithPlugins", () => {
     expect(picture.plugins.map((plugin) => plugin.record.pluginId)).toEqual(["linear"]);
     expect(picture.catalogPlugins.map((plugin) => plugin.pluginId)).toEqual(["github"]);
     expect(picture.contributions.at(-1)?.rows[0]?.value).toBe(true);
-    expect(picture.contributions.at(-1)?.readiness?._tag).toBe("not-ready");
+    expect(McpReadiness.$is("not-ready")(picture.contributions.at(-1)?.readiness)).toBe(true);
   });
 
   it("projects Plugin MCP enablement for each workspace overlay", () => {
@@ -151,11 +153,10 @@ describe("configurationWithPlugins", () => {
         scope: { kind: "private-overlay", workspaceId: removed },
         value: false,
         source: "Control store",
-        diagnostic: {
-          _tag: "dangling",
+        diagnostic: Diagnostic.dangling({
           source: "Control store",
           detail: "No loaded MCP server has this identity.",
-        },
+        }),
       },
     ]);
   });
@@ -188,7 +189,7 @@ describe("configurationWithPlugins", () => {
   });
 
   it("keeps a deep-linked Plugin route while data loads", () => {
-    expect(pluginDetailOf([], "linear", "loading")).toEqual({ _tag: "Loading" });
-    expect(pluginDetailOf([], "linear", "ready")).toEqual({ _tag: "Missing" });
+    expect(pluginDetailOf([], "linear", "loading")).toEqual(PluginDetailState.Loading({}));
+    expect(pluginDetailOf([], "linear", "ready")).toEqual(PluginDetailState.Missing({}));
   });
 });
