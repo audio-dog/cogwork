@@ -1,0 +1,184 @@
+apps/desktop/src/main/ipc.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 8,45,49-53,56-57,60-69,94,123,149,191,216,245,264-492
+packages/process-diagnostics/src/synchronous-file-writer.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-10
+packages/engine/src/run-event-codec.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-5
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_adbad50efd40b7::t_7c13bd747cb73f 1,3-8,312,330,349,368,641-642
+apps/desktop/src/shared/ipc.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 2-4,15,28,66-67
+apps/desktop/src/main/index.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 2-5,8,29,44-53,56-59,66-71,103-105,108-111,126-143
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 37
+apps/cli/src/rpc.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 5,9,12,18,82,85,87,89,94-98,308-323
+docs/agent-patterns/effect-schema-unions.md
+  s_adbad50efd40b7::t_7c13bd747cb73f 10,59,61,73,86,90,149-150
+packages/codex-cli/src/harness.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 16,27,32,72,153-161,165-167,173,183-211,213-226,292-309,400-402,458,463-466
+apps/cli/src/replay-commands.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-146
+apps/desktop/src/renderer/src/features/configuration-picture.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-9,34-39,62,99,122
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_adbad50efd40b7::t_51e9df43da6a63 1-6
+  s_adbad50efd40b7::t_fe5a48e5da109a 201
+packages/engine/replay/README.md
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-74
+packages/engine/replay/fixtures/representative-run.json
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-41
+packages/process-diagnostics/src/process-profile-protocol.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-32
+apps/cli/src/cli.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 19,42
+apps/desktop/package.json
+  s_adbad50efd40b7::t_7c13bd747cb73f 30
+apps/desktop/src/main/ipc.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-8,10-15,34-36,40-146,171,187-196
+packages/contracts/src/daemon.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-28
+apps/cli/src/platform.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 2-4,7,26-65,206-209,211-213,218-269,561-562,564,566,569,573,575,581,586,591,614-625,653,656,671,674,686-718,722,725,738,740,752,755,759,779,782,786
+apps/cli/src/status.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-3,5-6,35-40
+apps/desktop/src/main/engine-supervisor.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-7,20,31-35,43,53,59-61,64-65,73,80-81,100,104-109,116,119,121-123,127,181-184,186,199,208-279,283-284,296-299,306,308,311,318,370-371,374
+packages/engine/CONTEXT.md
+  s_adbad50efd40b7::t_7c13bd747cb73f 69,97,237
+packages/engine/src/daemon.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 9,446-448
+packages/process-diagnostics/src/process-profiler.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-132
+packages/engine/src/reconcile.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-7,9-10,303
+apps/cli/src/commands.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 40,292
+packages/process-diagnostics/src/process-profiler.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-215
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-155
+packages/engine/src/replay-harness.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-433
+apps/desktop/src/renderer/src/features/feed.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 3,9,85-87,90
+  s_adbad50efd40b7::t_ef334a870b69a9 53
+apps/cli/src/workspace-commands.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1,40-48,58,72-82,103
+apps/desktop/src/main/window-preferences.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 7,11,14,16-28,30,36-37,39,41,44,46-47,49
+packages/engine/src/event-publisher.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 6,20,479,564-566,568,602-604,625-627,668-670,672,690-692,702-703,730-732,738-741
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_adbad50efd40b7::t_fe5a48e5da109a 1,18-21,24-27,30-33,42
+packages/claude-code/package.json
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-31
+packages/engine/src/run-recorder.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 10,63,95,106-108
+packages/contracts/src/daemon.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 161
+packages/claude-code/tsconfig.json
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-20
+apps/cli/src/process-profile-ipc.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-91
+packages/process-diagnostics/tsconfig.json
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-18
+apps/desktop/electron.vite.config.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 11
+apps/desktop/src/renderer/src/components/settings-general.tsx
+  s_adbad50efd40b7::t_7c13bd747cb73f 1,3-4,9-25,27-46,51-61,66-87
+packages/engine/src/external-harness-runtime.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 22,32,46,238,241-243,248-252,258-261,265-309,485-491,527,545,571,593,595,624,626-627,630,639-643
+packages/process-diagnostics/package.json
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-23
+packages/claude-code/src/index.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1
+apps/desktop/src/renderer/src/features/use-window-preferences.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 4-5,9-10,16,25,28-36,40-42,45-49
+packages/engine/src/executor.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 5,53,80,627-634,637-638,646-651,1135-1139,1142,1330-1332,2094-2146,3534,3537-3539
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_adbad50efd40b7::t_7c13bd747cb73f 4-5,13,119-125,138-158,163,165-166,168-169,174-177,179-180,185,188,190-229,255,260,264
+apps/desktop/src/main/window-preferences.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-30
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1,3-8,24,36-49
+CONTEXT-MAP.md
+  s_adbad50efd40b7::t_7c13bd747cb73f 22,48
+apps/cli/package.json
+  s_adbad50efd40b7::t_7c13bd747cb73f 15,20
+apps/desktop/src/main/engine-command.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1,16,27-32,44,48-52,56,58-62
+apps/desktop/src/renderer/src/features/attention.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-2,4-8,36,64
+packages/engine/src/commands.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 9,26,511,785-788,1063,1097,1099,1108-1110,1128,1177-1179,1233-1235,1349,1353,1377,1421,1607,1612,1621,1643,1652-1655,1672,1699,1708,1736,1739-1742
+packages/engine/src/daemon-event-bus.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-8,75
+packages/engine/src/executor.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 106-107,1255-1259,1265-1278,1281,1548-1563
+  s_adbad50efd40b7::t_ad6bb1f3f1cb65 1564
+apps/desktop/src/main/engine-command.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 16,21,23-26,42,56,76-99
+packages/engine/src/recovery.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-3,5-8,265-269,304
+packages/engine/src/tools/owned-tools.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 33-40,49-51
+packages/engine/src/external-harness-runtime.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-9,27,51-52,54,59-61,851-913
+  s_adbad50efd40b7::t_1da5cfd80258e6 914-915
+packages/engine/src/scheduler.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-8,248
+apps/desktop/src/renderer/src/features/settings-catalog.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 21-25,63
+packages/engine/src/daemon-event-bus.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1,107-111
+packages/claude-code/src/harness.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-459
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 3,5,21-22,30-36,54,122,175-256,416,430
+packages/claude-code/src/harness.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-791
+packages/claude-code/CONTEXT.md
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-39
+packages/engine/src/replay-harness.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-252
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1,60
+packages/engine/src/engine.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 6,9,655,657,677,686-688,739-741,887,889,1154-1155,1216-1217,1219-1220
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 32-39,62-64,413-415
+apps/cli/src/external-harness.test.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-15
+apps/desktop/src/preload/index.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 37
+apps/cli/src/platform.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 9,75-83,115,117,119-121,127,136-139,145
+packages/process-diagnostics/src/index.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 1-2
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_adbad50efd40b7::t_478cf70abb88a2 40-51,53
+  s_adbad50efd40b7::t_fae980d516174b 52
+packages/engine/src/index.ts
+  s_adbad50efd40b7::t_7c13bd747cb73f 30
+pnpm-lock.yaml
+  s_adbad50efd40b7::t_8d553e7a302529 18-20,105-107,120-122,190-192,327-366,533-554,2189-2194,6918-6922
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "95a782c64993c1e8623726e3d7d668f9cd33efbb",
+  "prompts": {},
+  "sessions": {
+    "s_adbad50efd40b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3de78da9-460f-46c7-954a-e6f06aa3992b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
