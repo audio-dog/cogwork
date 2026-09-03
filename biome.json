@@ -32,14 +32,12 @@
     }
   },
   "plugins": [
-    "./configs/lint/react.grit",
     "./configs/lint/ladders.grit",
     "./configs/lint/effect-calls.grit",
     "./configs/lint/iife.grit",
     "./configs/lint/staging.grit",
     "./configs/lint/member-calls.grit",
-    "./configs/lint/gated.grit",
-    "./configs/lint/jsx.grit"
+    "./configs/lint/gated.grit"
   ],
   "javascript": {
     "formatter": {
@@ -75,6 +73,14 @@
           }
         }
       }
+    },
+    {
+      "includes": ["**/*.tsx"],
+      "plugins": ["./configs/lint/jsx.grit"]
+    },
+    {
+      "includes": ["apps/desktop/src/**", "packages/ui/src/**"],
+      "plugins": ["./configs/lint/react.grit"]
     }
   ]
 }
