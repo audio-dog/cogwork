@@ -1330,6 +1330,15 @@ function provide(
 const provideReplay = (runners: ReadonlyArray<TestRunner>) =>
   provide(runners, worktreeStubLayer, noopProviderLayer, trackerRecorder(), runnableReplayStages);
 
+const runFromFreshExecutor = () =>
+  Effect.flatMap(Executor.Executor, (executor) =>
+    execute(executor, implementWorkspace, implementItem).pipe(
+      Effect.andThen(RunLedger.RunLedger),
+      Effect.flatMap((ledger) => ledger.listRuns(1)),
+      Effect.flatMap(([run]) => (run ? Effect.succeed(run.id) : Effect.die("executor recorded no Run"))),
+    ),
+  ).pipe(Effect.provide(provide([runner(implementEvents)])));
+
 const harnessSwitchLayer = (alternates: ReadonlyArray<HarnessName>) =>
   provide(
     [
@@ -2143,6 +2152,12 @@ describe("Executor.execute", () => {
       assert.isTrue(runs.every((run) => run.status === "succeeded"));
     }).pipe(Effect.provide(provideReplay([recordOnlyRunner(implementEvents)])));
   });
+
+  it.effect("mints globally unique Run IDs across Executor lifetimes", () =>
+    Effect.all([runFromFreshExecutor(), runFromFreshExecutor()]).pipe(
+      Effect.map(([first, second]) => assert.notStrictEqual(first, second)),
+    ),
+  );
 
   it.effect("correlates claimed-run library logs and spans", () => {
     return Effect.gen(function* () {

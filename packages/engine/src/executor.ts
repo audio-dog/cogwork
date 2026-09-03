@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   AvailabilityCause,
   ControlStoreFailure,
@@ -38,7 +39,6 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -410,7 +410,6 @@ export const make = Effect.gen(function* () {
     ),
   );
   const releaseClaim = makeReleaseClaim(issueTracker);
-  const runCounter = yield* Ref.make(0);
   const claimCooldowns = yield* Cooldown.make;
 
   const cleanupRunContext = (runId: RunId) =>
@@ -547,11 +546,8 @@ export const make = Effect.gen(function* () {
     } satisfies PreparedHarnessRequest;
   });
 
-  const nextRunId = (startedAtMillis: number) =>
-    Ref.getAndUpdate(runCounter, (n) => n + 1).pipe(
-      Effect.flatMap((n) => decodeRunId(`run-${startedAtMillis}-${n}`)),
-      Effect.orDie,
-    );
+  const nextRunId = () =>
+    Effect.sync(() => `run-${randomUUID()}`).pipe(Effect.flatMap(decodeRunId), Effect.orDie);
 
   const mintSession = (workspace: RegisteredWorkspace, ops: StageOps, startedAtMillis: number) =>
     sessionStore.mint(
@@ -1599,7 +1595,7 @@ export const make = Effect.gen(function* () {
     startedAtMillis: number,
     observation: RunPlanObservation,
   ) {
-    const runId = yield* nextRunId(startedAtMillis);
+    const runId = yield* nextRunId();
     const correlation = {
       workspace: workspace.config.name,
       item: item.id,
