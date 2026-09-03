@@ -1,0 +1,42 @@
+apps/desktop/src/renderer/src/features/harness-catalog.ts
+  s_330b4caffc139b::t_04116799ad7546 3,13,24-25,31-32,46-47
+.gitignore
+  s_330b4caffc139b::t_505729a80d2b3a 35-37
+apps/desktop/src/renderer/src/features/provider-presentation.ts
+  s_330b4caffc139b::t_04116799ad7546 1,3,10,12
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_330b4caffc139b::t_137afef21ff090 12,19,79
+apps/desktop/src/renderer/src/features/settings-catalog.test.ts
+  s_330b4caffc139b::t_137afef21ff090 54,62-63
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_330b4caffc139b::t_04116799ad7546 54,132,186,231
+apps/desktop/src/renderer/src/features/provider-presentation.test.ts
+  s_330b4caffc139b::t_04116799ad7546 2,4-7,10-12
+apps/desktop/CONTEXT.md
+  s_330b4caffc139b::t_653db09e509308 185-190,192-193
+apps/desktop/src/renderer/src/components/provider-glyph.tsx
+  s_330b4caffc139b::t_04116799ad7546 8,14,18
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_330b4caffc139b::t_eb6e326be1c1d4 22,78-80,120,134,153,173,187,205,292-296,376,385
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_330b4caffc139b::t_d35411f667d529 24-26,28-29,118,122,194,221,224,257,259,321,355,372,391-394
+  s_330b4caffc139b::t_a254ce0028801d 33,35,50-52,56,62-63,65-66,73,99,103,139,141-142,147,149,245,248,294,299,319,332,336,342,346,353,356-357,362,365-369,375,385-386,388
+  s_330b4caffc139b::t_fb1cc1169d7baf 20,22-23,27
+  s_330b4caffc139b::t_62a3105974d4f3 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "24527a9824fee6848e8a5ecf1318d9aa648dac5c",
+  "prompts": {},
+  "sessions": {
+    "s_330b4caffc139b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ef9e7d2-206d-4a38-87e4-9f3fab2eb473",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
