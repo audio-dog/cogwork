@@ -914,6 +914,27 @@ describe("external Harness runtime", () => {
           },
           {
             type: EventType.CUSTOM,
+            name: "file.changed",
+            value: {
+              path: "/checkout/.repos/effect/packages/effect/src/Stream.ts",
+              diff: "diff --git a/r b/r",
+            },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/node_modules/left-pad/index.js", diff: "diff --git a/m b/m" },
+          },
+          // TanStack makes `diff` optional, so a file event with no diff is a real
+          // shape. It cannot carry the shared contract and must not survive under
+          // its native name.
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/nodiff.ts", type: "change", timestamp: 1 },
+          },
+          {
+            type: EventType.CUSTOM,
             name: "structured-output.complete",
             value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
           },
@@ -928,6 +949,8 @@ describe("external Harness runtime", () => {
           diffs.map((event) => event.value.path),
           ["big.ts", "src/.tanstack-nested.ts", "."],
         );
+        // Nothing escapes under the native name, whatever the payload was.
+        assert.isFalse(output.some((event) => event.name === "file.changed"));
         const big = diffs[0];
         if (!big) return assert.fail("the oversized diff was dropped");
         assert.isBelow(Buffer.byteLength(big.value.diff), Buffer.byteLength(oversized));

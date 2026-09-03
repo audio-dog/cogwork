@@ -66,7 +66,7 @@ import {
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
 import { SessionStore } from "./session-store";
-import { boundedDiff } from "./tools/file-diff-feed";
+import { boundedDiff, ignored } from "./tools/file-diff-feed";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
 type AdapterOptions<Adapter extends AnyTextAdapter> = Adapter["~types"]["providerOptions"];
@@ -556,11 +556,20 @@ const normalizeFileEvent = (event: AgUiEvent, checkoutPath: string) => {
 const reservedScratch = /^\.tanstack-[^/]*$/;
 
 const publicFileEvent = (event: AgUiEvent) => {
+  // A native file event that could not carry the shared contract keeps its native
+  // name through `normalizeFileEvent`. TanStack's payload makes `diff` optional, so
+  // this is a real shape, and it has no diff to show — drop it rather than persist
+  // an event under a name no client reads.
+  if (AgUiEvent.guards.CUSTOM(event) && event.name === "file.changed") return false;
   if (!agUiIsFileDiffEvent(event)) return true;
   // A touched-but-unchanged file still reports a change; an empty diff would render
   // as an activity entry with nothing in it.
   if (event.value.diff === "") return false;
-  return !reservedScratch.test(event.value.path);
+  if (reservedScratch.test(event.value.path)) return false;
+  // The Sandbox watcher only skips `.git` and `node_modules`, and `defineSandbox`
+  // exposes no ignore list. Share the owned feed's segments so one list serves both
+  // ends of the same client contract.
+  return !ignored(event.value.path);
 };
 
 const preserveUsage: ExternalHarnessUsageEstimator = (_request, event) => event;
