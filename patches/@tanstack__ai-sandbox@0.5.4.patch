@@ -1,23 +1,170 @@
+diff --git a/dist/esm/middleware.js b/dist/esm/middleware.js
+index 74b7bbca..db881102 100644
+--- a/dist/esm/middleware.js
++++ b/dist/esm/middleware.js
+@@ -391,6 +391,7 @@ function withSandbox(definition, options) {
+ 							dispatchDefinitionHooks(hooks, enriched, logger);
+ 							runtime?.emit(enriched);
+ 							if (fe.diff) pendingDiffs.push(enriched.diff().then((diff) => {
++								if (diff === "") return;
+ 								runtime?.emitFileDiff({
+ 									path: event.path,
+ 									diff
+@@ -430,10 +431,10 @@ function withSandbox(definition, options) {
+ 		async onChunk(ctx, chunk) {
+ 			const state = runState.get(ctx);
+ 			state?.toolHistory.observe(chunk, ctx);
+-			if (state && chunk.type === "RUN_FINISHED" && chunk.outcome?.type === "interrupt") {
+-				await drainWatcher(state, "pause");
+-				await stopSnapshotLease(state, { closePortable: true });
+-			}
++			if (!state || chunk.type !== "RUN_FINISHED") return;
++			const interrupted = chunk.outcome?.type === "interrupt";
++			await drainWatcher(state, interrupted ? "pause" : "finish");
++			if (interrupted) await stopSnapshotLease(state, { closePortable: true });
+ 		},
+ 		async onFinish(ctx) {
+ 			const state = runState.get(ctx);
 diff --git a/dist/esm/watch.js b/dist/esm/watch.js
-index b645d68..26db154 100644
+index 040f0ee2..f90f13f3 100644
 --- a/dist/esm/watch.js
 +++ b/dist/esm/watch.js
-@@ -61,3 +61,4 @@ function q(value) {
+@@ -59,7 +59,8 @@ function diffSnapshots(prev, next, timestamp) {
+ * root-normalized in {@link parseFindOutput}.
+ */
  function buildFindCommand(ignore) {
 -	return `find . -type f ${ignore.map((entry) => `-not -path ${q(`*/${entry}/*`)}`).join(" ")} -printf '%T@\\t%s\\t%p\\n'`;
 +	const find = `find . -type f ${ignore.map((entry) => `-not -path ${q(`*/${entry}/*`)}`).join(" ")}`;
-+	return `if stat -f '%m' . >/dev/null 2>&1; then ${find} -exec stat -f '%m\t%z\t%N' {} +; else ${find} -printf '%T@\\t%s\\t%p\\n'; fi`;
++	return `if stat -f '%m' . >/dev/null 2>&1; then ${find} -exec stat -f '%Fm\t%z\t%N' {} +; else ${find} -printf '%T@\\t%s\\t%p\\n'; fi`;
  }
+ /**
+ * Parse `find -printf` output into a `Map<path, signature>`. `find .` prints
+@@ -245,7 +246,11 @@ async function startPollWatch(handle, options) {
+ 			seededFromComplete = poll.complete;
+ 		}
+ 	}
+-	const state = { running: true };
++	const state = {
++		running: true,
++		tick: Promise.resolve(),
++		stopping: null
++	};
+ 	const tick = async () => {
+ 		if (!state.running) return;
+ 		try {
+@@ -272,16 +277,21 @@ async function startPollWatch(handle, options) {
+ 			});
+ 		}
+ 	};
+-	const timer = setInterval(() => void tick(), intervalMs);
++	const runTick = () => {
++		state.tick = state.tick.then(tick);
++		return state.tick;
++	};
++	const timer = setInterval(() => void runTick(), intervalMs);
+ 	if (typeof timer.unref === "function") timer.unref();
+ 	const stop = () => {
+-		if (state.running) {
++		if (state.stopping) return state.stopping;
++		clearInterval(timer);
++		options.signal?.removeEventListener("abort", onAbort);
++		state.stopping = runTick().finally(() => {
+ 			state.running = false;
+-			clearInterval(timer);
+ 			controller.abort();
+-			options.signal?.removeEventListener("abort", onAbort);
+-		}
+-		return Promise.resolve();
++		});
++		return state.stopping;
+ 	};
+ 	const onAbort = () => void stop();
+ 	options.signal?.addEventListener("abort", onAbort, { once: true });
+diff --git a/src/middleware.ts b/src/middleware.ts
+index aba99a20..9d150b04 100644
+--- a/src/middleware.ts
++++ b/src/middleware.ts
+@@ -923,6 +923,7 @@ export function withSandbox<TOffset extends string = string>(
+                   enriched
+                     .diff()
+                     .then((diff) => {
++                      if (diff === '') return
+                       runtime?.emitFileDiff({ path: event.path, diff })
+                     })
+                     .catch((error: unknown) => {
+@@ -989,14 +990,10 @@ export function withSandbox<TOffset extends string = string>(
+     async onChunk(ctx, chunk) {
+       const state = runState.get(ctx)
+       state?.toolHistory.observe(chunk, ctx)
+-      if (
+-        state &&
+-        chunk.type === 'RUN_FINISHED' &&
+-        chunk.outcome?.type === 'interrupt'
+-      ) {
+-        await drainWatcher(state, 'pause')
+-        await stopSnapshotLease(state, { closePortable: true })
+-      }
++      if (!state || chunk.type !== 'RUN_FINISHED') return
++      const interrupted = chunk.outcome?.type === 'interrupt'
++      await drainWatcher(state, interrupted ? 'pause' : 'finish')
++      if (interrupted) await stopSnapshotLease(state, { closePortable: true })
+     },
+ 
+     async onFinish(ctx) {
 diff --git a/src/watch.ts b/src/watch.ts
-index 1260731..af9092b 100644
+index bf7c858d..f99d3a88 100644
 --- a/src/watch.ts
 +++ b/src/watch.ts
-@@ -93,6 +93,7 @@ function q(value: string): string {
- function buildFindCommand(ignore: Array<string>): string {
+@@ -94,7 +94,8 @@ function buildFindCommand(ignore: Array<string>): string {
    const prunes = ignore
      .map((entry) => `-not -path ${q(`*/${entry}/*`)}`)
      .join(' ')
 -  return `find . -type f ${prunes} -printf '%T@\\t%s\\t%p\\n'`
 +  const find = `find . -type f ${prunes}`
-+  return `if stat -f '%m' . >/dev/null 2>&1; then ${find} -exec stat -f '%m\t%z\t%N' {} +; else ${find} -printf '%T@\\t%s\\t%p\\n'; fi`
++  return `if stat -f '%m' . >/dev/null 2>&1; then ${find} -exec stat -f '%Fm\t%z\t%N' {} +; else ${find} -printf '%T@\\t%s\\t%p\\n'; fi`
  }
+ 
+ /**
+@@ -351,7 +352,11 @@ async function startPollWatch(
+       seededFromComplete = poll.complete
+     }
+   }
+-  const state = { running: true }
++  const state: { running: boolean; tick: Promise<void>; stopping: Promise<void> | null } = {
++    running: true,
++    tick: Promise.resolve(),
++    stopping: null,
++  }
+ 
+   const tick = async (): Promise<void> => {
+     if (!state.running) return
+@@ -396,18 +401,23 @@ async function startPollWatch(
+     }
+   }
+ 
+-  const timer = setInterval(() => void tick(), intervalMs)
++  const runTick = () => {
++    state.tick = state.tick.then(tick)
++    return state.tick
++  }
++  const timer = setInterval(() => void runTick(), intervalMs)
+   // Don't keep the event loop alive on the watcher alone.
+   if (typeof timer.unref === 'function') timer.unref()
+ 
+   const stop = (): Promise<void> => {
+-    if (state.running) {
++    if (state.stopping) return state.stopping
++    clearInterval(timer)
++    options.signal?.removeEventListener('abort', onAbort)
++    state.stopping = runTick().finally(() => {
+       state.running = false
+-      clearInterval(timer)
+       controller.abort()
+-      options.signal?.removeEventListener('abort', onAbort)
+-    }
+-    return Promise.resolve()
++    })
++    return state.stopping
+   }
+   const onAbort = (): void => void stop()
+   options.signal?.addEventListener('abort', onAbort, { once: true })

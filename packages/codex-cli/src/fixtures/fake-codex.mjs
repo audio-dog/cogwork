@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { once } from "node:events";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readFile, utimes, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -38,8 +38,9 @@ if (process.argv.includes("login") && process.argv.includes("status")) {
 
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
 if (process.argv.includes("--emit-change")) {
-  await writeFile(`${process.cwd()}/tracked.txt`, "changed by Codex\n");
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2_100);
+  const trackedPath = `${process.cwd()}/tracked.txt`;
+  await writeFile(trackedPath, "changed by Codex\n");
+  if (process.argv.includes("--fixed-mtime")) await utimes(trackedPath, 1_577_836_800, 1_577_836_800.5);
 }
 // Resolve the bearer exactly as Codex would: read the env var NAMED by the
 // `bearer_token_env_var` config override, so a drift between the argv name and the
