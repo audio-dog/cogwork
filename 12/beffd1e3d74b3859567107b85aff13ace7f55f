@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_eea0b6ad2aea02::t_1cffa8e80f37b4 8,330
+apps/desktop/src/renderer/src/components/scheduler-gauges.tsx
+  s_eea0b6ad2aea02::t_1cffa8e80f37b4 5,54,67
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_eea0b6ad2aea02::t_1cffa8e80f37b4 8,255
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_eea0b6ad2aea02::t_1cffa8e80f37b4 27,711
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "12beffd1e3d74b3859567107b85aff13ace7f55f",
+  "prompts": {},
+  "sessions": {
+    "s_eea0b6ad2aea02": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0654d-4b45-7872-84bf-facc42544e80",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
