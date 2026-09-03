@@ -1,5 +1,9 @@
 language js(typescript, jsx)
 
+// Several of these dropped the Effect import gate the originals carried, so they now
+// apply repository-wide. Every root here names `Effect` in the pattern itself, so the
+// gate only added cost. Two rules could not drop it and live in gated.grit instead.
+//
 // Biome runs one pass over every source file for each plugin file,
 // so a rule in its own file re-walks the whole repository. One node-kind-filtered
 // root shared by many rules collapses those passes into one. See issue #433.

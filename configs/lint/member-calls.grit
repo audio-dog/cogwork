@@ -1,5 +1,9 @@
 language js(typescript, jsx)
 
+// Three of these dropped the Effect import gate the originals carried, so they now
+// apply repository-wide. `Match.when(...)`, `Option.as(...)` and `Runtime.runFork(...)`
+// name their module in the pattern itself, so the gate only added cost.
+//
 // Biome runs one pass over every source file for each plugin file, so rules that
 // share a root pattern share a file rather than each re-walking the repository.
 // See issue #433.

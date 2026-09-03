@@ -1,5 +1,10 @@
 language js(typescript, jsx)
 
+// These dropped the Effect import gate the originals carried, so they now apply
+// repository-wide rather than only to files importing Effect. That is deliberate:
+// an IIFE hides sequencing wherever it appears, and the gate cost more than the
+// rules did. Nothing in the repository relied on the narrower reach.
+//
 // A top-level call root lets Biome reject non-matching nodes by kind. The earlier
 // `file($body) where { contains ... }` form re-walked every file instead, which cost
 // about thirty times as much. See issue #433.

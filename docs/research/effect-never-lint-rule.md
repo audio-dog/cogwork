@@ -109,7 +109,7 @@ No source found.
   (`docs/agent-patterns/effect-fiber-lifecycle.md`).
 - **"It leaks resources."** False as stated. The effect owns nothing, so it can leak
   nothing. A leak needs an unowned fiber. This repo already guards that edge with
-  `configs/lint/no-runtime-runfork.grit` and with the fiber-lifecycle pattern doc's rule
+  the `Runtime.runFork` rule in `configs/lint/member-calls.grit` and with the fiber-lifecycle pattern doc's rule
   "Never use `Effect.forkDetach` in the engine"
   (`docs/agent-patterns/effect-fiber-lifecycle.md`, "Cogwork conventions").
 - **"Fix: use Stream or acquire/release."** The fix does not match the uses. A test that
