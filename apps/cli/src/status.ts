@@ -65,6 +65,10 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
       (item) => `${item.reason} ${item.id} ${item.title}${proposalPreview(item.proposal)}`,
     ),
   );
+  const readyToMerge = section(
+    "ready-to-merge",
+    workspace.readyToMerge.map((item) => `${item.id} ${item.title} (PR #${item.pr.number})`),
+  );
   return [
     `  - ${workspaceLabel(workspace)} [${workspace.issueTracker}] ${workspace.checkoutPath}`,
     ...poll,
@@ -72,6 +76,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     ...claimed,
     ...blocked,
     ...needsHuman,
+    ...readyToMerge,
   ].join("\n");
 };
 

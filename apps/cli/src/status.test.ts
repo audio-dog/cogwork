@@ -18,6 +18,7 @@ const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   claimed: [],
   blocked: [],
   needsHuman: [],
+  readyToMerge: [],
   ...over,
   availability: over.availability ?? [],
   contributions: over.contributions ?? [],
@@ -117,6 +118,34 @@ describe("formatStatus", () => {
       "        · needs-info #3 waiting on details — Which auth provider should this target?",
     );
     assert.include(output, "        · ready-for-human #9 keeps failing");
+  });
+
+  it("renders a ready-to-merge section with each pull request", () => {
+    const output = formatStatus(
+      status({
+        workspaces: [
+          workspace({
+            readyToMerge: [
+              {
+                id: workItemId("#7"),
+                title: "approved change",
+                pr: {
+                  number: 17,
+                  url: "https://github.com/acme/repo/pull/17",
+                  checks: "passing",
+                  review: "ready",
+                  baseDivergence: "none",
+                  waitingSinceMillis: 0,
+                },
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    assert.include(output, "      ready-to-merge:");
+    assert.include(output, "        · #7 approved change (PR #17)");
   });
 
   it("collapses and truncates a long triage proposal preview to one line", () => {
