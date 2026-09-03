@@ -24,7 +24,12 @@ import type {
   SandboxProvider,
   WorkspaceDefinition,
 } from "@tanstack/ai-sandbox";
-import { createSecrets, getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
+import {
+  createSecrets,
+  getSandbox,
+  getWorkspaceProjection,
+  SandboxDurabilityCapability,
+} from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -54,6 +59,7 @@ import { SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
+const freshSession = Schema.decodeSync(SessionId)("sess-external-fresh");
 const resumedSession = Schema.decodeSync(SessionId)("sess-external-147");
 const secondCheckoutRunId = Schema.decodeSync(RunId)("run-second-checkout");
 const secretWorkspace = Schema.decodeSync(WorkspaceId)("workspace-secret-test");
@@ -225,7 +231,8 @@ const controlledProvider = (
 const harnessServices = {
   sessionStore: {
     persistence: memoryPersistence(),
-    resumeHandle: () => Effect.succeed("native-session-147"),
+    resumeHandle: (session: SessionId) =>
+      Effect.succeed(session === resumedSession ? "native-session-147" : null),
     mint: () => Effect.die("unexpected mint"),
   },
   contextAssembler: {
@@ -432,7 +439,7 @@ describe("external Harness runtime", () => {
           });
 
           yield* harness
-            .run({ plan: request, session: null, mcpCredentials: new Map() })
+            .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
             .pipe(Stream.runDrain);
 
           assert.strictEqual(workspaces.length, 1);
@@ -486,7 +493,7 @@ describe("external Harness runtime", () => {
           }),
         ]);
 
-        yield* harness.run({ plan, session: null, mcpCredentials: new Map() }).pipe(Stream.runDrain);
+        yield* harness.run({ plan, session: freshSession, mcpCredentials: new Map() }).pipe(Stream.runDrain);
 
         assert.deepStrictEqual(reads, ["supporting guide"]);
         assert.isFalse(yield* fs.exists(`${checkout}/GUIDE.md`));
@@ -616,7 +623,7 @@ describe("external Harness runtime", () => {
           ])
             .run({
               plan,
-              session: null,
+              session: freshSession,
               mcpCredentials: new Map([
                 ["local:repo/mcp/linear.api", Redacted.make(`${version}-dot-bearer`)],
                 ["local:repo/mcp/linear-api", Redacted.make(`${version}-dash-bearer`)],
@@ -688,7 +695,7 @@ describe("external Harness runtime", () => {
         ])
           .run({
             plan,
-            session: null,
+            session: freshSession,
             mcpCredentials: new Map([["local:repo/mcp/linear.api", Redacted.make("native-bearer")]]),
           })
           .pipe(Stream.runDrain);
@@ -742,7 +749,7 @@ describe("external Harness runtime", () => {
         });
 
         const error = yield* harness
-          .run({ plan, session: null, mcpCredentials: new Map() })
+          .run({ plan, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runDrain, Effect.flip);
 
         assert.strictEqual(error.reason, "workspace");
@@ -773,7 +780,7 @@ describe("external Harness runtime", () => {
         });
 
         const error = yield* harness
-          .run({ plan, session: null, mcpCredentials: new Map() })
+          .run({ plan, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runDrain, Effect.flip);
 
         assert.strictEqual(error.reason, "credential");
@@ -806,7 +813,7 @@ describe("external Harness runtime", () => {
         ];
         const harness = makeHarness(descriptor(events, probe), created);
         const output = yield* harness
-          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runCollect);
 
         assert.deepStrictEqual(created, ["none"]);
@@ -826,14 +833,14 @@ describe("external Harness runtime", () => {
         assert.strictEqual(launch?.model, "controlled");
         assert.strictEqual(launch?.authentication, "host");
         assert.strictEqual(launch?.request.identity.run, request.id);
-        assert.isNull(launch?.request.identity.session);
+        assert.strictEqual(launch?.request.identity.session, freshSession);
         assert.strictEqual(launch?.request.policy, "full");
         assert.strictEqual(launch?.request.checkout.path, "/checkout");
         assert.strictEqual(launch?.request.operatingInstructions.path, "/instructions/implement-agent");
         assert.deepStrictEqual(launch?.request.prompt, request.messages);
         assert.deepStrictEqual(launch?.request.outputSchema, request.structuredOutput);
         assert.strictEqual(probe.chatOptions[0]?.runId, request.id);
-        assert.strictEqual(probe.chatOptions[0]?.threadId, request.id);
+        assert.strictEqual(probe.chatOptions[0]?.threadId, freshSession);
         assert.deepStrictEqual(probe.chatOptions[0]?.modelOptions, {
           effort: "high",
           authentication: "host",
@@ -882,7 +889,7 @@ describe("external Harness runtime", () => {
           },
         );
         const output = yield* harness
-          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runCollect);
 
         assert.strictEqual(output[0]?.type, EventType.RUN_STARTED);
@@ -900,7 +907,7 @@ describe("external Harness runtime", () => {
           stage: "implement",
           harness: name,
           branch: null,
-          session: null,
+          session: freshSession,
           usage: null,
           status: "running",
           startedAtMillis: 1,
@@ -939,7 +946,37 @@ describe("external Harness runtime", () => {
             resumeHandle: "native-session-147",
           },
         });
+        assert.strictEqual(probe.chatOptions[0]?.runId, request.id);
+        assert.strictEqual(probe.chatOptions[0]?.threadId, resumedSession);
         assert.strictEqual(probe.chatOptions[0]?.modelOptions?.sessionId, "native-session-147");
+      }),
+    );
+
+    it.effect("keeps the shared external Harness launch nondurable", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const harness = makeHarness(descriptor(terminalEvents, probe), []);
+
+        yield* harness
+          .run({ plan: request, session: resumedSession, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain);
+
+        const options = probe.chatOptions[0];
+        if (!options) return yield* Effect.die("external Harness opened no chat");
+        assert.isFalse(SandboxDurabilityCapability.has(runtimeCapabilities(options)));
+      }),
+    );
+
+    it.effect("rejects an external launch without a Cogwork Session", () =>
+      Effect.gen(function* () {
+        const harness = makeHarness(descriptor(terminalEvents, new ControlledProbe()), []);
+
+        const error = yield* harness
+          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "launch");
+        assert.include(error.message, "requires a Cogwork Session");
       }),
     );
 
@@ -968,7 +1005,7 @@ describe("external Harness runtime", () => {
         );
 
         yield* harness
-          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.take(1), Stream.runDrain);
 
         assert.deepStrictEqual(probe.cancellations, [true]);
@@ -990,7 +1027,7 @@ describe("external Harness runtime", () => {
         };
         const harness = makeHarness(controlledDescriptor, created);
         const error = yield* harness
-          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runDrain, Effect.flip);
 
         assert.strictEqual(error.reason, "launch");
@@ -1007,7 +1044,7 @@ describe("external Harness runtime", () => {
           authentication: Effect.succeed({ mode: "byok", secrets: {} }),
         });
         const error = yield* harness
-          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runDrain, Effect.flip);
 
         assert.strictEqual(error.reason, "credential");
@@ -1027,7 +1064,7 @@ describe("external Harness runtime", () => {
         } satisfies SandboxProvider;
         const harness = makeHarness(descriptor([], probe), created, [], { provider });
         const error = yield* harness
-          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runDrain, Effect.flip);
 
         assert.strictEqual(error.reason, "sandbox");
@@ -1060,7 +1097,7 @@ describe("external Harness runtime", () => {
         const error = yield* runner
           .preflight(
             HarnessPreflightInput.Launch({
-              request: { plan: request, session: null, mcpCredentials: new Map() },
+              request: { plan: request, session: freshSession, mcpCredentials: new Map() },
             }),
           )
           .pipe(Effect.flip);
@@ -1081,7 +1118,7 @@ describe("external Harness runtime", () => {
           middleware: [],
         });
         const error = yield* harness
-          .run({ plan, session: null, mcpCredentials: new Map() })
+          .run({ plan, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runDrain, Effect.flip);
 
         assert.strictEqual(error.reason, "sandbox");
@@ -1101,7 +1138,7 @@ describe("external Harness runtime", () => {
           sandbox: { ...request.sandbox, policy: "read-only" },
         });
         const error = yield* harness
-          .run({ plan, session: null, mcpCredentials: new Map() })
+          .run({ plan, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runDrain, Effect.flip);
 
         assert.strictEqual(error.reason, "policy");
@@ -1131,10 +1168,12 @@ describe("external Harness runtime", () => {
           ),
           created,
         );
-        const error = yield* harness.run({ plan: request, session: null, mcpCredentials: new Map() }).pipe(
-          Stream.runForEach((event) => Effect.sync(() => seen.push(event))),
-          Effect.flip,
-        );
+        const error = yield* harness
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
+          .pipe(
+            Stream.runForEach((event) => Effect.sync(() => seen.push(event))),
+            Effect.flip,
+          );
 
         assert.strictEqual(error.reason, "turn");
         assert.strictEqual(error.retryable, true);

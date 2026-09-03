@@ -81,7 +81,7 @@ export interface ExternalHarnessAuthentication {
 
 export interface ExternalHarnessIdentity {
   readonly run: RunId;
-  readonly session: SessionId | null;
+  readonly session: SessionId;
   readonly resumeHandle: string | null;
 }
 
@@ -402,11 +402,21 @@ const validateExternalRequest = Effect.fn("ExternalHarnessRuntime.validateReques
 });
 
 const resolveResumeHandle = Effect.fn("ExternalHarnessRuntime.resolveResumeHandle")(function* (
-  session: SessionId | null,
+  session: SessionId,
 ) {
-  if (!session) return null;
   const store = yield* SessionStore;
   return yield* store.resumeHandle(session);
+});
+
+const requireSession = Effect.fn("ExternalHarnessRuntime.requireSession")(function* (
+  session: SessionId | null,
+) {
+  if (session) return session;
+  return yield* new HarnessError({
+    reason: "launch",
+    retryable: false,
+    message: "external Harness launch requires a Cogwork Session",
+  });
 });
 
 const sharedGitError = (checkoutPath: string) =>
@@ -449,12 +459,13 @@ const sharedGitDirectory = (
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
   descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
   request: HarnessRequest,
+  session: SessionId,
   authentication: ExternalHarnessAuthentication,
 ) {
-  const resumeHandle = yield* resolveResumeHandle(request.session);
+  const resumeHandle = yield* resolveResumeHandle(session);
   const gitDirectory = yield* sharedGitDirectory(descriptor, request.plan.sandbox.workspace);
   return {
-    identity: { run: request.plan.id, session: request.session, resumeHandle },
+    identity: { run: request.plan.id, session, resumeHandle },
     selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
     authentication,
     policy: request.plan.harness.profile,
@@ -476,8 +487,9 @@ const resolveExternalLaunch = Effect.fn("ExternalHarnessRuntime.resolveLaunch")(
   inputs: ExternalHarnessRuntimeInputs,
   request: HarnessRequest,
 ) {
+  const session = yield* requireSession(request.session);
   const authentication = yield* inputs.authentication(request);
-  const resolved = yield* resolvedRequest(descriptor, request, authentication);
+  const resolved = yield* resolvedRequest(descriptor, request, session, authentication);
   const provider = yield* inputs.sandboxProvider(resolved);
   yield* validateExternalRequest(descriptor, request, resolved, provider);
   const workspaceDefinition = harnessWorkspace(descriptor, resolved);
@@ -539,7 +551,7 @@ const makeChatStream = <Adapter extends AnyTextAdapter, NativeAuthentication>(
     abortController,
     modelOptions: descriptor.projectOptions(request),
     outputSchema: request.outputSchema ?? undefined,
-    threadId: request.identity.session ?? request.identity.run,
+    threadId: request.identity.session,
     runId: request.identity.run,
     stream: true,
     ...(secretValues.length > 0 ? { debug: false } : {}),

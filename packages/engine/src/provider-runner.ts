@@ -1,4 +1,4 @@
-import type { HarnessName, LifecycleStage, RunPlan } from "@cogwork/contracts";
+import type { HarnessName, LifecycleStage, RunId, RunPlan } from "@cogwork/contracts";
 import {
   type AgentLoopStrategy,
   type AnyTool,
@@ -44,6 +44,7 @@ export interface RunChatOptions {
   readonly middleware: ReadonlyArray<ChatMiddleware>;
   readonly agentLoopStrategy: AgentLoopStrategy;
   readonly abortController: AbortController;
+  readonly runId: RunId;
   readonly threadId?: string;
   readonly outputSchema?: JSONSchema;
 }
@@ -58,6 +59,7 @@ const defaultRunChat: RunChat = (options) =>
     middleware: [...options.middleware],
     agentLoopStrategy: options.agentLoopStrategy,
     abortController: options.abortController,
+    runId: options.runId,
     threadId: options.threadId,
     outputSchema: options.outputSchema,
     stream: true,
@@ -233,6 +235,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             middleware,
             agentLoopStrategy: maxIterations(defaultLoopBudget(plan.operation)),
             abortController,
+            runId: plan.id,
             threadId: session ?? undefined,
             outputSchema: plan.structuredOutput ?? undefined,
           });
