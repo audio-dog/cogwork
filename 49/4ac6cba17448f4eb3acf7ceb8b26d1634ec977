@@ -1,0 +1,24 @@
+apps/cli/CONTEXT.md
+  s_a38d1882a40a69::t_78bcfa305abebb 27
+apps/cli/src/external-harness.test.ts
+  s_a38d1882a40a69::t_091b26ab9855e4 1-2,5,8-9,11-12,14-19,21-29,31-40,51-56,58-59
+  s_a38d1882a40a69::t_5e02a68977696a 10,20,30,57
+  s_a38d1882a40a69::t_1b389508fe4a91 13
+  s_a38d1882a40a69::t_f27b9a48bb9bbf 60-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "494ac6cba17448f4eb3acf7ceb8b26d1634ec977",
+  "prompts": {},
+  "sessions": {
+    "s_a38d1882a40a69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-3296-70a2-a373-a3565da4aa0b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
