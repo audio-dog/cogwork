@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_adbad50efd40b7::t_8cf2d7f743850b 166,173,177-183,232-237,353-355,362,370
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5e2ddcccc4d98acbe2d223022302910eaedaad00",
+  "prompts": {},
+  "sessions": {
+    "s_adbad50efd40b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3de78da9-460f-46c7-954a-e6f06aa3992b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
