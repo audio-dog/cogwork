@@ -4,6 +4,7 @@ import {
   type ClaimedItem,
   type NeedsHumanItem,
   PrSummary,
+  type ReadyToMergeItem,
   SessionId,
   WorkItemId,
   WorkspaceConfig,
@@ -102,6 +103,13 @@ const needsHumanNoPr: NeedsHumanItem = {
   url: "https://github.com/owner/repo/issues/72",
 };
 
+const readyToMerge: ReadyToMergeItem = {
+  id: id("ready"),
+  title: "ready to merge",
+  url: "https://github.com/owner/repo/issues/73",
+  pr: prSummary,
+};
+
 const state: WorkspaceReconcileState = {
   name: workspaceId("example"),
   poll: { status: "ok" },
@@ -109,6 +117,7 @@ const state: WorkspaceReconcileState = {
   claimed: [claimedWithPr, claimedNoPr],
   blocked: [blockedWithPr, blockedNoPr],
   needsHuman: [needsHumanWithPr, needsHumanNoPr],
+  readyToMerge: [readyToMerge],
   observed: [],
   observedCount: 0,
   availability: [
@@ -154,6 +163,7 @@ describe("classifiedItemsOf", () => {
     assert.deepStrictEqual(byId.get(id("c-pr")), { _tag: "Claimed", ...claimedWithPr });
     assert.deepStrictEqual(byId.get(id("b-pr")), { _tag: "Blocked", ...blockedWithPr });
     assert.deepStrictEqual(byId.get(id("h-pr")), { _tag: "NeedsHuman", ...needsHumanWithPr });
+    assert.deepStrictEqual(byId.get(id("ready")), { _tag: "ReadyToMerge", ...readyToMerge });
   });
 
   it("omits the PR key on every bucket without one, and never leaks scheduling-only fields", () => {
@@ -179,7 +189,7 @@ describe("workspaceInfoOf", () => {
     assert.deepStrictEqual(info.availability, state.availability);
   });
 
-  it("projects the same four buckets and PR summaries as the event stream", () => {
+  it("projects the same five buckets and PR summaries as the event stream", () => {
     const info = workspaceInfoOf(workspace, state);
 
     assert.deepStrictEqual(info.eligible, [
@@ -195,13 +205,17 @@ describe("workspaceInfoOf", () => {
     assert.deepStrictEqual(info.claimed, [claimedWithPr, claimedNoPr]);
     assert.deepStrictEqual(info.blocked, [blockedWithPr, blockedNoPr]);
     assert.deepStrictEqual(info.needsHuman, [needsHumanWithPr, needsHumanNoPr]);
+    assert.deepStrictEqual(info.readyToMerge, [readyToMerge]);
   });
 
   it("reports an empty workspace whose poll is pending when it has no reconcile state yet", () => {
     const info = workspaceInfoOf(workspace, undefined);
 
     assert.deepStrictEqual(info.poll, { status: "pending" });
-    assert.deepStrictEqual([info.eligible, info.claimed, info.blocked, info.needsHuman], [[], [], [], []]);
+    assert.deepStrictEqual(
+      [info.eligible, info.claimed, info.blocked, info.needsHuman, info.readyToMerge],
+      [[], [], [], [], []],
+    );
   });
 });
 

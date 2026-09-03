@@ -10,6 +10,7 @@ import {
   NeedsHumanItem,
   OperationAvailabilityList,
   PollState,
+  ReadyToMergeItem,
   SchedulerStats,
 } from "./daemon";
 import { PluginOverview } from "./plugin";
@@ -20,6 +21,7 @@ export const ClassifiedItem = Schema.TaggedUnion({
   Claimed: ClaimedItem.fields,
   Blocked: BlockedItem.fields,
   NeedsHuman: NeedsHumanItem.fields,
+  ReadyToMerge: ReadyToMergeItem.fields,
 });
 export type ClassifiedItem = typeof ClassifiedItem.Type;
 

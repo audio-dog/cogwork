@@ -326,6 +326,7 @@ const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileS
     claimed: [],
     blocked: [],
     needsHuman: [],
+    readyToMerge: [],
     observed: [],
     observedCount: 0,
     availability: [],

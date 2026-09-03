@@ -32,6 +32,22 @@ describe("classified item formatting", () => {
       }),
       "needs-human ready-for-human 4 Decision",
     ],
+    [
+      item({
+        _tag: "ReadyToMerge",
+        id: "5",
+        title: "Approved",
+        pr: {
+          number: 5,
+          url: "https://example.test/pull/5",
+          checks: "passing",
+          review: "ready",
+          baseDivergence: "none",
+          waitingSinceMillis: 0,
+        },
+      }),
+      "ready-to-merge 5 Approved (PR #5)",
+    ],
   ])("formats every classification", (classified, expected) => {
     assert.strictEqual(formatClassifiedItem(classified), expected);
   });

@@ -63,13 +63,12 @@ describe("describeItemState", () => {
     expect(describeItemState(one, null).tone).toBe("muted");
   });
 
-  it("reads Ready to merge when the PR is ready", () => {
+  it("reads Ready to merge from the classification", () => {
     const item = classifiedItem({
-      _tag: "Eligible",
+      _tag: "ReadyToMerge",
       id: "42",
       title: "t",
       url: null,
-      stage: "verify",
       pr: readyPr,
     });
     expect(describeItemState(item, null)).toEqual({
@@ -92,6 +91,7 @@ describe("describeItemState", () => {
       title: "t",
       url: null,
       claim: { by: "agent", claimedAtMillis: 0, stage: "implement" },
+      pr: readyPr,
     });
     expect(describeItemState(claimed, null).label).toBe("Working · implement");
   });

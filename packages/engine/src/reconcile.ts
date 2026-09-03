@@ -6,6 +6,7 @@ import {
   type OperationAvailability,
   type PollPauseReason,
   PollState,
+  type ReadyToMergeItem,
   type WorkspaceId,
   type WorkspaceRegistrationError,
 } from "@cogwork/contracts";
@@ -55,6 +56,7 @@ export interface WorkspaceReconcileState {
   readonly claimed: ReadonlyArray<ClaimedItem>;
   readonly blocked: ReadonlyArray<BlockedItem>;
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
+  readonly readyToMerge: ReadonlyArray<ReadyToMergeItem>;
   readonly observed: ReadonlyArray<ObservedItem>;
   readonly observedCount: number;
   readonly availability: ReadonlyArray<OperationAvailability>;
@@ -89,6 +91,7 @@ const okState = (
   claimed: classified.claimed,
   blocked: classified.blocked,
   needsHuman: classified.needsHuman,
+  readyToMerge: classified.readyToMerge,
   observed,
   observedCount: observed.length,
   availability,
@@ -107,6 +110,7 @@ const pausedState = (workspace: RegisteredWorkspace, pause: Pause): WorkspaceRec
   claimed: [],
   blocked: [],
   needsHuman: [],
+  readyToMerge: [],
   observed: [],
   observedCount: 0,
   availability: [],
