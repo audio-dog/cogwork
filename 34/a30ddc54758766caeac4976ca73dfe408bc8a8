@@ -1,0 +1,19 @@
+packages/engine/src/commands.test.ts
+  s_05d02009edd117::t_669441c03b33bf 495-497
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "34a30ddc54758766caeac4976ca73dfe408bc8a8",
+  "prompts": {},
+  "sessions": {
+    "s_05d02009edd117": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-337f-7a12-9962-8895ebeb110c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
