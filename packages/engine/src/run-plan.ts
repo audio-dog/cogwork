@@ -70,7 +70,13 @@ export const engineSettingScopeDirection = [
   "PrivateWorkspaceOverlay",
 ] as const satisfies readonly SettingScope["_tag"][];
 
-const scopeRank = (scope: SettingScope) => engineSettingScopeDirection.indexOf(scope._tag);
+const scopeRank = (scope: SettingScope) =>
+  SettingScopeSchema.match(scope, {
+    SettingsProfile: () => 0,
+    RuntimeHost: () => 1,
+    WorkspaceInput: () => 2,
+    PrivateWorkspaceOverlay: () => 3,
+  });
 
 const levelRank = (level: SettingLevel, context: OperationSettingContext) =>
   SettingLevelSchema.match(level, {
@@ -180,15 +186,14 @@ export const availabilityCauses = (input: AvailabilityInput) =>
 export const engineAdmissibleSettingScope = (
   family: "contribution" | "operation",
   setting: OperationSettingName | "enabled",
-  scope: SettingScope["_tag"],
-) => {
-  if (family === "contribution") {
-    return scope === "SettingsProfile" || scope === "PrivateWorkspaceOverlay";
-  }
-  if (scope === "WorkspaceInput") return false;
-  if (scope === "RuntimeHost") return setting === "harness";
-  return true;
-};
+  scope: SettingScope,
+) =>
+  SettingScopeSchema.match(scope, {
+    SettingsProfile: () => true,
+    RuntimeHost: () => family === "operation" && setting === "harness",
+    WorkspaceInput: () => false,
+    PrivateWorkspaceOverlay: () => true,
+  });
 
 export const resolveEngineContributionEnabled = <A extends ContributionEnabledRow>(
   rows: readonly A[],
