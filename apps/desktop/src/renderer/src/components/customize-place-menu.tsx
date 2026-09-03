@@ -15,6 +15,7 @@ import { Separator } from "@cogwork/ui/components/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiArrowDownSLine, RiArrowRightSLine, RiCheckDoubleLine } from "@remixicon/react";
+import * as Data from "effect/Data";
 import { type ComponentProps, type ReactNode, useState } from "react";
 import { scopeIcons } from "../features/configuration-icons";
 import {
@@ -30,7 +31,15 @@ import { useCustomizeFilter } from "./customize-filter";
 
 const ProfileIcon = scopeIcons["settings-profile"];
 
-type Highlight = { readonly _tag: "user" } | { readonly _tag: "workspace"; readonly id: Workspace["id"] };
+declare const emptyVariant: unique symbol;
+type EmptyVariant = { readonly [emptyVariant]?: never };
+
+type Highlight = Data.TaggedEnum<{
+  user: EmptyVariant;
+  workspace: { readonly id: Workspace["id"] };
+}>;
+
+const Highlight = Data.taggedEnum<Highlight>();
 
 /** How much of a place is picked. Distinct from `count`, which is how much lives there. */
 type Selection = "none" | "some" | "all";
@@ -144,19 +153,23 @@ export function CustomizePlaceMenu({ kind }: { kind: ContributionKind }) {
     state: { places },
     actions: { setPlaces, togglePlace },
   } = useCustomizeFilter();
-  const [highlight, setHighlight] = useState<Highlight>({ _tag: "user" });
+  const [highlight, setHighlight] = useState<Highlight>(() => Highlight.user({}));
 
   const { workspaces } = picture;
   const profileKey = scopeKey(profilePlace);
   const everything = places.length === placeAxis.placeCount;
-  const workspace =
-    highlight._tag === "workspace" ? workspaces.find((entry) => entry.id === highlight.id) : undefined;
-  const user = highlight._tag === "user";
-  const shown: readonly ScopeRef[] = user
-    ? [profilePlace]
-    : workspace
-      ? workspaceScopeKinds.map((scopeKind) => ({ kind: scopeKind, workspaceId: workspace.id }))
-      : [];
+  const workspace = Highlight.$match(highlight, {
+    user: () => undefined,
+    workspace: ({ id }) => workspaces.find((entry) => entry.id === id),
+  });
+  const user = Highlight.$is("user")(highlight);
+  const shown: readonly ScopeRef[] = Highlight.$match(highlight, {
+    user: () => [profilePlace],
+    workspace: () =>
+      workspace
+        ? workspaceScopeKinds.map((scopeKind) => ({ kind: scopeKind, workspaceId: workspace.id }))
+        : [],
+  });
 
   return (
     <Popover>
@@ -184,7 +197,7 @@ export function CustomizePlaceMenu({ kind }: { kind: ContributionKind }) {
               count={placeAxis.countAt(profilePlace, kind)}
               selection={places.includes(profileKey) ? "all" : "none"}
               active={user}
-              onHighlight={() => setHighlight({ _tag: "user" })}
+              onHighlight={() => setHighlight(Highlight.user({}))}
             />
 
             <span className="px-2 pt-3 pb-1 text-xs text-muted-foreground">Workspaces</span>
@@ -201,8 +214,8 @@ export function CustomizePlaceMenu({ kind }: { kind: ContributionKind }) {
                   // badge's tone, never its number.
                   count={placeAxis.countInWorkspace(entry.id, kind)}
                   selection={selectionOf(picked, keys.length)}
-                  active={highlight._tag === "workspace" && highlight.id === entry.id}
-                  onHighlight={() => setHighlight({ _tag: "workspace", id: entry.id })}
+                  active={Highlight.$is("workspace")(highlight) && highlight.id === entry.id}
+                  onHighlight={() => setHighlight(Highlight.workspace({ id: entry.id }))}
                 />
               );
             })}
