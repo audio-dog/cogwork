@@ -1,0 +1,23 @@
+packages/contracts/src/settings.ts
+  s_5403703a843d43::t_f3f7e8b46b254d 3,46
+packages/contracts/src/settings.test.ts
+  s_5403703a843d43::t_93ac107a7d8d28 7,82-92
+  s_5403703a843d43::t_7cbcd9cd68ceeb 93-95
+  s_5403703a843d43::t_15f8554b6d4649 96-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "24e001a561cfe97037698ce368ac61338aa594c0",
+  "prompts": {},
+  "sessions": {
+    "s_5403703a843d43": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a067a4-6b2d-7a30-831d-57b8b10b23da",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
