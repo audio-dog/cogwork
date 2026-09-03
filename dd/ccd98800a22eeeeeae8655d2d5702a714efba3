@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/components/mcp-configure-dialog.tsx
+  s_16ee42df336e01::t_67ea0f544f60a1 17-18,99,106,109
+apps/desktop/src/renderer/src/components/mcp-facet.test.tsx
+  s_16ee42df336e01::t_fe094ab19f3dac 4,15
+apps/desktop/src/renderer/src/components/mcp-server-row.tsx
+  s_16ee42df336e01::t_67ea0f544f60a1 4-9,25,29
+apps/desktop/src/renderer/src/components/mcp-server-row.test.tsx
+  s_16ee42df336e01::t_fe094ab19f3dac 4,62
+apps/desktop/src/renderer/src/components/mcp-facet.tsx
+  s_16ee42df336e01::t_67ea0f544f60a1 4-10,19,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ddccd98800a22eeeeeae8655d2d5702a714efba3",
+  "prompts": {},
+  "sessions": {
+    "s_16ee42df336e01": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0657b-fb0f-7de0-bc98-f7b61ff0d09f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
