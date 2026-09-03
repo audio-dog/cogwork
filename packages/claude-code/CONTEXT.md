@@ -24,9 +24,9 @@ _Avoid_: Transcript replay, cross-worktree resume
 The Run's MCP servers travel through Claude's inline `--mcp-config` argument. The JSON holds only URLs and `${...}` environment references, so no generated MCP file can enter the driven checkout. The shared runtime resolves each bearer token onto the live Sandbox environment. A repository's own `.mcp.json` is untouched ambient state.
 _Avoid_: `.mcp.json` (that name belongs to the repository), credential file, adapter patch
 
-**Ambient Claude state**:
-Optional instructions, skills, plugins, hooks, and settings that Claude loads from its user and project sources. The session event records what Claude reports. This state never satisfies required instructions, MCP, or policy checks; those arrive through the Harness Workspace and preflight.
-_Avoid_: Harness Workspace, required capability
+**Native Sandbox policy**:
+Every Run starts Claude with the native Sandbox enabled and required. Native startup fails if isolation is unavailable, and commands cannot retry outside it. User, project, and local settings are excluded so merged settings cannot widen the boundary. The full profile allows sandboxed Bash; the read-only profile removes Bash and every native file-edit tool. Required instructions still arrive through the Harness Workspace.
+_Avoid_: Ambient permission, optional Sandbox, unsandboxed retry
 
 **Setup handoff**:
 Readiness checks installation, supported CLI version, and the runner's explicit authentication binding independently. Host login checks `claude auth status` and gives the operator a `claude auth login` path. Anthropic BYOK checks the Credential store and gives the operator a `cogwork login key --provider anthropic` path. A failed binding never tries the other mode. An unavailable Claude Code runner does not block other registered Harnesses.

@@ -68,6 +68,7 @@ const capture = {
   cwd: process.cwd(),
   files: await readdir(process.cwd(), { recursive: true }),
   settingSources: valueAfter("--setting-sources"),
+  settings: valueAfter("--settings"),
   resume: valueAfter("--resume"),
   forkSession: process.argv.includes("--fork-session"),
   authMode: process.argv.includes("--bare") ? "bare" : "host",

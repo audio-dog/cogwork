@@ -592,6 +592,7 @@ describe("Harness", () => {
 
     it.effect("refuses every unsupported hard posture before runner launch", () =>
       Effect.gen(function* () {
+        const alternativeName = yield* Schema.decodeEffect(HarnessName)("capable-alternative");
         const postures = [
           {
             expected: "non-interactive",
@@ -616,7 +617,16 @@ describe("Harness", () => {
               projectedMembers: [],
               planMiddleware: [],
               execution: posture.execution,
-              run: () => Stream.succeed({ type: "RUN_STARTED" }),
+              run: () => Stream.die("selected incapable Harness launched"),
+            },
+            {
+              ...controlledRunnerDefaults,
+              name: alternativeName,
+              sessionKind: "opaque-handle",
+              projectedMembers: [],
+              planMiddleware: [],
+              execution: fullHarnessExecution,
+              run: () => Stream.die("alternative Harness launched"),
             },
           ]);
           const error = yield* harness.run(request).pipe(Stream.runDrain, Effect.flip);

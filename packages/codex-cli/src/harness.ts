@@ -169,13 +169,13 @@ const codexPreflight = Effect.fn("CodexRunner.preflight")(
     ).pipe(Effect.mapError(addRemediation)),
 );
 
-const versionAtLeast = (actual: ReadonlyArray<number>, minimum: ReadonlyArray<number>) =>
-  (actual.map((part, index) => Math.sign(part - (minimum[index] ?? 0))).find((part) => part !== 0) ?? 0) >= 0;
-
 const codexVersionCompatible = (version: string) => {
   const match = version.match(/\b(\d+)\.(\d+)\.(\d+)\b/);
   if (!match) return false;
-  return versionAtLeast([Number(match[1]), Number(match[2]), Number(match[3])], minimumCodexVersion);
+  return HarnessBridge.versionAtLeast(
+    [Number(match[1]), Number(match[2]), Number(match[3])],
+    minimumCodexVersion,
+  );
 };
 
 const codexReadiness = (executable: string, scrubEnv: ReadonlyArray<string>) =>

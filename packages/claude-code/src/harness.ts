@@ -29,7 +29,8 @@ interface ClaudeCommandResult {
 const adapterPackageVersion = "0.6.3";
 const fallbackVersion = "claude-code-1";
 const supportedClaudeMajor = 2;
-const versionRequirement = `>=${supportedClaudeMajor}.0.0 <${supportedClaudeMajor + 1}.0.0`;
+const minimumClaudeVersion: ReadonlyArray<number> = [2, 1, 83];
+const versionRequirement = `>=${minimumClaudeVersion.join(".")} <${supportedClaudeMajor + 1}.0.0`;
 const commandDeadline = "5 seconds";
 const anthropicEnvironment = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
 type ClaudeAuthenticationMode = ClaudeCodeRunnerOptions["authentication"]["mode"];
@@ -164,7 +165,10 @@ const versionParts = (version: string) => {
   return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
 };
 
-const versionCompatible = (version: string) => versionParts(version)?.[0] === supportedClaudeMajor;
+const versionCompatible = (version: string) => {
+  const parts = versionParts(version);
+  return parts?.[0] === supportedClaudeMajor && HarnessBridge.versionAtLeast(parts, minimumClaudeVersion);
+};
 
 const setupGuidance = (mode: ClaudeAuthenticationMode, error: Harness.HarnessError) => {
   const profile = authenticationProfiles[mode];
@@ -349,24 +353,52 @@ const inlineMcpConfig = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
   );
 };
 
-const adapterConfig = (
+const nativeSandboxSettings = (policy: Harness.OperationPolicyProfile) =>
+  JSON.stringify({
+    sandbox: {
+      enabled: true,
+      failIfUnavailable: true,
+      allowUnsandboxedCommands: false,
+      autoAllowBashIfSandboxed: policy === "full",
+    },
+  });
+
+const claudeExecutableFor = (
   executable: string,
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
 ) => {
   const mcpConfig = inlineMcpConfig(request.mcp);
+  return [
+    executable,
+    "--settings",
+    nativeSandboxSettings(request.policy),
+    ...(mcpConfig ? ["--mcp-config", mcpConfig] : []),
+  ].join(" ");
+};
+
+const disallowedToolsFor = (policy: Harness.OperationPolicyProfile) => [
+  ...(policy === "read-only" ? ["Bash"] : []),
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+];
+
+const adapterConfig = (
+  executable: string,
+  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+) => {
   return {
     authMode: nativeAuthenticationMode,
-    settingSources: ["user", "project"],
+    settingSources: [],
     emitDiff: true,
     // "." instead of the adapter's virtual `/workspace` default: the Sandbox
     // remaps `/workspace` for fs and process cwd but not inside command
     // strings, so the post-run `git -C <cwd> diff` only sees the prepared
     // checkout when cwd already resolves there.
     cwd: ".",
-    claudeExecutable: mcpConfig.length > 0 ? `${executable} --mcp-config ${mcpConfig}` : executable,
-    // Upstream maps a write-deny policy to Write/Edit/MultiEdit but misses
-    // NotebookEdit; close that write path for read-only Operations.
-    ...(request.policy === "read-only" ? { disallowedTools: ["NotebookEdit"] } : {}),
+    claudeExecutable: claudeExecutableFor(executable, request),
+    disallowedTools: disallowedToolsFor(request.policy),
     ...(request.checkout.sharedGitDirectory ? { addDirs: [request.checkout.sharedGitDirectory] } : {}),
   } satisfies ClaudeCodeTextConfig;
 };

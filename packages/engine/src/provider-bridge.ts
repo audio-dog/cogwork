@@ -23,6 +23,9 @@ export const messageFromUnknown = (error: unknown) => {
   return String(error);
 };
 
+export const versionAtLeast = (actual: ReadonlyArray<number>, minimum: ReadonlyArray<number>) =>
+  (actual.map((part, index) => Math.sign(part - (minimum[index] ?? 0))).find((part) => part !== 0) ?? 0) >= 0;
+
 const fromThrown = (error: unknown) => {
   const message = messageFromUnknown(error);
   return new HarnessError({ reason: "turn", retryable: true, message });
