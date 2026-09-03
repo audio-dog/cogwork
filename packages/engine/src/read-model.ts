@@ -17,11 +17,11 @@ const actionableOf = (work: EligibleWork): ActionableItem => ({
 });
 
 export const classifiedItemsOf = (state: WorkspaceReconcileState): ReadonlyArray<ClassifiedItem> => [
-  ...state.eligible.map((work) => ({ _tag: "Eligible" as const, ...actionableOf(work) })),
-  ...state.claimed.map((item) => ({ _tag: "Claimed" as const, ...item })),
-  ...state.blocked.map((item) => ({ _tag: "Blocked" as const, ...item })),
-  ...state.needsHuman.map((item) => ({ _tag: "NeedsHuman" as const, ...item })),
-  ...state.readyToMerge.map((item) => ({ _tag: "ReadyToMerge" as const, ...item })),
+  ...state.eligible.map((work) => ({ _tag: "Eligible", ...actionableOf(work) }) satisfies ClassifiedItem),
+  ...state.claimed.map((item) => ({ _tag: "Claimed", ...item }) satisfies ClassifiedItem),
+  ...state.blocked.map((item) => ({ _tag: "Blocked", ...item }) satisfies ClassifiedItem),
+  ...state.needsHuman.map((item) => ({ _tag: "NeedsHuman", ...item }) satisfies ClassifiedItem),
+  ...state.readyToMerge.map((item) => ({ _tag: "ReadyToMerge", ...item }) satisfies ClassifiedItem),
 ];
 
 export const classifiedItemWithPr = (item: ObservedItem): ClassifiedItem | null => classifiedItemOf(item);
