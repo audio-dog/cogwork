@@ -13,6 +13,7 @@ import {
   WorkspaceState,
 } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomSubscribe } from "@effect/atom-react";
+import * as Data from "effect/Data";
 import type * as Atom from "effect/unstable/reactivity/Atom";
 import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
@@ -491,18 +492,20 @@ export function useActivitySession(): ActivitySession {
   return session;
 }
 
-export type BoardResult =
-  | { readonly _tag: "Initial" }
-  | { readonly _tag: "Failure" }
-  | {
-      readonly _tag: "Success";
-      readonly board: Board;
-      readonly previews: ReadonlyMap<string, RunActivityPreview>;
-    };
+export type BoardResult = Data.TaggedEnum<{
+  Initial: Record<never, never>;
+  Failure: Record<never, never>;
+  Success: {
+    readonly board: Board;
+    readonly previews: ReadonlyMap<string, RunActivityPreview>;
+  };
+}>;
+
+export const BoardResult = Data.taggedEnum<BoardResult>();
 
 export function useBoard(): BoardResult {
   const session = useActivitySession();
-  if (session.connection === "lost") return { _tag: "Failure" };
-  if (session.connection === "connecting") return { _tag: "Initial" };
-  return { _tag: "Success", board: session.board, previews: previewMap(session.previews) };
+  if (session.connection === "lost") return BoardResult.Failure();
+  if (session.connection === "connecting") return BoardResult.Initial();
+  return BoardResult.Success({ board: session.board, previews: previewMap(session.previews) });
 }
