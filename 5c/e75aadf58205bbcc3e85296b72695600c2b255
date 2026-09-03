@@ -1,0 +1,25 @@
+docs/adr/0004-tanstack-ai-as-execution-layer.md
+  s_a38d1882a40a69::t_2dcaa52cc9dfcd 3-4
+CONTEXT-MAP.md
+  s_a38d1882a40a69::t_78bcfa305abebb 47
+packages/engine/CONTEXT.md
+  s_a38d1882a40a69::t_2dcaa52cc9dfcd 89,93,125
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_a38d1882a40a69::t_2dcaa52cc9dfcd 3-4,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5ce75aadf58205bbcc3e85296b72695600c2b255",
+  "prompts": {},
+  "sessions": {
+    "s_a38d1882a40a69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-3296-70a2-a373-a3565da4aa0b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
