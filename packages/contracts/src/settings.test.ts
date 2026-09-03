@@ -4,6 +4,7 @@ import {
   admissibleSettingScope,
   ContributionSettingUpdate,
   defaultContributionEnabled,
+  OperationSettingUpdate,
   resolveContributionEnabled,
   resolveContributionUnion,
   resolveOperationSetting,
@@ -73,6 +74,22 @@ describe("ContributionSettingUpdate", () => {
           contribution,
           scope: { _tag: "WorkspaceInput", workspace: "workspace" },
           enabled: true,
+        },
+      }),
+    );
+  });
+});
+
+describe("OperationSettingUpdate", () => {
+  it("rejects an Operation level for an operation the build does not have", () => {
+    assert.isFalse(
+      Schema.is(OperationSettingUpdate)({
+        _tag: "Set",
+        row: {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "verify" },
+          scope: { _tag: "SettingsProfile" },
+          value: "openai/gpt-5",
         },
       }),
     );
