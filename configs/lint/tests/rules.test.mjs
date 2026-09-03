@@ -170,6 +170,26 @@ const ruleCases = [
     plugin: "no-use-effect",
     name: "no-use-effect",
   },
+  {
+    message:
+      "Rule: avoid Effect.zipRight for side effects. Why: it hides side effects and discards values. Fix: use explicit pipeline steps that return real values with Effect.flatMap, Effect.andThen, or Effect.tap.",
+    name: "no-effect-side-effect-wrapper-zip-right",
+    plugin: "effect-calls",
+  },
+  {
+    message:
+      "Rule: avoid map+flatten ladders. Why: they hide sequencing. Fix: build context once (Effect.all/Effect.map) and run a single flatMap.",
+    name: "no-flatmap-ladder-flatten",
+    plugin: "no-flatmap-ladder",
+    severity: "warning",
+  },
+  {
+    message:
+      "Rule: avoid multi-step sequencing inside Option.match branches. Why: it hides control flow. Prefer selecting a value in Option.match, then run one Effect pipeline outside. Leaf-level flows with local bindings may keep Option.match but should stay linear.",
+    name: "no-match-effect-branch-option",
+    plugin: "member-calls",
+    severity: "info",
+  },
 ];
 
 // Rules are grouped into plugin files: Biome runs one pass over every source file
@@ -222,6 +242,24 @@ test("every configured plugin file has rules with fixtures", () => {
   assert.deepEqual(unclaimed, []);
 });
 
+// Grouping removed the one-file-per-rule relation that used to force every rule to
+// have a fixture. Compare each plugin file's registered messages against the rules
+// claiming it instead, so a rule added inside an existing file cannot ship untested.
+test("every message a plugin file registers belongs to a tested rule", () => {
+  const untested = [...configuredPluginPaths].flatMap(([name, pluginPath]) => {
+    const source = readFileSync(pluginPath, "utf8");
+    const registered = [...source.matchAll(/message\s*=\s*"((?:[^"\\]|\\.)*)"/g)].map(([, message]) =>
+      message.replace(/\\"/g, '"').replace(/\\\\/g, "\\"),
+    );
+    const tested = new Set(ruleCases.filter((rule) => rule.plugin === name).map((rule) => rule.message));
+    return [...new Set(registered)]
+      .filter((message) => !tested.has(message))
+      .map((message) => ({ name, message }));
+  });
+
+  assert.deepEqual(untested, []);
+});
+
 for (const ruleCase of ruleCases) {
   const extension = ruleCase.extension ?? "ts";
   const fixtures = path.join(fixtureRoot, ruleCase.name);
@@ -244,6 +282,10 @@ for (const ruleCase of ruleCases) {
   test(`${ruleCase.name} allows its supported alternative`, () => {
     const result = lintWithRule(rulePath, path.join(fixtures, `valid-example.${extension}`));
 
-    assert.deepEqual(ownDiagnostics(result), [], result.output);
+    assert.deepEqual(
+      result.diagnostics.filter((diagnostic) => diagnostic.category === "plugin"),
+      [],
+      result.output,
+    );
   });
 }
