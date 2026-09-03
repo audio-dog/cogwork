@@ -2,6 +2,9 @@ diff --git a/dist/esm/handle.js b/dist/esm/handle.js
 index 8e0f030..cbdc19f 100644
 --- a/dist/esm/handle.js
 +++ b/dist/esm/handle.js
+@@ -510 +510 @@ class LocalProcessSandboxHandle {
+-		if (process.platform !== "linux") this.fs.watch = (p, onEvent) => {
++		if (process.platform === "win32") this.fs.watch = (p, onEvent) => {
 @@ -635 +635,2 @@ class LocalProcessSandboxHandle {
 -		this.track(child);
 +		this.track(child);
@@ -10,7 +13,18 @@ diff --git a/src/handle.ts b/src/handle.ts
 index 75bf56a..302259b 100644
 --- a/src/handle.ts
 +++ b/src/handle.ts
-@@ -891,6 +891,7 @@ class LocalProcessSandboxHandle implements SandboxHandle {
+@@ -686,8 +686,5 @@ export class LocalProcessHandle implements SandboxHandle {
+-    // Native recursive file watching is supported on Windows/macOS but not
+-    // Linux (Node throws ERR_FEATURE_UNAVAILABLE_ON_PLATFORM). Expose the
+-    // optional `fs.watch` seam only where it works; on Linux it stays
+-    // undefined so `watchWorkspace` falls back to the portable exec-poll path.
+-    if (process.platform !== 'linux') {
++    // macOS recursive watches can fail with EMFILE; macOS and Linux use portable polling.
++    if (process.platform === 'win32') {
+       this.fs.watch = (p, onEvent) => {
+         const dir = this.resolve(p)
+         // Emit paths under the requested watch root `p` (not a hardcoded
+@@ -891,6 +888,7 @@ class LocalProcessSandboxHandle implements SandboxHandle {
        detached: spawnDetached,
      })
      this.track(child)

@@ -43,4 +43,5 @@ catalogs:
     '@effect/vitest': '4.0.0-rc.112'
 
 patchedDependencies:
+  '@tanstack/ai-sandbox@0.5.4': patches/@tanstack__ai-sandbox@0.5.4.patch
   '@tanstack/ai-sandbox-local-process@0.2.4': patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
