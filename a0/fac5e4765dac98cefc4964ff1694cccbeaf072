@@ -1,0 +1,36 @@
+configs/lint/no-flatmap-ladder.grit
+  s_330c88d3939c54::t_90bb07f3bc44d5 1-20
+configs/lint/no-use-effect.grit
+  s_330c88d3939c54::t_90bb07f3bc44d5 1-8
+packages/ui/src/components/sidebar.tsx
+  s_330c88d3939c54::t_90bb07f3bc44d5 86
+packages/ui/src/hooks/use-mobile.ts
+  s_330c88d3939c54::t_90bb07f3bc44d5 8
+biome.json
+  s_330c88d3939c54::t_90bb07f3bc44d5 39-42,80,85
+configs/lint/tests/rules.test.mjs
+  s_330c88d3939c54::t_35aededb942347 202-205
+  s_330c88d3939c54::t_90bb07f3bc44d5 48,90,158,170,192,198
+apps/desktop/src/renderer/src/components/theme-provider.tsx
+  s_330c88d3939c54::t_90bb07f3bc44d5 116,149,178
+configs/lint/no-side-effect-in-state-updater.grit
+  s_330c88d3939c54::t_90bb07f3bc44d5 1-36
+configs/lint/no-effect-ladder.grit
+  s_330c88d3939c54::t_90bb07f3bc44d5 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a0fac5e4765dac98cefc4964ff1694cccbeaf072",
+  "prompts": {},
+  "sessions": {
+    "s_330c88d3939c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea7438ab-7eb0-4f94-b042-61420f9a63df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
