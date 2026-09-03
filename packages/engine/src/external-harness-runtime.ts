@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   AgUiEvent,
+  agUiIsFileDiffEvent,
   FILE_DIFF_EVENT,
   type HarnessName,
   type RunId,
@@ -529,13 +530,15 @@ const normalizeFileEvent = (event: AgUiEvent, checkoutPath: string) => {
   if (!AgUiEvent.guards.CUSTOM(event)) return event;
   const name = event.name === "file.changed" ? FILE_DIFF_EVENT : event.name;
   if (name !== FILE_DIFF_EVENT) return event;
-  return { ...event, name, value: normalizeFileDiffValue(event.value, checkoutPath) };
+  const normalized = { ...event, name, value: normalizeFileDiffValue(event.value, checkoutPath) };
+  return agUiIsFileDiffEvent(normalized) ? normalized : event;
 };
 
 const publicFileEvent = (event: AgUiEvent) => {
-  if (!AgUiEvent.guards.CUSTOM(event) || event.name !== FILE_DIFF_EVENT) return true;
-  if (typeof event.value !== "object" || event.value === null || !("path" in event.value)) return true;
-  if (typeof event.value.path !== "string") return true;
+  if (!agUiIsFileDiffEvent(event)) return true;
+  // A touched-but-unchanged file still reports a change; an empty diff would render
+  // as an activity entry with nothing in it.
+  if (event.value.diff === "") return false;
   return !event.value.path.startsWith(".tanstack-");
 };
 

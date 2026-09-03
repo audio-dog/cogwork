@@ -124,6 +124,20 @@ export const AgUiEvent = Object.assign(AgUiEventSchema, {
 });
 export type AgUiEvent = typeof AgUiEvent.Type;
 
+export const FileDiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String });
+export type FileDiffValue = typeof FileDiffValue.Type;
+
+const AgUiFileDiffEvent = eventVariant("CUSTOM", {
+  name: Schema.Literal(FILE_DIFF_EVENT),
+  value: FileDiffValue,
+});
+export type AgUiFileDiffEvent = typeof AgUiFileDiffEvent.Type;
+
+export const agUiIsFileDiffEvent = Schema.is(AgUiFileDiffEvent);
+
+export const agUiFileDiffEvent = (path: string, diff: string) =>
+  ({ type: "CUSTOM", name: FILE_DIFF_EVENT, value: { path, diff } }) satisfies AgUiFileDiffEvent;
+
 export const StructuredOutputCompleteValue = Schema.Struct({
   object: Schema.Unknown,
   raw: Schema.String,

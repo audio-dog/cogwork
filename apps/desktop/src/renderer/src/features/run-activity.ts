@@ -1,8 +1,8 @@
 import {
   AgUiEvent,
+  agUiIsFileDiffEvent,
   agUiIsSessionHandleEvent,
   agUiTextDelta,
-  FILE_DIFF_EVENT,
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
@@ -11,7 +11,6 @@ import * as Cause from "effect/Cause";
 import * as Chunk from "effect/Chunk";
 import * as HashMap from "effect/HashMap";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
@@ -151,9 +150,6 @@ export const withoutRunPreview = (state: RunPreviewState, runId: string) => {
   return next;
 };
 
-const FileDiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String });
-const decodeFileDiff = Schema.decodeUnknownOption(FileDiffValue);
-
 export type TranscriptEntry =
   | { readonly kind: "text"; readonly key: string; readonly text: string }
   | { readonly kind: "reasoning"; readonly key: string; readonly text: string }
@@ -275,11 +271,9 @@ const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
           complete: true,
         });
       },
-      CUSTOM: ({ name, value }) => {
-        if (name !== FILE_DIFF_EVENT) return state;
-        const diff = Option.getOrNull(decodeFileDiff(value));
-        if (!diff) return state;
-        return setDiffEntry(state, diff.path, diff.diff);
+      CUSTOM: (event) => {
+        if (!agUiIsFileDiffEvent(event)) return state;
+        return setDiffEntry(state, event.value.path, event.value.diff);
       },
       RUN_ERROR: ({ message }) => {
         const entry: TranscriptEntry = {

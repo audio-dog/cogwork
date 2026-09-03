@@ -1,5 +1,5 @@
 import { createHash, type Hash } from "node:crypto";
-import { type AgUiEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
+import { type AgUiEvent, agUiFileDiffEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
 import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -274,11 +274,8 @@ const streamDiff = Effect.fn("Tools.streamDiff")(function* (
   return { diff: diffFromOutput(result.stdout), fingerprint: result.stdout.fingerprint };
 });
 
-export const fileDiffEvent = (path: string, diff: string): AgUiEvent => ({
-  type: "CUSTOM",
-  name: FILE_DIFF_EVENT,
-  value: { path, diff: boundedDiff(diff) },
-});
+export const fileDiffEvent = (path: string, diff: string): AgUiEvent =>
+  agUiFileDiffEvent(path, boundedDiff(diff));
 
 export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
   sandbox: WorktreeSandbox,

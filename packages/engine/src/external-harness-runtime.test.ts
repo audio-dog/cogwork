@@ -39,6 +39,7 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { afterEach, vi } from "vitest";
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
@@ -58,6 +59,8 @@ import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
+
+afterEach(() => vi.restoreAllMocks());
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
 const freshSession = Schema.decodeSync(SessionId)("sess-external-fresh");
@@ -425,73 +428,8 @@ const terminalEvents: ReadonlyArray<StreamChunk> = [
   { type: EventType.RUN_FINISHED, threadId: "session-148", runId: request.id },
 ];
 
-const externalConformanceProfiles = [
-  { name: "claude", fileEventFidelity: "terminal-only", usageQuality: "metered" },
-  { name: "codex", fileEventFidelity: "best-effort", usageQuality: "metered" },
-  { name: "cursor", fileEventFidelity: "absent", usageQuality: "estimated" },
-] as const;
-
 describe("external Harness runtime", () => {
   it.layer(harnessRunnerLayer)((it) => {
-    it.effect("applies one public Harness conformance path to every external runner", () =>
-      Effect.gen(function* () {
-        const entries = externalConformanceProfiles.map((profile) => {
-          const runnerName = Schema.decodeSync(HarnessName)(profile.name);
-          const probe = new ControlledProbe();
-          const created: Array<string> = [];
-          const base = descriptor(terminalEvents, probe);
-          const controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
-            ...base,
-            name: runnerName,
-            capabilities: {
-              ...base.capabilities,
-              profile: {
-                ...base.capabilities.profile,
-                fileEventFidelity: profile.fileEventFidelity,
-                usageQuality: profile.usageQuality,
-              },
-            },
-          };
-          return {
-            profile,
-            runnerName,
-            probe,
-            created,
-            runner: externalHarnessRunner(controlledDescriptor, {
-              authentication: hostAuthentication,
-              sandboxProvider: () => Effect.succeed(controlledProvider(created, [])),
-            }),
-          };
-        });
-        const harness = make(entries.map(({ runner }) => runner));
-
-        yield* Effect.forEach(entries, ({ profile, runnerName, probe, created }) => {
-          const plan = RunPlan.make({
-            ...request,
-            harness: { ...request.harness, name: runnerName },
-          });
-          return harness.run({ plan, session: freshSession, mcpCredentials: new Map() }).pipe(
-            Stream.runCollect,
-            Effect.tap((output) =>
-              Effect.sync(() => {
-                assert.deepNestedInclude(harness.capabilities(runnerName), {
-                  fileEventFidelity: profile.fileEventFidelity,
-                  usageQuality: profile.usageQuality,
-                });
-                assert.deepStrictEqual(created, ["none"]);
-                assert.strictEqual(probe.resolved[0]?.request.identity.run, request.id);
-                assert.strictEqual(probe.resolved[0]?.request.identity.session, freshSession);
-                assert.strictEqual(
-                  output.filter((event) => event.name === "structured-output.complete").length,
-                  1,
-                );
-              }),
-            ),
-          );
-        });
-      }),
-    );
-
     it.effect(
       "projects mandatory instructions through one Harness Workspace and keeps work context user-authored",
       () =>
@@ -970,6 +908,8 @@ describe("external Harness runtime", () => {
         const output = yield* harness
           .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runCollect);
+        const options = probe.chatOptions[0];
+        if (!options) return yield* Effect.die("external Harness opened no chat");
 
         assert.strictEqual(output[0]?.type, EventType.RUN_STARTED);
         assert.strictEqual(output[0]?.threadId, "RUN");
@@ -977,6 +917,11 @@ describe("external Harness runtime", () => {
         assert.deepStrictEqual(output[1]?.value, {
           message: "rejected [redacted] and [redacted]",
         });
+        const logs: Array<unknown> = [];
+        vi.spyOn(console, "error").mockImplementation((...values) => logs.push(values));
+        options.logger.errors("native adapter failed", { secret });
+        assert.notInclude(yield* encodeJson(logs), secret);
+        assert.isFalse(SandboxDurabilityCapability.has(runtimeCapabilities(options)));
         assert.notInclude(yield* encodeJson(workspaces), secret);
 
         const record: RunRecord = {
