@@ -423,7 +423,7 @@ const descriptor = (
         session: { affinity: "sandbox-lineage", fork: true, humanAttach: false },
         structuredOutput: "native",
         policyFidelity: "profile-only",
-        fileEventFidelity: "native",
+        fileEventFidelity: "terminal-only",
         usageQuality: "metered",
         readinessDiagnostics: true,
         journal: true,
