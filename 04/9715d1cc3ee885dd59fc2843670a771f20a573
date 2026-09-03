@@ -1,0 +1,40 @@
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_330b4caffc139b::t_d35411f667d529 1-19,21,24-26,28-394
+  s_330b4caffc139b::t_fb1cc1169d7baf 20,22-23,27
+apps/desktop/src/renderer/src/features/harness-catalog.ts
+  s_330b4caffc139b::t_04116799ad7546 3,13,24-25,31-32,46-47
+apps/desktop/src/renderer/src/components/provider-glyph.tsx
+  s_330b4caffc139b::t_04116799ad7546 1-26
+apps/desktop/src/renderer/src/features/provider-presentation.ts
+  s_330b4caffc139b::t_04116799ad7546 1-12
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_330b4caffc139b::t_04116799ad7546 54,132,186,231
+.gitignore
+  s_330b4caffc139b::t_505729a80d2b3a 35-37
+apps/desktop/CONTEXT.md
+  s_330b4caffc139b::t_653db09e509308 185-190,192-193
+apps/desktop/src/renderer/src/features/settings-catalog.test.ts
+  s_330b4caffc139b::t_137afef21ff090 54,62-63
+apps/desktop/src/renderer/src/features/provider-presentation.test.ts
+  s_330b4caffc139b::t_04116799ad7546 1-14
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_330b4caffc139b::t_137afef21ff090 12,19,79
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_330b4caffc139b::t_eb6e326be1c1d4 22,78-80,120,134,153,173,187,205,292-296,376,385
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "049715d1cc3ee885dd59fc2843670a771f20a573",
+  "prompts": {},
+  "sessions": {
+    "s_330b4caffc139b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ef9e7d2-206d-4a38-87e4-9f3fab2eb473",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
