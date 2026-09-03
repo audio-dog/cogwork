@@ -24,6 +24,7 @@ import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   bearer,
   createSecrets,
+  DEFAULT_WORKSPACE_ROOT,
   defineSandbox,
   defineWorkspace,
   getSandbox,
@@ -509,10 +510,34 @@ const outputCharacters = (event: AgUiEvent) =>
     ? (event.delta?.length ?? 0)
     : 0;
 
-const normalizeFileEvent = (event: AgUiEvent): AgUiEvent =>
-  AgUiEvent.guards.CUSTOM(event) && event.name === "file.changed"
-    ? { ...event, name: FILE_DIFF_EVENT }
-    : event;
+const relativeToRoot = (path: string, root: string) => {
+  const normalizedPath = path.replace(/^\/+/, "");
+  const normalizedRoot = root.replace(/^\/+|\/+$/g, "");
+  if (normalizedPath === normalizedRoot) return ".";
+  const prefix = `${normalizedRoot}/`;
+  return normalizedPath.startsWith(prefix) ? normalizedPath.slice(prefix.length) : path;
+};
+
+const normalizeFileDiffValue = (value: unknown, checkoutPath: string) => {
+  if (typeof value !== "object" || value === null || !("path" in value)) return value;
+  if (typeof value.path !== "string") return value;
+  const workspacePath = relativeToRoot(value.path, DEFAULT_WORKSPACE_ROOT);
+  return { ...value, path: relativeToRoot(workspacePath, checkoutPath) };
+};
+
+const normalizeFileEvent = (event: AgUiEvent, checkoutPath: string) => {
+  if (!AgUiEvent.guards.CUSTOM(event)) return event;
+  const name = event.name === "file.changed" ? FILE_DIFF_EVENT : event.name;
+  if (name !== FILE_DIFF_EVENT) return event;
+  return { ...event, name, value: normalizeFileDiffValue(event.value, checkoutPath) };
+};
+
+const publicFileEvent = (event: AgUiEvent) => {
+  if (!AgUiEvent.guards.CUSTOM(event) || event.name !== FILE_DIFF_EVENT) return true;
+  if (typeof event.value !== "object" || event.value === null || !("path" in event.value)) return true;
+  if (typeof event.value.path !== "string") return true;
+  return !event.value.path.startsWith(".tanstack-");
+};
 
 const preserveUsage: ExternalHarnessUsageEstimator = (_request, event) => event;
 
@@ -652,7 +677,8 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                   ).pipe(
-                    Stream.map(normalizeFileEvent),
+                    Stream.map((event) => normalizeFileEvent(event, resolved.checkout.path)),
+                    Stream.filter(publicFileEvent),
                     Stream.map((event) => scrubEvent(event, secretValues)),
                     Stream.mapError((error) => scrubHarnessError(error, secretValues)),
                     Stream.ensuring(Effect.sync(() => opened.abortController.abort())),

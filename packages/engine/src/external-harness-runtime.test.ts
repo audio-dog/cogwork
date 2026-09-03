@@ -873,7 +873,7 @@ describe("external Harness runtime", () => {
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: ".", diff: "diff --git a/file.ts b/file.ts" },
+            value: { path: "/checkout/file.ts", diff: "diff --git a/file.ts b/file.ts" },
             metadata: { controlled: { fidelity: "terminal" } },
           },
           {
@@ -895,7 +895,7 @@ describe("external Harness runtime", () => {
         assert.deepStrictEqual(diagnostic?.metadata, { controlled: { trace: "trace-147" } });
         const fileDiff = output.find((event) => event.name === FILE_DIFF_EVENT);
         assert.deepStrictEqual(fileDiff?.value, {
-          path: ".",
+          path: "file.ts",
           diff: "diff --git a/file.ts b/file.ts",
         });
         assert.deepStrictEqual(fileDiff?.metadata, { controlled: { fidelity: "terminal" } });
