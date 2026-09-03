@@ -9,7 +9,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid nested IIFEs. Why: they hide sequencing and push wrapper hacks. Fix: bind a named context with const and keep one flat pipeline with a single Match/Option decision.",
-    plugin: "no-arrow-ladder",
+    plugin: "iife",
     name: "no-arrow-ladder",
   },
   {
@@ -94,7 +94,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid immediate invocation of inline functions. Why: it hides decisions and sequencing. Fix: bind a named context with const and keep one Match/Option decision in a flat pipeline.",
-    plugin: "no-iife-wrapper",
+    plugin: "iife",
     name: "no-iife-wrapper",
   },
   {
