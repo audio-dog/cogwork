@@ -193,7 +193,6 @@ const JsonValue = Schema.fromJsonString(Schema.Unknown);
 const decodeJson = Schema.decodeUnknownEffect(JsonValue);
 const encodeJson = Schema.encodeUnknownEffect(JsonValue);
 const isStaleControlStoreWrite = Schema.is(StaleControlStoreWrite);
-const isLifecycleStage = Schema.is(LifecycleStage);
 
 const setDaemonLimitFailure = (error: unknown) =>
   isStaleControlStoreWrite(error) ? error : storeFailure("set daemon limit")(error);
@@ -294,7 +293,7 @@ const scopeOf = (row: StoredOperationSettingRow) => {
 const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOperationSettingRow")(function* (
   row: StoredOperationSettingRow,
 ) {
-  if (row.level === "operation" && !isLifecycleStage(row.operation)) {
+  if (row.level === "operation" && !Schema.is(LifecycleStage)(row.operation)) {
     yield* Effect.logWarning("ignored stored Operation setting for unknown Operation", {
       operation: row.operation,
       setting: row.setting,
@@ -310,8 +309,6 @@ const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOper
   });
 });
 
-const isOperationSettingRow = (row: OperationSettingRow | null): row is OperationSettingRow => row !== null;
-
 const readOperationSettings = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     const stored = yield* sql<StoredOperationSettingRow>`
@@ -321,7 +318,7 @@ const readOperationSettings = (sql: SqlClient.SqlClient) =>
     `;
     const rows = yield* decodeStoredOperationSettingRows(stored);
     return yield* Effect.forEach(rows, decodeStoredOperationSettingRow).pipe(
-      Effect.map((decoded) => decoded.filter(isOperationSettingRow)),
+      Effect.map((decoded) => decoded.filter((row) => row !== null)),
     );
   });
 
