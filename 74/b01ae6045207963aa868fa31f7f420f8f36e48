@@ -1,0 +1,31 @@
+packages/engine/src/external-harness-runtime.ts
+  s_4cbaf27bdd9c29::t_ef20046c711f91 135-138,143-144
+  s_4cbaf27bdd9c29::t_0bb4c167315364 139-142
+  s_4cbaf27bdd9c29::t_d2b56996b258b1 643
+packages/codex-cli/src/harness.ts
+  s_4cbaf27bdd9c29::t_d9cd31c7691cdd 378
+packages/engine/CONTEXT.md
+  s_4cbaf27bdd9c29::t_5b308ba964375e 89
+packages/engine/src/harness.ts
+  s_4cbaf27bdd9c29::t_202ad2ed740bb8 109
+packages/contracts/CONTEXT.md
+  s_4cbaf27bdd9c29::t_5a8cb2036ce2cc 371
+packages/engine/src/external-harness-runtime.test.ts
+  s_4cbaf27bdd9c29::t_4893243d246eb3 330
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "74b01ae6045207963aa868fa31f7f420f8f36e48",
+  "prompts": {},
+  "sessions": {
+    "s_4cbaf27bdd9c29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2524c154-d8ba-4ccf-937b-21ae95b25774",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
