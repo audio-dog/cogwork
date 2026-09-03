@@ -319,12 +319,14 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   const cell = (setting: OperationSettingName) => settingCell(controlStore, workspace, operation, setting);
   const catalog = catalogFor(settingCell(controlStore, workspace, operation, "harness").effective);
   const set = (setting: OperationSettingName, value: string | null) => write(setting, operation, value);
-  const profileCell = cell("permission-profile");
-  // Harness and model are chosen together, so clearing either reverts both to the default.
+  // Harness, model and effort are chosen together, so they revert together — an effort left
+  // behind can outlive the catalog that offered it.
   const resetHarnessAndModel = () => {
     set("harness", null);
     set("model", null);
+    set("effort", null);
   };
+  const profileCell = cell("permission-profile");
 
   const specs: readonly ControlSpec[] = [
     {
@@ -417,7 +419,6 @@ function OperationRow({ operation }: { readonly operation: LifecycleStage }) {
   const {
     state: { controlStore, workspace },
   } = useOperationSettings();
-  // How many of this Operation's settings are answered here rather than inherited.
   const own = ownSettings.filter(
     (setting) => settingCell(controlStore, workspace, operation, setting).own !== null,
   ).length;

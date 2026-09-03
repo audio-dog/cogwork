@@ -1,4 +1,4 @@
-import { WorkspaceState } from "@cogwork/contracts";
+import { type WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 
 /** The columns this page can read back and write. #457 restores the rest with its act. */
 export interface WorkspaceRecordDraft {
@@ -18,6 +18,13 @@ export const seededDraft = (workspace: WorkspaceState): WorkspaceRecordDraft =>
   WorkspaceState.match(workspace, {
     Registered: ({ displayName, name, checkoutPath }) => ({ displayName: displayName ?? name, checkoutPath }),
     Failed: () => emptyDraft,
+  });
+
+/** The id an act can target. A Failed workspace input may never have been minted one. */
+export const workspaceIdentity = (workspace: WorkspaceState) =>
+  WorkspaceState.match<WorkspaceId | null>(workspace, {
+    Registered: ({ name }) => name,
+    Failed: ({ name }) => name ?? null,
   });
 
 export const workspaceKey = (workspace: WorkspaceState) =>

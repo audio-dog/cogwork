@@ -24,6 +24,7 @@ import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
+import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { setOperationSettingAtom } from "../daemon/atoms";
 import { useBoard } from "../features/activity-session";
@@ -35,6 +36,7 @@ import {
   type WorkspaceHealth,
   type WorkspaceRecordDraft,
   workspaceHealth,
+  workspaceIdentity,
   workspaceKey,
   workspaceLabel,
 } from "../features/workspace-record";
@@ -51,7 +53,8 @@ interface WorkspaceSettings {
   readonly draft: WorkspaceRecordDraft;
   readonly changes: number;
   readonly controlStore: ControlStore | null;
-  readonly workspaceId: WorkspaceId;
+  readonly workspaceId: WorkspaceId | null;
+  readonly writable: boolean;
   readonly health: WorkspaceHealth | null;
   readonly inFlight: number | null;
   readonly limit: number | null;
@@ -79,12 +82,20 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
 
   const [edits, setEdits] = useState<WorkspaceRecordDraft | null>(null);
   const [pathRefused, setPathRefused] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const workspace = workspaces.find((candidate) => workspaceKey(candidate) === workspaceId) ?? null;
   const baseline = workspace ? seededDraft(workspace) : null;
-  const draft = edits ?? baseline;
   const load = scheduler?.perWorkspace.find((entry) => entry.name === workspaceId) ?? null;
-  const identity = workspaceId as WorkspaceId;
+  // A Failed workspace input may hold no minted id, and then no act can target it.
+  const identity = workspace ? workspaceIdentity(workspace) : null;
+
+  // The daemon has caught up, so the draft is no longer an edit.
+  if (edits && baseline && edits.checkoutPath === baseline.checkoutPath) {
+    setEdits(null);
+    setSubmitted(false);
+  }
+  const draft = edits ?? baseline;
 
   return {
     status: status === "ready" && !workspace ? "unknown" : status,
@@ -94,6 +105,7 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
     changes: draft && baseline ? changedFieldCount(draft, baseline) : 0,
     controlStore,
     workspaceId: identity,
+    writable: identity !== null,
     health: workspace
       ? workspaceHealth(
           workspace,
@@ -104,23 +116,31 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
     limit: load?.limit ?? null,
     patch: (next) => {
       setPathRefused(false);
+      setSubmitted(false);
       setEdits({ ...(edits ?? baseline ?? emptyDraft), ...next });
     },
     saving: rebindPending && rebindTarget === identity,
-    saveError: pathRefused ? "Use an absolute path." : rebindTarget === identity ? rebindError : null,
+    // The provider keeps a failure until the next act, so only this page's own submit shows it.
+    saveError: pathRefused
+      ? "Use an absolute path."
+      : submitted && rebindTarget === identity
+        ? rebindError
+        : null,
     save: () => {
-      if (!edits || !baseline || edits.checkoutPath === baseline.checkoutPath) {
+      if (!edits || !baseline || !identity || edits.checkoutPath === baseline.checkoutPath) {
         setEdits(null);
         return;
       }
       const checkoutPath = absoluteCheckoutPathFrom(edits.checkoutPath);
       setPathRefused(checkoutPath === null);
       if (!checkoutPath) return;
+      setSubmitted(true);
       rebind(identity, checkoutPath);
     },
     discard: () => {
       setEdits(null);
       setPathRefused(false);
+      setSubmitted(false);
     },
   };
 }
@@ -152,6 +172,9 @@ function LiveOperationSettings({
   const effort = useAtom(setOperationSettingAtom("effort"));
   const permission = useAtom(setOperationSettingAtom("permission-profile"));
   const writers = { enabled, harness, model, effort, "permission-profile": permission };
+  const failure = writableSettings
+    .map((setting) => writers[setting][0])
+    .find((result) => result._tag === "Failure");
 
   return (
     <OperationSettings.Provider
@@ -170,6 +193,13 @@ function LiveOperationSettings({
       }}
     >
       <OperationSettings.Rows />
+      {failure?._tag === "Failure" && failure.cause ? (
+        <Alert variant="destructive">
+          <RiAlertLine />
+          <AlertTitle>Could not save that setting</AlertTitle>
+          <AlertDescription>{Cause.pretty(failure.cause)}</AlertDescription>
+        </Alert>
+      ) : null}
     </OperationSettings.Provider>
   );
 }
@@ -360,28 +390,42 @@ export function WorkspaceSettingsPage({ workspaceId }: { readonly workspaceId: s
       <PageHeader settings={settings} />
       <HealthAlert health={settings.health} />
       <SettingsSection title={settings.label}>
+        {settings.writable ? null : (
+          <Alert>
+            <RiAlertLine />
+            <AlertTitle>Nothing here can be changed</AlertTitle>
+            <AlertDescription>
+              Cogwork never read this workspace input, so it has no identity for a setting to belong to. Fix
+              what the message above reports, then register it.
+            </AlertDescription>
+          </Alert>
+        )}
         <WorkspaceRecord.Provider
           value={{
             state: { draft: settings.draft },
             actions: { patch: settings.patch },
-            meta: { disabled: settings.saving },
+            meta: { disabled: settings.saving || !settings.writable },
           }}
         >
           <SubSectionCard label="Checkout">
             <WorkspaceRecord.CheckoutRows />
           </SubSectionCard>
         </WorkspaceRecord.Provider>
-        {/* Operations sits second: which model runs the work matters more than the rest. */}
-        <SubSectionCard label="Operations">
-          <LiveOperationSettings
-            controlStore={settings.controlStore}
-            workspace={settings.workspaceId}
-            disabled={settings.saving}
-          />
-        </SubSectionCard>
-        <SubSectionCard label="Registration">
-          <DeregisterRow label={settings.label} workspace={settings.workspaceId} />
-        </SubSectionCard>
+        {settings.workspaceId ? (
+          <>
+            {/* Operations sits second: which model runs the work matters more than the rest. */}
+            <SubSectionCard label="Operations">
+              <LiveOperationSettings
+                controlStore={settings.controlStore}
+                workspace={settings.workspaceId}
+                disabled={settings.saving}
+              />
+            </SubSectionCard>
+            <SubSectionCard label="Registration">
+              <DeregisterRow label={settings.label} workspace={settings.workspaceId} />
+            </SubSectionCard>
+          </>
+        ) : null}
       </SettingsSection>
       <SaveBar settings={settings} />
     </main>
