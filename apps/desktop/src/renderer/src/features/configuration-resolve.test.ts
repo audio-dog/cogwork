@@ -56,7 +56,7 @@ describe("resolveEnablement", () => {
   it("drops an MCP server enablement written at the repository", () => {
     // A cloned repository may ship the file but may never start a process on your machine.
     const resolved = resolveEnablement(required("local:repo/mcp/repo-tools"), view);
-    expect(resolved.dropped.every((entry) => Diagnostic.$is("inadmissible")(entry.diagnostic))).toBe(true);
+    expect(resolved.dropped.map((entry) => Diagnostic.$is("inadmissible")(entry.diagnostic))).toEqual([true]);
     expect(resolved.dropped[0]?.row.scope.kind).toBe("workspace-input");
     // Dropped, so nothing resolves — and that is not the same as off.
     expect(resolved.effective).toBeUndefined();
@@ -64,7 +64,7 @@ describe("resolveEnablement", () => {
 
   it("drops a setting that references a contribution which no longer exists", () => {
     const resolved = resolveEnablement(required("plugin:granola/mcp/granola"), view);
-    expect(resolved.dropped.every((entry) => Diagnostic.$is("dangling")(entry.diagnostic))).toBe(true);
+    expect(resolved.dropped.map((entry) => Diagnostic.$is("dangling")(entry.diagnostic))).toEqual([true]);
     expect(resolved.effective).toBeUndefined();
   });
 
@@ -250,7 +250,7 @@ describe("diagnosticsOf", () => {
     expect(inItsOwnView).toHaveLength(0);
 
     const reported = diagnosticsOf(granola);
-    expect(reported.every((entry) => Diagnostic.$is("dangling")(entry.diagnostic))).toBe(true);
+    expect(reported.map((entry) => Diagnostic.$is("dangling")(entry.diagnostic))).toEqual([true]);
     expect(reported[0].row.scope.workspaceId).toBe(cogworkWorkspaceId);
   });
 
