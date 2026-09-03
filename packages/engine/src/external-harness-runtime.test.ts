@@ -24,7 +24,12 @@ import type {
   SandboxProvider,
   WorkspaceDefinition,
 } from "@tanstack/ai-sandbox";
-import { createSecrets, getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
+import {
+  createSecrets,
+  getSandbox,
+  getWorkspaceProjection,
+  SandboxDurabilityCapability,
+} from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -833,7 +838,8 @@ describe("external Harness runtime", () => {
         assert.deepStrictEqual(launch?.request.prompt, request.messages);
         assert.deepStrictEqual(launch?.request.outputSchema, request.structuredOutput);
         assert.strictEqual(probe.chatOptions[0]?.runId, request.id);
-        assert.strictEqual(probe.chatOptions[0]?.threadId, request.id);
+        assert.isString(probe.chatOptions[0]?.threadId);
+        assert.notStrictEqual(probe.chatOptions[0]?.threadId, request.id);
         assert.deepStrictEqual(probe.chatOptions[0]?.modelOptions, {
           effort: "high",
           authentication: "host",
@@ -939,7 +945,27 @@ describe("external Harness runtime", () => {
             resumeHandle: "native-session-147",
           },
         });
+        assert.strictEqual(probe.chatOptions[0]?.runId, request.id);
+        assert.strictEqual(probe.chatOptions[0]?.threadId, resumedSession);
         assert.strictEqual(probe.chatOptions[0]?.modelOptions?.sessionId, "native-session-147");
+      }),
+    );
+
+    it.effect("keeps the shared external Harness launch nondurable", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const durability: Array<boolean> = [];
+        probe.inspect = (options) => {
+          durability.push(SandboxDurabilityCapability.has(runtimeCapabilities(options)));
+          return Promise.resolve();
+        };
+        const harness = makeHarness(descriptor(terminalEvents, probe), []);
+
+        yield* harness
+          .run({ plan: request, session: resumedSession, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain);
+
+        assert.deepStrictEqual(durability, [false]);
       }),
     );
 

@@ -539,7 +539,7 @@ const makeChatStream = <Adapter extends AnyTextAdapter, NativeAuthentication>(
     abortController,
     modelOptions: descriptor.projectOptions(request),
     outputSchema: request.outputSchema ?? undefined,
-    threadId: request.identity.session ?? request.identity.run,
+    threadId: request.identity.session ?? undefined,
     runId: request.identity.run,
     stream: true,
     ...(secretValues.length > 0 ? { debug: false } : {}),
