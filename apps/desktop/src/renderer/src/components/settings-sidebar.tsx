@@ -98,7 +98,14 @@ export function SettingsSidebar() {
 
   return (
     <TooltipProvider>
-      <Sidebar collapsible="none">
+      {/*
+        `collapsible="none"` styles itself `h-full`, but `SidebarProvider`'s wrapper is `min-h-svh` —
+        a minimum, not a definite height — so `height: 100%` resolves to the content and the rail
+        stops under the last item. The `SidebarInset` beside it already declares `h-svh`; this
+        matches it. The app shell's sidebar escapes this because `collapsible="offcanvas"` positions
+        itself `fixed inset-y-0`.
+      */}
+      <Sidebar collapsible="none" className="h-svh">
         <SidebarHeader className="h-11 shrink-0 [-webkit-app-region:drag]" />
         <SidebarContent>
           <div className="flex flex-col gap-2 px-2">
