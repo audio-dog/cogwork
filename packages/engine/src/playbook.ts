@@ -136,6 +136,8 @@ export const buildContinuationNudge = (worktreePath: string) =>
   [
     "You were interrupted part-way through the task above and this session has just been resumed.",
     `Nothing has changed except that time passed. Inspect ${worktreePath} to see how far you got, then`,
+    "treat the prepared Worktree as ground truth, including files already written. Do not trust the ragged tail",
+    "of the interrupted native transcript over that state. Then",
     "continue from exactly where you stopped. Do not start over and do not redo completed work. If a pull",
     "request for this branch already exists, keep using it and never open a second one. If the task is",
     "already complete, say COMPLETE and stop.",
