@@ -47,22 +47,23 @@ const overviewItem = Effect.fn("Harness.overviewItem")(function* (
   harness: HarnessService,
   name: HarnessName,
 ) {
-  const probe = Effect.gen(function* () {
-    const readiness = yield* harness.readiness(name);
-    const models = yield* harness.catalog(name).pipe(
+  return yield* Effect.all({
+    readiness: harness.readiness(name),
+    models: harness.catalog(name).pipe(
       Effect.map((catalog) => catalog.models.map((choice) => choice.value)),
       // No catalog source answered. The state already carries why the Harness cannot run.
       Effect.catchTag("HarnessError", () => Effect.succeed<ReadonlyArray<string>>([])),
-    );
-    return HarnessItem.make({
-      harness: name,
-      version: readiness.installation.version,
-      state: harnessStateOf(readiness, harness.signIn(name)),
-      models,
-    });
-  });
-  // One bound per Harness, so a hung child costs that row alone.
-  return yield* probe.pipe(
+    ),
+  }).pipe(
+    Effect.map(({ readiness, models }) =>
+      HarnessItem.make({
+        harness: name,
+        version: readiness.installation.version,
+        state: harnessStateOf(readiness, harness.signIn(name)),
+        models,
+      }),
+    ),
+    // One bound per Harness, so a hung child costs that row alone.
     Effect.timeout(probeDeadline),
     Effect.catchTags({
       TimeoutError: () => Effect.succeed(unreachable(name, `the probe overran ${probeDeadline}`)),
