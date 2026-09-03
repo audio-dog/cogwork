@@ -1,7 +1,7 @@
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { Contribution } from "../features/configuration-model";
+import { type Contribution, McpReadiness } from "../features/configuration-model";
 import { contributionById, placeholderConfiguration } from "../features/configuration-placeholder";
 import { Configuration } from "./configuration-provider";
 import { CustomizeFilterProvider } from "./customize-filter";
@@ -12,7 +12,7 @@ const disabledDisconnectedServer = () => {
   if (!contribution) throw new Error("fixture is missing linear MCP");
   return {
     ...contribution,
-    readiness: { _tag: "not-ready", reason: "Connection needed" },
+    readiness: McpReadiness["not-ready"]({ reason: "Connection needed" }),
     rows: [{ scope: { kind: "settings-profile" }, value: false, source: "Control store" }],
   } satisfies Contribution;
 };

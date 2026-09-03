@@ -1,7 +1,12 @@
 import { Dialog, DialogTrigger } from "@cogwork/ui/components/dialog";
 import { ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { kindIcons } from "../features/configuration-icons";
-import { type Contribution as ContributionRecord, scopeCopy } from "../features/configuration-model";
+import {
+  type Contribution as ContributionRecord,
+  LoadState,
+  McpReadiness,
+  scopeCopy,
+} from "../features/configuration-model";
 import { useConfiguration } from "./configuration-provider";
 import { Contribution, useContribution } from "./contribution";
 import { ListRow, ListRowActions, ListRowMedia, ListRowOpen } from "./customize-list";
@@ -17,11 +22,11 @@ function StatusLine() {
     meta: { workspaceById },
   } = useConfiguration();
 
-  if (contribution.load._tag === "failed") return contribution.load.reason;
+  if (LoadState.$is("failed")(contribution.load)) return contribution.load.reason;
   const workspace = workspaceById(contribution.definedIn);
   const where = `${workspace ? `${workspace.name} · ` : ""}${scopeCopy[contribution.definedAt].name}`;
   if (!on) return `Off · ${where}`;
-  if (contribution.readiness?._tag === "not-ready") return contribution.readiness.reason;
+  if (McpReadiness.$is("not-ready")(contribution.readiness)) return contribution.readiness.reason;
   return `Connected · ${where}`;
 }
 

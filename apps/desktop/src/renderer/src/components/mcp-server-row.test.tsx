@@ -1,7 +1,7 @@
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { Contribution } from "../features/configuration-model";
+import { type Contribution, McpReadiness } from "../features/configuration-model";
 import { contributionById, placeholderConfiguration } from "../features/configuration-placeholder";
 import { Configuration } from "./configuration-provider";
 import { McpServerRow } from "./mcp-server-row";
@@ -59,7 +59,7 @@ describe("McpServerRow", () => {
   it("renders a disabled disconnected server as off without error status", () => {
     const contribution = {
       ...required("plugin:linear/mcp/linear"),
-      readiness: { _tag: "not-ready", reason: "Connection needed" },
+      readiness: McpReadiness["not-ready"]({ reason: "Connection needed" }),
       rows: [{ scope: { kind: "settings-profile" }, value: false, source: "Control store" }],
     } satisfies Contribution;
 
