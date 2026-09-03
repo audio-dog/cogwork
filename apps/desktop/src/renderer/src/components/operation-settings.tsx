@@ -51,7 +51,7 @@ import {
   operations,
   settingCell,
 } from "../features/operation-settings";
-import { HarnessGlyphIcon } from "./harness-glyph";
+import { ProviderGlyphIcon } from "./provider-glyph";
 
 interface OperationSettingsState {
   readonly controlStore: ControlStore | null;
@@ -129,7 +129,7 @@ function HarnessRail({
               />
             }
           >
-            <HarnessGlyphIcon glyph={catalog.glyph} />
+            <ProviderGlyphIcon glyph={catalog.glyph} />
           </TooltipTrigger>
           <TooltipContent side="right">{catalog.label}</TooltipContent>
         </Tooltip>
@@ -183,7 +183,7 @@ function HarnessModelPicker({
           />
         }
       >
-        {effectiveCatalog ? <HarnessGlyphIcon glyph={effectiveCatalog.glyph} /> : null}
+        {effectiveCatalog ? <ProviderGlyphIcon glyph={effectiveCatalog.glyph} /> : null}
         {retiredHarness ? <RiAlertLine className="text-destructive" /> : null}
         <span className={cn("truncate", !own && "text-muted-foreground")}>
           {retiredHarness ? `${effectiveHarness} · no longer offered` : triggerLabel}
@@ -228,7 +228,7 @@ function HarnessModelPicker({
                         <span className="flex min-w-0 flex-1 flex-col">
                           <span className="truncate text-sm font-medium">{model.label}</span>
                           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <HarnessGlyphIcon glyph={railCatalog.glyph} />
+                            <ProviderGlyphIcon glyph={railCatalog.glyph} />
                             {railCatalog.label}
                           </span>
                         </span>

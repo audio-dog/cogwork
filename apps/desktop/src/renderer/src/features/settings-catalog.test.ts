@@ -51,7 +51,7 @@ describe("catalog helpers", () => {
       "/settings/general",
       "/settings/scheduling",
       "/settings/appearance",
-      "/settings/harnesses",
+      "/settings/providers",
     ]);
   });
 
@@ -59,8 +59,8 @@ describe("catalog helpers", () => {
     for (const entry of settingsIndex) expect(findSection(entry.sectionId)).toBeDefined();
   });
 
-  it("files the harness section's setting under it, so search can reach the section", () => {
-    expect(settingsForSection("harnesses").map((entry) => entry.id)).toEqual(["harness-state"]);
+  it("files the provider section's setting under it, so search can reach the section", () => {
+    expect(settingsForSection("providers").map((entry) => entry.id)).toEqual(["harness-state"]);
   });
 
   it("lists the settings that belong to a section", () => {

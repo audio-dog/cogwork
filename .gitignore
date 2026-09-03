@@ -32,3 +32,6 @@ packages/*/.claude/
 # Vendored reference source (Effect v4, etc.), pinned by `pnpm vendor`.
 # No trailing slash: a real dir in the main checkout, a symlink in a hydrated worktree.
 /.repos
+
+# TypeScript incremental build state
+*.tsbuildinfo

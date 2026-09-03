@@ -9,14 +9,14 @@ const sectionLinks = linkOptions([
   { to: "/settings/general" },
   { to: "/settings/scheduling" },
   { to: "/settings/appearance" },
-  { to: "/settings/harnesses" },
+  { to: "/settings/providers" },
 ]);
 
 export const settingsSections = [
   { id: "general", label: "General", icon: RiSettings3Line, link: sectionLinks[0] },
   { id: "scheduling", label: "Scheduling", icon: RiSpeedUpLine, link: sectionLinks[1] },
   { id: "appearance", label: "Appearance", icon: RiPaletteLine, link: sectionLinks[2] },
-  { id: "harnesses", label: "Providers", icon: RiRobot2Line, link: sectionLinks[3] },
+  { id: "providers", label: "Providers", icon: RiRobot2Line, link: sectionLinks[3] },
 ] as const;
 
 export type SettingsSection = (typeof settingsSections)[number];
@@ -76,7 +76,7 @@ export const settingsIndex = [
   },
   {
     id: "harness-state",
-    sectionId: "harnesses",
+    sectionId: "providers",
     title: "Harness state",
     description: "Whether each coding agent on this machine is installed, supported and signed in.",
     keywords: [

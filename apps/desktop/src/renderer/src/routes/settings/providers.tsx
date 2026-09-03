@@ -17,21 +17,22 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
+import { createFileRoute } from "@tanstack/react-router";
 import { createContext, type ReactNode, use, useState } from "react";
-import { harnessesAtom } from "../daemon/atoms";
-import { relativeTime } from "../features/format";
-import { harnessGlyph, harnessLabel } from "../features/harness-presentation";
-import { harnessSummary, installedVersion, versionLabel } from "../features/harnesses-view";
-import { settingEntry } from "../features/settings-catalog";
-import { useNow } from "../features/use-now";
-import { HarnessGlyphIcon } from "./harness-glyph";
-import { useFocusFlash } from "./settings-parts";
+import { ProviderGlyphIcon } from "../../components/provider-glyph";
+import { useFocusFlash } from "../../components/settings-parts";
+import { harnessesAtom } from "../../daemon/atoms";
+import { relativeTime } from "../../features/format";
+import { harnessSummary, installedVersion, versionLabel } from "../../features/harnesses-view";
+import { providerGlyph, providerLabel } from "../../features/provider-presentation";
+import { settingEntry } from "../../features/settings-catalog";
+import { useNow } from "../../features/use-now";
 
 /* ------------------------------------------------------------------------------ shared state */
 
-interface HarnessesValue {
+interface ProvidersValue {
   readonly state: {
-    readonly harnesses: readonly HarnessItem[];
+    readonly providers: readonly HarnessItem[];
     readonly selected: HarnessItem | undefined;
     readonly checkedAtMillis: number | null;
     readonly load: "loading" | "ready" | "failed";
@@ -44,32 +45,32 @@ interface HarnessesValue {
   readonly meta: { readonly checking: boolean };
 }
 
-const HarnessesContext = createContext<HarnessesValue | null>(null);
+const ProvidersContext = createContext<ProvidersValue | null>(null);
 
-const useHarnesses = () => {
-  const value = use(HarnessesContext);
-  if (!value) throw new Error("Harness readers must render inside Harnesses.Provider");
+const useProviders = () => {
+  const value = use(ProvidersContext);
+  if (!value) throw new Error("Provider readers must render inside <Providers>");
   return value;
 };
 
-function HarnessesProvider({ children }: { readonly children: ReactNode }) {
+function Providers({ children }: { readonly children: ReactNode }) {
   const queried = useAtomValue(harnessesAtom);
   const refresh = useAtomRefresh(harnessesAtom);
   const [chosen, setChosen] = useState<HarnessName | null>(null);
 
   const overview = queried._tag === "Success" ? queried.value : null;
-  const harnesses = overview?.harnesses ?? [];
-  const value: HarnessesValue = {
+  const providers = overview?.harnesses ?? [];
+  const value: ProvidersValue = {
     state: {
-      harnesses,
-      selected: harnesses.find((item) => item.harness === chosen) ?? harnesses[0],
+      providers,
+      selected: providers.find((item) => item.harness === chosen) ?? providers[0],
       checkedAtMillis: overview?.checkedAtMillis ?? null,
       load: overview ? "ready" : queried._tag === "Failure" ? "failed" : "loading",
     },
     actions: { select: setChosen, check: refresh },
     meta: { checking: queried.waiting },
   };
-  return <HarnessesContext value={value}>{children}</HarnessesContext>;
+  return <ProvidersContext value={value}>{children}</ProvidersContext>;
 }
 
 /* ------------------------------------------------------------------------------ small pieces */
@@ -95,11 +96,11 @@ function VersionCode({ version }: { readonly version: string | null }) {
 
 /* ----------------------------------------------------------------------------------- the list */
 
-function HarnessRow({ item }: { readonly item: HarnessItem }) {
+function ProviderRow({ item }: { readonly item: HarnessItem }) {
   const {
     state: { selected },
     actions: { select },
-  } = useHarnesses();
+  } = useProviders();
   const summary = harnessSummary(item.state);
   const active = item.harness === selected?.harness;
   return (
@@ -114,11 +115,11 @@ function HarnessRow({ item }: { readonly item: HarnessItem }) {
     >
       <ItemMedia variant="icon">
         {/* ItemMedia sizes a bare svg to `size-4`; its `:not([class*='size-'])` selector yields to this. */}
-        <HarnessGlyphIcon glyph={harnessGlyph(item.harness)} className="size-5" />
+        <ProviderGlyphIcon glyph={providerGlyph(item.harness)} className="size-5" />
       </ItemMedia>
       <ItemContent>
         <ItemTitle className="flex min-w-0 items-center gap-2">
-          <span className="truncate">{harnessLabel(item.harness)}</span>
+          <span className="truncate">{providerLabel(item.harness)}</span>
           <VersionCode version={item.version} />
         </ItemTitle>
         <ItemDescription className="flex items-start gap-1.5">
@@ -135,17 +136,17 @@ function HarnessRow({ item }: { readonly item: HarnessItem }) {
   );
 }
 
-function HarnessList() {
+function ProviderList() {
   const {
-    state: { harnesses },
-  } = useHarnesses();
+    state: { providers },
+  } = useProviders();
   return (
     <div className="border-b border-border lg:flex lg:min-h-0 lg:flex-col lg:border-e lg:border-b-0">
       <ScrollArea className="lg:min-h-0 lg:flex-1">
         <div className="divide-y divide-border">
-          {harnesses.map((item) => (
+          {providers.map((item) => (
             <div key={item.harness} className="p-1">
-              <HarnessRow item={item} />
+              <ProviderRow item={item} />
             </div>
           ))}
         </div>
@@ -155,8 +156,6 @@ function HarnessList() {
 }
 
 /* --------------------------------------------------------------------------------- the detail */
-
-const FIELD_GRID = "grid gap-x-4 gap-y-2.5 px-4 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start";
 
 function SignInCommand({ command }: { readonly command: string }) {
   const [copied, setCopied] = useState(false);
@@ -192,7 +191,7 @@ function ConfigurationTab({ item }: { readonly item: HarnessItem }) {
   const summary = harnessSummary(item.state);
   return (
     <div className="flex flex-col gap-4 py-4">
-      <div className={FIELD_GRID}>
+      <div className="grid gap-x-4 gap-y-2.5 px-4 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
         <span className="text-xs font-medium text-foreground">Installed</span>
         <div className="flex min-w-0 flex-col gap-0.5">
           <code
@@ -219,10 +218,10 @@ function ModelsTab({ item }: { readonly item: HarnessItem }) {
       <Empty className="py-10">
         <EmptyHeader>
           <EmptyMedia variant="icon">
-            <HarnessGlyphIcon glyph={harnessGlyph(item.harness)} />
+            <ProviderGlyphIcon glyph={providerGlyph(item.harness)} />
           </EmptyMedia>
           <EmptyTitle>No models</EmptyTitle>
-          <EmptyDescription>{harnessLabel(item.harness)} offered no model list.</EmptyDescription>
+          <EmptyDescription>{providerLabel(item.harness)} offered no model list.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -243,10 +242,10 @@ function ModelsTab({ item }: { readonly item: HarnessItem }) {
   );
 }
 
-function HarnessDetail() {
+function ProviderDetail() {
   const {
     state: { selected },
-  } = useHarnesses();
+  } = useProviders();
   if (!selected) return null;
   const summary = harnessSummary(selected.state);
   return (
@@ -255,9 +254,9 @@ function HarnessDetail() {
         <div className="flex min-h-16 shrink-0 flex-col justify-center gap-1 border-b border-border px-4 py-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-muted-foreground">
-              <HarnessGlyphIcon glyph={harnessGlyph(selected.harness)} />
+              <ProviderGlyphIcon glyph={providerGlyph(selected.harness)} />
             </span>
-            <h2 className="truncate text-sm font-medium">{harnessLabel(selected.harness)}</h2>
+            <h2 className="truncate text-sm font-medium">{providerLabel(selected.harness)}</h2>
             <VersionCode version={selected.version} />
           </div>
           <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
@@ -292,15 +291,12 @@ function HarnessDetail() {
 
 /* ------------------------------------------------------------------------------------ the page */
 
-const FRAME =
-  "overflow-hidden rounded-lg border border-border lg:grid lg:h-[calc(100dvh-11rem)] lg:max-h-[48rem] lg:min-h-[30rem] lg:grid-cols-[20rem_minmax(0,1fr)]";
-
-function HarnessesHeader() {
+function ProvidersHeader() {
   const {
     state: { checkedAtMillis },
     actions: { check },
     meta: { checking },
-  } = useHarnesses();
+  } = useProviders();
   const now = useNow();
   return (
     <div className="flex items-center justify-between gap-4">
@@ -320,9 +316,9 @@ function HarnessesHeader() {
   );
 }
 
-function HarnessesLoading() {
+function ProvidersLoading() {
   return (
-    <div className={FRAME}>
+    <div className="overflow-hidden rounded-lg border border-border lg:grid lg:h-[calc(100dvh-11rem)] lg:max-h-[48rem] lg:min-h-[30rem] lg:grid-cols-[20rem_minmax(0,1fr)]">
       <div className="flex flex-col gap-1 border-b border-border p-1 lg:border-e lg:border-b-0">
         {[0, 1, 2, 3].map((row) => (
           <Skeleton key={row} className="h-19 w-full rounded-md" />
@@ -333,50 +329,50 @@ function HarnessesLoading() {
   );
 }
 
-function HarnessesFailure() {
+function ProvidersFailure() {
   return (
     <Alert variant="destructive">
       <RiAlertLine />
-      <AlertTitle>Cogwork could not read this machine's harnesses.</AlertTitle>
+      <AlertTitle>Cogwork could not read this machine's providers.</AlertTitle>
       <AlertDescription>The engine did not answer. Check again, or read the daemon log.</AlertDescription>
     </Alert>
   );
 }
 
-function HarnessesNone() {
+function ProvidersNone() {
   return (
     <Empty className="rounded-lg border border-border py-16">
       <EmptyHeader>
-        <EmptyTitle>No harnesses registered</EmptyTitle>
+        <EmptyTitle>No providers registered</EmptyTitle>
         <EmptyDescription>This engine build registers no coding agent to drive.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
 }
 
-function HarnessesFrame() {
+function ProvidersFrame() {
   return (
-    <div className={FRAME}>
-      <HarnessList />
-      <HarnessDetail />
+    <div className="overflow-hidden rounded-lg border border-border lg:grid lg:h-[calc(100dvh-11rem)] lg:max-h-[48rem] lg:min-h-[30rem] lg:grid-cols-[20rem_minmax(0,1fr)]">
+      <ProviderList />
+      <ProviderDetail />
     </div>
   );
 }
 
-function HarnessesBody() {
+function ProvidersBody() {
   const {
     state: { load, selected },
-  } = useHarnesses();
-  if (load === "failed") return <HarnessesFailure />;
-  if (load === "loading") return <HarnessesLoading />;
-  if (!selected) return <HarnessesNone />;
-  return <HarnessesFrame />;
+  } = useProviders();
+  if (load === "failed") return <ProvidersFailure />;
+  if (load === "loading") return <ProvidersLoading />;
+  if (!selected) return <ProvidersNone />;
+  return <ProvidersFrame />;
 }
 
-export function HarnessesSettings() {
+function ProvidersSettings() {
   const { ref, flashing, flashKey } = useFocusFlash(settingEntry("harness-state").id);
   return (
-    <HarnessesProvider>
+    <Providers>
       {/* The settings shell centres its column at `max-w-2xl`; this breaks out of it. */}
       <div
         key={flashKey}
@@ -386,9 +382,13 @@ export function HarnessesSettings() {
           flashing && "settings-focus-flash",
         )}
       >
-        <HarnessesHeader />
-        <HarnessesBody />
+        <ProvidersHeader />
+        <ProvidersBody />
       </div>
-    </HarnessesProvider>
+    </Providers>
   );
 }
+
+export const Route = createFileRoute("/settings/providers")({
+  component: ProvidersSettings,
+});

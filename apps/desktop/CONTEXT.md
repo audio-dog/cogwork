@@ -182,15 +182,15 @@ a long tool chain never buries the notes either side of it. A step is what the a
 is what it *said* (the stage result's summary, which this harness emits in place of prose).
 _Avoid_: Tool call (only some steps are tool calls), activity (that's the daemon event stream), event.
 
-**Providers** (settings section):
-The one place the renderer's word and the domain noun disagree on purpose. The section is titled
-**Providers** and lists **Harnesses** — the glossary avoids "provider" for a Harness, and reserves it
-for the **Source control provider**, so the split is UI chrome only: the route, the components and
-the wire all say harness. It reports **Harness state** per Harness and never sets anything, because
-neither an on/off nor an install belongs to it. Whether the product word should change everywhere is
-[#502](https://github.com/colonylabs/cogwork/issues/502); a per-Harness on/off is
+**Provider** (settings section):
+Anything cogwork can send work to. Today every Provider is a **Harness**, so the section lists
+harnesses and nothing else; the word is the wider one because the set is expected to widen. That is
+why the glossary's `_Avoid_: provider` on **Harness** still holds: a Harness is not *called* a
+provider, it *is* one kind of Provider. The section reports **Harness state** per Harness and never
+sets anything — neither an on/off nor an install belongs to it. A per-Harness on/off is
 [#501](https://github.com/colonylabs/cogwork/issues/501).
-_Avoid_: Harnesses (as the section's title — only as what it lists), Models (that is one of its tabs)
+_Avoid_: Harnesses (as the section's name — only as what it currently lists), Models (that is one of
+its tabs), Source control provider (a different noun in contracts)
 
 ## Cross-context edges
 

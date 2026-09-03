@@ -19,7 +19,7 @@ import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsSplatRouteImport } from './routes/settings/$'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
-import { Route as SettingsHarnessesRouteImport } from './routes/settings/harnesses'
+import { Route as SettingsProvidersRouteImport } from './routes/settings/providers'
 import { Route as SettingsSchedulingRouteImport } from './routes/settings/scheduling'
 import { Route as AppCustomizeIndexRouteImport } from './routes/_app/customize/index'
 import { Route as AppCustomizeFacetRouteImport } from './routes/_app/customize/$facet'
@@ -75,9 +75,9 @@ const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
-const SettingsHarnessesRoute = SettingsHarnessesRouteImport.update({
-  id: '/harnesses',
-  path: '/harnesses',
+const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
+  id: '/providers',
+  path: '/providers',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
 const SettingsSchedulingRoute = SettingsSchedulingRouteImport.update({
@@ -117,7 +117,7 @@ export interface FileRoutesByFullPath {
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
-  '/settings/harnesses': typeof SettingsHarnessesRoute
+  '/settings/providers': typeof SettingsProvidersRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
   '/settings/': typeof SettingsIndexRoute
   '/customize/$facet': typeof AppCustomizeFacetRoute
@@ -131,7 +131,7 @@ export interface FileRoutesByTo {
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
-  '/settings/harnesses': typeof SettingsHarnessesRoute
+  '/settings/providers': typeof SettingsProvidersRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -150,7 +150,7 @@ export interface FileRoutesById {
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
-  '/settings/harnesses': typeof SettingsHarnessesRoute
+  '/settings/providers': typeof SettingsProvidersRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -170,7 +170,7 @@ export interface FileRouteTypes {
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
-    | '/settings/harnesses'
+    | '/settings/providers'
     | '/settings/scheduling'
     | '/settings/'
     | '/customize/$facet'
@@ -184,7 +184,7 @@ export interface FileRouteTypes {
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
-    | '/settings/harnesses'
+    | '/settings/providers'
     | '/settings/scheduling'
     | '/'
     | '/settings'
@@ -202,7 +202,7 @@ export interface FileRouteTypes {
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
-    | '/settings/harnesses'
+    | '/settings/providers'
     | '/settings/scheduling'
     | '/_app/'
     | '/settings/'
@@ -289,11 +289,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsGeneralRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
-    '/settings/harnesses': {
-      id: '/settings/harnesses'
-      path: '/harnesses'
-      fullPath: '/settings/harnesses'
-      preLoaderRoute: typeof SettingsHarnessesRouteImport
+    '/settings/providers': {
+      id: '/settings/providers'
+      path: '/providers'
+      fullPath: '/settings/providers'
+      preLoaderRoute: typeof SettingsProvidersRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
     '/settings/scheduling': {
@@ -373,7 +373,7 @@ interface SettingsRouteRouteChildren {
   SettingsSplatRoute: typeof SettingsSplatRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
-  SettingsHarnessesRoute: typeof SettingsHarnessesRoute
+  SettingsProvidersRoute: typeof SettingsProvidersRoute
   SettingsSchedulingRoute: typeof SettingsSchedulingRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
@@ -382,7 +382,7 @@ const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
   SettingsSplatRoute: SettingsSplatRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
-  SettingsHarnessesRoute: SettingsHarnessesRoute,
+  SettingsProvidersRoute: SettingsProvidersRoute,
   SettingsSchedulingRoute: SettingsSchedulingRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }

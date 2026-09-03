@@ -5,17 +5,17 @@ import {
   RiOpenaiFill,
   RiSparklingFill,
 } from "@remixicon/react";
-import type { HarnessGlyph } from "../features/harness-presentation";
+import type { ProviderGlyph } from "../features/provider-presentation";
 
 /**
  * `RiCursorFill` is a mouse pointer, not Cursor. The brand marks are `RiCursorAiFill` and
  * `RiClaudeFill`, both shipped by @remixicon/react 4.9.0.
  */
-export function HarnessGlyphIcon({
+export function ProviderGlyphIcon({
   glyph,
   className,
 }: {
-  readonly glyph: HarnessGlyph;
+  readonly glyph: ProviderGlyph;
   readonly className?: string;
 }) {
   if (glyph === "openai") return <RiOpenaiFill className={className} />;
