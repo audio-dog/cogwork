@@ -1,0 +1,29 @@
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_330b4caffc139b::t_f9bbcbb1a60096 15,371-379
+  s_330b4caffc139b::t_b185a0b8478b56 225
+  s_330b4caffc139b::t_3b0d1f27933bfb 33,118,133-135,215,239,296-302,307-311
+  s_330b4caffc139b::t_c85bdc4414f357 1
+  s_330b4caffc139b::t_5a3c86691e3c37 202
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_330b4caffc139b::t_3b0d1f27933bfb 1,42-46
+  s_330b4caffc139b::t_0eb921c68d3132 47
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_330b4caffc139b::t_aff7bf47df8d7a 20
+  s_330b4caffc139b::t_64e5521a217e0e 1-19,21-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e3ba914f513f4137eb3ea4cb91e415b540446200",
+  "prompts": {},
+  "sessions": {
+    "s_330b4caffc139b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ef9e7d2-206d-4a38-87e4-9f3fab2eb473",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
