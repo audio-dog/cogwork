@@ -10,6 +10,7 @@ import type {
   OperationAvailability,
   Priority,
   PrSummary,
+  ReadyToMergeItem,
   RunPlanWorkContextFacts,
   RunPlanWorkContextReference,
   SessionId,
@@ -49,6 +50,7 @@ export interface Classification {
   readonly claimed: ReadonlyArray<ClaimedItem>;
   readonly blocked: ReadonlyArray<BlockedItem>;
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
+  readonly readyToMerge: ReadonlyArray<ReadyToMergeItem>;
 }
 
 declare const emptyOutcome: unique symbol;
@@ -59,6 +61,7 @@ type Outcome = Data.TaggedEnum<{
   Claimed: { readonly claim: Claim };
   Blocked: EmptyOutcome;
   NeedsHuman: { readonly reason: NeedsHumanReason };
+  ReadyToMerge: { readonly pr: ObservedPr };
   Drop: EmptyOutcome;
 }>;
 
@@ -69,6 +72,7 @@ interface ClassificationChunks {
   readonly claimed: Chunk.Chunk<ClaimedItem>;
   readonly blocked: Chunk.Chunk<BlockedItem>;
   readonly needsHuman: Chunk.Chunk<NeedsHumanItem>;
+  readonly readyToMerge: Chunk.Chunk<ReadyToMergeItem>;
 }
 
 const prSummaryOf = (pr: ObservedPr): PrSummary => ({
@@ -109,11 +113,24 @@ const needsHumanItemOf = (item: ObservedItem, reason: NeedsHumanReason) => ({
   ...prFields(item),
 });
 
+const readyToMergeItemOf = (item: ObservedItem, pr: ObservedPr) => ({
+  id: item.id,
+  title: item.title,
+  ...trackerUrl(item),
+  pr: prSummaryOf(pr),
+});
+
 const prStage = (pr: ObservedPr) => {
   if (pr.draft || pr.followable === false) return null;
   if (triggersFollowUp(pr)) return "follow-up";
-  if (pr.review === "ready") return "verify";
   return null;
+};
+
+const readyToMergePrOf = (item: ObservedItem) => {
+  const pr = item.pr;
+  if (!pr || pr.draft || pr.followable === false) return null;
+  if (triggersFollowUp(pr) || pr.review !== "ready") return null;
+  return pr;
 };
 
 export const observedStage = (item: ObservedItem) => {
@@ -145,6 +162,8 @@ const classifyOne = (
   if (item.claimLabeled) return Outcome.Drop({});
   if (item.roles.includes("needs-info")) return Outcome.NeedsHuman({ reason: "needs-info" });
   if (item.roles.includes("ready-for-human")) return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  const readyToMergePr = readyToMergePrOf(item);
+  if (readyToMergePr) return Outcome.ReadyToMerge({ pr: readyToMergePr });
   const stage = observedStage(item);
   if (!stage) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
@@ -182,6 +201,11 @@ export const classifiedItemOf = (item: ObservedItem) =>
       ({
         _tag: "NeedsHuman",
         ...needsHumanItemOf(item, reason),
+      }) satisfies ClassifiedItem,
+    ReadyToMerge: ({ pr }) =>
+      ({
+        _tag: "ReadyToMerge",
+        ...readyToMergeItemOf(item, pr),
       }) satisfies ClassifiedItem,
     Drop: () => null,
   });
@@ -226,24 +250,35 @@ export const classify = (
           claimed: current.claimed,
           blocked: current.blocked,
           needsHuman: current.needsHuman,
+          readyToMerge: current.readyToMerge,
         }),
         Claimed: ({ claim }) => ({
           eligible: current.eligible,
           claimed: Chunk.append(current.claimed, claimedItemOf(item, claim)),
           blocked: current.blocked,
           needsHuman: current.needsHuman,
+          readyToMerge: current.readyToMerge,
         }),
         Blocked: () => ({
           eligible: current.eligible,
           claimed: current.claimed,
           blocked: Chunk.append(current.blocked, blockedItemOf(item)),
           needsHuman: current.needsHuman,
+          readyToMerge: current.readyToMerge,
         }),
         NeedsHuman: ({ reason }) => ({
           eligible: current.eligible,
           claimed: current.claimed,
           blocked: current.blocked,
           needsHuman: Chunk.append(current.needsHuman, needsHumanItemOf(item, reason)),
+          readyToMerge: current.readyToMerge,
+        }),
+        ReadyToMerge: ({ pr }) => ({
+          eligible: current.eligible,
+          claimed: current.claimed,
+          blocked: current.blocked,
+          needsHuman: current.needsHuman,
+          readyToMerge: Chunk.append(current.readyToMerge, readyToMergeItemOf(item, pr)),
         }),
         Drop: () => current,
       }),
@@ -252,6 +287,7 @@ export const classify = (
       claimed: Chunk.empty(),
       blocked: Chunk.empty(),
       needsHuman: Chunk.empty(),
+      readyToMerge: Chunk.empty(),
     },
   );
   return {
@@ -259,5 +295,6 @@ export const classify = (
     claimed: Chunk.toReadonlyArray(classification.claimed),
     blocked: Chunk.toReadonlyArray(classification.blocked),
     needsHuman: Chunk.toReadonlyArray(classification.needsHuman),
+    readyToMerge: Chunk.toReadonlyArray(classification.readyToMerge),
   };
 };

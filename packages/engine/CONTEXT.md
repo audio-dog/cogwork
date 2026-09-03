@@ -26,7 +26,7 @@ The span a rate-limit scope is held out of polling for, opened when a source rep
 _Avoid_: Circuit breaker (nothing is tripped open by error rate), throttle
 
 **Classification**:
-The partition of an issue tracker's observed items into eligible, claimed, blocked, and needs-human, each tagged with an operation. *Blocked* means the issue tracker reports open blockers, so implementation is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
+The partition of an issue tracker's observed items into eligible, claimed, blocked, needs-human, and ready-to-merge. The first four shapes state whether or why an agent can act; ready-to-merge carries a required PR summary and waits for a person. *Blocked* means the issue tracker reports open blockers, so implementation is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
 _Avoid_: Filtering, triage (triage is an operation, not this)
 
 **Assignee ownership gate**:
