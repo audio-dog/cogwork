@@ -76,11 +76,7 @@ function LimitStepper({
 
 export function SchedulingSettings() {
   const board = useBoard();
-  const published = BoardResult.$match(board, {
-    Initial: () => null,
-    Failure: () => null,
-    Success: ({ board: picture }) => picture.controlStore,
-  });
+  const published = BoardResult.$is("Success")(board) ? board.board.controlStore : null;
   const { controlStore, result, setLimit } = useDaemonLimit(published);
   const limits = controlStore?.daemonLimits ?? null;
   // A second click would interrupt the first write and resubmit its pre-write revision.
