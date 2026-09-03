@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
+import { LifecycleStage } from "./triage";
 
 export const SettingsProfileScope = Schema.TaggedStruct("SettingsProfile", {});
 export type SettingsProfileScope = typeof SettingsProfileScope.Type;
@@ -42,7 +43,7 @@ export type WorkflowSettingLevel = typeof WorkflowSettingLevel.Type;
 
 export const OperationSettingLevel = Schema.TaggedStruct("Operation", {
   workflow: TrimmedNonEmptyString,
-  operation: TrimmedNonEmptyString,
+  operation: LifecycleStage,
 });
 export type OperationSettingLevel = typeof OperationSettingLevel.Type;
 
