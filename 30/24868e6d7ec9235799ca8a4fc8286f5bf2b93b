@@ -1,0 +1,41 @@
+apps/cli/src/platform.test.ts
+  s_d1d450eb6ec3a8::t_55174b74c9e431 613-616
+  s_d1d450eb6ec3a8::t_b433585774f64f 612
+packages/engine/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+apps/cli/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+apps/desktop/vitest.config.ts
+  s_d1d450eb6ec3a8::t_46989bd2c338d2 1-11
+packages/process-diagnostics/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+turbo.json
+  s_d1d450eb6ec3a8::t_7720a905e4c545 19-20
+packages/cursor-acp/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+packages/contracts/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+packages/claude-code/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+packages/codex-cli/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+configs/vitest/base.ts
+  s_d1d450eb6ec3a8::t_55174b74c9e431 5-6
+  s_d1d450eb6ec3a8::t_36c0cd932578f1 1-4,7-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3024868e6d7ec9235799ca8a4fc8286f5bf2b93b",
+  "prompts": {},
+  "sessions": {
+    "s_d1d450eb6ec3a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1a59a783-c9f5-4a94-9a01-5ebd44a8747b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
