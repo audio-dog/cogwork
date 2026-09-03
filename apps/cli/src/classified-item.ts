@@ -9,5 +9,6 @@ export const formatClassifiedItem = (item: ClassifiedItem) =>
       Blocked: ({ id, title, openBlockers }) =>
         `blocked ${id} ${title} (${openBlockers} open blocker${openBlockers === 1 ? "" : "s"})`,
       NeedsHuman: ({ reason, id, title }) => `needs-human ${reason} ${id} ${title}`,
+      ReadyToMerge: ({ id, title, pr }) => `ready-to-merge ${id} ${title} (PR #${pr.number})`,
     }),
   );
