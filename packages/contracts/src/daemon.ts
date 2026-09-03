@@ -116,6 +116,14 @@ export const NeedsHumanItem = Schema.Struct({
 });
 export type NeedsHumanItem = typeof NeedsHumanItem.Type;
 
+export const ReadyToMergeItem = Schema.Struct({
+  id: WorkItemId,
+  title: TrimmedNonEmptyString,
+  url: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
+  pr: PrSummary,
+});
+export type ReadyToMergeItem = typeof ReadyToMergeItem.Type;
+
 export const AvailabilityCause = Schema.TaggedUnion({
   UnsatisfiedNeed: {
     need: TrimmedNonEmptyString,
@@ -173,6 +181,7 @@ export const WorkspaceInfo = Schema.Struct({
   claimed: Schema.Array(ClaimedItem),
   blocked: Schema.Array(BlockedItem),
   needsHuman: Schema.Array(NeedsHumanItem),
+  readyToMerge: Schema.Array(ReadyToMergeItem),
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
 
