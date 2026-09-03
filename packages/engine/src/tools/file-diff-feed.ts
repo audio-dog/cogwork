@@ -1,5 +1,5 @@
 import { createHash, type Hash } from "node:crypto";
-import type { AgUiEvent } from "@cogwork/contracts";
+import { type AgUiEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
 import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -10,7 +10,7 @@ import * as Stream from "effect/Stream";
 import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
 
-export const FILE_DIFF_EVENT = "sandbox.file.diff";
+export { FILE_DIFF_EVENT };
 export const fileDiffExecDuration = Metric.timer("cogwork_file_diff_git_diff_exec_duration", {
   description: "Time spent executing git diff for a file event.",
 });
