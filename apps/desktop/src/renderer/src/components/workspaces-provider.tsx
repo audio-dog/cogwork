@@ -1,4 +1,5 @@
 import type {
+  Board,
   Connection,
   ControlStore,
   DaemonLimitUpdate,
@@ -10,11 +11,12 @@ import { useAtom } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useState } from "react";
 import { deregisterWorkspaceAtom, rebindWorkspaceAtom, registerWorkspaceAtom } from "../daemon/atoms";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import { readyConnections } from "../features/connections-view";
 import { useDaemonLimit } from "../features/use-daemon-limit";
 
 type WorkspacesStatus = "loading" | "offline" | "ready";
+type WorkspaceBoardState = { readonly status: WorkspacesStatus; readonly picture: Board | null };
 
 interface WorkspacesStateValue {
   readonly status: WorkspacesStatus;
@@ -69,12 +71,6 @@ export function WorkspacesProvider({ value, children }: { value: WorkspacesValue
   return <WorkspacesContext value={value}>{children}</WorkspacesContext>;
 }
 
-const boardStatus = (tag: ReturnType<typeof useBoard>["_tag"]) => {
-  if (tag === "Success") return "ready";
-  if (tag === "Failure") return "offline";
-  return "loading";
-};
-
 export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const board = useBoard();
   const [registerResult, runRegister] = useAtom(registerWorkspaceAtom);
@@ -82,7 +78,11 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const [deregisterResult, runDeregister] = useAtom(deregisterWorkspaceAtom);
   const [rebindTarget, setRebindTarget] = useState<WorkspaceId | null>(null);
   const [deregisterTarget, setDeregisterTarget] = useState<WorkspaceId | null>(null);
-  const picture = board._tag === "Success" ? board.board : null;
+  const { status, picture } = BoardResult.$match(board, {
+    Initial: (): WorkspaceBoardState => ({ status: "loading", picture: null }),
+    Failure: (): WorkspaceBoardState => ({ status: "offline", picture: null }),
+    Success: ({ board }): WorkspaceBoardState => ({ status: "ready", picture: board }),
+  });
   const limits = useDaemonLimit(picture?.controlStore ?? null);
   const workspaces = picture ? [...picture.workspaces.values()] : [];
   const connections = readyConnections(picture?.connections);
@@ -104,7 +104,7 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
     <WorkspacesProvider
       value={{
         state: {
-          status: boardStatus(board._tag),
+          status,
           workspaces,
           controlStore: limits.controlStore,
           connections,

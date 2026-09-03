@@ -9,7 +9,7 @@ import {
 import { RiAddLine, RiSubtractLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import { settingEntry } from "../features/settings-catalog";
 import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../features/settings-defaults";
 import { parseCount, sanitizeCountDraft } from "../features/settings-values";
@@ -76,7 +76,11 @@ function LimitStepper({
 
 export function SchedulingSettings() {
   const board = useBoard();
-  const published = board._tag === "Success" ? board.board.controlStore : null;
+  const published = BoardResult.$match(board, {
+    Initial: () => null,
+    Failure: () => null,
+    Success: ({ board: picture }) => picture.controlStore,
+  });
   const { controlStore, result, setLimit } = useDaemonLimit(published);
   const limits = controlStore?.daemonLimits ?? null;
   // A second click would interrupt the first write and resubmit its pre-write revision.
