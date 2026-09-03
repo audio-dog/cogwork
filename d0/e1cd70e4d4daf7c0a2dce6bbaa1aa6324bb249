@@ -1,0 +1,25 @@
+docs/research/preventing-test-suite-performance-drift.md
+  s_d1d450eb6ec3a8::t_6415ef657d1a37 1-4,16-647
+  s_d1d450eb6ec3a8::t_dc586a92f39da3 5-15
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  s_d1d450eb6ec3a8::t_ea95b202ca4a32 1-141
+  s_d1d450eb6ec3a8::t_ccdc41f5f4acb5 142-146
+docs/research/performance-feedback-loop-into-tracker.md
+  s_d1d450eb6ec3a8::t_5fee2b679e1a7e 5-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d0e1cd70e4d4daf7c0a2dce6bbaa1aa6324bb249",
+  "prompts": {},
+  "sessions": {
+    "s_d1d450eb6ec3a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1a59a783-c9f5-4a94-9a01-5ebd44a8747b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
