@@ -66,6 +66,7 @@ import {
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
 import { SessionStore } from "./session-store";
+import { boundedDiff } from "./tools/file-diff-feed";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
 type AdapterOptions<Adapter extends AnyTextAdapter> = Adapter["~types"]["providerOptions"];
@@ -531,15 +532,25 @@ const normalizeFileEvent = (event: AgUiEvent, checkoutPath: string) => {
   const name = event.name === "file.changed" ? FILE_DIFF_EVENT : event.name;
   if (name !== FILE_DIFF_EVENT) return event;
   const normalized = { ...event, name, value: normalizeFileDiffValue(event.value, checkoutPath) };
-  return agUiIsFileDiffEvent(normalized) ? normalized : event;
+  if (!agUiIsFileDiffEvent(normalized)) return event;
+  // A native whole-worktree diff is unbounded at the source. The owned diff feed
+  // holds the same client contract to one bound, so hold this path to it too
+  // rather than persisting and rendering a multi-megabyte string.
+  return { ...normalized, value: { ...normalized.value, diff: boundedDiff(normalized.value.diff) } };
 };
+
+// `.tanstack-*` at the checkout root is TanStack's reserved scratch namespace — the
+// Workspace projection marker, the per-run output schema, and the projected skills
+// tree all land there, and none of them are the agent's work. Anchored to a single
+// root segment so it cannot also hide a nested file the agent did write.
+const reservedScratch = /^\.tanstack-[^/]*$/;
 
 const publicFileEvent = (event: AgUiEvent) => {
   if (!agUiIsFileDiffEvent(event)) return true;
   // A touched-but-unchanged file still reports a change; an empty diff would render
   // as an activity entry with nothing in it.
   if (event.value.diff === "") return false;
-  return !event.value.path.startsWith(".tanstack-");
+  return !reservedScratch.test(event.value.path);
 };
 
 const preserveUsage: ExternalHarnessUsageEstimator = (_request, event) => event;

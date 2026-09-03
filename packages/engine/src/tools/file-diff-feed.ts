@@ -125,7 +125,7 @@ const decodeUtf8Prefix = (bytes: Uint8Array): string => {
   }
 };
 
-const boundedDiff = (diff: string) => {
+export const boundedDiff = (diff: string) => {
   const bytes = Buffer.from(diff);
   if (bytes.length <= fileDiffMaxBytes) return diff;
   const available = fileDiffMaxBytes - Buffer.byteLength(diffTruncationMarker);

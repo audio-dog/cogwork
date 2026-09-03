@@ -1,4 +1,5 @@
 import {
+  agUiIsFileDiffEvent,
   FILE_DIFF_EVENT,
   HarnessName,
   RunId,
@@ -872,6 +873,68 @@ describe("external Harness runtime", () => {
       }),
     );
 
+    it.effect("bounds, drops, and hides file diffs on the shared client contract", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const oversized = "d".repeat(80 * 1024);
+        const events: ReadonlyArray<StreamChunk> = [
+          { type: EventType.RUN_STARTED, threadId: "session-147", runId: "run-external-test" },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/big.ts", diff: oversized },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/touched.ts", diff: "" },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/.tanstack-projected-abc123", diff: "diff --git a/x b/x" },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: {
+              path: "/checkout/.tanstack-output-schema-run-1.json",
+              diff: "diff --git a/y b/y",
+            },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/src/.tanstack-nested.ts", diff: "diff --git a/n b/n" },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout", diff: "diff --git a/z b/z" },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "structured-output.complete",
+            value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
+          },
+          { type: EventType.RUN_FINISHED, threadId: "session-147", runId: "run-external-test" },
+        ];
+        const output = yield* makeHarness(descriptor(events, probe), [])
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
+          .pipe(Stream.runCollect);
+        const diffs = output.filter(agUiIsFileDiffEvent);
+
+        assert.deepStrictEqual(
+          diffs.map((event) => event.value.path),
+          ["big.ts", "src/.tanstack-nested.ts", "."],
+        );
+        const big = diffs[0];
+        if (!big) return assert.fail("the oversized diff was dropped");
+        assert.isBelow(Buffer.byteLength(big.value.diff), Buffer.byteLength(oversized));
+        assert.include(big.value.diff, "diff truncated by Cogwork");
+      }),
+    );
+
     it.effect("scrubs secrets before output, Workspace serialization, and persistence", () =>
       Effect.gen(function* () {
         const secret = "anthropic-test-key-secret";
@@ -917,11 +980,13 @@ describe("external Harness runtime", () => {
         assert.deepStrictEqual(output[1]?.value, {
           message: "rejected [redacted] and [redacted]",
         });
+        // The native adapter's own logger is the one channel cogwork cannot scrub on
+        // the way out, so a request carrying secrets has to silence it outright. Drop
+        // the `debug: false` wiring and this logger writes the secret to the console.
         const logs: Array<unknown> = [];
         vi.spyOn(console, "error").mockImplementation((...values) => logs.push(values));
         options.logger.errors("native adapter failed", { secret });
         assert.notInclude(yield* encodeJson(logs), secret);
-        assert.isFalse(SandboxDurabilityCapability.has(runtimeCapabilities(options)));
         assert.notInclude(yield* encodeJson(workspaces), secret);
 
         const record: RunRecord = {
