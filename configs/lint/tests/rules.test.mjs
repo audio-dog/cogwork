@@ -63,7 +63,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid Effect-step const staging. Why this is wrong: this const stores an intermediate Effect step, then later code has to chase names to reconstruct validation, decision, control flow, and the final Effect. Safe remediation: do not move the step into another helper or wrapper. Inline the step into one visible Effect pipeline at the operation that performs the work; use pipe/flatMap/andThen/tap to keep sequencing continuous. Bind a local only for a final domain-shaped value with an explicit domain type, not for staged Effect inputs.",
-    plugin: "no-effect-step-const-staging",
+    plugin: "staging",
     name: "no-effect-step-const-staging",
   },
   {
@@ -143,7 +143,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid pipeline fragment staging. Why this is wrong: this operation stages an intermediate pipeline fragment and then returns another pipeline that consumes it, so the reader must chase names to understand the final flow. Safe remediation: keep the producer and final selection in one visible pipeline, or promote a complete named domain operation.",
-    plugin: "no-pipeline-fragment-staging",
+    plugin: "staging",
     name: "no-pipeline-fragment-staging",
   },
   {
@@ -161,7 +161,7 @@ const ruleCases = [
   {
     message:
       "Rule: no switch statements. Why: they read as a control-flow ladder, and a default case silently swallows new cases instead of failing the build. Fix: use a mapped-type object map keyed by the discriminant, a keyed dictionary of functions, a cond/rule table, or a tuple spec table projected into a Map — see https://github.com/colonylabs/cogwork/issues/102.",
-    plugin: "no-switch",
+    plugin: "staging",
     name: "no-switch",
   },
   {

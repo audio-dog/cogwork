@@ -37,12 +37,10 @@
     "./configs/lint/effect-calls.grit",
     "./configs/lint/no-arrow-ladder.grit",
     "./configs/lint/no-iife-wrapper.grit",
-    "./configs/lint/no-effect-step-const-staging.grit",
-    "./configs/lint/no-pipeline-fragment-staging.grit",
+    "./configs/lint/staging.grit",
     "./configs/lint/member-calls.grit",
     "./configs/lint/no-effect-do.grit",
     "./configs/lint/no-side-effect-in-state-updater.grit",
-    "./configs/lint/no-switch.grit",
     "./configs/lint/no-native-button-mismatch.grit",
     "./configs/lint/no-wire-union-tag-comparison.grit"
   ],

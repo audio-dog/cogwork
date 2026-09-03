@@ -1,0 +1,29 @@
+language js(typescript, jsx)
+
+// These share a file because each keys on a distinct statement node, so grouping
+// them costs one pass instead of three without widening any root. Do not add a rule
+// here whose root is broader: a root is tested at every node, and a broad one costs
+// more than the pass it saves. See issue #433.
+
+any {
+  JsVariableStatement() as $statement where {
+    or {
+      $statement <: contains `const $sname = Effect.$smethod($sargs);`,
+      $statement <: contains `const $sname = pipe($sproducer);` where {
+        $statement <: contains `Effect.$smethod2($seffectArgs)`
+      },
+      $statement <: contains `const $sname = $ssource.pipe($ssteps);` where {
+        $statement <: contains `Effect.$smethod3($seffectArgs2)`
+      }
+    },
+    register_diagnostic(span=$statement, message="Rule: avoid Effect-step const staging. Why this is wrong: this const stores an intermediate Effect step, then later code has to chase names to reconstruct validation, decision, control flow, and the final Effect. Safe remediation: do not move the step into another helper or wrapper. Inline the step into one visible Effect pipeline at the operation that performs the work; use pipe/flatMap/andThen/tap to keep sequencing continuous. Bind a local only for a final domain-shaped value with an explicit domain type, not for staged Effect inputs.", severity="error")
+  },
+  JsFunctionBody(statements=$statements) as $block where {
+    $statements <: contains `const $fragment = pipe($producerArgs)`,
+    $statements <: contains `return pipe($fragment, $...)`,
+    register_diagnostic(span=$block, message="Rule: avoid pipeline fragment staging. Why this is wrong: this operation stages an intermediate pipeline fragment and then returns another pipeline that consumes it, so the reader must chase names to understand the final flow. Safe remediation: keep the producer and final selection in one visible pipeline, or promote a complete named domain operation.", severity="error")
+  },
+  JsSwitchStatement() as $switchStatement where {
+    register_diagnostic(span=$switchStatement, message="Rule: no switch statements. Why: they read as a control-flow ladder, and a default case silently swallows new cases instead of failing the build. Fix: use a mapped-type object map keyed by the discriminant, a keyed dictionary of functions, a cond/rule table, or a tuple spec table projected into a Map — see https://github.com/colonylabs/cogwork/issues/102.", severity="error")
+  }
+}
