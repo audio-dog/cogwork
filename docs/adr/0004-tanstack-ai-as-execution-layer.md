@@ -32,7 +32,7 @@ any client (CLI, GUI, feldspar) without per-vendor translation.
 
 ## Durable execution boundary
 
-Cogwork gives every TanStack Harness invocation its globally unique `RunId` as `runId` and its `SessionId` as `threadId`. Native Claude, Codex, and Cursor handles remain adapter model options. Claude Code and Codex declare journal and takeover support. Cursor ACP declares no support; OpenCode must also declare no support if a runner is added before its lifecycle is verified.
+Cogwork gives every TanStack Harness invocation its globally unique `RunId` as `runId` and its `SessionId` as `threadId`. Native Claude, Codex, and Cursor handles remain adapter model options. Claude Code and Codex declare journal and takeover support. Cursor ACP declares no support. Cogwork has no OpenCode runner, so no OpenCode capability profile exists to activate; any future runner must initially declare no journal or takeover support.
 
 Capability is not activation. The shared external Harness runtime uses nondurable `withSandbox` without Run stores, stream durability, journal, detach, attach, takeover, or reaping. Cancellation aborts and destroys the local execution. A disconnect or daemon death does not prove that the child process stopped, so diagnostics must not claim that `SIGKILL` established safe detachment.
 
