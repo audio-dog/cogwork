@@ -1,0 +1,79 @@
+packages/engine/src/harness.test.ts
+  s_284a296406e8cc::t_904e3ea73a308f 620,629
+  s_284a296406e8cc::t_90b03c8b2f5882 595,622-628
+  s_284a296406e8cc::t_9565b157460e4e 621
+packages/engine/src/index.ts
+  s_284a296406e8cc::t_195ad1f41682fe 20
+packages/claude-code/CONTEXT.md
+  s_284a296406e8cc::t_3697cdbbb222cd 27-29
+packages/cursor-acp/src/harness.ts
+  s_284a296406e8cc::t_904e3ea73a308f 40-43
+  s_284a296406e8cc::t_9251f3a9aef6fe 354-355,362
+packages/codex-cli/src/harness.test.ts
+  s_284a296406e8cc::t_90b03c8b2f5882 6,498
+  s_284a296406e8cc::t_195ad1f41682fe 13,88,303,503
+  s_284a296406e8cc::t_527fcf343e72ed 273-288,494,502,504-508
+  s_284a296406e8cc::t_85fe256a86047b 299-302,304-305
+  s_284a296406e8cc::t_2a84dda41638c5 499
+  s_284a296406e8cc::t_6ddcab9049c9c0 501
+packages/engine/CONTEXT.md
+  s_284a296406e8cc::t_3697cdbbb222cd 130-135
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_284a296406e8cc::t_3594ce84df609e 71
+packages/claude-code/src/harness.test.ts
+  s_284a296406e8cc::t_195ad1f41682fe 9,192,373,627
+  s_284a296406e8cc::t_8c2574231492db 626
+  s_284a296406e8cc::t_53fbc62bc59440 556-598,615,638-643
+  s_284a296406e8cc::t_8a6d65f5f4b262 362
+  s_284a296406e8cc::t_85fe256a86047b 366-372,374-376
+  s_284a296406e8cc::t_0b2dbbb0b7fe48 532-542
+  s_284a296406e8cc::t_87017e4f714a08 321-331,621-622,624-625,629-637,644
+  s_284a296406e8cc::t_90b03c8b2f5882 5,484,623
+  s_284a296406e8cc::t_f0fee61518be0a 360-361,363-365,628
+  s_284a296406e8cc::t_3594ce84df609e 164,191,197,305
+  s_e270aee8ff8fe1::t_16e96730f740ca 543-555,645-647
+packages/engine/src/provider-bridge.ts
+  s_284a296406e8cc::t_904e3ea73a308f 26-28
+packages/cursor-acp/src/harness.test.ts
+  s_284a296406e8cc::t_90b03c8b2f5882 6,307
+  s_284a296406e8cc::t_4af8e8d72b1fe8 96-97,108
+  s_284a296406e8cc::t_87017e4f714a08 302-306,308-317
+  s_284a296406e8cc::t_3594ce84df609e 87-91,93,297
+  s_284a296406e8cc::t_195ad1f41682fe 11,82-84,92,118,130-131
+packages/codex-cli/CONTEXT.md
+  s_284a296406e8cc::t_3697cdbbb222cd 41-43
+packages/cursor-acp/CONTEXT.md
+  s_284a296406e8cc::t_3697cdbbb222cd 32-38
+packages/claude-code/src/harness.ts
+  s_284a296406e8cc::t_90b03c8b2f5882 32-33,168-169,171
+  s_284a296406e8cc::t_904e3ea73a308f 170
+  s_284a296406e8cc::t_9251f3a9aef6fe 356-366,371-378,387-390,393,400
+  s_284a296406e8cc::t_53fbc62bc59440 379-385
+  s_284a296406e8cc::t_6d027e699dd856 386,401
+packages/codex-cli/src/harness.ts
+  s_284a296406e8cc::t_904e3ea73a308f 175-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0800a77a418fa294ee14a42e8b176a008b004160",
+  "prompts": {},
+  "sessions": {
+    "s_284a296406e8cc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-337f-7e52-84de-18b62158f26a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e270aee8ff8fe1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-38ad-7cc3-bd8e-8bb09e28a9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
