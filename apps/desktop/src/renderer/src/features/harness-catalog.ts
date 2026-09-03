@@ -1,18 +1,16 @@
 // Mirrors the engine's cogwork-fallback catalogs. Delete when #456 publishes the real one.
 import type { LifecycleStage } from "@cogwork/contracts";
+import { type ProviderGlyph, providerGlyph, providerLabel } from "./provider-presentation";
 
 export interface CatalogChoice {
   readonly value: string;
   readonly label: string;
 }
 
-/** Which mark identifies a harness in the picker's rail. */
-export type HarnessGlyph = "openai" | "cursor" | "sparkle";
-
 export interface HarnessCatalog {
   readonly harness: string;
   readonly label: string;
-  readonly glyph: HarnessGlyph;
+  readonly glyph: ProviderGlyph;
   readonly models: readonly CatalogChoice[];
   /** Absent when the harness has no reasoning effort. The control disappears, never disables. */
   readonly efforts?: readonly CatalogChoice[];
@@ -23,15 +21,15 @@ const choices = (values: readonly string[]) => values.map((value) => ({ value, l
 export const harnessCatalogs: readonly HarnessCatalog[] = [
   {
     harness: "codex",
-    label: "Codex",
-    glyph: "openai",
+    label: providerLabel("codex"),
+    glyph: providerGlyph("codex"),
     models: choices(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]),
     efforts: choices(["minimal", "low", "medium", "high"]),
   },
   {
     harness: "cursor",
-    label: "Cursor",
-    glyph: "cursor",
+    label: providerLabel("cursor"),
+    glyph: providerGlyph("cursor"),
     models: choices([
       "auto",
       "gpt-5.3-codex",
@@ -45,8 +43,8 @@ export const harnessCatalogs: readonly HarnessCatalog[] = [
   },
   {
     harness: "provider",
-    label: "Provider",
-    glyph: "sparkle",
+    label: providerLabel("provider"),
+    glyph: providerGlyph("provider"),
     models: choices(["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"]),
   },
 ];

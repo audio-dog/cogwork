@@ -59,6 +59,7 @@ import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
 
 const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
@@ -367,6 +368,7 @@ const daemonLayer = (
   runControl: Layer.Layer<RunControl.RunControl> = RunControl.layer,
 ) =>
   Daemon.handlersLayer.pipe(
+    Layer.provideMerge(harnessProbeTestLayer()),
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
     Layer.provideMerge(Daemon.daemonInfoLayer),
     Layer.provideMerge(eventPublisherLayer),

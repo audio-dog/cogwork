@@ -150,6 +150,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
       takeover: false,
     },
     authentication: { mode: "byok", reference: "Cogwork provider key" },
+    signIn: "cogwork login key --provider anthropic",
     catalogSources: {
       runtime: staticCatalogSource(
         {

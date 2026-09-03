@@ -1,0 +1,80 @@
+import type { HarnessName } from "@cogwork/contracts";
+import { HarnessItem, HarnessOverview, HarnessSignIn, HarnessState } from "@cogwork/contracts";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import { Harness, type HarnessError, type HarnessReadiness, type HarnessService } from "./harness";
+
+// Reading readiness spawns the Harness's CLI; each runner also bounds its own probe.
+const probeDeadline = "10 seconds";
+
+// `TrimmedNonEmptyString` rejects a blank, and a harness can report one.
+const diagnostic = (message: string) => message.trim() || "the harness gave no reason";
+
+export const harnessStateOf = (readiness: HarnessReadiness, signIn: string | null): HarnessState => {
+  if (readiness.installation.status === "missing") {
+    return HarnessState.cases.NotInstalled.make({
+      diagnostic: diagnostic(readiness.operational.diagnostic),
+    });
+  }
+  if (readiness.compatibility.status === "incompatible") {
+    return HarnessState.cases.UnsupportedVersion.make({
+      requirement: readiness.compatibility.requirement,
+    });
+  }
+  if (readiness.authentication.status === "unavailable") {
+    return HarnessState.cases.NotSignedIn.make({
+      signIn: signIn ? HarnessSignIn.make({ command: signIn }) : null,
+    });
+  }
+  if (readiness.operational.status === "ready") return HarnessState.cases.Ready.make({});
+  if (readiness.operational.status === "unknown") {
+    return HarnessState.cases.Unknown.make({ diagnostic: diagnostic(readiness.operational.diagnostic) });
+  }
+  return HarnessState.cases.Unavailable.make({
+    diagnostic: diagnostic(readiness.operational.diagnostic),
+  });
+};
+
+const unreachable = (name: HarnessName, message: string) =>
+  HarnessItem.make({
+    harness: name,
+    version: null,
+    state: HarnessState.cases.Unknown.make({ diagnostic: diagnostic(message) }),
+    models: [],
+  });
+
+const overviewItem = Effect.fn("Harness.overviewItem")(function* (
+  harness: HarnessService,
+  name: HarnessName,
+) {
+  const readiness = yield* harness.readiness(name);
+  const models: ReadonlyArray<string> = yield* harness.catalog(name).pipe(
+    Effect.map((catalog) => catalog.models.map((choice) => choice.value)),
+    // No catalog source answered. The state already carries why the Harness cannot run.
+    Effect.catchTag("HarnessError", () => Effect.succeed<ReadonlyArray<string>>([])),
+  );
+  return HarnessItem.make({
+    harness: name,
+    version: readiness.installation.version,
+    state: harnessStateOf(readiness, harness.signIn(name)),
+    models,
+  });
+});
+
+export const harnessOverview = Effect.fn("Harness.overview")(function* () {
+  const harness = yield* Harness;
+  const harnesses = yield* Effect.forEach(
+    harness.names,
+    (name) =>
+      // One bound per Harness, so a hung child costs that row alone.
+      overviewItem(harness, name).pipe(
+        Effect.timeout(probeDeadline),
+        Effect.catchTags({
+          TimeoutError: () => Effect.succeed(unreachable(name, `the probe overran ${probeDeadline}`)),
+          HarnessError: (error: HarnessError) => Effect.succeed(unreachable(name, error.message)),
+        }),
+      ),
+    { concurrency: "unbounded" },
+  );
+  return HarnessOverview.make({ harnesses, checkedAtMillis: yield* Clock.currentTimeMillis });
+});

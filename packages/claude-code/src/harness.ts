@@ -53,6 +53,7 @@ const rejectedApiKeyPattern =
 const authenticationProfiles = {
   host: {
     binding: { mode: "host", reference: "Claude Code host login on this Runtime Host" },
+    signIn: "claude auth login",
     availableDiagnostic: "Claude Code host login is available",
     installNextStep: "Install Claude Code, then run `claude auth login`.",
     credentialGuidance: "Claude Code host login is unavailable. Run `claude auth login`, then retry.",
@@ -61,6 +62,7 @@ const authenticationProfiles = {
   },
   byok: {
     binding: { mode: "byok", reference: "Anthropic provider key in the Credential store" },
+    signIn: "cogwork login key --provider anthropic",
     availableDiagnostic: "Anthropic provider key is available",
     installNextStep: "Install Claude Code.",
     credentialGuidance:
@@ -443,6 +445,7 @@ const descriptor = (
       planMiddleware: ["sandbox"],
     },
     authentication: authenticationProfiles[options.authentication.mode].binding,
+    signIn: authenticationProfiles[options.authentication.mode].signIn,
     catalogSources: claudeCodeCatalogSources(executable),
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",

@@ -32,10 +32,7 @@ import {
   RiArrowDownSLine,
   RiArrowGoBackLine,
   RiCheckLine,
-  RiCursorFill,
-  RiOpenaiFill,
   RiSearchLine,
-  RiSparklingFill,
 } from "@remixicon/react";
 import { createContext, type ReactNode, use, useState } from "react";
 import {
@@ -43,7 +40,6 @@ import {
   catalogFor,
   defaultProfile,
   type HarnessCatalog,
-  type HarnessGlyph,
   harnessCatalogs,
   policyProfiles,
 } from "../features/harness-catalog";
@@ -55,6 +51,7 @@ import {
   operations,
   settingCell,
 } from "../features/operation-settings";
+import { ProviderGlyphIcon } from "./provider-glyph";
 
 interface OperationSettingsState {
   readonly controlStore: ControlStore | null;
@@ -108,12 +105,6 @@ interface ControlSpec {
 const labelOf = (spec: ControlSpec, value: string | null) =>
   value === null ? "Not set" : (spec.options.find((option) => option.value === value)?.label ?? value);
 
-function HarnessGlyphIcon({ glyph }: { readonly glyph: HarnessGlyph }) {
-  if (glyph === "openai") return <RiOpenaiFill />;
-  if (glyph === "cursor") return <RiCursorFill />;
-  return <RiSparklingFill />;
-}
-
 function HarnessRail({
   catalogs,
   active,
@@ -138,7 +129,7 @@ function HarnessRail({
               />
             }
           >
-            <HarnessGlyphIcon glyph={catalog.glyph} />
+            <ProviderGlyphIcon glyph={catalog.glyph} />
           </TooltipTrigger>
           <TooltipContent side="right">{catalog.label}</TooltipContent>
         </Tooltip>
@@ -192,7 +183,7 @@ function HarnessModelPicker({
           />
         }
       >
-        {effectiveCatalog ? <HarnessGlyphIcon glyph={effectiveCatalog.glyph} /> : null}
+        {effectiveCatalog ? <ProviderGlyphIcon glyph={effectiveCatalog.glyph} /> : null}
         {retiredHarness ? <RiAlertLine className="text-destructive" /> : null}
         <span className={cn("truncate", !own && "text-muted-foreground")}>
           {retiredHarness ? `${effectiveHarness} · no longer offered` : triggerLabel}
@@ -237,7 +228,7 @@ function HarnessModelPicker({
                         <span className="flex min-w-0 flex-1 flex-col">
                           <span className="truncate text-sm font-medium">{model.label}</span>
                           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <HarnessGlyphIcon glyph={railCatalog.glyph} />
+                            <ProviderGlyphIcon glyph={railCatalog.glyph} />
                             {railCatalog.label}
                           </span>
                         </span>

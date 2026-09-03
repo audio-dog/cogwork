@@ -98,7 +98,9 @@ export function SettingsSidebar() {
 
   return (
     <TooltipProvider>
-      <Sidebar collapsible="none">
+      {/* `SidebarProvider`'s wrapper is `min-h-svh`, so a `collapsible="none"` rail's own
+          `h-full` has no definite height to resolve against. */}
+      <Sidebar collapsible="none" className="h-svh">
         <SidebarHeader className="h-11 shrink-0 [-webkit-app-region:drag]" />
         <SidebarContent>
           <div className="flex flex-col gap-2 px-2">

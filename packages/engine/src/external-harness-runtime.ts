@@ -162,6 +162,7 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter, Nativ
   readonly sessionKind: SessionKind;
   readonly capabilities: ExternalHarnessCapabilities;
   readonly authentication: HarnessAuthenticationBinding;
+  readonly signIn?: string;
   readonly catalogSources: HarnessCatalogSources;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly sharedGit: "none" | "required";
@@ -685,6 +686,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
     execution: descriptor.capabilities.execution,
     capabilities: descriptor.capabilities.profile,
     authentication: descriptor.authentication,
+    ...(descriptor.signIn ? { signIn: descriptor.signIn } : {}),
     catalogSources: descriptor.catalogSources,
     readiness: descriptor.readiness,
     projectedMembers: descriptor.capabilities.projectedMembers,

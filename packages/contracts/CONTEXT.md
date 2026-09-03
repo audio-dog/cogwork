@@ -363,6 +363,14 @@ _Avoid_: Model catalog, settings, arbitrary option
 An observation of one Harness's installation, compatible version, and selected authentication binding on the current Runtime host. It can block a Run when negative but never guarantees that a later launch will succeed, and it never selects a fallback Harness or authentication mode.
 _Avoid_: Health check, launch guarantee, availability fallback
 
+**Harness state**:
+The single conclusion **Harness readiness** folds to for a person: ready, not installed, unsupported version, not signed in, unavailable, or unknown. The engine folds it once, so every client shows the same answer instead of re-deriving one from the four observed axes. Its `NotSignedIn` case carries the **Harness sign-in** command when the Harness declares one.
+_Avoid_: Status, health, readiness (that is the observation this folds)
+
+**Harness sign-in**:
+The one command that establishes a Harness's own login — `codex login`, `claude auth login` — declared by the adapter that owns that Harness. Cogwork never runs it and never stores what it produces: the credential is **harness-owned**, so this is something a person is shown, not something the product does. Absent for a Harness that verifies its login during the native launch instead.
+_Avoid_: Login flow, credential prompt, authenticate action
+
 **Harness preflight**:
 The authoritative per-Run check that one registered Harness can execute the accepted Run Plan with its selected catalog values, authentication binding, policy, Workspace projection, required MCP servers, and Sandbox provider. It validates the Plan as frozen and never re-resolves settings.
 _Avoid_: Readiness, Run Plan resolution, fallback

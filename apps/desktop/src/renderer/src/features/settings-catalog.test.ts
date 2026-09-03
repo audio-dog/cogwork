@@ -51,11 +51,16 @@ describe("catalog helpers", () => {
       "/settings/general",
       "/settings/scheduling",
       "/settings/appearance",
+      "/settings/providers",
     ]);
   });
 
   it("files every setting under a section that exists", () => {
     for (const entry of settingsIndex) expect(findSection(entry.sectionId)).toBeDefined();
+  });
+
+  it("files the provider section's setting under it, so search can reach the section", () => {
+    expect(settingsForSection("providers").map((entry) => entry.id)).toEqual(["harness-state"]);
   });
 
   it("lists the settings that belong to a section", () => {

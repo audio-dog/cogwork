@@ -47,6 +47,7 @@ import * as RunControl from "./run-control";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
 import { WorktreeManager } from "./worktree";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -1127,6 +1128,7 @@ describe("daemon status over rpc", () => {
   const engineServices = engineTestLayer();
   const daemonLayer = (sourceLayer: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>) =>
     Daemon.handlersLayer.pipe(
+      Layer.provideMerge(harnessProbeTestLayer()),
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(EventPublisher.layer),

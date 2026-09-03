@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { ScrollArea } from "@cogwork/ui/components/scroll-area";
@@ -11,6 +12,7 @@ import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
 import type { RunActivityPreview } from "../features/run-activity";
 import { useNow } from "../features/use-now";
+import { workspaceLabelById } from "../features/workspace-record";
 import type { ItemSelection } from "../store/chrome";
 import { useChromeStore } from "../store/chrome";
 import { useRightPanelStore } from "../store/right-panel";
@@ -28,6 +30,7 @@ interface FeedActions {
 
 interface FeedMeta {
   now: number;
+  workspaceName: (workspace: WorkspaceId) => string;
 }
 
 interface FeedContextValue {
@@ -112,7 +115,7 @@ function ConsoleLine({ preview }: { preview: RunActivityPreview | undefined }) {
 function TerminalStrip({ entry, preview }: { entry: FeedRun; preview: RunActivityPreview | undefined }) {
   const {
     actions: { select },
-    meta: { now },
+    meta: { now, workspaceName },
   } = useFeed();
   const { run, title } = entry;
   return (
@@ -127,7 +130,9 @@ function TerminalStrip({ entry, preview }: { entry: FeedRun; preview: RunActivit
         <Badge variant="secondary" className="w-20 shrink-0 justify-center">
           {run.stage}
         </Badge>
-        <span className="w-16 shrink-0 truncate text-end text-xs text-muted-foreground">{run.workspace}</span>
+        <span className="w-16 shrink-0 truncate text-end text-xs text-muted-foreground">
+          {workspaceName(run.workspace)}
+        </span>
         <span className="w-14 shrink-0 text-end font-mono text-xs text-muted-foreground">{run.workItem}</span>
         <span className="w-12 shrink-0 text-end font-mono text-xs text-muted-foreground tabular-nums">
           {elapsed(run.startedAtMillis, now)}
@@ -194,6 +199,7 @@ function QueuedBadge() {
 function QueuedLedgerRow({ entry }: { entry: QueuedItem }) {
   const {
     actions: { select },
+    meta: { workspaceName },
   } = useFeed();
   return (
     <TableRow
@@ -206,7 +212,7 @@ function QueuedLedgerRow({ entry }: { entry: QueuedItem }) {
       <TableCell className="font-mono text-xs text-muted-foreground">{entry.item.id}</TableCell>
       <TableCell className="truncate text-foreground">{entry.item.title}</TableCell>
       <TableCell>
-        <Badge variant="outline">{entry.workspace}</Badge>
+        <Badge variant="outline">{workspaceName(entry.workspace)}</Badge>
       </TableCell>
       <TableCell className="text-end text-xs text-muted-foreground tabular-nums">—</TableCell>
     </TableRow>
@@ -216,6 +222,7 @@ function QueuedLedgerRow({ entry }: { entry: QueuedItem }) {
 function DoneLedgerRow({ entry }: { entry: FeedRun }) {
   const {
     actions: { select },
+    meta: { workspaceName },
   } = useFeed();
   const { run, title } = entry;
   return (
@@ -229,7 +236,7 @@ function DoneLedgerRow({ entry }: { entry: FeedRun }) {
       <TableCell className="font-mono text-xs text-muted-foreground">{run.workItem}</TableCell>
       <TableCell className="truncate text-foreground">{title ?? run.workItem}</TableCell>
       <TableCell>
-        <Badge variant="outline">{run.workspace}</Badge>
+        <Badge variant="outline">{workspaceName(run.workspace)}</Badge>
       </TableCell>
       <TableCell className="text-end text-xs text-muted-foreground tabular-nums">
         {run.endedAtMillis !== null ? relativeTime(run.endedAtMillis) : "—"}
@@ -286,12 +293,22 @@ const FeedCompound = {
   Ledger: LedgerSection,
 };
 
-function FeedContent({ running, queued, done, previews }: FeedState) {
+function FeedContent({
+  running,
+  queued,
+  done,
+  previews,
+  workspaceName,
+}: FeedState & Pick<FeedMeta, "workspaceName">) {
   const openItem = useRightPanelStore((state) => state.openItem);
   const select = (selection: ItemSelection) => openItem(selection.workspace, selection.workItem);
   const now = useNow();
   return (
-    <FeedCompound.Provider state={{ running, queued, done, previews }} actions={{ select }} meta={{ now }}>
+    <FeedCompound.Provider
+      state={{ running, queued, done, previews }}
+      actions={{ select }}
+      meta={{ now, workspaceName }}
+    >
       <FeedCompound.Frame>
         <FeedCompound.LiveNow />
         <FeedCompound.Ledger />
@@ -351,5 +368,13 @@ export function Feed() {
     );
   }
 
-  return <FeedContent running={running} queued={queued} done={done} previews={previews} />;
+  return (
+    <FeedContent
+      running={running}
+      queued={queued}
+      done={done}
+      previews={previews}
+      workspaceName={(workspace) => workspaceLabelById(board, workspace)}
+    />
+  );
 }

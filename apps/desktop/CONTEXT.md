@@ -182,6 +182,16 @@ a long tool chain never buries the notes either side of it. A step is what the a
 is what it *said* (the stage result's summary, which this harness emits in place of prose).
 _Avoid_: Tool call (only some steps are tool calls), activity (that's the daemon event stream), event.
 
+**Provider** (settings section):
+Anything cogwork can send work to. Today every Provider is a **Harness**, so the section lists
+harnesses and nothing else; the word is the wider one because the set is expected to widen. That is
+why the glossary's `_Avoid_: provider` on **Harness** still holds: a Harness is not *called* a
+provider, it *is* one kind of Provider. The section reports **Harness state** per Harness and never
+sets anything — neither an on/off nor an install belongs to it. A per-Harness on/off is
+[#501](https://github.com/colonylabs/cogwork/issues/501).
+_Avoid_: Harnesses (as the section's name — only as what it currently lists), Models (that is one of
+its tabs), Source control provider (a different noun in contracts)
+
 ## Cross-context edges
 
 - **desktop → cli.** In development the supervisor spawns the CLI `daemon` command as the engine
