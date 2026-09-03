@@ -54,7 +54,7 @@ const attentionEntryFor = (
       {
         workspace,
         item: ready,
-        kind: "ready-to-merge" as const,
+        kind: "ready-to-merge",
         pr: ready.pr,
       },
     ],
@@ -62,7 +62,7 @@ const attentionEntryFor = (
       {
         workspace,
         item: needsHuman,
-        kind: "needs-decision" as const,
+        kind: "needs-decision",
         reason: needsHuman.reason,
         url: needsHuman.url,
         tracker: trackerFor(board, workspace),
