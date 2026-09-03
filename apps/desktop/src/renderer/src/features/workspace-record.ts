@@ -1,4 +1,4 @@
-import { PollState, type WorkspaceId, WorkspaceState } from "@cogwork/contracts";
+import { type Board, PollState, type WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 
 /** The columns this page can read back and write. #457 restores the rest with its act. */
 export interface WorkspaceRecordDraft {
@@ -38,6 +38,12 @@ export const workspaceLabel = (workspace: WorkspaceState) =>
     Registered: ({ displayName, name }) => displayName ?? name,
     Failed: ({ displayName, name, source }) => displayName ?? name ?? source,
   });
+
+/** Register mints the WorkspaceId as a UUIDv7, so no surface should print one at a person. */
+export const workspaceLabelById = (board: Board, workspace: WorkspaceId) => {
+  const state = board.workspaces.get(workspace);
+  return state ? workspaceLabel(state) : workspace;
+};
 
 export interface WorkspaceHealth {
   readonly tone: "ok" | "pending" | "paused" | "failed";
