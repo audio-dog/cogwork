@@ -2,7 +2,7 @@ import {
   ClassifiedItem,
   Connection,
   type ConnectionEstablishment,
-  type ContributionSettingUpdate,
+  ContributionSettingUpdate,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   connectionIdOf,
@@ -13,7 +13,7 @@ import {
   IssueTrackerError,
   type LocalContribution,
   localOwnerId,
-  type OperationSettingUpdate,
+  OperationSettingUpdate,
   type PluginItem,
   type PluginOverview,
   RunId,
@@ -328,12 +328,18 @@ const controlStoreStub = ({
   updateOperationSetting = (update) =>
     Effect.succeed({
       ...picture,
-      operationSettings: update._tag === "Set" ? [update.row] : [],
+      operationSettings: OperationSettingUpdate.match(update, {
+        Set: ({ row }) => [row],
+        Clear: () => [],
+      }),
     }),
   updateContributionSetting = (update) =>
     Effect.succeed({
       ...picture,
-      contributionSettings: update._tag === "Set" ? [update.row] : [],
+      contributionSettings: ContributionSettingUpdate.match(update, {
+        Set: ({ row }) => [row],
+        Clear: () => [],
+      }),
     }),
 }: ControlStoreStubOptions = {}) =>
   Layer.succeed(ControlStore, {
@@ -1178,7 +1184,7 @@ describe("SetOperationSetting", () => {
         return assert.fail("expected ControlStoreChanged");
       }
       assert.deepStrictEqual(published.controlStore, returned);
-      if (modelUpdate._tag !== "Set") return assert.fail("expected set update");
+      if (!OperationSettingUpdate.guards.Set(modelUpdate)) return assert.fail("expected set update");
       assert.deepStrictEqual(returned.operationSettings, [modelUpdate.row]);
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
