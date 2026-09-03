@@ -4,7 +4,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { SettingsFocusProvider } from "../../components/settings-parts";
 import { SettingsSidebar } from "../../components/settings-sidebar";
 
-interface SettingsSearch {
+export interface SettingsSearch {
   readonly focus?: string;
   readonly jump?: number;
 }

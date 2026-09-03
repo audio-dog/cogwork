@@ -49,11 +49,42 @@ const runs = (board: Board, filter: WorkspaceId | null) =>
 const workspaceItems = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
   [...board.items.values()].filter(({ workspace }) => inWorkspace(filter, workspace));
 
+const registeredStates = (board: Board) =>
+  [...board.workspaces.values()].filter(WorkspaceState.guards.Registered);
+
 export const registeredWorkspaces = (board: Board): WorkspaceId[] =>
-  [...board.workspaces.values()]
-    .filter(WorkspaceState.guards.Registered)
+  registeredStates(board)
     .map((state) => state.name)
     .sort();
+
+export interface WorkspaceOption {
+  readonly id: WorkspaceId;
+  readonly label: string;
+}
+
+/** Register mints the WorkspaceId as a UUIDv7, so anything a person picks from needs the name. */
+export const registeredWorkspaceOptions = (board: Board): WorkspaceOption[] =>
+  registeredStates(board)
+    .map((state) => ({ id: state.name, label: state.displayName ?? state.name }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+
+export interface FailedWorkspace {
+  readonly label: string;
+  readonly message: string;
+  /** Absent until register mints one, and then there is no settings page to open. */
+  readonly id: WorkspaceId | null;
+}
+
+/** A Failed workspace has no work to filter, but its settings page carries the error. */
+export const failedWorkspaces = (board: Board): FailedWorkspace[] =>
+  [...board.workspaces.values()]
+    .filter(WorkspaceState.guards.Failed)
+    .map(({ name, displayName, source, message }) => ({
+      id: name ?? null,
+      label: displayName ?? name ?? source,
+      message,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
 
 export const runningRuns = (board: Board, filter: WorkspaceId | null): FeedRun[] =>
   runs(board, filter)

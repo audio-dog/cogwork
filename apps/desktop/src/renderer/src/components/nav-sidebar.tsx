@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@cogwork/contracts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,23 +18,28 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
-import { TooltipProvider } from "@cogwork/ui/components/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import {
+  RiAlertLine,
   RiEqualizerLine,
-  RiFoldersLine,
   RiNodeTree,
   RiPlugLine,
   RiPulseLine,
   RiSettings3Line,
+  RiSettings4Line,
   RiUserLine,
 } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { useBoard } from "../features/activity-session";
-import { registeredWorkspaces } from "../features/feed";
+import { type FailedWorkspace, failedWorkspaces, registeredWorkspaceOptions } from "../features/feed";
+
+type FailedWorkspaceWithId = FailedWorkspace & { readonly id: WorkspaceId };
+
 import { useChromeStore } from "../store/chrome";
 import { HistoryNav } from "./history-nav";
 import { useTheme } from "./theme-provider";
@@ -46,7 +52,6 @@ interface View {
 
 const views: ReadonlyArray<View> = [
   { label: "Feed", icon: RiPulseLine, to: "/" },
-  { label: "Workspaces", icon: RiFoldersLine, to: "/workspaces" },
   { label: "Workflows", icon: RiNodeTree, to: "/workflows" },
   { label: "Connections", icon: RiPlugLine, to: "/connections" },
   { label: "Customize", icon: RiEqualizerLine, to: "/customize" },
@@ -71,11 +76,39 @@ function ViewItem({ view }: { view: View }) {
   );
 }
 
+/** A Failed workspace cannot filter the feed, so its row opens the settings that explain it. */
+function FailedWorkspaceItem({ workspace }: { readonly workspace: FailedWorkspaceWithId }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={workspace.message}
+        render={<Link to="/workspaces/$workspaceId" params={{ workspaceId: workspace.id }} />}
+      >
+        <RiAlertLine className="text-destructive" />
+        <span>{workspace.label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+/** Register never minted this one an id, so there is no settings page to send it to. */
+function UnregisteredWorkspaceItem({ workspace }: { readonly workspace: FailedWorkspace }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton tooltip={workspace.message} className="cursor-default">
+        <RiAlertLine className="text-destructive" />
+        <span className="text-muted-foreground">{workspace.label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
 function WorkspaceFilter() {
   const board = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
   const setFilter = useChromeStore((state) => state.setWorkspaceFilter);
-  const workspaces = board._tag === "Success" ? registeredWorkspaces(board.board) : [];
+  const workspaces = board._tag === "Success" ? registeredWorkspaceOptions(board.board) : [];
+  const failed = board._tag === "Success" ? failedWorkspaces(board.board) : [];
 
   return (
     <SidebarGroup>
@@ -92,16 +125,37 @@ function WorkspaceFilter() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           {workspaces.map((workspace) => (
-            <SidebarMenuItem key={workspace}>
+            <SidebarMenuItem key={workspace.id}>
               <SidebarMenuButton
-                isActive={filter === workspace}
-                onClick={() => setFilter(workspace)}
-                tooltip={workspace}
+                isActive={filter === workspace.id}
+                onClick={() => setFilter(workspace.id)}
+                tooltip={workspace.label}
               >
-                <span>{workspace}</span>
+                <span>{workspace.label}</span>
               </SidebarMenuButton>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <SidebarMenuAction
+                      showOnHover
+                      aria-label={`${workspace.label} settings`}
+                      render={<Link to="/workspaces/$workspaceId" params={{ workspaceId: workspace.id }} />}
+                    />
+                  }
+                >
+                  <RiSettings4Line />
+                </TooltipTrigger>
+                <TooltipContent side="right">Workspace settings</TooltipContent>
+              </Tooltip>
             </SidebarMenuItem>
           ))}
+          {failed.map((workspace) =>
+            workspace.id === null ? (
+              <UnregisteredWorkspaceItem key={workspace.label} workspace={workspace} />
+            ) : (
+              <FailedWorkspaceItem key={workspace.id} workspace={{ ...workspace, id: workspace.id }} />
+            ),
+          )}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
