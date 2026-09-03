@@ -5,7 +5,7 @@ const MOBILE_BREAKPOINT = 768;
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined);
 
-  // biome-ignore lint/plugin/react: shadcn ui primitive, kept as-is
+  // biome-ignore lint/plugin/no-use-effect: shadcn ui primitive, kept as-is
   React.useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
     const onChange = () => {

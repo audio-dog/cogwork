@@ -32,12 +32,14 @@
     }
   },
   "plugins": [
-    "./configs/lint/ladders.grit",
     "./configs/lint/effect-calls.grit",
     "./configs/lint/iife.grit",
     "./configs/lint/staging.grit",
     "./configs/lint/member-calls.grit",
-    "./configs/lint/gated.grit"
+    "./configs/lint/gated.grit",
+    "./configs/lint/no-effect-ladder.grit",
+    "./configs/lint/no-flatmap-ladder.grit",
+    "./configs/lint/no-side-effect-in-state-updater.grit"
   ],
   "javascript": {
     "formatter": {
@@ -75,12 +77,12 @@
       }
     },
     {
-      "includes": ["**/*.tsx"],
+      "includes": ["**/*.jsx", "**/*.tsx"],
       "plugins": ["./configs/lint/jsx.grit"]
     },
     {
       "includes": ["apps/desktop/src/**", "packages/ui/src/**"],
-      "plugins": ["./configs/lint/react.grit"]
+      "plugins": ["./configs/lint/no-use-effect.grit"]
     }
   ]
 }

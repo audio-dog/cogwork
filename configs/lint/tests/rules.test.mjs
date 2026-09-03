@@ -45,7 +45,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid nested Effect combinators. Why: they hide sequencing and create laddered control flow. Fix: build context once (Effect.all/Effect.map) and then run a single flat pipeline.",
-    plugin: "ladders",
+    plugin: "no-effect-ladder",
     name: "no-effect-ladder",
   },
   {
@@ -87,7 +87,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid nested Effect.flatMap. Why: it hides sequencing and pushes laddered control flow. Fix: build context once (Effect.all/Effect.map) and run a single flatMap.",
-    plugin: "ladders",
+    plugin: "no-flatmap-ladder",
     name: "no-flatmap-ladder",
     severity: "warning",
   },
@@ -155,7 +155,7 @@ const ruleCases = [
   {
     message:
       "Rule: no side effect inside a React state updater. Why: React may run the updater more than once (StrictMode double-invoke, concurrent replay), so a browser-storage write here can run twice or observe stale external state. Fix: compute the next state and return it; write to storage in the event handler or effect (reuse the setter that persists + sets state).",
-    plugin: "react",
+    plugin: "no-side-effect-in-state-updater",
     name: "no-side-effect-in-state-updater",
   },
   {
@@ -167,7 +167,7 @@ const ruleCases = [
   {
     message:
       "Direct useEffect() calls are not allowed. Refactor to derived state, event handlers, the key prop, or a data-fetching library. See .agents/skills/react-no-use-effect. If you must keep it, suppress inline with a reason.",
-    plugin: "react",
+    plugin: "no-use-effect",
     name: "no-use-effect",
   },
 ];
@@ -189,17 +189,20 @@ test("every rule names a configured plugin file", () => {
   assert.deepEqual(missing, []);
 });
 
-// `react.grit` is scoped to the packages that depend on React, so it does not pay a
+// `no-use-effect.grit` is scoped to the packages that depend on React, so it does not pay a
 // pass over the whole repository. That scope is only safe while React stays inside
 // it: a React file added elsewhere would silently stop being linted. This test fails
 // loudly instead. Widen the override in biome.json if a new package adopts React.
 test("the react plugin's scope covers every file that imports React", () => {
   const reactOverride = biomeConfig.overrides.find((override) =>
-    override.plugins?.some((plugin) => plugin.endsWith("react.grit")),
+    override.plugins?.some((plugin) => plugin.endsWith("no-use-effect.grit")),
   );
   const scopedPrefixes = reactOverride.includes.map((include) => include.replace(/\*+$/, ""));
 
-  const tracked = spawnSync("git", ["ls-files", "*.ts", "*.tsx"], { cwd: repoRoot, encoding: "utf8" })
+  const tracked = spawnSync("git", ["ls-files", "*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  })
     .stdout.split("\n")
     .filter(Boolean)
     .filter((file) => !file.startsWith("configs/lint/tests/fixtures/"));
