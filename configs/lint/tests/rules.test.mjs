@@ -33,7 +33,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid Effect.Do. Why: it pushes Effect code toward imperative builder choreography. Fix: use one flat pipe-based Effect flow or one direct top-level Effect.gen with direct yields, not nested generators or wrapper helpers.",
-    plugin: "no-effect-do",
+    plugin: "gated",
     name: "no-effect-do",
   },
   {
@@ -119,7 +119,7 @@ const ruleCases = [
   {
     message:
       "Rule: do not compare a wire-crossing union discriminant by hand. Why: the comparison is not exhaustive and does not use the generated type guard. Fix: use the union's generated match for a fold or guards for a single-variant test.",
-    plugin: "no-wire-union-tag-comparison",
+    plugin: "gated",
     name: "no-wire-union-tag-comparison",
   },
   {
