@@ -134,6 +134,9 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
       const checkoutPath = absoluteCheckoutPathFrom(edits.checkoutPath);
       setPathRefused(checkoutPath === null);
       if (!checkoutPath) return;
+      // The act sends the trimmed path, so hold that: the raw one would never match what
+      // the daemon publishes back and the save bar would never settle.
+      setEdits({ ...edits, checkoutPath });
       setSubmitted(true);
       rebind(identity, checkoutPath);
     },

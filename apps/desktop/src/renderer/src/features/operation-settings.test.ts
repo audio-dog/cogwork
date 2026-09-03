@@ -123,3 +123,14 @@ describe("enabled", () => {
     });
   });
 });
+
+describe("an unknown harness", () => {
+  it("makes the model saved under it stale, because no catalog can vouch for it", () => {
+    const controlStore = store([
+      profileDefault("harness", "retired-harness"),
+      profileDefault("model", "gpt-5.6-sol"),
+    ]);
+    expect(settingCell(controlStore, workspace, "triage", "harness").stale).toBe(true);
+    expect(settingCell(controlStore, workspace, "triage", "model").stale).toBe(true);
+  });
+});

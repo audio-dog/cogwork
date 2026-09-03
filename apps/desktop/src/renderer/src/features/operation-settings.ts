@@ -92,7 +92,7 @@ const isStale = (
   if (setting === "harness") return catalogFor(value) === null;
   if (setting !== "model" && setting !== "effort") return false;
   const catalog = catalogFor(settingCell(controlStore, workspace, operation, "harness").effective);
-  if (!catalog) return false;
+  if (!catalog) return true;
   const options = setting === "model" ? catalog.models : (catalog.efforts ?? []);
   return !options.some((option) => option.value === value);
 };

@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@cogwork/contracts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +37,9 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { useBoard } from "../features/activity-session";
 import { type FailedWorkspace, failedWorkspaces, registeredWorkspaceOptions } from "../features/feed";
+
+type FailedWorkspaceWithId = FailedWorkspace & { readonly id: WorkspaceId };
+
 import { useChromeStore } from "../store/chrome";
 import { HistoryNav } from "./history-nav";
 import { useTheme } from "./theme-provider";
@@ -73,15 +77,27 @@ function ViewItem({ view }: { view: View }) {
 }
 
 /** A Failed workspace cannot filter the feed, so its row opens the settings that explain it. */
-function FailedWorkspaceItem({ workspace }: { readonly workspace: FailedWorkspace }) {
+function FailedWorkspaceItem({ workspace }: { readonly workspace: FailedWorkspaceWithId }) {
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        tooltip={`${workspace.label} could not be read`}
+        tooltip={workspace.message}
         render={<Link to="/workspaces/$workspaceId" params={{ workspaceId: workspace.id }} />}
       >
         <RiAlertLine className="text-destructive" />
         <span>{workspace.label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+/** Register never minted this one an id, so there is no settings page to send it to. */
+function UnregisteredWorkspaceItem({ workspace }: { readonly workspace: FailedWorkspace }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton tooltip={workspace.message} className="cursor-default">
+        <RiAlertLine className="text-destructive" />
+        <span className="text-muted-foreground">{workspace.label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
@@ -133,9 +149,13 @@ function WorkspaceFilter() {
               </Tooltip>
             </SidebarMenuItem>
           ))}
-          {failed.map((workspace) => (
-            <FailedWorkspaceItem key={workspace.id} workspace={workspace} />
-          ))}
+          {failed.map((workspace) =>
+            workspace.id === null ? (
+              <UnregisteredWorkspaceItem key={workspace.label} workspace={workspace} />
+            ) : (
+              <FailedWorkspaceItem key={workspace.id} workspace={{ ...workspace, id: workspace.id }} />
+            ),
+          )}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

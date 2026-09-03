@@ -28,6 +28,7 @@ import { Switch } from "@cogwork/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import {
+  RiAlertLine,
   RiArrowDownSLine,
   RiArrowGoBackLine,
   RiCheckLine,
@@ -158,34 +159,44 @@ function HarnessModelPicker({
   const {
     meta: { disabled },
   } = useOperationSettings();
-  const effectiveHarness = harnessSpec.cell.effective ?? harnessCatalogs[0].harness;
-  const [rail, setRail] = useState(effectiveHarness);
+  const effectiveHarness = harnessSpec.cell.effective;
+  const effectiveCatalog = catalogFor(effectiveHarness);
+  // Null until the rail is picked, so a live harness change still moves the popover.
+  const [chosenRail, setChosenRail] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const railCatalog = catalogFor(rail) ?? harnessCatalogs[0];
+  const railCatalog = catalogFor(chosenRail) ?? effectiveCatalog ?? harnessCatalogs[0];
+  const rail = railCatalog.harness;
+  const stale = modelSpec.cell.stale || harnessSpec.cell.stale;
   const needle = query.trim().toLowerCase();
   const shown = railCatalog.models.filter((model) => model.label.toLowerCase().includes(needle));
   const own = harnessSpec.cell.own !== null || modelSpec.cell.own !== null;
   const triggerLabel = modelSpec.cell.effective ?? "Not set";
 
   return (
-    <Popover>
+    <Popover onOpenChange={(open) => open || setChosenRail(null)}>
       <PopoverTrigger
         render={
           <Button
             variant="outline"
-            className={cn("w-64 justify-start gap-2", modelSpec.cell.stale && "border-destructive")}
+            className={cn("w-64 justify-start gap-2", stale && "border-destructive")}
             aria-label="Harness and model"
             disabled={disabled}
           />
         }
       >
-        <HarnessGlyphIcon glyph={(catalogFor(effectiveHarness) ?? harnessCatalogs[0]).glyph} />
-        <span className={cn("truncate", !own && "text-muted-foreground")}>{triggerLabel}</span>
+        {effectiveCatalog ? (
+          <HarnessGlyphIcon glyph={effectiveCatalog.glyph} />
+        ) : (
+          <RiAlertLine className="text-destructive" />
+        )}
+        <span className={cn("truncate", !own && "text-muted-foreground")}>
+          {effectiveCatalog ? triggerLabel : `${effectiveHarness ?? triggerLabel} · no longer offered`}
+        </span>
         <RiArrowDownSLine className="ms-auto size-4 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[26rem] gap-0 p-2">
         <div className="flex gap-1.5">
-          <HarnessRail catalogs={harnessCatalogs} active={rail} onSelect={setRail} />
+          <HarnessRail catalogs={harnessCatalogs} active={rail} onSelect={setChosenRail} />
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex items-center gap-2 border-b border-border pb-1.5">
               <RiSearchLine className="size-4 shrink-0 text-muted-foreground" />

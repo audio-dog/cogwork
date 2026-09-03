@@ -69,17 +69,20 @@ export const registeredWorkspaceOptions = (board: Board): WorkspaceOption[] =>
     .sort((left, right) => left.label.localeCompare(right.label));
 
 export interface FailedWorkspace {
-  readonly id: string;
   readonly label: string;
+  readonly message: string;
+  /** Absent until register mints one, and then there is no settings page to open. */
+  readonly id: WorkspaceId | null;
 }
 
 /** A Failed workspace has no work to filter, but its settings page carries the error. */
 export const failedWorkspaces = (board: Board): FailedWorkspace[] =>
   [...board.workspaces.values()]
     .filter(WorkspaceState.guards.Failed)
-    .map(({ name, displayName, source }) => ({
-      id: name ?? source,
+    .map(({ name, displayName, source, message }) => ({
+      id: name ?? null,
       label: displayName ?? name ?? source,
+      message,
     }))
     .sort((left, right) => left.label.localeCompare(right.label));
 
