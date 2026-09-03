@@ -179,6 +179,17 @@ describe("classify", () => {
     assert.strictEqual(result.eligible[0]?.stage, "follow-up");
   });
 
+  it("classifies an approved fork pull request as ready-to-merge", () => {
+    const result = classify([
+      item({ id: "1", roles: ["ready-for-agent"], pr: pr("ready", { followable: false }) }),
+    ]);
+
+    assert.deepStrictEqual(
+      result.readyToMerge.map((entry) => entry.id),
+      [id("1")],
+    );
+  });
+
   it("drops in-flight items whose PR is still pending", () => {
     const { eligible, claimed, needsHuman } = classify([
       item({ id: "1", roles: ["ready-for-agent"], pr: pr("pending") }),

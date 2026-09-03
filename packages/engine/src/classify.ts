@@ -75,6 +75,12 @@ interface ClassificationChunks {
   readonly readyToMerge: Chunk.Chunk<ReadyToMergeItem>;
 }
 
+const replaceClassificationChunk = <Key extends keyof ClassificationChunks>(
+  current: ClassificationChunks,
+  key: Key,
+  chunk: ClassificationChunks[Key],
+) => Object.assign({}, current, { [key]: chunk });
+
 const prSummaryOf = (pr: ObservedPr): PrSummary => ({
   number: pr.number,
   url: pr.url,
@@ -128,7 +134,7 @@ const prStage = (pr: ObservedPr) => {
 
 const readyToMergePrOf = (item: ObservedItem) => {
   const pr = item.pr;
-  if (!pr || pr.draft || pr.followable === false) return null;
+  if (!pr || pr.draft) return null;
   if (triggersFollowUp(pr) || pr.review !== "ready") return null;
   return pr;
 };
@@ -245,41 +251,32 @@ export const classify = (
   const classification = items.reduce<ClassificationChunks>(
     (current, item) =>
       Outcome.$match(classifyOne(item, allowlist, availability), {
-        Eligible: ({ stage }) => ({
-          eligible: Chunk.append(current.eligible, eligibleWork(item, stage)),
-          claimed: current.claimed,
-          blocked: current.blocked,
-          needsHuman: current.needsHuman,
-          readyToMerge: current.readyToMerge,
-        }),
-        Claimed: ({ claim }) => ({
-          eligible: current.eligible,
-          claimed: Chunk.append(current.claimed, claimedItemOf(item, claim)),
-          blocked: current.blocked,
-          needsHuman: current.needsHuman,
-          readyToMerge: current.readyToMerge,
-        }),
-        Blocked: () => ({
-          eligible: current.eligible,
-          claimed: current.claimed,
-          blocked: Chunk.append(current.blocked, blockedItemOf(item)),
-          needsHuman: current.needsHuman,
-          readyToMerge: current.readyToMerge,
-        }),
-        NeedsHuman: ({ reason }) => ({
-          eligible: current.eligible,
-          claimed: current.claimed,
-          blocked: current.blocked,
-          needsHuman: Chunk.append(current.needsHuman, needsHumanItemOf(item, reason)),
-          readyToMerge: current.readyToMerge,
-        }),
-        ReadyToMerge: ({ pr }) => ({
-          eligible: current.eligible,
-          claimed: current.claimed,
-          blocked: current.blocked,
-          needsHuman: current.needsHuman,
-          readyToMerge: Chunk.append(current.readyToMerge, readyToMergeItemOf(item, pr)),
-        }),
+        Eligible: ({ stage }) =>
+          replaceClassificationChunk(
+            current,
+            "eligible",
+            Chunk.append(current.eligible, eligibleWork(item, stage)),
+          ),
+        Claimed: ({ claim }) =>
+          replaceClassificationChunk(
+            current,
+            "claimed",
+            Chunk.append(current.claimed, claimedItemOf(item, claim)),
+          ),
+        Blocked: () =>
+          replaceClassificationChunk(current, "blocked", Chunk.append(current.blocked, blockedItemOf(item))),
+        NeedsHuman: ({ reason }) =>
+          replaceClassificationChunk(
+            current,
+            "needsHuman",
+            Chunk.append(current.needsHuman, needsHumanItemOf(item, reason)),
+          ),
+        ReadyToMerge: ({ pr }) =>
+          replaceClassificationChunk(
+            current,
+            "readyToMerge",
+            Chunk.append(current.readyToMerge, readyToMergeItemOf(item, pr)),
+          ),
         Drop: () => current,
       }),
     {
