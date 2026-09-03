@@ -1,4 +1,7 @@
 import type { DesktopProcessHealthSample } from "@cogwork/contracts";
+import type { ProcessProfileCapture as ProcessProfileCaptureValue } from "@cogwork/process-diagnostics";
+
+export type ProcessProfileCapture = ProcessProfileCaptureValue;
 
 export type EngineStatus = "starting" | "running" | "adopted" | "stopped" | "failed";
 
@@ -9,6 +12,7 @@ export const IpcChannel = {
   getWindowPreferences: "cogwork:get-window-preferences",
   getMainProcessHealth: "cogwork:get-main-process-health",
   setWindowPreferences: "cogwork:set-window-preferences",
+  captureProcessProfile: "cogwork:capture-process-profile",
   rpcConnect: "cogwork:rpc-connect",
   rpcDisconnect: "cogwork:rpc-disconnect",
   rpcSend: "cogwork:rpc-send",
@@ -21,6 +25,7 @@ export const IpcChannel = {
 // closing the window hides it and leaves the engine running; off means closing quits the app.
 export interface WindowPreferences {
   readonly closeToHide: boolean;
+  readonly profiling: boolean;
 }
 
 // A renderer-side failure (router error boundary, unhandled rejection) forwarded to `main`
@@ -58,7 +63,8 @@ export interface CogworkBridge {
   readonly onEngineStatus: (listener: (status: EngineStatus) => void) => () => void;
   readonly getWindowPreferences: () => Promise<WindowPreferences>;
   readonly getProcessHealth: () => Promise<ReadonlyArray<DesktopProcessHealthSample>>;
-  readonly setWindowPreferences: (preferences: WindowPreferences) => Promise<WindowPreferences>;
+  readonly setWindowPreferences: (preferences: Partial<WindowPreferences>) => Promise<WindowPreferences>;
+  readonly captureProcessProfile: (capture: ProcessProfileCapture) => Promise<string>;
   readonly rpc: DaemonRpcBridge;
   readonly reportError: (report: RendererErrorReport) => void;
 }

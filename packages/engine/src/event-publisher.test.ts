@@ -3,6 +3,7 @@ import {
   ClassifiedItem,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
+  DaemonEvent,
   DaemonRpcs,
   defaultControlStore,
   HarnessName,
@@ -16,6 +17,7 @@ import {
   WorkItemId,
   WorkspaceConfig,
   WorkspaceId,
+  WorkspaceState,
   workspaceFailureState,
   workspaceKey,
   workspaceStateFromInfo,
@@ -474,7 +476,7 @@ describe("DaemonEventPublisher", () => {
         ...(yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect)),
       ];
       const inFlight = events.flatMap((event) =>
-        event._tag === "SchedulerChanged" ? [event.scheduler.globalInFlight] : [],
+        DaemonEvent.guards.SchedulerChanged(event) ? [event.scheduler.globalInFlight] : [],
       );
       assert.deepStrictEqual(inFlight, [1, 2]);
       assert.strictEqual(events.at(-1)?._tag, "ItemChanged");
@@ -559,15 +561,11 @@ describe("DaemonEventPublisher", () => {
     Effect.gen(function* () {
       const messages = yield* LogMessages;
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const seed = yield* client.WatchEvents().pipe(
-        Stream.takeUntil((event) => event._tag === "SeedEnd"),
-        Stream.runCollect,
-        Effect.timeout("1 second"),
-      );
+      const seed = yield* client
+        .WatchEvents()
+        .pipe(Stream.takeUntil(DaemonEvent.guards.SeedEnd), Stream.runCollect, Effect.timeout("1 second"));
 
-      assert.isFalse(
-        [...seed].some((event) => event._tag === "ControlStoreChanged" || event._tag === "PluginsChanged"),
-      );
+      assert.isFalse([...seed].some(DaemonEvent.isAnyOf(["ControlStoreChanged", "PluginsChanged"])));
       assert.isTrue(
         MutableRef.get(messages).some((message) => message.includes("Control store seed failed")),
       );
@@ -601,7 +599,9 @@ describe("DaemonEventPublisher", () => {
       const received = yield* Fiber.join(watcher);
 
       const trackedIds = [...received].flatMap((event) =>
-        event._tag === "ItemChanged" && event.item._tag === "Eligible" ? [event.item.id] : [],
+        DaemonEvent.guards.ItemChanged(event) && ClassifiedItem.guards.Eligible(event.item)
+          ? [event.item.id]
+          : [],
       );
       assert.deepStrictEqual(trackedIds, [id("AUD-1")]);
 
@@ -622,10 +622,9 @@ describe("DaemonEventPublisher", () => {
       yield* ledger.insertRun(runningRun);
 
       const seed = [
-        ...(yield* client.WatchEvents().pipe(
-          Stream.takeUntil((event) => event._tag === "SeedEnd"),
-          Stream.runCollect,
-        )),
+        ...(yield* client
+          .WatchEvents()
+          .pipe(Stream.takeUntil(DaemonEvent.guards.SeedEnd), Stream.runCollect)),
       ];
       const board = seed.reduce(applyDaemonEvent, initialBoard);
 
@@ -666,12 +665,11 @@ describe("DaemonEventPublisher", () => {
 
       yield* worker.submit();
       yield* Ref.set(probe.registry, Registry.emptyRegistry);
-      const seed = yield* client.WatchEvents().pipe(
-        Stream.takeUntil((event) => event._tag === "SeedEnd"),
-        Stream.runCollect,
-      );
+      const seed = yield* client
+        .WatchEvents()
+        .pipe(Stream.takeUntil(DaemonEvent.guards.SeedEnd), Stream.runCollect);
 
-      assert.isFalse([...seed].some((event) => event._tag === "ItemChanged"));
+      assert.isFalse([...seed].some(DaemonEvent.guards.ItemChanged));
     }).pipe(Effect.provide(daemonTestLayer([eligibleItem("stale")])), Effect.scoped),
   );
 
@@ -689,11 +687,9 @@ describe("DaemonEventPublisher", () => {
       if (item === undefined) return assert.fail("expected a classified item");
       const live = { _tag: "ItemRemoved", workspace: state.name, id: item.id } as const;
 
-      const watcher = yield* client.WatchEvents().pipe(
-        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
-        Stream.runCollect,
-        Effect.forkChild,
-      );
+      const watcher = yield* client
+        .WatchEvents()
+        .pipe(Stream.takeUntil(DaemonEvent.guards.ItemRemoved), Stream.runCollect, Effect.forkChild);
       const busEvent = yield* Stream.fromSubscription(subscription).pipe(
         Stream.take(1),
         Stream.runCollect,
@@ -703,8 +699,8 @@ describe("DaemonEventPublisher", () => {
 
       const received = [...(yield* Fiber.join(watcher))];
       const observedByBus = [...(yield* Fiber.join(busEvent))];
-      const boundary = received.filter((event) => event._tag === "SeedEnd");
-      const boundaryIndex = received.findIndex((event) => event._tag === "SeedEnd");
+      const boundary = received.filter(DaemonEvent.guards.SeedEnd);
+      const boundaryIndex = received.findIndex(DaemonEvent.guards.SeedEnd);
       const seed = received.slice(0, boundaryIndex);
 
       assert.strictEqual(boundary.length, 1);
@@ -731,16 +727,18 @@ describe("DaemonEventPublisher", () => {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
 
       const seed = [
-        ...(yield* client.WatchEvents().pipe(
-          Stream.takeUntil((event) => event._tag === "SchedulerChanged"),
-          Stream.runCollect,
-        )),
+        ...(yield* client
+          .WatchEvents()
+          .pipe(Stream.takeUntil(DaemonEvent.guards.SchedulerChanged), Stream.runCollect)),
       ];
       const board = seed.reduce(applyDaemonEvent, initialBoard);
 
       const failed = board.workspaces.get("broken.workspace.ts");
       assert.strictEqual(failed?._tag, "Failed");
-      assert.strictEqual(failed?._tag === "Failed" ? failed.message : null, "config threw at import");
+      assert.strictEqual(
+        failed && WorkspaceState.guards.Failed(failed) ? failed.message : null,
+        "config threw at import",
+      );
 
       const status = yield* client.GetStatus();
       assert.strictEqual(status.failures[0]?.source, "broken.workspace.ts");

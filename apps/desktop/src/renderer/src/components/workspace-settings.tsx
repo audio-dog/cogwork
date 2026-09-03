@@ -1,4 +1,9 @@
-import type { ControlStore, OperationSettingName, WorkspaceId, WorkspaceState } from "@cogwork/contracts";
+import {
+  type ControlStore,
+  type OperationSettingName,
+  type WorkspaceId,
+  WorkspaceState,
+} from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
   AlertDialog,
@@ -193,7 +198,7 @@ function PageHeader({ settings }: { readonly settings: WorkspaceSettings }) {
             {settings.inFlight} of {settings.limit} Runs in flight
           </Badge>
         ) : null}
-        {settings.workspace?._tag === "Registered" ? (
+        {settings.workspace && WorkspaceState.guards.Registered(settings.workspace) ? (
           <Badge variant="outline" className="font-mono">
             {settings.workspace.name}
           </Badge>

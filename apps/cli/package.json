@@ -12,10 +12,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@cogwork/claude-code": "workspace:*",
     "@cogwork/codex-cli": "workspace:*",
     "@cogwork/contracts": "workspace:*",
     "@cogwork/cursor-acp": "workspace:*",
     "@cogwork/engine": "workspace:*",
+    "@cogwork/process-diagnostics": "workspace:*",
     "@effect/opentelemetry": "catalog:effect",
     "@effect/platform-node": "catalog:effect",
     "@effect/sql-sqlite-node": "catalog:effect",

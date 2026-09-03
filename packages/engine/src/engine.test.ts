@@ -3,8 +3,10 @@ import {
   type ConnectionId,
   type ConnectionReadiness,
   connectionIdOf,
+  DaemonEvent,
   DaemonRpcs,
   defaultControlStore,
+  PollState,
   WorkItemId,
   WorkspaceConfig,
   WorkspaceId,
@@ -650,11 +652,9 @@ describe("reconcile worker", () => {
       assert.strictEqual(receipt.paused, 1);
       assert.strictEqual(receipt.pendingWork, 0);
       const state = (yield* worker.snapshot).workspaces[0];
-      assert.strictEqual(state?.poll.status, "paused");
+      if (!state || !PollState.guards.paused(state.poll)) return assert.fail("expected paused poll");
       assert.deepStrictEqual(
-        state?.poll.status === "paused"
-          ? { reason: state.poll.reason, retryAtMillis: state.poll.retryAtMillis }
-          : null,
+        { reason: state.poll.reason, retryAtMillis: state.poll.retryAtMillis },
         { reason: "auth", retryAtMillis: null },
       );
     }).pipe(Effect.provide(workerWithAuthFailure), Effect.scoped),
@@ -674,7 +674,7 @@ describe("reconcile worker", () => {
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
       const published = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.filter((event) => event._tag === "ConnectionsChanged"),
+        Stream.filter(DaemonEvent.guards.ConnectionsChanged),
         Stream.take(1),
         Stream.runCollect,
         Effect.forkChild,
@@ -683,7 +683,9 @@ describe("reconcile worker", () => {
       const events = yield* Fiber.join(published);
 
       const event = events[0];
-      if (event?._tag !== "ConnectionsChanged") return assert.fail("expected ConnectionsChanged");
+      if (!event || !DaemonEvent.guards.ConnectionsChanged(event)) {
+        return assert.fail("expected ConnectionsChanged");
+      }
       const github = event.connections.connections.find((connection) => connection.system === "github");
       assert.strictEqual(github?.connection?.status, "revoked");
       assert.strictEqual(github?.readiness._tag, "NotReady");
@@ -734,8 +736,9 @@ describe("reconcile worker", () => {
       yield* worker.submit();
       assert.strictEqual(yield* Ref.get(observes), 1);
       const paused = (yield* worker.snapshot).workspaces[0]?.poll;
-      assert.strictEqual(paused?.status === "paused" ? paused.reason : null, "rate-limited");
-      assert.isNotNull(paused?.status === "paused" ? paused.retryAtMillis : null);
+      if (!paused || !PollState.guards.paused(paused)) return assert.fail("expected paused poll");
+      assert.strictEqual(paused.reason, "rate-limited");
+      assert.isNotNull(paused.retryAtMillis);
 
       yield* TestClock.adjust("31 seconds");
       yield* worker.submit();
@@ -881,8 +884,9 @@ describe("reconcile worker", () => {
       yield* worker.submit();
       assert.strictEqual(yield* Ref.get(observes), 2);
       const paused = (yield* worker.snapshot).workspaces[0]?.poll;
+      if (!paused || !PollState.guards.paused(paused)) return assert.fail("expected paused poll");
       assert.deepStrictEqual(
-        paused?.status === "paused" ? { reason: paused.reason, retryAtMillis: paused.retryAtMillis } : null,
+        { reason: paused.reason, retryAtMillis: paused.retryAtMillis },
         { reason: "rate-limited", retryAtMillis: null },
       );
     }).pipe(Effect.provide(scopelessWorker), Effect.scoped),
@@ -1147,7 +1151,8 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.workspaces.length, 1);
       assert.strictEqual(status.workspaces[0]?.name, "example");
       assert.strictEqual(status.workspaces[0]?.issueTracker, "linear");
-      assert.strictEqual(status.workspaces[0]?.poll.status, "pending");
+      const [workspace] = status.workspaces;
+      assert.isTrue(workspace !== undefined && PollState.guards.pending(workspace.poll));
       assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
       assert.strictEqual(status.failures.length, 2);
       assert.strictEqual(status.failures[0]?.name, "broken");
@@ -1208,9 +1213,11 @@ describe("daemon status over rpc", () => {
   it.effect("reports a workspace poll as ok only once it has actually polled", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      assert.strictEqual((yield* client.GetStatus()).workspaces[0]?.poll.status, "pending");
+      const [pending] = (yield* client.GetStatus()).workspaces;
+      assert.isTrue(pending !== undefined && PollState.guards.pending(pending.poll));
       yield* (yield* Reconcile.ReconcileWorker).submit();
-      assert.strictEqual((yield* client.GetStatus()).workspaces[0]?.poll.status, "ok");
+      const [ok] = (yield* client.GetStatus()).workspaces;
+      assert.isTrue(ok !== undefined && PollState.guards.ok(ok.poll));
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 

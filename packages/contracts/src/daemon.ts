@@ -158,7 +158,7 @@ export const PollState = Schema.Union([
     message: Schema.String,
     retryAtMillis: Schema.NullOr(Schema.Finite),
   }),
-]);
+]).pipe(Schema.toTaggedUnion("status"));
 export type PollState = typeof PollState.Type;
 
 export const WorkspaceInfo = Schema.Struct({

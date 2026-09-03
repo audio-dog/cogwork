@@ -4,49 +4,49 @@ import { app } from "electron";
 import type { WindowPreferences } from "../shared/ipc";
 import { mainLogger } from "./logger";
 
-const defaults: WindowPreferences = { closeToHide: true };
+const defaults: WindowPreferences = { closeToHide: true, profiling: false };
 
 export interface WindowPreferencesStore {
   readonly get: () => WindowPreferences;
-  readonly set: (preferences: WindowPreferences) => WindowPreferences;
+  readonly set: (preferences: Partial<WindowPreferences>) => WindowPreferences;
 }
 
-const filePath = () => join(app.getPath("userData"), "window-preferences.json");
+const defaultPath = () => join(app.getPath("userData"), "window-preferences.json");
 
-// A hand-edited or partial file must not crash startup, so anything that isn't a clean boolean
-// falls back to the default.
-const readFromDisk = (): WindowPreferences => {
+const booleanProperty = (value: unknown, key: keyof WindowPreferences, fallback: boolean) => {
+  if (typeof value !== "object" || value === null) return fallback;
+  if (!(key in value)) return fallback;
+  const property = Reflect.get(value, key);
+  return typeof property === "boolean" ? property : fallback;
+};
+
+const normalizePreferences = (value: unknown, fallback = defaults): WindowPreferences => ({
+  closeToHide: booleanProperty(value, "closeToHide", fallback.closeToHide),
+  profiling: booleanProperty(value, "profiling", fallback.profiling),
+});
+
+const readFromDisk = (path: string): WindowPreferences => {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(filePath(), "utf8"));
-    if (typeof parsed === "object" && parsed !== null && "closeToHide" in parsed) {
-      const value = parsed.closeToHide;
-      if (typeof value === "boolean") return { closeToHide: value };
-    }
-    return defaults;
+    return normalizePreferences(JSON.parse(readFileSync(path, "utf8")));
   } catch {
     return defaults;
   }
 };
 
-// The main process owns the value and caches it in memory so the window close handler can read it
-// synchronously, then writes through to disk so the choice survives a restart.
-export const createWindowPreferencesStore = (): WindowPreferencesStore => {
-  let current = readFromDisk();
+export const createWindowPreferencesStore = (path = defaultPath()): WindowPreferencesStore => {
+  const cache = { current: readFromDisk(path) };
   return {
-    get: () => current,
+    get: () => cache.current,
     set: (preferences) => {
-      // The renderer is a trust boundary, so keep the value only when it is really a boolean.
-      const closeToHide =
-        typeof preferences.closeToHide === "boolean" ? preferences.closeToHide : current.closeToHide;
-      current = { closeToHide };
+      cache.current = normalizePreferences(preferences, cache.current);
       try {
-        const path = filePath();
         mkdirSync(dirname(path), { recursive: true });
-        writeFileSync(path, JSON.stringify(current), "utf8");
+        writeFileSync(path, JSON.stringify(cache.current), "utf8");
       } catch (error) {
-        mainLogger.warn(`Failed to persist window preferences: ${(error as Error).message}`);
+        const message = error instanceof Error ? error.message : String(error);
+        mainLogger.warn(`Failed to persist window preferences: ${message}`);
       }
-      return current;
+      return cache.current;
     },
   };
 };

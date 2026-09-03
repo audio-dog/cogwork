@@ -7,6 +7,7 @@ Use this reference when defining a domain type with variants, branching on one, 
 A union you branch on is schema-backed and discriminated, and the schema generates the fold.
 
 - Every `_tag === "..."` if-chain, `switch`, or string-keyed handler table is a missing `.match`. The generated fold is exhaustive: adding a variant becomes a compile error at every fold instead of a silent fallthrough.
+- A fold over a schema-backed union that crosses the RPC wire uses the generated `match`. A single-variant test uses the generated `guards`.
 - Decode once at the boundary into the domain type. Downstream code reads typed fields; it never re-decodes a `Schema.Unknown` payload or re-guards a discriminant.
 - Branded identifiers cross every service seam. A port that takes `(workspace: string, workItem: string)` compiles when the arguments are swapped; one that takes `(WorkspaceId, WorkItemId)` does not.
 - Openness is a scoped decision. A deliberately uncurated payload keeps its rest-record, but its discriminant still gets a real union so the folds stay checked.
@@ -55,9 +56,9 @@ const scopeRank = (scope: SettingScope) => {
 
 Declare the union with `Schema.TaggedUnion`, or pipe an existing `Schema.Union` of tagged structs through `Schema.toTaggedUnion("_tag")`, and the chain becomes a checked fold. The same applies to single-variant tests: `event._tag === "SeedEnd"` in a stream filter is the generated `DaemonEvent.guards.SeedEnd` written by hand.
 
-## String-keyed handler tables are drift
+## Harness event dispatches use generated partial folds
 
-Three dispatch tables fold the harness event stream today — one in the CLI watch renderer, two in the desktop renderer (run preview and transcript) — and each is a `Record<string, Handler>` or `Map` keyed by `event.type` with a silent `?? ignore` fallback:
+The CLI watch renderer and the desktop run preview and transcript once folded the harness event stream with a `Record<string, Handler>` or `Map` keyed by `event.type` and a silent `?? ignore` fallback:
 
 ```ts
 // Avoid: nothing checks these keys against anything
@@ -69,7 +70,7 @@ const handlers: Record<string, Handler> = {
 const handle = handlers[event.type] ?? ignore;
 ```
 
-The tables have already drifted: the desktop transcript handles `REASONING_MESSAGE_CONTENT`, the CLI table does not, and no compiler knows. A discriminated union turns each table into `matchOrElse`, where the fallback is one deliberate, visible choice instead of a lookup miss:
+All three dispatches now use `AgUiEvent.matchOrElse`, where the fallback is one deliberate, visible choice instead of a lookup miss:
 
 ```ts
 AgUiEvent.matchOrElse(
@@ -82,11 +83,11 @@ AgUiEvent.matchOrElse(
 );
 ```
 
-For the harness event specifically, the openness is a recorded decision (`packages/contracts/CONTEXT.md`, "Harness event": unnamed keys ride along instead of being dropped at decode). The pattern respects it: each named variant keeps its rest-record for unnamed keys, a catch-all variant carries every type the union does not name, and only the discriminant becomes closed. The target is the three parallel tables and the re-decoding helpers, not the openness.
+For the harness event specifically, the openness is a recorded decision (`packages/contracts/CONTEXT.md`, "Harness event": unnamed keys ride along instead of being dropped at decode). The pattern respects it: each named variant keeps its rest-record for unnamed keys, a catch-all variant carries every type the union does not name, and only the discriminant becomes closed.
 
 ## In-process unions still get constructors and matching
 
-A union that never crosses a wire does not need a schema, but it still needs exhaustiveness. `classify`'s `Outcome` is a hand-rolled `kind` union folded by sequential ifs that rebuild `_tag` objects field by field. `Data.taggedEnum` gives it constructors and `$match` with no schema overhead:
+A union that never crosses a wire does not need a schema, but it still needs exhaustiveness. `classify`'s `Outcome` uses `Data.taggedEnum` for constructors and `$match` with no schema overhead:
 
 ```ts
 type Outcome = Data.TaggedEnum<{
@@ -145,8 +146,8 @@ Choose the decoder by what failure means there: `decodeUnknownEffect` when failu
 - `.repos/effect/ai-docs/src/01_effect/02_schema/10_schema-basics.ts`: hoisted module-scope decoders and `Schema.Class` domain models; `index.md`'s rule — parse untrusted data with `Schema`, never predicates.
 - `.agents/skills/effect-ts/references/guide-schema.md`.
 - `packages/contracts/src/daemon-event.ts` and `packages/contracts/src/board.ts`: the in-repo `TaggedUnion` + `.match` exemplars.
-- `packages/contracts/src/ag-ui.ts`, `apps/cli/src/watch.ts`, `apps/desktop/src/renderer/src/features/run-activity.ts`: the flat event schema and the three drifting dispatch tables this pattern retires.
-- `packages/engine/src/classify.ts`: the hand-rolled `kind` union and if-chain conversion.
+- `packages/contracts/src/ag-ui.ts`, `apps/cli/src/watch.ts`, `apps/desktop/src/renderer/src/features/run-activity.ts`, and `apps/desktop/src/renderer/src/features/run-transcript.ts`: the flat event schema and its generated partial folds.
+- `packages/engine/src/classify.ts`: the process-local `Data.taggedEnum` exemplar.
 - `packages/engine/src/run-ledger.ts`: branded and raw-string parameters on one service.
 - `packages/contracts/CONTEXT.md` ("Harness event"): the recorded openness decision the pattern preserves.
 - `.repos/t3code/packages/contracts/src/baseSchemas.ts`: `makeEntityId` (the same brand factory) and `ForwardCompatibleArray`, a principled decode-time forward-compatibility transform.

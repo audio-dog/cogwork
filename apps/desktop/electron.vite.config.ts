@@ -8,7 +8,7 @@ import { defineConfig } from "electron-vite";
 export default defineConfig({
   main: {
     build: {
-      externalizeDeps: { exclude: ["@cogwork/contracts"] },
+      externalizeDeps: { exclude: ["@cogwork/contracts", "@cogwork/process-diagnostics"] },
     },
   },
   preload: {},

@@ -13,13 +13,17 @@ describe("resolveEngineCommand", () => {
     expect(budgets.terminateTimeoutMillis).toBeGreaterThan(budgets.drainGraceSeconds * 1_000);
   });
 
-  it("runs the CLI daemon through the CLI's own tsx in development", () => {
+  it("starts development diagnostics before the CLI's tsx loader", () => {
     const baseDir = "/repo";
     const cliDir = join(baseDir, "apps", "cli");
     const command = resolveEngineCommand({ socketPath, packaged: false, baseDir });
 
-    expect(command.command).toBe(join(cliDir, "node_modules", ".bin", "tsx"));
+    expect(command.command).toBe("node");
     expect(command.args).toEqual([
+      "--report-on-fatalerror",
+      "--diagnostic-dir=/home/me/.cogwork",
+      "--heapsnapshot-near-heap-limit=3",
+      join(cliDir, "node_modules", "tsx", "dist", "cli.mjs"),
       join(cliDir, "src", "main.ts"),
       "daemon",
       "--socket",
@@ -35,7 +39,7 @@ describe("resolveEngineCommand", () => {
     const command = resolveEngineCommand({ socketPath, packaged: true, baseDir });
 
     expect(command.command).toBe("node");
-    expect(command.args[0]).toBe(join(baseDir, "engine", "index.js"));
+    expect(command.args).toContain(join(baseDir, "engine", "index.js"));
     expect(command.args).toContain(socketPath);
   });
 
@@ -49,7 +53,7 @@ describe("resolveEngineCommand", () => {
     });
 
     expect(command.command).toBe("/opt/node/bin/node");
-    expect(command.args[0]).toBe("/opt/engine/main.js");
+    expect(command.args).toContain("/opt/engine/main.js");
   });
 
   it("does not pass the retired scheduling mode flag", () => {
@@ -68,5 +72,29 @@ describe("resolveEngineCommand", () => {
 
     expect(drainGraceSeconds(command)).toBe(30);
     expect(resolveEngineShutdownBudgets(30).terminateTimeoutMillis).toBe(35_000);
+  });
+
+  it("keeps continuous profiling off by default", () => {
+    const command = resolveEngineCommand({ socketPath, packaged: false, baseDir: "/repo" });
+
+    expect(command.args).not.toContain("--cpu-prof");
+    expect(command.args).not.toContain("--heap-prof");
+  });
+
+  it("enables continuous profiles in the diagnostics directory", () => {
+    const command = resolveEngineCommand({
+      socketPath,
+      packaged: false,
+      baseDir: "/repo",
+      profiling: true,
+    });
+
+    expect(command.args.slice(0, 5)).toEqual([
+      "--report-on-fatalerror",
+      "--diagnostic-dir=/home/me/.cogwork",
+      "--heapsnapshot-near-heap-limit=3",
+      "--cpu-prof",
+      "--heap-prof",
+    ]);
   });
 });

@@ -19,6 +19,7 @@ import {
   RUN_CANCEL_REASON,
   type SystemPrompt,
 } from "@tanstack/ai";
+import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   bearer,
   createSecrets,
@@ -28,6 +29,7 @@ import {
   mcpSkill,
   ProjectionCapability,
   provideWorkspaceProjection,
+  resolveAllSecrets,
   resolveHarnessCwd,
   type SandboxHooks,
   type SandboxPolicy,
@@ -41,6 +43,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
   type HarnessAuthenticationBinding,
@@ -232,28 +235,78 @@ const mcpWorkspaceProjection = (request: ExternalHarnessResolvedRequest) => {
   const secretValues = Object.fromEntries(request.mcp.flatMap(mcpSecretEntry));
   const secrets = createSecrets(secretValues);
   const skills = request.mcp.map((server) => mcpSkill(server.name, mcpSkillConfig(secrets, server)));
-  return { secrets, skills, hasSecrets: Object.keys(secretValues).length > 0 };
+  return { secretValues, skills };
 };
+
+const resolvedSecretValues = (secrets: Secrets) =>
+  Object.keys(secrets).length === 0 ? {} : resolveAllSecrets(secrets);
 
 const harnessWorkspace = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
   request: ExternalHarnessResolvedRequest,
 ) => {
-  const mcp = descriptor.transport.mcpProjection === "native" ? null : mcpWorkspaceProjection(request);
+  const mcp = mcpWorkspaceProjection(request);
+  const secretValues = {
+    ...resolvedSecretValues(request.authentication.secrets),
+    ...mcp.secretValues,
+  };
   return {
     ...preparedWorkspace,
     ...(descriptor.transport.instructionProjection === "system-prompt"
       ? {}
       : { instructions: workspaceInstructions(request) }),
-    ...(mcp !== null && mcp.skills.length > 0 ? { skills: mcp.skills } : {}),
-    ...(mcp?.hasSecrets ? { secrets: mcp.secrets } : {}),
+    ...(descriptor.transport.mcpProjection !== "native" && mcp.skills.length > 0
+      ? { skills: mcp.skills }
+      : {}),
+    ...(Object.keys(secretValues).length > 0 ? { secrets: createSecrets(secretValues) } : {}),
   } satisfies WorkspaceDefinition;
 };
 
-const projectsWorkspaceMembers = (definition: WorkspaceDefinition) =>
-  definition.instructions !== undefined ||
-  definition.skills !== undefined ||
-  definition.secrets !== undefined;
+const writesWorkspaceFiles = (definition: WorkspaceDefinition) =>
+  definition.instructions !== undefined || definition.skills !== undefined;
+
+const workspaceSecretValues = (definition: WorkspaceDefinition) =>
+  definition.secrets ? Object.values(resolveAllSecrets(definition.secrets)) : [];
+
+const eventMetadataFields = new Set([
+  "type",
+  "threadId",
+  "runId",
+  "messageId",
+  "toolCallId",
+  "name",
+  "toolCallName",
+  "stepName",
+  "finishReason",
+  "role",
+]);
+
+const scrubValue = (value: unknown, secrets: ReadonlyArray<string>): unknown => {
+  if (typeof value === "string") return scrubSecrets(value, secrets);
+  if (Array.isArray(value)) return value.map((entry) => scrubValue(entry, secrets));
+  if (typeof value !== "object" || value === null) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, scrubValue(entry, secrets)]));
+};
+
+const scrubEvent = (event: AgUiEvent, secrets: ReadonlyArray<string>) => {
+  if (secrets.length === 0) return event;
+  const scrubbed = Object.fromEntries(
+    Object.entries(event).map(([key, value]) => [
+      key,
+      eventMetadataFields.has(key) ? value : scrubValue(value, secrets),
+    ]),
+  );
+  return Schema.decodeUnknownSync(AgUiEvent)(scrubbed);
+};
+
+const scrubHarnessError = (error: HarnessError, secrets: ReadonlyArray<string>) =>
+  secrets.length === 0
+    ? error
+    : new HarnessError({
+        reason: error.reason,
+        retryable: error.retryable,
+        message: scrubSecrets(error.message, secrets),
+      });
 
 // `withSandbox` always hands the adapter a Workspace projection, and every adapter's
 // projection pass then writes a one-time marker file into the checkout — a file the agent
@@ -429,7 +482,13 @@ const resolveExternalLaunch = Effect.fn("ExternalHarnessRuntime.resolveLaunch")(
   yield* validateExternalRequest(descriptor, request, resolved, provider);
   const workspaceDefinition = harnessWorkspace(descriptor, resolved);
   const policy = yield* inputs.sandboxPolicy?.(resolved) ?? Effect.succeed(null);
-  return { resolved, provider, workspaceDefinition, policy };
+  return {
+    resolved,
+    provider,
+    workspaceDefinition,
+    secretValues: workspaceSecretValues(workspaceDefinition),
+    policy,
+  };
 });
 
 const outputCharacters = (event: AgUiEvent) =>
@@ -465,6 +524,7 @@ const makeChatStream = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   adapter: Adapter,
   middleware: ReadonlyArray<ChatMiddleware>,
   abortController: AbortController,
+  secretValues: ReadonlyArray<string>,
 ) =>
   chat({
     adapter,
@@ -482,6 +542,7 @@ const makeChatStream = <Adapter extends AnyTextAdapter, NativeAuthentication>(
     threadId: request.identity.session ?? request.identity.run,
     runId: request.identity.run,
     stream: true,
+    ...(secretValues.length > 0 ? { debug: false } : {}),
   });
 
 const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abortController: AbortController) => ({
@@ -507,6 +568,7 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   provider: SandboxProvider,
   workspaceDefinition: WorkspaceDefinition,
   policy: SandboxPolicy | null,
+  secretValues: ReadonlyArray<string>,
 ) => {
   const model = descriptor.projectModel(request);
   const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
@@ -528,9 +590,9 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   const abortController = new AbortController();
   const middleware = [
     withSandbox(sandbox),
-    ...(projectsWorkspaceMembers(workspaceDefinition) ? [] : [satisfiedProjection()]),
+    ...(writesWorkspaceFiles(workspaceDefinition) ? [] : [satisfiedProjection()]),
   ];
-  const stream = makeChatStream(descriptor, request, adapter, middleware, abortController);
+  const stream = makeChatStream(descriptor, request, adapter, middleware, abortController, secretValues);
   return { abortController, stream };
 };
 
@@ -559,11 +621,13 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
     run: (request) =>
       Stream.unwrap(
         resolveExternalLaunch(descriptor, inputs, request).pipe(
-          Effect.flatMap(({ resolved, provider, workspaceDefinition, policy }) =>
+          Effect.flatMap(({ resolved, provider, workspaceDefinition, secretValues, policy }) =>
             Effect.try({
-              try: () => openChat(descriptor, inputs, resolved, provider, workspaceDefinition, policy),
+              try: () =>
+                openChat(descriptor, inputs, resolved, provider, workspaceDefinition, policy, secretValues),
               catch: descriptor.diagnostics,
             }).pipe(
+              Effect.mapError((error) => scrubHarnessError(error, secretValues)),
               Effect.map((opened) =>
                 withUsage(
                   resolved,
@@ -572,7 +636,11 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                     abortOnReturn(opened.stream, opened.abortController),
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
-                  ).pipe(Stream.ensuring(Effect.sync(() => opened.abortController.abort()))),
+                  ).pipe(
+                    Stream.map((event) => scrubEvent(event, secretValues)),
+                    Stream.mapError((error) => scrubHarnessError(error, secretValues)),
+                    Stream.ensuring(Effect.sync(() => opened.abortController.abort())),
+                  ),
                 ),
               ),
             ),

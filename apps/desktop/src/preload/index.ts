@@ -34,6 +34,7 @@ const bridge: CogworkBridge = {
     ];
   },
   setWindowPreferences: (preferences) => ipcRenderer.invoke(IpcChannel.setWindowPreferences, preferences),
+  captureProcessProfile: (capture) => ipcRenderer.invoke(IpcChannel.captureProcessProfile, capture),
   rpc: {
     connect: (sessionId) => ipcRenderer.invoke(IpcChannel.rpcConnect, sessionId),
     disconnect: () => ipcRenderer.invoke(IpcChannel.rpcDisconnect),

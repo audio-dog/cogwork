@@ -1,11 +1,12 @@
 import {
   type Board,
-  type ClassifiedItem,
+  ClassifiedItem,
   itemKey,
   type NeedsHumanReason,
   type RunSummary,
   type WorkItemId,
   type WorkspaceId,
+  WorkspaceState,
 } from "@cogwork/contracts";
 
 export const needsHumanReasonLabel: Record<NeedsHumanReason, string> = {
@@ -49,7 +50,7 @@ const workspaceItems = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
   [...board.items.values()].filter(({ workspace }) => inWorkspace(filter, workspace));
 
 const registeredStates = (board: Board) =>
-  [...board.workspaces.values()].filter((state) => state._tag === "Registered");
+  [...board.workspaces.values()].filter(WorkspaceState.guards.Registered);
 
 export const registeredWorkspaces = (board: Board): WorkspaceId[] =>
   registeredStates(board)
@@ -81,10 +82,12 @@ export const recentlyDone = (board: Board, filter: WorkspaceId | null, limit = 8
     .map((run) => ({ run, title: titleFor(board, run) }));
 
 export const queuedItems = (board: Board, filter: WorkspaceId | null): QueuedItem[] =>
-  workspaceItems(board, filter).filter((entry): entry is QueuedItem => entry.item._tag === "Eligible");
+  workspaceItems(board, filter).filter((entry): entry is QueuedItem =>
+    ClassifiedItem.guards.Eligible(entry.item),
+  );
 
 export const blockedCount = (board: Board, filter: WorkspaceId | null): number =>
-  workspaceItems(board, filter).filter(({ item }) => item._tag === "Blocked").length;
+  workspaceItems(board, filter).filter(({ item }) => ClassifiedItem.guards.Blocked(item)).length;
 
 export const boardItem = (board: Board, workspace: WorkspaceId, workItem: WorkItemId) =>
   board.items.get(itemKey(workspace, workItem)) ?? null;

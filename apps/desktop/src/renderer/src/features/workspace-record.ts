@@ -1,4 +1,4 @@
-import type { WorkspaceState } from "@cogwork/contracts";
+import { WorkspaceState } from "@cogwork/contracts";
 
 /** The columns this page can read back and write. #457 restores the rest with its act. */
 export interface WorkspaceRecordDraft {
@@ -15,17 +15,22 @@ export const changedFieldCount = (draft: WorkspaceRecordDraft, against: Workspac
   ).length;
 
 export const seededDraft = (workspace: WorkspaceState): WorkspaceRecordDraft =>
-  workspace._tag === "Failed"
-    ? emptyDraft
-    : { displayName: workspace.displayName ?? workspace.name, checkoutPath: workspace.checkoutPath };
+  WorkspaceState.match(workspace, {
+    Registered: ({ displayName, name, checkoutPath }) => ({ displayName: displayName ?? name, checkoutPath }),
+    Failed: () => emptyDraft,
+  });
 
 export const workspaceKey = (workspace: WorkspaceState) =>
-  workspace._tag === "Registered" ? workspace.name : (workspace.name ?? workspace.source);
+  WorkspaceState.match(workspace, {
+    Registered: ({ name }) => name,
+    Failed: ({ name, source }) => name ?? source,
+  });
 
 export const workspaceLabel = (workspace: WorkspaceState) =>
-  workspace._tag === "Registered"
-    ? (workspace.displayName ?? workspace.name)
-    : (workspace.displayName ?? workspace.name ?? workspace.source);
+  WorkspaceState.match(workspace, {
+    Registered: ({ displayName, name }) => displayName ?? name,
+    Failed: ({ displayName, name, source }) => displayName ?? name ?? source,
+  });
 
 export interface WorkspaceHealth {
   readonly tone: "ok" | "pending" | "paused" | "failed";
@@ -34,7 +39,7 @@ export interface WorkspaceHealth {
 }
 
 export const workspaceHealth = (workspace: WorkspaceState, dangling: boolean): WorkspaceHealth => {
-  if (workspace._tag === "Failed") {
+  if (WorkspaceState.guards.Failed(workspace)) {
     return { tone: "failed", label: "Workspace input failed", detail: workspace.message };
   }
   if (dangling) {

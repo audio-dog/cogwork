@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "sourceRunId": "sanitized-representative-run",
+  "events": [
+    {
+      "seq": 0,
+      "type": "RUN_STARTED",
+      "name": null,
+      "data": "{\"type\":\"RUN_STARTED\",\"threadId\":\"fixture-thread\",\"runId\":\"fixture-run\"}",
+      "atMillis": 1000
+    },
+    {
+      "seq": 1,
+      "type": "TEXT_MESSAGE_START",
+      "name": null,
+      "data": "{\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"fixture-message\",\"role\":\"assistant\"}",
+      "atMillis": 1100
+    },
+    {
+      "seq": 2,
+      "type": "TEXT_MESSAGE_CONTENT",
+      "name": null,
+      "data": "{\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"fixture-message\",\"delta\":\"Sanitized representative response.\"}",
+      "atMillis": 1250
+    },
+    {
+      "seq": 3,
+      "type": "TEXT_MESSAGE_END",
+      "name": null,
+      "data": "{\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"fixture-message\"}",
+      "atMillis": 1300
+    },
+    {
+      "seq": 4,
+      "type": "RUN_FINISHED",
+      "name": null,
+      "data": "{\"type\":\"RUN_FINISHED\",\"threadId\":\"fixture-thread\",\"runId\":\"fixture-run\"}",
+      "atMillis": 1400
+    }
+  ]
+}
