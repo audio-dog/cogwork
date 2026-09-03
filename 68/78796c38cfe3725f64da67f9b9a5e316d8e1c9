@@ -1,0 +1,26 @@
+packages/claude-code/CONTEXT.md
+  s_a38d1882a40a69::t_2dcaa52cc9dfcd 39-42
+packages/claude-code/src/harness.test.ts
+  s_a38d1882a40a69::t_e9aae014b46f9d 632-659
+  s_a38d1882a40a69::t_83e6c11507124f 4,585
+  s_a38d1882a40a69::t_e98999a003a70b 422,586
+  s_a38d1882a40a69::t_c0758559503423 42
+packages/claude-code/src/harness.ts
+  s_a38d1882a40a69::t_c0758559503423 426
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6878796c38cfe3725f64da67f9b9a5e316d8e1c9",
+  "prompts": {},
+  "sessions": {
+    "s_a38d1882a40a69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-3296-70a2-a373-a3565da4aa0b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
