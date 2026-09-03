@@ -1,5 +1,4 @@
 import type {
-  Board,
   Connection,
   ControlStore,
   DaemonLimitUpdate,
@@ -16,7 +15,6 @@ import { readyConnections } from "../features/connections-view";
 import { useDaemonLimit } from "../features/use-daemon-limit";
 
 type WorkspacesStatus = "loading" | "offline" | "ready";
-type WorkspaceBoardState = { readonly status: WorkspacesStatus; readonly picture: Board | null };
 
 interface WorkspacesStateValue {
   readonly status: WorkspacesStatus;
@@ -78,11 +76,12 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const [deregisterResult, runDeregister] = useAtom(deregisterWorkspaceAtom);
   const [rebindTarget, setRebindTarget] = useState<WorkspaceId | null>(null);
   const [deregisterTarget, setDeregisterTarget] = useState<WorkspaceId | null>(null);
-  const { status, picture } = BoardResult.$match(board, {
-    Initial: (): WorkspaceBoardState => ({ status: "loading", picture: null }),
-    Failure: (): WorkspaceBoardState => ({ status: "offline", picture: null }),
-    Success: ({ board }): WorkspaceBoardState => ({ status: "ready", picture: board }),
+  const status = BoardResult.$match(board, {
+    Initial: (): WorkspacesStatus => "loading",
+    Failure: (): WorkspacesStatus => "offline",
+    Success: (): WorkspacesStatus => "ready",
   });
+  const picture = BoardResult.$is("Success")(board) ? board.board : null;
   const limits = useDaemonLimit(picture?.controlStore ?? null);
   const workspaces = picture ? [...picture.workspaces.values()] : [];
   const connections = readyConnections(picture?.connections);
