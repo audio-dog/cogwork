@@ -1,0 +1,26 @@
+packages/contracts/src/board.test.ts
+  s_50ed37570d5d50::t_b5d2db57237f57 121,127,138,143
+  s_50ed37570d5d50::t_fa77be94dc3d36 12,35
+packages/contracts/src/triage.test.ts
+  s_50ed37570d5d50::t_8dfc0fc4521aef 9,122-126
+packages/contracts/src/triage.ts
+  s_50ed37570d5d50::t_fa77be94dc3d36 81-84,86-89,92,94
+  s_50ed37570d5d50::t_f0e58b189fe7eb 5,85,90-91,93,99
+  s_50ed37570d5d50::t_d78a1ede58b241 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "cc8b87f90064ab97b7f362869f5bf4be654ab56f",
+  "prompts": {},
+  "sessions": {
+    "s_50ed37570d5d50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0655d-acbf-74d1-ba03-bd039b084526",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
