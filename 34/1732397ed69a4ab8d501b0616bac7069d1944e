@@ -1,0 +1,28 @@
+packages/engine/src/external-harness-runtime.test.ts
+  s_a38d1882a40a69::t_83e6c11507124f 2,896
+  s_a38d1882a40a69::t_71b48310afaaf5 468-476,490-491
+  s_a38d1882a40a69::t_e98999a003a70b 326,875-877,897-902
+  s_a38d1882a40a69::t_1b389508fe4a91 477-480
+  s_a38d1882a40a69::t_091b26ab9855e4 428-433,436-467,481-487,492-494
+  s_a38d1882a40a69::t_fc6ccd2ecd5f99 488-489
+  s_a38d1882a40a69::t_565ad43855a71b 873-874
+  s_a38d1882a40a69::t_93af558affb3fa 878
+packages/engine/src/external-harness-runtime.ts
+  s_a38d1882a40a69::t_c0758559503423 4,512-516,594-595,602,655
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "341732397ed69a4ab8d501b0616bac7069d1944e",
+  "prompts": {},
+  "sessions": {
+    "s_a38d1882a40a69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-3296-70a2-a373-a3565da4aa0b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
