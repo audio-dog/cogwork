@@ -1,0 +1,21 @@
+apps/cli/src/classified-item.test.ts
+  s_1341416beabf33::t_c88608b148b603 35-50
+apps/cli/src/classified-item.ts
+  s_1341416beabf33::t_87fa22ac0bf594 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0d02715b7906f657ad6761f4fbec1167c230662a",
+  "prompts": {},
+  "sessions": {
+    "s_1341416beabf33": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-337f-7533-963c-3ceabf7075c3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
