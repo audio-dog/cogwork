@@ -119,11 +119,7 @@ function ConnectionsProvider({ children }: { readonly children: ReactNode }) {
   const establish = useAtomSet(establishConnectionAtom, { mode: "promiseExit" });
   const reconnect = useAtomSet(reconnectConnectionAtom, { mode: "promiseExit" });
   const [removeResult, remove] = useAtom(removeConnectionAtom);
-  const board = BoardResult.$match(boardResult, {
-    Initial: () => null,
-    Failure: () => null,
-    Success: ({ board }) => board,
-  });
+  const board = BoardResult.$is("Success")(boardResult) ? boardResult.board : null;
   const overview = board?.connections ?? (queried._tag === "Success" ? queried.value : null);
   // The Board carries Connections and Plugins on separate events, and the Connection overview has a
   // query fallback the Plugin overview did not. Without the same fallback a card reached that way
