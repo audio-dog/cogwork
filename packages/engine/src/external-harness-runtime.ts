@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   AgUiEvent,
+  FILE_DIFF_EVENT,
   type HarnessName,
   type RunId,
   type RunPlanInstruction,
@@ -508,6 +509,11 @@ const outputCharacters = (event: AgUiEvent) =>
     ? (event.delta?.length ?? 0)
     : 0;
 
+const normalizeFileEvent = (event: AgUiEvent): AgUiEvent =>
+  AgUiEvent.guards.CUSTOM(event) && event.name === "file.changed"
+    ? { ...event, name: FILE_DIFF_EVENT }
+    : event;
+
 const preserveUsage: ExternalHarnessUsageEstimator = (_request, event) => event;
 
 const withUsage = (
@@ -585,18 +591,15 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   const model = descriptor.projectModel(request);
   const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
   const adapter = descriptor.makeAdapter({ model, authentication: nativeAuthentication, request });
-  const watchesFiles =
-    inputs.fileHooks?.onFile !== undefined ||
-    inputs.fileHooks?.onFileCreate !== undefined ||
-    inputs.fileHooks?.onFileChange !== undefined ||
-    inputs.fileHooks?.onFileDelete !== undefined;
+  const fileEvents =
+    descriptor.capabilities.profile.fileEventFidelity === "best-effort" ? { diff: true } : false;
   const sandbox = defineSandbox({
     id: `cogwork-${descriptor.name}`,
     provider,
     workspace: defineWorkspace(workspaceDefinition),
     lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
     ...(policy ? { policy } : {}),
-    fileEvents: watchesFiles,
+    fileEvents,
     ...(inputs.fileHooks ? { hooks: inputs.fileHooks } : {}),
   });
   const abortController = new AbortController();
@@ -649,6 +652,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                   ).pipe(
+                    Stream.map(normalizeFileEvent),
                     Stream.map((event) => scrubEvent(event, secretValues)),
                     Stream.mapError((error) => scrubHarnessError(error, secretValues)),
                     Stream.ensuring(Effect.sync(() => opened.abortController.abort())),

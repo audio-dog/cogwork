@@ -1,4 +1,5 @@
 import {
+  FILE_DIFF_EVENT,
   HarnessName,
   RunId,
   RunPlan,
@@ -322,7 +323,7 @@ const descriptor = (
       session: { affinity: "runtime-host", fork: false, humanAttach: false },
       structuredOutput: "native",
       policyFidelity: "exact",
-      fileEventFidelity: "sandbox",
+      fileEventFidelity: "exact",
       usageQuality: "estimated",
       readinessDiagnostics: true,
       journal: false,
@@ -424,8 +425,73 @@ const terminalEvents: ReadonlyArray<StreamChunk> = [
   { type: EventType.RUN_FINISHED, threadId: "session-148", runId: request.id },
 ];
 
+const externalConformanceProfiles = [
+  { name: "claude", fileEventFidelity: "terminal-only", usageQuality: "metered" },
+  { name: "codex", fileEventFidelity: "best-effort", usageQuality: "metered" },
+  { name: "cursor", fileEventFidelity: "absent", usageQuality: "estimated" },
+] as const;
+
 describe("external Harness runtime", () => {
   it.layer(harnessRunnerLayer)((it) => {
+    it.effect("applies one public Harness conformance path to every external runner", () =>
+      Effect.gen(function* () {
+        const entries = externalConformanceProfiles.map((profile) => {
+          const runnerName = Schema.decodeSync(HarnessName)(profile.name);
+          const probe = new ControlledProbe();
+          const created: Array<string> = [];
+          const base = descriptor(terminalEvents, probe);
+          const controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
+            ...base,
+            name: runnerName,
+            capabilities: {
+              ...base.capabilities,
+              profile: {
+                ...base.capabilities.profile,
+                fileEventFidelity: profile.fileEventFidelity,
+                usageQuality: profile.usageQuality,
+              },
+            },
+          };
+          return {
+            profile,
+            runnerName,
+            probe,
+            created,
+            runner: externalHarnessRunner(controlledDescriptor, {
+              authentication: hostAuthentication,
+              sandboxProvider: () => Effect.succeed(controlledProvider(created, [])),
+            }),
+          };
+        });
+        const harness = make(entries.map(({ runner }) => runner));
+
+        yield* Effect.forEach(entries, ({ profile, runnerName, probe, created }) => {
+          const plan = RunPlan.make({
+            ...request,
+            harness: { ...request.harness, name: runnerName },
+          });
+          return harness.run({ plan, session: freshSession, mcpCredentials: new Map() }).pipe(
+            Stream.runCollect,
+            Effect.tap((output) =>
+              Effect.sync(() => {
+                assert.deepNestedInclude(harness.capabilities(runnerName), {
+                  fileEventFidelity: profile.fileEventFidelity,
+                  usageQuality: profile.usageQuality,
+                });
+                assert.deepStrictEqual(created, ["none"]);
+                assert.strictEqual(probe.resolved[0]?.request.identity.run, request.id);
+                assert.strictEqual(probe.resolved[0]?.request.identity.session, freshSession);
+                assert.strictEqual(
+                  output.filter((event) => event.name === "structured-output.complete").length,
+                  1,
+                );
+              }),
+            ),
+          );
+        });
+      }),
+    );
+
     it.effect(
       "projects mandatory instructions through one Harness Workspace and keeps work context user-authored",
       () =>
@@ -806,6 +872,12 @@ describe("external Harness runtime", () => {
           },
           {
             type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: ".", diff: "diff --git a/file.ts b/file.ts" },
+            metadata: { controlled: { fidelity: "terminal" } },
+          },
+          {
+            type: EventType.CUSTOM,
             name: "structured-output.complete",
             value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
           },
@@ -821,6 +893,13 @@ describe("external Harness runtime", () => {
         const diagnostic = output.find((event) => event.name === "controlled.diagnostic");
         assert.deepStrictEqual(diagnostic?.value, { native: true });
         assert.deepStrictEqual(diagnostic?.metadata, { controlled: { trace: "trace-147" } });
+        const fileDiff = output.find((event) => event.name === FILE_DIFF_EVENT);
+        assert.deepStrictEqual(fileDiff?.value, {
+          path: ".",
+          diff: "diff --git a/file.ts b/file.ts",
+        });
+        assert.deepStrictEqual(fileDiff?.metadata, { controlled: { fidelity: "terminal" } });
+        assert.isFalse(output.some((event) => event.name === "file.changed"));
         const finished = output.find((event) => event.type === EventType.RUN_FINISHED);
         assert.deepStrictEqual(finished?.usage, {
           promptTokens: 2,
