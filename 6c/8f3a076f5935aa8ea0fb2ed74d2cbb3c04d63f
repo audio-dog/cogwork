@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_eea0b6ad2aea02::t_9251a87eda9239 79-82,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6c8f3a076f5935aa8ea0fb2ed74d2cbb3c04d63f",
+  "prompts": {},
+  "sessions": {
+    "s_eea0b6ad2aea02": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0654d-4b45-7872-84bf-facc42544e80",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
