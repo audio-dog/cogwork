@@ -77,14 +77,9 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
     meta: { rebindPending, rebindError, rebindTarget },
   } = useWorkspaces();
   const board = useBoard();
-  const { scheduler, dangling } = BoardResult.$match(board, {
-    Initial: () => ({ scheduler: null, dangling: [] }),
-    Failure: () => ({ scheduler: null, dangling: [] }),
-    Success: ({ board: picture }) => ({
-      scheduler: picture.scheduler,
-      dangling: picture.connectionNotices,
-    }),
-  });
+  const picture = BoardResult.$is("Success")(board) ? board.board : null;
+  const scheduler = picture?.scheduler ?? null;
+  const dangling = picture?.connectionNotices ?? [];
 
   const [edits, setEdits] = useState<WorkspaceRecordDraft | null>(null);
   const [pathRefused, setPathRefused] = useState(false);
