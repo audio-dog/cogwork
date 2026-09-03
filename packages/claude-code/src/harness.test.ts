@@ -389,7 +389,7 @@ describe("Claude Code Harness", () => {
           usageQuality: "metered",
           readinessDiagnostics: true,
           journal: true,
-          takeover: false,
+          takeover: true,
         });
         assert.isFalse(adapterHasEffort);
       }),
