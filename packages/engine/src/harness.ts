@@ -106,7 +106,7 @@ export interface HarnessCapabilityProfile {
   };
   readonly structuredOutput: "native" | "prompt-and-parse" | "none";
   readonly policyFidelity: "exact" | "profile-only" | "none";
-  readonly fileEventFidelity: "native" | "sandbox" | "none";
+  readonly fileEventFidelity: "exact" | "terminal-only" | "best-effort" | "absent";
   readonly usageQuality: "metered" | "estimated" | "none";
   readonly readinessDiagnostics: boolean;
   readonly journal: boolean;
