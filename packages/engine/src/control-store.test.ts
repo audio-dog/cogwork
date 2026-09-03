@@ -682,6 +682,42 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.layer(ControlStoreLogProbe.layer)((it) => {
+    it.effect("ignores one stored setting for an unknown Operation without dropping valid settings", () =>
+      Effect.gen(function* () {
+        const { storePath } = yield* temporaryStore();
+        const logProbe = yield* ControlStoreLogProbe;
+        assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+        yield* poke(
+          storePath,
+          `INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
+           VALUES ('model', 'operation', 'coding', 'implement', 'settings-profile', '', '"openai/gpt-5"');
+           INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
+           VALUES ('model', 'operation', 'coding', 'verify', 'settings-profile', '', '"ignored"');`,
+        );
+
+        const reloaded = yield* readControlStore(storePath).pipe(Effect.withLogger(logProbe.logger));
+
+        assert.strictEqual(
+          resolveOperationSetting(reloaded.operationSettings, "model", {
+            workflow: "coding",
+            operation: "implement",
+            workspace,
+          }),
+          "openai/gpt-5",
+        );
+        assert.strictEqual(reloaded.operationSettings.length, 1);
+        const warnings = (yield* logProbe.entries).filter(
+          (entry) =>
+            entry.level === "WARN" &&
+            Array.isArray(entry.message) &&
+            entry.message.includes("ignored stored Operation setting for unknown Operation"),
+        );
+        assert.strictEqual(warnings.length, 1);
+      }),
+    );
+  });
+
   it.effect("sets, clears, and reloads raw contribution setting rows", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();

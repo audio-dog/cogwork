@@ -14,6 +14,7 @@ import {
   DaemonLimits as DaemonLimitsSchema,
   type DaemonLimitUpdate,
   defaultDaemonLimits,
+  LifecycleStage,
   type OperationSettingCell,
   type OperationSettingRow,
   OperationSettingRow as OperationSettingRowSchema,
@@ -192,6 +193,7 @@ const JsonValue = Schema.fromJsonString(Schema.Unknown);
 const decodeJson = Schema.decodeUnknownEffect(JsonValue);
 const encodeJson = Schema.encodeUnknownEffect(JsonValue);
 const isStaleControlStoreWrite = Schema.is(StaleControlStoreWrite);
+const isLifecycleStage = Schema.is(LifecycleStage);
 
 const setDaemonLimitFailure = (error: unknown) =>
   isStaleControlStoreWrite(error) ? error : storeFailure("set daemon limit")(error);
@@ -289,6 +291,27 @@ const scopeOf = (row: StoredOperationSettingRow) => {
   return { _tag: "PrivateWorkspaceOverlay", workspace: row.workspace };
 };
 
+const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOperationSettingRow")(function* (
+  row: StoredOperationSettingRow,
+) {
+  if (row.level === "operation" && !isLifecycleStage(row.operation)) {
+    yield* Effect.logWarning("ignored stored Operation setting for unknown Operation", {
+      operation: row.operation,
+      setting: row.setting,
+    });
+    return null;
+  }
+  const value = yield* decodeJson(row.value);
+  return yield* decodeOperationSettingRow({
+    setting: row.setting,
+    level: levelOf(row),
+    scope: scopeOf(row),
+    value,
+  });
+});
+
+const isOperationSettingRow = (row: OperationSettingRow | null): row is OperationSettingRow => row !== null;
+
 const readOperationSettings = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     const stored = yield* sql<StoredOperationSettingRow>`
@@ -297,15 +320,8 @@ const readOperationSettings = (sql: SqlClient.SqlClient) =>
       ORDER BY setting, level, workflow, operation, scope, workspace
     `;
     const rows = yield* decodeStoredOperationSettingRows(stored);
-    return yield* Effect.forEach(rows, (row) =>
-      Effect.flatMap(decodeJson(row.value), (value) =>
-        decodeOperationSettingRow({
-          setting: row.setting,
-          level: levelOf(row),
-          scope: scopeOf(row),
-          value,
-        }),
-      ),
+    return yield* Effect.forEach(rows, decodeStoredOperationSettingRow).pipe(
+      Effect.map((decoded) => decoded.filter(isOperationSettingRow)),
     );
   });
 
