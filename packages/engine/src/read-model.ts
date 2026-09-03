@@ -21,6 +21,7 @@ export const classifiedItemsOf = (state: WorkspaceReconcileState): ReadonlyArray
   ...state.claimed.map((item) => ({ _tag: "Claimed" as const, ...item })),
   ...state.blocked.map((item) => ({ _tag: "Blocked" as const, ...item })),
   ...state.needsHuman.map((item) => ({ _tag: "NeedsHuman" as const, ...item })),
+  ...state.readyToMerge.map((item) => ({ _tag: "ReadyToMerge" as const, ...item })),
 ];
 
 export const classifiedItemWithPr = (item: ObservedItem): ClassifiedItem | null => classifiedItemOf(item);
@@ -45,6 +46,7 @@ export const workspaceInfoOf = (
   claimed: state?.claimed ?? [],
   blocked: state?.blocked ?? [],
   needsHuman: state?.needsHuman ?? [],
+  readyToMerge: state?.readyToMerge ?? [],
 });
 
 export const workspaceStatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot) => {

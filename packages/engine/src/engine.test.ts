@@ -1325,22 +1325,27 @@ describe("daemon status over rpc", () => {
     draft: false,
   };
 
-  it.effect("carries a PR summary on every classified item that has a linked pull request", () =>
+  it.effect("carries a required PR summary on a ready-to-merge item", () =>
     Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;
       yield* worker.submit();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const status = yield* client.GetStatus();
-      const eligible = status.workspaces[0]?.eligible[0];
-      assert.strictEqual(eligible?.stage, "verify");
-      assert.deepStrictEqual(eligible?.pr, {
-        number: 77,
-        url: "https://github.com/owner/repo/pull/77",
-        checks: "passing",
-        review: "ready",
-        baseDivergence: "none",
-        waitingSinceMillis: 1_786_000_000_000,
-      });
+      assert.deepStrictEqual(status.workspaces[0]?.readyToMerge, [
+        {
+          id: id("AUD-9"),
+          title: "pr in review",
+          url: "https://linear.app/acme/issue/AUD-9",
+          pr: {
+            number: 77,
+            url: "https://github.com/owner/repo/pull/77",
+            checks: "passing",
+            review: "ready",
+            baseDivergence: "none",
+            waitingSinceMillis: 1_786_000_000_000,
+          },
+        },
+      ]);
     }).pipe(Effect.provide(daemonLayer(observing([inReviewItem], [[id("AUD-9"), readyPr]]))), Effect.scoped),
   );
 
