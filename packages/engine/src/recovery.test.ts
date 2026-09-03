@@ -223,6 +223,7 @@ const snapshotOf = (
       claimed: [],
       blocked: [],
       needsHuman: [],
+      readyToMerge: [],
       observed,
       observedCount: observed.length,
       availability: [],
