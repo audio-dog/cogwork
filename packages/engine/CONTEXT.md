@@ -86,11 +86,11 @@ A pluggable implementation of one agent backend. Beside dispatch it declares its
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **Harness capability profile**:
-The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity, fork and human-attach behavior, structured-output reliability, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Claude Code and Codex declare journal and takeover support; Cursor ACP declares neither. These facts describe adapter capability only. They do not activate durable execution. Adapter models, provider options, modalities, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
+The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity, fork and human-attach behavior, structured-output reliability, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. File-event fidelity is `exact`, `terminal-only`, `best-effort`, or `absent`. Claude Code and Codex declare journal and takeover support; Cursor ACP declares neither. These facts describe adapter capability only. They do not activate durable execution. Adapter models, provider options, modalities, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
 _Avoid_: Feature flags, adapter metadata, projection matrix
 
 **External Harness runtime**:
-The engine-owned execution module beneath external Harness runners. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, descriptor-required shared Git metadata, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate. It passes the Cogwork `RunId` as TanStack `runId`, the Cogwork `SessionId` as `threadId`, and any opaque native handle only through adapter model options. Its `withSandbox` call is intentionally nondurable: no Run store, stream durability, journal, detach, attach, or takeover option is present. Driver loss therefore cannot leave an intentional detached agent or trigger attach-first recovery.
+The engine-owned execution module beneath Claude Code, Codex, and Cursor. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, descriptor-required shared Git metadata, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate. It normalizes supported native and Sandbox file activity to `sandbox.file.diff` without rebuilding the payload. It passes the Cogwork `RunId` as TanStack `runId`, the Cogwork `SessionId` as `threadId`, and any opaque native handle only through adapter model options. Its `withSandbox` call is intentionally nondurable: no Run store, stream durability, journal, detach, attach, or takeover option is present. Driver loss therefore cannot leave an intentional detached agent or trigger attach-first recovery.
 _Avoid_: Harness service (the dispatcher above it), Harness runner (the engine-facing backend seam), provider runner (the owned-transcript path)
 
 **Harness Workspace projection**:
@@ -122,7 +122,7 @@ The rule that keeps a file-touching tool inside the worktree root: a requested p
 _Avoid_: Sandboxing (that's the process boundary), chroot, jail
 
 **File-diff feed**:
-The stream of file-change events the owned tools produce for the live run view's diff panel. It watches the worktree, computes a unified diff per change against the run's base SHA (synthesizing an add-patch for a brand-new file), and emits each as an `AgUiEvent` — a `CUSTOM` event named `sandbox.file.diff`. This is how a run's edits show up in the diff feed without the tools having to know the UI exists.
+The stream of file-change events the live run view consumes. Owned tools watch the worktree and compute a unified diff per change against the Run's base SHA. External Harnesses normalize their supported native or Sandbox events to the same `AgUiEvent`: a `CUSTOM` event named `sandbox.file.diff`. Payload and metadata remain whole, so fidelity stays runner-declared instead of inferred by the client.
 _Avoid_: Event log (that's the durable run record), file watcher (that's the mechanism, this is the diff stream on top of it)
 
 **Policy profile**:
