@@ -1,0 +1,25 @@
+patches/@tanstack__ai-sandbox@0.5.4.patch
+  s_a38d1882a40a69::t_b65b81b9a6bad5 1-23
+pnpm-workspace.yaml
+  s_a38d1882a40a69::t_b65b81b9a6bad5 46
+patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
+  s_a38d1882a40a69::t_0d7c2f70a4fe8a 5-7,16-27
+pnpm-lock.yaml
+  s_a38d1882a40a69::t_e1d7d16b4b0831 78-79,341,344,347,381,384,387,443,446,449,498,501,6903,6907,6919,6922,6924,6927,6965,6967,6969
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5806c95951ff0934abf01346bc25cd0c5f78b937",
+  "prompts": {},
+  "sessions": {
+    "s_a38d1882a40a69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-3296-70a2-a373-a3565da4aa0b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
