@@ -99,6 +99,11 @@ const ruleCases = [
   },
   {
     message:
+      "Rule: do not compare a wire-crossing union discriminant by hand. Why: the comparison is not exhaustive and does not use the generated type guard. Fix: use the union's generated match for a fold or guards for a single-variant test.",
+    name: "no-wire-union-tag-comparison",
+  },
+  {
+    message:
       "Rule: avoid deeply nested Effect calls (Effect.xx(Effect.yy(Effect.zz(...)))). Why: they hide sequencing and spread flow. Fix: build values first, then run one flat Effect pipeline.",
     name: "no-nested-effect-call",
   },
