@@ -32,15 +32,14 @@
     }
   },
   "plugins": [
-    "./configs/lint/no-use-effect.grit",
+    "./configs/lint/react.grit",
     "./configs/lint/ladders.grit",
     "./configs/lint/effect-calls.grit",
     "./configs/lint/iife.grit",
     "./configs/lint/staging.grit",
     "./configs/lint/member-calls.grit",
     "./configs/lint/gated.grit",
-    "./configs/lint/no-side-effect-in-state-updater.grit",
-    "./configs/lint/no-native-button-mismatch.grit"
+    "./configs/lint/jsx.grit"
   ],
   "javascript": {
     "formatter": {

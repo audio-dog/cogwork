@@ -113,7 +113,7 @@ const ruleCases = [
     extension: "tsx",
     message:
       "Rule: the render prop of a Base UI button must agree with nativeButton. Why: <Button> has nativeButton true, so a <a> removes native button semantics (form submission, Enter and Space activation) and Base UI logs a console error. Fix: render a real <button>, or keep <a> and add nativeButton={false}.",
-    plugin: "no-native-button-mismatch",
+    plugin: "jsx",
     name: "no-native-button-mismatch",
   },
   {
@@ -155,7 +155,7 @@ const ruleCases = [
   {
     message:
       "Rule: no side effect inside a React state updater. Why: React may run the updater more than once (StrictMode double-invoke, concurrent replay), so a browser-storage write here can run twice or observe stale external state. Fix: compute the next state and return it; write to storage in the event handler or effect (reuse the setter that persists + sets state).",
-    plugin: "no-side-effect-in-state-updater",
+    plugin: "react",
     name: "no-side-effect-in-state-updater",
   },
   {
@@ -167,7 +167,7 @@ const ruleCases = [
   {
     message:
       "Direct useEffect() calls are not allowed. Refactor to derived state, event handlers, the key prop, or a data-fetching library. See .agents/skills/react-no-use-effect. If you must keep it, suppress inline with a reason.",
-    plugin: "no-use-effect",
+    plugin: "react",
     name: "no-use-effect",
   },
 ];

@@ -1,8 +1,0 @@
-language js(typescript, jsx)
-
-or {
-  `useEffect($args)` as $call,
-  `React.useEffect($args)` as $call
-} where {
-  register_diagnostic(span=$call, message="Direct useEffect() calls are not allowed. Refactor to derived state, event handlers, the key prop, or a data-fetching library. See .agents/skills/react-no-use-effect. If you must keep it, suppress inline with a reason.", severity="error")
-}
