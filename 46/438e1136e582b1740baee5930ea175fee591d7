@@ -1,0 +1,42 @@
+apps/desktop/vitest.config.ts
+  s_d1d450eb6ec3a8::t_15bfc969741eb8 1
+turbo.json
+  s_d1d450eb6ec3a8::t_db1fdee46d3a42 19-20
+packages/engine/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+packages/claude-code/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+apps/cli/src/platform.test.ts
+  s_d1d450eb6ec3a8::t_f4abf7f597292d 613-616
+  s_d1d450eb6ec3a8::t_b433585774f64f 612
+packages/contracts/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+configs/vitest/base.ts
+  s_d1d450eb6ec3a8::t_55174b74c9e431 9-10
+  s_d1d450eb6ec3a8::t_15bfc969741eb8 1-4
+  s_d1d450eb6ec3a8::t_36c0cd932578f1 5-8,11-13
+packages/codex-cli/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+packages/process-diagnostics/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+apps/cli/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+packages/cursor-acp/vitest.config.ts
+  s_d1d450eb6ec3a8::t_299b3271232ffd 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "46438e1136e582b1740baee5930ea175fee591d7",
+  "prompts": {},
+  "sessions": {
+    "s_d1d450eb6ec3a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1a59a783-c9f5-4a94-9a01-5ebd44a8747b",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
