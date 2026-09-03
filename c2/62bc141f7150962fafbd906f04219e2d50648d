@@ -1,0 +1,33 @@
+apps/desktop/src/renderer/src/features/harness-presentation.test.ts
+  s_330b4caffc139b::t_88d3c8457241df 1-14
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_330b4caffc139b::t_8d624b924df358 4
+apps/desktop/src/renderer/src/components/harness-glyph.tsx
+  s_330b4caffc139b::t_5dd56dae408cbe 8
+apps/desktop/CONTEXT.md
+  s_330b4caffc139b::t_96e8bb13905951 185-194
+apps/desktop/src/renderer/src/features/harness-catalog.ts
+  s_330b4caffc139b::t_5dd56dae408cbe 3,24-25,31-32,46-47
+apps/desktop/src/renderer/src/features/harness-presentation.ts
+  s_330b4caffc139b::t_5dd56dae408cbe 1-18
+apps/desktop/src/renderer/src/components/settings-harnesses.tsx
+  s_330b4caffc139b::t_8d624b924df358 21-23,55,60,279
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_330b4caffc139b::t_8d624b924df358 88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c262bc141f7150962fafbd906f04219e2d50648d",
+  "prompts": {},
+  "sessions": {
+    "s_330b4caffc139b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ef9e7d2-206d-4a38-87e4-9f3fab2eb473",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
