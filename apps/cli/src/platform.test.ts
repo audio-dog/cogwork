@@ -609,7 +609,11 @@ const operationFixtures: ReadonlyArray<{
   },
 ];
 
-describe("gitLayer against a real repository", () => {
+// Each test builds its own throwaway repository, so the only thing they share is wall clock
+// time spent waiting on real git subprocesses. Overlap that wait. Overlapping it is also why
+// these tests need their own ceiling: five fixtures competing for the same git stretch each one
+// past the 5s default, and a test here is slow because it queued, not because it hung.
+describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, () => {
   layer(testLayer)((it) => {
     it.effect("keeps identity out of the fixture repository config", () =>
       Effect.gen(function* () {
