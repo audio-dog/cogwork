@@ -6,9 +6,9 @@ import {
 } from "@tanstack/react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ConfigurationPicture, InstalledPlugin } from "../features/configuration-model";
+import { Authority, type ConfigurationPicture, type InstalledPlugin } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
-import { Configuration } from "./configuration-provider";
+import { Configuration, PluginFailurePresentation } from "./configuration-provider";
 import { CustomizeFilterProvider } from "./customize-filter";
 import { PluginsFacet } from "./plugins-facet";
 
@@ -18,7 +18,7 @@ describe("PluginsFacet", () => {
     plugins: [],
     catalogPlugins: [],
     contributions: placeholderConfiguration.contributions.filter(
-      (contribution) => contribution.authority._tag !== "plugin",
+      (contribution) => !Authority.$is("plugin")(contribution.authority),
     ),
   };
 
@@ -83,7 +83,7 @@ describe("PluginsFacet", () => {
     const markup = renderToStaticMarkup(
       <Configuration.Provider
         picture={emptyPicture}
-        pluginFailure={{ _tag: "Load", message: "catalog unreadable" }}
+        pluginFailure={PluginFailurePresentation.Load({ message: "catalog unreadable" })}
         pluginLoadState="failed"
       >
         <CustomizeFilterProvider>

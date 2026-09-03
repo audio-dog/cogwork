@@ -51,7 +51,7 @@ function EngineGateProvider({ children }: { children: ReactNode }) {
   const { status, isRestarting, setEnabled, restart } = useEngineStatus();
   const board = useBoard();
   const phase = enginePhase(status);
-  const treatment = treatmentFor(phase, board._tag);
+  const treatment = treatmentFor(phase, board);
   return (
     <EngineGateContext value={{ treatment, phase, isRestarting, actions: { setEnabled, restart } }}>
       {children}

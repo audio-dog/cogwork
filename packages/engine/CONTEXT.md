@@ -127,6 +127,12 @@ _Avoid_: Event log (that's the durable run record), file watcher (that's the mec
 
 **Policy profile**:
 The allow/ask/deny rules a run's owned tools are gated by, chosen from the selected operation and its settings. Two engine-owned defaults over one shared tool set: **read-only** for triage (read/glob/grep/webfetch; writes and shell refused), and **full** for implementation and follow-up (everything, with only the hard-deny list as a floor). A profile is a TanStack `ai-sandbox` `SandboxPolicy`, so the engine reuses that package's `evaluateCommand` to match bash against command globs; `write`/`edit` ride the `fileWrite` capability, `webfetch` rides `network`, and `read`/`glob`/`grep` are always allowed. The Harness request carries the resolved profile. A runner declares which profiles it can enforce, plus non-interactive and worktree-confined postures; the Harness service refuses a missing hard posture before the executor claims the item or records a Run. Per-workspace overrides wait for settings-as-data.
+
+`LifecycleStage` is the retained wire name for the three Operations. It maps without aliases: triage uses `read-only`; implement and follow-up use `full`. Run Plan resolution chooses this profile once. The Harness consumes that immutable choice and rejects a mismatched Sandbox policy.
+
+An external Harness receives the same `SandboxPolicy` as engine-owned tools. Its native built-in tools are not Cogwork's bridged server tools: the native adapter projects the policy into its own permission, tool, command, and Sandbox controls, while MCP projection stays a separate transport. `policyFidelity` reports whether that native projection is exact, profile-only, or absent. Provider selection is a separate input to the shared external Harness runtime, not part of Harness selection.
+
+The local-process Sandbox provider is a trusted Runtime Host process boundary. It sets the checkout working directory and scrubs environment variables; it is not container or filesystem isolation. A runner may claim worktree confinement only when its native controls or a future isolated provider enforce it.
 _Avoid_: Sandbox isolation (that's the process boundary; this is the decision layer above it), per-tool allowlist (bash is command-matched, not all-or-nothing)
 
 **Ask-compiles-to-deny**:

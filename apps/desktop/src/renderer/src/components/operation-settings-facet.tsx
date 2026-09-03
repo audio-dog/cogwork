@@ -3,7 +3,7 @@ import { Badge } from "@cogwork/ui/components/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { RiSettings3Line } from "@remixicon/react";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import {
   operationSettingDisplayRows,
   operationSettingDisplaySections,
@@ -87,8 +87,14 @@ function MissingOperationSettings() {
 
 export function OperationSettingsFacet() {
   const result = useBoard();
-  if (result._tag === "Initial") return <LoadingOperationSettings />;
-  if (result._tag === "Failure") return <DisconnectedOperationSettings />;
-  if (result.board.controlStore === null) return <MissingOperationSettings />;
-  return <OperationSettingRows controlStore={result.board.controlStore} />;
+  return BoardResult.$match(result, {
+    Initial: () => <LoadingOperationSettings />,
+    Failure: () => <DisconnectedOperationSettings />,
+    Success: ({ board }) =>
+      board.controlStore === null ? (
+        <MissingOperationSettings />
+      ) : (
+        <OperationSettingRows controlStore={board.controlStore} />
+      ),
+  });
 }

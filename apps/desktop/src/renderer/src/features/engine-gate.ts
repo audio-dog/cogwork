@@ -1,9 +1,7 @@
-import type { BoardResult } from "./activity-session";
+import { BoardResult } from "./activity-session";
 import type { EnginePhase } from "./use-engine-status";
 
 export type Treatment = "live" | "off" | "connecting" | "broken";
-
-export type BoardStatus = BoardResult["_tag"];
 
 const phaseTreatment: Record<Exclude<EnginePhase, "up">, Treatment> = {
   off: "off",
@@ -11,14 +9,14 @@ const phaseTreatment: Record<Exclude<EnginePhase, "up">, Treatment> = {
   starting: "connecting",
 };
 
-const upBoardTreatment: Record<BoardStatus, Treatment> = {
-  Success: "live",
-  Initial: "connecting",
-  Failure: "broken",
-};
+const upBoardTreatment = BoardResult.$match({
+  Success: (): Treatment => "live",
+  Initial: (): Treatment => "connecting",
+  Failure: (): Treatment => "broken",
+});
 
-export const treatmentFor = (phase: EnginePhase, board: BoardStatus): Treatment =>
-  phase === "up" ? upBoardTreatment[board] : phaseTreatment[phase];
+export const treatmentFor = (phase: EnginePhase, board: BoardResult): Treatment =>
+  phase === "up" ? upBoardTreatment(board) : phaseTreatment[phase];
 
 export type BrokenReason = "engine-failed" | "daemon-unreachable";
 

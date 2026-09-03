@@ -3,15 +3,14 @@ import {
   agUiIsStructuredOutputComplete,
   HarnessName,
   ImplementStageResult,
-  type LifecycleStage,
+  LifecycleStage,
   RunId,
   RunPlan,
   SessionId,
   stageResultJsonSchema,
-  TriageStageResult,
   WorkItemId,
 } from "@cogwork/contracts";
-import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
@@ -87,7 +86,7 @@ const projectedMcpName = (name: string, index: number) =>
 
 const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   const stage = overrides.stage ?? "implement";
-  const profile = stage === "triage" ? "read-only" : "full";
+  const profile = OperationPolicy.operationPolicyProfile(stage);
   const mcpSkills = overrides.mcpSkills ?? [];
   const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
     target: "draft-2020-12",
@@ -273,6 +272,15 @@ const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
   );
 };
 
+const operationCapture = (stage: LifecycleStage, events: ReadonlyArray<Harness.AgUiEvent>) => {
+  const object = structuredCompletions(events)[0]?.object;
+  if (typeof object !== "object" || object === null) {
+    return Effect.die(new Error(`fake Codex emitted no ${stage} structured result`));
+  }
+  const value = Reflect.get(object, stage === "triage" ? "proposal" : "summary");
+  return Schema.decodeUnknownEffect(Capture)(value);
+};
+
 const runInRepository = (
   harness: Harness.HarnessService,
   handle: SandboxHandle,
@@ -284,6 +292,13 @@ const runInRepository = (
       harness.run(makeRequest({ checkoutPath, session: freshSession, ...overrides })),
     );
   });
+
+const runOperation = (harness: Harness.HarnessService, stage: LifecycleStage) =>
+  createSandbox().pipe(
+    Effect.flatMap((handle) => runInRepository(harness, handle, { stage })),
+    Effect.flatMap((events) => operationCapture(stage, events)),
+    Effect.map((capture) => [stage, capture] satisfies [LifecycleStage, typeof Capture.Type]),
+  );
 
 const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
   {
@@ -483,31 +498,21 @@ describe("codexRunner", () => {
       10_000,
     );
 
-    it.effect("maps the Operation policy through TanStack's Codex controls", () =>
+    it.effect("maps every Operation policy through TanStack's Codex controls", () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const fullHandle = yield* createSandbox();
-          const readOnlyHandle = yield* createSandbox();
           const harness = Harness.make([runner()]);
-          const full = yield* runInRepository(harness, fullHandle);
-          const readOnly = yield* runInRepository(harness, readOnlyHandle, { stage: "triage" });
-          const fullCapture = yield* structuredCapture(full);
-          const triageResponse = readOnly
-            .filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT)
-            .map((event) => event.delta)
-            .find((delta): delta is string => typeof delta === "string");
-          if (!triageResponse) return assert.fail("fake Codex emitted no triage response");
-          const triageResult = yield* Schema.decodeUnknownEffect(TriageStageResult)(
-            yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(triageResponse),
+          const captures = yield* Effect.forEach(LifecycleStage.literals, (stage) =>
+            runOperation(harness, stage),
           );
-          const readOnlyCapture = yield* Schema.decodeEffect(Capture)(triageResult.proposal);
 
-          assert.include(fullCapture.args, "workspace-write");
-          assert.include(fullCapture.args, 'approval_policy="never"');
-          assert.include(fullCapture.args, "sandbox_workspace_write.network_access=true");
-          assert.include(readOnlyCapture.args, "read-only");
-          assert.include(readOnlyCapture.args, 'approval_policy="never"');
-          assert.notInclude(readOnlyCapture.args, "danger-full-access");
+          for (const [stage, capture] of captures) {
+            const readOnly = OperationPolicy.operationPolicyProfile(stage) === "read-only";
+            assert.include(capture.args, readOnly ? "read-only" : "workspace-write");
+            assert.include(capture.args, 'approval_policy="never"');
+            assert.notInclude(capture.args, "danger-full-access");
+            if (!readOnly) assert.include(capture.args, "sandbox_workspace_write.network_access=true");
+          }
         }),
       ),
     );

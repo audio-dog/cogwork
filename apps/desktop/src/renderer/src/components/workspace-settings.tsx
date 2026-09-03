@@ -27,7 +27,7 @@ import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/re
 import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import { operationSettingUpdate } from "../features/operation-settings";
 import {
   changedFieldCount,
@@ -77,8 +77,9 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
     meta: { rebindPending, rebindError, rebindTarget },
   } = useWorkspaces();
   const board = useBoard();
-  const scheduler = board._tag === "Success" ? board.board.scheduler : null;
-  const dangling = board._tag === "Success" ? board.board.connectionNotices : [];
+  const picture = BoardResult.$is("Success")(board) ? board.board : null;
+  const scheduler = picture?.scheduler ?? null;
+  const dangling = picture?.connectionNotices ?? [];
 
   const [edits, setEdits] = useState<WorkspaceRecordDraft | null>(null);
   const [pathRefused, setPathRefused] = useState(false);

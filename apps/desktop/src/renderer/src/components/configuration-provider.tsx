@@ -7,6 +7,7 @@ import {
 } from "@cogwork/contracts";
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
+import * as Data from "effect/Data";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import {
@@ -15,7 +16,7 @@ import {
   setContributionSettingAtom,
   uninstallPluginAtom,
 } from "../daemon/atoms";
-import { type BoardResult, useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import type {
   ConfigurationPicture,
   Contribution,
@@ -36,21 +37,25 @@ interface ConfigurationState {
   readonly picture: ConfigurationPicture;
 }
 
-export type PluginFailurePresentation =
-  | { readonly _tag: "Load"; readonly message: string }
-  | { readonly _tag: "Mutation"; readonly message: string };
+export type PluginFailurePresentation = Data.TaggedEnum<{
+  Load: { readonly message: string };
+  Mutation: { readonly message: string };
+}>;
+
+export const PluginFailurePresentation = Data.taggedEnum<PluginFailurePresentation>();
 
 export const pluginFailureTitle = (failure: PluginFailurePresentation) =>
-  failure._tag === "Load" ? "Plugins failed to load" : "Plugin change failed";
+  PluginFailurePresentation.$match(failure, {
+    Load: () => "Plugins failed to load",
+    Mutation: () => "Plugin change failed",
+  });
 
 const pluginFailureOf = (
   mutationFailure: Cause.Cause<unknown> | null,
   queryFailure: Cause.Cause<unknown> | null,
 ) => {
-  if (mutationFailure)
-    return { _tag: "Mutation", message: Cause.pretty(mutationFailure) } satisfies PluginFailurePresentation;
-  if (queryFailure)
-    return { _tag: "Load", message: Cause.pretty(queryFailure) } satisfies PluginFailurePresentation;
+  if (mutationFailure) return PluginFailurePresentation.Mutation({ message: Cause.pretty(mutationFailure) });
+  if (queryFailure) return PluginFailurePresentation.Load({ message: Cause.pretty(queryFailure) });
   return null;
 };
 
@@ -159,10 +164,8 @@ export const contributionSettingState = (
   return { controlStore: result.value, waiting: true, settled: false };
 };
 
-export const retainConfigurationBoard = (board: Board | null, result: BoardResult) => {
-  if (result._tag !== "Success") return board;
-  return result.board;
-};
+export const retainConfigurationBoard = (board: Board | null, result: BoardResult) =>
+  BoardResult.$is("Success")(result) ? result.board : board;
 
 export function useConfiguration() {
   const value = use(ConfigurationContext);
@@ -257,7 +260,7 @@ export function DaemonConfigurationProvider({ children }: { children: ReactNode 
     <ConfigurationProvider
       picture={picture}
       actions={actions}
-      contributionSettingWaiting={settingState.waiting || boardResult._tag !== "Success"}
+      contributionSettingWaiting={settingState.waiting || !BoardResult.$is("Success")(boardResult)}
       notices={notices}
       pluginFailure={pluginFailure}
       pluginLoadState={loadState}

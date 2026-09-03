@@ -1,6 +1,7 @@
 import { type Board, LocalContribution, WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
+import { Authority, Diagnostic, LoadState } from "./configuration-model";
 import { configurationPicture } from "./configuration-picture";
 
 const workspace = Schema.decodeSync(WorkspaceId)("example");
@@ -69,14 +70,14 @@ describe("configurationPicture", () => {
     expect(picture.contributions).toEqual([
       {
         id: "local:repo/mcp/tools",
-        authority: { _tag: "local", tree: "repo" },
+        authority: Authority.local({ tree: "repo" }),
         kind: "mcp-server",
         localName: "tools",
         summary: "/repos/example/.agents/mcp/tools.json",
         file: "/repos/example/.agents/mcp/tools.json",
         definedAt: "workspace-input",
         definedIn: workspace,
-        load: { _tag: "loaded" },
+        load: LoadState.loaded({}),
         rows: [
           {
             scope: { kind: "private-overlay", workspaceId: workspace },
@@ -87,14 +88,14 @@ describe("configurationPicture", () => {
       },
       {
         id: "local:private/skill/review",
-        authority: { _tag: "local", tree: "private" },
+        authority: Authority.local({ tree: "private" }),
         kind: "skill",
         localName: "review",
         summary: "/home/.cogwork/workspaces/example/skills/review/SKILL.md",
         file: "/home/.cogwork/workspaces/example/skills/review/SKILL.md",
         definedAt: "private-overlay",
         definedIn: workspace,
-        load: { _tag: "loaded" },
+        load: LoadState.loaded({}),
         rows: [],
       },
     ]);
@@ -290,11 +291,10 @@ describe("configurationPicture", () => {
             scope: { kind: "private-overlay", workspaceId: missing },
             value: false,
             source: "Control store",
-            diagnostic: {
-              _tag: "dangling",
+            diagnostic: Diagnostic.dangling({
               source: "Control store",
               detail: "No loaded MCP server has this identity.",
-            },
+            }),
           },
         ],
       },

@@ -31,9 +31,13 @@ _Avoid_: Work source adapter (unrelated), harness runner
 Cursor has no native structured-output contract in ACP. The shared runtime supplies the operation schema through prompt-and-parse, so Cursor declares lower structured-output reliability than native adapters.
 _Avoid_: Native structured output, guaranteed JSON mode
 
-**Sandbox**:
-The scoped local-process environment — working directory set to the run's checkout, with env scrubbed — the Cursor CLI is launched inside.
-_Avoid_: Container, worktree
+**Unsupported policy posture**:
+Cursor ACP runs with explicit headless permissions and a fail-closed permission mode. ACP cannot prove worktree confinement or either Operation profile because Cursor decides which native actions request permission. The runner therefore rejects every current local-process Run before native launch. A future isolated Sandbox provider can supply confinement independently, but Cursor still needs an enforceable profile before it can run.
+_Avoid_: Permission prompt, bypassPermissions, silent downgrade
+
+**Runtime Host process**:
+The local-process provider sets the checkout working directory and scrubs environment variables. It is a trusted Runtime Host boundary, not a container, Sandbox, or worktree-confinement mechanism.
+_Avoid_: Container, isolated Sandbox
 
 **Token-usage estimate**:
 The best-guess `usage` this adapter attaches to a run's terminal event because Cursor's ACP mode reports no real token counts (see [FINDINGS.md](./FINDINGS.md) Q2 — the prompt response is `{stopReason}`, no `usage`; the counts exist only in the CLI's non-ACP `--print --output-format json` mode). The descriptor's usage estimator folds the streamed assistant + reasoning text and, when the real `RUN_FINISHED` carries no `usage`, fills one in at `chars/4` over the prompt plus that streamed text, flagged `estimated`. The flag rides the whole ledger and both surfaces (`cogwork runs` prints `tokens=~N`; the desktop drill-in marks it with a tooltip) so a rough number is never mistaken for a metered one. Because it undercounts, the follow-up resume policy ignores it — only metered usage can trip the resume token cap. It undercounts the system prompt, tools, and resumed server-side context the harness can't see; the day Cursor adds `usage` to the ACP response the real counts flow through untouched (`@tanstack/ai-acp` already forwards them) and this estimate steps aside.

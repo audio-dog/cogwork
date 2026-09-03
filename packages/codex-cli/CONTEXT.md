@@ -42,7 +42,9 @@ The shared Sandbox Policy maps through TanStack's coarse Codex controls. Read-on
 The descriptor also grants linked Worktrees their resolved shared Git metadata directory with
 Codex `--add-dir`. Codex CLI owns
 authentication through its host login; Cogwork's credential store is not consulted.
-_Avoid_: Sandbox isolation (the local-process provider scopes the worktree but is not a container)
+The local-process provider only starts Codex on the trusted Runtime Host; Codex's native Sandbox is
+the worktree-confinement boundary.
+_Avoid_: Local-process isolation, danger-full-access
 
 **Native MCP projection**:
 The descriptor declares native MCP projection and maps each resolved MCP server from the request

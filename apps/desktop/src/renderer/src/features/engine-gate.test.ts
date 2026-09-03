@@ -1,8 +1,13 @@
+import { initialBoard } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
-import { type BoardStatus, brokenReason, treatmentFor } from "./engine-gate";
+import { BoardResult } from "./activity-session";
+import { brokenReason, treatmentFor } from "./engine-gate";
 import type { EnginePhase } from "./use-engine-status";
 
-const boards: readonly BoardStatus[] = ["Initial", "Failure", "Success"];
+const initial = BoardResult.Initial();
+const failure = BoardResult.Failure();
+const success = BoardResult.Success({ board: initialBoard, previews: new Map() });
+const boards = [initial, failure, success];
 
 describe("treatmentFor", () => {
   it("is Off whenever the engine is off, whatever the stream is doing", () => {
@@ -24,21 +29,21 @@ describe("treatmentFor", () => {
   });
 
   it("is Live only when the engine is up and the stream has a board", () => {
-    expect(treatmentFor("up", "Success")).toBe("live");
+    expect(treatmentFor("up", success)).toBe("live");
   });
 
   it("is Connecting when the engine is up but the stream has not seeded yet", () => {
-    expect(treatmentFor("up", "Initial")).toBe("connecting");
+    expect(treatmentFor("up", initial)).toBe("connecting");
   });
 
   it("is Broken when the engine claims it is up but the stream has failed", () => {
-    expect(treatmentFor("up", "Failure")).toBe("broken");
+    expect(treatmentFor("up", failure)).toBe("broken");
   });
 
   it("lets engine phase win over the stream result", () => {
-    expect(treatmentFor("off", "Success")).toBe("off");
-    expect(treatmentFor("failed", "Success")).toBe("broken");
-    expect(treatmentFor("starting", "Failure")).toBe("connecting");
+    expect(treatmentFor("off", success)).toBe("off");
+    expect(treatmentFor("failed", success)).toBe("broken");
+    expect(treatmentFor("starting", failure)).toBe("connecting");
   });
 });
 
