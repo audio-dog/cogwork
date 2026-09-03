@@ -1,0 +1,35 @@
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_a38d1882a40a69::t_709d4ee3eaf56e 3,41-43
+patches/@tanstack__ai-sandbox@0.5.4.patch
+  s_a38d1882a40a69::t_12ca29dc54f4ad 84,87,91-92,95,97-98,107-110,115,118,124,128-129,137,140-141,143,147-150,152,156-160,162,166-170
+  s_a38d1882a40a69::t_a36e80e48811e7 38,132-136,145-146,151,153-155,161,163-165
+  s_a38d1882a40a69::t_9eacf417546644 1,3-27,32-34,40-45,52-58,72-77,81-83,85-86,88-90,93-94,96,99-106,111-113,126-127,130-131,138-139,142,144
+  s_a38d1882a40a69::t_9f8e0a59342023 2,29
+  s_a38d1882a40a69::t_71f7c7bf9d0fc5 46-51,59-64
+  s_a38d1882a40a69::t_02b6d5a63b514f 65-71,78-80
+packages/codex-cli/src/harness.test.ts
+  s_a38d1882a40a69::t_0fbee98deae4e2 571
+  s_a38d1882a40a69::t_709d4ee3eaf56e 533-534,539-542,557-558
+  s_a38d1882a40a69::t_fd40efd0acd4b1 564-570
+  s_a38d1882a40a69::t_c726a27fa17e10 535-538
+  s_a38d1882a40a69::t_e3cbd1605d0dc1 560-563,572-573
+  s_a38d1882a40a69::t_c1ee9254473f6e 559
+pnpm-lock.yaml
+  s_a38d1882a40a69::t_e8540b6d28784b 79,341,344,347,381,384,387,443,446,449,498,501,6903,6907,6919,6922,6924,6927,6965,6967,6969
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "419ed53241bdb994b0df78b01f8782d8f6ce4e11",
+  "prompts": {},
+  "sessions": {
+    "s_a38d1882a40a69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-3296-70a2-a373-a3565da4aa0b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
