@@ -159,7 +159,7 @@ function ProviderList() {
 
 function SignInCommand({ command }: { readonly command: string }) {
   const [copied, setCopied] = useState(false);
-  const [clearCopied] = useTimeoutEffect(() => setCopied(false), copied ? 2000 : undefined);
+  useTimeoutEffect(() => setCopied(false), copied ? 2000 : undefined);
   return (
     <div className="px-4">
       <InputGroup>
@@ -169,13 +169,10 @@ function SignInCommand({ command }: { readonly command: string }) {
             size="icon-xs"
             aria-label="Copy command"
             onClick={() => {
-              navigator.clipboard
-                .writeText(command)
-                .then(
-                  () => setCopied(true),
-                  () => setCopied(false),
-                )
-                .finally(clearCopied);
+              navigator.clipboard.writeText(command).then(
+                () => setCopied(true),
+                () => setCopied(false),
+              );
             }}
           >
             {copied ? <RiCheckLine /> : <RiFileCopyLine />}
@@ -207,7 +204,7 @@ function ConfigurationTab({ item }: { readonly item: HarnessItem }) {
           ) : null}
         </div>
       </div>
-      {summary.signIn ? <SignInCommand command={summary.signIn} /> : null}
+      {summary.signIn ? <SignInCommand key={summary.signIn} command={summary.signIn} /> : null}
     </div>
   );
 }

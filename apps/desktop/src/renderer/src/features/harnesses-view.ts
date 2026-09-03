@@ -46,16 +46,24 @@ export const harnessSummary = (state: HarnessState): HarnessSummary =>
     }),
   });
 
-export const installedVersion = (item: HarnessItem) =>
-  HarnessState.matchOrElse(
-    item.state,
-    {
-      NotInstalled: () => ({ value: "not found", requirement: null, faulty: true }),
-      UnsupportedVersion: ({ requirement }) => ({
-        value: versionLabel(item.version) ?? "installed",
-        requirement,
-        faulty: true,
-      }),
-    },
-    () => ({ value: versionLabel(item.version) ?? "installed", requirement: null, faulty: false }),
-  );
+export const installedVersion = (item: HarnessItem) => {
+  const reported = versionLabel(item.version);
+  return HarnessState.match<{
+    readonly value: string;
+    readonly requirement: string | null;
+    readonly faulty: boolean;
+  }>(item.state, {
+    Ready: () => ({ value: reported ?? "installed", requirement: null, faulty: false }),
+    NotInstalled: () => ({ value: "not found", requirement: null, faulty: true }),
+    UnsupportedVersion: ({ requirement }) => ({
+      value: reported ?? "installed",
+      requirement,
+      faulty: true,
+    }),
+    // Installed either way: what is missing is the login, not the binary.
+    NotSignedIn: () => ({ value: reported ?? "installed", requirement: null, faulty: false }),
+    Unavailable: () => ({ value: reported ?? "installed", requirement: null, faulty: false }),
+    // The probe reached no conclusion, so this cannot claim the binary is there.
+    Unknown: () => ({ value: reported ?? "not checked", requirement: null, faulty: true }),
+  });
+};

@@ -70,6 +70,26 @@ describe("installedVersion", () => {
     ).toEqual({ value: "v2.0.41", requirement: ">=2.1.0", faulty: true });
   });
 
+  it("does not claim an install for a probe that reached no conclusion", () => {
+    const state = HarnessState.cases.Unknown.make({ diagnostic: "the probe overran 10 seconds" });
+
+    expect(installedVersion(item(state, null))).toEqual({
+      value: "not checked",
+      requirement: null,
+      faulty: true,
+    });
+  });
+
+  it("keeps a missing login off the installed row, which is not the fault", () => {
+    const state = HarnessState.cases.NotSignedIn.make({ signIn: null });
+
+    expect(installedVersion(item(state, "2026.08.11"))).toEqual({
+      value: "v2026.08.11",
+      requirement: null,
+      faulty: false,
+    });
+  });
+
   it("says not found rather than showing a version it does not have", () => {
     expect(
       installedVersion(item(HarnessState.cases.NotInstalled.make({ diagnostic: "gone" }), null)).value,
