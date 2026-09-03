@@ -1,0 +1,19 @@
+docs/research/effect-schema-union-folds.md
+  s_05d02009edd117::t_a10938c2990542 1-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "466df948d763f3cde352fae7ac708f532e41cb91",
+  "prompts": {},
+  "sessions": {
+    "s_05d02009edd117": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-337f-7a12-9962-8895ebeb110c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
