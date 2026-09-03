@@ -1,0 +1,120 @@
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_284a296406e8cc::t_c74287c6cf4693 125
+packages/engine/src/read-model.ts
+  s_284a296406e8cc::t_c74287c6cf4693 20-24,49
+packages/engine/src/playbook.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 146-147
+configs/lint/tests/fixtures/no-wire-union-tag-comparison/valid-example.ts
+  s_284a296406e8cc::t_c74287c6cf4693 1-3
+packages/codex-cli/src/harness.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 34-35,49,144,297-299,367-368,442-446,452-456,535-538,558-564,577-580,599,638-644,668,686,704,726,745-751,803
+packages/claude-code/CONTEXT.md
+  s_284a296406e8cc::t_c74287c6cf4693 20
+apps/desktop/src/renderer/src/features/feed.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 1-32
+packages/cursor-acp/src/harness.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 29,129,393-396,430-433
+apps/cli/src/status.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 21,123-177
+  s_284a296406e8cc::t_ee77bced82880a 178
+biome.json
+  s_284a296406e8cc::t_c74287c6cf4693 60-61
+configs/lint/tests/fixtures/no-wire-union-tag-comparison/invalid-example.ts
+  s_284a296406e8cc::t_c74287c6cf4693 1-3
+packages/claude-code/src/harness.ts
+  s_284a296406e8cc::t_c74287c6cf4693 430
+apps/cli/src/classified-item.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 35-50
+packages/codex-cli/src/harness.ts
+  s_284a296406e8cc::t_c74287c6cf4693 328-329
+packages/engine/src/classify.ts
+  s_284a296406e8cc::t_c74287c6cf4693 13,53,64,75,78-83,122-128,135-141,171-172,211-215,254-279,287,295
+packages/engine/src/read-model.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 7,106-112,120,166,192,208,215-218
+packages/contracts/src/daemon.ts
+  s_284a296406e8cc::t_c74287c6cf4693 119-126,184
+packages/engine/src/recovery.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 226
+apps/desktop/src/renderer/src/features/item-tab.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 66,68,94
+packages/engine/src/classify.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 135,140-190,200-201,206,264-265,272,275-278,308,312-319,500,505,510,516,526,534-535,560-562,569-573
+packages/engine/src/executor.ts
+  s_284a296406e8cc::t_c74287c6cf4693 1,145,550-551,575,578-588,590,618-628,644-648,650-657,1267,1630
+apps/desktop/src/renderer/src/features/attention.ts
+  s_284a296406e8cc::t_c74287c6cf4693 51-53,56-58,60-74
+docs/research/effect-schema-union-folds.md
+  s_284a296406e8cc::t_c74287c6cf4693 1-84
+packages/contracts/src/daemon-event.ts
+  s_284a296406e8cc::t_c74287c6cf4693 13,24
+packages/codex-cli/CONTEXT.md
+  s_284a296406e8cc::t_c74287c6cf4693 20-23
+packages/engine/src/external-harness-runtime.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 27-32,62,234-235,442,496,626,698,752,783,816,836,843,892,910,949-950,955-982,1008,1030,1047,1067,1100,1121,1141,1171-1176
+configs/lint/tests/rules.test.mjs
+  s_284a296406e8cc::t_c74287c6cf4693 102-104
+  s_284a296406e8cc::t_9d4351b239936c 100-101
+configs/lint/no-wire-union-tag-comparison.grit
+  s_284a296406e8cc::t_c74287c6cf4693 1-76
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_284a296406e8cc::t_c74287c6cf4693 1,59,66
+apps/desktop/CONTEXT.md
+  s_284a296406e8cc::t_c74287c6cf4693 162
+packages/contracts/CONTEXT.md
+  s_284a296406e8cc::t_c74287c6cf4693 320-335,345,400-401
+packages/engine/src/external-harness-runtime.ts
+  s_284a296406e8cc::t_c74287c6cf4693 84,405,411-421,462,465,468,490,492,554
+packages/engine/src/reconcile.ts
+  s_284a296406e8cc::t_c74287c6cf4693 9,59,94,113
+packages/engine/src/provider-runner.ts
+  s_284a296406e8cc::t_c74287c6cf4693 1,47,62,238
+docs/adr/0004-tanstack-ai-as-execution-layer.md
+  s_284a296406e8cc::t_c74287c6cf4693 32-39
+apps/cli/src/status.ts
+  s_284a296406e8cc::t_c74287c6cf4693 10-11,70-73,81
+packages/engine/src/engine.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 1328,1334-1348
+apps/cli/src/classified-item.ts
+  s_284a296406e8cc::t_c74287c6cf4693 1,4-6,15
+packages/engine/src/run-recorder.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 75-76,181-194
+  s_284a296406e8cc::t_8de9994b54cf85 195-197
+packages/cursor-acp/CONTEXT.md
+  s_284a296406e8cc::t_c74287c6cf4693 16-17
+packages/engine/CONTEXT.md
+  s_284a296406e8cc::t_c74287c6cf4693 29,89,93
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 22,28,58-70,77,102
+packages/claude-code/src/harness.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 70,84,249,425,615-618
+  s_284a296406e8cc::t_4c55916abb72a3 576-579
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_284a296406e8cc::t_c74287c6cf4693 21,40-42
+packages/engine/src/commands.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 495-497
+packages/engine/src/executor.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 40,659,665,2149-2167,2696-2726
+  s_284a296406e8cc::t_eb3050deadd4e9 2727-2728
+packages/engine/src/playbook.ts
+  s_284a296406e8cc::t_c74287c6cf4693 139-140
+packages/engine/src/provider-runner.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 275-276
+packages/engine/src/scheduler.test.ts
+  s_284a296406e8cc::t_c74287c6cf4693 329
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "80854bdd84461e0939e4885c29cc074ee80df265",
+  "prompts": {},
+  "sessions": {
+    "s_284a296406e8cc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-337f-7e52-84de-18b62158f26a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
