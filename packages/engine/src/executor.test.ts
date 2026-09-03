@@ -37,6 +37,7 @@ import * as Stream from "effect/Stream";
 import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import * as Availability from "./availability";
 import type { EligibleWork } from "./classify";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import * as ContextAssembler from "./context-assembler";
@@ -655,12 +656,13 @@ const capturingRunner = (
   sessionKind: SessionKind = "opaque-handle",
   name: HarnessName = cursor,
   humanAttach: HarnessCapabilityProfile["session"]["humanAttach"] = "codex-cli",
+  affinity: HarnessCapabilityProfile["session"]["affinity"] = "runtime-host",
 ): TestRunner => ({
   make: (requests) => ({
     ...testRunnerDefaults,
     capabilities: {
       ...testRunnerDefaults.capabilities,
-      session: { ...testRunnerDefaults.capabilities.session, humanAttach },
+      session: { ...testRunnerDefaults.capabilities.session, affinity, humanAttach },
     },
     name,
     sessionKind,
@@ -1329,15 +1331,6 @@ function provide(
 
 const provideReplay = (runners: ReadonlyArray<TestRunner>) =>
   provide(runners, worktreeStubLayer, noopProviderLayer, trackerRecorder(), runnableReplayStages);
-
-const runFromFreshExecutor = () =>
-  Effect.flatMap(Executor.Executor, (executor) =>
-    execute(executor, implementWorkspace, implementItem).pipe(
-      Effect.andThen(RunLedger.RunLedger),
-      Effect.flatMap((ledger) => ledger.listRuns(1)),
-      Effect.flatMap(([run]) => (run ? Effect.succeed(run.id) : Effect.die("executor recorded no Run"))),
-    ),
-  ).pipe(Effect.provide(provide([runner(implementEvents)])));
 
 const harnessSwitchLayer = (alternates: ReadonlyArray<HarnessName>) =>
   provide(
@@ -2154,9 +2147,22 @@ describe("Executor.execute", () => {
   });
 
   it.effect("mints globally unique Run IDs across Executor lifetimes", () =>
-    Effect.all([runFromFreshExecutor(), runFromFreshExecutor()]).pipe(
-      Effect.map(([first, second]) => assert.notStrictEqual(first, second)),
-    ),
+    Effect.gen(function* () {
+      const firstExecutor = yield* Executor.make;
+      yield* execute(firstExecutor, implementWorkspace, implementItem);
+      const secondWorkItem = id("#155-run-id");
+      const secondExecutor = yield* Executor.make;
+      yield* execute(secondExecutor, implementWorkspace, {
+        ...implementItem,
+        id: secondWorkItem,
+        workContext: workContext(secondWorkItem),
+      });
+
+      const [second, first] = yield* (yield* RunLedger.RunLedger).listRuns(2);
+      assert.isDefined(first);
+      assert.isDefined(second);
+      assert.notStrictEqual(first.id, second.id);
+    }).pipe(Effect.provide(Layer.merge(provide([runner(implementEvents)]), Availability.Availability.layer))),
   );
 
   it.effect("correlates claimed-run library logs and spans", () => {
@@ -2685,6 +2691,39 @@ describe("Executor.execute", () => {
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((c) => c.method === "implemented"));
     }).pipe(Effect.provide(provide([capturingRunner(resumedImplementEvents)], resumeRecordingWorktree)));
+  });
+
+  it.effect("starts a fresh Session when recovery recreates the Sandbox lineage", () => {
+    const resumeItem: EligibleWork = {
+      ...implementItem,
+      resume: { session: previousSession, reason: "interrupted" },
+    };
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* seedResumeSession();
+      yield* execute(executor, implementWorkspace, resumeItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.notStrictEqual(request?.session, previousSession);
+      assert.include(request?.plan.messages[0]?.content ?? "", "Implement playbook");
+      assert.include(request?.plan.messages[0]?.content ?? "", "You were interrupted part-way through");
+      assert.include(request?.plan.messages[0]?.content ?? "", "prepared Worktree as ground truth");
+    }).pipe(
+      Effect.provide(
+        provide([
+          capturingRunner(
+            implementEvents,
+            Stream.empty,
+            "opaque-handle",
+            cursor,
+            "codex-cli",
+            "sandbox-lineage",
+          ),
+        ]),
+      ),
+    );
   });
 
   it.effect("cold-starts recovery when its selected harness changed", () => {

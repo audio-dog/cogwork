@@ -142,6 +142,7 @@ interface PreparedRun {
   readonly checkoutPath: string;
   readonly session: SessionId | null;
   readonly prompt: string;
+  readonly worktreeRecreated?: boolean;
   readonly resumeCandidate?: PreparedResumeCandidate;
 }
 
@@ -571,13 +572,22 @@ export const make = Effect.gen(function* () {
   const compatibleSession = Effect.fn("Executor.compatibleSession")(function* (
     ops: StageOps,
     session: Session | null,
+    worktreeRecreated: boolean,
   ) {
     if (!session) return null;
-    if (session.harness === ops.resolved.harness) return session.id;
-    yield* Effect.logInfo("started fresh after harness switch", {
+    if (session.harness !== ops.resolved.harness) {
+      yield* Effect.logInfo("started fresh after harness switch", {
+        ...(ops.branch ? { branch: ops.branch } : {}),
+        oldHarness: session.harness,
+        newHarness: ops.resolved.harness,
+      });
+      return null;
+    }
+    const affinity = harness.capabilities(session.harness)?.session.affinity;
+    if (!worktreeRecreated || affinity !== "sandbox-lineage") return session.id;
+    yield* Effect.logInfo("started fresh after Sandbox lineage was recreated", {
       ...(ops.branch ? { branch: ops.branch } : {}),
-      oldHarness: session.harness,
-      newHarness: ops.resolved.harness,
+      harness: session.harness,
     });
     return null;
   });
@@ -605,6 +615,17 @@ export const make = Effect.gen(function* () {
     return candidate.session.id;
   });
 
+  const promptForSessionDecision = (
+    sameHarness: boolean,
+    resumesPrevious: boolean,
+    fullPrompt: string,
+    continuationPrompt: string,
+  ) => {
+    if (!sameHarness) return fullPrompt;
+    if (resumesPrevious) return continuationPrompt;
+    return `${fullPrompt}\n\n${continuationPrompt}`;
+  };
+
   const planSession = Effect.fn("Executor.planSession")(function* (
     runId: RunId,
     workspace: RegisteredWorkspace,
@@ -620,10 +641,20 @@ export const make = Effect.gen(function* () {
     const policySession = ops.resumePolicy ? yield* resumeCandidateSession(currentOps, prepared) : previous;
     const preparedSessionId = prepared.session ?? policySession;
     const preparedSession = preparedSessionId ? yield* ledger.getSession(preparedSessionId) : null;
-    const compatiblePrevious = yield* compatibleSession(currentOps, preparedSession);
+    const compatiblePrevious = yield* compatibleSession(
+      currentOps,
+      preparedSession,
+      prepared.worktreeRecreated ?? false,
+    );
     const resumesPrevious = compatiblePrevious !== null;
-    const selectedOps = resumesPrevious ? currentOps : freshRecoveryOps(workspace, item, currentOps);
-    const prompt = resumesPrevious ? prepared.prompt : selectedOps.fullPrompt;
+    const sameHarness = preparedSession?.harness === currentOps.resolved.harness;
+    const selectedOps = sameHarness ? currentOps : freshRecoveryOps(workspace, item, currentOps);
+    const prompt = promptForSessionDecision(
+      sameHarness,
+      resumesPrevious,
+      selectedOps.fullPrompt,
+      prepared.prompt,
+    );
     const preparedRequest = yield* harnessRequest(
       workspace,
       currentPlanStage,
@@ -1233,6 +1264,7 @@ export const make = Effect.gen(function* () {
       checkoutPath: worktree.path,
       prompt: buildContinuationNudge(worktree.path),
       session,
+      worktreeRecreated: worktree.created,
     } satisfies PreparedRun;
   });
 
