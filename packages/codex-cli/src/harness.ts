@@ -375,6 +375,7 @@ const codexDescriptor = (
     transport: {
       instructionProjection: "system-prompt",
       mcpProjection: "native",
+      sandboxFileDiffs: true,
     },
     diagnostics: codexLaunchDiagnostics,
     turnDiagnostics: codexTurnDiagnostics,

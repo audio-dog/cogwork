@@ -132,6 +132,16 @@ export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
    * runtime keeps MCP servers and their secrets out of the Harness Workspace.
    */
   readonly mcpProjection?: "workspace" | "native";
+  /**
+   * Whether this descriptor's file activity comes from the Sandbox watcher rather
+   * than its own native events. A transport fact, deliberately not read off the
+   * capability profile: the profile describes delivery quality for a client, and
+   * letting a more honest label switch the watcher off is the wrong coupling.
+   *
+   * The watcher is also the only thing that dispatches `fileHooks`, so a descriptor
+   * that accepts hooks must set this or they are accepted and never called.
+   */
+  readonly sandboxFileDiffs?: boolean;
   readonly messages?: (
     request: ExternalHarnessResolvedRequest,
   ) => ReadonlyArray<ModelMessage | AdapterMessage<Adapter>>;
@@ -630,8 +640,7 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   const model = descriptor.projectModel(request);
   const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
   const adapter = descriptor.makeAdapter({ model, authentication: nativeAuthentication, request });
-  const fileEvents =
-    descriptor.capabilities.profile.fileEventFidelity === "best-effort" ? { diff: true } : false;
+  const fileEvents = descriptor.transport.sandboxFileDiffs ? { diff: true } : false;
   const sandbox = defineSandbox({
     id: `cogwork-${descriptor.name}`,
     provider,

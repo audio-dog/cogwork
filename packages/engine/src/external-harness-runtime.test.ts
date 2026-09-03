@@ -327,7 +327,7 @@ const descriptor = (
       session: { affinity: "runtime-host", fork: false, humanAttach: false },
       structuredOutput: "native",
       policyFidelity: "exact",
-      fileEventFidelity: "exact",
+      fileEventFidelity: "terminal-only",
       usageQuality: "estimated",
       readinessDiagnostics: true,
       journal: false,

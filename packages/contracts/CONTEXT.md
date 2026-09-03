@@ -368,7 +368,7 @@ The authoritative per-Run check that one registered Harness can execute the acce
 _Avoid_: Readiness, Run Plan resolution, fallback
 
 **Harness capability profile**:
-The runner-declared facts that let clients and preflight describe intentional native inequalities without guessing from a Harness name. They cover authentication bindings, Session affinity, option and structured-output support, policy fidelity, usage quality, readiness diagnostics, journal and takeover support, and file-event fidelity. File events are `exact`, `terminal-only`, `best-effort`, or `absent`; the label reports delivery quality, not whether a Run changed files.
+The runner-declared facts that let clients and preflight describe intentional native inequalities without guessing from a Harness name. They cover authentication bindings, Session affinity, option and structured-output support, policy fidelity, usage quality, readiness diagnostics, journal and takeover support, and file-event fidelity. File events are `terminal-only`, `best-effort`, or `absent`; the label reports delivery quality, not whether a Run changed files.
 _Avoid_: Feature flag, fallback policy, durability activation
 
 **Harness execution boundary**:
