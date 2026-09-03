@@ -691,9 +691,9 @@ layer(NodeServices.layer)((it) => {
         yield* poke(
           storePath,
           `INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
-           VALUES ('model', 'operation', 'coding', 'implement', 'settings-profile', '', '"openai/gpt-5"');
-           INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
-           VALUES ('model', 'operation', 'coding', 'verify', 'settings-profile', '', '"ignored"');`,
+           VALUES
+             ('model', 'operation', 'coding', 'implement', 'settings-profile', '', '"openai/gpt-5"'),
+             ('model', 'operation', 'coding', 'verify', 'settings-profile', '', '"ignored"');`,
         );
 
         const reloaded = yield* readControlStore(storePath).pipe(Effect.withLogger(logProbe.logger));
