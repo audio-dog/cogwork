@@ -1,5 +1,5 @@
 import { createHash, type Hash } from "node:crypto";
-import type { AgUiEvent } from "@cogwork/contracts";
+import { type AgUiEvent, agUiFileDiffEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
 import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -10,7 +10,7 @@ import * as Stream from "effect/Stream";
 import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
 
-export const FILE_DIFF_EVENT = "sandbox.file.diff";
+export { FILE_DIFF_EVENT };
 export const fileDiffExecDuration = Metric.timer("cogwork_file_diff_git_diff_exec_duration", {
   description: "Time spent executing git diff for a file event.",
 });
@@ -125,7 +125,7 @@ const decodeUtf8Prefix = (bytes: Uint8Array): string => {
   }
 };
 
-const boundedDiff = (diff: string) => {
+export const boundedDiff = (diff: string) => {
   const bytes = Buffer.from(diff);
   if (bytes.length <= fileDiffMaxBytes) return diff;
   const available = fileDiffMaxBytes - Buffer.byteLength(diffTruncationMarker);
@@ -274,11 +274,8 @@ const streamDiff = Effect.fn("Tools.streamDiff")(function* (
   return { diff: diffFromOutput(result.stdout), fingerprint: result.stdout.fingerprint };
 });
 
-export const fileDiffEvent = (path: string, diff: string): AgUiEvent => ({
-  type: "CUSTOM",
-  name: FILE_DIFF_EVENT,
-  value: { path, diff: boundedDiff(diff) },
-});
+export const fileDiffEvent = (path: string, diff: string): AgUiEvent =>
+  agUiFileDiffEvent(path, boundedDiff(diff));
 
 export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
   sandbox: WorktreeSandbox,
@@ -291,7 +288,7 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
 
 const IGNORED_SEGMENTS = [".git", "node_modules", ".repos"];
 
-const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
+export const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
 
 const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
   stream.pipe(

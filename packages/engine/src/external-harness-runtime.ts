@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import {
   AgUiEvent,
+  agUiIsFileDiffEvent,
+  FILE_DIFF_EVENT,
   type HarnessName,
   type RunId,
   type RunPlanInstruction,
@@ -23,6 +25,7 @@ import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   bearer,
   createSecrets,
+  DEFAULT_WORKSPACE_ROOT,
   defineSandbox,
   defineWorkspace,
   getSandbox,
@@ -63,6 +66,7 @@ import {
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
 import { SessionStore } from "./session-store";
+import { boundedDiff, ignored } from "./tools/file-diff-feed";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
 type AdapterOptions<Adapter extends AnyTextAdapter> = Adapter["~types"]["providerOptions"];
@@ -128,6 +132,16 @@ export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
    * runtime keeps MCP servers and their secrets out of the Harness Workspace.
    */
   readonly mcpProjection?: "workspace" | "native";
+  /**
+   * Whether this descriptor's file activity comes from the Sandbox watcher rather
+   * than its own native events. A transport fact, deliberately not read off the
+   * capability profile: the profile describes delivery quality for a client, and
+   * letting a more honest label switch the watcher off is the wrong coupling.
+   *
+   * The watcher is also the only thing that dispatches `fileHooks`, so a descriptor
+   * that accepts hooks must set this or they are accepted and never called.
+   */
+  readonly sandboxFileDiffs?: boolean;
   readonly messages?: (
     request: ExternalHarnessResolvedRequest,
   ) => ReadonlyArray<ModelMessage | AdapterMessage<Adapter>>;
@@ -508,6 +522,56 @@ const outputCharacters = (event: AgUiEvent) =>
     ? (event.delta?.length ?? 0)
     : 0;
 
+const relativeToRoot = (path: string, root: string) => {
+  const normalizedPath = path.replace(/^\/+/, "");
+  const normalizedRoot = root.replace(/^\/+|\/+$/g, "");
+  if (normalizedPath === normalizedRoot) return ".";
+  const prefix = `${normalizedRoot}/`;
+  return normalizedPath.startsWith(prefix) ? normalizedPath.slice(prefix.length) : path;
+};
+
+const normalizeFileDiffValue = (value: unknown, checkoutPath: string) => {
+  if (typeof value !== "object" || value === null || !("path" in value)) return value;
+  if (typeof value.path !== "string") return value;
+  const workspacePath = relativeToRoot(value.path, DEFAULT_WORKSPACE_ROOT);
+  return { ...value, path: relativeToRoot(workspacePath, checkoutPath) };
+};
+
+const normalizeFileEvent = (event: AgUiEvent, checkoutPath: string) => {
+  if (!AgUiEvent.guards.CUSTOM(event)) return event;
+  const name = event.name === "file.changed" ? FILE_DIFF_EVENT : event.name;
+  if (name !== FILE_DIFF_EVENT) return event;
+  const normalized = { ...event, name, value: normalizeFileDiffValue(event.value, checkoutPath) };
+  if (!agUiIsFileDiffEvent(normalized)) return event;
+  // A native whole-worktree diff is unbounded at the source. The owned diff feed
+  // holds the same client contract to one bound, so hold this path to it too
+  // rather than persisting and rendering a multi-megabyte string.
+  return { ...normalized, value: { ...normalized.value, diff: boundedDiff(normalized.value.diff) } };
+};
+
+// `.tanstack-*` at the checkout root is TanStack's reserved scratch namespace — the
+// Workspace projection marker, the per-run output schema, and the projected skills
+// tree all land there, and none of them are the agent's work. Anchored to a single
+// root segment so it cannot also hide a nested file the agent did write.
+const reservedScratch = /^\.tanstack-[^/]*$/;
+
+const publicFileEvent = (event: AgUiEvent) => {
+  // A native file event that could not carry the shared contract keeps its native
+  // name through `normalizeFileEvent`. TanStack's payload makes `diff` optional, so
+  // this is a real shape, and it has no diff to show — drop it rather than persist
+  // an event under a name no client reads.
+  if (AgUiEvent.guards.CUSTOM(event) && event.name === "file.changed") return false;
+  if (!agUiIsFileDiffEvent(event)) return true;
+  // A touched-but-unchanged file still reports a change; an empty diff would render
+  // as an activity entry with nothing in it.
+  if (event.value.diff === "") return false;
+  if (reservedScratch.test(event.value.path)) return false;
+  // The Sandbox watcher only skips `.git` and `node_modules`, and `defineSandbox`
+  // exposes no ignore list. Share the owned feed's segments so one list serves both
+  // ends of the same client contract.
+  return !ignored(event.value.path);
+};
+
 const preserveUsage: ExternalHarnessUsageEstimator = (_request, event) => event;
 
 const withUsage = (
@@ -585,18 +649,14 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   const model = descriptor.projectModel(request);
   const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
   const adapter = descriptor.makeAdapter({ model, authentication: nativeAuthentication, request });
-  const watchesFiles =
-    inputs.fileHooks?.onFile !== undefined ||
-    inputs.fileHooks?.onFileCreate !== undefined ||
-    inputs.fileHooks?.onFileChange !== undefined ||
-    inputs.fileHooks?.onFileDelete !== undefined;
+  const fileEvents = descriptor.transport.sandboxFileDiffs ? { diff: true } : false;
   const sandbox = defineSandbox({
     id: `cogwork-${descriptor.name}`,
     provider,
     workspace: defineWorkspace(workspaceDefinition),
     lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
     ...(policy ? { policy } : {}),
-    fileEvents: watchesFiles,
+    fileEvents,
     ...(inputs.fileHooks ? { hooks: inputs.fileHooks } : {}),
   });
   const abortController = new AbortController();
@@ -649,6 +709,8 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                     descriptor.turnDiagnostics ?? descriptor.diagnostics,
                   ).pipe(
+                    Stream.map((event) => normalizeFileEvent(event, resolved.checkout.path)),
+                    Stream.filter(publicFileEvent),
                     Stream.map((event) => scrubEvent(event, secretValues)),
                     Stream.mapError((error) => scrubHarnessError(error, secretValues)),
                     Stream.ensuring(Effect.sync(() => opened.abortController.abort())),

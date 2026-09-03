@@ -2,6 +2,8 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
   AgUiEvent,
+  agUiFileDiffEvent,
+  agUiIsFileDiffEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   agUiIsTerminal,
@@ -101,5 +103,14 @@ describe("AgUiEvent", () => {
       totalTokens: 5,
       estimated: true,
     });
+  });
+
+  it("owns the shared file-diff event contract", () => {
+    const event = agUiFileDiffEvent("src/index.ts", "@@ changed @@");
+
+    assert.isTrue(agUiIsFileDiffEvent(event));
+    if (!agUiIsFileDiffEvent(event)) return assert.fail("expected file diff");
+    assert.deepStrictEqual(event.value, { path: "src/index.ts", diff: "@@ changed @@" });
+    assert.isFalse(agUiIsFileDiffEvent({ type: "CUSTOM", name: "sandbox.file.diff", value: { path: 1 } }));
   });
 });

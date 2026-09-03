@@ -1,4 +1,5 @@
 import {
+  agUiIsFileDiffEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   HarnessName,
@@ -356,7 +357,7 @@ describe("codexRunner", () => {
           session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
           structuredOutput: "native",
           policyFidelity: "profile-only",
-          fileEventFidelity: "sandbox",
+          fileEventFidelity: "best-effort",
           usageQuality: "metered",
           journal: true,
           takeover: true,
@@ -517,27 +518,37 @@ describe("codexRunner", () => {
       ),
     );
 
-    it.effect("preserves native events, metered usage, and one structured result", () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const handle = yield* createSandbox();
-          const events = yield* runInRepository(Harness.make([runner()]), handle);
-          const capture = yield* structuredCapture(events);
+    it.effect(
+      "preserves native events, metered usage, and one structured result",
+      () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const handle = yield* createSandbox();
+            const events = yield* runInRepository(
+              Harness.make([runner({ codexExecutable: fakeCodexExecutable(" --emit-change") })]),
+              handle,
+            );
+            const capture = yield* structuredCapture(events);
 
-          assert.lengthOf(structuredCompletions(events), 1);
-          assert.include(capture.args, "--output-schema");
-          assert.deepNestedInclude(
-            events.find((event) => event.type === EventType.RUN_STARTED),
-            { runId, threadId: freshSession },
-          );
-          assert.isTrue(events.some((event) => event.type === EventType.TEXT_MESSAGE_CONTENT));
-          assert.isTrue(events.some((event) => event.type === EventType.CUSTOM));
-          assert.deepNestedInclude(events.at(-1), {
-            type: EventType.RUN_FINISHED,
-            usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          });
-        }),
-      ),
+            assert.lengthOf(structuredCompletions(events), 1);
+            assert.include(capture.args, "--output-schema");
+            assert.deepNestedInclude(
+              events.find((event) => event.type === EventType.RUN_STARTED),
+              { runId, threadId: freshSession },
+            );
+            assert.isTrue(events.some((event) => event.type === EventType.TEXT_MESSAGE_CONTENT));
+            assert.isTrue(events.some((event) => event.type === EventType.CUSTOM));
+            const fileDiff = events.find(agUiIsFileDiffEvent);
+            if (!fileDiff) return yield* Effect.die(new Error("Codex emitted no file diff"));
+            assert.strictEqual(fileDiff.value.path, "tracked.txt");
+            assert.include(fileDiff.value.diff, "+changed by Codex");
+            assert.deepNestedInclude(events.at(-1), {
+              type: EventType.RUN_FINISHED,
+              usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+            });
+          }),
+        ),
+      10_000,
     );
 
     it.effect("resumes through the native Codex thread handle", () =>

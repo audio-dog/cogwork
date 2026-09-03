@@ -1,4 +1,6 @@
 import {
+  agUiIsFileDiffEvent,
+  FILE_DIFF_EVENT,
   HarnessName,
   RunId,
   RunPlan,
@@ -38,6 +40,7 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { afterEach, vi } from "vitest";
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
@@ -57,6 +60,8 @@ import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
+
+afterEach(() => vi.restoreAllMocks());
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
 const freshSession = Schema.decodeSync(SessionId)("sess-external-fresh");
@@ -322,7 +327,7 @@ const descriptor = (
       session: { affinity: "runtime-host", fork: false, humanAttach: false },
       structuredOutput: "native",
       policyFidelity: "exact",
-      fileEventFidelity: "sandbox",
+      fileEventFidelity: "terminal-only",
       usageQuality: "estimated",
       readinessDiagnostics: true,
       journal: false,
@@ -806,6 +811,12 @@ describe("external Harness runtime", () => {
           },
           {
             type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/file.ts", diff: "diff --git a/file.ts b/file.ts" },
+            metadata: { controlled: { fidelity: "terminal" } },
+          },
+          {
+            type: EventType.CUSTOM,
             name: "structured-output.complete",
             value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
           },
@@ -821,6 +832,13 @@ describe("external Harness runtime", () => {
         const diagnostic = output.find((event) => event.name === "controlled.diagnostic");
         assert.deepStrictEqual(diagnostic?.value, { native: true });
         assert.deepStrictEqual(diagnostic?.metadata, { controlled: { trace: "trace-147" } });
+        const fileDiff = output.find((event) => event.name === FILE_DIFF_EVENT);
+        assert.deepStrictEqual(fileDiff?.value, {
+          path: "file.ts",
+          diff: "diff --git a/file.ts b/file.ts",
+        });
+        assert.deepStrictEqual(fileDiff?.metadata, { controlled: { fidelity: "terminal" } });
+        assert.isFalse(output.some((event) => event.name === "file.changed"));
         const finished = output.find((event) => event.type === EventType.RUN_FINISHED);
         assert.deepStrictEqual(finished?.usage, {
           promptTokens: 2,
@@ -852,6 +870,91 @@ describe("external Harness runtime", () => {
           return assert.fail("adapter received no converted JSON Schema");
         }
         assert.strictEqual(outputSchema.additionalProperties, false);
+      }),
+    );
+
+    it.effect("bounds, drops, and hides file diffs on the shared client contract", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const oversized = "d".repeat(80 * 1024);
+        const events: ReadonlyArray<StreamChunk> = [
+          { type: EventType.RUN_STARTED, threadId: "session-147", runId: "run-external-test" },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/big.ts", diff: oversized },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/touched.ts", diff: "" },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/.tanstack-projected-abc123", diff: "diff --git a/x b/x" },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: {
+              path: "/checkout/.tanstack-output-schema-run-1.json",
+              diff: "diff --git a/y b/y",
+            },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/src/.tanstack-nested.ts", diff: "diff --git a/n b/n" },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout", diff: "diff --git a/z b/z" },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: {
+              path: "/checkout/.repos/effect/packages/effect/src/Stream.ts",
+              diff: "diff --git a/r b/r",
+            },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/node_modules/left-pad/index.js", diff: "diff --git a/m b/m" },
+          },
+          // TanStack makes `diff` optional, so a file event with no diff is a real
+          // shape. It cannot carry the shared contract and must not survive under
+          // its native name.
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: { path: "/checkout/nodiff.ts", type: "change", timestamp: 1 },
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "structured-output.complete",
+            value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
+          },
+          { type: EventType.RUN_FINISHED, threadId: "session-147", runId: "run-external-test" },
+        ];
+        const output = yield* makeHarness(descriptor(events, probe), [])
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
+          .pipe(Stream.runCollect);
+        const diffs = output.filter(agUiIsFileDiffEvent);
+
+        assert.deepStrictEqual(
+          diffs.map((event) => event.value.path),
+          ["big.ts", "src/.tanstack-nested.ts", "."],
+        );
+        // Nothing escapes under the native name, whatever the payload was.
+        assert.isFalse(output.some((event) => event.name === "file.changed"));
+        const big = diffs[0];
+        if (!big) return assert.fail("the oversized diff was dropped");
+        assert.isBelow(Buffer.byteLength(big.value.diff), Buffer.byteLength(oversized));
+        assert.include(big.value.diff, "diff truncated by Cogwork");
       }),
     );
 
@@ -891,6 +994,8 @@ describe("external Harness runtime", () => {
         const output = yield* harness
           .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runCollect);
+        const options = probe.chatOptions[0];
+        if (!options) return yield* Effect.die("external Harness opened no chat");
 
         assert.strictEqual(output[0]?.type, EventType.RUN_STARTED);
         assert.strictEqual(output[0]?.threadId, "RUN");
@@ -898,6 +1003,13 @@ describe("external Harness runtime", () => {
         assert.deepStrictEqual(output[1]?.value, {
           message: "rejected [redacted] and [redacted]",
         });
+        // The native adapter's own logger is the one channel cogwork cannot scrub on
+        // the way out, so a request carrying secrets has to silence it outright. Drop
+        // the `debug: false` wiring and this logger writes the secret to the console.
+        const logs: Array<unknown> = [];
+        vi.spyOn(console, "error").mockImplementation((...values) => logs.push(values));
+        options.logger.errors("native adapter failed", { secret });
+        assert.notInclude(yield* encodeJson(logs), secret);
         assert.notInclude(yield* encodeJson(workspaces), secret);
 
         const record: RunRecord = {

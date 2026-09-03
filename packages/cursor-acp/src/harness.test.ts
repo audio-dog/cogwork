@@ -291,7 +291,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
     assert.isFalse(runner.capabilities.session.humanAttach);
     assert.strictEqual(runner.capabilities.structuredOutput, "prompt-and-parse");
     assert.strictEqual(runner.capabilities.policyFidelity, "none");
-    assert.strictEqual(runner.capabilities.fileEventFidelity, "none");
+    assert.strictEqual(runner.capabilities.fileEventFidelity, "absent");
     assert.isFalse(runner.capabilities.journal);
     assert.isFalse(runner.capabilities.takeover);
     assert.isTrue(runner.execution.nonInteractive);

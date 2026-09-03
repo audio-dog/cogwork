@@ -36,4 +36,8 @@ _Avoid_: Daemon startup check, provider fallback
 The runner passes the engine-owned root JSON Schema to Claude Code and returns one terminal `structured-output.complete` event. The executor, not this package, decodes the result before coordination changes.
 _Avoid_: Text-result parser, result footer
 
+**Terminal file diff**:
+Claude emits one native whole-worktree diff at the end of a turn. The shared runtime renames it to `sandbox.file.diff` without changing its payload or metadata. The capability profile therefore says `terminal-only`, not exact change delivery.
+_Avoid_: Live file watcher, exact file events
+
 Run `pnpm --filter @cogwork/claude-code test:claude-live` only when an authenticated Claude Code CLI is available. It is the opt-in compatibility probe for fresh launch, session resume, and structured output.

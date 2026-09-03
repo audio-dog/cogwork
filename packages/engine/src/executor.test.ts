@@ -589,7 +589,7 @@ const testRunnerDefaults = {
     session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
     structuredOutput: "none",
     policyFidelity: "exact",
-    fileEventFidelity: "none",
+    fileEventFidelity: "absent",
     usageQuality: "none",
     readinessDiagnostics: true,
     journal: false,

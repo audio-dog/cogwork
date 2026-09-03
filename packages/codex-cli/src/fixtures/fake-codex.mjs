@@ -37,6 +37,12 @@ if (process.argv.includes("login") && process.argv.includes("status")) {
 }
 
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
+if (process.argv.includes("--emit-change")) {
+  await writeFile(`${process.cwd()}/tracked.txt`, "changed by Codex\n");
+  // Hold the process open past two poll ticks so the watcher observes the write
+  // before the run finishes.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2_100);
+}
 // Resolve the bearer exactly as Codex would: read the env var NAMED by the
 // `bearer_token_env_var` config override, so a drift between the argv name and the
 // delivered environment fails the capture instead of passing on a prefix scan.

@@ -143,7 +143,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
       session: { affinity: "portable", fork: false, humanAttach: false },
       structuredOutput: "native",
       policyFidelity: "exact",
-      fileEventFidelity: "native",
+      fileEventFidelity: "best-effort",
       usageQuality: "metered",
       readinessDiagnostics: true,
       journal: false,

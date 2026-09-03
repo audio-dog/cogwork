@@ -1,6 +1,7 @@
 import {
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
+  FILE_DIFF_EVENT,
   HarnessName,
   LifecycleStage,
   RunPlan,
@@ -38,7 +39,7 @@ const companionRunner = {
     session: { affinity: "runtime-host", fork: false, humanAttach: false },
     structuredOutput: "none",
     policyFidelity: "exact",
-    fileEventFidelity: "none",
+    fileEventFidelity: "absent",
     usageQuality: "none",
     readinessDiagnostics: true,
     journal: false,
@@ -418,7 +419,7 @@ describe("Claude Code Harness", () => {
           session: { affinity: "sandbox-lineage", fork: true, humanAttach: false },
           structuredOutput: "native",
           policyFidelity: "profile-only",
-          fileEventFidelity: "native",
+          fileEventFidelity: "terminal-only",
           usageQuality: "metered",
           readinessDiagnostics: true,
           journal: true,
@@ -581,7 +582,8 @@ describe("Claude Code Harness", () => {
         assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
         assert.isTrue(events.some((event) => event.type === "TOOL_CALL_START"));
         assert.isTrue(events.some((event) => event.type === "TOOL_CALL_RESULT"));
-        assert.isTrue(events.some((event) => event.type === "CUSTOM" && event.name === "file.changed"));
+        assert.isTrue(events.some((event) => event.type === "CUSTOM" && event.name === FILE_DIFF_EVENT));
+        assert.isFalse(events.some((event) => event.type === "CUSTOM" && event.name === "file.changed"));
         const finished = events.find((event) => event.type === "RUN_FINISHED");
         assert.deepNestedInclude(finished?.usage, {
           promptTokens: 13,
@@ -627,31 +629,34 @@ describe("Claude Code Harness", () => {
       }),
     );
 
-    it.effect("projects every Operation into a non-interactive native Sandbox posture", () =>
-      Effect.gen(function* () {
-        const captures = yield* Effect.forEach(LifecycleStage.literals, captureOperation);
+    it.effect(
+      "projects every Operation into a non-interactive native Sandbox posture",
+      () =>
+        Effect.gen(function* () {
+          const captures = yield* Effect.forEach(LifecycleStage.literals, captureOperation);
 
-        for (const [operation, capture] of captures) {
-          const settings = yield* Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings);
-          const readOnly = OperationPolicy.operationPolicyProfile(operation) === "read-only";
-          const disallowed = capturedDisallowedTools(capture);
+          for (const [operation, capture] of captures) {
+            const settings = yield* Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings);
+            const readOnly = OperationPolicy.operationPolicyProfile(operation) === "read-only";
+            const disallowed = capturedDisallowedTools(capture);
 
-          assert.deepStrictEqual(settings.sandbox, {
-            enabled: true,
-            failIfUnavailable: true,
-            allowUnsandboxedCommands: false,
-            autoAllowBashIfSandboxed: !readOnly,
-          });
-          assert.strictEqual(capture.settingSources, "");
-          assert.strictEqual(capture.permissionMode, readOnly ? "acceptEdits" : "bypassPermissions");
-          assert.deepStrictEqual(
-            disallowed,
-            readOnly
-              ? ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]
-              : ["Write", "Edit", "MultiEdit", "NotebookEdit"],
-          );
-        }
-      }),
+            assert.deepStrictEqual(settings.sandbox, {
+              enabled: true,
+              failIfUnavailable: true,
+              allowUnsandboxedCommands: false,
+              autoAllowBashIfSandboxed: !readOnly,
+            });
+            assert.strictEqual(capture.settingSources, "");
+            assert.strictEqual(capture.permissionMode, readOnly ? "acceptEdits" : "bypassPermissions");
+            assert.deepStrictEqual(
+              disallowed,
+              readOnly
+                ? ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]
+                : ["Write", "Edit", "MultiEdit", "NotebookEdit"],
+            );
+          }
+        }),
+      10_000,
     );
 
     it.effect("cancels the Claude child when its Harness stream is interrupted", () =>

@@ -388,7 +388,7 @@ export const replayRunner = Effect.fn("ReplayHarness.runner")(function* (options
             session: { affinity: "portable", fork: false, humanAttach: false },
             structuredOutput: "native",
             policyFidelity: "exact",
-            fileEventFidelity: "none",
+            fileEventFidelity: "absent",
             usageQuality: "none",
             readinessDiagnostics: true,
             journal: false,

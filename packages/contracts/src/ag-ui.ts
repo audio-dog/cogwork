@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 import type { TokenUsage } from "./run";
 
+export const FILE_DIFF_EVENT = "sandbox.file.diff";
+
 const anyExtraKeys = Schema.Record(Schema.String, Schema.Unknown);
 const SessionHandleValue = Schema.Struct({ sessionId: Schema.String });
 const SessionHandleEventName = Schema.TemplateLiteral([Schema.String, ".session-id"]);
@@ -121,6 +123,20 @@ export const AgUiEvent = Object.assign(AgUiEventSchema, {
   matchOrElse,
 });
 export type AgUiEvent = typeof AgUiEvent.Type;
+
+export const FileDiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String });
+export type FileDiffValue = typeof FileDiffValue.Type;
+
+const AgUiFileDiffEvent = eventVariant("CUSTOM", {
+  name: Schema.Literal(FILE_DIFF_EVENT),
+  value: FileDiffValue,
+});
+export type AgUiFileDiffEvent = typeof AgUiFileDiffEvent.Type;
+
+export const agUiIsFileDiffEvent = Schema.is(AgUiFileDiffEvent);
+
+export const agUiFileDiffEvent = (path: string, diff: string) =>
+  ({ type: "CUSTOM", name: FILE_DIFF_EVENT, value: { path, diff } }) satisfies AgUiFileDiffEvent;
 
 export const StructuredOutputCompleteValue = Schema.Struct({
   object: Schema.Unknown,
