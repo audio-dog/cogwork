@@ -18,14 +18,7 @@ export interface ItemStateDescriptor {
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
-const calmDescriptor = (
-  item: Extract<ClassifiedItem, { _tag: "Eligible" | "Claimed" }>,
-  verb: "Queued" | "Working",
-  stage: LifecycleStage | null,
-): ItemStateDescriptor => {
-  if (item.pr?.review === "ready") {
-    return { label: "Ready to merge", tone: "ready", running: false };
-  }
+const calmDescriptor = (verb: "Queued" | "Working", stage: LifecycleStage | null): ItemStateDescriptor => {
   return { label: stage ? `${verb} · ${stage}` : verb, tone: "muted", running: false };
 };
 
@@ -44,8 +37,9 @@ export function describeItemState(item: ClassifiedItem, run: RunSummary | null):
       tone: "muted",
       running: false,
     }),
-    Eligible: (eligible) => calmDescriptor(eligible, "Queued", eligible.stage),
-    Claimed: (claimed) => calmDescriptor(claimed, "Working", claimed.claim.stage ?? null),
+    ReadyToMerge: () => ({ label: "Ready to merge", tone: "ready", running: false }),
+    Eligible: (eligible) => calmDescriptor("Queued", eligible.stage),
+    Claimed: (claimed) => calmDescriptor("Working", claimed.claim.stage ?? null),
   });
 }
 
