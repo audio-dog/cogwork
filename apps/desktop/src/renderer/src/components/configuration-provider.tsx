@@ -146,11 +146,7 @@ export const contributionSettingState = (
 };
 
 export const retainConfigurationBoard = (board: Board | null, result: BoardResult) =>
-  BoardResult.$match(result, {
-    Initial: () => board,
-    Failure: () => board,
-    Success: ({ board: current }) => current,
-  });
+  BoardResult.$is("Success")(result) ? result.board : board;
 
 export function useConfiguration() {
   const value = use(ConfigurationContext);
