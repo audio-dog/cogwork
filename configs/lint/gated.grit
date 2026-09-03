@@ -1,0 +1,106 @@
+language js(typescript, jsx)
+
+// The two rules that must know what the file imports, sharing one pass.
+//
+// Neither can use a bare top-level pattern: `Effect.Do` and a `_tag` comparison are
+// only violations when the name comes from an import, so each needs the file's
+// import list. See issue #433.
+//
+// Each wire-union family keeps its own import gate paired with its own tag set.
+// Do not merge them into one regex over every tag: a file that imports one family
+// and compares a different union's discriminant would then be reported wrongly.
+// The outer import test is only a pre-filter — a file importing no family cannot
+// match any branch below, so it skips all four comparison walks.
+
+file($body) where {
+  any {
+    and {
+      or {
+        $body <: contains `"effect"`,
+        $body <: contains JsImport() as $effectImport where {
+          $effectImport <: r"(?s).*\"(?:effect|effect/[A-Za-z0-9_]+|@effect-atom/atom-react)\".*"
+        }
+      },
+      $body <: contains `Effect.Do` as $effectDo where {
+        register_diagnostic(span=$effectDo, message="Rule: avoid Effect.Do. Why: it pushes Effect code toward imperative builder choreography. Fix: use one flat pipe-based Effect flow or one direct top-level Effect.gen with direct yields, not nested generators or wrapper helpers.", severity="error")
+      }
+    },
+    and {
+      $body <: contains JsImport() as $familyImport where {
+        $familyImport <: r"(?s).*(?:ClassifiedItem|WorkspaceState|DaemonEvent|PollState).*"
+      },
+      or {
+        and {
+          $body <: contains JsImport() as $classifiedImport where {
+            $classifiedImport <: contains `ClassifiedItem`
+          },
+          $body <: contains bubble or {
+            `$value._tag === $tag` as $comparison,
+            `$value._tag !== $tag` as $comparison,
+            `$value?._tag === $tag` as $comparison,
+            `$value?._tag !== $tag` as $comparison,
+            `$tag === $value._tag` as $comparison,
+            `$tag !== $value._tag` as $comparison,
+            `$tag === $value?._tag` as $comparison,
+            `$tag !== $value?._tag` as $comparison
+          } where {
+            $tag <: r"^\"(?:Eligible|Claimed|Blocked|NeedsHuman)\"$",
+            register_diagnostic(span=$comparison, message="Rule: do not compare a wire-crossing union discriminant by hand. Why: the comparison is not exhaustive and does not use the generated type guard. Fix: use the union's generated match for a fold or guards for a single-variant test.", severity="error")
+          }
+        },
+        and {
+          $body <: contains JsImport() as $workspaceImport where {
+            $workspaceImport <: contains `WorkspaceState`
+          },
+          $body <: contains bubble or {
+            `$value._tag === $tag` as $comparison,
+            `$value._tag !== $tag` as $comparison,
+            `$value?._tag === $tag` as $comparison,
+            `$value?._tag !== $tag` as $comparison,
+            `$tag === $value._tag` as $comparison,
+            `$tag !== $value._tag` as $comparison,
+            `$tag === $value?._tag` as $comparison,
+            `$tag !== $value?._tag` as $comparison
+          } where {
+            $tag <: r"^\"(?:Registered|Failed)\"$",
+            register_diagnostic(span=$comparison, message="Rule: do not compare a wire-crossing union discriminant by hand. Why: the comparison is not exhaustive and does not use the generated type guard. Fix: use the union's generated match for a fold or guards for a single-variant test.", severity="error")
+          }
+        },
+        and {
+          $body <: contains JsImport() as $eventImport where { $eventImport <: contains `DaemonEvent` },
+          $body <: contains bubble or {
+            `$value._tag === $tag` as $comparison,
+            `$value._tag !== $tag` as $comparison,
+            `$value?._tag === $tag` as $comparison,
+            `$value?._tag !== $tag` as $comparison,
+            `$tag === $value._tag` as $comparison,
+            `$tag !== $value._tag` as $comparison,
+            `$tag === $value?._tag` as $comparison,
+            `$tag !== $value?._tag` as $comparison
+          } where {
+            $tag <: r"^\"(?:SeedEnd|RunActivity|ItemChanged|ItemRemoved|RunChanged|WorkspaceChanged|WorkspaceRemoved|ControlStoreChanged|PluginsChanged|ConnectionsChanged|SchedulerChanged)\"$",
+            register_diagnostic(span=$comparison, message="Rule: do not compare a wire-crossing union discriminant by hand. Why: the comparison is not exhaustive and does not use the generated type guard. Fix: use the union's generated match for a fold or guards for a single-variant test.", severity="error")
+          }
+        },
+        and {
+          $body <: contains JsImport() as $pollImport where {
+            or { $pollImport <: contains `PollState`, $pollImport <: contains `WorkspaceState` }
+          },
+          $body <: contains bubble or {
+            `$value.status === $tag` as $comparison,
+            `$value.status !== $tag` as $comparison,
+            `$value?.status === $tag` as $comparison,
+            `$value?.status !== $tag` as $comparison,
+            `$tag === $value.status` as $comparison,
+            `$tag !== $value.status` as $comparison,
+            `$tag === $value?.status` as $comparison,
+            `$tag !== $value?.status` as $comparison
+          } where {
+            $tag <: r"^\"(?:ok|pending|paused)\"$",
+            register_diagnostic(span=$comparison, message="Rule: do not compare a wire-crossing union discriminant by hand. Why: the comparison is not exhaustive and does not use the generated type guard. Fix: use the union's generated match for a fold or guards for a single-variant test.", severity="error")
+          }
+        }
+      }
+    }
+  }
+}

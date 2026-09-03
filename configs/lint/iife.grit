@@ -1,0 +1,28 @@
+language js(typescript, jsx)
+
+// These dropped the Effect import gate the originals carried, so they now apply
+// repository-wide rather than only to files importing Effect. That is deliberate:
+// an IIFE hides sequencing wherever it appears, and the gate cost more than the
+// rules did. Nothing in the repository relied on the narrower reach.
+//
+// A top-level call root lets Biome reject non-matching nodes by kind. The earlier
+// `file($body) where { contains ... }` form re-walked every file instead, which cost
+// about thirty times as much. See issue #433.
+
+any {
+  `($fn)($args)` as $call where {
+    or {
+      $fn <: `($params) => $expr`,
+      $fn <: `($params) => { $block }`,
+      $fn <: `$param => $expr`,
+      $fn <: `$param => { $block }`,
+      $fn <: `function ($params) { $block }`,
+      $fn <: `function $name($params) { $block }`
+    },
+    register_diagnostic(span=$call, message="Rule: avoid immediate invocation of inline functions. Why: it hides decisions and sequencing. Fix: bind a named context with const and keep one Match/Option decision in a flat pipeline.", severity="error")
+  },
+  `(($param) => $inner)($arg)` where {
+    $inner <: contains `(($param2) => $_)($_)` as $nested,
+    register_diagnostic(span=$nested, message="Rule: avoid nested IIFEs. Why: they hide sequencing and push wrapper hacks. Fix: bind a named context with const and keep one flat pipeline with a single Match/Option decision.", severity="error")
+  }
+}

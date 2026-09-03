@@ -32,33 +32,14 @@
     }
   },
   "plugins": [
-    "./configs/lint/no-use-effect.grit",
-    "./configs/lint/no-flatmap-ladder.grit",
+    "./configs/lint/effect-calls.grit",
+    "./configs/lint/iife.grit",
+    "./configs/lint/staging.grit",
+    "./configs/lint/member-calls.grit",
+    "./configs/lint/gated.grit",
     "./configs/lint/no-effect-ladder.grit",
-    "./configs/lint/no-nested-effect-call.grit",
-    "./configs/lint/no-nested-effect-gen.grit",
-    "./configs/lint/no-arrow-ladder.grit",
-    "./configs/lint/no-effect-orElse-ladder.grit",
-    "./configs/lint/no-iife-wrapper.grit",
-    "./configs/lint/no-effect-step-const-staging.grit",
-    "./configs/lint/no-pipeline-fragment-staging.grit",
-    "./configs/lint/no-effect-all-step-sequencing.grit",
-    "./configs/lint/no-effect-as.grit",
-    "./configs/lint/no-option-as.grit",
-    "./configs/lint/no-effect-side-effect-wrapper.grit",
-    "./configs/lint/no-effect-bind.grit",
-    "./configs/lint/no-effect-do.grit",
-    "./configs/lint/no-effect-fn-generator.grit",
-    "./configs/lint/no-match-effect-branch.grit",
-    "./configs/lint/no-match-void-branch.grit",
-    "./configs/lint/no-effect-sync-throw.grit",
-    "./configs/lint/no-effect-sync-promise.grit",
-    "./configs/lint/no-effect-sync-effect.grit",
-    "./configs/lint/no-runtime-runfork.grit",
-    "./configs/lint/no-side-effect-in-state-updater.grit",
-    "./configs/lint/no-switch.grit",
-    "./configs/lint/no-native-button-mismatch.grit",
-    "./configs/lint/no-wire-union-tag-comparison.grit"
+    "./configs/lint/no-flatmap-ladder.grit",
+    "./configs/lint/no-side-effect-in-state-updater.grit"
   ],
   "javascript": {
     "formatter": {
@@ -94,6 +75,14 @@
           }
         }
       }
+    },
+    {
+      "includes": ["**/*.jsx", "**/*.tsx"],
+      "plugins": ["./configs/lint/jsx.grit"]
+    },
+    {
+      "includes": ["apps/desktop/src/**", "packages/ui/src/**"],
+      "plugins": ["./configs/lint/no-use-effect.grit"]
     }
   ]
 }
