@@ -17,6 +17,10 @@ coarse policy fidelity, and required shared-Git access. The shared runtime owns 
 Sandbox, stream, cancellation, event, and structured-output plumbing.
 _Avoid_: Provider runner, OpenAI runner
 
+**Durable-run capability**:
+The Codex adapter supports journaled output and takeover attachment. The runner declares that fact, but the shared runtime does not supply durability stores or flags, so Codex Runs remain nondurable and locally cancelled.
+_Avoid_: Enabled takeover, safe detachment
+
 **Stage-result interface**:
 The shared runtime passes the Run Plan's root JSON Schema through streaming `outputSchema`; TanStack
 projects it to native Codex `--output-schema`. Codex emits one terminal `structured-output.complete` event;

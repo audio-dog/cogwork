@@ -339,6 +339,8 @@ describe("codexRunner", () => {
           policyFidelity: "profile-only",
           fileEventFidelity: "sandbox",
           usageQuality: "metered",
+          journal: true,
+          takeover: true,
         });
       }),
     );
