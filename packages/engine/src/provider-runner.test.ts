@@ -146,8 +146,9 @@ interface RequestOverrides {
 const request = (overrides: RequestOverrides): HarnessRequest => {
   const stage = overrides.stage ?? "implement";
   const profile = stage === "triage" ? "read-only" : "full";
-  const structuredOutput =
-    stageResultJsonSchema(stage)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
+  const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
+    target: "draft-2020-12",
+  });
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-provider-test",
@@ -382,14 +383,12 @@ describe("parseModelRef", () => {
 describe("defaultLoopBudget", () => {
   it("gives read-only stages fewer turns than writing stages", () => {
     assert.isBelow(defaultLoopBudget("triage"), defaultLoopBudget("implement"));
-    assert.isBelow(defaultLoopBudget("verify"), defaultLoopBudget("follow-up"));
   });
 });
 
 describe("defaultRunBudget", () => {
   it("gives read-only stages less wall-clock time than writing stages", () => {
     assert.strictEqual(defaultRunBudget("triage"), "15 minutes");
-    assert.strictEqual(defaultRunBudget("verify"), "15 minutes");
     assert.strictEqual(defaultRunBudget("implement"), "2 hours");
     assert.strictEqual(defaultRunBudget("follow-up"), "2 hours");
   });

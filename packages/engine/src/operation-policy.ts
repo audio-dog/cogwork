@@ -9,7 +9,7 @@ import * as Schema from "effect/Schema";
 export type OperationPolicyProfile = "read-only" | "full";
 
 export const operationPolicyProfile = (stage: LifecycleStage): OperationPolicyProfile =>
-  stage === "implement" || stage === "follow-up" ? "full" : "read-only";
+  stage === "triage" ? "read-only" : "full";
 
 const isLifecycleStage = Schema.is(LifecycleStage);
 
