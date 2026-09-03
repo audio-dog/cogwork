@@ -10,7 +10,8 @@ function WorkspaceSettingsRoute() {
   const { workspaceId } = Route.useParams();
   return (
     <LiveWorkspacesProvider>
-      <WorkspaceSettingsPage workspaceId={workspaceId} />
+      {/* The route reuses one component across params, so the draft dies with the key. */}
+      <WorkspaceSettingsPage key={workspaceId} workspaceId={workspaceId} />
     </LiveWorkspacesProvider>
   );
 }

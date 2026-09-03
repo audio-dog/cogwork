@@ -23,6 +23,7 @@ import {
 } from "@cogwork/ui/components/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import {
+  RiAlertLine,
   RiEqualizerLine,
   RiNodeTree,
   RiPlugLine,
@@ -34,7 +35,7 @@ import {
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { useBoard } from "../features/activity-session";
-import { registeredWorkspaceOptions } from "../features/feed";
+import { type FailedWorkspace, failedWorkspaces, registeredWorkspaceOptions } from "../features/feed";
 import { useChromeStore } from "../store/chrome";
 import { HistoryNav } from "./history-nav";
 import { useTheme } from "./theme-provider";
@@ -71,11 +72,27 @@ function ViewItem({ view }: { view: View }) {
   );
 }
 
+/** A Failed workspace cannot filter the feed, so its row opens the settings that explain it. */
+function FailedWorkspaceItem({ workspace }: { readonly workspace: FailedWorkspace }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={`${workspace.label} could not be read`}
+        render={<Link to="/workspaces/$workspaceId" params={{ workspaceId: workspace.id }} />}
+      >
+        <RiAlertLine className="text-destructive" />
+        <span>{workspace.label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
 function WorkspaceFilter() {
   const board = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
   const setFilter = useChromeStore((state) => state.setWorkspaceFilter);
   const workspaces = board._tag === "Success" ? registeredWorkspaceOptions(board.board) : [];
+  const failed = board._tag === "Success" ? failedWorkspaces(board.board) : [];
 
   return (
     <SidebarGroup>
@@ -115,6 +132,9 @@ function WorkspaceFilter() {
                 <TooltipContent side="right">Workspace settings</TooltipContent>
               </Tooltip>
             </SidebarMenuItem>
+          ))}
+          {failed.map((workspace) => (
+            <FailedWorkspaceItem key={workspace.id} workspace={workspace} />
           ))}
         </SidebarMenu>
       </SidebarGroupContent>

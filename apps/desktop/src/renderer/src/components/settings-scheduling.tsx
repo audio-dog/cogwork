@@ -1,4 +1,5 @@
 import { type DaemonLimitKey, maxSchedulerLimit } from "@cogwork/contracts";
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
   InputGroup,
   InputGroupAddon,
@@ -6,6 +7,7 @@ import {
   InputGroupInput,
 } from "@cogwork/ui/components/input-group";
 import { RiAddLine, RiSubtractLine } from "@remixicon/react";
+import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { useBoard } from "../features/activity-session";
 import { settingEntry } from "../features/settings-catalog";
@@ -75,9 +77,11 @@ function LimitStepper({
 export function SchedulingSettings() {
   const board = useBoard();
   const published = board._tag === "Success" ? board.board.controlStore : null;
-  const { controlStore, setLimit } = useDaemonLimit(published);
+  const { controlStore, result, setLimit } = useDaemonLimit(published);
   const limits = controlStore?.daemonLimits ?? null;
-  const disabled = limits === null;
+  // A second click would interrupt the first write and resubmit its pre-write revision.
+  const disabled = limits === null || result.waiting;
+  const failure = result._tag === "Failure" && result.cause ? Cause.pretty(result.cause) : null;
   const expectedRevision = limits?.revision ?? 0;
 
   const limitRows: ReadonlyArray<{
@@ -120,6 +124,12 @@ export function SchedulingSettings() {
             />
           </SettingRow>
         ))}
+        {failure ? (
+          <Alert variant="destructive">
+            <AlertTitle>Could not save that limit</AlertTitle>
+            <AlertDescription>{failure}</AlertDescription>
+          </Alert>
+        ) : null}
       </SubSectionCard>
     </SettingsSection>
   );

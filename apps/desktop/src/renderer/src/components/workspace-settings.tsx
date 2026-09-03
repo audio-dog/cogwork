@@ -38,6 +38,7 @@ import {
   workspaceKey,
   workspaceLabel,
 } from "../features/workspace-record";
+import { absoluteCheckoutPathFrom } from "../features/workspace-registration";
 import { OperationSettings } from "./operation-settings";
 import { SettingsSection, SubSectionCard } from "./settings-parts";
 import { type PatchDraft, WorkspaceRecord } from "./workspace-setting-rows";
@@ -70,13 +71,14 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
   const {
     state: { status, workspaces, controlStore },
     actions: { rebind },
-    meta: { rebindPending, rebindError },
+    meta: { rebindPending, rebindError, rebindTarget },
   } = useWorkspaces();
   const board = useBoard();
   const scheduler = board._tag === "Success" ? board.board.scheduler : null;
   const dangling = board._tag === "Success" ? board.board.connectionNotices : [];
 
   const [edits, setEdits] = useState<WorkspaceRecordDraft | null>(null);
+  const [pathRefused, setPathRefused] = useState(false);
 
   const workspace = workspaces.find((candidate) => workspaceKey(candidate) === workspaceId) ?? null;
   const baseline = workspace ? seededDraft(workspace) : null;
@@ -100,17 +102,26 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
       : null,
     inFlight: load?.inFlight ?? null,
     limit: load?.limit ?? null,
-    patch: (next) => setEdits({ ...(edits ?? baseline ?? emptyDraft), ...next }),
-    saving: rebindPending,
-    saveError: rebindError,
+    patch: (next) => {
+      setPathRefused(false);
+      setEdits({ ...(edits ?? baseline ?? emptyDraft), ...next });
+    },
+    saving: rebindPending && rebindTarget === identity,
+    saveError: pathRefused ? "Use an absolute path." : rebindTarget === identity ? rebindError : null,
     save: () => {
       if (!edits || !baseline || edits.checkoutPath === baseline.checkoutPath) {
         setEdits(null);
         return;
       }
-      rebind(identity, edits.checkoutPath);
+      const checkoutPath = absoluteCheckoutPathFrom(edits.checkoutPath);
+      setPathRefused(checkoutPath === null);
+      if (!checkoutPath) return;
+      rebind(identity, checkoutPath);
     },
-    discard: () => setEdits(null),
+    discard: () => {
+      setEdits(null);
+      setPathRefused(false);
+    },
   };
 }
 

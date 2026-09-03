@@ -68,6 +68,21 @@ export const registeredWorkspaceOptions = (board: Board): WorkspaceOption[] =>
     .map((state) => ({ id: state.name, label: state.displayName ?? state.name }))
     .sort((left, right) => left.label.localeCompare(right.label));
 
+export interface FailedWorkspace {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** A Failed workspace has no work to filter, but its settings page carries the error. */
+export const failedWorkspaces = (board: Board): FailedWorkspace[] =>
+  [...board.workspaces.values()]
+    .filter(WorkspaceState.guards.Failed)
+    .map(({ name, displayName, source }) => ({
+      id: name ?? source,
+      label: displayName ?? name ?? source,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+
 export const runningRuns = (board: Board, filter: WorkspaceId | null): FeedRun[] =>
   runs(board, filter)
     .filter((run) => run.status === "running")
