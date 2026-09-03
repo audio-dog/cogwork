@@ -1,0 +1,37 @@
+language js(typescript, jsx)
+
+// These two rules share the same six declaration and return roots, so one file runs
+// one pass for both instead of two. See issue #433.
+//
+// Biome keeps one diagnostic per span within a plugin, so the specific flatMap and
+// flatten branches must register before the general ladder branch: a nested flatMap
+// satisfies both rules on the same span, and the specific message is the useful one.
+
+or {
+  `const $n = Effect.$o($f)` as $decl,
+  `const $n: $t = Effect.$o($f)` as $decl,
+  `const $n = Effect.$o($f, $s)` as $decl,
+  `const $n: $t = Effect.$o($f, $s)` as $decl,
+  `return Effect.$o($f)` as $decl,
+  `return Effect.$o($f, $s)` as $decl
+} where {
+  any {
+    and {
+      $o <: r"^flatMap$",
+      $f <: contains `Effect.flatMap($_)`,
+      register_diagnostic(span=$decl, message="Rule: avoid nested Effect.flatMap. Why: it hides sequencing and pushes laddered control flow. Fix: build context once (Effect.all/Effect.map) and run a single flatMap.", severity="warn")
+    },
+    and {
+      $o <: r"^flatten$",
+      $f <: contains `Effect.map($_)`,
+      register_diagnostic(span=$decl, message="Rule: avoid map+flatten ladders. Why: they hide sequencing. Fix: build context once (Effect.all/Effect.map) and run a single flatMap.", severity="warn")
+    },
+    and {
+      or {
+        $f <: `Effect.$inner($only)` where { $only <: `Effect.$deep($_)` },
+        $f <: `Effect.$inner($fa, $fb)` where { $fa <: `Effect.$deep($_)` }
+      },
+      register_diagnostic(span=$decl, message="Rule: avoid nested Effect combinators. Why: they hide sequencing and create laddered control flow. Fix: build context once (Effect.all/Effect.map) and then run a single flat pipeline.", severity="error")
+    }
+  }
+}

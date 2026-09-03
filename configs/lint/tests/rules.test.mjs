@@ -45,7 +45,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid nested Effect combinators. Why: they hide sequencing and create laddered control flow. Fix: build context once (Effect.all/Effect.map) and then run a single flat pipeline.",
-    plugin: "no-effect-ladder",
+    plugin: "ladders",
     name: "no-effect-ladder",
   },
   {
@@ -87,7 +87,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid nested Effect.flatMap. Why: it hides sequencing and pushes laddered control flow. Fix: build context once (Effect.all/Effect.map) and run a single flatMap.",
-    plugin: "no-flatmap-ladder",
+    plugin: "ladders",
     name: "no-flatmap-ladder",
     severity: "warning",
   },

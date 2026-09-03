@@ -33,8 +33,7 @@
   },
   "plugins": [
     "./configs/lint/no-use-effect.grit",
-    "./configs/lint/no-flatmap-ladder.grit",
-    "./configs/lint/no-effect-ladder.grit",
+    "./configs/lint/ladders.grit",
     "./configs/lint/effect-calls.grit",
     "./configs/lint/no-arrow-ladder.grit",
     "./configs/lint/no-iife-wrapper.grit",
