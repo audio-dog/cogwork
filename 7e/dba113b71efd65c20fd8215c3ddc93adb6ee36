@@ -1,0 +1,19 @@
+packages/engine/src/harness-overview.ts
+  s_330b4caffc139b::t_be22db1adac047 50-54,56-61,66-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7edba113b71efd65c20fd8215c3ddc93adb6ee36",
+  "prompts": {},
+  "sessions": {
+    "s_330b4caffc139b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ef9e7d2-206d-4a38-87e4-9f3fab2eb473",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
