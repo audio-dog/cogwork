@@ -1,4 +1,5 @@
 import {
+  Authority,
   type ConfigurationPicture,
   type Contribution,
   type ContributionKind,
@@ -96,9 +97,10 @@ export function customizePlaces(picture: ConfigurationPicture): CustomizePlaces 
     const visible = visibleContributions(kind, places, query);
 
     const mine = visible.filter(
-      (contribution) => contribution.authority._tag === "local" && contribution.authority.tree === "user",
+      (contribution) =>
+        Authority.$is("local")(contribution.authority) && contribution.authority.tree === "user",
     );
-    const builtIn = visible.filter((contribution) => contribution.authority._tag === "engine");
+    const builtIn = visible.filter((contribution) => Authority.$is("engine")(contribution.authority));
 
     const fromPlugins = [...plugins]
       .toSorted((a, b) => a.name.localeCompare(b.name))
@@ -107,7 +109,7 @@ export function customizePlaces(picture: ConfigurationPicture): CustomizePlaces 
         label: plugin.name,
         rows: visible.filter(
           (contribution) =>
-            contribution.authority._tag === "plugin" &&
+            Authority.$is("plugin")(contribution.authority) &&
             contribution.authority.pluginId === plugin.record.pluginId,
         ),
       }));
@@ -121,7 +123,8 @@ export function customizePlaces(picture: ConfigurationPicture): CustomizePlaces 
           key,
           label: `${workspace?.name ?? "Unknown"} · ${scopeCopy[place.kind].name}`,
           rows: visible.filter(
-            (contribution) => contribution.authority._tag !== "plugin" && placeOf(contribution) === key,
+            (contribution) =>
+              !Authority.$is("plugin")(contribution.authority) && placeOf(contribution) === key,
           ),
         };
       });

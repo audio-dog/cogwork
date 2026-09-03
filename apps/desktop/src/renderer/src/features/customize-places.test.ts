@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scopeKey } from "./configuration-model";
+import { Authority, scopeKey } from "./configuration-model";
 import {
   clankerWorkspaceId,
   cogworkWorkspaceId,
@@ -136,7 +136,7 @@ describe("groupContributions", () => {
     const elsewhere = groups
       .filter((group) => group.label !== "GitHub review pack")
       .flatMap((group) => group.rows);
-    expect(elsewhere.every((row) => row.authority._tag !== "plugin")).toBe(true);
+    expect(elsewhere.every((row) => !Authority.$is("plugin")(row.authority))).toBe(true);
   });
 
   it("keeps your own machine-level files in the User group", () => {

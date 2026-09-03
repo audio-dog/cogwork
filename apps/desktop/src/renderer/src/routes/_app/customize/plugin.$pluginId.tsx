@@ -3,7 +3,7 @@ import { RiBox3Line } from "@remixicon/react";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useConfiguration } from "../../../components/configuration-provider";
 import { PluginDetail } from "../../../components/plugin-detail";
-import { pluginDetailOf } from "../../../features/plugin-configuration";
+import { PluginDetailState, pluginDetailOf } from "../../../features/plugin-configuration";
 
 export const Route = createFileRoute("/_app/customize/plugin/$pluginId")({
   component: PluginRoute,
@@ -16,11 +16,12 @@ function PluginRoute() {
   } = useConfiguration();
   const pluginId = Route.useParams().pluginId;
   const detail = pluginDetailOf(picture.plugins, pluginId, pluginLoadState);
-  if (detail._tag === "Loading") return <LoadingPluginDetail />;
-  if (detail._tag === "Failed") return <FailedPluginDetail />;
-  if (detail._tag === "Missing")
-    return <Navigate to="/customize/$facet" params={{ facet: "plugins" }} replace />;
-  return <PluginDetail plugin={detail.plugin} />;
+  return PluginDetailState.$match(detail, {
+    Loading: () => <LoadingPluginDetail />,
+    Failed: () => <FailedPluginDetail />,
+    Missing: () => <Navigate to="/customize/$facet" params={{ facet: "plugins" }} replace />,
+    Ready: ({ plugin }) => <PluginDetail plugin={plugin} />,
+  });
 }
 
 function LoadingPluginDetail() {

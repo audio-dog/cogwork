@@ -1,4 +1,5 @@
 import type { WorkspaceId } from "@cogwork/contracts";
+import * as Data from "effect/Data";
 
 export const scopeOrder = ["settings-profile", "workspace-input", "private-overlay"] as const;
 
@@ -75,27 +76,41 @@ export const treePath: Record<AuthoringTree, string> = {
   private: "~/.cogwork/workspaces/<WorkspaceId>/",
 };
 
-export type Authority =
-  | { readonly _tag: "plugin"; readonly pluginId: string }
-  | { readonly _tag: "engine" }
-  | { readonly _tag: "local"; readonly tree: AuthoringTree };
+declare const emptyVariant: unique symbol;
+type EmptyVariant = { readonly [emptyVariant]?: never };
 
-export function authorityLabel(authority: Authority) {
-  if (authority._tag === "plugin") return `plugin:${authority.pluginId}`;
-  if (authority._tag === "local") return `local:${authority.tree}`;
-  return "engine";
+export type Authority = Data.TaggedEnum<{
+  plugin: { readonly pluginId: string };
+  engine: EmptyVariant;
+  local: { readonly tree: AuthoringTree };
+}>;
+
+export const Authority = Data.taggedEnum<Authority>();
+
+export const authorityLabel = Authority.$match({
+  plugin: ({ pluginId }) => `plugin:${pluginId}`,
+  engine: () => "engine",
+  local: ({ tree }) => `local:${tree}`,
+});
+
+interface DiagnosticFields {
+  readonly detail: string;
+  readonly source: string;
 }
 
-export type Diagnostic =
-  | { readonly _tag: "inadmissible"; readonly detail: string; readonly source: string }
-  | { readonly _tag: "dangling"; readonly detail: string; readonly source: string }
-  | { readonly _tag: "ambiguous"; readonly detail: string; readonly source: string };
+export type Diagnostic = Data.TaggedEnum<{
+  inadmissible: DiagnosticFields;
+  dangling: DiagnosticFields;
+  ambiguous: DiagnosticFields;
+}>;
 
-export const diagnosticLabels: Record<Diagnostic["_tag"], string> = {
-  inadmissible: "Inadmissible",
-  dangling: "Dangling",
-  ambiguous: "Ambiguous",
-};
+export const Diagnostic = Data.taggedEnum<Diagnostic>();
+
+export const diagnosticLabel = Diagnostic.$match({
+  inadmissible: () => "Inadmissible",
+  dangling: () => "Dangling",
+  ambiguous: () => "Ambiguous",
+});
 
 export interface EnablementRow {
   readonly scope: ScopeRef;
@@ -106,7 +121,12 @@ export interface EnablementRow {
 
 export type DraftCell = "on" | "off" | "unset";
 
-export type LoadState = { readonly _tag: "loaded" } | { readonly _tag: "failed"; readonly reason: string };
+export type LoadState = Data.TaggedEnum<{
+  loaded: EmptyVariant;
+  failed: { readonly reason: string };
+}>;
+
+export const LoadState = Data.taggedEnum<LoadState>();
 
 export interface Contribution {
   readonly id: string;
@@ -125,9 +145,12 @@ export interface Contribution {
 export const contributionInstanceKey = (contribution: Contribution) =>
   contribution.definedIn ? `${contribution.id}:${contribution.definedIn}` : contribution.id;
 
-export type McpReadiness =
-  | { readonly _tag: "ready" }
-  | { readonly _tag: "not-ready"; readonly reason: string };
+export type McpReadiness = Data.TaggedEnum<{
+  ready: EmptyVariant;
+  "not-ready": { readonly reason: string };
+}>;
+
+export const McpReadiness = Data.taggedEnum<McpReadiness>();
 
 export interface InstallRecord {
   readonly pluginId: string;

@@ -4,7 +4,7 @@ import { ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/u
 import { RiBox3Line } from "@remixicon/react";
 import { useNavigate } from "@tanstack/react-router";
 import type { CatalogPlugin, InstalledPlugin } from "../features/configuration-model";
-import { attentionAction, attentionLine } from "../features/plugins-view";
+import { attentionAction, attentionLine, PluginAttention } from "../features/plugins-view";
 import { useConfiguration } from "./configuration-provider";
 import { ListRow, ListRowMedia, ListRowOpen } from "./customize-list";
 
@@ -36,7 +36,8 @@ export function PluginAttentionRow({ plugin }: { plugin: InstalledPlugin }) {
   } = useConfiguration();
   const attention = plugins.attentionOf(plugin);
   const action = attentionAction(attention);
-  const failed = attention._tag === "load-failed" || attention._tag === "manifest-failed";
+  const failed =
+    PluginAttention.$is("load-failed")(attention) || PluginAttention.$is("manifest-failed")(attention);
 
   return (
     <ListRow>

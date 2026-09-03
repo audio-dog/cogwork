@@ -14,6 +14,8 @@ import { scopeIcons } from "../features/configuration-icons";
 import {
   authorityLabel,
   type Contribution as ContributionRecord,
+  LoadState,
+  McpReadiness,
   scopeCopy,
 } from "../features/configuration-model";
 import { offeredElsewhere } from "../features/configuration-resolve";
@@ -94,17 +96,17 @@ function SourceSection() {
  * A file that will not load is the third case, and calling it either of the first two is a lie.
  */
 export function readinessCopy(contribution: ContributionRecord) {
-  if (contribution.readiness?._tag === "ready") {
+  if (McpReadiness.$is("ready")(contribution.readiness)) {
     return {
       title: "Ready",
       detail: "Launchable, authenticated, and speaking a protocol we understand.",
       output: false,
     };
   }
-  if (contribution.readiness?._tag === "not-ready") {
+  if (McpReadiness.$is("not-ready")(contribution.readiness)) {
     return { title: "Not ready", detail: contribution.readiness.reason, output: true };
   }
-  if (contribution.load._tag === "failed") {
+  if (LoadState.$is("failed")(contribution.load)) {
     return {
       title: "Not checked",
       detail: "This file didn't load, so the Engine never started the server to judge it.",

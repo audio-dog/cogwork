@@ -9,12 +9,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { RiErrorWarningLine } from "@remixicon/react";
 import { createContext, type ReactNode, use } from "react";
 import {
-  type Authority,
+  Authority,
   authorityLabel,
   type Contribution as ContributionRecord,
-  type Diagnostic,
-  diagnosticLabels,
-  type McpReadiness,
+  Diagnostic,
+  diagnosticLabel,
+  LoadState,
+  McpReadiness,
   type ScopeRef,
   scopeCopy,
   scopeKey,
@@ -106,8 +107,8 @@ function ContributionProvider({
   const resolved = resolveEnablement(contribution, viewOf(contribution));
   const on =
     displayedEnablement(resolved) ?? defaultContributionEnabled(authorityLabel(contribution.authority));
-  const failed = contribution.load._tag === "failed";
-  const notReady = contribution.readiness?._tag === "not-ready";
+  const failed = LoadState.$is("failed")(contribution.load);
+  const notReady = McpReadiness.$is("not-ready")(contribution.readiness);
 
   const value: ContributionContextValue = {
     state: {
@@ -132,17 +133,17 @@ function ContributionProvider({
 }
 
 function AuthorityBadge({ authority }: { authority: Authority }) {
-  const variant = authority._tag === "plugin" ? "secondary" : "outline";
+  const variant = Authority.$is("plugin")(authority) ? "secondary" : "outline";
   return <Badge variant={variant}>{authorityLabel(authority)}</Badge>;
 }
 
 function DiagnosticBadge({ diagnostic }: { diagnostic: Diagnostic }) {
-  const variant = diagnostic._tag === "ambiguous" ? "destructive" : "outline";
+  const variant = Diagnostic.$is("ambiguous")(diagnostic) ? "destructive" : "outline";
   return (
     <Tooltip>
       <TooltipTrigger render={<Badge variant={variant} />}>
         <RiErrorWarningLine data-icon="inline-start" />
-        {diagnosticLabels[diagnostic._tag]}
+        {diagnosticLabel(diagnostic)}
       </TooltipTrigger>
       <TooltipContent className="max-w-80">{diagnostic.detail}</TooltipContent>
     </Tooltip>
@@ -150,13 +151,15 @@ function DiagnosticBadge({ diagnostic }: { diagnostic: Diagnostic }) {
 }
 
 function ReadinessBadge({ readiness }: { readiness: McpReadiness }) {
-  if (readiness._tag === "ready") return <Badge variant="outline">Ready</Badge>;
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<Badge variant="destructive" />}>Not ready</TooltipTrigger>
-      <TooltipContent className="max-w-80">{readiness.reason}</TooltipContent>
-    </Tooltip>
-  );
+  return McpReadiness.$match(readiness, {
+    ready: () => <Badge variant="outline">Ready</Badge>,
+    "not-ready": ({ reason }) => (
+      <Tooltip>
+        <TooltipTrigger render={<Badge variant="destructive" />}>Not ready</TooltipTrigger>
+        <TooltipContent className="max-w-80">{reason}</TooltipContent>
+      </Tooltip>
+    ),
+  });
 }
 
 function SpreadBadge({ places }: { places: readonly string[] }) {

@@ -6,9 +6,9 @@ import {
 } from "@tanstack/react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ConfigurationPicture, InstalledPlugin } from "../features/configuration-model";
+import { Authority, type ConfigurationPicture, type InstalledPlugin } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
-import { Configuration } from "./configuration-provider";
+import { Configuration, PluginFailurePresentation } from "./configuration-provider";
 import { PluginDetail } from "./plugin-detail";
 
 const plugin: InstalledPlugin = {
@@ -32,7 +32,7 @@ const picture: ConfigurationPicture = {
   plugins: [plugin],
   catalogPlugins: [],
   contributions: placeholderConfiguration.contributions.filter(
-    (contribution) => contribution.authority._tag !== "plugin",
+    (contribution) => !Authority.$is("plugin")(contribution.authority),
   ),
 };
 
@@ -46,7 +46,9 @@ describe("PluginDetail", () => {
       <RouterContextProvider router={router}>
         <Configuration.Provider
           picture={picture}
-          pluginFailure={{ _tag: "Mutation", message: "could not reclaim Plugin files" }}
+          pluginFailure={PluginFailurePresentation.Mutation({
+            message: "could not reclaim Plugin files",
+          })}
         >
           <PluginDetail plugin={plugin} />
         </Configuration.Provider>
