@@ -1,0 +1,25 @@
+packages/engine/src/tools/file-diff-feed.ts
+  s_4cbaf27bdd9c29::t_a167115259c290 291
+packages/engine/src/external-harness-runtime.ts
+  s_4cbaf27bdd9c29::t_263b724f2a738c 559-563,568-572
+  s_4cbaf27bdd9c29::t_9815d85c24e610 69
+packages/engine/src/external-harness-runtime.test.ts
+  s_4cbaf27bdd9c29::t_ad1b7faf313602 915-934
+  s_4cbaf27bdd9c29::t_e8cadd84c75cc4 935,952-953
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3bf11dd0b9bc7e332c6acccd5aaa1bd12835c482",
+  "prompts": {},
+  "sessions": {
+    "s_4cbaf27bdd9c29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2524c154-d8ba-4ccf-937b-21ae95b25774",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
