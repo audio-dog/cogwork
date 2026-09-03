@@ -99,7 +99,7 @@ const request = (checkoutPath: string) =>
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput:
-        stageResultJsonSchema("triage")?.["~standard"].jsonSchema.input({
+        stageResultJsonSchema("triage")["~standard"].jsonSchema.input({
           target: "draft-2020-12",
         }) ?? null,
       connections: [],

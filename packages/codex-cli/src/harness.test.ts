@@ -87,10 +87,11 @@ const projectedMcpName = (name: string, index: number) =>
 
 const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   const stage = overrides.stage ?? "implement";
-  const profile = stage === "triage" || stage === "verify" ? "read-only" : "full";
+  const profile = stage === "triage" ? "read-only" : "full";
   const mcpSkills = overrides.mcpSkills ?? [];
-  const structuredOutput =
-    stageResultJsonSchema(stage)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
+  const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
+    target: "draft-2020-12",
+  });
   const mcp = mcpSkills.map((server, index) => ({
     identity: `test/mcp/${index}`,
     name: server.name,
