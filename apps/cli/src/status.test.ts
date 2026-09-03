@@ -148,6 +148,34 @@ describe("formatStatus", () => {
     assert.include(output, "        · #7 approved change (PR #17)");
   });
 
+  it("removes terminal controls and line breaks from ready-to-merge titles", () => {
+    const output = formatStatus(
+      status({
+        workspaces: [
+          workspace({
+            readyToMerge: [
+              {
+                id: workItemId("#7"),
+                title: "approved\u001b[2J\nchange",
+                pr: {
+                  number: 17,
+                  url: "https://github.com/acme/repo/pull/17",
+                  checks: "passing",
+                  review: "ready",
+                  baseDivergence: "none",
+                  waitingSinceMillis: 0,
+                },
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    assert.include(output, "        · #7 approved[2J change (PR #17)");
+    assert.notInclude(output, "\u001b");
+  });
+
   it("collapses and truncates a long triage proposal preview to one line", () => {
     const proposal = `${"a".repeat(200)}\nsecond line`;
     const output = formatStatus(

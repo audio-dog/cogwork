@@ -7,6 +7,7 @@ import {
 } from "@cogwork/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
+import { terminalLine } from "./terminal-text";
 
 const section = (label: string, lines: ReadonlyArray<string>) =>
   lines.length === 0 ? [] : [`      ${label}:`, ...lines.map((line) => `        · ${line}`)];
@@ -67,7 +68,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
   );
   const readyToMerge = section(
     "ready-to-merge",
-    workspace.readyToMerge.map((item) => `${item.id} ${item.title} (PR #${item.pr.number})`),
+    workspace.readyToMerge.map((item) => terminalLine(`${item.id} ${item.title} (PR #${item.pr.number})`)),
   );
   return [
     `  - ${workspaceLabel(workspace)} [${workspace.issueTracker}] ${workspace.checkoutPath}`,
