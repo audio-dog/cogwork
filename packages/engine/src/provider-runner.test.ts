@@ -272,6 +272,8 @@ describe("providerRunner", () => {
         assert.lengthOf([...options.tools], 7);
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "cogwork-context"));
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "chat-persistence"));
+        assert.strictEqual(options.runId, "run-provider-test");
+        assert.strictEqual(options.threadId, sessionId);
       }),
     30000,
   );

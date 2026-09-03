@@ -29,3 +29,11 @@ any client (CLI, GUI, feldspar) without per-vendor translation.
   (`cursor/ask_question`, `cursor/create_plan`) need verification under a headless generic
   client. Fallback if the Cursor ACP path proves lossy: a `@cursor/sdk`-backed adapter for
   Cursor only, behind the same interface.
+
+## Durable execution boundary
+
+Cogwork gives every TanStack Harness invocation its globally unique `RunId` as `runId` and its `SessionId` as `threadId`. Native Claude, Codex, and Cursor handles remain adapter model options. Claude Code and Codex declare journal and takeover support. Cursor ACP declares no support. Cogwork has no OpenCode runner, so no OpenCode capability profile exists to activate; any future runner must initially declare no journal or takeover support.
+
+Capability is not activation. The shared external Harness runtime uses nondurable `withSandbox` without Run stores, stream durability, journal, detach, attach, takeover, or reaping. Cancellation aborts and destroys the local execution. A disconnect or daemon death does not prove that the child process stopped, so diagnostics must not claim that `SIGKILL` established safe detachment.
+
+Restart recovery creates a replacement Run and a new native invocation. It can resume the prior Session with a continuation Message, but it is neither a retry of an interrupted attempt nor a takeover of the old Run. Attach-first recovery stays deferred until persistent Harness execution status, exact delivery logging, durable cancellation, supported locking and fencing, and scheduled reaping exist together. Decoded Run events remain the client and ledger projection; they are not a TanStack `StreamDurability` exact chunk log.

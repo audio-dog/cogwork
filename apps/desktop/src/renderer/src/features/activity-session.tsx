@@ -122,6 +122,7 @@ const classifiedState = (item: ClassifiedItem) =>
     Claimed: () => ({ text: "claimed", severity: "info" }),
     Blocked: ({ openBlockers }) => ({ text: `blocked · ${openBlockers} open`, severity: "warn" }),
     NeedsHuman: () => ({ text: "needs a person", severity: "warn" }),
+    ReadyToMerge: () => ({ text: "ready to merge", severity: "warn" }),
   });
 
 export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {

@@ -72,8 +72,8 @@ const undecodable = (seq: number, atMillis = 1000 + seq): RunEvent => ({
   atMillis,
 });
 
-const sessionEvent = (id: string) =>
-  ({ type: "CUSTOM", name: "cursor.session-id", value: { sessionId: id } }) satisfies AgUiEvent;
+const sessionEvent = (id: string, namespace = "cursor") =>
+  ({ type: "CUSTOM", name: `${namespace}.session-id`, value: { sessionId: id } }) satisfies AgUiEvent;
 
 const runStarted: AgUiEvent = { type: "RUN_STARTED" };
 const finished: AgUiEvent = { type: "RUN_FINISHED", finishReason: "stop" };
@@ -175,6 +175,23 @@ describe("RunRecorder", () => {
         assert.strictEqual(captured, "cursor-abc");
         assert.strictEqual(carried, "cursor-abc");
         assert.strictEqual(sessionHandle(yield* ledger.getSession(session)), "cursor-abc");
+      }),
+    );
+
+    it.effect("captures native handles from every namespaced session-id event", () =>
+      Effect.gen(function* () {
+        const session = sessionId("sess-generic-handle");
+        const record = run("run-generic-handle", { session });
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertSession(opaqueSession(session));
+
+        const recorder = yield* RunRecorder;
+        const claude = yield* recorder.record(record, sessionEvent("claude-native", "claude-code"));
+        const codex = yield* recorder.record(record, sessionEvent("codex-native", "codex"));
+
+        assert.strictEqual(claude, "claude-native");
+        assert.strictEqual(codex, "codex-native");
+        assert.strictEqual(sessionHandle(yield* ledger.getSession(session)), "codex-native");
       }),
     );
 

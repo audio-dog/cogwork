@@ -19,13 +19,13 @@ const board = (events: ReadonlyArray<Record<string, unknown>>) =>
   events.map((event) => daemonEvent(event)).reduce(applyDaemonEvent, initialBoard);
 
 describe("attentionEntries", () => {
-  it("derives decisions first, dedupes merge-ready decisions, and orders PRs by longest wait", () => {
+  it("reads classifications, orders decisions first, and orders PRs by longest wait", () => {
     const entries = attentionEntries(
       board([
         {
           _tag: "ItemChanged",
           workspace: "acme",
-          item: { _tag: "Eligible", id: "3", title: "Newer PR", url: null, stage: "verify", pr: pr(40) },
+          item: { _tag: "ReadyToMerge", id: "3", title: "Newer PR", url: null, pr: pr(40) },
         },
         {
           _tag: "ItemChanged",
@@ -55,15 +55,27 @@ describe("attentionEntries", () => {
         {
           _tag: "ItemChanged",
           workspace: "acme",
-          item: { _tag: "Eligible", id: "4", title: "Older PR", url: null, stage: "verify", pr: pr(5) },
+          item: { _tag: "ReadyToMerge", id: "4", title: "Older PR", url: null, pr: pr(5) },
+        },
+        {
+          _tag: "ItemChanged",
+          workspace: "acme",
+          item: {
+            _tag: "Claimed",
+            id: "5",
+            title: "In flight",
+            url: null,
+            claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+            pr: pr(1),
+          },
         },
       ]),
     );
 
     expect(entries.map(({ kind, item }) => [kind, item.id])).toEqual([
       ["needs-decision", "1"],
+      ["needs-decision", "2"],
       ["ready-to-merge", "4"],
-      ["ready-to-merge", "2"],
       ["ready-to-merge", "3"],
     ]);
   });
@@ -87,7 +99,7 @@ describe("filterAttention", () => {
       {
         _tag: "ItemChanged",
         workspace: "beta",
-        item: { _tag: "Eligible", id: "2", title: "PR", url: null, stage: "verify", pr: pr(10) },
+        item: { _tag: "ReadyToMerge", id: "2", title: "PR", url: null, pr: pr(10) },
       },
     ]),
   );

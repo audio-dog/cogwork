@@ -26,7 +26,7 @@ The span a rate-limit scope is held out of polling for, opened when a source rep
 _Avoid_: Circuit breaker (nothing is tripped open by error rate), throttle
 
 **Classification**:
-The partition of an issue tracker's observed items into eligible, claimed, blocked, and needs-human, each tagged with an operation. *Blocked* means the issue tracker reports open blockers, so implementation is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
+The partition of an issue tracker's observed items into eligible, claimed, blocked, needs-human, and ready-to-merge. The first four shapes state whether or why an agent can act; ready-to-merge carries a required PR summary and waits for a person. *Blocked* means the issue tracker reports open blockers, so implementation is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
 _Avoid_: Filtering, triage (triage is an operation, not this)
 
 **Assignee ownership gate**:
@@ -86,11 +86,11 @@ A pluggable implementation of one agent backend. Beside dispatch it declares its
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **Harness capability profile**:
-The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity, fork and human-attach behavior, structured-output reliability, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Adapter models, provider options, modalities, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
+The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity, fork and human-attach behavior, structured-output reliability, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Claude Code and Codex declare journal and takeover support; Cursor ACP declares neither. These facts describe adapter capability only. They do not activate durable execution. Adapter models, provider options, modalities, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
 _Avoid_: Feature flags, adapter metadata, projection matrix
 
 **External Harness runtime**:
-The engine-owned execution module beneath external Harness runners. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, descriptor-required shared Git metadata, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate.
+The engine-owned execution module beneath external Harness runners. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, descriptor-required shared Git metadata, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate. It passes the Cogwork `RunId` as TanStack `runId`, the Cogwork `SessionId` as `threadId`, and any opaque native handle only through adapter model options. Its `withSandbox` call is intentionally nondurable: no Run store, stream durability, journal, detach, attach, or takeover option is present. Driver loss therefore cannot leave an intentional detached agent or trigger attach-first recovery.
 _Avoid_: Harness service (the dispatcher above it), Harness runner (the engine-facing backend seam), provider runner (the owned-transcript path)
 
 **Harness Workspace projection**:

@@ -17,7 +17,7 @@ Authentication owned by the principal through the Credential store. The runner r
 _Avoid_: Claude Code API-key mode, ambient environment authentication, Host login fallback
 
 **Sandbox lineage**:
-The ownership boundary for an opaque Claude session handle. Resume is allowed only in the Sandbox lineage that created the session. The runner declares fork support for later orchestration work but does not fork sessions in this package.
+The ownership boundary for an opaque Claude session handle. Resume is allowed only on the Runtime Host and in the Sandbox lineage that created the Session. The runner declares journal, takeover, and fork support for later orchestration work, but the shared runtime enables none of them.
 _Avoid_: Transcript replay, cross-worktree resume
 
 **MCP config projection**:

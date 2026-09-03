@@ -317,6 +317,22 @@ _Avoid_: Run event (the persisted form), notification
 A first-class entity with its own `SessionId`, grouping the runs that make up one conversation — a run points at it by foreign key (`RunRecord.session`), and runs on the same branch share one while their selected harness remains unchanged. Every session is permanently owned by the harness that created it and can be resumed only by that harness; model, effort, operation, and instruction changes do not affect compatibility. A fresh start always mints a new session. It comes in two kinds. An **owned-transcript** session is the provider runner's: the whole conversation lives in our run ledger, so its transcript folds straight from the events and no handle is kept. An **opaque-handle** session is a CLI harness's: the harness keeps its own history and hands back an opaque `handle` (e.g. Cursor's session id) we store to resume it — `null` until the harness emits one. The kind is not a guess: each harness runner declares its `SessionKind` beside its name, and the session store mints the matching one. The session is minted when the run is inserted, before the harness has said anything (see engine ADR 0002), so a run always names a session even before it can be resumed.
 _Avoid_: Run, connection, handle (that's one field of the opaque-handle kind, not the session itself)
 
+**Session resume**:
+A new Run and new native invocation that continue an existing Session. Cogwork sends the Session's `SessionId` as TanStack `threadId`; an opaque native handle, when present, goes only into the adapter's native `modelOptions.sessionId`. A resume never continues the old Run.
+_Avoid_: Retry (why the new Run started), replacement Run (one recovery reason), Run takeover (continuation of the same invocation)
+
+**Retry**:
+The control plane starting another Run after a retryable failure. The new Run can resume the failed Run's Session, but retry describes failure policy, not conversation identity.
+_Avoid_: Session resume, replacement Run, Run takeover
+
+**Replacement Run**:
+The new Run started after an interrupted or crashed Run. It can resume the same Session, but it starts a new native invocation with a continuation Message that treats the prepared Worktree as ground truth.
+_Avoid_: Retry (interruption and crash are not attempts), Run takeover
+
+**Run takeover**:
+A successor driver adopting the same live native invocation and continuing the same Run after driver loss. It requires an exact delivery log, persistent native status, durable cancellation, distributed locking and fencing, and scheduled reaping. Cogwork does not enable it.
+_Avoid_: Session resume, retry, replacement Run, human attach
+
 **Harness switch**:
 A run selecting a different harness from the branch's latest session. It begins a new session with the full operating instructions while preserving the worktree, branch, code progress, claim, and historical run records; only conversation continuity is discarded. Switching back never resurrects an older session from that harness.
 _Avoid_: Session migration, session transfer, cross-harness resume
@@ -326,7 +342,7 @@ The three failure outcomes — how the control plane stops spending tokens on an
 _Avoid_: Blocked (dependencies now), failed (the single, still-retryable attempt status).
 
 **Interrupted / crashed**:
-The two restart outcomes, distinct from the failure outcomes above: neither is an **attempt record**, and neither advances an item toward *exhausted*. A run is *interrupted* when the daemon stops it gracefully during a drain — a shutdown finalizer records it, and it resumes its **session** on the next start. A run is *crashed* when startup finds it still `running` because the daemon died ungracefully — it also resumes, but a small per-item cap on consecutive crashes tips it to *exhausted*, so a poison-pill item cannot resume forever. Both keep their **claim** across the restart; resume is machine-local, since the session lives only in this daemon's run ledger.
+The two restart outcomes, distinct from the failure outcomes above: neither is an **attempt record**, and neither advances an item toward *exhausted*. A run is *interrupted* when the daemon stops it gracefully during a drain. A run is *crashed* when startup finds it still `running` because the daemon died ungracefully. Recovery starts a replacement Run that resumes the Session; it never takes over the prior native invocation. A small per-item cap on consecutive crashes tips the item to *exhausted*, so a poison-pill item cannot restart forever. Both keep their **claim** across the restart; Session resume is machine-local, since the Session lives only in this daemon's Run ledger.
 _Avoid_: Failed (a real, still-retryable attempt), exhausted (the terminal failure outcome), stale claim (one we release — a resumable run's claim is not stale).
 
 ### Harness contract
@@ -381,8 +397,8 @@ _Avoid_: Run id (that's the execution), message id alone (there are several)
 The snapshot the daemon reports over RPC: health, uptime, scheduler stats, per-workspace info, and load failures.
 _Avoid_: State, health check
 
-**Actionable / claimed / blocked / needs-human item**:
-The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, blocked on open dependencies, and parked for a person. Narrowed views of a work item, not new entities. Each carries an optional **PR summary** when the source control provider resolved a pull request for it; an item with no PR simply omits it. A needs-human item also carries the halt reason and, when triage self-halted it, the **inline triage proposal** — the agent's proposal/question text, re-derived from the tracker on every reconcile so a surface can render the question in place without reading the comment thread. It is `null` when nothing self-halted the item (for example, an exhaustion hand-off).
+**Actionable / claimed / blocked / needs-human / ready-to-merge item**:
+The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, blocked on open dependencies, parked for a person, and an approved pull request waiting for a person to merge it. Narrowed views of a work item, not new entities. The first four carry an optional **PR summary** when the source control provider resolved a pull request for the item; an item with no PR omits it. A ready-to-merge item carries a required PR summary and is neither eligible, claimed, blocked, nor needs-human. A needs-human item also carries the halt reason and, when triage self-halted it, the **inline triage proposal** — the agent's proposal/question text, re-derived from the tracker on every reconcile so a surface can render the question in place without reading the comment thread. It is `null` when nothing self-halted the item (for example, an exhaustion hand-off).
 _Avoid_: Reusing "work item" for these narrowed views
 
 **Inline triage proposal**:

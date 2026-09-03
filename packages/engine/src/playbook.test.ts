@@ -143,6 +143,8 @@ describe("buildContinuationNudge", () => {
     assert.include(nudge, "You were interrupted part-way through the task above");
     assert.include(nudge, "Inspect /wt/15-implement-playbook to see how far you got");
     assert.include(nudge, "Do not start over and do not redo completed work");
+    assert.include(nudge, "prepared Worktree as ground truth");
+    assert.include(nudge, "Do not trust the ragged tail");
     assert.include(nudge, "say COMPLETE and stop");
     assert.include(nudge, "keep using it and never open a second one");
     assert.notInclude(nudge, "implement-agent");

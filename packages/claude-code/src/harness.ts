@@ -427,7 +427,7 @@ const descriptor = (
         usageQuality: "metered",
         readinessDiagnostics: true,
         journal: true,
-        takeover: false,
+        takeover: true,
       },
       projectedMembers: [
         "Harness Adapter",

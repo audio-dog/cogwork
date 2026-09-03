@@ -325,8 +325,8 @@ const codexDescriptor = (
         fileEventFidelity: "sandbox",
         usageQuality: "metered",
         readinessDiagnostics: true,
-        journal: false,
-        takeover: false,
+        journal: true,
+        takeover: true,
       },
       projectedMembers: [
         "Harness Adapter",

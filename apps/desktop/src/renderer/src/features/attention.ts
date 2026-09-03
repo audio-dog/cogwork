@@ -48,31 +48,30 @@ const attentionEntryFor = (
   board: Board,
   workspace: WorkspaceId,
   item: ClassifiedItem,
-): ReadonlyArray<AttentionEntry> => {
-  const tracker = trackerFor(board, workspace);
-  const pr = item.pr;
-  if (pr?.review === "ready") {
-    return [
+): ReadonlyArray<AttentionEntry> =>
+  ClassifiedItem.match<ReadonlyArray<AttentionEntry>>(item, {
+    ReadyToMerge: (ready) => [
       {
         workspace,
-        item,
-        kind: "ready-to-merge" as const,
-        pr,
+        item: ready,
+        kind: "ready-to-merge",
+        pr: ready.pr,
       },
-    ];
-  }
-  if (!ClassifiedItem.guards.NeedsHuman(item)) return [];
-  return [
-    {
-      workspace,
-      item,
-      kind: "needs-decision" as const,
-      reason: item.reason,
-      url: item.url,
-      tracker,
-    },
-  ];
-};
+    ],
+    NeedsHuman: (needsHuman) => [
+      {
+        workspace,
+        item: needsHuman,
+        kind: "needs-decision",
+        reason: needsHuman.reason,
+        url: needsHuman.url,
+        tracker: trackerFor(board, workspace),
+      },
+    ],
+    Eligible: () => [],
+    Claimed: () => [],
+    Blocked: () => [],
+  });
 
 export const attentionEntries = (board: Board): ReadonlyArray<AttentionEntry> =>
   [...board.items.values()]

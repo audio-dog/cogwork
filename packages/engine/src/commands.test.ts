@@ -492,11 +492,9 @@ describe("CancelRun", () => {
       const { item } = outcome;
 
       assert.strictEqual(outcome._tag, "Cancelled");
-      assert.strictEqual(item._tag, "NeedsHuman");
-      if (item._tag === "NeedsHuman") {
-        assert.strictEqual(item.reason, "ready-for-human");
-        assert.strictEqual(item.url, "https://linear.app/acme/issue/AUD-1");
-      }
+      if (!ClassifiedItem.guards.NeedsHuman(item)) assert.fail("expected NeedsHuman item");
+      assert.strictEqual(item.reason, "ready-for-human");
+      assert.strictEqual(item.url, "https://linear.app/acme/issue/AUD-1");
 
       const settled = yield* ledger.getRun(rid("run-1"));
       assert.strictEqual(settled?.status, "interrupted");

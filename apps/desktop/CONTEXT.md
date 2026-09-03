@@ -159,7 +159,7 @@ agent's triage proposal is AI prose; it lives on the item tab, clearly marked as
 _Avoid_: Self-halt (jargon), needs-human (the code tag, not the human word).
 
 **Ready to merge**:
-An attention item that is a pull request ready and waiting for a human (PR review `ready`). The card
+An attention item whose read-model tag is `ReadyToMerge`: a pull request ready and waiting for a human. The card
 shows its checks / review / base-divergence / wait time; the human opens it on the code host to merge
 (no in-app merge).
 _Avoid_: Merge gate, PR gate (old jargon; the PR section elsewhere is still labelled "Pull request").

@@ -1,4 +1,4 @@
-import { type WorkspaceId, WorkspaceState } from "@cogwork/contracts";
+import { PollState, type WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 
 /** The columns this page can read back and write. #457 restores the rest with its act. */
 export interface WorkspaceRecordDraft {
@@ -56,14 +56,14 @@ export const workspaceHealth = (workspace: WorkspaceState, dangling: boolean): W
       detail: "Establish it again on Connections to start polling.",
     };
   }
-  if (workspace.poll.status === "paused") {
+  if (PollState.guards.paused(workspace.poll)) {
     return {
       tone: "paused",
       label: `Polling paused · ${workspace.poll.reason}`,
       detail: workspace.poll.message,
     };
   }
-  if (workspace.poll.status === "pending") {
+  if (PollState.guards.pending(workspace.poll)) {
     return {
       tone: "pending",
       label: "Waiting for the first poll",

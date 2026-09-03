@@ -13,6 +13,8 @@ events.
 The Cursor descriptor passed to the engine's shared External Harness runtime. It retains only Cursor's ACP transport, model and effort projection, telemetry acknowledgments, diagnostics, and optional token estimate. The shared runtime owns Workspace and MCP projection, host authentication, Sandbox lifecycle, chat streaming, event bridging, and cancellation. When a request references a Session, the descriptor hands its stored opaque handle to Cursor as `modelOptions.sessionId`. Cursor sessions support programmatic resume but no human attach command.
 _Avoid_: Harness, driver
 
+Cursor ACP has no journal or takeover capability. Driver loss is never treated as safe detachment.
+
 **Cursor model / effort**:
 Harness-native strings for Cursor. The picker and adapter share the generated, versioned `cursorModels` tuple (`models:sync` → `models.generated.ts`), never a second live catalog. `models:check` detects drift from the local CLI. Runtime readiness still probes the installed CLI and its model command without changing the picker source. Config authors get autocomplete via `satisfies CursorModel`. Effort is optional (`none` | `low` | `medium` | `high` | `xhigh` | `max`) and becomes a bracket `--model` override for parameterized base ids; the listed preset ids already embed their effort.
 _Avoid_: Sync's semantic model tiers (`fast` / `default` / `powerful`); hand-maintaining the model catalog
