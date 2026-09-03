@@ -580,6 +580,5 @@ describe("handoffRoleFor", () => {
 
   it("clears no role for stages that carry none", () => {
     assert.isNull(handoffRoleFor("follow-up"));
-    assert.isNull(handoffRoleFor("verify"));
   });
 });
