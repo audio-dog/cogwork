@@ -163,17 +163,24 @@ function HarnessModelPicker({
   const effectiveCatalog = catalogFor(effectiveHarness);
   // Null until the rail is picked, so a live harness change still moves the popover.
   const [chosenRail, setChosenRail] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const railCatalog = catalogFor(chosenRail) ?? effectiveCatalog ?? harnessCatalogs[0];
   const rail = railCatalog.harness;
   const stale = modelSpec.cell.stale || harnessSpec.cell.stale;
   const needle = query.trim().toLowerCase();
   const shown = railCatalog.models.filter((model) => model.label.toLowerCase().includes(needle));
-  const own = harnessSpec.cell.own !== null || modelSpec.cell.own !== null;
+  const own = modelSpec.cell.own !== null;
   const triggerLabel = modelSpec.cell.effective ?? "Not set";
 
   return (
-    <Popover onOpenChange={(open) => open || setChosenRail(null)}>
+    <Popover
+      open={open && !disabled}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setChosenRail(null);
+      }}
+    >
       <PopoverTrigger
         render={
           <Button
@@ -222,7 +229,12 @@ function HarnessModelPicker({
                         key={model.value}
                         variant="ghost"
                         className="h-auto justify-start gap-2 px-2 py-1.5 text-start"
-                        onClick={() => onPick(rail, model.value)}
+                        onClick={() => {
+                          // One pick writes harness, model and effort; a second would
+                          // interrupt all three, so the list closes with the choice.
+                          setOpen(false);
+                          onPick(rail, model.value);
+                        }}
                       >
                         <span className="flex min-w-0 flex-1 flex-col">
                           <span className="truncate text-sm font-medium">{model.label}</span>
@@ -338,13 +350,16 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
     set("effort", null);
   };
   const profileCell = cell("permission-profile");
+  const harnessCell = cell("harness");
+  const modelCell = cell("model");
+  const pairOwn = modelCell.own ?? harnessCell.own;
 
   const specs: readonly ControlSpec[] = [
     {
       key: "harness",
       label: "Harness",
       options: harnessCatalogs.map((entry) => ({ value: entry.harness, label: entry.label })),
-      cell: cell("harness"),
+      cell: { ...harnessCell, own: pairOwn },
       select: (value) => set("harness", value),
       reset: resetHarnessAndModel,
     },
@@ -352,7 +367,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
       key: "model",
       label: "Model",
       options: catalog?.models ?? [],
-      cell: cell("model"),
+      cell: { ...modelCell, own: pairOwn },
       select: (value) => set("model", value),
       reset: resetHarnessAndModel,
     },
