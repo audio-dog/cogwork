@@ -19,6 +19,7 @@ import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsSplatRouteImport } from './routes/settings/$'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
+import { Route as SettingsHarnessesRouteImport } from './routes/settings/harnesses'
 import { Route as SettingsSchedulingRouteImport } from './routes/settings/scheduling'
 import { Route as AppCustomizeIndexRouteImport } from './routes/_app/customize/index'
 import { Route as AppCustomizeFacetRouteImport } from './routes/_app/customize/$facet'
@@ -74,6 +75,11 @@ const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
+const SettingsHarnessesRoute = SettingsHarnessesRouteImport.update({
+  id: '/harnesses',
+  path: '/harnesses',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
 const SettingsSchedulingRoute = SettingsSchedulingRouteImport.update({
   id: '/scheduling',
   path: '/scheduling',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/harnesses': typeof SettingsHarnessesRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
   '/settings/': typeof SettingsIndexRoute
   '/customize/$facet': typeof AppCustomizeFacetRoute
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/harnesses': typeof SettingsHarnessesRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/harnesses': typeof SettingsHarnessesRoute
   '/settings/scheduling': typeof SettingsSchedulingRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
+    | '/settings/harnesses'
     | '/settings/scheduling'
     | '/settings/'
     | '/customize/$facet'
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
+    | '/settings/harnesses'
     | '/settings/scheduling'
     | '/'
     | '/settings'
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/settings/$'
     | '/settings/appearance'
     | '/settings/general'
+    | '/settings/harnesses'
     | '/settings/scheduling'
     | '/_app/'
     | '/settings/'
@@ -277,6 +289,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsGeneralRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
+    '/settings/harnesses': {
+      id: '/settings/harnesses'
+      path: '/harnesses'
+      fullPath: '/settings/harnesses'
+      preLoaderRoute: typeof SettingsHarnessesRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/settings/scheduling': {
       id: '/settings/scheduling'
       path: '/scheduling'
@@ -354,6 +373,7 @@ interface SettingsRouteRouteChildren {
   SettingsSplatRoute: typeof SettingsSplatRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
+  SettingsHarnessesRoute: typeof SettingsHarnessesRoute
   SettingsSchedulingRoute: typeof SettingsSchedulingRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
@@ -362,6 +382,7 @@ const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
   SettingsSplatRoute: SettingsSplatRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
+  SettingsHarnessesRoute: SettingsHarnessesRoute,
   SettingsSchedulingRoute: SettingsSchedulingRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }

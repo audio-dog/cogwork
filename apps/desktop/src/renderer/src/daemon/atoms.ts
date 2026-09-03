@@ -83,6 +83,10 @@ export const pluginsAtom = DaemonAtomRpc.query("GetPlugins", undefined);
 
 export const connectionsAtom = DaemonAtomRpc.query("GetConnections", undefined);
 
+// Reading this spawns every installed harness's CLI, so it is asked for when the section opens and
+// when a person asks again — never on a timer.
+export const harnessesAtom = Atom.keepAlive(DaemonAtomRpc.query("GetHarnesses", undefined));
+
 export const installPluginAtom = DaemonAtomRpc.mutation("InstallPlugin");
 
 export const uninstallPluginAtom = DaemonAtomRpc.mutation("UninstallPlugin");

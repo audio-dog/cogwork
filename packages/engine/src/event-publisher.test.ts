@@ -54,6 +54,7 @@ import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
 
 const engineServices = engineTestLayer();
 const controlStoreService = {
@@ -520,6 +521,7 @@ describe("DaemonEventPublisher", () => {
     plugins = pluginManagerLayer,
   ) =>
     Daemon.handlersLayer.pipe(
+      Layer.provideMerge(harnessProbeTestLayer()),
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(eventPublisherLayer),

@@ -6,6 +6,7 @@ export * from "./contribution";
 export * from "./coordination";
 export * from "./daemon";
 export * from "./daemon-event";
+export * from "./harness";
 export * from "./issue-tracker";
 export * from "./mcp-skill";
 export * from "./plugin";

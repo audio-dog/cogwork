@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { connectionIdOf, DaemonRpcs, HarnessName, WorkspaceConfig } from "@cogwork/contracts";
+import { connectionIdOf, DaemonRpcs, HarnessName, HarnessState, WorkspaceConfig } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -123,7 +123,8 @@ const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(func
   const rpc = yield* RpcClient.make(DaemonRpcs);
   const runs = yield* rpc.ListRuns();
   const status = yield* rpc.GetStatus();
-  return { runs, status, reconciled, heartbeatsExit };
+  const harnesses = yield* rpc.GetHarnesses();
+  return { runs, status, reconciled, heartbeatsExit, harnesses };
 });
 
 const connectedWorkspace: RegisteredWorkspace = {
@@ -281,6 +282,19 @@ describe("daemon server composition", () => {
       assert.isUndefined(result.heartbeatsExit);
       assert.strictEqual(result.status.scheduler.globalInFlight, 0);
       assert.deepStrictEqual(result.status.workspaces, []);
+    }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
+  );
+
+  it.effect("reports the registered harness, its version and its models over RPC", () =>
+    Effect.gen(function* () {
+      const result = yield* inspectUnavailableDaemon();
+      const item = result.harnesses.harnesses[0];
+
+      assert.strictEqual(result.harnesses.harnesses.length, 1);
+      assert.strictEqual(item?.harness, "cursor");
+      assert.strictEqual(item?.version, "1");
+      assert.isTrue(HarnessState.guards.Ready(item?.state ?? HarnessState.cases.Ready.make({})));
+      assert.deepStrictEqual(item?.models, ["test"]);
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 });

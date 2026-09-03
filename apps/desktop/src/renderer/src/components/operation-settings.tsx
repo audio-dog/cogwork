@@ -32,10 +32,7 @@ import {
   RiArrowDownSLine,
   RiArrowGoBackLine,
   RiCheckLine,
-  RiCursorFill,
-  RiOpenaiFill,
   RiSearchLine,
-  RiSparklingFill,
 } from "@remixicon/react";
 import { createContext, type ReactNode, use, useState } from "react";
 import {
@@ -43,7 +40,6 @@ import {
   catalogFor,
   defaultProfile,
   type HarnessCatalog,
-  type HarnessGlyph,
   harnessCatalogs,
   policyProfiles,
 } from "../features/harness-catalog";
@@ -55,6 +51,7 @@ import {
   operations,
   settingCell,
 } from "../features/operation-settings";
+import { HarnessGlyphIcon } from "./harness-glyph";
 
 interface OperationSettingsState {
   readonly controlStore: ControlStore | null;
@@ -107,12 +104,6 @@ interface ControlSpec {
 /** A catalog value's label, so an inherited harness reads "Codex" rather than "codex". */
 const labelOf = (spec: ControlSpec, value: string | null) =>
   value === null ? "Not set" : (spec.options.find((option) => option.value === value)?.label ?? value);
-
-function HarnessGlyphIcon({ glyph }: { readonly glyph: HarnessGlyph }) {
-  if (glyph === "openai") return <RiOpenaiFill />;
-  if (glyph === "cursor") return <RiCursorFill />;
-  return <RiSparklingFill />;
-}
 
 function HarnessRail({
   catalogs,

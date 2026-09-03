@@ -1,4 +1,4 @@
-import { RiPaletteLine, RiSettings3Line, RiSpeedUpLine } from "@remixicon/react";
+import { RiPaletteLine, RiRobot2Line, RiSettings3Line, RiSpeedUpLine } from "@remixicon/react";
 import { linkOptions } from "@tanstack/react-router";
 
 /**
@@ -9,12 +9,14 @@ const sectionLinks = linkOptions([
   { to: "/settings/general" },
   { to: "/settings/scheduling" },
   { to: "/settings/appearance" },
+  { to: "/settings/harnesses" },
 ]);
 
 export const settingsSections = [
   { id: "general", label: "General", icon: RiSettings3Line, link: sectionLinks[0] },
   { id: "scheduling", label: "Scheduling", icon: RiSpeedUpLine, link: sectionLinks[1] },
   { id: "appearance", label: "Appearance", icon: RiPaletteLine, link: sectionLinks[2] },
+  { id: "harnesses", label: "Providers", icon: RiRobot2Line, link: sectionLinks[3] },
 ] as const;
 
 export type SettingsSection = (typeof settingsSections)[number];
@@ -71,6 +73,40 @@ export const settingsIndex = [
     title: "Runs per day",
     description: "How many Runs may start each day before the scheduler pauses new work.",
     keywords: ["budget", "daily", "spend", "cap", "limit", "runs", "pause"],
+  },
+  {
+    id: "provider-readiness",
+    sectionId: "harnesses",
+    title: "Provider readiness",
+    description: "Whether each coding agent on this machine is installed, supported and signed in.",
+    keywords: [
+      "provider",
+      "providers",
+      "harness",
+      "harnesses",
+      "coding agent",
+      "readiness",
+      "installed",
+      "version",
+      "codex",
+      "claude",
+      "cursor",
+      "anthropic",
+    ],
+  },
+  {
+    id: "provider-sign-in",
+    sectionId: "harnesses",
+    title: "Provider sign-in",
+    description: "The command that signs you in to a coding agent that owns its own login.",
+    keywords: ["sign in", "signin", "login", "authenticate", "credential", "account", "provider", "harness"],
+  },
+  {
+    id: "provider-models",
+    sectionId: "harnesses",
+    title: "Provider models",
+    description: "The models each coding agent offers on this machine.",
+    keywords: ["models", "model list", "catalog", "provider", "harness", "gpt", "claude", "opus", "sonnet"],
   },
   {
     id: "theme",

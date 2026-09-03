@@ -226,6 +226,12 @@ export const validateCheckoutDirectory = Effect.fn("Harness.validateCheckoutDire
 export interface HarnessRunner {
   readonly name: HarnessName;
   readonly sessionKind: SessionKind;
+  /**
+   * The command that establishes this Harness's own login, for a client to show when authentication
+   * is unavailable. Absent when the Harness has no such command — Cursor verifies its login during
+   * the native launch, so there is nothing to run beforehand.
+   */
+  readonly signIn?: string;
   readonly execution: HarnessExecution;
   readonly capabilities: HarnessCapabilityProfile;
   readonly authentication: HarnessAuthenticationBinding;
@@ -238,6 +244,9 @@ export interface HarnessRunner {
 }
 
 export interface HarnessService {
+  /** Every registered Harness, in registration order, so a client can list them without guessing. */
+  readonly names: ReadonlyArray<HarnessName>;
+  readonly signIn: (harness: HarnessName) => string | null;
   readonly catalog: (
     harness: HarnessName,
   ) => Effect.Effect<HarnessOptionCatalog, HarnessError, HarnessRunnerEnv>;
@@ -439,6 +448,8 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
     return yield* (yield* runnerFor(registry, harness)).readiness();
   });
   return {
+    names: runners.map((runner) => runner.name),
+    signIn: (harness) => registry.get(harness)?.signIn ?? null,
     catalog,
     preflight,
     run: (request) =>

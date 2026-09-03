@@ -47,7 +47,6 @@ import {
   setScheduling,
   uninstallPlugin,
 } from "./commands";
-
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
@@ -62,6 +61,7 @@ import {
 import * as Executor from "./executor";
 import * as GitHub from "./github";
 import * as Harness from "./harness";
+import { harnessOverview } from "./harness-overview";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
@@ -272,6 +272,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetConnections: Effect.fn("Daemon.GetConnections")(function* () {
     return yield* (yield* ConnectionStore).overview;
+  }),
+  GetHarnesses: Effect.fn("Daemon.GetHarnesses")(function* () {
+    return yield* harnessOverview();
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;

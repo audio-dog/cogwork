@@ -342,6 +342,7 @@ const codexDescriptor = (
       planMiddleware: ["sandbox"],
     },
     authentication: { mode: "host", reference: "Codex host login" },
+    signIn: "codex login",
     catalogSources: {
       // No runtime source: nothing here reads the Runtime host, so claiming `tanstack-runtime`
       // provenance made a stale pin out of every model the shipped package had not heard of.

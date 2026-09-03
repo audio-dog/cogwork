@@ -51,6 +51,7 @@ describe("catalog helpers", () => {
       "/settings/general",
       "/settings/scheduling",
       "/settings/appearance",
+      "/settings/harnesses",
     ]);
   });
 
