@@ -1,7 +1,7 @@
 import {
+  agUiIsFileDiffEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
-  FILE_DIFF_EVENT,
   HarnessName,
   ImplementStageResult,
   LifecycleStage,
@@ -530,16 +530,9 @@ describe("codexRunner", () => {
         Effect.scoped(
           Effect.gen(function* () {
             const handle = yield* createSandbox();
-            const checkoutPath = yield* initializeRepository(handle);
-            yield* Effect.promise(() => handle.fs.write("/workspace/tracked.txt", "before! by Codex\n"));
-            const timestamped = yield* Effect.promise(() =>
-              handle.process.exec("touch -t 202001010000.00 tracked.txt"),
-            );
-            yield* ensureSuccess(timestamped);
-            const events = yield* collectEvents(
-              Harness.make([
-                runner({ codexExecutable: fakeCodexExecutable(" --emit-change --fixed-mtime") }),
-              ]).run(makeRequest({ checkoutPath, session: freshSession })),
+            const events = yield* runInRepository(
+              Harness.make([runner({ codexExecutable: fakeCodexExecutable(" --emit-change") })]),
+              handle,
             );
             const capture = yield* structuredCapture(events);
 
@@ -551,26 +544,10 @@ describe("codexRunner", () => {
             );
             assert.isTrue(events.some((event) => event.type === EventType.TEXT_MESSAGE_CONTENT));
             assert.isTrue(events.some((event) => event.type === EventType.CUSTOM));
-            assert.isTrue(
-              events.some((event) => event.type === EventType.CUSTOM && event.name === FILE_DIFF_EVENT),
-            );
-            const fileDiff = events.find(
-              (event) => event.type === EventType.CUSTOM && event.name === FILE_DIFF_EVENT,
-            );
-            const fileDiffValue = fileDiff?.value;
-            if (typeof fileDiffValue !== "object" || fileDiffValue === null) {
-              return yield* Effect.die(new Error("Codex emitted no file diff value"));
-            }
-            if (
-              !("path" in fileDiffValue) ||
-              typeof fileDiffValue.path !== "string" ||
-              !("diff" in fileDiffValue) ||
-              typeof fileDiffValue.diff !== "string"
-            ) {
-              return yield* Effect.die(new Error("Codex emitted invalid file diff fields"));
-            }
-            assert.strictEqual(fileDiffValue.path, "tracked.txt");
-            assert.include(fileDiffValue.diff, "+changed by Codex");
+            const fileDiff = events.find(agUiIsFileDiffEvent);
+            if (!fileDiff) return yield* Effect.die(new Error("Codex emitted no file diff"));
+            assert.strictEqual(fileDiff.value.path, "tracked.txt");
+            assert.include(fileDiff.value.diff, "+changed by Codex");
             assert.deepNestedInclude(events.at(-1), {
               type: EventType.RUN_FINISHED,
               usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
