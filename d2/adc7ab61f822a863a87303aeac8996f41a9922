@@ -1,0 +1,29 @@
+apps/desktop/src/renderer/src/components/theme-provider.tsx
+  s_330c88d3939c54::t_d24ac68e7e949a 116,149,178
+biome.json
+  s_330c88d3939c54::t_8047acf21f7192 35,42
+configs/lint/react.grit
+  s_330c88d3939c54::t_2054af053e3003 3-8,10-12,14-15,17-41
+configs/lint/tests/rules.test.mjs
+  s_330c88d3939c54::t_903dddf871bb5f 116,158,170
+packages/ui/src/components/sidebar.tsx
+  s_330c88d3939c54::t_4335cb9fc94282 86
+packages/ui/src/hooks/use-mobile.ts
+  s_330c88d3939c54::t_11c646211c529e 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d2adc7ab61f822a863a87303aeac8996f41a9922",
+  "prompts": {},
+  "sessions": {
+    "s_330c88d3939c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea7438ab-7eb0-4f94-b042-61420f9a63df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
