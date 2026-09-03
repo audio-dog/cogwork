@@ -367,6 +367,10 @@ _Avoid_: Health check, launch guarantee, availability fallback
 The authoritative per-Run check that one registered Harness can execute the accepted Run Plan with its selected catalog values, authentication binding, policy, Workspace projection, required MCP servers, and Sandbox provider. It validates the Plan as frozen and never re-resolves settings.
 _Avoid_: Readiness, Run Plan resolution, fallback
 
+**Harness capability profile**:
+The runner-declared facts that let clients and preflight describe intentional native inequalities without guessing from a Harness name. They cover authentication bindings, Session affinity, option and structured-output support, policy fidelity, usage quality, readiness diagnostics, journal and takeover support, and file-event fidelity. File events are `exact`, `terminal-only`, `best-effort`, or `absent`; the label reports delivery quality, not whether a Run changed files.
+_Avoid_: Feature flag, fallback policy, durability activation
+
 **Harness execution boundary**:
 The sandbox, approval mode, and native tools an external CLI harness enforces inside its agent loop. Cogwork chooses that boundary when it launches the harness, but its owned-tool policy cannot intercept native shell or file operations inside Cursor or Codex. An unattended harness must use a non-interactive approval mode and remain bounded to its worktree; full host access is not an unattended default.
 _Avoid_: Owned tool policy, provider sandbox, fallback
@@ -384,7 +388,7 @@ The Operation-owned instruction document and supporting resources carrying its m
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Harness event**:
-The whole AG-UI event a harness run streams, carried inside a stable envelope rather than curated down to a fixed set of fields. A handful of fields are named because our folds and clients read them (text delta, tool call id/name, result, session id, usage, finish reason); every other key the harness emits — tool-call input, reasoning deltas, correlation ids, per-turn cost, and AG-UI fields we don't name yet — rides along instead of being dropped at decode. The engine persists these as run events and republishes them as run activity. The provider runner will emit AG-UI natively; cursor-acp maps its ACP stream best-effort.
+The whole AG-UI event a harness run streams, carried inside a stable envelope rather than curated down to a fixed set of fields. A handful of fields are named because our folds and clients read them (text delta, tool call id/name, result, session id, usage, finish reason); every other key the harness emits — tool-call input, reasoning deltas, correlation ids, per-turn cost, and AG-UI fields we don't name yet — rides along instead of being dropped at decode. The engine persists these as run events and republishes them as run activity. Supported external file changes use the shared `sandbox.file.diff` custom event before persistence, so owned and external Runs feed the same client contract. The provider runner emits AG-UI natively; cursor-acp maps its ACP stream best-effort.
 _Avoid_: Message, token, curated event (the point is that it is not curated)
 
 **Correlation ids**:

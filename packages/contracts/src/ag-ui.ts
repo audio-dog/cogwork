@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 import type { TokenUsage } from "./run";
 
+export const FILE_DIFF_EVENT = "sandbox.file.diff";
+
 const anyExtraKeys = Schema.Record(Schema.String, Schema.Unknown);
 const SessionHandleValue = Schema.Struct({ sessionId: Schema.String });
 const SessionHandleEventName = Schema.TemplateLiteral([Schema.String, ".session-id"]);
