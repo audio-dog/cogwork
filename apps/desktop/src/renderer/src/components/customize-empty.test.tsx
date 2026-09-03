@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { McpReadiness } from "../features/configuration-model";
 import { contributionById } from "../features/configuration-placeholder";
 import { emptyReason, searchEmptyReason } from "./customize-empty";
 import { readinessCopy } from "./mcp-configure-dialog";
@@ -58,7 +59,7 @@ describe("readinessCopy", () => {
   it("passes the Engine's own reason through when it says not ready", () => {
     const copy = readinessCopy({
       ...required("plugin:linear/mcp/linear"),
-      readiness: { _tag: "not-ready", reason: "The command exited before the handshake." },
+      readiness: McpReadiness["not-ready"]({ reason: "The command exited before the handshake." }),
     });
     expect(copy.title).toBe("Not ready");
     expect(copy.detail).toBe("The command exited before the handshake.");
