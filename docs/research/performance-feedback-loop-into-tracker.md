@@ -2,6 +2,17 @@
 
 Date: 2026-09-01.
 
+> **Two facts below were overtaken the same day this was written.** The engine *can* create issues:
+> `createIssue` landed in `82129aff` and sits on the port at
+> `packages/engine/src/issue-tracker.ts:132`. And open-issue observation *does* paginate:
+> `collectIssuePages` walks pages until a short one
+> (`packages/engine/src/github/client.ts:638`), landed in `fd2b9b2e`, so the "one unpaginated page
+> of 100" figure cited at four points below no longer holds and auto-filed ticket noise is not the
+> correctness bug this doc calls it. The guardrail reasoning — fingerprints, stateful detectors,
+> tracker-derived dedup, bounded emission, re-file never reopen — is unaffected and carried into
+> ADR [0021](../adr/0021-the-performance-sensor-files-its-own-tickets.md) and ADR
+> [0022](../adr/0022-a-sensor-lives-where-its-signal-is-produced.md).
+
 **Question.** When cogwork detects bad performance in itself, can it file a ticket on its own
 board and let its own triage → implement → follow-up pipeline carry the fix? What does a
 machine-filed ticket need for the pipeline to pick it up with no human, what guardrails does the
