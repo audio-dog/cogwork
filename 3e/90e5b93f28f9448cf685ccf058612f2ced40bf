@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_16ee42df336e01::t_e340e859065f27 10,40-45,48-51,57-58
+apps/desktop/src/renderer/src/features/plugin-configuration.test.ts
+  s_16ee42df336e01::t_252b4971d826be 12,156,159
+  s_16ee42df336e01::t_fe094ab19f3dac 87
+  s_16ee42df336e01::t_5bf9f3dc1e2b80 192-193
+  s_16ee42df336e01::t_979e2c02abb7c3 17
+apps/desktop/src/renderer/src/features/plugin-configuration.ts
+  s_16ee42df336e01::t_c7ec07f0471eb7 9,12,15,17-18,52,56-59,67,118,126,138,141,149,215
+  s_16ee42df336e01::t_f6be2c435b7a39 40-42,53-55
+  s_16ee42df336e01::t_5bf9f3dc1e2b80 68-70,125,148
+  s_16ee42df336e01::t_a0cb5441efe6c0 11,13-14,16
+  s_16ee42df336e01::t_3b2ef781028a44 19-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3e90e5b93f28f9448cf685ccf058612f2ced40bf",
+  "prompts": {},
+  "sessions": {
+    "s_16ee42df336e01": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0657b-fb0f-7de0-bc98-f7b61ff0d09f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
