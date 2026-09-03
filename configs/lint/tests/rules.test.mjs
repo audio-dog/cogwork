@@ -15,19 +15,19 @@ const ruleCases = [
   {
     message:
       "Rule: avoid Effect.all for sequential side-effect steps. Why: it hides imperative sequencing in an array. Fix: use one explicit linear pipeline with Effect.andThen/flatMap and reserve Effect.all for real value aggregation.",
-    plugin: "no-effect-all-step-sequencing",
+    plugin: "effect-calls",
     name: "no-effect-all-step-sequencing",
   },
   {
     message:
       "Rule: avoid Effect.as. Why: it hides sequencing and turns effects into placeholders. Fix: use Effect.map for value mapping or Effect.asVoid after explicit pipeline steps.",
-    plugin: "no-effect-as",
+    plugin: "effect-calls",
     name: "no-effect-as",
   },
   {
     message:
       "Rule: avoid Effect.bind. Why: it hides sequencing inside builder-style accumulation. Fix: use one flat pipe-based Effect flow or one direct top-level Effect.gen with direct yields, not nested generators or wrapper helpers.",
-    plugin: "no-effect-bind",
+    plugin: "effect-calls",
     name: "no-effect-bind",
   },
   {
@@ -39,7 +39,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid Effect.fn generator wrappers. Why: they hide sequencing and dodge ladder rules. Fix: keep a single flat pipeline or use one Effect.gen.",
-    plugin: "no-effect-fn-generator",
+    plugin: "effect-calls",
     name: "no-effect-fn-generator",
   },
   {
@@ -51,13 +51,13 @@ const ruleCases = [
   {
     message:
       "Rule: avoid Effect.orElse around sequencing chains. Why: it hides error handling and splits the flow. Fix: move error handling to a single terminal decision after the pipeline.",
-    plugin: "no-effect-orElse-ladder",
+    plugin: "effect-calls",
     name: "no-effect-orElse-ladder",
   },
   {
     message:
       "Rule: avoid Effect.as for side effects. Why: it hides side effects and turns them into placeholders. Fix: use explicit pipeline steps that return real values with Effect.flatMap, Effect.andThen, or Effect.tap.",
-    plugin: "no-effect-side-effect-wrapper",
+    plugin: "effect-calls",
     name: "no-effect-side-effect-wrapper",
   },
   {
@@ -69,19 +69,19 @@ const ruleCases = [
   {
     message:
       "Rule: do not return an Effect from Effect.sync. Why: the result is Effect<Effect<...>>, so the inner Effect is constructed and never run — a silent no-op. Fix: use Effect.suspend to defer building it, or call it directly when laziness is not needed.",
-    plugin: "no-effect-sync-effect",
+    plugin: "effect-calls",
     name: "no-effect-sync-effect",
   },
   {
     message:
       "Rule: do not pass an async thunk to Effect.sync. Why: the result is Effect<Promise<A>>, so the promise is never awaited, a rejection becomes an unhandled rejection instead of a typed failure, and interruption cannot cancel it. Fix: use Effect.tryPromise, whose callback receives an AbortSignal wired to interruption, or Effect.promise when it cannot reject.",
-    plugin: "no-effect-sync-promise",
+    plugin: "effect-calls",
     name: "no-effect-sync-promise",
   },
   {
     message:
       "Rule: do not throw inside Effect.sync. Why: Effect.sync is documented as not throwing, so a thrown value becomes a defect rather than a typed failure and escapes the error channel. Fix: use Effect.try with a catch that builds a typed error, or return Effect.fail for an expected failure.",
-    plugin: "no-effect-sync-throw",
+    plugin: "effect-calls",
     name: "no-effect-sync-throw",
   },
   {
@@ -125,13 +125,13 @@ const ruleCases = [
   {
     message:
       "Rule: avoid deeply nested Effect calls (Effect.xx(Effect.yy(Effect.zz(...)))). Why: they hide sequencing and spread flow. Fix: build values first, then run one flat Effect pipeline.",
-    plugin: "no-nested-effect-call",
+    plugin: "effect-calls",
     name: "no-nested-effect-call",
   },
   {
     message:
       "Rule: avoid nested Effect.gen. Why: nested generators hide sequencing. Fix: flatten to a single Effect.gen per method or a single flat pipeline.",
-    plugin: "no-nested-effect-gen",
+    plugin: "effect-calls",
     name: "no-nested-effect-gen",
   },
   {

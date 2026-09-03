@@ -1,0 +1,156 @@
+language js(typescript, jsx)
+
+// Biome runs one pass over every source file for each plugin file,
+// so a rule in its own file re-walks the whole repository. One node-kind-filtered
+// root shared by many rules collapses those passes into one. See issue #433.
+//
+// Biome keeps one diagnostic per span within a plugin, so branches run
+// most-specific first: the most useful message must be the one that survives.
+
+any {
+  `Effect.$method($args)` as $call where {
+    any {
+      // no-effect-side-effect-wrapper (Effect.as)
+      and {
+        $call <: `Effect.as($first, $second)`,
+        or {
+          $first <: contains `setState($_)`,
+          $first <: contains `Atom.set($_)`,
+          $first <: contains `invalidate($_)`,
+          $first <: contains `Effect.log$_`,
+          $first <: contains `console.$consoleMethod($_)`
+        },
+        register_diagnostic(span=$call, message="Rule: avoid Effect.as for side effects. Why: it hides side effects and turns them into placeholders. Fix: use explicit pipeline steps that return real values with Effect.flatMap, Effect.andThen, or Effect.tap.", severity="error")
+      },
+      // no-effect-side-effect-wrapper (Effect.zipRight)
+      and {
+        $call <: `Effect.zipRight($first, $second)`,
+        or {
+          $first <: contains `setState($_)`,
+          $first <: contains `Atom.set($_)`,
+          $first <: contains `invalidate($_)`,
+          $first <: contains `Effect.log$_`,
+          $first <: contains `console.$consoleMethod($_)`
+        },
+        register_diagnostic(span=$call, message="Rule: avoid Effect.zipRight for side effects. Why: it hides side effects and discards values. Fix: use explicit pipeline steps that return real values with Effect.flatMap, Effect.andThen, or Effect.tap.", severity="error")
+      },
+      // no-effect-sync-promise
+      and {
+        or {
+          $call <: `Effect.sync(async $params => $body)`,
+          $call <: `Effect.sync(async function $_($_) { $body })`
+        },
+        register_diagnostic(span=$call, message="Rule: do not pass an async thunk to Effect.sync. Why: the result is Effect<Promise<A>>, so the promise is never awaited, a rejection becomes an unhandled rejection instead of a typed failure, and interruption cannot cancel it. Fix: use Effect.tryPromise, whose callback receives an AbortSignal wired to interruption, or Effect.promise when it cannot reject.", severity="error")
+      },
+      // no-effect-sync-throw
+      and {
+        $call <: `Effect.sync($fn)`,
+        $fn <: contains `throw $_`,
+        register_diagnostic(span=$call, message="Rule: do not throw inside Effect.sync. Why: Effect.sync is documented as not throwing, so a thrown value becomes a defect rather than a typed failure and escapes the error channel. Fix: use Effect.try with a catch that builds a typed error, or return Effect.fail for an expected failure.", severity="error")
+      },
+      // no-effect-sync-effect
+      and {
+        $call <: `Effect.sync($fn)`,
+        $fn <: `() => $expr`,
+        or {
+          $expr <: `Effect.$syncMethod($_)`,
+          $expr <: `Effect.$syncMethod<$_>($_)`,
+          $expr <: `Effect.$syncMethod($_).pipe($_)`
+        },
+        register_diagnostic(span=$call, message="Rule: do not return an Effect from Effect.sync. Why: the result is Effect<Effect<...>>, so the inner Effect is constructed and never run — a silent no-op. Fix: use Effect.suspend to defer building it, or call it directly when laziness is not needed.", severity="error")
+      },
+      // no-effect-all-step-sequencing
+      and {
+        $call <: `Effect.all($steps, $options)`,
+        $options <: contains `concurrency: 1`,
+        or {
+          $steps <: contains `Ref.set($_, $_)`,
+          $steps <: contains `Atom.set($_, $_)`,
+          $steps <: contains `SubscriptionRef.set($_, $_)`,
+          $steps <: contains `Reactivity.invalidate($_)`,
+          $steps <: contains `Fiber.interrupt($_)`,
+          $steps <: contains `Effect.log$_`
+        },
+        register_diagnostic(span=$call, message="Rule: avoid Effect.all for sequential side-effect steps. Why: it hides imperative sequencing in an array. Fix: use one explicit linear pipeline with Effect.andThen/flatMap and reserve Effect.all for real value aggregation.", severity="error")
+      },
+      // no-effect-fn-generator
+      and {
+        or {
+          $call <: `Effect.fn(function* () { $block })`,
+          $call <: `Effect.fn(function* ($params) { $block })`
+        },
+        register_diagnostic(span=$call, message="Rule: avoid Effect.fn generator wrappers. Why: they hide sequencing and dodge ladder rules. Fix: keep a single flat pipeline or use one Effect.gen.", severity="error")
+      },
+      // no-effect-bind
+      and {
+        $call <: `Effect.bind($name, $step)`,
+        register_diagnostic(span=$call, message="Rule: avoid Effect.bind. Why: it hides sequencing inside builder-style accumulation. Fix: use one flat pipe-based Effect flow or one direct top-level Effect.gen with direct yields, not nested generators or wrapper helpers.", severity="error")
+      },
+      // no-effect-orElse-ladder
+      and {
+        $call <: `Effect.orElse($first, $second)`,
+        or {
+          $first <: contains `Effect.flatMap($_)`,
+          $first <: contains `Effect.zipRight($_)`,
+          $first <: contains `Effect.as($_)`,
+          $first <: contains `Effect.tap($_)`
+        },
+        register_diagnostic(span=$call, message="Rule: avoid Effect.orElse around sequencing chains. Why: it hides error handling and splits the flow. Fix: move error handling to a single terminal decision after the pipeline.", severity="error")
+      },
+      // no-nested-effect-gen (spans the inner gen, not the call)
+      and {
+        $call <: `Effect.gen(function* () { $outer })`,
+        $outer <: contains `Effect.gen($_)` as $nested,
+        register_diagnostic(span=$nested, message="Rule: avoid nested Effect.gen. Why: nested generators hide sequencing. Fix: flatten to a single Effect.gen per method or a single flat pipeline.", severity="error")
+      },
+      // no-nested-effect-call
+      and {
+        or { $call <: `Effect.$outer($first)`, $call <: `Effect.$outer($first, $second)` },
+        or {
+          $first <: `Effect.$inner($innerOnly)` where { $innerOnly <: `Effect.$deep($_)` },
+          $first <: `Effect.$inner($innerFirst, $innerSecond)` where { $innerFirst <: `Effect.$deep($_)` }
+        },
+        register_diagnostic(span=$call, message="Rule: avoid deeply nested Effect calls (Effect.xx(Effect.yy(Effect.zz(...)))). Why: they hide sequencing and spread flow. Fix: build values first, then run one flat Effect pipeline.", severity="error")
+      },
+      // no-effect-as (most general; runs last)
+      and {
+        $call <: `Effect.as($value)`,
+        register_diagnostic(span=$call, message="Rule: avoid Effect.as. Why: it hides sequencing and turns effects into placeholders. Fix: use Effect.map for value mapping or Effect.asVoid after explicit pipeline steps.", severity="error")
+      }
+    }
+  },
+  // Type-argument call forms are a different node shape, so they need their own root.
+  `Effect.sync<$types>($fn)` as $tcall where {
+    any {
+      and {
+        $fn <: `async $tparams => $tbody`,
+        register_diagnostic(span=$tcall, message="Rule: do not pass an async thunk to Effect.sync. Why: the result is Effect<Promise<A>>, so the promise is never awaited, a rejection becomes an unhandled rejection instead of a typed failure, and interruption cannot cancel it. Fix: use Effect.tryPromise, whose callback receives an AbortSignal wired to interruption, or Effect.promise when it cannot reject.", severity="error")
+      },
+      and {
+        $fn <: contains `throw $_`,
+        register_diagnostic(span=$tcall, message="Rule: do not throw inside Effect.sync. Why: Effect.sync is documented as not throwing, so a thrown value becomes a defect rather than a typed failure and escapes the error channel. Fix: use Effect.try with a catch that builds a typed error, or return Effect.fail for an expected failure.", severity="error")
+      },
+      and {
+        $fn <: `() => $texpr`,
+        or {
+          $texpr <: `Effect.$tm($_)`,
+          $texpr <: `Effect.$tm<$_>($_)`,
+          $texpr <: `Effect.$tm($_).pipe($_)`
+        },
+        register_diagnostic(span=$tcall, message="Rule: do not return an Effect from Effect.sync. Why: the result is Effect<Effect<...>>, so the inner Effect is constructed and never run — a silent no-op. Fix: use Effect.suspend to defer building it, or call it directly when laziness is not needed.", severity="error")
+      }
+    }
+  },
+  // Effect.all(...).pipe(Effect.asVoid) — the callee is a member of a call, not of `Effect`.
+  `Effect.all($steps).pipe(Effect.asVoid)` as $pcall where {
+    or {
+      $steps <: contains `Ref.set($_, $_)`,
+      $steps <: contains `Atom.set($_, $_)`,
+      $steps <: contains `SubscriptionRef.set($_, $_)`,
+      $steps <: contains `Reactivity.invalidate($_)`,
+      $steps <: contains `Fiber.interrupt($_)`,
+      $steps <: contains `Effect.log$_`
+    },
+    register_diagnostic(span=$pcall, message="Rule: avoid Effect.all for sequential side-effect steps. Why: it hides imperative sequencing in an array. Fix: use one explicit linear pipeline with Effect.andThen/flatMap and reserve Effect.all for real value aggregation.", severity="error")
+  }
+}
