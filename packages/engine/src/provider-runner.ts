@@ -25,6 +25,7 @@ import {
   selectionOfPreflightInput,
   staticCatalogSource,
 } from "./harness";
+import { operationPolicyProfile } from "./operation-policy";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
@@ -72,17 +73,17 @@ export interface ProviderRunnerOptions {
   readonly runChat?: RunChat;
 }
 
-const isReadOnlyStage = (stage: LifecycleStage) => stage === "triage" || stage === "verify";
+const usesReadOnlyProfile = (stage: LifecycleStage) => operationPolicyProfile(stage) === "read-only";
 const readOnlyLoopBudget = 12;
 const writingLoopBudget = 40;
 const readOnlyRunBudget = "15 minutes";
 const writingRunBudget = "2 hours";
 
 export const defaultLoopBudget = (stage: LifecycleStage) =>
-  isReadOnlyStage(stage) ? readOnlyLoopBudget : writingLoopBudget;
+  usesReadOnlyProfile(stage) ? readOnlyLoopBudget : writingLoopBudget;
 
 export const defaultRunBudget = (stage: LifecycleStage) =>
-  isReadOnlyStage(stage) ? readOnlyRunBudget : writingRunBudget;
+  usesReadOnlyProfile(stage) ? readOnlyRunBudget : writingRunBudget;
 
 const launchError = (retryable: boolean, message: string) =>
   new HarnessError({ reason: "launch", retryable, message });

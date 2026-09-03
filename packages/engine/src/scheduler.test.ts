@@ -159,7 +159,7 @@ describe("Scheduler.plan", () => {
 
   it("orders picks by stage priority under contention", () => {
     const candidates = [
-      candidate(wsA, work(1, "verify"), 10),
+      candidate(wsA, work(1, "implement"), 10),
       candidate(wsA, work(2, "triage"), 10),
       candidate(wsA, work(3, "follow-up"), 10),
     ];
@@ -460,29 +460,6 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
 describe("Scheduler.tick", () => {
   const wsA = workspaceOf("a", 2);
   const wsB = workspaceOf("b", 2);
-
-  it.effect("does not dispatch verify work without an executable Operation", () =>
-    Effect.gen(function* () {
-      const scheduler = yield* Scheduler.Scheduler;
-      const probe = yield* SchedulerProbe;
-      const before = (yield* Metric.value(Scheduler.schedulerTickDuration)).count;
-
-      assert.strictEqual(yield* scheduler.tick(), 0);
-      assert.strictEqual((yield* Metric.value(Scheduler.schedulerTickDuration)).count, before + 1);
-      assert.deepStrictEqual(yield* Ref.get(probe.executions), []);
-    }).pipe(
-      Effect.provide(
-        schedulerLayer(
-          { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
-          {
-            registry: [wsA],
-            snapshots: [{ workspace: wsA, eligible: [work(1, "verify")] }],
-            execute: succeed,
-          },
-        ),
-      ),
-    ),
-  );
 
   it.effect("enforces global and per-workspace caps across two workspaces", () =>
     Effect.gen(function* () {

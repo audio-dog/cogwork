@@ -105,10 +105,9 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
       commands: [],
       hooks: [],
       middleware: ["sandbox"],
-      structuredOutput:
-        stageResultJsonSchema(operation)?.["~standard"].jsonSchema.input({
-          target: "draft-2020-12",
-        }) ?? null,
+      structuredOutput: stageResultJsonSchema(operation)["~standard"].jsonSchema.input({
+        target: "draft-2020-12",
+      }),
       connections: [],
       messages: [{ role: "user", content: "triage the issue" }],
       workContext: {

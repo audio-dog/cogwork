@@ -83,22 +83,22 @@ describe("operationSettingUpdate", () => {
   });
 
   it("clears the cell when the value is null, which puts it back on the default", () => {
-    expect(operationSettingUpdate(workspace, "verify", "effort", null)).toEqual({
+    expect(operationSettingUpdate(workspace, "follow-up", "effort", null)).toEqual({
       _tag: "Clear",
       cell: {
         setting: "effort",
-        level: { _tag: "Operation", workflow: "coding", operation: "verify" },
+        level: { _tag: "Operation", workflow: "coding", operation: "follow-up" },
         scope: { _tag: "PrivateWorkspaceOverlay", workspace },
       },
     });
   });
 
   it("sends enabled as the boolean its row schema expects", () => {
-    expect(operationSettingUpdate(workspace, "verify", "enabled", "false")).toEqual({
+    expect(operationSettingUpdate(workspace, "follow-up", "enabled", "false")).toEqual({
       _tag: "Set",
       row: {
         setting: "enabled",
-        level: { _tag: "Operation", workflow: "coding", operation: "verify" },
+        level: { _tag: "Operation", workflow: "coding", operation: "follow-up" },
         scope: { _tag: "PrivateWorkspaceOverlay", workspace },
         value: false,
       },
@@ -111,13 +111,13 @@ describe("enabled", () => {
     const controlStore = store([
       { setting: "enabled", level: { _tag: "Default" }, scope: { _tag: "SettingsProfile" }, value: false },
     ]);
-    expect(settingCell(controlStore, workspace, "verify", "enabled").effective).toBe("false");
+    expect(settingCell(controlStore, workspace, "follow-up", "enabled").effective).toBe("false");
     // Clearing would fall back to the profile's `false`, so "on" has to be an explicit true.
-    expect(operationSettingUpdate(workspace, "verify", "enabled", "true")).toEqual({
+    expect(operationSettingUpdate(workspace, "follow-up", "enabled", "true")).toEqual({
       _tag: "Set",
       row: {
         setting: "enabled",
-        level: { _tag: "Operation", workflow: "coding", operation: "verify" },
+        level: { _tag: "Operation", workflow: "coding", operation: "follow-up" },
         scope: { _tag: "PrivateWorkspaceOverlay", workspace },
         value: true,
       },

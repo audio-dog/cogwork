@@ -52,11 +52,10 @@ const dangerousCommands = [
 ];
 
 describe("policy profiles", () => {
-  it("maps each stage to a profile, defaulting to read-only", () => {
+  it("maps each stage to a profile", () => {
     assert.strictEqual(profileForStage("triage"), readOnlyProfile);
     assert.strictEqual(profileForStage("implement"), fullProfile);
     assert.strictEqual(profileForStage("follow-up"), fullProfile);
-    assert.strictEqual(profileForStage("verify"), readOnlyProfile);
   });
 
   it("triage denies write, edit, and shell but allows the read-only surface", () => {

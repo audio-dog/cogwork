@@ -444,25 +444,6 @@ describe("Recovery.recover", () => {
     }).pipe(Effect.provide(recoveryLayer({ observed: [claimedWithPr("pending", { checks: "failing" })] }))),
   );
 
-  it.effect("releases an interrupted implement claim whose current verify stage is unsupported", () =>
-    Effect.gen(function* () {
-      const probe = yield* RecoveryProbe;
-      const recovery = yield* Recovery.Recovery;
-      yield* probe.ledger.insertRun(interrupted);
-      yield* recovery.recover();
-      assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
-      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
-      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
-    }).pipe(
-      Effect.provide(
-        recoveryLayer({
-          observed: [claimedWithPr("ready")],
-          availability: { operation: "verify", available: false, causes: [] },
-        }),
-      ),
-    ),
-  );
-
   it.effect("settles and releases a claim whose current PR state has no operation", () =>
     Effect.gen(function* () {
       const probe = yield* RecoveryProbe;

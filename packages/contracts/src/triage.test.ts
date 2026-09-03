@@ -6,6 +6,7 @@ import {
   FollowUpStageResult,
   FollowUpStageResultCompletion,
   ImplementStageResult,
+  LifecycleStage,
   priorityRank,
   resolvePriority,
   StageResult,
@@ -118,11 +119,12 @@ describe("StageResult", () => {
     }),
   );
 
-  it("returns shared stage-result schemas for follow-up and leaves verify without one", () => {
-    assert.isDefined(stageResultJsonSchema("follow-up"));
-    assert.strictEqual(stageResultJsonSchema("verify"), undefined);
+  it("returns schemas for every operation", () => {
+    for (const operation of LifecycleStage.literals) {
+      assert.isDefined(stageResultJsonSchema(operation));
+      assert.isDefined(stageResultCompletionSchema(operation));
+    }
     assert.strictEqual(stageResultCompletionSchema("follow-up"), FollowUpStageResultCompletion);
-    assert.strictEqual(stageResultCompletionSchema("verify"), undefined);
   });
 });
 

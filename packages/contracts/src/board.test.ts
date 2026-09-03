@@ -9,6 +9,7 @@ import { ControlStore, SchedulerStats } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { RunSummary } from "./run";
 import { defaultControlStore } from "./scheduler-defaults";
+import type { LifecycleStage } from "./triage";
 
 const workspace = Schema.decodeSync(WorkspaceId);
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
@@ -31,9 +32,7 @@ const registered = (name: string) =>
     availability: [],
   });
 
-type Stage = "triage" | "implement" | "follow-up" | "verify";
-
-const eligible = (id: string, stage: Stage) =>
+const eligible = (id: string, stage: LifecycleStage) =>
   classifiedItem({ _tag: "Eligible", id, title: `Item ${id}`, url: null, stage });
 
 const needsHuman = (id: string, url: string | null) =>
@@ -119,13 +118,13 @@ describe("applyDaemonEvent", () => {
   it("removes an item only in its own workspace", () => {
     const board = fold([
       event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
-      event({ _tag: "ItemChanged", workspace: "beta", item: eligible("1", "verify") }),
+      event({ _tag: "ItemChanged", workspace: "beta", item: eligible("1", "follow-up") }),
       event({ _tag: "ItemRemoved", workspace: "acme", id: "1" }),
     ]);
 
     assert.strictEqual(board.items.size, 1);
     assert.isUndefined(board.items.get("acme::1"));
-    assert.strictEqual(stageOf(board.items.get("beta::1")?.item), "verify");
+    assert.strictEqual(stageOf(board.items.get("beta::1")?.item), "follow-up");
   });
 
   it("tolerates removing an item the board never had", () => {
@@ -136,12 +135,12 @@ describe("applyDaemonEvent", () => {
   it("keeps items with the same id apart across workspaces", () => {
     const board = fold([
       event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
-      event({ _tag: "ItemChanged", workspace: "beta", item: eligible("1", "verify") }),
+      event({ _tag: "ItemChanged", workspace: "beta", item: eligible("1", "follow-up") }),
     ]);
 
     assert.strictEqual(board.items.size, 2);
     assert.strictEqual(stageOf(board.items.get("acme::1")?.item), "triage");
-    assert.strictEqual(stageOf(board.items.get("beta::1")?.item), "verify");
+    assert.strictEqual(stageOf(board.items.get("beta::1")?.item), "follow-up");
   });
 
   it("is idempotent: applying the same event twice is harmless", () => {

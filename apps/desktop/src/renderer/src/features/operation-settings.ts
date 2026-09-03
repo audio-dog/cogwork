@@ -1,6 +1,6 @@
 import {
   type ControlStore,
-  type LifecycleStage,
+  LifecycleStage,
   type OperationSettingName,
   type OperationSettingRow,
   type OperationSettingUpdate,
@@ -12,20 +12,18 @@ import { catalogFor } from "./harness-catalog";
 /** `operationSettingRefusal` refuses any workflow but this one, so it is fixed today. */
 export const codingWorkflow = "coding";
 
-export const operations: readonly LifecycleStage[] = ["triage", "implement", "follow-up", "verify"];
+export const operations = LifecycleStage.literals;
 
 export const operationLabels: Record<LifecycleStage, string> = {
   triage: "Triage",
   implement: "Implement",
   "follow-up": "Follow-up",
-  verify: "Verify",
 };
 
 export const operationSummaries: Record<LifecycleStage, string> = {
   triage: "Reads a new work item and proposes what happens to it.",
   implement: "Writes the change and opens a pull request.",
   "follow-up": "Answers failing checks and review comments on its own pull request.",
-  verify: "Checks the change against what the work item asked for.",
 };
 
 /**

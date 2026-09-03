@@ -73,16 +73,13 @@ export const resolveFollowUp = (config: WorkspaceConfig) =>
     needs: [],
   });
 
-const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) => OperationDefinition>> = {
+const stageResolvers: Record<LifecycleStage, (config: WorkspaceConfig) => OperationDefinition> = {
   triage: resolveTriage,
   implement: resolveImplement,
   "follow-up": resolveFollowUp,
 };
 
-export const operationStages = ["triage", "implement", "follow-up"] satisfies ReadonlyArray<LifecycleStage>;
-
-export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) =>
-  stageResolvers[stage]?.(config) ?? null;
+export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) => stageResolvers[stage](config);
 
 const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);

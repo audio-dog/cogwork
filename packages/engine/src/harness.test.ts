@@ -150,7 +150,6 @@ describe("stageResultSchema", () => {
   it.effect("prepares the triage result as a validating Standard JSON Schema", () =>
     Effect.gen(function* () {
       const schema = stageResultSchema("triage");
-      if (!schema) return assert.fail("triage stage has no result schema");
 
       const jsonSchema = schema["~standard"].jsonSchema.input({ target: "draft-2020-12" });
       const root = yield* Schema.decodeUnknownEffect(
@@ -190,7 +189,6 @@ describe("stageResultSchema", () => {
   it.effect("prepares the implement result as a validating Standard JSON Schema", () =>
     Effect.gen(function* () {
       const schema = stageResultSchema("implement");
-      if (!schema) return assert.fail("implement stage has no result schema");
 
       const result = yield* Effect.promise(() =>
         Promise.resolve(
@@ -219,7 +217,6 @@ describe("stageResultSchema", () => {
   it.effect("prepares the follow-up result as a validating Standard JSON Schema", () =>
     Effect.gen(function* () {
       const schema = stageResultSchema("follow-up");
-      if (!schema) return assert.fail("follow-up stage has no result schema");
 
       const result = yield* Effect.promise(() =>
         Promise.resolve(
@@ -244,10 +241,6 @@ describe("stageResultSchema", () => {
       assert.isDefined(invalid.issues);
     }),
   );
-
-  it("does not prepare a structured result for stages still using their existing protocols", () => {
-    assert.isUndefined(stageResultSchema("verify"));
-  });
 });
 
 describe("Harness", () => {

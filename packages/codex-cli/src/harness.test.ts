@@ -88,8 +88,9 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   const stage = overrides.stage ?? "implement";
   const profile = OperationPolicy.operationPolicyProfile(stage);
   const mcpSkills = overrides.mcpSkills ?? [];
-  const structuredOutput =
-    stageResultJsonSchema(stage)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
+  const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
+    target: "draft-2020-12",
+  });
   const mcp = mcpSkills.map((server, index) => ({
     identity: `test/mcp/${index}`,
     name: server.name,
@@ -272,13 +273,6 @@ const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
 };
 
 const operationCapture = (stage: LifecycleStage, events: ReadonlyArray<Harness.AgUiEvent>) => {
-  if (stage === "verify") {
-    const text = events
-      .filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT)
-      .map((event) => event.delta ?? "")
-      .join("");
-    return Schema.decodeEffect(Capture)(text);
-  }
   const object = structuredCompletions(events)[0]?.object;
   if (typeof object !== "object" || object === null) {
     return Effect.die(new Error(`fake Codex emitted no ${stage} structured result`));

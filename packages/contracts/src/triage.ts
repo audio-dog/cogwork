@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import { StructuredOutputCompleteValue } from "./ag-ui";
 import { TrimmedNonEmptyString } from "./base-schemas";
 
-export const LifecycleStage = Schema.Literals(["triage", "implement", "follow-up", "verify"]);
+export const LifecycleStage = Schema.Literals(["triage", "implement", "follow-up"]);
 export type LifecycleStage = typeof LifecycleStage.Type;
 
 export const TriageRole = Schema.Literals([
@@ -68,20 +68,6 @@ const triageStageResultSchema = standardSchema(Schema.Struct(TriageStageResult.f
 const implementStageResultSchema = standardSchema(Schema.Struct(ImplementStageResult.fields));
 const followUpStageResultSchema = standardSchema(Schema.Struct(FollowUpStageResult.fields));
 
-export const stageResultJsonSchema = (stage: LifecycleStage) => {
-  if (stage === "triage") return triageStageResultSchema;
-  if (stage === "implement") return implementStageResultSchema;
-  if (stage === "follow-up") return followUpStageResultSchema;
-  return undefined;
-};
-
-export const stageResultCompletionSchema = (stage: LifecycleStage) => {
-  if (stage === "triage") return TriageStageResultCompletion;
-  if (stage === "implement") return ImplementStageResultCompletion;
-  if (stage === "follow-up") return FollowUpStageResultCompletion;
-  return undefined;
-};
-
 export type StageResultJsonSchema =
   | typeof triageStageResultSchema
   | typeof implementStageResultSchema
@@ -92,10 +78,25 @@ export type StageResultCompletionSchema =
   | typeof ImplementStageResultCompletion
   | typeof FollowUpStageResultCompletion;
 
+interface StageResultSchemas {
+  readonly json: StageResultJsonSchema;
+  readonly completion: StageResultCompletionSchema;
+}
+
+const stageResultSchemas: Record<LifecycleStage, StageResultSchemas> = {
+  triage: { json: triageStageResultSchema, completion: TriageStageResultCompletion },
+  implement: { json: implementStageResultSchema, completion: ImplementStageResultCompletion },
+  "follow-up": { json: followUpStageResultSchema, completion: FollowUpStageResultCompletion },
+};
+
+export const stageResultJsonSchema = (stage: LifecycleStage) => stageResultSchemas[stage].json;
+
+export const stageResultCompletionSchema = (stage: LifecycleStage) => stageResultSchemas[stage].completion;
+
 export const NeedsHumanReason = Schema.Literals(["needs-info", "ready-for-human"]);
 export type NeedsHumanReason = typeof NeedsHumanReason.Type;
 
-export const stagePriority: ReadonlyArray<LifecycleStage> = ["follow-up", "triage", "implement", "verify"];
+export const stagePriority: ReadonlyArray<LifecycleStage> = ["follow-up", "triage", "implement"];
 
 export const Priority = Schema.Literals(["urgent", "high", "medium", "low"]);
 export type Priority = typeof Priority.Type;

@@ -232,7 +232,7 @@ describe("renderBoard", () => {
       daemonEvent({ _tag: "SchedulerChanged", scheduler: schedulerStats }),
       eligibleEvent("acme", "#1", "triage", "First"),
       eligibleEvent("acme", "#2", "implement", "Second"),
-      eligibleEvent("beta", "#3", "verify", "Third"),
+      eligibleEvent("beta", "#3", "follow-up", "Third"),
       daemonEvent({ _tag: "RunChanged", run: runningRun }),
     ]);
 
@@ -243,7 +243,7 @@ describe("renderBoard", () => {
       "    triage #1 First",
       "    implement #2 Second",
       "  beta",
-      "    verify #3 Third",
+      "    follow-up #3 Third",
       "running:",
       "  implement #1 [cursor] run-1",
     ]);

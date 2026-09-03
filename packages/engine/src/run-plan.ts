@@ -350,7 +350,6 @@ export const resolveRunPlanStage = (
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
 ) => {
   const base = resolveStage(config, operation);
-  if (!base) return null;
   const context = { workflow: "coding", operation, workspace: config.name };
   const settings = new Map(
     operationSettingNames.map(
@@ -625,7 +624,7 @@ const deepFreeze = <A>(value: A): A => {
 export const freezeRunPlan = (plan: RunPlan) => deepFreeze(plan);
 
 const structuredOutput = (operation: LifecycleStage) =>
-  stageResultJsonSchema(operation)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
+  stageResultJsonSchema(operation)["~standard"].jsonSchema.input({ target: "draft-2020-12" });
 
 const projectionFor = (projectedMembers: ReadonlyArray<RunPlanMemberType>) => {
   const projected = new Set(projectedMembers);

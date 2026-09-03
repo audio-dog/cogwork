@@ -52,7 +52,6 @@ const stageGerund: Record<LifecycleStage, string> = {
   triage: "triaging",
   implement: "implementing",
   "follow-up": "following up on",
-  verify: "verifying",
 };
 
 export const defaultStatus = "Working on this issue.";
