@@ -1,0 +1,25 @@
+docs/research/effect-never-lint-rule.md
+  s_330c88d3939c54::t_a30b076f865c0d 112
+configs/lint/member-calls.grit
+  s_330c88d3939c54::t_a30b076f865c0d 3-6
+configs/lint/iife.grit
+  s_330c88d3939c54::t_a30b076f865c0d 3-7
+configs/lint/effect-calls.grit
+  s_330c88d3939c54::t_a30b076f865c0d 3-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b206a3533bdc76275b614f7600d4a3ad45ca2ee4",
+  "prompts": {},
+  "sessions": {
+    "s_330c88d3939c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea7438ab-7eb0-4f94-b042-61420f9a63df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
