@@ -1,0 +1,57 @@
+language js(typescript, jsx)
+
+// Biome runs one pass over every source file for each plugin file, so rules that
+// share a root pattern share a file rather than each re-walking the repository.
+// See issue #433.
+
+any {
+  `Match.$matchMethod($matchArgs)` as $mcall where {
+    or {
+      $mcall <: `Match.when(true, () => Effect.void)`,
+      $mcall <: `Match.when(false, () => Effect.void)`,
+      $mcall <: `Match.orElse(() => Effect.void)`
+    },
+    register_diagnostic(span=$mcall, message="Rule: avoid void Match branches. Why: they hide guard-style control flow. Fix: remove the no-op branch or select a value and run one Effect pipeline outside the Match.", severity="error")
+  },
+  `Match.value($value).pipe($args)` as $matchCall where {
+    $args <: contains or {
+      `Match.when($cond, () => $seq)`,
+      `Match.when($cond, () => { $seq })`,
+      `Match.orElse(() => $seq)`,
+      `Match.orElse(() => { $seq })`,
+      `Match.when($cond, () => void $seq)`,
+      `Match.orElse(() => void $seq)`
+    } where {
+      $seq <: contains `Effect.$effectFn($_)`,
+      or {
+        $seq <: contains `Effect.flatMap($_)`,
+        $seq <: contains `Effect.map($_)`,
+        $seq <: contains `Effect.andThen($_)`,
+        $seq <: contains `Effect.tap($_)`,
+        $seq <: contains `Effect.zipRight($_)`,
+        $seq <: contains `pipe($_)`,
+        $seq <: contains `Stream.$streamMethod($_)`
+      }
+    },
+    register_diagnostic(span=$matchCall, message="Rule: avoid multi-step sequencing inside Match branches. Why: it hides control flow. Fix: select a value in Match, then run one Effect pipeline outside. Avoid data-encoded conditionals (Option.toArray/forEach) that only rewrap the branch.", severity="error")
+  },
+  `Option.match($value, { $cases })` as $ocall where {
+    $cases <: contains `Effect.$optFn($_)`,
+    or {
+      $cases <: contains `Effect.flatMap($_)`,
+      $cases <: contains `Effect.map($_)`,
+      $cases <: contains `Effect.andThen($_)`,
+      $cases <: contains `Effect.tap($_)`,
+      $cases <: contains `Effect.zipRight($_)`,
+      $cases <: contains `pipe($_)`,
+      $cases <: contains `Stream.$optStream($_)`
+    },
+    register_diagnostic(span=$ocall, message="Rule: avoid multi-step sequencing inside Option.match branches. Why: it hides control flow. Prefer selecting a value in Option.match, then run one Effect pipeline outside. Leaf-level flows with local bindings may keep Option.match but should stay linear.", severity="info")
+  },
+  `Option.as($optValue, $optResult)` as $oascall where {
+    register_diagnostic(span=$oascall, message="Rule: avoid Option.as. Why: it hides selection and encourages placeholder flows. Fix: use Option.map or Option.match and return the value explicitly.", severity="error")
+  },
+  `Runtime.runFork($rfArgs)` as $runFork where {
+    register_diagnostic(span=$runFork, message="Rule: avoid Runtime.runFork. Why: it escapes structured concurrency. Fix: use forkScoped, Stream, or runtime-provided layers instead.", severity="error")
+  }
+}

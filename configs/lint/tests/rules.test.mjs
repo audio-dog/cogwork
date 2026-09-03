@@ -100,13 +100,13 @@ const ruleCases = [
   {
     message:
       "Rule: avoid multi-step sequencing inside Match branches. Why: it hides control flow. Fix: select a value in Match, then run one Effect pipeline outside. Avoid data-encoded conditionals (Option.toArray/forEach) that only rewrap the branch.",
-    plugin: "no-match-effect-branch",
+    plugin: "member-calls",
     name: "no-match-effect-branch",
   },
   {
     message:
       "Rule: avoid void Match branches. Why: they hide guard-style control flow. Fix: remove the no-op branch or select a value and run one Effect pipeline outside the Match.",
-    plugin: "no-match-void-branch",
+    plugin: "member-calls",
     name: "no-match-void-branch",
   },
   {
@@ -137,7 +137,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid Option.as. Why: it hides selection and encourages placeholder flows. Fix: use Option.map or Option.match and return the value explicitly.",
-    plugin: "no-option-as",
+    plugin: "member-calls",
     name: "no-option-as",
   },
   {
@@ -149,7 +149,7 @@ const ruleCases = [
   {
     message:
       "Rule: avoid Runtime.runFork. Why: it escapes structured concurrency. Fix: use forkScoped, Stream, or runtime-provided layers instead.",
-    plugin: "no-runtime-runfork",
+    plugin: "member-calls",
     name: "no-runtime-runfork",
   },
   {
