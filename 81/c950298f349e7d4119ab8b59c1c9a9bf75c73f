@@ -1,0 +1,32 @@
+packages/engine/src/tools/file-diff-feed.ts
+  s_4cbaf27bdd9c29::t_ad586a910b96e1 128
+packages/engine/src/external-harness-runtime.ts
+  s_4cbaf27bdd9c29::t_fb2b7c7426d430 69
+  s_4cbaf27bdd9c29::t_82738a15b7aa70 535-539,547
+  s_4cbaf27bdd9c29::t_6b23ec81d230d9 542-546,553
+packages/engine/src/external-harness-runtime.test.ts
+  s_4cbaf27bdd9c29::t_810a9bae48ddbd 900-908
+  s_4cbaf27bdd9c29::t_48c314d9a8b920 984-985
+  s_4cbaf27bdd9c29::t_4c97489acd9fee 876-899,909-914,920-924,926-927,930,935-937
+  s_4cbaf27bdd9c29::t_81f7803647d94d 925,928,931-934
+  s_4cbaf27bdd9c29::t_ce55a3d4283354 2
+  s_4cbaf27bdd9c29::t_656aba3fd4d02e 915-919
+  s_4cbaf27bdd9c29::t_456c68a73fea1e 929
+  s_4cbaf27bdd9c29::t_b409ed55929b9a 983
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "81c950298f349e7d4119ab8b59c1c9a9bf75c73f",
+  "prompts": {},
+  "sessions": {
+    "s_4cbaf27bdd9c29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2524c154-d8ba-4ccf-937b-21ae95b25774",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
