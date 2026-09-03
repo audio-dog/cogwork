@@ -162,7 +162,6 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter, Nativ
   readonly sessionKind: SessionKind;
   readonly capabilities: ExternalHarnessCapabilities;
   readonly authentication: HarnessAuthenticationBinding;
-  /** See `HarnessRunner.signIn`. */
   readonly signIn?: string;
   readonly catalogSources: HarnessCatalogSources;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;

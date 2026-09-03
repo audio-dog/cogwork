@@ -1,4 +1,4 @@
-import type { HarnessItem } from "@cogwork/contracts";
+import type { HarnessItem, HarnessName } from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
@@ -15,18 +15,66 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cogwork/ui/components
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
-import { useState } from "react";
+import { createContext, type ReactNode, use, useState } from "react";
 import { harnessesAtom } from "../daemon/atoms";
 import { relativeTime } from "../features/format";
 import { harnessGlyph, harnessLabel } from "../features/harness-presentation";
 import { harnessSummary, installedVersion, versionLabel } from "../features/harnesses-view";
+import { settingEntry } from "../features/settings-catalog";
+import { useNow } from "../features/use-now";
 import { HarnessGlyphIcon } from "./harness-glyph";
+import { useFocusFlash } from "./settings-parts";
+
+/* ------------------------------------------------------------------------------ shared state */
+
+interface HarnessesValue {
+  readonly state: {
+    readonly harnesses: readonly HarnessItem[];
+    readonly selected: HarnessItem | undefined;
+    readonly checkedAtMillis: number | null;
+    readonly load: "loading" | "ready" | "failed";
+  };
+  readonly actions: {
+    readonly select: (harness: HarnessName) => void;
+    readonly check: () => void;
+  };
+  // A probe spawns every installed harness's CLI; stacking them up must stay impossible.
+  readonly meta: { readonly checking: boolean };
+}
+
+const HarnessesContext = createContext<HarnessesValue | null>(null);
+
+const useHarnesses = () => {
+  const value = use(HarnessesContext);
+  if (!value) throw new Error("Harness readers must render inside Harnesses.Provider");
+  return value;
+};
+
+function HarnessesProvider({ children }: { readonly children: ReactNode }) {
+  const queried = useAtomValue(harnessesAtom);
+  const refresh = useAtomRefresh(harnessesAtom);
+  const [chosen, setChosen] = useState<HarnessName | null>(null);
+
+  const overview = queried._tag === "Success" ? queried.value : null;
+  const harnesses = overview?.harnesses ?? [];
+  const value: HarnessesValue = {
+    state: {
+      harnesses,
+      selected: harnesses.find((item) => item.harness === chosen) ?? harnesses[0],
+      checkedAtMillis: overview?.checkedAtMillis ?? null,
+      load: overview ? "ready" : queried._tag === "Failure" ? "failed" : "loading",
+    },
+    actions: { select: setChosen, check: refresh },
+    meta: { checking: queried.waiting },
+  };
+  return <HarnessesContext value={value}>{children}</HarnessesContext>;
+}
 
 /* ------------------------------------------------------------------------------ small pieces */
 
-/** Only trouble gets a dot, so a ready list stays quiet. */
-function StatusDot({ attention }: { readonly attention: "none" | "warning" | "fatal" }) {
+function AttentionDot({ attention }: { readonly attention: "none" | "warning" | "fatal" }) {
   if (attention === "none") return null;
   return (
     <span
@@ -45,83 +93,23 @@ function VersionCode({ version }: { readonly version: string | null }) {
   return <code className="min-w-0 truncate text-xs font-normal text-muted-foreground">{label}</code>;
 }
 
-const FIELD_GRID = "grid gap-x-4 gap-y-2.5 px-4 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start";
-
-/** One label/value pair, emitted as two cells of the enclosing `FIELD_GRID`. */
-function Fact({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly detail?: string;
-  readonly tone: "good" | "bad";
-}) {
-  return (
-    <>
-      <span className="text-xs font-medium text-foreground">{label}</span>
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <code
-          className={cn(
-            "text-xs [overflow-wrap:anywhere]",
-            tone === "good" && "text-foreground",
-            tone === "bad" && "text-destructive",
-          )}
-        >
-          {value}
-        </code>
-        {detail ? <span className="text-xs text-muted-foreground">{detail}</span> : null}
-      </div>
-    </>
-  );
-}
-
-function SignInCommand({ command }: { readonly command: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="px-4">
-      <InputGroup>
-        <InputGroupInput readOnly value={command} aria-label="Sign-in command" className="font-mono" />
-        <InputGroupAddon align="inline-end">
-          <InputGroupButton
-            size="icon-xs"
-            aria-label="Copy command"
-            onClick={() => {
-              navigator.clipboard.writeText(command).catch(() => undefined);
-              setCopied(true);
-            }}
-          >
-            {copied ? <RiCheckLine /> : <RiFileCopyLine />}
-          </InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
-    </div>
-  );
-}
-
 /* ----------------------------------------------------------------------------------- the list */
 
-function HarnessListRow({
-  item,
-  selected,
-  onSelect,
-}: {
-  readonly item: HarnessItem;
-  readonly selected: boolean;
-  readonly onSelect: () => void;
-}) {
+function HarnessRow({ item }: { readonly item: HarnessItem }) {
+  const {
+    state: { selected },
+    actions: { select },
+  } = useHarnesses();
   const summary = harnessSummary(item.state);
+  const active = item.harness === selected?.harness;
   return (
     <Item
       size="sm"
-      render={<button type="button" onClick={onSelect} aria-pressed={selected} />}
-      // Fixed row height keeps the list even while a two-line status clamps instead of growing.
+      render={<button type="button" onClick={() => select(item.harness)} aria-pressed={active} />}
       className={cn(
         "min-h-19 cursor-pointer items-start text-left",
-        selected && "bg-foreground/8",
-        !selected && "hover:bg-foreground/4",
+        active && "bg-foreground/8",
+        !active && "hover:bg-foreground/4",
       )}
     >
       <ItemMedia variant="icon">
@@ -135,7 +123,7 @@ function HarnessListRow({
         </ItemTitle>
         <ItemDescription className="flex items-start gap-1.5">
           <span className="flex h-[1.45em] shrink-0 items-center">
-            <StatusDot attention={summary.attention} />
+            <AttentionDot attention={summary.attention} />
           </span>
           <span className="line-clamp-2 [overflow-wrap:anywhere]">
             {summary.headline}
@@ -147,7 +135,57 @@ function HarnessListRow({
   );
 }
 
+function HarnessList() {
+  const {
+    state: { harnesses },
+  } = useHarnesses();
+  return (
+    <div className="border-b border-border lg:flex lg:min-h-0 lg:flex-col lg:border-e lg:border-b-0">
+      <ScrollArea className="lg:min-h-0 lg:flex-1">
+        <div className="divide-y divide-border">
+          {harnesses.map((item) => (
+            <div key={item.harness} className="p-1">
+              <HarnessRow item={item} />
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
 /* --------------------------------------------------------------------------------- the detail */
+
+const FIELD_GRID = "grid gap-x-4 gap-y-2.5 px-4 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start";
+
+function SignInCommand({ command }: { readonly command: string }) {
+  const [copied, setCopied] = useState(false);
+  const [clearCopied] = useTimeoutEffect(() => setCopied(false), copied ? 2000 : undefined);
+  return (
+    <div className="px-4">
+      <InputGroup>
+        <InputGroupInput readOnly value={command} aria-label="Sign-in command" className="font-mono" />
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton
+            size="icon-xs"
+            aria-label="Copy command"
+            onClick={() => {
+              navigator.clipboard
+                .writeText(command)
+                .then(
+                  () => setCopied(true),
+                  () => setCopied(false),
+                )
+                .finally(clearCopied);
+            }}
+          >
+            {copied ? <RiCheckLine /> : <RiFileCopyLine />}
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+    </div>
+  );
+}
 
 function ConfigurationTab({ item }: { readonly item: HarnessItem }) {
   const installed = installedVersion(item);
@@ -155,12 +193,20 @@ function ConfigurationTab({ item }: { readonly item: HarnessItem }) {
   return (
     <div className="flex flex-col gap-4 py-4">
       <div className={FIELD_GRID}>
-        <Fact
-          label="Installed"
-          tone={installed.requirement || installed.value === "not found" ? "bad" : "good"}
-          value={installed.value}
-          {...(installed.requirement ? { detail: `Needs ${installed.requirement}` } : {})}
-        />
+        <span className="text-xs font-medium text-foreground">Installed</span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <code
+            className={cn(
+              "text-xs [overflow-wrap:anywhere]",
+              installed.faulty ? "text-destructive" : "text-foreground",
+            )}
+          >
+            {installed.value}
+          </code>
+          {installed.requirement ? (
+            <span className="text-xs text-muted-foreground">Needs {installed.requirement}</span>
+          ) : null}
+        </div>
       </div>
       {summary.signIn ? <SignInCommand command={summary.signIn} /> : null}
     </div>
@@ -197,57 +243,84 @@ function ModelsTab({ item }: { readonly item: HarnessItem }) {
   );
 }
 
-function HarnessDetail({ item }: { readonly item: HarnessItem }) {
-  const summary = harnessSummary(item.state);
+function HarnessDetail() {
+  const {
+    state: { selected },
+  } = useHarnesses();
+  if (!selected) return null;
+  const summary = harnessSummary(selected.state);
   return (
-    <div className="flex min-w-0 flex-col lg:h-full lg:min-h-0">
-      <div className="flex min-h-16 shrink-0 flex-col justify-center gap-1 border-b border-border px-4 py-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-muted-foreground">
-            <HarnessGlyphIcon glyph={harnessGlyph(item.harness)} />
-          </span>
-          <h2 className="truncate text-sm font-medium">{harnessLabel(item.harness)}</h2>
-          <VersionCode version={item.version} />
+    <div className="min-w-0 lg:min-h-0">
+      <div className="flex min-w-0 flex-col lg:h-full lg:min-h-0">
+        <div className="flex min-h-16 shrink-0 flex-col justify-center gap-1 border-b border-border px-4 py-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">
+              <HarnessGlyphIcon glyph={harnessGlyph(selected.harness)} />
+            </span>
+            <h2 className="truncate text-sm font-medium">{harnessLabel(selected.harness)}</h2>
+            <VersionCode version={selected.version} />
+          </div>
+          <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+            <AttentionDot attention={summary.attention} />
+            <span>{summary.headline}</span>
+            {summary.detail ? <span>· {summary.detail}</span> : null}
+          </p>
         </div>
-        <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-[13px] leading-[1.45] text-muted-foreground">
-          <StatusDot attention={summary.attention} />
-          <span>{summary.headline}</span>
-          {summary.detail ? <span>· {summary.detail}</span> : null}
-        </p>
-      </div>
 
-      <Tabs defaultValue="configuration" className="min-w-0 gap-0 lg:min-h-0 lg:flex-1">
-        <div className="shrink-0 border-b border-border px-4 py-2">
-          <TabsList>
-            <TabsTrigger value="configuration">Configuration</TabsTrigger>
-            <TabsTrigger value="models">Models</TabsTrigger>
-          </TabsList>
-        </div>
-        <TabsContent value="configuration" className="min-w-0 lg:min-h-0 lg:flex-1">
-          <ScrollArea className="lg:h-full">
-            <ConfigurationTab item={item} />
-          </ScrollArea>
-        </TabsContent>
-        <TabsContent value="models" className="min-w-0 lg:min-h-0 lg:flex-1">
-          <ScrollArea className="lg:h-full">
-            <ModelsTab item={item} />
-          </ScrollArea>
-        </TabsContent>
-      </Tabs>
+        <Tabs defaultValue="configuration" className="min-w-0 gap-0 lg:min-h-0 lg:flex-1">
+          <div className="shrink-0 border-b border-border px-4 py-2">
+            <TabsList>
+              <TabsTrigger value="configuration">Configuration</TabsTrigger>
+              <TabsTrigger value="models">Models</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="configuration" className="min-w-0 lg:min-h-0 lg:flex-1">
+            <ScrollArea className="lg:h-full">
+              <ConfigurationTab item={selected} />
+            </ScrollArea>
+          </TabsContent>
+          <TabsContent value="models" className="min-w-0 lg:min-h-0 lg:flex-1">
+            <ScrollArea className="lg:h-full">
+              <ModelsTab item={selected} />
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
 
-/* ------------------------------------------------------------------------------------ the frame */
+/* ------------------------------------------------------------------------------------ the page */
 
 const FRAME =
   "overflow-hidden rounded-lg border border-border lg:grid lg:h-[calc(100dvh-11rem)] lg:max-h-[48rem] lg:min-h-[30rem] lg:grid-cols-[20rem_minmax(0,1fr)]";
 
-/** Escapes the settings column, which is `max-w-2xl` — too narrow for a list beside a detail pane. */
-const WIDE =
-  "relative left-1/2 flex w-[min(64rem,calc(100vw-var(--sidebar-width)-4rem))] -translate-x-1/2 flex-col gap-4";
+function HarnessesHeader() {
+  const {
+    state: { checkedAtMillis },
+    actions: { check },
+    meta: { checking },
+  } = useHarnesses();
+  const now = useNow();
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <h1 className="font-heading text-2xl font-semibold tracking-tight">Providers</h1>
+      <Tooltip>
+        <TooltipTrigger render={<Button size="sm" variant="ghost" disabled={checking} onClick={check} />}>
+          <RiRefreshLine data-icon="inline-start" />
+          {checking
+            ? "Checking…"
+            : checkedAtMillis
+              ? `Checked ${relativeTime(checkedAtMillis, now)}`
+              : "Check again"}
+        </TooltipTrigger>
+        <TooltipContent side="top">Check again</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
 
-function LoadingFrame() {
+function HarnessesLoading() {
   return (
     <div className={FRAME}>
       <div className="flex flex-col gap-1 border-b border-border p-1 lg:border-e lg:border-b-0">
@@ -260,69 +333,62 @@ function LoadingFrame() {
   );
 }
 
-export function HarnessesSettings() {
-  const queried = useAtomValue(harnessesAtom);
-  const refresh = useAtomRefresh(harnessesAtom);
-  const [selected, setSelected] = useState<string | null>(null);
-
-  const overview = queried._tag === "Success" ? queried.value : null;
-  const harnesses = overview?.harnesses ?? [];
-  const item = harnesses.find((candidate) => candidate.harness === selected) ?? harnesses[0];
-
+function HarnessesFailure() {
   return (
-    <div className={WIDE}>
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">Providers</h1>
-        <Tooltip>
-          <TooltipTrigger render={<Button size="sm" variant="ghost" onClick={refresh} />}>
-            <RiRefreshLine data-icon="inline-start" />
-            {overview ? `Checked ${relativeTime(overview.checkedAtMillis)}` : "Check again"}
-          </TooltipTrigger>
-          <TooltipContent side="top">Check again</TooltipContent>
-        </Tooltip>
-      </div>
+    <Alert variant="destructive">
+      <RiAlertLine />
+      <AlertTitle>Cogwork could not read this machine's harnesses.</AlertTitle>
+      <AlertDescription>The engine did not answer. Check again, or read the daemon log.</AlertDescription>
+    </Alert>
+  );
+}
 
-      {queried._tag === "Failure" ? (
-        <Alert variant="destructive">
-          <RiAlertLine />
-          <AlertTitle>Cogwork could not read this machine's providers.</AlertTitle>
-          <AlertDescription>The engine did not answer. Check again, or read the daemon log.</AlertDescription>
-        </Alert>
-      ) : null}
+function HarnessesNone() {
+  return (
+    <Empty className="rounded-lg border border-border py-16">
+      <EmptyHeader>
+        <EmptyTitle>No harnesses registered</EmptyTitle>
+        <EmptyDescription>This engine build registers no coding agent to drive.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
 
-      {queried._tag === "Initial" ? <LoadingFrame /> : null}
-
-      {overview && !item ? (
-        <Empty className="rounded-lg border border-border py-16">
-          <EmptyHeader>
-            <EmptyTitle>No providers registered</EmptyTitle>
-            <EmptyDescription>This engine build registers no coding agent to drive.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : null}
-
-      {item ? (
-        <div className={FRAME}>
-          <div className="border-b border-border lg:flex lg:min-h-0 lg:flex-col lg:border-e lg:border-b-0">
-            <ScrollArea className="lg:min-h-0 lg:flex-1">
-              <div className="divide-y divide-border">
-                {harnesses.map((candidate) => (
-                  <div key={candidate.harness} className="p-1">
-                    <HarnessListRow
-                      item={candidate}
-                      selected={candidate.harness === item.harness}
-                      onSelect={() => setSelected(candidate.harness)}
-                    />
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-          <div className="min-w-0 lg:min-h-0">
-            <HarnessDetail item={item} />
-          </div>
-        </div>
-      ) : null}
+function HarnessesFrame() {
+  return (
+    <div className={FRAME}>
+      <HarnessList />
+      <HarnessDetail />
     </div>
+  );
+}
+
+function HarnessesBody() {
+  const {
+    state: { load, selected },
+  } = useHarnesses();
+  if (load === "failed") return <HarnessesFailure />;
+  if (load === "loading") return <HarnessesLoading />;
+  if (!selected) return <HarnessesNone />;
+  return <HarnessesFrame />;
+}
+
+export function HarnessesSettings() {
+  const { ref, flashing, flashKey } = useFocusFlash(settingEntry("harness-state").id);
+  return (
+    <HarnessesProvider>
+      {/* The settings shell centres its column at `max-w-2xl`; this breaks out of it. */}
+      <div
+        key={flashKey}
+        ref={ref}
+        className={cn(
+          "relative left-1/2 flex w-[min(64rem,calc(100vw-var(--sidebar-width)-4rem))] -translate-x-1/2 scroll-mt-8 flex-col gap-4 rounded-lg",
+          flashing && "settings-focus-flash",
+        )}
+      >
+        <HarnessesHeader />
+        <HarnessesBody />
+      </div>
+    </HarnessesProvider>
   );
 }

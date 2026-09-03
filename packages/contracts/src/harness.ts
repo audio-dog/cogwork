@@ -1,19 +1,12 @@
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString } from "./base-schemas";
 
-/**
- * The one command that establishes a Harness's own login, declared by the Harness that owns it.
- * Cogwork never runs it: the credential is harness-owned, so a person runs this themselves.
- */
+/** Cogwork never runs this: the credential is harness-owned, so a person runs it themselves. */
 export class HarnessSignIn extends Schema.Class<HarnessSignIn>("HarnessSignIn")({
   command: TrimmedNonEmptyString,
 }) {}
 
-/**
- * What one Harness's readiness means for a person, folded from the four axes the engine observes.
- * The fold happens once, in the engine, so every client reads the same conclusion instead of
- * re-deriving it from installation, compatibility, authentication and operational status.
- */
+/** Folded in the engine, so no client re-derives it from the four axes readiness observes. */
 export const HarnessState = Schema.TaggedUnion({
   Ready: {},
   NotInstalled: { diagnostic: TrimmedNonEmptyString },
@@ -37,6 +30,5 @@ export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
 
 export class HarnessOverview extends Schema.Class<HarnessOverview>("HarnessOverview")({
   harnesses: Schema.Array(HarnessItem),
-  /** When the probe that produced this ran, so a client can say how stale it is. */
   checkedAtMillis: Schema.Natural,
 }) {}

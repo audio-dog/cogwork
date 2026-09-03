@@ -6,11 +6,7 @@ import { ContextAssembler, ContextAssemblerError } from "../context-assembler";
 import * as CredentialStore from "../credential-store";
 import * as Harness from "../harness";
 
-/**
- * Probing a Harness never assembles a context, so this double refuses rather than pretending. It
- * exists because `HarnessRunnerEnv` is declared for every runner method at once: reading readiness
- * carries the requirements of running a turn even though it touches none of them.
- */
+/** Probing never assembles a context, so this refuses rather than pretending to. */
 const refusingContextAssembler = Layer.succeed(ContextAssembler, {
   assemble: () =>
     Effect.fail(
@@ -22,10 +18,10 @@ const refusingContextAssembler = Layer.succeed(ContextAssembler, {
   cleanup: () => Effect.void,
 });
 
-/**
- * The environment `Harness.readiness` and `Harness.catalog` demand, for a test that builds the
- * daemon's handlers layer by hand. Production gets the same services from `engineLayer`.
- */
+// `HarnessRunnerEnv` is declared for every runner method at once, so a probe demands all of it.
+// It stays its own builder: folded into `engineTestLayer`, an empty registry would shadow the
+// harness double `executor.test.ts` provides, and a second `engineTestLayer` in the daemon pipe
+// would hand those suites a different run ledger than the one they assert on.
 export const harnessProbeTestLayer = (runners: ReadonlyArray<Harness.HarnessRunner> = []) =>
   Layer.mergeAll(
     Harness.layer(runners),

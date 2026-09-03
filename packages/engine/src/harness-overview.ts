@@ -4,20 +4,12 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { Harness, type HarnessError, type HarnessReadiness, type HarnessService } from "./harness";
 
-/**
- * Reading one Harness's readiness spawns that Harness's CLI. Each runner already bounds its own
- * probe; this bound is the backstop that stops one hung child from holding the whole answer.
- */
+// Reading readiness spawns the Harness's CLI; each runner also bounds its own probe.
 const probeDeadline = "10 seconds";
 
-/** `TrimmedNonEmptyString` rejects a blank, and a diagnostic is the one field that might be one. */
+// `TrimmedNonEmptyString` rejects a blank, and a harness can report one.
 const diagnostic = (message: string) => message.trim() || "the harness gave no reason";
 
-/**
- * Fold the four observed axes into the one conclusion a client shows, in the order a person can act
- * on them: not installed, wrong version, not signed in, then whatever is left. Exported for its own
- * tests.
- */
 export const harnessStateOf = (readiness: HarnessReadiness, signIn: string | null): HarnessState => {
   if (readiness.installation.status === "missing") {
     return HarnessState.cases.NotInstalled.make({
@@ -43,43 +35,42 @@ export const harnessStateOf = (readiness: HarnessReadiness, signIn: string | nul
   });
 };
 
-const unknownState = (message: string) =>
-  HarnessState.cases.Unknown.make({ diagnostic: diagnostic(message) });
+const unreachable = (name: HarnessName, message: string) =>
+  HarnessItem.make({
+    harness: name,
+    version: null,
+    state: HarnessState.cases.Unknown.make({ diagnostic: diagnostic(message) }),
+    models: [],
+  });
 
-/**
- * One Harness's row. Nothing here fails: a probe that errors or overruns becomes an `Unknown` state
- * for that Harness, so the other rows still reach the client.
- */
 const overviewItem = Effect.fn("Harness.overviewItem")(function* (
   harness: HarnessService,
   name: HarnessName,
 ) {
-  const probe = yield* harness.readiness(name).pipe(
-    Effect.map((readiness) => ({
+  const probe = Effect.gen(function* () {
+    const readiness = yield* harness.readiness(name);
+    const models = yield* harness.catalog(name).pipe(
+      Effect.map((catalog) => catalog.models.map((choice) => choice.value)),
+      // No catalog source answered. The state already carries why the Harness cannot run.
+      Effect.catchTag("HarnessError", () => Effect.succeed<ReadonlyArray<string>>([])),
+    );
+    return HarnessItem.make({
+      harness: name,
       version: readiness.installation.version,
       state: harnessStateOf(readiness, harness.signIn(name)),
-    })),
+      models,
+    });
+  });
+  // One bound per Harness, so a hung child costs that row alone.
+  return yield* probe.pipe(
     Effect.timeout(probeDeadline),
     Effect.catchTags({
-      TimeoutError: () =>
-        Effect.succeed({
-          version: null,
-          state: unknownState(`the readiness probe overran ${probeDeadline}`),
-        }),
-      HarnessError: (error: HarnessError) =>
-        Effect.succeed({ version: null, state: unknownState(error.message) }),
+      TimeoutError: () => Effect.succeed(unreachable(name, `the probe overran ${probeDeadline}`)),
+      HarnessError: (error: HarnessError) => Effect.succeed(unreachable(name, error.message)),
     }),
   );
-  // A catalog no source can answer is an empty model list, not a failure: the state already says why.
-  const models = yield* harness.catalog(name).pipe(
-    Effect.map((catalog) => catalog.models.map((choice) => choice.value)),
-    Effect.timeout(probeDeadline),
-    Effect.orElseSucceed((): ReadonlyArray<string> => []),
-  );
-  return HarnessItem.make({ harness: name, version: probe.version, state: probe.state, models });
 });
 
-/** Every registered Harness's readiness and models, as of now. */
 export const harnessOverview = Effect.fn("Harness.overview")(function* () {
   const harness = yield* Harness;
   const harnesses = yield* Effect.forEach(harness.names, (name) => overviewItem(harness, name), {

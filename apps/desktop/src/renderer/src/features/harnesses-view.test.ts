@@ -1,11 +1,11 @@
-import { HarnessItem, HarnessSignIn, HarnessState } from "@cogwork/contracts";
+import { HarnessItem, HarnessName, HarnessSignIn, HarnessState } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { harnessSummary, installedVersion, versionLabel } from "./harnesses-view";
 
 const item = (state: HarnessState, version: string | null, models: ReadonlyArray<string> = []) =>
   HarnessItem.make({
-    harness: Schema.decodeSync(Schema.String.pipe(Schema.brand("HarnessName")))("codex"),
+    harness: Schema.decodeSync(HarnessName)("codex"),
     version,
     state,
     models,
@@ -58,6 +58,7 @@ describe("installedVersion", () => {
     expect(installedVersion(item(HarnessState.cases.Ready.make({}), "0.153.0"))).toEqual({
       value: "v0.153.0",
       requirement: null,
+      faulty: false,
     });
   });
 
@@ -66,7 +67,7 @@ describe("installedVersion", () => {
       installedVersion(
         item(HarnessState.cases.UnsupportedVersion.make({ requirement: ">=2.1.0" }), "2.0.41"),
       ),
-    ).toEqual({ value: "v2.0.41", requirement: ">=2.1.0" });
+    ).toEqual({ value: "v2.0.41", requirement: ">=2.1.0", faulty: true });
   });
 
   it("says not found rather than showing a version it does not have", () => {

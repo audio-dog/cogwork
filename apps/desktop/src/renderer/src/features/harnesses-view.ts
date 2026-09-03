@@ -1,5 +1,4 @@
 import { type HarnessItem, HarnessState } from "@cogwork/contracts";
-/** A bare version gets a `v`; anything else is shown as the Harness reported it. */
 export const versionLabel = (version: string | null) => {
   if (!version) return null;
   return /^\d/.test(version) ? `v${version}` : version;
@@ -8,15 +7,10 @@ export const versionLabel = (version: string | null) => {
 export interface HarnessSummary {
   readonly headline: string;
   readonly detail: string | null;
-  /** Trouble earns a status dot; a fatal one earns a red dot. */
   readonly attention: "none" | "warning" | "fatal";
   readonly signIn: string | null;
 }
 
-/**
- * The generated fold, so a new `HarnessState` variant fails to compile here instead of falling
- * through to a default.
- */
 export const harnessSummary = (state: HarnessState): HarnessSummary =>
   HarnessState.match<HarnessSummary>(state, {
     Ready: () => ({ headline: "Ready", detail: null, attention: "none", signIn: null }),
@@ -52,12 +46,16 @@ export const harnessSummary = (state: HarnessState): HarnessSummary =>
     }),
   });
 
-/** The version a person reads, and whether it is the reason the Harness cannot run. */
-export const installedVersion = (item: HarnessItem) => {
-  const label = versionLabel(item.version);
-  if (HarnessState.guards.NotInstalled(item.state)) return { value: "not found", requirement: null };
-  if (HarnessState.guards.UnsupportedVersion(item.state)) {
-    return { value: label ?? "installed", requirement: item.state.requirement };
-  }
-  return { value: label ?? "installed", requirement: null };
-};
+export const installedVersion = (item: HarnessItem) =>
+  HarnessState.matchOrElse(
+    item.state,
+    {
+      NotInstalled: () => ({ value: "not found", requirement: null, faulty: true }),
+      UnsupportedVersion: ({ requirement }) => ({
+        value: versionLabel(item.version) ?? "installed",
+        requirement,
+        faulty: true,
+      }),
+    },
+    () => ({ value: versionLabel(item.version) ?? "installed", requirement: null, faulty: false }),
+  );

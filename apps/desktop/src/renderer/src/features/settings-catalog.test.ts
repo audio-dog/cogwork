@@ -59,6 +59,10 @@ describe("catalog helpers", () => {
     for (const entry of settingsIndex) expect(findSection(entry.sectionId)).toBeDefined();
   });
 
+  it("files the harness section's setting under it, so search can reach the section", () => {
+    expect(settingsForSection("harnesses").map((entry) => entry.id)).toEqual(["harness-state"]);
+  });
+
   it("lists the settings that belong to a section", () => {
     const ids = settingsForSection("general").map((entry) => entry.id);
     expect(ids).toEqual(["close-to-hide", "profiling", "process-captures"]);
