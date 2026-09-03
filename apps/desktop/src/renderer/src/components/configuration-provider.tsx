@@ -14,7 +14,7 @@ import {
   setContributionSettingAtom,
   uninstallPluginAtom,
 } from "../daemon/atoms";
-import { type BoardResult, useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import type {
   ConfigurationPicture,
   Contribution,
@@ -145,10 +145,12 @@ export const contributionSettingState = (
   return { controlStore: result.value, waiting: true, settled: false };
 };
 
-export const retainConfigurationBoard = (board: Board | null, result: BoardResult) => {
-  if (result._tag !== "Success") return board;
-  return result.board;
-};
+export const retainConfigurationBoard = (board: Board | null, result: BoardResult) =>
+  BoardResult.$match(result, {
+    Initial: () => board,
+    Failure: () => board,
+    Success: ({ board: current }) => current,
+  });
 
 export function useConfiguration() {
   const value = use(ConfigurationContext);
@@ -243,7 +245,7 @@ export function DaemonConfigurationProvider({ children }: { children: ReactNode 
     <ConfigurationProvider
       picture={picture}
       actions={actions}
-      contributionSettingWaiting={settingState.waiting || boardResult._tag !== "Success"}
+      contributionSettingWaiting={settingState.waiting || !BoardResult.$is("Success")(boardResult)}
       notices={notices}
       pluginFailure={pluginFailure}
       pluginLoadState={loadState}

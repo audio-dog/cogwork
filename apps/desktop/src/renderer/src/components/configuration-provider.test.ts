@@ -1,6 +1,7 @@
 import { type ContributionSettingUpdate, type ControlStore, initialBoard } from "@cogwork/contracts";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
+import { BoardResult } from "../features/activity-session";
 import { contributionSettingState, retainConfigurationBoard } from "./configuration-provider";
 
 const contribution = { id: "repo-tools", kind: "mcp-server" } as const;
@@ -105,11 +106,11 @@ describe("retainConfigurationBoard", () => {
     const live = { ...initialBoard, controlStore: picture(false) };
     const replacement = { ...initialBoard, controlStore: picture(true) };
 
-    expect(retainConfigurationBoard(null, { _tag: "Initial" })).toBeNull();
-    expect(retainConfigurationBoard(live, { _tag: "Initial" })).toBe(live);
-    expect(retainConfigurationBoard(live, { _tag: "Failure" })).toBe(live);
-    expect(retainConfigurationBoard(live, { _tag: "Success", board: replacement, previews: new Map() })).toBe(
-      replacement,
-    );
+    expect(retainConfigurationBoard(null, BoardResult.Initial())).toBeNull();
+    expect(retainConfigurationBoard(live, BoardResult.Initial())).toBe(live);
+    expect(retainConfigurationBoard(live, BoardResult.Failure())).toBe(live);
+    expect(
+      retainConfigurationBoard(live, BoardResult.Success({ board: replacement, previews: new Map() })),
+    ).toBe(replacement);
   });
 });
