@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { placeholderConfiguration } from "./configuration-placeholder";
-import { attentionAction, attentionLine, pluginsView } from "./plugins-view";
+import { attentionAction, attentionLine, PluginAttention, pluginsView } from "./plugins-view";
 
 const { plugins } = placeholderConfiguration;
 const { attentionOf, contributionsOf, needsAttention } = pluginsView(placeholderConfiguration);
@@ -14,14 +14,14 @@ function plugin(pluginId: string) {
 describe("attentionOf", () => {
   it("settles a Plugin that loads and is set up", () => {
     // No update state: every Plugin ships with cogwork, so there is nothing to stage or offer.
-    expect(attentionOf(plugin("gh-review"))).toEqual({ _tag: "settled" });
-    expect(attentionOf(plugin("codex-extras"))).toEqual({ _tag: "settled" });
+    expect(attentionOf(plugin("gh-review"))).toEqual(PluginAttention.settled({}));
+    expect(attentionOf(plugin("codex-extras"))).toEqual(PluginAttention.settled({}));
   });
 
   it("puts a file that will not load ahead of everything else", () => {
     // Granola has both a failed contribution and an unfinished setup step.
     const attention = attentionOf(plugin("granola"));
-    expect(attention._tag).toBe("load-failed");
+    expect(PluginAttention.$is("load-failed")(attention)).toBe(true);
   });
 
   it("puts an installed Plugin with a broken manifest in Needs Attention", () => {
@@ -29,16 +29,13 @@ describe("attentionOf", () => {
       ...plugin("gh-review"),
       manifestFailure: "plugin.json is invalid",
     });
-    expect(attention).toEqual({
-      _tag: "manifest-failed",
-      reason: "plugin.json is invalid",
-    });
+    expect(attention).toEqual(PluginAttention["manifest-failed"]({ reason: "plugin.json is invalid" }));
     expect(attentionLine(attention)).toBe("plugin.json is invalid");
   });
 
   it("reports an unfinished setup", () => {
     const attention = attentionOf(plugin("linear"));
-    expect(attention).toEqual({ _tag: "setup-unfinished", remaining: 1 });
+    expect(attention).toEqual(PluginAttention["setup-unfinished"]({ remaining: 1 }));
   });
 });
 
@@ -47,7 +44,7 @@ describe("needsAttention", () => {
     const attention = plugins.filter(needsAttention);
     const settled = plugins.filter((entry) => !needsAttention(entry));
     expect(attention.length + settled.length).toBe(plugins.length);
-    expect(settled.every((entry) => attentionOf(entry)._tag === "settled")).toBe(true);
+    expect(settled.every((entry) => PluginAttention.$is("settled")(attentionOf(entry)))).toBe(true);
   });
 });
 
