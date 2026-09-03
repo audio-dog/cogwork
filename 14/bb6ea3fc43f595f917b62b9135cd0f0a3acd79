@@ -1,0 +1,23 @@
+biome.json
+  s_330c88d3939c54::t_dc09fa4c64895b 41,43
+configs/lint/tests/rules.test.mjs
+  s_330c88d3939c54::t_dc09fa4c64895b 36,122
+configs/lint/gated.grit
+  s_330c88d3939c54::t_dc09fa4c64895b 1-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "14bb6ea3fc43f595f917b62b9135cd0f0a3acd79",
+  "prompts": {},
+  "sessions": {
+    "s_330c88d3939c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea7438ab-7eb0-4f94-b042-61420f9a63df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
