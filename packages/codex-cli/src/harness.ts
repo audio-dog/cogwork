@@ -322,7 +322,7 @@ const codexDescriptor = (
         session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
         structuredOutput: "native",
         policyFidelity: "profile-only",
-        fileEventFidelity: "sandbox",
+        fileEventFidelity: "best-effort",
         usageQuality: "metered",
         readinessDiagnostics: true,
         journal: true,

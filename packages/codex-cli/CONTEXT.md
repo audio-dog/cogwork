@@ -21,6 +21,10 @@ _Avoid_: Provider runner, OpenAI runner
 The Codex adapter supports journaled output and takeover attachment. The runner declares that fact, but the shared runtime does not supply durability stores or flags, so Codex Runs remain nondurable and locally cancelled.
 _Avoid_: Enabled takeover, safe detachment
 
+**Best-effort file diff**:
+Codex does not provide the Run activity file contract. The shared runtime observes its Sandbox workspace and emits `sandbox.file.diff` while the Run is live. The capability profile says `best-effort`: polling and process termination can miss intermediate states.
+_Avoid_: Native Codex file event, exact delivery
+
 **Stage-result interface**:
 The shared runtime passes the Run Plan's root JSON Schema through streaming `outputSchema`; TanStack
 projects it to native Codex `--output-schema`. Codex emits one terminal `structured-output.complete` event;
