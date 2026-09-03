@@ -10,11 +10,13 @@ import {
 } from "@cogwork/contracts";
 import {
   type AuthoringTree,
+  Authority,
   type ConfigurationPicture,
   type Contribution,
   contributionInstanceKey,
-  type Diagnostic,
+  Diagnostic,
   type EnablementRow,
+  LoadState,
   type ScopeRef,
   type Workspace,
 } from "./configuration-model";
@@ -39,11 +41,10 @@ const settingScope = (row: ContributionSettingRow): ScopeRef =>
   });
 
 const diagnosticOf = (diagnostic: ContributionSettingDiagnostic) =>
-  ({
-    _tag: "dangling",
+  Diagnostic.dangling({
     source: diagnostic.source,
     detail: diagnostic.detail,
-  }) satisfies Diagnostic;
+  });
 
 const enablementRowOf = (row: ContributionSettingRow) =>
   ({
@@ -85,12 +86,12 @@ const contributionOf = (
     id: contribution.id,
     kind: contribution.kind,
     localName: contribution.localName,
-    authority: { _tag: "local", tree: treeByAuthority[contribution.authority] },
+    authority: Authority.local({ tree: treeByAuthority[contribution.authority] }),
     summary: contribution.file,
     file: contribution.file,
     definedAt: definedAtByAuthority[contribution.authority],
     ...(definedIn === undefined ? {} : { definedIn }),
-    load: { _tag: "loaded" },
+    load: LoadState.loaded({}),
     rows: enablementRows(contribution, definedIn, settings),
   } satisfies Contribution;
 };
