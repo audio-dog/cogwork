@@ -1,0 +1,19 @@
+packages/engine/docs/adr/0012-operation-resolution-is-a-module-and-outcomes-are-data.md
+  s_88fdff1a2e3ca6::t_50e84fe4fc9052 1-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7165516131b5366122f8bac63ef262254b89416c",
+  "prompts": {},
+  "sessions": {
+    "s_88fdff1a2e3ca6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2fe95146-ebd9-4c5e-a2ed-d9539e1a39e7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
