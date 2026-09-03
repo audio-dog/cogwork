@@ -144,3 +144,13 @@ describe("operationSettingAtomKey", () => {
     );
   });
 });
+
+describe("an unset harness", () => {
+  it("is not stale, because there is no choice to have gone out of date", () => {
+    const controlStore = store([]);
+    const cell = settingCell(controlStore, workspace, "triage", "harness");
+    expect(cell.effective).toBeNull();
+    expect(cell.stale).toBe(false);
+    expect(settingCell(controlStore, workspace, "triage", "model").stale).toBe(false);
+  });
+});

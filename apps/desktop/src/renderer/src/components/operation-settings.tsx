@@ -168,6 +168,7 @@ function HarnessModelPicker({
   const railCatalog = catalogFor(chosenRail) ?? effectiveCatalog ?? harnessCatalogs[0];
   const rail = railCatalog.harness;
   const stale = modelSpec.cell.stale || harnessSpec.cell.stale;
+  const retiredHarness = effectiveHarness !== null && effectiveCatalog === null;
   const needle = query.trim().toLowerCase();
   const shown = railCatalog.models.filter((model) => model.label.toLowerCase().includes(needle));
   const own = modelSpec.cell.own !== null;
@@ -191,13 +192,10 @@ function HarnessModelPicker({
           />
         }
       >
-        {effectiveCatalog ? (
-          <HarnessGlyphIcon glyph={effectiveCatalog.glyph} />
-        ) : (
-          <RiAlertLine className="text-destructive" />
-        )}
+        {effectiveCatalog ? <HarnessGlyphIcon glyph={effectiveCatalog.glyph} /> : null}
+        {retiredHarness ? <RiAlertLine className="text-destructive" /> : null}
         <span className={cn("truncate", !own && "text-muted-foreground")}>
-          {effectiveCatalog ? triggerLabel : `${effectiveHarness ?? triggerLabel} · no longer offered`}
+          {retiredHarness ? `${effectiveHarness} · no longer offered` : triggerLabel}
         </span>
         <RiArrowDownSLine className="ms-auto size-4 text-muted-foreground" />
       </PopoverTrigger>
