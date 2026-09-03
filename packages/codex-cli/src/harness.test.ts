@@ -32,7 +32,8 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { type CodexRunnerOptions, codexRunner, defaultCodexModel, type MakeCodexAdapter } from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("codex");
-const session = Schema.decodeSync(SessionId)("session-1");
+const freshSession = Schema.decodeSync(SessionId)("session-codex-fresh");
+const resumedSession = Schema.decodeSync(SessionId)("session-codex-resumed");
 const runId = Schema.decodeSync(RunId)("run-codex-test");
 const workItemId = Schema.decodeSync(WorkItemId)("#150");
 // The runner's own default: the live probe runs against the real backend, and the stale
@@ -46,7 +47,7 @@ const instructions = [
 
 const sessionStore: SessionStore.SessionStoreService = {
   persistence: memoryPersistence(),
-  resumeHandle: () => Effect.succeed("thread-123"),
+  resumeHandle: (session) => Effect.succeed(session === resumedSession ? "thread-123" : null),
   mint: () => Effect.die(new Error("unexpected mint")),
 };
 
@@ -141,7 +142,7 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
         observation: { generation: 1, observedAtMillis: 1 },
       },
     }),
-    session: overrides.session === undefined ? session : overrides.session,
+    session: overrides.session === undefined ? freshSession : overrides.session,
     mcpCredentials: new Map(
       mcpSkills.flatMap((server, index) =>
         server.bearer ? ([[`test/mcp/${index}`, server.bearer]] as const) : [],
@@ -278,7 +279,9 @@ const runInRepository = (
 ) =>
   Effect.gen(function* () {
     const checkoutPath = yield* initializeRepository(handle);
-    return yield* collectEvents(harness.run(makeRequest({ checkoutPath, session: null, ...overrides })));
+    return yield* collectEvents(
+      harness.run(makeRequest({ checkoutPath, session: freshSession, ...overrides })),
+    );
   });
 
 const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
@@ -414,13 +417,21 @@ describe("codexRunner", () => {
             ]);
             const first = yield* collectEvents(
               harness.run(
-                makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("first-secret") }),
+                makeRequest({
+                  checkoutPath,
+                  session: freshSession,
+                  mcpSkills: authenticatedMcp("first-secret"),
+                }),
               ),
             );
             assert.strictEqual(yield* fs.readFileString(capturePath), "first-secret");
             const rotated = yield* collectEvents(
               harness.run(
-                makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("rotated-secret") }),
+                makeRequest({
+                  checkoutPath,
+                  session: freshSession,
+                  mcpSkills: authenticatedMcp("rotated-secret"),
+                }),
               ),
             );
             assert.strictEqual(yield* fs.readFileString(capturePath), "rotated-secret");
@@ -509,7 +520,10 @@ describe("codexRunner", () => {
 
           assert.lengthOf(structuredCompletions(events), 1);
           assert.include(capture.args, "--output-schema");
-          assert.isTrue(events.some((event) => event.type === EventType.RUN_STARTED));
+          assert.deepNestedInclude(
+            events.find((event) => event.type === EventType.RUN_STARTED),
+            { runId, threadId: freshSession },
+          );
           assert.isTrue(events.some((event) => event.type === EventType.TEXT_MESSAGE_CONTENT));
           assert.isTrue(events.some((event) => event.type === EventType.CUSTOM));
           assert.deepNestedInclude(events.at(-1), {
@@ -529,7 +543,13 @@ describe("codexRunner", () => {
           const nativeHandle = sessionHandles(fresh)[0];
           if (!nativeHandle) return assert.fail("fresh Codex run emitted no session handle");
           const resumed = yield* collectEvents(
-            harness.run(makeRequest({ checkoutPath: handle.id, prompt: "current prompt" })),
+            harness.run(
+              makeRequest({
+                checkoutPath: handle.id,
+                session: resumedSession,
+                prompt: "current prompt",
+              }),
+            ),
           ).pipe(
             Effect.provideService(SessionStore.SessionStore, {
               ...sessionStore,
@@ -542,6 +562,10 @@ describe("codexRunner", () => {
           assert.include(capture.args, nativeHandle);
           assert.include(capture.prompt, "current prompt");
           assert.notInclude(capture.prompt, "first prompt");
+          assert.deepNestedInclude(
+            resumed.find((event) => event.type === EventType.RUN_STARTED),
+            { runId, threadId: resumedSession },
+          );
         }),
       ),
     );
@@ -560,7 +584,7 @@ describe("codexRunner", () => {
               },
             }),
           ]);
-          yield* harness.run(makeRequest({ checkoutPath, session: null })).pipe(Stream.runDrain);
+          yield* harness.run(makeRequest({ checkoutPath, session: freshSession })).pipe(Stream.runDrain);
 
           assert.deepStrictEqual(calls[0]?.additionalDirectories, [commonDirectory]);
         }),
@@ -599,7 +623,13 @@ describe("codexRunner", () => {
             runner({ codexExecutable: fakeCodexExecutable(" --fake-turn-error=not-logged-in") }),
           ]);
           const error = yield* harness
-            .run(makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("error-secret") }))
+            .run(
+              makeRequest({
+                checkoutPath,
+                session: freshSession,
+                mcpSkills: authenticatedMcp("error-secret"),
+              }),
+            )
             .pipe(
               Stream.runForEach((event) => Effect.sync(() => events.push(event))),
               Effect.flip,
@@ -623,7 +653,7 @@ describe("codexRunner", () => {
             runner({ codexExecutable: fakeCodexExecutable(" --fake-turn-error=network-reset") }),
           ]);
           const error = yield* harness
-            .run(makeRequest({ checkoutPath, session: null }))
+            .run(makeRequest({ checkoutPath, session: freshSession }))
             .pipe(Stream.runDrain, Effect.flip);
 
           assert.strictEqual(error.reason, "turn");
@@ -641,7 +671,7 @@ describe("codexRunner", () => {
             runner({ codexExecutable: fakeCodexExecutable(" --fake-turn-error=spawn-codex-ENOENT") }),
           ]);
           const error = yield* harness
-            .run(makeRequest({ checkoutPath, session: null }))
+            .run(makeRequest({ checkoutPath, session: freshSession }))
             .pipe(Stream.runDrain, Effect.flip);
 
           assert.strictEqual(error.reason, "turn");
@@ -659,7 +689,7 @@ describe("codexRunner", () => {
             runner({ codexExecutable: fakeCodexExecutable(" --fake-turn-error=incompatible-tool-output") }),
           ]);
           const error = yield* harness
-            .run(makeRequest({ checkoutPath, session: null }))
+            .run(makeRequest({ checkoutPath, session: freshSession }))
             .pipe(Stream.runDrain, Effect.flip);
 
           assert.strictEqual(error.reason, "turn");
@@ -681,7 +711,7 @@ describe("codexRunner", () => {
             }),
           ]);
           const error = yield* harness
-            .run(makeRequest({ checkoutPath, session: null }))
+            .run(makeRequest({ checkoutPath, session: freshSession }))
             .pipe(Stream.runDrain, Effect.flip);
 
           assert.strictEqual(error.reason, "missing-harness");
@@ -700,7 +730,13 @@ describe("codexRunner", () => {
           const harness = Harness.make([runner({ codexExecutable: fakeCodexExecutable(" --hang") })]);
 
           yield* harness
-            .run(makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("abort-secret") }))
+            .run(
+              makeRequest({
+                checkoutPath,
+                session: freshSession,
+                mcpSkills: authenticatedMcp("abort-secret"),
+              }),
+            )
             .pipe(Stream.take(2), Stream.runDrain);
 
           const pid = yield* Schema.decodeEffect(Schema.FiniteFromString)(
@@ -752,7 +788,7 @@ describe("codexRunner", () => {
               harness.run(
                 makeRequest({
                   checkoutPath,
-                  session: null,
+                  session: freshSession,
                   prompt:
                     "Create codex-probe.txt, add it to Git, and commit it with message codex linked worktree probe. Return the required implement result. Do not open a pull request.",
                 }),

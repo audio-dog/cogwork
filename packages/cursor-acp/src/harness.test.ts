@@ -25,6 +25,7 @@ import { cursorModels } from "./models.generated";
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
+const freshSessionId = Schema.decodeSync(SessionId)("sess-cursor-fresh");
 const resumedSessionId = Schema.decodeSync(SessionId)("sess-cursor-resume");
 
 const decodeObservation = Schema.decodeUnknownSync(
@@ -118,7 +119,7 @@ const request = (checkoutPath: string) =>
         observation: { generation: 1, observedAtMillis: 1 },
       },
     }),
-    session: null,
+    session: freshSessionId,
     mcpCredentials: new Map(),
   }) satisfies Harness.HarnessRequest;
 
@@ -365,6 +366,10 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       const finished = events.at(-1);
 
       assert.deepStrictEqual(session?.value, { sessionId: "fake-cursor-session" });
+      assert.deepNestedInclude(
+        Array.from(events).find((event) => event.type === "RUN_STARTED"),
+        { runId: "run-cursor-test", threadId: freshSessionId },
+      );
       assert.deepStrictEqual(structured?.value.object, {
         _tag: "triage",
         role: "ready-for-agent",
@@ -398,6 +403,10 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       );
 
       assert.deepStrictEqual(session?.value, { sessionId: resumeHandle });
+      assert.deepNestedInclude(
+        Array.from(events).find((event) => event.type === "RUN_STARTED"),
+        { runId: "run-cursor-test", threadId: resumedSessionId },
+      );
     }),
   );
 

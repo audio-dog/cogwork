@@ -66,6 +66,7 @@ const companionRunner = {
 
 type AdapterHasEffort = "effort" extends keyof ClaudeCodeTextProviderOptions ? true : false;
 const adapterHasEffort: AdapterHasEffort = false;
+const freshSession = Schema.decodeSync(SessionId)("session-claude-fresh");
 const resumedSession = Schema.decodeSync(SessionId)("session-claude-test");
 const environmentValue = (name: string) => {
   const value = Reflect.get(process.env, name);
@@ -79,7 +80,7 @@ const inheritedAnthropicEnvironment = {
 const persistence = memoryPersistence();
 const sessionStore: SessionStore.SessionStoreService = {
   persistence,
-  resumeHandle: () => Effect.succeed("fake-claude-session-1"),
+  resumeHandle: (session) => Effect.succeed(session === resumedSession ? "fake-claude-session-1" : null),
   mint: () => Effect.die("unexpected Session mint"),
 };
 
@@ -242,7 +243,7 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
         observation: { generation: 1, observedAtMillis: 1 },
       },
     }),
-    session: overrides.session ?? null,
+    session: overrides.session === undefined ? freshSession : overrides.session,
     mcpCredentials: overrides.mcp
       ? new Map([["local:repo/mcp/linear", Redacted.make("mcp-test-bearer")]])
       : new Map(),
@@ -538,6 +539,10 @@ describe("Claude Code Harness", () => {
           assert.isFalse(containsString(events, "mcp-test-bearer"));
           assert.deepStrictEqual(sessionHandles(events), ["fake-claude-session-1"]);
           assert.isNull(capture.resume);
+          assert.deepNestedInclude(
+            events.find((event) => event.type === "RUN_STARTED"),
+            { runId: "run-claude-test", threadId: freshSession },
+          );
           assert.isTrue(events.some((event) => event.type === "REASONING_MESSAGE_CONTENT"));
           assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
           assert.isTrue(events.some((event) => event.type === "TOOL_CALL_START"));
@@ -573,6 +578,10 @@ describe("Claude Code Harness", () => {
         const capture = yield* captureFrom(events);
 
         assert.strictEqual(capture.resume, "fake-claude-session-1");
+        assert.deepNestedInclude(
+          events.find((event) => event.type === "RUN_STARTED"),
+          { runId: "run-claude-test", threadId: resumedSession },
+        );
         assert.isFalse(capture.forkSession);
         assert.notMatch(capture.mcpConfigArgument ?? "", /^\{/);
         assert.include(capture.args, "--disallowedTools");
