@@ -107,14 +107,9 @@ function WorkspaceFilter() {
   const board = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
   const setFilter = useChromeStore((state) => state.setWorkspaceFilter);
-  const { workspaces, failed } = BoardResult.$match(board, {
-    Initial: () => ({ workspaces: [], failed: [] }),
-    Failure: () => ({ workspaces: [], failed: [] }),
-    Success: ({ board: picture }) => ({
-      workspaces: registeredWorkspaceOptions(picture),
-      failed: failedWorkspaces(picture),
-    }),
-  });
+  const picture = BoardResult.$is("Success")(board) ? board.board : null;
+  const workspaces = picture ? registeredWorkspaceOptions(picture) : [];
+  const failed = picture ? failedWorkspaces(picture) : [];
 
   return (
     <SidebarGroup>
