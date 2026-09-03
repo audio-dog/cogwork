@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_fdd1fe94ff5343::t_430ca9859da454 1-4,6,101-111,115,119-122,128,132-135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ce6937eb713db498e65a7cae457634a24bdad3aa",
+  "prompts": {},
+  "sessions": {
+    "s_fdd1fe94ff5343": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-38a5-7a20-8ebf-5c179df18508",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
