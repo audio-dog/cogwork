@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_16ee42df336e01::t_fe094ab19f3dac 139
+  s_16ee42df336e01::t_0136edb1edd7e9 2
+apps/desktop/src/renderer/src/features/customize-places.ts
+  s_16ee42df336e01::t_67ea0f544f60a1 2,100-101,103,112,126-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "df44614c3d9b054d634d7d13c9f91c922a4770d3",
+  "prompts": {},
+  "sessions": {
+    "s_16ee42df336e01": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0657b-fb0f-7de0-bc98-f7b61ff0d09f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
