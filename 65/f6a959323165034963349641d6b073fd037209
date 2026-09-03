@@ -1,0 +1,20 @@
+configs/lint/tests/rules.test.mjs
+  s_330c88d3939c54::t_e13a1965e9c514 2,12,18,24,30,36,42,48,54,60,66,72,78,84,90,97,103,109,116,122,128,134,140,146,152,158,164,170,175-183,186-187,189,192-196,202-208,212,214-215,221
+  s_330c88d3939c54::t_41a68542005464 190-191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "65f6a959323165034963349641d6b073fd037209",
+  "prompts": {},
+  "sessions": {
+    "s_330c88d3939c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea7438ab-7eb0-4f94-b042-61420f9a63df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
