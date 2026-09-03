@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_05d02009edd117::t_a483cbcff40408 1,59,66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "61fbf205d9dd4ceda4c63d1d1f6004c4e05da401",
+  "prompts": {},
+  "sessions": {
+    "s_05d02009edd117": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-337f-7a12-9962-8895ebeb110c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
