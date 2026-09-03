@@ -2,6 +2,7 @@ import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
   agUiTextDelta,
+  FILE_DIFF_EVENT,
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
@@ -149,8 +150,6 @@ export const withoutRunPreview = (state: RunPreviewState, runId: string) => {
   next.delete(runId);
   return next;
 };
-
-const FILE_DIFF_EVENT = "sandbox.file.diff";
 
 const FileDiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String });
 const decodeFileDiff = Schema.decodeUnknownOption(FileDiffValue);
