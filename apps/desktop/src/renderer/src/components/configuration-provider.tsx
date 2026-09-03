@@ -1,8 +1,9 @@
-import type {
-  Board,
-  ContributionSettingCell,
+import {
+  type Board,
+  type ContributionSettingCell,
+  ContributionSettingScope,
   ContributionSettingUpdate,
-  ControlStore,
+  type ControlStore,
 } from "@cogwork/contracts";
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
@@ -97,28 +98,41 @@ interface ContributionSettingSubmission {
 }
 
 const contributionSettingKey = (cell: ContributionSettingCell) =>
-  cell.scope._tag === "SettingsProfile"
-    ? `${cell.contribution.id}:settings-profile`
-    : `${cell.contribution.id}:private-workspace-overlay:${cell.scope.workspace}`;
+  ContributionSettingScope.match(cell.scope, {
+    SettingsProfile: () => `${cell.contribution.id}:settings-profile`,
+    PrivateWorkspaceOverlay: ({ workspace }) =>
+      `${cell.contribution.id}:private-workspace-overlay:${workspace}`,
+  });
+
+const contributionSettingCell = (update: ContributionSettingUpdate) =>
+  ContributionSettingUpdate.match(update, {
+    Set: ({ row }) => row,
+    Clear: ({ cell }) => cell,
+  });
 
 const applyContributionSetting = (controlStore: ControlStore | null, update: ContributionSettingUpdate) => {
   if (controlStore === null) return null;
-  const cell = update._tag === "Set" ? update.row : update.cell;
+  const cell = contributionSettingCell(update);
   const remaining = controlStore.contributionSettings.filter(
     (row) => contributionSettingKey(row) !== contributionSettingKey(cell),
   );
-  const contributionSettings = update._tag === "Set" ? [...remaining, update.row] : remaining;
+  const contributionSettings = ContributionSettingUpdate.match(update, {
+    Set: ({ row }) => [...remaining, row],
+    Clear: () => remaining,
+  });
   return { ...controlStore, contributionSettings };
 };
 
 const contributionSettingMatches = (controlStore: ControlStore | null, update: ContributionSettingUpdate) => {
   if (controlStore === null) return false;
-  const cell = update._tag === "Set" ? update.row : update.cell;
+  const cell = contributionSettingCell(update);
   const stored = controlStore.contributionSettings.find(
     (row) => contributionSettingKey(row) === contributionSettingKey(cell),
   );
-  if (update._tag === "Clear") return stored === undefined;
-  return stored?.enabled === update.row.enabled;
+  return ContributionSettingUpdate.match(update, {
+    Set: ({ row }) => stored?.enabled === row.enabled,
+    Clear: () => stored === undefined,
+  });
 };
 
 export const contributionSettingState = (
