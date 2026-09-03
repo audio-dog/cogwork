@@ -5,7 +5,8 @@ import {
   type ContributionSettingCell,
   type ContributionSettingRow,
   ContributionSettingRow as ContributionSettingRowSchema,
-  type ContributionSettingUpdate,
+  ContributionSettingScope,
+  ContributionSettingUpdate,
   type ContributionSettingValue,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
@@ -16,9 +17,11 @@ import {
   type OperationSettingCell,
   type OperationSettingRow,
   OperationSettingRow as OperationSettingRowSchema,
-  type OperationSettingUpdate,
+  OperationSettingScope,
+  OperationSettingUpdate,
   type PluginInstall,
   PluginInstall as PluginInstallSchema,
+  SettingLevel,
   StaleControlStoreWrite,
 } from "@cogwork/contracts";
 
@@ -343,9 +346,13 @@ const readPicture = (sql: SqlClient.SqlClient) =>
   });
 
 const storedContributionScope = (scope: ContributionSettingCell["scope"]) =>
-  scope._tag === "SettingsProfile"
-    ? { scope: "settings-profile", workspace: "" }
-    : { scope: "private-workspace-overlay", workspace: scope.workspace };
+  ContributionSettingScope.match(scope, {
+    SettingsProfile: () => ({ scope: "settings-profile", workspace: "" }),
+    PrivateWorkspaceOverlay: ({ workspace }) => ({
+      scope: "private-workspace-overlay",
+      workspace,
+    }),
+  });
 
 const storedContributionCell = (cell: ContributionSettingCell) => ({
   contribution: cell.contribution.id,
@@ -378,17 +385,22 @@ const clearContributionSetting = Effect.fn("ControlStore.clearContributionSettin
   `;
 });
 
-const storedLevel = (level: OperationSettingCell["level"]) => {
-  if (level._tag === "Default") return { level: "default", workflow: "", operation: "" };
-  if (level._tag === "Workflow") return { level: "workflow", workflow: level.workflow, operation: "" };
-  return { level: "operation", workflow: level.workflow, operation: level.operation };
-};
+const storedLevel = (level: OperationSettingCell["level"]) =>
+  SettingLevel.match(level, {
+    Default: () => ({ level: "default", workflow: "", operation: "" }),
+    Workflow: ({ workflow }) => ({ level: "workflow", workflow, operation: "" }),
+    Operation: ({ workflow, operation }) => ({ level: "operation", workflow, operation }),
+  });
 
-const storedScope = (scope: OperationSettingCell["scope"]) => {
-  if (scope._tag === "SettingsProfile") return { scope: "settings-profile", workspace: "" };
-  if (scope._tag === "RuntimeHost") return { scope: "runtime-host", workspace: "" };
-  return { scope: "private-workspace-overlay", workspace: scope.workspace };
-};
+const storedScope = (scope: OperationSettingCell["scope"]) =>
+  OperationSettingScope.match(scope, {
+    SettingsProfile: () => ({ scope: "settings-profile", workspace: "" }),
+    RuntimeHost: () => ({ scope: "runtime-host", workspace: "" }),
+    PrivateWorkspaceOverlay: ({ workspace }) => ({
+      scope: "private-workspace-overlay",
+      workspace,
+    }),
+  });
 
 const storedCell = (cell: OperationSettingCell) => ({
   setting: cell.setting,
@@ -555,8 +567,10 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
   ) {
     return yield* sql.withTransaction(
       Effect.gen(function* () {
-        if (update._tag === "Set") yield* setOperationSetting(sql, update.row);
-        else yield* clearOperationSetting(sql, update.cell);
+        yield* OperationSettingUpdate.match(update, {
+          Set: ({ row }) => setOperationSetting(sql, row),
+          Clear: ({ cell }) => clearOperationSetting(sql, cell),
+        });
         return yield* readPicture(sql);
       }),
     );
@@ -600,8 +614,10 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
   ) {
     return yield* sql.withTransaction(
       Effect.gen(function* () {
-        if (update._tag === "Set") yield* setContributionSetting(sql, update.row);
-        else yield* clearContributionSetting(sql, update.cell);
+        yield* ContributionSettingUpdate.match(update, {
+          Set: ({ row }) => setContributionSetting(sql, row),
+          Clear: ({ cell }) => clearContributionSetting(sql, cell),
+        });
         return yield* readPicture(sql);
       }),
     );

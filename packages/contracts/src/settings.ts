@@ -25,6 +25,13 @@ export const SettingScope = Schema.Union([
 ]).pipe(Schema.toTaggedUnion("_tag"));
 export type SettingScope = typeof SettingScope.Type;
 
+export const OperationSettingScope = Schema.Union([
+  SettingsProfileScope,
+  RuntimeHostScope,
+  PrivateWorkspaceOverlayScope,
+]).pipe(Schema.toTaggedUnion("_tag"));
+export type OperationSettingScope = typeof OperationSettingScope.Type;
+
 export const DefaultSettingLevel = Schema.TaggedStruct("Default", {});
 export type DefaultSettingLevel = typeof DefaultSettingLevel.Type;
 
@@ -74,7 +81,7 @@ const enabledCell = Schema.Struct({
 const harnessCell = Schema.Struct({
   ...operationCellFields,
   setting: Schema.Literal("harness"),
-  scope: Schema.Union([SettingsProfileScope, RuntimeHostScope, PrivateWorkspaceOverlayScope]),
+  scope: OperationSettingScope,
 });
 const modelCell = Schema.Struct({
   ...operationCellFields,
@@ -281,15 +288,14 @@ export const defaultContributionEnabled = (authority: string) => authority !== "
 export const admissibleSettingScope = (
   family: "contribution" | "operation",
   setting: OperationSettingName | "enabled",
-  scope: SettingScope["_tag"],
-) => {
-  if (family === "contribution") {
-    return scope === "SettingsProfile" || scope === "PrivateWorkspaceOverlay";
-  }
-  if (scope === "WorkspaceInput") return false;
-  if (scope === "RuntimeHost") return setting === "harness";
-  return true;
-};
+  scope: SettingScope,
+) =>
+  SettingScope.match(scope, {
+    SettingsProfile: () => true,
+    RuntimeHost: () => family === "operation" && setting === "harness",
+    WorkspaceInput: () => false,
+    PrivateWorkspaceOverlay: () => true,
+  });
 
 export type SettingResolutionCase =
   | {
@@ -297,7 +303,7 @@ export type SettingResolutionCase =
       readonly name: string;
       readonly family: "contribution" | "operation";
       readonly setting: OperationSettingName | "enabled";
-      readonly scope: SettingScope["_tag"];
+      readonly scope: SettingScope;
       readonly expected: boolean;
     }
   | {
@@ -357,7 +363,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "admits a contribution setting at Settings profile",
     family: "contribution",
     setting: "enabled",
-    scope: "SettingsProfile",
+    scope: profile,
     expected: true,
   },
   {
@@ -365,7 +371,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "leaves the contribution Workspace input cell empty",
     family: "contribution",
     setting: "enabled",
-    scope: "WorkspaceInput",
+    scope: workspaceInput,
     expected: false,
   },
   {
@@ -373,7 +379,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "admits a contribution setting at Private workspace overlay",
     family: "contribution",
     setting: "enabled",
-    scope: "PrivateWorkspaceOverlay",
+    scope: overlay,
     expected: true,
   },
   {
@@ -381,7 +387,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "admits an Operation setting at Settings profile",
     family: "operation",
     setting: "model",
-    scope: "SettingsProfile",
+    scope: profile,
     expected: true,
   },
   {
@@ -389,7 +395,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "leaves the contribution Runtime host cell empty",
     family: "contribution",
     setting: "enabled",
-    scope: "RuntimeHost",
+    scope: host,
     expected: false,
   },
   {
@@ -397,7 +403,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "leaves non-Harness Operation setting Runtime host cells empty",
     family: "operation",
     setting: "model",
-    scope: "RuntimeHost",
+    scope: host,
     expected: false,
   },
   {
@@ -405,7 +411,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "leaves every Operation setting Workspace input cell empty",
     family: "operation",
     setting: "model",
-    scope: "WorkspaceInput",
+    scope: workspaceInput,
     expected: false,
   },
   {
@@ -413,7 +419,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "admits only the Harness Operation setting at Runtime host",
     family: "operation",
     setting: "harness",
-    scope: "RuntimeHost",
+    scope: host,
     expected: true,
   },
   {
@@ -421,7 +427,7 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
     name: "admits an Operation setting at Private workspace overlay",
     family: "operation",
     setting: "model",
-    scope: "PrivateWorkspaceOverlay",
+    scope: overlay,
     expected: true,
   },
   {

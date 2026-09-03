@@ -2,6 +2,7 @@ import {
   type ControlStore,
   type OperationSettingContext,
   type OperationSettingName,
+  OperationSettingScope,
   operationSettingNames,
   operationSettingRowsForContext,
   resolveOperationSetting,
@@ -43,14 +44,18 @@ const hasCodingImplementOverlay = (
   workspace: OperationSettingContext["workspace"],
 ) =>
   operationSettingRowsForContext(controlStore.operationSettings, codingImplementContext(workspace)).some(
-    (row) => row.scope._tag === "PrivateWorkspaceOverlay",
+    (row) => OperationSettingScope.guards.PrivateWorkspaceOverlay(row.scope),
   );
 
 export const operationSettingDisplaySections = (controlStore: ControlStore) => {
   const workspaces = [
     ...new Set(
       controlStore.operationSettings.flatMap((row) =>
-        row.scope._tag === "PrivateWorkspaceOverlay" ? [row.scope.workspace] : [],
+        OperationSettingScope.match(row.scope, {
+          SettingsProfile: () => [],
+          RuntimeHost: () => [],
+          PrivateWorkspaceOverlay: ({ workspace }) => [workspace],
+        }),
       ),
     ),
   ].filter((workspace) => hasCodingImplementOverlay(controlStore, workspace));

@@ -1,6 +1,7 @@
 import {
   applyDaemonEvent,
   type Board,
+  ContributionSettingScope,
   ContributionSettingUpdate,
   type ControlStore,
   type DaemonEvent,
@@ -534,7 +535,10 @@ export const formatContributionSettings = (controlStore: ControlStore) => {
   if (controlStore.contributionSettings.length === 0) return "(no contribution settings)";
   return controlStore.contributionSettings
     .map((row) => {
-      const scope = row.scope._tag === "SettingsProfile" ? "profile" : `overlay:${row.scope.workspace}`;
+      const scope = ContributionSettingScope.match(row.scope, {
+        SettingsProfile: () => "profile",
+        PrivateWorkspaceOverlay: ({ workspace }) => `overlay:${workspace}`,
+      });
       const diagnostic = row.diagnostic ? ` (${row.diagnostic._tag.toLowerCase()})` : "";
       return `${row.contribution.id} [${scope}]: ${row.enabled ? "on" : "off"}${diagnostic}`;
     })

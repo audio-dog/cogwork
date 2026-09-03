@@ -52,6 +52,7 @@ export const contributionSettings = sqliteTable(
     enabled: integer("enabled", { mode: "boolean" }).notNull(),
   },
   (table) => [
+    // Storage tags deliberately duplicate ContributionSettingScope; update both together.
     primaryKey({ columns: [table.contribution, table.scope, table.workspace] }),
     check(
       "contribution_settings_scope",
@@ -72,6 +73,7 @@ export const operationSettings = sqliteTable(
     value: text("value").notNull(),
   },
   (table) => [
+    // Storage tags deliberately duplicate SettingLevel and OperationSettingScope; update both together.
     primaryKey({
       columns: [table.setting, table.level, table.workflow, table.operation, table.scope, table.workspace],
     }),

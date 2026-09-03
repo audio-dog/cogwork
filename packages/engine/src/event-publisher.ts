@@ -1,6 +1,7 @@
 import {
   ClassifiedItem,
   type ConnectionOverview,
+  ContributionSettingScope,
   type ControlStore as ControlStorePicture,
   itemKey,
   type PluginOverview,
@@ -51,30 +52,47 @@ const withoutContributionDiagnostic = ({
 const contributionSettingAppliesToWorkspace = (
   scope: ControlStorePicture["contributionSettings"][number]["scope"],
   workspace: RegistryState["workspaces"][number],
-) => scope._tag === "SettingsProfile" || workspace.config.name === scope.workspace;
+) =>
+  ContributionSettingScope.match(scope, {
+    SettingsProfile: () => true,
+    PrivateWorkspaceOverlay: ({ workspace: scopeWorkspace }) => workspace.config.name === scopeWorkspace,
+  });
 
 const contributionSettingScopeExists = (
   scope: ControlStorePicture["contributionSettings"][number]["scope"],
   registry: RegistryState,
-) => {
-  if (scope._tag === "SettingsProfile") return true;
-  return registry.workspaces.some((workspace) => workspace.config.name === scope.workspace);
-};
+) =>
+  ContributionSettingScope.match(scope, {
+    SettingsProfile: () => true,
+    PrivateWorkspaceOverlay: ({ workspace: scopeWorkspace }) =>
+      registry.workspaces.some((workspace) => workspace.config.name === scopeWorkspace),
+  });
+
+const contributionSettingInstalledByPlugin = (
+  controlStore: ControlStorePicture,
+  row: ControlStorePicture["contributionSettings"][number],
+) =>
+  controlStore.pluginInstalls.some(({ pluginId }) => row.contribution.id.startsWith(`plugin:${pluginId}/`));
+
+const contributionSettingExistsInWorkspace = (
+  registry: RegistryState,
+  row: ControlStorePicture["contributionSettings"][number],
+) =>
+  registry.workspaces.some(
+    (workspace) =>
+      contributionSettingAppliesToWorkspace(row.scope, workspace) &&
+      workspace.contributions.some((contribution) => contribution.id === row.contribution.id),
+  );
 
 const contributionSettingExists = (
   controlStore: ControlStorePicture,
   registry: RegistryState,
   row: ControlStorePicture["contributionSettings"][number],
-) =>
-  contributionSettingScopeExists(row.scope, registry) &&
-  (controlStore.pluginInstalls.some(({ pluginId }) =>
-    row.contribution.id.startsWith(`plugin:${pluginId}/`),
-  ) ||
-    registry.workspaces.some(
-      (workspace) =>
-        contributionSettingAppliesToWorkspace(row.scope, workspace) &&
-        workspace.contributions.some((contribution) => contribution.id === row.contribution.id),
-    ));
+) => {
+  if (!contributionSettingScopeExists(row.scope, registry)) return false;
+  if (contributionSettingInstalledByPlugin(controlStore, row)) return true;
+  return contributionSettingExistsInWorkspace(registry, row);
+};
 
 export const controlStoreWithDiagnostics = (controlStore: ControlStorePicture, registry: RegistryState) => {
   const contributionSettings: ControlStorePicture["contributionSettings"] =
