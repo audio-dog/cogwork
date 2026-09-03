@@ -1,0 +1,23 @@
+packages/cursor-acp/src/harness.test.ts
+  s_a38d1882a40a69::t_e98999a003a70b 295
+packages/cursor-acp/src/harness.ts
+  s_a38d1882a40a69::t_c0758559503423 371
+packages/cursor-acp/CONTEXT.md
+  s_a38d1882a40a69::t_2dcaa52cc9dfcd 18-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "542fdf8de4ecfbeb172f939340399e73fc1f39ad",
+  "prompts": {},
+  "sessions": {
+    "s_a38d1882a40a69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-3296-70a2-a373-a3565da4aa0b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
