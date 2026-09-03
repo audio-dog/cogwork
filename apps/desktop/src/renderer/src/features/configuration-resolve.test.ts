@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  Authority,
   type Contribution,
+  Diagnostic,
   enablementScopes,
+  LoadState,
   type ScopeRef,
   scopeOrder,
   type WorkspaceId,
@@ -53,7 +56,7 @@ describe("resolveEnablement", () => {
   it("drops an MCP server enablement written at the repository", () => {
     // A cloned repository may ship the file but may never start a process on your machine.
     const resolved = resolveEnablement(required("local:repo/mcp/repo-tools"), view);
-    expect(resolved.dropped.map((entry) => entry.diagnostic._tag)).toEqual(["inadmissible"]);
+    expect(resolved.dropped.every((entry) => Diagnostic.$is("inadmissible")(entry.diagnostic))).toBe(true);
     expect(resolved.dropped[0]?.row.scope.kind).toBe("workspace-input");
     // Dropped, so nothing resolves — and that is not the same as off.
     expect(resolved.effective).toBeUndefined();
@@ -61,7 +64,7 @@ describe("resolveEnablement", () => {
 
   it("drops a setting that references a contribution which no longer exists", () => {
     const resolved = resolveEnablement(required("plugin:granola/mcp/granola"), view);
-    expect(resolved.dropped.map((entry) => entry.diagnostic._tag)).toEqual(["dangling"]);
+    expect(resolved.dropped.every((entry) => Diagnostic.$is("dangling")(entry.diagnostic))).toBe(true);
     expect(resolved.effective).toBeUndefined();
   });
 
@@ -76,25 +79,24 @@ describe("resolveEnablement", () => {
   it("shows and edits a dangling overlay at its stored scope", () => {
     const contribution = {
       id: "plugin:linear/mcp/linear",
-      authority: { _tag: "plugin", pluginId: "linear" },
+      authority: Authority.plugin({ pluginId: "linear" }),
       kind: "mcp-server",
       localName: "linear",
       summary: "Linear MCP",
       file: "/plugins/linear/mcp/linear.json",
       definedAt: "settings-profile",
       definedIn: cogworkWorkspaceId,
-      load: { _tag: "loaded" },
+      load: LoadState.loaded({}),
       rows: [
         { scope: { kind: "settings-profile" }, value: true, source: "Control store" },
         {
           scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
           value: false,
           source: "Control store",
-          diagnostic: {
-            _tag: "dangling",
+          diagnostic: Diagnostic.dangling({
             source: "Control store",
             detail: "The workspace was removed.",
-          },
+          }),
         },
       ],
     } satisfies Contribution;
@@ -183,14 +185,14 @@ describe("where a contribution lives, and where it is turned on", () => {
   it("edits a user MCP server at its effective workspace overlay", () => {
     const mcp = {
       id: "local:user/mcp/review",
-      authority: { _tag: "local", tree: "user" },
+      authority: Authority.local({ tree: "user" }),
       kind: "mcp-server",
       localName: "review",
       summary: "/home/.agents/mcp/review.json",
       file: "/home/.agents/mcp/review.json",
       definedAt: "settings-profile",
       definedIn: cogworkWorkspaceId,
-      load: { _tag: "loaded" },
+      load: LoadState.loaded({}),
       rows: [
         { scope: { kind: "settings-profile" }, value: true, source: "Control store" },
         {
@@ -248,7 +250,7 @@ describe("diagnosticsOf", () => {
     expect(inItsOwnView).toHaveLength(0);
 
     const reported = diagnosticsOf(granola);
-    expect(reported.map((entry) => entry.diagnostic._tag)).toEqual(["dangling"]);
+    expect(reported.every((entry) => Diagnostic.$is("dangling")(entry.diagnostic))).toBe(true);
     expect(reported[0].row.scope.workspaceId).toBe(cogworkWorkspaceId);
   });
 

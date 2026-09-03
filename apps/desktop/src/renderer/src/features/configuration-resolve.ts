@@ -1,7 +1,7 @@
 import {
   type Contribution,
   type ContributionKind,
-  type Diagnostic,
+  Diagnostic,
   type EnablementRow,
   enablementScopes,
   type ScopeKind,
@@ -51,11 +51,12 @@ export function diagnosticsOf(contribution: Contribution): readonly DroppedRow[]
     .filter((row) => row.diagnostic !== undefined || !admissibleFor(contribution.kind, row))
     .map((row) => ({
       row,
-      diagnostic: row.diagnostic ?? {
-        _tag: "inadmissible" as const,
-        detail: `A ${contribution.kind} on / off may not be written at the ${row.scope.kind} Scope.`,
-        source: row.source,
-      },
+      diagnostic:
+        row.diagnostic ??
+        Diagnostic.inadmissible({
+          detail: `A ${contribution.kind} on / off may not be written at the ${row.scope.kind} Scope.`,
+          source: row.source,
+        }),
     }));
 }
 
