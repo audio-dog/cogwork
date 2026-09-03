@@ -1,0 +1,23 @@
+packages/engine/src/scheduler.test.ts
+  s_1341416beabf33::t_0c027cc6205cfe 329
+packages/engine/src/recovery.test.ts
+  s_1341416beabf33::t_0c027cc6205cfe 226
+packages/engine/src/reconcile.ts
+  s_1341416beabf33::t_597c5268c240f6 9,59,94,113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1f6f0c3d00e540339a890bdf0caab3802d19529f",
+  "prompts": {},
+  "sessions": {
+    "s_1341416beabf33": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0648f-337f-7533-963c-3ceabf7075c3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
