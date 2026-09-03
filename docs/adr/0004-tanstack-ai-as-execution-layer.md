@@ -1,6 +1,6 @@
 # 0004 — TanStack AI is the unified AI execution layer
 
-> **Implementation amendment (2026-09-03).** Claude Code, Codex, and Cursor now share one engine-owned external Harness runtime for Workspace and Sandbox lifecycle, authentication, MCP and secret projection, cancellation, event bridging, and usage handling. Their native descriptors retain only native projection and transport differences. Supported file activity enters the Run contract as `sandbox.file.diff`; capability profiles state `exact`, `terminal-only`, `best-effort`, or `absent` fidelity.
+> **Implementation amendment (2026-09-03).** Claude Code, Codex, and Cursor now share one engine-owned external Harness runtime for Workspace and Sandbox lifecycle, authentication, MCP and secret projection, cancellation, event bridging, and usage handling. Their native descriptors retain only native projection and transport differences. Supported file activity enters the Run contract as `sandbox.file.diff`; capability profiles state `terminal-only`, `best-effort`, or `absent` fidelity.
 
 - **Status:** accepted — extended by engine ADR 0006 (`packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md`): the `HarnessRunner` port does not disappear; a first-party TanStack runner and the CLI harness adapters both live behind it, and only the owned provider layer serves direct model calls.
 - **Date:** 2026-07-28
