@@ -2,7 +2,7 @@ import type { SchedulerStats } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import { useScheduling } from "../features/use-scheduling";
 
 function SchedulingToggle({ scheduler }: { scheduler: SchedulerStats }) {
@@ -51,7 +51,7 @@ function SchedulerSummary({ scheduler }: { scheduler: SchedulerStats }) {
 
 export function SchedulerControls() {
   const result = useBoard();
-  if (result._tag !== "Success" || result.board.scheduler === null) return null;
+  if (!BoardResult.$is("Success")(result) || result.board.scheduler === null) return null;
 
   const scheduler = result.board.scheduler;
   return (
@@ -64,7 +64,7 @@ export function SchedulerControls() {
 
 export function PausedBanner() {
   const result = useBoard();
-  if (result._tag !== "Success" || result.board.scheduler?.scheduling !== "paused") return null;
+  if (!BoardResult.$is("Success")(result) || result.board.scheduler?.scheduling !== "paused") return null;
 
   return (
     <div className="border-b border-amber-500/30 bg-amber-500/10 px-6 py-1.5 text-center text-xs text-amber-700 dark:text-amber-300">

@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiExternalLinkLine, RiGitPullRequestLine, RiQuestionAnswerLine } from "@remixicon/react";
 import { useState } from "react";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import {
   type AttentionEntry,
   type AttentionKind,
@@ -252,7 +252,7 @@ function AttentionContent({
 
 export function AttentionList() {
   const result = useBoard();
-  if (result._tag !== "Success") return null;
+  if (!BoardResult.$is("Success")(result)) return null;
   const entries = attentionEntries(result.board);
   return <AttentionContent entries={entries} workspaces={registeredWorkspaces(result.board)} />;
 }

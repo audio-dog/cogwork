@@ -35,7 +35,7 @@ import {
 } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import { type FailedWorkspace, failedWorkspaces, registeredWorkspaceOptions } from "../features/feed";
 
 type FailedWorkspaceWithId = FailedWorkspace & { readonly id: WorkspaceId };
@@ -107,8 +107,9 @@ function WorkspaceFilter() {
   const board = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
   const setFilter = useChromeStore((state) => state.setWorkspaceFilter);
-  const workspaces = board._tag === "Success" ? registeredWorkspaceOptions(board.board) : [];
-  const failed = board._tag === "Success" ? failedWorkspaces(board.board) : [];
+  const picture = BoardResult.$is("Success")(board) ? board.board : null;
+  const workspaces = picture ? registeredWorkspaceOptions(picture) : [];
+  const failed = picture ? failedWorkspaces(picture) : [];
 
   return (
     <SidebarGroup>

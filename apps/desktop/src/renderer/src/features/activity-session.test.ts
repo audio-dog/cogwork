@@ -1,7 +1,8 @@
-import { type AgUiEvent, ClassifiedItem, DaemonEvent, RunSummary } from "@cogwork/contracts";
+import { type AgUiEvent, ClassifiedItem, DaemonEvent, initialBoard, RunSummary } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import {
+  BoardResult,
   ingestDaemonEvent,
   initialActivitySession,
   resetActivityFolds,
@@ -47,6 +48,19 @@ const activity = (runId: string, agui: AgUiEvent & { type: string }) =>
   });
 
 describe("activity session", () => {
+  it("constructs and folds every board result", () => {
+    const initial = BoardResult.Initial();
+    const failure = BoardResult.Failure();
+    const success = BoardResult.Success({ board: initialBoard, previews: new Map() });
+    const label = BoardResult.$match({
+      Initial: () => "initial",
+      Failure: () => "failure",
+      Success: ({ board }) => (board === initialBoard ? "success" : "wrong board"),
+    });
+
+    expect([label(initial), label(failure), label(success)]).toEqual(["initial", "failure", "success"]);
+  });
+
   it("rebuilds folds from a reconnect seed while keeping each log event once", () => {
     const seed = event({
       _tag: "ItemChanged",

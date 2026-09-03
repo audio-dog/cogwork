@@ -24,7 +24,7 @@ import * as Cause from "effect/Cause";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useRef, useState } from "react";
 import { cancelRunAtom, handBackAtom, handBackTargetAtom, reclassifyAtom } from "../daemon/atoms";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import { boardItem, needsHumanReasonLabel, runForItem, runsForItem } from "../features/feed";
 import { relativeTime } from "../features/format";
 import {
@@ -708,7 +708,7 @@ function ItemGone() {
 
 export function ItemTab({ selection }: { selection: ItemSelection & { runId?: RunSummary["id"] } }) {
   const result = useBoard();
-  if (result._tag !== "Success") return <ItemGone />;
+  if (!BoardResult.$is("Success")(result)) return <ItemGone />;
 
   const { board } = result;
   const entry = boardItem(board, selection.workspace, selection.workItem);

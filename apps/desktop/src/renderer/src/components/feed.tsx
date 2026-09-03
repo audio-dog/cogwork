@@ -5,7 +5,7 @@ import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
 import { RiCheckLine, RiTimeLine } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use } from "react";
-import { useBoard } from "../features/activity-session";
+import { BoardResult, useBoard } from "../features/activity-session";
 import type { FeedRun, QueuedItem } from "../features/feed";
 import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
@@ -327,7 +327,7 @@ export function Feed() {
   const result = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
 
-  if (result._tag !== "Success") return null;
+  if (!BoardResult.$is("Success")(result)) return null;
 
   const { board, previews } = result;
   const running = runningRuns(board, filter);
