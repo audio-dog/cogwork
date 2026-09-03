@@ -15,6 +15,8 @@ _Avoid_: Harness, driver
 
 Cursor ACP has no journal or takeover capability. Driver loss is never treated as safe detachment.
 
+Cursor ACP also declares file-event fidelity `absent`. Its ACP stream has no supported file-diff event, and the current execution posture rejects local-process Runs before a workspace watcher could be authoritative.
+
 **Cursor model / effort**:
 Harness-native strings for Cursor. The picker and adapter share the generated, versioned `cursorModels` tuple (`models:sync` → `models.generated.ts`), never a second live catalog. `models:check` detects drift from the local CLI. Runtime readiness still probes the installed CLI and its model command without changing the picker source. Config authors get autocomplete via `satisfies CursorModel`. Effort is optional (`none` | `low` | `medium` | `high` | `xhigh` | `max`) and becomes a bracket `--model` override for parameterized base ids; the listed preset ids already embed their effort.
 _Avoid_: Sync's semantic model tiers (`fast` / `default` / `powerful`); hand-maintaining the model catalog

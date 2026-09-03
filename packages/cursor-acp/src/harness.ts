@@ -368,7 +368,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
         session: { affinity: "runtime-host", fork: false, humanAttach: false },
         structuredOutput: "prompt-and-parse",
         policyFidelity: "none",
-        fileEventFidelity: "none",
+        fileEventFidelity: "absent",
         usageQuality: "estimated",
         readinessDiagnostics: true,
         journal: false,
