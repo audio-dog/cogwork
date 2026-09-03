@@ -44,12 +44,11 @@ describe("resolveFollowUp", () => {
 });
 
 describe("resolveStage", () => {
-  it("resolves triage, implement, and follow-up, and returns null for unsupported stages", () => {
+  it("resolves every operation", () => {
     const cfg = config();
-    assert.strictEqual(resolveStage(cfg, "triage")?.skill, "triage-agent");
-    assert.strictEqual(resolveStage(cfg, "implement")?.skill, "implement-agent");
-    assert.strictEqual(resolveStage(cfg, "follow-up")?.skill, "follow-up-agent");
-    assert.isNull(resolveStage(cfg, "verify"));
+    assert.strictEqual(resolveStage(cfg, "triage").skill, "triage-agent");
+    assert.strictEqual(resolveStage(cfg, "implement").skill, "implement-agent");
+    assert.strictEqual(resolveStage(cfg, "follow-up").skill, "follow-up-agent");
   });
 });
 

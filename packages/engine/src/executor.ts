@@ -4,7 +4,6 @@ import type {
   ControlStoreFailure,
   FileContribution,
   HarnessName,
-  LifecycleStage,
   OperationAvailability,
   PluginContribution,
   PluginMcpServer,
@@ -24,6 +23,7 @@ import {
   FollowUpStageResultCompletion,
   ImplementStageResultCompletion,
   issueTrackerErrorIsPermanent,
+  LifecycleStage,
   PluginContributionLoad,
   RunId,
   sessionHandle,
@@ -67,7 +67,6 @@ import {
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
-  operationStages,
 } from "./playbook";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
@@ -1501,7 +1500,7 @@ export const make = Effect.gen(function* () {
   const refreshAvailability = Effect.fn("Executor.refreshAvailability")(function* (
     workspace: RegisteredWorkspace,
   ) {
-    const operations = yield* Effect.forEach(operationStages, (operation) =>
+    const operations = yield* Effect.forEach(Array.from(LifecycleStage.literals), (operation) =>
       controlStore
         .withWrite(resolvePlanStage(workspace, operation))
         .pipe(Effect.map((resolved) => ({ operation, resolved }))),
