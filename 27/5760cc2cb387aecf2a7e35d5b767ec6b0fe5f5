@@ -1,0 +1,25 @@
+packages/engine/src/daemon-composition.test.ts
+  s_a38d1882a40a69::t_c0758559503423 65
+packages/engine/src/replay-harness.ts
+  s_a38d1882a40a69::t_c0758559503423 391
+packages/engine/src/provider-runner.ts
+  s_a38d1882a40a69::t_c0758559503423 145
+packages/engine/src/executor.test.ts
+  s_a38d1882a40a69::t_c0758559503423 592
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "275760cc2cb387aecf2a7e35d5b767ec6b0fe5f5",
+  "prompts": {},
+  "sessions": {
+    "s_a38d1882a40a69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-3296-70a2-a373-a3565da4aa0b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
