@@ -47,35 +47,34 @@ const overviewItem = Effect.fn("Harness.overviewItem")(function* (
   harness: HarnessService,
   name: HarnessName,
 ) {
-  return yield* Effect.all({
-    readiness: harness.readiness(name),
-    models: harness.catalog(name).pipe(
-      Effect.map((catalog) => catalog.models.map((choice) => choice.value)),
-      // No catalog source answered. The state already carries why the Harness cannot run.
-      Effect.catchTag("HarnessError", () => Effect.succeed<ReadonlyArray<string>>([])),
-    ),
-  }).pipe(
-    Effect.map(({ readiness, models }) =>
-      HarnessItem.make({
-        harness: name,
-        version: readiness.installation.version,
-        state: harnessStateOf(readiness, harness.signIn(name)),
-        models,
-      }),
-    ),
-    // One bound per Harness, so a hung child costs that row alone.
-    Effect.timeout(probeDeadline),
-    Effect.catchTags({
-      TimeoutError: () => Effect.succeed(unreachable(name, `the probe overran ${probeDeadline}`)),
-      HarnessError: (error: HarnessError) => Effect.succeed(unreachable(name, error.message)),
-    }),
+  const readiness = yield* harness.readiness(name);
+  const models: ReadonlyArray<string> = yield* harness.catalog(name).pipe(
+    Effect.map((catalog) => catalog.models.map((choice) => choice.value)),
+    // No catalog source answered. The state already carries why the Harness cannot run.
+    Effect.catchTag("HarnessError", () => Effect.succeed<ReadonlyArray<string>>([])),
   );
+  return HarnessItem.make({
+    harness: name,
+    version: readiness.installation.version,
+    state: harnessStateOf(readiness, harness.signIn(name)),
+    models,
+  });
 });
 
 export const harnessOverview = Effect.fn("Harness.overview")(function* () {
   const harness = yield* Harness;
-  const harnesses = yield* Effect.forEach(harness.names, (name) => overviewItem(harness, name), {
-    concurrency: "unbounded",
-  });
+  const harnesses = yield* Effect.forEach(
+    harness.names,
+    (name) =>
+      // One bound per Harness, so a hung child costs that row alone.
+      overviewItem(harness, name).pipe(
+        Effect.timeout(probeDeadline),
+        Effect.catchTags({
+          TimeoutError: () => Effect.succeed(unreachable(name, `the probe overran ${probeDeadline}`)),
+          HarnessError: (error: HarnessError) => Effect.succeed(unreachable(name, error.message)),
+        }),
+      ),
+    { concurrency: "unbounded" },
+  );
   return HarnessOverview.make({ harnesses, checkedAtMillis: yield* Clock.currentTimeMillis });
 });
