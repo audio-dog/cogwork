@@ -1,0 +1,25 @@
+patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
+  s_4cbaf27bdd9c29::t_56ddc80611d82d 13
+packages/codex-cli/src/harness.test.ts
+  s_4cbaf27bdd9c29::t_b577f762bc60fc 2
+  s_4cbaf27bdd9c29::t_c227e0c818cc90 533-535,547-550
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_4cbaf27bdd9c29::t_d900a270214d4e 41-44
+  s_4cbaf27bdd9c29::t_2b8cd33495cf47 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1b07edb2e94bb323ee0a3a8c931f8ae4c3e33ea7",
+  "prompts": {},
+  "sessions": {
+    "s_4cbaf27bdd9c29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2524c154-d8ba-4ccf-937b-21ae95b25774",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
