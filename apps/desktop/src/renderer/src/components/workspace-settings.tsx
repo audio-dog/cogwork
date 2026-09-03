@@ -26,7 +26,7 @@ import { useAtom } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { setOperationSettingAtom } from "../daemon/atoms";
+import { operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
 import { useBoard } from "../features/activity-session";
 import { operationSettingUpdate } from "../features/operation-settings";
 import {
@@ -169,11 +169,13 @@ function LiveOperationSettings({
   readonly workspace: WorkspaceId;
   readonly disabled: boolean;
 }) {
-  const enabled = useAtom(setOperationSettingAtom("enabled"));
-  const harness = useAtom(setOperationSettingAtom("harness"));
-  const model = useAtom(setOperationSettingAtom("model"));
-  const effort = useAtom(setOperationSettingAtom("effort"));
-  const permission = useAtom(setOperationSettingAtom("permission-profile"));
+  const key = (setting: OperationSettingName) =>
+    setOperationSettingAtom(operationSettingAtomKey(workspace, setting));
+  const enabled = useAtom(key("enabled"));
+  const harness = useAtom(key("harness"));
+  const model = useAtom(key("model"));
+  const effort = useAtom(key("effort"));
+  const permission = useAtom(key("permission-profile"));
   const writers = { enabled, harness, model, effort, "permission-profile": permission };
   const failure = writableSettings
     .map((setting) => writers[setting][0])

@@ -1,6 +1,7 @@
 import { defaultControlStore, WorkspaceId } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
+import { operationSettingAtomKey } from "../daemon/atoms";
 import { operationSettingUpdate, settingCell } from "./operation-settings";
 
 const workspace = Schema.decodeSync(WorkspaceId)("w");
@@ -132,5 +133,14 @@ describe("an unknown harness", () => {
     ]);
     expect(settingCell(controlStore, workspace, "triage", "harness").stale).toBe(true);
     expect(settingCell(controlStore, workspace, "triage", "model").stale).toBe(true);
+  });
+});
+
+describe("operationSettingAtomKey", () => {
+  it("separates two workspaces writing the same setting", () => {
+    expect(operationSettingAtomKey(workspace, "model")).not.toBe(operationSettingAtomKey(other, "model"));
+    expect(operationSettingAtomKey(workspace, "model")).not.toBe(
+      operationSettingAtomKey(workspace, "harness"),
+    );
   });
 });

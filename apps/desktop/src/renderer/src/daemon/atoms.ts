@@ -68,12 +68,16 @@ export const setDaemonLimitAtom = DaemonAtomRpc.mutation("SetDaemonLimit");
 
 export const setContributionSettingAtom = DaemonAtomRpc.mutation("SetContributionSetting");
 
-// One mutation atom per setting name. `Atom.fn` is non-concurrent, so a second call on the
-// same atom interrupts the first — and choosing a model writes both the harness and the
-// model. A family gives each setting its own fiber, so neither write is lost.
-export const setOperationSettingAtom = Atom.family((_setting: OperationSettingName) =>
+// One mutation atom per workspace and setting. `Atom.fn` is non-concurrent, so a second call
+// on the same atom interrupts the first — and choosing a model writes both the harness and
+// the model. The workspace is in the key because an atom outlives the page: without it one
+// workspace's failure disables and reports on the next.
+export const setOperationSettingAtom = Atom.family((_key: string) =>
   DaemonAtomRpc.mutation("SetOperationSetting"),
 );
+
+export const operationSettingAtomKey = (workspace: WorkspaceId, setting: OperationSettingName) =>
+  `${workspace}/${setting}`;
 
 export const pluginsAtom = DaemonAtomRpc.query("GetPlugins", undefined);
 
