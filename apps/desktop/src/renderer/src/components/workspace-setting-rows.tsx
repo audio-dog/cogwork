@@ -286,20 +286,6 @@ function IssueTrackerRows() {
             </WorkspaceField.Content>
             <DraftInput field="organization" label="Linear organization" />
           </WorkspaceField.Root>
-          <WorkspaceField.Root orientation="responsive">
-            <WorkspaceField.Content>
-              <WorkspaceField.Title>Read comment history</WorkspaceField.Title>
-              <WorkspaceField.Description>
-                Let reconciliation use earlier Linear comments.
-              </WorkspaceField.Description>
-            </WorkspaceField.Content>
-            <Switch
-              aria-label="Read comment history"
-              checked={draft.linearHistory}
-              disabled={disabled}
-              onCheckedChange={(linearHistory) => patch({ linearHistory })}
-            />
-          </WorkspaceField.Root>
         </WorkspaceField.Group>
       ) : null}
       <WorkspaceField.Root orientation="responsive">
@@ -418,6 +404,20 @@ function SourceControlRows() {
             </SelectGroup>
           </SelectContent>
         </Select>
+      </WorkspaceField.Root>
+      <WorkspaceField.Root orientation="responsive">
+        <WorkspaceField.Content>
+          <WorkspaceField.Title>Linear history</WorkspaceField.Title>
+          <WorkspaceField.Description>
+            Rebase follow-up branches when the base diverges.
+          </WorkspaceField.Description>
+        </WorkspaceField.Content>
+        <Switch
+          aria-label="Require linear history"
+          checked={draft.linearHistory}
+          disabled={disabled}
+          onCheckedChange={(linearHistory) => patch({ linearHistory })}
+        />
       </WorkspaceField.Root>
       {draft.sourceControlType === "github" ? (
         <WorkspaceField.Group>
