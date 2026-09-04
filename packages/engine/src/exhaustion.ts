@@ -5,6 +5,11 @@ export interface ExhaustionHistory {
   readonly handback: HandbackRecord | null;
 }
 
+export interface ExhaustionDecision {
+  readonly failedAttempts: number;
+  readonly exhausted: boolean;
+}
+
 export const maxAttemptsPerStage = 3;
 
 const afterHandback = (attempt: AttemptRecord, handback: HandbackRecord | null) =>
@@ -19,3 +24,8 @@ export const consecutiveFailures = (history: ExhaustionHistory, stage: Lifecycle
 };
 
 export const isExhausted = (failedAttempts: number) => failedAttempts >= maxAttemptsPerStage;
+
+export const exhaustionOf = (history: ExhaustionHistory, stage: LifecycleStage) => {
+  const failedAttempts = consecutiveFailures(history, stage);
+  return { failedAttempts, exhausted: isExhausted(failedAttempts) } satisfies ExhaustionDecision;
+};

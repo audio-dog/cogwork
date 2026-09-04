@@ -1,25 +1,15 @@
-import type { AttemptOutcome, AttemptRecord, HandbackRecord, LifecycleStage } from "@cogwork/contracts";
+import type { AttemptOutcome, AttemptRecord, LifecycleStage } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { consecutiveFailures, isExhausted, maxAttemptsPerStage } from "./exhaustion";
+import { consecutiveFailures, type ExhaustionHistory, exhaustionOf, isExhausted } from "./exhaustion";
 
-interface History {
-  readonly attempts: ReadonlyArray<AttemptRecord>;
-  readonly handback: HandbackRecord | null;
-}
+const attempt = (outcome: AttemptOutcome, atMillis: number, stage: LifecycleStage = "implement") =>
+  ({ stage, outcome, atMillis }) satisfies AttemptRecord;
 
-const attempt = (
-  outcome: AttemptOutcome,
-  atMillis: number,
-  stage: LifecycleStage = "implement",
-): AttemptRecord => ({ stage, outcome, atMillis });
-
-const history = (
-  attempts: ReadonlyArray<AttemptRecord>,
-  handbackAtMillis: number | null = null,
-): History => ({
-  attempts,
-  handback: handbackAtMillis === null ? null : { by: "maintainer", atMillis: handbackAtMillis },
-});
+const history = (attempts: ReadonlyArray<AttemptRecord>, handbackAtMillis: number | null = null) =>
+  ({
+    attempts,
+    handback: handbackAtMillis === null ? null : { by: "maintainer", atMillis: handbackAtMillis },
+  }) satisfies ExhaustionHistory;
 
 describe("consecutiveFailures", () => {
   it("returns zero when the item has no attempts", () => {
@@ -144,14 +134,122 @@ describe("consecutiveFailures", () => {
 
 describe("isExhausted", () => {
   it("keeps an item available below the failed-attempt cap", () => {
-    assert.isFalse(isExhausted(maxAttemptsPerStage - 1));
+    assert.isFalse(isExhausted(2));
   });
 
   it("spends an item at the failed-attempt cap", () => {
-    assert.isTrue(isExhausted(maxAttemptsPerStage));
+    assert.isTrue(isExhausted(3));
   });
 
   it("keeps an item spent above the failed-attempt cap", () => {
-    assert.isTrue(isExhausted(maxAttemptsPerStage + 1));
+    assert.isTrue(isExhausted(4));
+  });
+});
+
+describe("exhaustionOf", () => {
+  it("keeps an item available before any attempt", () => {
+    assert.deepStrictEqual(exhaustionOf(history([]), "implement"), {
+      failedAttempts: 0,
+      exhausted: false,
+    });
+  });
+
+  it("keeps an item available after two consecutive failures", () => {
+    assert.deepStrictEqual(exhaustionOf(history([attempt("failed", 1), attempt("failed", 2)]), "implement"), {
+      failedAttempts: 2,
+      exhausted: false,
+    });
+  });
+
+  it("spends an item after three consecutive failures", () => {
+    assert.deepStrictEqual(
+      exhaustionOf(history([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)]), "implement"),
+      {
+        failedAttempts: 3,
+        exhausted: true,
+      },
+    );
+  });
+
+  it("uses only failures from the selected stage", () => {
+    assert.deepStrictEqual(
+      exhaustionOf(
+        history([
+          attempt("failed", 1, "triage"),
+          attempt("failed", 2, "implement"),
+          attempt("failed", 3, "triage"),
+          attempt("failed", 4, "implement"),
+          attempt("failed", 5, "triage"),
+        ]),
+        "triage",
+      ),
+      {
+        failedAttempts: 3,
+        exhausted: true,
+      },
+    );
+  });
+
+  it("uses the newest success for the selected stage as its reset", () => {
+    assert.deepStrictEqual(
+      exhaustionOf(
+        history([
+          attempt("failed", 1),
+          attempt("failed", 2),
+          attempt("failed", 3),
+          attempt("succeeded", 4),
+          attempt("failed", 5),
+        ]),
+        "implement",
+      ),
+      {
+        failedAttempts: 1,
+        exhausted: false,
+      },
+    );
+  });
+
+  it("starts the decision again after the newest handback", () => {
+    assert.deepStrictEqual(
+      exhaustionOf(
+        history(
+          [
+            attempt("failed", 1),
+            attempt("failed", 2),
+            attempt("failed", 3),
+            attempt("failed", 5),
+            attempt("failed", 6),
+          ],
+          4,
+        ),
+        "implement",
+      ),
+      {
+        failedAttempts: 2,
+        exhausted: false,
+      },
+    );
+  });
+
+  it("spends the item again after enough post-handback failures", () => {
+    assert.deepStrictEqual(
+      exhaustionOf(
+        history(
+          [
+            attempt("failed", 1),
+            attempt("failed", 2),
+            attempt("failed", 4),
+            attempt("failed", 5),
+            attempt("failed", 6),
+          ],
+          3,
+        ),
+        "implement",
+      ),
+      {
+        failedAttempts: 3,
+        exhausted: true,
+      },
+    );
   });
 });
