@@ -34,7 +34,10 @@ export type HarnessState = typeof HarnessState.Type;
 
 export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
   harness: HarnessName,
-  enabled: Schema.Boolean.pipe(Schema.withConstructorDefault(Effect.succeed(true))),
+  enabled: Schema.Boolean.pipe(
+    Schema.withConstructorDefault(Effect.succeed(true)),
+    Schema.withDecodingDefaultKey(Effect.succeed(true)),
+  ),
   /** As the Harness reported it, so a non-semver release tag survives. */
   version: Schema.NullOr(TrimmedNonEmptyString),
   state: HarnessState,

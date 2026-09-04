@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { HarnessName } from "./base-schemas";
-import { HarnessEnablement, harnessEnabled } from "./harness";
+import { HarnessEnablement, HarnessItem, harnessEnabled } from "./harness";
 
 const harness = Schema.decodeSync(HarnessName);
 
@@ -15,5 +15,16 @@ describe("Harness enablement", () => {
 
     assert.isFalse(harnessEnabled(settings, harness("codex")));
     assert.isTrue(harnessEnabled(settings, harness("cursor")));
+  });
+
+  it("decodes older Harness reports as enabled", () => {
+    const item = Schema.decodeSync(HarnessItem)({
+      harness: "codex",
+      version: null,
+      state: { _tag: "Ready" },
+      models: [],
+    });
+
+    assert.isTrue(item.enabled);
   });
 });

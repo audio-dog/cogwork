@@ -60,6 +60,7 @@ export const GetConnections = Rpc.make("GetConnections", {
 
 export const GetHarnesses = Rpc.make("GetHarnesses", {
   success: HarnessOverview,
+  error: ControlStoreFailure,
 });
 
 export const ListRuns = Rpc.make("ListRuns", { success: Schema.Array(RunSummary) });
