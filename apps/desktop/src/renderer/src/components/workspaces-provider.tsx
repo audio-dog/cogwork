@@ -5,11 +5,17 @@ import type {
   WorkspaceId,
   WorkspaceRegistration,
   WorkspaceState,
+  WorkspaceUpdate,
 } from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useState } from "react";
-import { deregisterWorkspaceAtom, rebindWorkspaceAtom, registerWorkspaceAtom } from "../daemon/atoms";
+import {
+  deregisterWorkspaceAtom,
+  rebindWorkspaceAtom,
+  registerWorkspaceAtom,
+  updateWorkspaceAtom,
+} from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { readyConnections } from "../features/connections-view";
 import { useDaemonLimit } from "../features/use-daemon-limit";
@@ -25,6 +31,7 @@ interface WorkspacesStateValue {
 
 interface WorkspacesActions {
   readonly register: (registration: WorkspaceRegistration) => void;
+  readonly update: (workspace: WorkspaceId, update: WorkspaceUpdate) => void;
   readonly rebind: (workspace: WorkspaceId, checkoutPath: string) => void;
   readonly deregister: (workspace: WorkspaceId) => void;
   readonly setLimit: (update: DaemonLimitUpdate) => void;
@@ -38,6 +45,9 @@ interface WorkspacesMeta {
   readonly rebindError: string | null;
   readonly rebindOutcome: WorkspaceState | null;
   readonly rebindTarget: WorkspaceId | null;
+  readonly updatePending: boolean;
+  readonly updateError: string | null;
+  readonly updateTarget: WorkspaceId | null;
   readonly deregisterPending: boolean;
   readonly deregisterError: string | null;
   readonly deregisterTarget: WorkspaceId | null;
@@ -73,8 +83,10 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const board = useBoard();
   const [registerResult, runRegister] = useAtom(registerWorkspaceAtom);
   const [rebindResult, runRebind] = useAtom(rebindWorkspaceAtom);
+  const [updateResult, runUpdate] = useAtom(updateWorkspaceAtom);
   const [deregisterResult, runDeregister] = useAtom(deregisterWorkspaceAtom);
   const [rebindTarget, setRebindTarget] = useState<WorkspaceId | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<WorkspaceId | null>(null);
   const [deregisterTarget, setDeregisterTarget] = useState<WorkspaceId | null>(null);
   const status = BoardResult.$match(board, {
     Initial: (): WorkspacesStatus => "loading",
@@ -88,6 +100,10 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
 
   const actions: WorkspacesActions = {
     register: (registration) => runRegister({ payload: { registration } }),
+    update: (workspace, update) => {
+      setUpdateTarget(workspace);
+      runUpdate({ payload: { workspace, update } });
+    },
     rebind: (workspace, checkoutPath) => {
       setRebindTarget(workspace);
       runRebind({ payload: { workspace, checkoutPath } });
@@ -117,6 +133,9 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
           rebindError: resultError(rebindResult),
           rebindOutcome: resultValue(rebindResult),
           rebindTarget,
+          updatePending: updateResult.waiting,
+          updateError: resultError(updateResult),
+          updateTarget,
           deregisterPending: deregisterResult.waiting,
           deregisterError: resultError(deregisterResult),
           deregisterTarget,
