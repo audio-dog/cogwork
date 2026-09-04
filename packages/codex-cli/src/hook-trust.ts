@@ -39,7 +39,12 @@ const CommandHook = Schema.Struct({
   async: Schema.optional(Schema.Boolean),
   statusMessage: Schema.optional(Schema.String),
   additionalContextLimit: Schema.optional(Schema.Natural),
-});
+}).check(
+  Schema.makeFilter(
+    (handler) => handler.commandWindows === undefined || handler.command_windows === undefined,
+    { expected: "at most one Windows command alias" },
+  ),
+);
 
 const McpToolHook = Schema.Struct({
   type: Schema.Literal("mcp_tool"),

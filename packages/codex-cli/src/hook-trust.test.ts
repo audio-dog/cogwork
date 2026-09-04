@@ -212,6 +212,30 @@ trusted_hash = "sha256:existing"
     assert.throws(() => codexHookTrustEntries(hooksPath, JSON.stringify({ hooks: {}, bogus: true })));
   });
 
+  it("rejects duplicate Windows command aliases", () => {
+    assert.throws(() =>
+      codexHookTrustEntries(
+        hooksPath,
+        JSON.stringify({
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command: "scan",
+                    commandWindows: "scan.cmd",
+                    command_windows: "scan.bat",
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      ),
+    );
+  });
+
   it("fails closed on MCP input Codex cannot hash as TOML", () => {
     assert.throws(() =>
       codexHookTrustEntries(
