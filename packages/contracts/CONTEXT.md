@@ -388,7 +388,7 @@ The projection of an accepted Run Plan handed to one Harness: checkout path, wor
 _Avoid_: Run plan (the complete engine-owned input), prompt, job
 
 **Operation result**:
-The tagged, Effect-Schema-defined value an operation returns through the harness stream. The shared kernel owns each operation's schema: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary. Prose remains ordinary streamed output and is never parsed as an operation result.
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. The shared kernel owns each operation's schema: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; implement returns `opened-pr`, `stuck`, or `ready-for-pr`, whose pull request title and body the Engine uses after its gate passes; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary. Prose remains ordinary streamed output and is never parsed as an operation result.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Operating-instructions package**:

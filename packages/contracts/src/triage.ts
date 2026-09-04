@@ -27,13 +27,32 @@ export class TriageStageResult extends Schema.TaggedClass<TriageStageResult>()("
   proposal: TrimmedNonEmptyString,
 }) {}
 
-export const ImplementResultOutcome = Schema.Literals(["opened-pr", "stuck"]);
+export const ImplementResultOutcome = Schema.Literals(["opened-pr", "ready-for-pr", "stuck"]);
 export type ImplementResultOutcome = typeof ImplementResultOutcome.Type;
 
-export class ImplementStageResult extends Schema.TaggedClass<ImplementStageResult>()("implement", {
-  outcome: ImplementResultOutcome,
+class OpenedPrImplementResult extends Schema.TaggedClass<OpenedPrImplementResult>()("implement", {
+  outcome: Schema.Literal("opened-pr"),
   summary: TrimmedNonEmptyString,
 }) {}
+
+class ReadyForPrImplementResult extends Schema.TaggedClass<ReadyForPrImplementResult>()("implement", {
+  outcome: Schema.Literal("ready-for-pr"),
+  summary: TrimmedNonEmptyString,
+  title: TrimmedNonEmptyString,
+  body: TrimmedNonEmptyString,
+}) {}
+
+class StuckImplementResult extends Schema.TaggedClass<StuckImplementResult>()("implement", {
+  outcome: Schema.Literal("stuck"),
+  summary: TrimmedNonEmptyString,
+}) {}
+
+export const ImplementStageResult = Schema.Union([
+  OpenedPrImplementResult,
+  ReadyForPrImplementResult,
+  StuckImplementResult,
+]).pipe(Schema.toTaggedUnion("outcome"));
+export type ImplementStageResult = typeof ImplementStageResult.Type;
 
 export const FollowUpResultOutcome = Schema.Literals(["pushed", "noop", "stuck"]);
 export type FollowUpResultOutcome = typeof FollowUpResultOutcome.Type;
@@ -65,7 +84,14 @@ const standardSchema = <S extends Schema.Codec<unknown, unknown, never, never>>(
   Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(schema));
 
 const triageStageResultSchema = standardSchema(Schema.Struct(TriageStageResult.fields));
-const implementStageResultSchema = standardSchema(Schema.Struct(ImplementStageResult.fields));
+const implementStageResultSchema = standardSchema(
+  Schema.TaggedStruct("implement", {
+    outcome: ImplementResultOutcome,
+    summary: TrimmedNonEmptyString,
+    title: Schema.NullOr(TrimmedNonEmptyString),
+    body: Schema.NullOr(TrimmedNonEmptyString),
+  }),
+);
 const followUpStageResultSchema = standardSchema(Schema.Struct(FollowUpStageResult.fields));
 
 export type StageResultJsonSchema =
