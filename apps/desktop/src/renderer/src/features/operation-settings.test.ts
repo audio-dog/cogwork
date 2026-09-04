@@ -233,6 +233,7 @@ describe("an unset harness", () => {
     expect(cell.effective).toBeNull();
     expect(cell.stale).toBe(false);
     expect(settingCell(controlStore, catalogs, workspace, "triage", "model").stale).toBe(false);
+    expect(settingCell(controlStore, catalogs, workspace, "triage", "permission-profile").stale).toBe(false);
   });
 });
 

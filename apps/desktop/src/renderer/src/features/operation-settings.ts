@@ -124,10 +124,9 @@ const isStale = (
   if (value === null) return false;
   if (setting === "harness") return catalogFor(catalogs, value) === null;
   if (setting !== "model" && setting !== "effort" && setting !== "permission-profile") return false;
-  const catalog = catalogFor(
-    catalogs,
-    settingCell(controlStore, catalogs, workspace, operation, "harness").effective,
-  );
+  const harness = settingCell(controlStore, catalogs, workspace, operation, "harness").effective;
+  if (harness === null) return false;
+  const catalog = catalogFor(catalogs, harness);
   if (!catalog) return true;
   if (setting === "permission-profile") {
     return !catalog.policyProfiles.some((profile) => profile === value);
