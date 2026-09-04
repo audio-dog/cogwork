@@ -1,0 +1,22 @@
+scripts/setup-worktree.mjs
+  s_777b251643bf2e::t_c1dd989d115d95 4,37-47
+  s_777b251643bf2e::t_1164ecf21aeaf5 35-36,48-49,82
+turbo.json
+  s_777b251643bf2e::t_337e04a2144c77 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e7642fbccddbd5a8368e647c8f16a64884cb46c8",
+  "prompts": {},
+  "sessions": {
+    "s_777b251643bf2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de5-9582-7b31-a35e-4391798377b9",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
