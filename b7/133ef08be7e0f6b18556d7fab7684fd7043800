@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_4c8cd823764032::t_22ab7f3162ac99 125-137,382,404-406
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_4c8cd823764032::t_e92b073c0a2b56 3-7,51-71
+  s_80ca826a317ad6::t_ae7c1b0068efdb 72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b7133ef08be7e0f6b18556d7fab7684fd7043800",
+  "prompts": {},
+  "sessions": {
+    "s_4c8cd823764032": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dfc-1b38-7750-b2c5-60b4a0d9ce93",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_80ca826a317ad6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e38-4ae6-7ed3-a111-7d43eba91d91",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
