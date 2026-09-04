@@ -1,0 +1,93 @@
+packages/engine/src/engine.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 118,222,235,248
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1-146
+turbo.json
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 19-20
+packages/claude-code/vitest.config.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1
+apps/desktop/src/renderer/src/routes/settings/appearance.tsx
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1-3,5-85
+packages/codex-cli/vitest.config.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1
+packages/engine/src/github/client.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 28,120-124,273-274,305-307,579-615,762
+apps/desktop/src/renderer/src/routes/settings/scheduling.tsx
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1-9,11-137
+apps/cli/src/commands.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 252,366,432,435
+CONTEXT-MAP.md
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 49
+packages/engine/src/provider-runner.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 13,283-305
+  s_d2c41d3cf117ad::t_55822e761e44cc 306-307
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 5,7,20
+  s_d2c41d3cf117ad::t_edef6fb6a1411a 21
+packages/cursor-acp/vitest.config.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1
+docs/research/performance-feedback-loop-into-tracker.md
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 5-15
+packages/process-diagnostics/vitest.config.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1
+docs/research/preventing-test-suite-performance-drift.md
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1-647
+packages/engine/src/executor.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 960,975,986
+packages/engine/src/observe.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 69
+configs/vitest/base.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1-13
+packages/engine/src/github/client.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 153-243
+apps/cli/vitest.config.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1
+apps/desktop/vitest.config.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1
+packages/contracts/CONTEXT.md
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 16
+packages/contracts/vitest.config.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1
+apps/desktop/src/renderer/src/routes/settings/general.tsx
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1-2,4-93
+apps/cli/src/platform.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 612-616
+packages/engine/src/commands.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 167
+packages/contracts/src/triage.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 21,37,64,80,93,108
+packages/engine/src/provider-runner.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 232-235,255
+packages/engine/src/source-control.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 6,13-24,39-43,54-57
+packages/engine/src/event-publisher.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 245
+packages/engine/vitest.config.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 1
+packages/engine/CONTEXT.md
+  s_d2c41d3cf117ad::t_3954d1ea166023 159
+biome.json
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 21-26
+packages/engine/src/github/provider.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 6,280-289
+  s_d2c41d3cf117ad::t_06d40f68412329 290
+packages/engine/src/github/github.test.ts
+  s_d2c41d3cf117ad::t_5221a71fa4dbcb 83,166-169,343,408-438
+  s_d2c41d3cf117ad::t_2f4855977135c4 439
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "191b5f251d3328304c5b062c0ecb671325df0ff6",
+  "prompts": {},
+  "sessions": {
+    "s_d2c41d3cf117ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e04-3496-7013-b71e-9b8b46cf5882",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
