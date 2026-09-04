@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/routes/_app/workflows.tsx
+  s_4a681223b22e5e::t_0cf6c0c19c1a0e 4,12,22
+apps/desktop/src/renderer/src/routes/_app/customize/route.tsx
+  s_4a681223b22e5e::t_0cf6c0c19c1a0e 4,17,19
+apps/desktop/src/renderer/src/routes/_app/connections.tsx
+  s_4a681223b22e5e::t_0cf6c0c19c1a0e 3,11,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c70bb2a1b7a6273c315269a2c0d7dd80e233fe61",
+  "prompts": {},
+  "sessions": {
+    "s_4a681223b22e5e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06af7-9173-7430-be59-73695d71b7fb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
