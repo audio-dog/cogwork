@@ -29,7 +29,6 @@ export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
   connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
-  repo: Schema.optional(TrimmedNonEmptyString),
   teams: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   organization: Schema.optional(TrimmedNonEmptyString),
   actorLogin: Schema.optional(TrimmedNonEmptyString),
@@ -49,7 +48,6 @@ export const linearTeams = (source: IssueTrackerConfig) => {
 export const SourceControlConfig = Schema.Struct({
   type: SourceControlType,
   connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
-  repo: Schema.optional(TrimmedNonEmptyString),
   actorLogin: Schema.optional(TrimmedNonEmptyString),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
 });
