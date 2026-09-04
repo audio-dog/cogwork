@@ -1,0 +1,43 @@
+apps/cli/src/connection-commands.ts
+  s_4399801e8e8169::t_7c6dfd26f881b0 75-78,85
+  s_4399801e8e8169::t_3081e2bc882e31 68,72
+  s_4399801e8e8169::t_2fa44f612d69a3 38-42,63-64,66,108,112-114
+  s_4399801e8e8169::t_d166d7e2144027 14,44-51,86-103,105,110-111
+  s_95138d1a68f5e2::t_6f57f7250c8eec 43,109,115
+apps/cli/CONTEXT.md
+  s_4399801e8e8169::t_92cbead49d442a 43
+apps/cli/src/connection-commands.test.ts
+  s_4399801e8e8169::t_3081e2bc882e31 14,26,38,65,73
+  s_4399801e8e8169::t_87f07d486411c7 7,80
+  s_4399801e8e8169::t_666bc3b2b1bb42 3-5,11-13,15-22
+  s_4399801e8e8169::t_1839e47e91eddb 35-37,39-46,61-64,66-72,74,84-86
+  s_4399801e8e8169::t_7dc76784860b00 57
+  s_4399801e8e8169::t_16ddb45f9fd88f 8,75-79,81-83
+  s_4399801e8e8169::t_108474902ec7f9 23-25,27,29-34
+  s_4399801e8e8169::t_0d21f9d613a648 47-56,58-60
+  s_4399801e8e8169::t_00db70637d7e8d 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5cc8e5d83931fb92a6d10017760718df031143b4",
+  "prompts": {},
+  "sessions": {
+    "s_4399801e8e8169": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06856-baa7-7d31-9fe5-7b0db7df2456",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_95138d1a68f5e2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06af5-bbc6-7db2-b865-baa5fc02deed",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
