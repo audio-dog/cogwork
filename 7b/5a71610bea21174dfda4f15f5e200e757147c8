@@ -1,0 +1,19 @@
+apps/cli/src/commands.ts
+  s_95138d1a68f5e2::t_b8641151de5512 252,366,432,435
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7b5a71610bea21174dfda4f15f5e200e757147c8",
+  "prompts": {},
+  "sessions": {
+    "s_95138d1a68f5e2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06af5-bbc6-7db2-b865-baa5fc02deed",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
