@@ -10,7 +10,12 @@ import {
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { operationSettingAtomKey } from "../daemon/atoms";
-import { availableHarnessCatalogs, operationSettingUpdate, settingCell } from "./operation-settings";
+import {
+  availableHarnessCatalogs,
+  harnessCatalogLoad,
+  operationSettingUpdate,
+  settingCell,
+} from "./operation-settings";
 
 const workspace = Schema.decodeSync(WorkspaceId)("w");
 const other = Schema.decodeSync(WorkspaceId)("other");
@@ -60,6 +65,19 @@ describe("availableHarnessCatalogs", () => {
       source: "cogwork-fallback",
       fallbackVersion: "test-1",
     });
+  });
+});
+
+describe("harnessCatalogLoad", () => {
+  it("does not represent a pending or failed query as an empty catalog", () => {
+    expect(harnessCatalogLoad(null, false)).toEqual({ status: "loading" });
+    expect(harnessCatalogLoad(null, true)).toEqual({ status: "failed" });
+  });
+
+  it("represents a successful empty overview as ready", () => {
+    const overview = HarnessOverview.make({ harnesses: [], checkedAtMillis: 1 });
+
+    expect(harnessCatalogLoad(overview, false)).toEqual({ status: "ready", catalogs: [] });
   });
 });
 
@@ -234,5 +252,20 @@ describe("a policy profile the selected harness cannot enforce", () => {
     expect(settingCell(controlStore, readOnlyCatalogs, workspace, "triage", "permission-profile").stale).toBe(
       true,
     );
+  });
+
+  it("checks the implicit stage default", () => {
+    const controlStore = store([profileDefault("harness", "codex")]);
+    const fullOnlyCatalogs = availableHarnessCatalogs(
+      HarnessOverview.make({
+        harnesses: [harnessItem("codex", optionCatalog(["full"]))],
+        checkedAtMillis: 1,
+      }),
+    );
+
+    const cell = settingCell(controlStore, fullOnlyCatalogs, workspace, "triage", "permission-profile");
+    expect(cell.inherited).toBe("read-only");
+    expect(cell.effective).toBe("read-only");
+    expect(cell.stale).toBe(true);
   });
 });

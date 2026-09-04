@@ -43,7 +43,6 @@ import {
 import { createContext, type ReactNode, use, useState } from "react";
 import {
   catalogFor,
-  defaultProfile,
   type HarnessCatalog,
   operationLabels,
   operationSummaries,
@@ -394,8 +393,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
       key: "permission-profile",
       label: "Permissions",
       options: policyProfileChoices(catalog),
-      // The engine defaults a stage's profile, so an unset cell still inherits something.
-      cell: { ...profileCell, inherited: profileCell.inherited ?? defaultProfile(operation) },
+      cell: profileCell,
       select: (value) => set("permission-profile", value),
       reset: () => set("permission-profile", null),
     },

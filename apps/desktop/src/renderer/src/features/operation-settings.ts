@@ -37,6 +37,12 @@ export const availableHarnessCatalogs = (overview: HarnessOverview | null) =>
     catalog && catalog.policyProfiles.length > 0 ? [{ harness, ...catalog }] : [],
   ) ?? [];
 
+export const harnessCatalogLoad = (overview: HarnessOverview | null, failed: boolean) => {
+  if (overview) return { status: "ready" as const, catalogs: availableHarnessCatalogs(overview) };
+  if (failed) return { status: "failed" as const };
+  return { status: "loading" as const };
+};
+
 export const catalogFor = (catalogs: ReadonlyArray<HarnessCatalog>, harness: string | null) =>
   catalogs.find((candidate) => candidate.harness === harness) ?? null;
 
@@ -86,13 +92,15 @@ export const settingCell = (
 ) => {
   const rows = controlStore?.operationSettings ?? [];
   const context = { workflow: codingWorkflow, operation, workspace };
-  const inherited = asDisplayValue(
+  const resolvedInherited = asDisplayValue(
     resolveOperationSetting(
       rows.filter((row) => !isOverride(row, operation, workspace)),
       setting,
       context,
     ),
   );
+  const inherited =
+    resolvedInherited ?? (setting === "permission-profile" ? defaultProfile(operation) : null);
   const stored = rows.find((row) => row.setting === setting && isOverride(row, operation, workspace));
   const own = stored ? asDisplayValue(stored.value) : null;
   const effective = own ?? inherited;
