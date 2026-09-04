@@ -59,6 +59,17 @@ export const selectableHarnessCatalogs = (controlStore: ControlStore | null) => 
   return harnessCatalogs.filter((catalog) => harnessEnabled(controlStore.harnessSettings, catalog.harness));
 };
 
+export const harnessIsDisabled = (controlStore: ControlStore | null, harness: string | null) => {
+  if (!controlStore || !harness) return false;
+  return controlStore.harnessSettings.some((setting) => setting.harness === harness && !setting.enabled);
+};
+
+export const unavailableHarnessLabel = (harness: string | null, disabled: boolean) => {
+  if (!harness) return "No Harness enabled";
+  if (disabled) return `${harness} · disabled`;
+  return `${harness} · no longer offered`;
+};
+
 export const policyProfiles: readonly CatalogChoice[] = [
   { value: "read-only", label: "Read only" },
   { value: "full", label: "Full" },

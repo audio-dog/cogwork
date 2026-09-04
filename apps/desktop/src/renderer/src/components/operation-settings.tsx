@@ -40,8 +40,10 @@ import {
   catalogFor,
   defaultProfile,
   type HarnessCatalog,
+  harnessIsDisabled,
   policyProfiles,
   selectableHarnessCatalogs,
+  unavailableHarnessLabel,
 } from "../features/harness-catalog";
 import type { SettingCell } from "../features/operation-settings";
 import {
@@ -150,6 +152,7 @@ function HarnessModelPicker({
   readonly onPick: (harness: string, model: string) => void;
 }) {
   const {
+    state: { controlStore },
     meta: { disabled },
   } = useOperationSettings();
   const effectiveHarness = harnessSpec.cell.effective;
@@ -159,9 +162,8 @@ function HarnessModelPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const stale = modelSpec.cell.stale || harnessSpec.cell.stale;
-  const retiredHarness = effectiveHarness !== null && effectiveCatalog === null;
-  const disabledHarness =
-    effectiveCatalog !== null && !catalogs.some((catalog) => catalog.harness === effectiveHarness);
+  const disabledHarness = harnessIsDisabled(controlStore, effectiveHarness);
+  const retiredHarness = effectiveHarness !== null && effectiveCatalog === null && !disabledHarness;
   const chosenCatalog = catalogs.find((catalog) => catalog.harness === chosenRail);
   const enabledEffective = catalogs.find((catalog) => catalog.harness === effectiveHarness);
   const railCatalog = chosenCatalog ?? enabledEffective ?? catalogs[0];
@@ -170,7 +172,7 @@ function HarnessModelPicker({
       <Button variant="outline" className="w-64 justify-start gap-2" disabled>
         {effectiveCatalog ? <ProviderGlyphIcon glyph={effectiveCatalog.glyph} /> : null}
         <span className="truncate">
-          {effectiveHarness ? `${effectiveHarness} · disabled` : "No Harness enabled"}
+          {unavailableHarnessLabel(effectiveCatalog?.label ?? effectiveHarness, disabledHarness)}
         </span>
       </Button>
     );
@@ -180,7 +182,8 @@ function HarnessModelPicker({
   const shown = railCatalog.models.filter((model) => model.label.toLowerCase().includes(needle));
   const own = modelSpec.cell.own !== null;
   const modelLabel = modelSpec.cell.effective ?? "Not set";
-  const triggerLabel = disabledHarness ? `${effectiveCatalog.label} disabled · ${modelLabel}` : modelLabel;
+  const harnessLabel = effectiveCatalog?.label ?? effectiveHarness;
+  const triggerLabel = disabledHarness ? `${harnessLabel} disabled · ${modelLabel}` : modelLabel;
 
   return (
     <Popover
