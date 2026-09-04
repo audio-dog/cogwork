@@ -1,4 +1,10 @@
-import type { ControlStore, LifecycleStage, OperationSettingName, WorkspaceId } from "@cogwork/contracts";
+import type {
+  ControlStore,
+  HarnessCatalogChoice,
+  LifecycleStage,
+  OperationSettingName,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Collapsible, CollapsibleContent } from "@cogwork/ui/components/collapsible";
@@ -36,25 +42,23 @@ import {
 } from "@remixicon/react";
 import { createContext, type ReactNode, use, useState } from "react";
 import {
-  type CatalogChoice,
   catalogFor,
   defaultProfile,
   type HarnessCatalog,
-  harnessCatalogs,
-  policyProfiles,
-} from "../features/harness-catalog";
-import type { SettingCell } from "../features/operation-settings";
-import {
   operationLabels,
   operationSummaries,
   operationSummaryLine,
   operations,
+  policyProfileChoices,
+  type SettingCell,
   settingCell,
 } from "../features/operation-settings";
+import { providerGlyph, providerLabel } from "../features/provider-presentation";
 import { ProviderGlyphIcon } from "./provider-glyph";
 
 interface OperationSettingsState {
   readonly controlStore: ControlStore | null;
+  readonly catalogs: ReadonlyArray<HarnessCatalog>;
   readonly workspace: WorkspaceId;
 }
 
@@ -95,7 +99,7 @@ function OperationSettingsProvider({
 interface ControlSpec {
   readonly key: OperationSettingName;
   readonly label: string;
-  readonly options: readonly CatalogChoice[];
+  readonly options: ReadonlyArray<HarnessCatalogChoice>;
   readonly cell: SettingCell;
   readonly select: (value: string) => void;
   readonly reset: () => void;
@@ -123,15 +127,15 @@ function HarnessRail({
               <Button
                 size="icon-sm"
                 variant={catalog.harness === active ? "secondary" : "ghost"}
-                aria-label={catalog.label}
+                aria-label={providerLabel(catalog.harness)}
                 aria-pressed={catalog.harness === active}
                 onClick={() => onSelect(catalog.harness)}
               />
             }
           >
-            <ProviderGlyphIcon glyph={catalog.glyph} />
+            <ProviderGlyphIcon glyph={providerGlyph(catalog.harness)} />
           </TooltipTrigger>
-          <TooltipContent side="right">{catalog.label}</TooltipContent>
+          <TooltipContent side="right">{providerLabel(catalog.harness)}</TooltipContent>
         </Tooltip>
       ))}
     </div>
@@ -148,15 +152,23 @@ function HarnessModelPicker({
   readonly onPick: (harness: string, model: string) => void;
 }) {
   const {
+    state: { catalogs },
     meta: { disabled },
   } = useOperationSettings();
   const effectiveHarness = harnessSpec.cell.effective;
-  const effectiveCatalog = catalogFor(effectiveHarness);
+  const effectiveCatalog = catalogFor(catalogs, effectiveHarness);
   // Null until the rail is picked, so a live harness change still moves the popover.
   const [chosenRail, setChosenRail] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const railCatalog = catalogFor(chosenRail) ?? effectiveCatalog ?? harnessCatalogs[0];
+  const railCatalog = catalogFor(catalogs, chosenRail) ?? effectiveCatalog ?? catalogs[0];
+  if (!railCatalog) {
+    return (
+      <Button variant="outline" className="w-64 justify-start" aria-label="Harness and model" disabled>
+        <span className="truncate text-muted-foreground">No Harness catalog available</span>
+      </Button>
+    );
+  }
   const rail = railCatalog.harness;
   const stale = modelSpec.cell.stale || harnessSpec.cell.stale;
   const retiredHarness = effectiveHarness !== null && effectiveCatalog === null;
@@ -183,7 +195,7 @@ function HarnessModelPicker({
           />
         }
       >
-        {effectiveCatalog ? <ProviderGlyphIcon glyph={effectiveCatalog.glyph} /> : null}
+        {effectiveCatalog ? <ProviderGlyphIcon glyph={providerGlyph(effectiveCatalog.harness)} /> : null}
         {retiredHarness ? <RiAlertLine className="text-destructive" /> : null}
         <span className={cn("truncate", !own && "text-muted-foreground")}>
           {retiredHarness ? `${effectiveHarness} · no longer offered` : triggerLabel}
@@ -192,12 +204,12 @@ function HarnessModelPicker({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[26rem] gap-0 p-2">
         <div className="flex gap-1.5">
-          <HarnessRail catalogs={harnessCatalogs} active={rail} onSelect={setChosenRail} />
+          <HarnessRail catalogs={catalogs} active={rail} onSelect={setChosenRail} />
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex items-center gap-2 border-b border-border pb-1.5">
               <RiSearchLine className="size-4 shrink-0 text-muted-foreground" />
               <Input
-                aria-label={`Search ${railCatalog.label} models`}
+                aria-label={`Search ${providerLabel(railCatalog.harness)} models`}
                 placeholder="Search models"
                 value={query}
                 className="h-7 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
@@ -208,7 +220,7 @@ function HarnessModelPicker({
               <div className="flex flex-col">
                 {shown.length === 0 ? (
                   <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-                    No {railCatalog.label} model matches that.
+                    No {providerLabel(railCatalog.harness)} model matches that.
                   </p>
                 ) : (
                   shown.map((model) => {
@@ -228,8 +240,8 @@ function HarnessModelPicker({
                         <span className="flex min-w-0 flex-1 flex-col">
                           <span className="truncate text-sm font-medium">{model.label}</span>
                           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <ProviderGlyphIcon glyph={railCatalog.glyph} />
-                            {railCatalog.label}
+                            <ProviderGlyphIcon glyph={providerGlyph(railCatalog.harness)} />
+                            {providerLabel(railCatalog.harness)}
                           </span>
                         </span>
                         {chosen ? <RiCheckLine className="size-4 shrink-0" /> : null}
@@ -325,11 +337,12 @@ function RevertLabel({ spec, label }: { readonly spec: ControlSpec; readonly lab
 
 function OperationControls({ operation }: { readonly operation: LifecycleStage }) {
   const {
-    state: { controlStore, workspace },
+    state: { catalogs, controlStore, workspace },
     actions: { write },
   } = useOperationSettings();
-  const cell = (setting: OperationSettingName) => settingCell(controlStore, workspace, operation, setting);
-  const catalog = catalogFor(settingCell(controlStore, workspace, operation, "harness").effective);
+  const cell = (setting: OperationSettingName) =>
+    settingCell(controlStore, catalogs, workspace, operation, setting);
+  const catalog = catalogFor(catalogs, cell("harness").effective);
   const set = (setting: OperationSettingName, value: string | null) => write(setting, operation, value);
   // Harness, model and effort are chosen together, so they revert together — an effort left
   // behind can outlive the catalog that offered it.
@@ -347,7 +360,10 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
     {
       key: "harness",
       label: "Harness",
-      options: harnessCatalogs.map((entry) => ({ value: entry.harness, label: entry.label })),
+      options: catalogs.map((entry) => ({
+        value: entry.harness,
+        label: providerLabel(entry.harness),
+      })),
       cell: { ...harnessCell, own: pairOwn },
       select: (value) => set("harness", value),
       reset: resetHarnessAndModel,
@@ -377,7 +393,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
     {
       key: "permission-profile",
       label: "Permissions",
-      options: policyProfiles,
+      options: policyProfileChoices(catalog),
       // The engine defaults a stage's profile, so an unset cell still inherits something.
       cell: { ...profileCell, inherited: profileCell.inherited ?? defaultProfile(operation) },
       select: (value) => set("permission-profile", value),
@@ -412,11 +428,11 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
 
 function EnabledSwitch({ operation }: { readonly operation: LifecycleStage }) {
   const {
-    state: { controlStore, workspace },
+    state: { catalogs, controlStore, workspace },
     actions: { write },
     meta: { disabled },
   } = useOperationSettings();
-  const cell = settingCell(controlStore, workspace, operation, "enabled");
+  const cell = settingCell(controlStore, catalogs, workspace, operation, "enabled");
   const on = cell.effective === null ? true : cell.effective === "true";
   return (
     <Switch
@@ -432,10 +448,10 @@ const ownSettings: readonly OperationSettingName[] = ["harness", "model", "effor
 
 function OperationRow({ operation }: { readonly operation: LifecycleStage }) {
   const {
-    state: { controlStore, workspace },
+    state: { catalogs, controlStore, workspace },
   } = useOperationSettings();
   const own = ownSettings.filter(
-    (setting) => settingCell(controlStore, workspace, operation, setting).own !== null,
+    (setting) => settingCell(controlStore, catalogs, workspace, operation, setting).own !== null,
   ).length;
   // An Operation that already differs from the default opens expanded, so what differs is
   // visible without a click.
@@ -448,7 +464,9 @@ function OperationRow({ operation }: { readonly operation: LifecycleStage }) {
             {operationLabels[operation]}
             {own > 0 ? <Badge variant="secondary">Not the default</Badge> : null}
           </ItemTitle>
-          <ItemDescription>{operationSummaryLine(controlStore, workspace, operation)}</ItemDescription>
+          <ItemDescription>
+            {operationSummaryLine(controlStore, catalogs, workspace, operation)}
+          </ItemDescription>
         </ItemContent>
         <ItemActions>
           <EnabledSwitch operation={operation} />

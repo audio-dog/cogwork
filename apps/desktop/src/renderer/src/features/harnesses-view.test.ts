@@ -9,6 +9,7 @@ const item = (state: HarnessState, version: string | null, models: ReadonlyArray
     version,
     state,
     models,
+    catalog: null,
   });
 
 describe("versionLabel", () => {

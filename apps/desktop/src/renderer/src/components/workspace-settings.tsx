@@ -22,13 +22,13 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useAtom } from "@effect/atom-react";
+import { useAtom, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
+import { harnessesAtom, operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
-import { operationSettingUpdate } from "../features/operation-settings";
+import { availableHarnessCatalogs, operationSettingUpdate } from "../features/operation-settings";
 import {
   changedFieldCount,
   emptyDraft,
@@ -170,6 +170,9 @@ function LiveOperationSettings({
   readonly workspace: WorkspaceId;
   readonly disabled: boolean;
 }) {
+  const harnesses = useAtomValue(harnessesAtom);
+  const overview = harnesses._tag === "Success" ? harnesses.value : null;
+  const catalogs = availableHarnessCatalogs(overview);
   const key = (setting: OperationSettingName) =>
     setOperationSettingAtom(operationSettingAtomKey(workspace, setting));
   const enabled = useAtom(key("enabled"));
@@ -185,7 +188,7 @@ function LiveOperationSettings({
   return (
     <OperationSettings.Provider
       value={{
-        state: { controlStore, workspace },
+        state: { catalogs, controlStore, workspace },
         actions: {
           write: (setting, operation, value) => {
             const writer = writers[setting as (typeof writableSettings)[number]];
