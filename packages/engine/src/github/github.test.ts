@@ -207,34 +207,36 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
+    issueTracker: { type: "github", actorLogin: bot.login },
   }),
 };
 
 const noBotWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-nobot",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
 const trustsCursorBot: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-bots",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
+    issueTracker: { type: "github", actorLogin: bot.login },
     sourceControl: {
       type: "github",
-      repo: "owner/repo",
       actorLogin: bot.login,
       botAllowlist: ["cursor[bot]"],
     },
@@ -243,11 +245,12 @@ const trustsCursorBot: RegisteredWorkspace = {
 
 const prioritizedWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-priority",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login, priority: { project: 1 } },
+    issueTracker: { type: "github", actorLogin: bot.login, priority: { project: 1 } },
   }),
 };
 

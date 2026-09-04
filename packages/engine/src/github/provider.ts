@@ -14,6 +14,7 @@ import {
   type RawPull,
   type RawReview,
   type ReviewDecision,
+  repoRefFromRepository,
   reviewDecisionOf,
 } from "./client";
 import { agentNoteMarker, hasCogworkMarker } from "./markers";
@@ -29,13 +30,11 @@ const targetFromRepo = (
   actorLogin: string | undefined,
   botAllowlist: ReadonlyArray<string> | undefined,
 ): GitHubTarget | null => {
-  const [owner, name] = repo.split("/");
-  if (!owner || !name) return null;
+  const repository = repoRefFromRepository(repo);
+  if (!repository) return null;
   const boundConnectionId: ConnectionId | undefined = connectionId === "unbound" ? undefined : connectionId;
   return {
-    owner,
-    name,
-    tokenEnv: "GITHUB_TOKEN",
+    ...repository,
     ...(boundConnectionId ? { connectionId: boundConnectionId } : {}),
     actorLogin: actorLogin ?? null,
     botAllowlist: new Set(botAllowlist ?? []),
@@ -45,12 +44,17 @@ const targetFromRepo = (
 export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTarget | null => {
   const explicit = workspace.config.sourceControl;
   if (explicit) {
-    if (explicit.type !== "github" || !explicit.repo) return null;
-    return targetFromRepo(explicit.repo, explicit.connectionId, explicit.actorLogin, explicit.botAllowlist);
+    if (explicit.type !== "github" || !workspace.repository) return null;
+    return targetFromRepo(
+      workspace.repository,
+      explicit.connectionId,
+      explicit.actorLogin,
+      explicit.botAllowlist,
+    );
   }
   const source = workspace.config.issueTracker;
-  if (source.type !== "github" || !source.repo) return null;
-  return targetFromRepo(source.repo, source.connectionId, source.actorLogin, source.botAllowlist);
+  if (source.type !== "github" || !workspace.repository) return null;
+  return targetFromRepo(workspace.repository, source.connectionId, source.actorLogin, source.botAllowlist);
 };
 
 // The engine cuts an item's branch as `branchName(item)`, whose stable prefix is `ticketSlug(item.id)`.
