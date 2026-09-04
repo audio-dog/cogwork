@@ -1,0 +1,22 @@
+packages/codex-cli/src/hook-trust.ts
+  s_777b251643bf2e::t_7cafda6fff6a75 24-25,28,56,171-174,254-255
+  s_777b251643bf2e::t_48896fad048d5d 26-27
+packages/codex-cli/src/hook-trust.test.ts
+  s_777b251643bf2e::t_7cafda6fff6a75 198-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "867a37c58b418e0be4153bd8508d4cb785da80b4",
+  "prompts": {},
+  "sessions": {
+    "s_777b251643bf2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de5-9582-7b31-a35e-4391798377b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
