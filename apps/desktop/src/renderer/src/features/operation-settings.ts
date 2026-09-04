@@ -1,5 +1,6 @@
 import {
   type ControlStore,
+  type HarnessCatalogChoice,
   type HarnessName,
   type HarnessOptionCatalog,
   type HarnessOverview,
@@ -53,6 +54,14 @@ const policyProfileLabels: Record<RunPlanPolicyProfile, string> = {
 
 export const policyProfileChoices = (catalog: HarnessCatalog | null) =>
   catalog?.policyProfiles.map((value) => ({ value, label: policyProfileLabels[value] })) ?? [];
+
+export const catalogChoiceLabel = (choices: ReadonlyArray<HarnessCatalogChoice>, value: string | null) =>
+  value === null ? "Not set" : (choices.find((choice) => choice.value === value)?.label ?? value);
+
+export const catalogChoiceMatches = (choice: HarnessCatalogChoice, query: string) => {
+  const needle = query.trim().toLowerCase();
+  return choice.label.toLowerCase().includes(needle) || choice.value.toLowerCase().includes(needle);
+};
 
 export const defaultProfile = (operation: LifecycleStage) =>
   operation === "implement" || operation === "follow-up" ? "full" : "read-only";

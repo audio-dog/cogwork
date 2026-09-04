@@ -12,6 +12,8 @@ import { describe, expect, it } from "vitest";
 import { operationSettingAtomKey } from "../daemon/atoms";
 import {
   availableHarnessCatalogs,
+  catalogChoiceLabel,
+  catalogChoiceMatches,
   harnessCatalogLoad,
   operationSettingUpdate,
   settingCell,
@@ -65,6 +67,19 @@ describe("availableHarnessCatalogs", () => {
       source: "cogwork-fallback",
       fallbackVersion: "test-1",
     });
+  });
+});
+
+describe("catalog choices", () => {
+  const choice = { value: "model-a", label: "Model A" };
+
+  it("uses the published label for a selected value", () => {
+    expect(catalogChoiceLabel([choice], choice.value)).toBe("Model A");
+  });
+
+  it("matches searches against labels and values", () => {
+    expect(catalogChoiceMatches(choice, "model a")).toBe(true);
+    expect(catalogChoiceMatches(choice, "model-a")).toBe(true);
   });
 });
 

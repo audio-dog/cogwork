@@ -42,6 +42,8 @@ import {
 } from "@remixicon/react";
 import { createContext, type ReactNode, use, useState } from "react";
 import {
+  catalogChoiceLabel,
+  catalogChoiceMatches,
   catalogFor,
   type HarnessCatalog,
   operationLabels,
@@ -105,8 +107,7 @@ interface ControlSpec {
 }
 
 /** A catalog value's label, so an inherited harness reads "Codex" rather than "codex". */
-const labelOf = (spec: ControlSpec, value: string | null) =>
-  value === null ? "Not set" : (spec.options.find((option) => option.value === value)?.label ?? value);
+const labelOf = (spec: ControlSpec, value: string | null) => catalogChoiceLabel(spec.options, value);
 
 function HarnessRail({
   catalogs,
@@ -171,10 +172,9 @@ function HarnessModelPicker({
   const rail = railCatalog.harness;
   const stale = modelSpec.cell.stale || harnessSpec.cell.stale;
   const retiredHarness = effectiveHarness !== null && effectiveCatalog === null;
-  const needle = query.trim().toLowerCase();
-  const shown = railCatalog.models.filter((model) => model.label.toLowerCase().includes(needle));
+  const shown = railCatalog.models.filter((model) => catalogChoiceMatches(model, query));
   const own = modelSpec.cell.own !== null;
-  const triggerLabel = modelSpec.cell.effective ?? "Not set";
+  const triggerLabel = labelOf(modelSpec, modelSpec.cell.effective);
 
   return (
     <Popover
@@ -354,6 +354,16 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   const harnessCell = cell("harness");
   const modelCell = cell("model");
   const pairOwn = modelCell.own ?? harnessCell.own;
+  const profileSpec: ControlSpec | null = catalog
+    ? {
+        key: "permission-profile",
+        label: "Permissions",
+        options: policyProfileChoices(catalog),
+        cell: profileCell,
+        select: (value) => set("permission-profile", value),
+        reset: () => set("permission-profile", null),
+      }
+    : null;
 
   const specs: readonly ControlSpec[] = [
     {
@@ -389,14 +399,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
           },
         ]
       : []),
-    {
-      key: "permission-profile",
-      label: "Permissions",
-      options: policyProfileChoices(catalog),
-      cell: profileCell,
-      select: (value) => set("permission-profile", value),
-      reset: () => set("permission-profile", null),
-    },
+    ...(profileSpec ? [profileSpec] : []),
   ];
 
   const [harnessSpec, modelSpec, ...rest] = specs;
