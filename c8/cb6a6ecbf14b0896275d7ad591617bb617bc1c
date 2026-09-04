@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/routes/settings/general.tsx
+  s_dc6f398c2ee802::t_58ffa0a6d75511 1-2,4-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c8cb6a6ecbf14b0896275d7ad591617bb617bc1c",
+  "prompts": {},
+  "sessions": {
+    "s_dc6f398c2ee802": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06b04-e138-7f20-a332-01243f2b8002",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
