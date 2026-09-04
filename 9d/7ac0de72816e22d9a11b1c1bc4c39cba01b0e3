@@ -1,0 +1,31 @@
+configs/lint/oxlint-spike/biome/no-effect-sync-throw.grit
+  s_ff1b0862c84cda::t_af021947979ba9 1-12
+configs/lint/oxlint-spike/biome/no-runtime-runfork.grit
+  s_ff1b0862c84cda::t_af021947979ba9 1-5
+configs/lint/oxlint-spike/biome-zero.json
+  s_ff1b0862c84cda::t_af021947979ba9 1-8
+configs/lint/oxlint-spike/biome-five.json
+  s_ff1b0862c84cda::t_af021947979ba9 1-15
+configs/lint/oxlint-spike/biome/no-wire-union-tag-comparison.grit
+  s_ff1b0862c84cda::t_abace336f95842 1-79
+configs/lint/oxlint-spike/biome/no-iife-wrapper.grit
+  s_ff1b0862c84cda::t_af021947979ba9 1-13
+configs/lint/oxlint-spike/biome/no-switch.grit
+  s_ff1b0862c84cda::t_af021947979ba9 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9d7ac0de72816e22d9a11b1c1bc4c39cba01b0e3",
+  "prompts": {},
+  "sessions": {
+    "s_ff1b0862c84cda": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de4-7937-74c3-99cc-e3b66be25ac4",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
