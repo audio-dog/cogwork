@@ -25,7 +25,7 @@ The stable key tying a work item to its pull request across systems. GitHub nume
 _Avoid_: PR reference, branch name (the full branch also carries a title slug that can drift)
 
 **Workspace**:
-A repo registered with the daemon under a minted `WorkspaceId`: a checkout path bound to an issue tracker and, optionally, a source control provider, plus workflow and operation settings. Checkout path and git remote are re-binding hints, never identity. The unit of isolation and per-repo configuration.
+A repo registered with the daemon under a minted `WorkspaceId`: a checkout path bound to an issue tracker and, optionally, a source control provider, plus workflow and operation settings. Checkout path is a re-binding hint, never identity. The unit of isolation and per-repo configuration.
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:

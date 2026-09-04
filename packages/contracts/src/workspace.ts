@@ -90,7 +90,6 @@ export type WorkspaceBindingWorktreeConfig = typeof WorkspaceBindingWorktreeConf
 export const WorkspaceRegistration = Schema.Struct({
   name: TrimmedNonEmptyString,
   checkoutPath: TrimmedNonEmptyString,
-  gitRemote: Schema.optional(TrimmedNonEmptyString),
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
