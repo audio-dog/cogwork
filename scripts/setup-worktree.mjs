@@ -11,14 +11,17 @@ const manifestPath = join(worktreeRoot, "scripts", "worktree-manifest.json");
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 const warn = (message) => console.warn(`setup-worktree: ${message}`);
 
-const resolveMainCheckout = () => {
-  const fromEnv = process.env.ROOT_WORKTREE_PATH?.trim();
-  if (fromEnv) return resolve(fromEnv);
+const resolveSharedCheckout = () => {
   const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], {
     cwd: worktreeRoot,
     encoding: "utf8",
   }).trim();
   return dirname(resolve(worktreeRoot, commonDir));
+};
+
+const resolveMainCheckout = () => {
+  const fromEnv = process.env.ROOT_WORKTREE_PATH?.trim();
+  return fromEnv ? resolve(fromEnv) : resolveSharedCheckout();
 };
 
 const readManifest = () => {
@@ -44,7 +47,7 @@ const trustCodexHooks = (mainCheckout) =>
       mainCheckout,
       process.env.CODEX_HOME?.trim() || join(homedir(), ".codex"),
     ],
-    { cwd: mainCheckout, stdio: "inherit" },
+    { cwd: worktreeRoot, stdio: "inherit", timeout: 30_000 },
   );
 
 const targetIn = (mainCheckout, relative) => {
@@ -79,7 +82,7 @@ const hydrate = (mainCheckout, relative) => {
 
 const main = () => {
   const mainCheckout = resolveMainCheckout();
-  trustCodexHooks(mainCheckout);
+  trustCodexHooks(resolveSharedCheckout());
   if (mainCheckout === worktreeRoot) {
     console.log("setup-worktree: running in the main checkout; nothing to hydrate");
     return;
