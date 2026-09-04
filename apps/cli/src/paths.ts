@@ -11,5 +11,3 @@ export const defaultControlStorePath = path.join(daemonHome, "control.db");
 export const defaultTelemetryStorePath = path.join(daemonHome, "telemetry.db");
 
 export const defaultCredentialsPath = path.join(daemonHome, "credentials.json");
-
-export const defaultEnvFilePath = path.join(daemonHome, ".env");
