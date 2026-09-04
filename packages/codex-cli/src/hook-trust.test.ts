@@ -182,6 +182,19 @@ trusted_hash = "sha256:existing"
     );
   });
 
+  it("accepts Codex's match-all matcher", () => {
+    const entries = codexHookTrustEntries(
+      hooksPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "scan" }] }],
+        },
+      }),
+    );
+
+    assert.lengthOf(entries, 1);
+  });
+
   it("fails closed on MCP input Codex cannot hash as TOML", () => {
     assert.throws(() =>
       codexHookTrustEntries(

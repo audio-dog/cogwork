@@ -149,7 +149,7 @@ const normalizedTimeout = (event: EventDefinition, timeout: number | undefined) 
 const matcherForEvent = (event: EventDefinition, matcher: string | undefined) =>
   event.acceptsMatcher ? matcher : undefined;
 
-const isSupportedMatcher = (matcher: string) => isSupportedRustRegex(matcher);
+const isSupportedMatcher = (matcher: string) => matcher === "*" || isSupportedRustRegex(matcher);
 
 const isTomlValue = (value: unknown): boolean => {
   if (value === null) return false;
