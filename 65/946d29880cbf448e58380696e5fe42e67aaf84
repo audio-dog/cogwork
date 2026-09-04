@@ -1,0 +1,24 @@
+configs/lint/tests/oxlint-spike.test.mjs
+  s_ff1b0862c84cda::t_8142bf38ce3c7d 65-91
+  s_ff1b0862c84cda::t_1fee71534364b9 1-13,17-44,59-64
+  s_ff1b0862c84cda::t_02571f1c80eb07 112-131
+  s_ff1b0862c84cda::t_4eccd4d1d68c41 132-151
+  s_ff1b0862c84cda::t_528940bcf833ca 92-111
+  s_ff1b0862c84cda::t_e9f582f1a8d4bb 14-16,45-58,152-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "65946d29880cbf448e58380696e5fe42e67aaf84",
+  "prompts": {},
+  "sessions": {
+    "s_ff1b0862c84cda": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de4-7937-74c3-99cc-e3b66be25ac4",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
