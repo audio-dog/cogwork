@@ -5,6 +5,7 @@ import {
   type OperationSettingRow,
   operationSettingNames,
   RunId,
+  RunPlanMcpServer,
   type SettingResolutionCase,
   settingResolutionCases,
   WorkItemId,
@@ -21,6 +22,7 @@ import type { RegisteredWorkspace } from "./projector";
 import {
   assembleRunPlan,
   availabilityCauses,
+  type BuildRunPlanInput,
   buildRunPlan,
   engineAdmissibleSettingScope,
   engineSettingScopeDirection,
@@ -402,7 +404,7 @@ describe("Run Plan assembly", () => {
         unavailableReason: null,
       },
     ];
-    const input = {
+    const input: Omit<BuildRunPlanInput, "mcpServers"> = {
       runId: Schema.decodeSync(RunId)("run-identity-keyed-mcp"),
       workspace,
       item,
@@ -410,8 +412,8 @@ describe("Run Plan assembly", () => {
       resolved,
       prompt: "Implement #228",
       checkoutPath: "/worktrees/228",
-      sessionKind: "opaque-handle" as const,
-      projectedMembers: ["MCP" as const],
+      sessionKind: "opaque-handle",
+      projectedMembers: ["MCP"],
       middleware: [],
       context,
       contributions,
@@ -479,18 +481,17 @@ describe("Run Plan assembly", () => {
       ],
       provenanceStamps: [],
     });
-    const workspaceServer = plan.mcp.find(
-      (server) => "endpoint" in server && server.name === "workspace-tools",
-    );
-    const publicServer = plan.mcp.find((server) => "endpoint" in server && server.name === "public-tools");
+    const servers = plan.mcp.filter(Schema.is(RunPlanMcpServer));
+    const workspaceServer = servers.find(({ name }) => name === "workspace-tools");
+    const publicServer = servers.find(({ name }) => name === "public-tools");
     const workspaceCredential = workspaceServer ? mcpCredentials.get(workspaceServer.identity) : undefined;
     assert.isDefined(workspaceServer);
     assert.isDefined(publicServer);
     assert.isDefined(workspaceCredential);
     if (!workspaceServer || !publicServer || !workspaceCredential) return;
 
-    assert.isTrue("authenticated" in workspaceServer && workspaceServer.authenticated);
-    assert.isFalse("authenticated" in publicServer && publicServer.authenticated);
+    assert.isTrue(workspaceServer.authenticated);
+    assert.isFalse(publicServer.authenticated);
     assert.strictEqual(Redacted.value(workspaceCredential), "workspace-token");
     assert.isFalse(mcpCredentials.has(publicServer.identity));
     assert.notInclude(JSON.stringify(plan), "workspace-token");

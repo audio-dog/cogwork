@@ -923,7 +923,9 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
   );
   const mcpCredentials: ReadonlyMap<string, Redacted.Redacted<string>> = new Map(
     preparedMcpServers.flatMap(({ plan: server, credential }) =>
-      credential === null ? [] : [[server.identity, credential] as const],
+      credential === null
+        ? []
+        : [[server.identity, credential] satisfies readonly [string, Redacted.Redacted<string>]],
     ),
   );
   return { plan, mcpCredentials };
