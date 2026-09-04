@@ -1,0 +1,30 @@
+packages/engine/src/worktree.ts
+  s_486c47cd4bd6e6::t_a9817ec6f4ecfa 282-302,304-310
+  s_80ca826a317ad6::t_1823777af88206 303
+packages/engine/src/worktree.test.ts
+  s_486c47cd4bd6e6::t_bad5329cda6c31 85,91-94,493-514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7704cae4c91ddc474e541f28b658b07ab9525615",
+  "prompts": {},
+  "sessions": {
+    "s_486c47cd4bd6e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e2c-5bad-7641-87ba-305ed27d3f1c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_80ca826a317ad6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e38-4ae6-7ed3-a111-7d43eba91d91",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
