@@ -1017,7 +1017,7 @@ describe("daemon heartbeats", () => {
     EventPublisher.DaemonEventPublisher,
     Effect.map(PublishedItemCount, (publishes) => ({
       publishItems: () => Ref.update(publishes, (count) => count + 1),
-      publishWorkspaces: () => Effect.void,
+      publishWorkspaces: () => Effect.succeed([]),
       publishWorkspaceRemoved: Effect.succeed,
       publishScheduler: () =>
         Effect.succeed({

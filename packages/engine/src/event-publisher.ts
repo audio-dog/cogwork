@@ -209,6 +209,7 @@ export const make = Effect.gen(function* () {
       new Map(signed.map(({ key, signature, state }) => [key, { signature, state }] as const)),
     );
     if (changed.length > 0 || removed.length > 0) yield* refreshControlStore();
+    return states;
   });
 
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
