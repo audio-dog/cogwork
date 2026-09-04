@@ -2,9 +2,6 @@ node_modules/
 dist/
 out/
 
-# A checkout can acquire a pnpm store of its own, and the File-diff feed asks
-# `git check-ignore` what to withhold — so an untracked store here would be
-# reported as tens of thousands of new files, each with a whole-file diff.
 .pnpm-store/
 
 .env
