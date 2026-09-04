@@ -136,6 +136,16 @@ describe("workspace record draft", () => {
     ).toBeNull();
   });
 
+  it("treats blank MCP skills as an empty list", () => {
+    expect(
+      workspaceUpdateFromDraft({
+        ...emptyDraft,
+        displayName: "cogwork",
+        mcpSkills: "",
+      })?.mcpSkills,
+    ).toEqual([]);
+  });
+
   it("holds every normalized field after submission", () => {
     const draft = {
       ...emptyDraft,

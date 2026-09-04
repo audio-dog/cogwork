@@ -171,7 +171,7 @@ const priorityFrom = (draft: WorkspaceRecordDraft) => {
 };
 
 export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
-  const mcpSkills = Option.getOrUndefined(decodeMcpSkills(draft.mcpSkills));
+  const mcpSkills = Option.getOrUndefined(decodeMcpSkills(draft.mcpSkills.trim() || "[]"));
   if (!mcpSkills) return null;
   const roleLabels = {
     "needs-triage": optional(draft.needsTriageLabel),
