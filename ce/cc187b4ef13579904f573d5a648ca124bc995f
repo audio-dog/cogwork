@@ -1,0 +1,23 @@
+packages/codex-cli/package.json
+  s_777b251643bf2e::t_200982a6ee6e5d 18
+  s_777b251643bf2e::t_8261c375a824b0 23,25
+  s_777b251643bf2e::t_dde3878c3b35db 24,31
+pnpm-lock.yaml
+  s_777b251643bf2e::t_4acaaac2c73d4c 375-377,393-398,409-411,1448-1452,5056-5059,6327-6328,9629-9630
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "cecc187b4ef13579904f573d5a648ca124bc995f",
+  "prompts": {},
+  "sessions": {
+    "s_777b251643bf2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de5-9582-7b31-a35e-4391798377b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
