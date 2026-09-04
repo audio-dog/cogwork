@@ -58,7 +58,7 @@ describe("credentialAccountFor", () => {
   });
 
   it("returns null for a non-Linear workspace", () => {
-    const account = credentialAccountFor(config({ issueTracker: { type: "github", repo: "owner/repo" } }));
+    const account = credentialAccountFor(config({ issueTracker: { type: "github" } }));
     assert.isNull(account);
   });
 });
