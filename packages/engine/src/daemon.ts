@@ -276,12 +276,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetHarnesses: Effect.fn("Daemon.GetHarnesses")(function* () {
     const store = yield* ControlStore;
-    if (store.health === "unavailable") return yield* harnessOverview();
-    const settings = yield* store.picture.pipe(
-      Effect.map((picture) => picture.harnessSettings),
-      Effect.catchTag("ControlStoreFailure", () => Effect.succeed([])),
-    );
-    return yield* harnessOverview(settings);
+    if (store.health === "unavailable") return yield* store.picture;
+    const picture = yield* store.picture;
+    return yield* harnessOverview(picture.harnessSettings);
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;

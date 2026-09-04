@@ -1277,7 +1277,18 @@ describe("SetOperationSetting", () => {
   );
 });
 
-describe("SetHarnessEnabled", () => {
+describe("Harness management", () => {
+  it.effect("reports the registered Harness through RPC", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const overview = yield* client.GetHarnesses();
+      const item = overview.harnesses[0];
+
+      assert.strictEqual(item?.harness, "cursor");
+      assert.isTrue(item?.enabled);
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}))), Effect.scoped),
+  );
+
   it.effect("returns disabled Harness state", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
