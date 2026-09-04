@@ -289,7 +289,7 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("mints identities, keeps clone hints non-identifying, and reloads from the Control store", () =>
+  it.effect("mints distinct identities for duplicate display names and reloads from the Control store", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
