@@ -1,0 +1,30 @@
+packages/engine/src/exhaustion.ts
+  s_20ee436f7692cd::t_5eb9f8c1bef69e 1-21
+packages/engine/src/exhaustion.test.ts
+  s_20ee436f7692cd::t_358859d06530a9 1-31,33-71,73-97,99-107,109-117,119-157
+  s_ff1b0862c84cda::t_4ae71562066159 32,72,98,108,118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "91d025eabd2bf9e46c791e438c148f40e7033d9a",
+  "prompts": {},
+  "sessions": {
+    "s_20ee436f7692cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06d99-1931-7a33-a8b3-f315a5b6b11d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ff1b0862c84cda": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de4-7937-74c3-99cc-e3b66be25ac4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
