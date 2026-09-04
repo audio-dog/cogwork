@@ -1,0 +1,21 @@
+packages/contracts/src/workspace.test.ts
+  s_3c4a42d9eee4a6::t_adaf216f2e9492 43,55
+  s_3c4a42d9eee4a6::t_583c4eef28a7fb 3,40-42,44-54,56-62
+  s_3c4a42d9eee4a6::t_b879b4e85d8979 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "523e4cfa49a33cc412eae7da78f43420a7babdea",
+  "prompts": {},
+  "sessions": {
+    "s_3c4a42d9eee4a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e01-7017-7e73-805c-5fb3c397c7c0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
