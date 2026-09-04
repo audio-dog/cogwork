@@ -216,7 +216,7 @@ The single bot-owned comment an adapter keeps on an issue for control-plane stat
 _Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (proposals are separate notes).
 
 **Worktree manager**:
-The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
+The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. It also reports whether the prepared implement worktree is still on the Engine-cut branch and whether that head is ahead of the configured base before the Engine can open a pull request. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
 _Avoid_: Checkout, clone, worktree setup (that is the repo-local harness concern, not this)
 
 **Branch divergence**:
