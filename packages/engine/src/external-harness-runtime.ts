@@ -184,6 +184,7 @@ export interface ExternalHarnessRuntimeInputs {
   readonly authentication: (request: HarnessRequest) => ExternalInputEffect<ExternalHarnessAuthentication>;
   readonly sandboxProvider: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<SandboxProvider>;
   readonly sandboxPolicy?: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<SandboxPolicy>;
+  readonly launchPreflight?: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<void>;
 }
 
 const preparedWorkspace = { source: { type: "none" } } satisfies WorkspaceDefinition;
@@ -714,7 +715,10 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
 ): HarnessRunner => {
   const preflightPhase = HarnessPreflightInput.$match({
     Static: () => Effect.void,
-    Launch: ({ request }) => resolveExternalLaunch(descriptor, inputs, request).pipe(Effect.asVoid),
+    Launch: ({ request }) =>
+      resolveExternalLaunch(descriptor, inputs, request).pipe(
+        Effect.flatMap(({ resolved }) => inputs.launchPreflight?.(resolved) ?? Effect.void),
+      ),
   });
   const preflight = Effect.fn("ExternalHarnessRuntime.preflight")((input: HarnessPreflightInput) =>
     preflightPhase(input),

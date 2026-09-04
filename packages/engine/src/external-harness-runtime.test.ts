@@ -817,6 +817,37 @@ describe("external Harness runtime", () => {
       }),
     );
 
+    it.effect("runs launch preflight before the native Harness launches", () =>
+      Effect.gen(function* () {
+        const created: Array<string> = [];
+        const probe = new ControlledProbe();
+        const harness = make([
+          externalHarnessRunner(descriptor(terminalEvents, probe), {
+            authentication: hostAuthentication,
+            sandboxProvider: () => Effect.succeed(controlledProvider(created, [])),
+            launchPreflight: () =>
+              Effect.fail(
+                new HarnessError({
+                  reason: "workspace",
+                  retryable: false,
+                  message: "launch preflight blocked the Run",
+                }),
+              ),
+          }),
+        ]);
+
+        const error = yield* harness
+          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "workspace");
+        assert.strictEqual(error.retryable, false);
+        assert.include(error.message, "launch preflight");
+        assert.deepStrictEqual(created, []);
+        assert.deepStrictEqual(probe.resolved, []);
+      }),
+    );
+
     it.effect("rejects an authenticated MCP server without a live credential before launch", () =>
       Effect.gen(function* () {
         const created: Array<string> = [];
