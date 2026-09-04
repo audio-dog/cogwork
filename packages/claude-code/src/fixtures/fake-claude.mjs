@@ -23,9 +23,12 @@ if (process.argv.includes("--help")) {
 if (process.argv.includes("auth") && process.argv.includes("status")) {
   if (
     process.argv.includes("--require-clean-environment") &&
-    (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN)
+    (process.env.ANTHROPIC_API_KEY ||
+      process.env.ANTHROPIC_AUTH_TOKEN ||
+      process.env.GITHUB_TOKEN ||
+      process.env.GH_TOKEN)
   ) {
-    process.stderr.write("Inherited Anthropic credentials detected\n");
+    process.stderr.write("Inherited credentials detected\n");
     process.exit(1);
   }
   if (process.argv.includes("--not-authenticated")) {
@@ -82,6 +85,8 @@ const capture = {
   apiKeyPresent: apiKey !== null,
   apiKeyVersion: apiKey?.match(/-(one|two)$/)?.[1] ?? null,
   authToken: process.env.ANTHROPIC_AUTH_TOKEN ?? null,
+  githubToken: process.env.GITHUB_TOKEN ?? null,
+  ghToken: process.env.GH_TOKEN ?? null,
 };
 const sessionId = capture.resume ?? "fake-claude-session-1";
 const init = {
