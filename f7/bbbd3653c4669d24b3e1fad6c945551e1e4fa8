@@ -1,0 +1,21 @@
+packages/engine/src/scheduler.test.ts
+  s_d2c41d3cf117ad::t_c6711f896b06c2 52,57
+packages/engine/src/read-model.test.ts
+  s_d2c41d3cf117ad::t_c6711f896b06c2 147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f7bbbd3653c4669d24b3e1fad6c945551e1e4fa8",
+  "prompts": {},
+  "sessions": {
+    "s_d2c41d3cf117ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e04-3496-7013-b71e-9b8b46cf5882",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
