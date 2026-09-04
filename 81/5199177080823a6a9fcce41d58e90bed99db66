@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/features/workspace-registration.test.ts
+  s_d2c41d3cf117ad::t_9cd454deb80139 103,129
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_d2c41d3cf117ad::t_9cd454deb80139 29-30,72,80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "815199177080823a6a9fcce41d58e90bed99db66",
+  "prompts": {},
+  "sessions": {
+    "s_d2c41d3cf117ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e04-3496-7013-b71e-9b8b46cf5882",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
