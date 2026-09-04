@@ -52,6 +52,7 @@ const controlStoreService = {
   establishConnection: () => Effect.succeed(defaultControlStore),
   revokeConnection: () => Effect.succeed(defaultControlStore),
   removeConnection: () => Effect.succeed(defaultControlStore),
+  setHarnessEnabled: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
   installPlugin: () => Effect.succeed(defaultControlStore),
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
