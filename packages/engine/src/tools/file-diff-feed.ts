@@ -286,18 +286,9 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
   return diff === "" ? null : fileDiffEvent(relTo(event.path), diff);
 });
 
-export const fileDiffIgnoredSegments = [
-  ".git",
-  "node_modules",
-  ".repos",
-  ".pnpm-store",
-  ".turbo",
-  "dist",
-  "out",
-];
+const IGNORED_SEGMENTS = [".git", "node_modules", ".repos"];
 
-export const ignored = (rel: string) =>
-  rel.split("/").some((segment) => fileDiffIgnoredSegments.includes(segment));
+export const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
 
 const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
   stream.pipe(
@@ -429,12 +420,20 @@ const classifyWorktreeEvent = Effect.fn("Tools.classifyWorktreeEvent")(function*
 export const watchWorktreeDiffs = (
   sandbox: WorktreeSandbox,
   baseSha: string,
+  /**
+   * Completes to stop watching. Halting the source rather than interrupting the
+   * feed is what lets the debounce flush, so a file written just before the caller
+   * stopped needing the feed still reaches the client. Omit to watch until
+   * interruption, which drops whatever the debounce still holds.
+   */
+  stop?: Effect.Effect<void>,
 ): Stream.Stream<AgUiEvent, ToolError, FileSystem.FileSystem> =>
   Stream.unwrap(
     FileSystem.FileSystem.pipe(
       Effect.map((fs) =>
         fs.watch(sandbox.root, { recursive: true }).pipe(
           Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
+          (source) => (stop ? source.pipe(Stream.haltWhen(stop)) : source),
           Stream.filter((event) => !ignored(event.path)),
           Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
           Stream.mapEffect((events) => configuredIgnoredEvents(sandbox, baseSha, events)),

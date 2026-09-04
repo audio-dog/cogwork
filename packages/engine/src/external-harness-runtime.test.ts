@@ -180,54 +180,17 @@ const cancellableAsyncIterable = <Value>(values: ReadonlyArray<Value>, cancellat
   },
 });
 
-const flushMicrotasks = (remaining: number): Promise<void> =>
-  remaining === 0 ? Promise.resolve() : Promise.resolve().then(() => flushMicrotasks(remaining - 1));
-
-const fileEventSandbox = (probe: {
-  readonly commands: Array<string>;
-  readonly diffResolvers: Array<() => void>;
-  readonly state: { active: number; maxActive: number; release: boolean };
-  emit?: (event: { type: string; path: string }) => void;
-}) => {
-  const handle = sandboxHandle("file-event-sandbox");
+const watchProbeSandbox = (probe: { watches: number }) => {
+  const handle = sandboxHandle("watch-probe-sandbox");
   return {
     ...handle,
     fs: {
       ...handle.fs,
       list: () => Promise.resolve([]),
       exists: () => Promise.resolve(true),
-      watch: (_path, emit) => {
-        probe.emit = emit;
+      watch: () => {
+        probe.watches += 1;
         return Promise.resolve({ stop: () => Promise.resolve() });
-      },
-    },
-    process: {
-      ...handle.process,
-      exec: (command) => {
-        probe.commands.push(command);
-        if (command === "git rev-parse HEAD") {
-          return Promise.resolve({ stdout: "controlled-base\n", stderr: "", exitCode: 0 });
-        }
-        if (command.startsWith("git check-ignore")) {
-          const exitCode = command.includes("generated/cache.bin") ? 0 : 1;
-          return Promise.resolve({ stdout: "", stderr: "", exitCode });
-        }
-        if (!command.startsWith("git diff")) {
-          return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
-        }
-        probe.state.active += 1;
-        probe.state.maxActive = Math.max(probe.state.maxActive, probe.state.active);
-        const result = { stdout: "diff --git a/source.ts b/source.ts\n", stderr: "", exitCode: 0 };
-        if (probe.state.release) {
-          probe.state.active -= 1;
-          return Promise.resolve(result);
-        }
-        const deferred = Promise.withResolvers<typeof result>();
-        probe.diffResolvers.push(() => {
-          probe.state.active -= 1;
-          deferred.resolve(result);
-        });
-        return deferred.promise;
       },
     },
   } satisfies SandboxHandle;
@@ -516,39 +479,15 @@ describe("external Harness runtime", () => {
         }),
     );
 
-    it.effect("bounds external Sandbox file churn before it reaches the Run stream", () =>
+    it.effect("never asks the Sandbox to watch a checkout the runtime feeds itself", () =>
       Effect.gen(function* () {
         const created: Array<string> = [];
-        const probe = new ControlledProbe();
-        const watcherProbe: Parameters<typeof fileEventSandbox>[0] = {
-          commands: [],
-          diffResolvers: [],
-          state: { active: 0, maxActive: 0, release: false },
-        };
-        const sourceEvents = Array.from({ length: 64 }, (_, index) => ({
-          type: "change",
-          path: `/checkout/src/file-${index}.ts`,
-        }));
-        const ignoredEvents = Array.from({ length: 1_000 }, (_, index) => ({
-          type: "change",
-          path: `/checkout/.pnpm-store/v10/file-${index}`,
-        }));
-        const configuredIgnoredEvent = { type: "change", path: "/checkout/generated/cache.bin" };
-        probe.inspect = () => {
-          for (const event of [...ignoredEvents, ...sourceEvents]) watcherProbe.emit?.(event);
-          watcherProbe.emit?.(configuredIgnoredEvent);
-          return flushMicrotasks(20).then(() => {
-            const maxActive = watcherProbe.state.maxActive;
-            watcherProbe.state.release = true;
-            for (const resolve of watcherProbe.diffResolvers.splice(0)) resolve();
-            assert.isAtMost(maxActive, 8);
-          });
-        };
-        const base = descriptor(terminalEvents, probe);
-        const harness = makeHarness({ ...base, transport: { sandboxFileDiffs: true } }, created, [], {
+        const watchProbe = { watches: 0 };
+        const base = descriptor(terminalEvents, new ControlledProbe());
+        const harness = makeHarness({ ...base, transport: { runtimeFileDiffFeed: true } }, created, [], {
           provider: {
             ...controlledProvider(created, []),
-            create: () => Promise.resolve(fileEventSandbox(watcherProbe)),
+            create: () => Promise.resolve(watchProbeSandbox(watchProbe)),
           },
         });
         const seen: Array<AgUiEvent> = [];
@@ -557,22 +496,12 @@ describe("external Harness runtime", () => {
           .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runForEach((event) => Effect.sync(() => seen.push(event))));
 
+        // The Sandbox watcher retains one diff promise per filesystem event for the
+        // whole Run and cannot be told to skip a tree. Leaving it off is what bounds
+        // the daemon, so the Run must never start it.
+        assert.strictEqual(watchProbe.watches, 0);
         assert.isFalse(
           seen.some((event) => event.type === EventType.CUSTOM && event.name === "sandbox.file"),
-        );
-        assert.isTrue(
-          seen.some(
-            (event) =>
-              agUiIsFileDiffEvent(event) &&
-              event.value.path === "src/file-0.ts" &&
-              event.value.diff === "diff --git a/source.ts b/source.ts\n",
-          ),
-        );
-        assert.isFalse(watcherProbe.commands.some((command) => command.includes(".pnpm-store")));
-        assert.isFalse(
-          watcherProbe.commands.some(
-            (command) => command.startsWith("git diff") && command.includes("generated/cache.bin"),
-          ),
         );
       }),
     );
