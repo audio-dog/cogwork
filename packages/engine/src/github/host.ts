@@ -8,6 +8,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { CommentHost, CoordinationComment } from "../coordination";
+import * as Coordination from "../coordination";
 import type { CoordinationHost, ListedItem } from "../coordination-tracker";
 import { IssueTrackerError } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
@@ -90,6 +91,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
   const listItem = (target: AuthenticatedGitHubTarget, priorityFor: (issueNumber: number) => Priority) =>
     Effect.fn("github.listItem")(function* (issue: RawIssue) {
       const rawComments = yield* client.listComments(target, issue.number);
+      const comments = rawComments.map(toCoordinationComment(target.actorLogin));
       const id = yield* itemId(issue.number);
       return {
         id,
@@ -99,9 +101,9 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
         assignees: issue.assignees,
         claimLabeled: hasClaimLabel(issue.labels),
         openBlockers: issue.openBlockers,
-        claimIdentity: claimIdentity(target),
+        acceptedClaimants: [target.actorLogin, Coordination.defaultClaimant],
         priority: priorityFor(issue.number),
-        comments: rawComments.map(toCoordinationComment(target.actorLogin)),
+        comments,
       } satisfies ListedItem<number>;
     });
 
