@@ -1,0 +1,21 @@
+packages/engine/CONTEXT.md
+  s_d2c41d3cf117ad::t_1393de6f22c59f 159,231
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_d2c41d3cf117ad::t_051d0d2b11207b 14,18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f05cf4ea23533fa6cbedcfe3f7f0fea88777ef6e",
+  "prompts": {},
+  "sessions": {
+    "s_d2c41d3cf117ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e04-3496-7013-b71e-9b8b46cf5882",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
