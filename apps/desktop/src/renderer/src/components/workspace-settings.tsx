@@ -1,4 +1,5 @@
 import {
+  type Connection,
   type ControlStore,
   type OperationSettingName,
   type WorkspaceId,
@@ -39,6 +40,7 @@ import {
   workspaceIdentity,
   workspaceKey,
   workspaceLabel,
+  workspaceUpdateFromDraft,
 } from "../features/workspace-record";
 import { absoluteCheckoutPathFrom } from "../features/workspace-registration";
 import { OperationSettings } from "./operation-settings";
@@ -53,6 +55,7 @@ interface WorkspaceSettings {
   readonly draft: WorkspaceRecordDraft;
   readonly changes: number;
   readonly controlStore: ControlStore | null;
+  readonly connections: readonly Connection[];
   readonly workspaceId: WorkspaceId | null;
   readonly writable: boolean;
   readonly health: WorkspaceHealth | null;
@@ -65,6 +68,12 @@ interface WorkspaceSettings {
   readonly discard: () => void;
 }
 
+const draftError = (pathRefused: boolean, recordRefused: boolean) => {
+  if (pathRefused) return "Use an absolute path.";
+  if (recordRefused) return "Check the workspace fields. JSON and positive numbers must be valid.";
+  return null;
+};
+
 /**
  * One workspace's draft: edits over the saved value over the seeded record. Nothing is
  * seeded by an effect — the draft is derived at render, so a live daemon change reaches
@@ -72,9 +81,9 @@ interface WorkspaceSettings {
  */
 function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
   const {
-    state: { status, workspaces, controlStore },
-    actions: { rebind },
-    meta: { rebindPending, rebindError, rebindTarget },
+    state: { status, workspaces, controlStore, connections },
+    actions: { rebind, update },
+    meta: { rebindPending, rebindError, rebindTarget, updatePending, updateError, updateTarget },
   } = useWorkspaces();
   const board = useBoard();
   const picture = BoardResult.$is("Success")(board) ? board.board : null;
@@ -83,7 +92,8 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
 
   const [edits, setEdits] = useState<WorkspaceRecordDraft | null>(null);
   const [pathRefused, setPathRefused] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [recordRefused, setRecordRefused] = useState(false);
+  const [submitted, setSubmitted] = useState({ update: false, rebind: false });
 
   const workspace = workspaces.find((candidate) => workspaceKey(candidate) === workspaceId) ?? null;
   const baseline = workspace ? seededDraft(workspace) : null;
@@ -92,11 +102,13 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
   const identity = workspace ? workspaceIdentity(workspace) : null;
 
   // The daemon has caught up, so the draft is no longer an edit.
-  if (edits && baseline && edits.checkoutPath === baseline.checkoutPath) {
+  if (edits && baseline && changedFieldCount(edits, baseline) === 0) {
     setEdits(null);
-    setSubmitted(false);
+    setSubmitted({ update: false, rebind: false });
   }
   const draft = edits ?? baseline;
+  const submittedUpdateError = submitted.update && updateTarget === identity ? updateError : null;
+  const submittedRebindError = submitted.rebind && rebindTarget === identity ? rebindError : null;
 
   return {
     status: status === "ready" && !workspace ? "unknown" : status,
@@ -105,6 +117,7 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
     draft: draft ?? emptyDraft,
     changes: draft && baseline ? changedFieldCount(draft, baseline) : 0,
     controlStore,
+    connections,
     workspaceId: identity,
     writable: identity !== null,
     health: workspace
@@ -117,34 +130,38 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
     limit: load?.limit ?? null,
     patch: (next) => {
       setPathRefused(false);
-      setSubmitted(false);
+      setRecordRefused(false);
+      setSubmitted({ update: false, rebind: false });
       setEdits({ ...(edits ?? baseline ?? emptyDraft), ...next });
     },
-    saving: rebindPending && rebindTarget === identity,
+    saving: (rebindPending && rebindTarget === identity) || (updatePending && updateTarget === identity),
     // The provider keeps a failure until the next act, so only this page's own submit shows it.
-    saveError: pathRefused
-      ? "Use an absolute path."
-      : submitted && rebindTarget === identity
-        ? rebindError
-        : null,
+    saveError: draftError(pathRefused, recordRefused) ?? submittedUpdateError ?? submittedRebindError,
     save: () => {
-      if (!edits || !baseline || !identity || edits.checkoutPath === baseline.checkoutPath) {
+      if (!edits || !baseline || !identity) {
         setEdits(null);
         return;
       }
-      const checkoutPath = absoluteCheckoutPathFrom(edits.checkoutPath);
+      const pathChanged = edits.checkoutPath !== baseline.checkoutPath;
+      const recordChanged =
+        changedFieldCount({ ...edits, checkoutPath: baseline.checkoutPath }, baseline) > 0;
+      const checkoutPath = pathChanged ? absoluteCheckoutPathFrom(edits.checkoutPath) : baseline.checkoutPath;
+      const workspaceUpdate = recordChanged ? workspaceUpdateFromDraft(edits) : null;
       setPathRefused(checkoutPath === null);
-      if (!checkoutPath) return;
+      setRecordRefused(recordChanged && workspaceUpdate === null);
+      if (!checkoutPath || (recordChanged && !workspaceUpdate)) return;
       // The act sends the trimmed path, so hold that: the raw one would never match what
       // the daemon publishes back and the save bar would never settle.
       setEdits({ ...edits, checkoutPath });
-      setSubmitted(true);
-      rebind(identity, checkoutPath);
+      setSubmitted({ update: recordChanged, rebind: pathChanged });
+      if (recordChanged && workspaceUpdate) update(identity, workspaceUpdate);
+      if (pathChanged) rebind(identity, checkoutPath);
     },
     discard: () => {
       setEdits(null);
       setPathRefused(false);
-      setSubmitted(false);
+      setRecordRefused(false);
+      setSubmitted({ update: false, rebind: false });
     },
   };
 }
@@ -408,13 +425,31 @@ export function WorkspaceSettingsPage({ workspaceId }: { readonly workspaceId: s
         )}
         <WorkspaceRecord.Provider
           value={{
-            state: { draft: settings.draft },
+            state: { draft: settings.draft, connections: settings.connections },
             actions: { patch: settings.patch },
             meta: { disabled: settings.saving || !settings.writable },
           }}
         >
           <SubSectionCard label="Checkout">
             <WorkspaceRecord.CheckoutRows />
+          </SubSectionCard>
+          <SubSectionCard label="Workspace">
+            <WorkspaceRecord.IdentityRows />
+          </SubSectionCard>
+          <SubSectionCard label="Issue tracker">
+            <WorkspaceRecord.IssueTrackerRows />
+          </SubSectionCard>
+          <SubSectionCard label="Triage and ownership">
+            <WorkspaceRecord.TriageRows />
+          </SubSectionCard>
+          <SubSectionCard label="Source control">
+            <WorkspaceRecord.SourceControlRows />
+          </SubSectionCard>
+          <SubSectionCard label="Worktrees">
+            <WorkspaceRecord.WorktreeRows />
+          </SubSectionCard>
+          <SubSectionCard label="Runs">
+            <WorkspaceRecord.RunRows />
           </SubSectionCard>
         </WorkspaceRecord.Provider>
         {settings.workspaceId ? (
