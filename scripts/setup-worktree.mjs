@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,6 +31,21 @@ const vendorRepos = (mainCheckout) => {
   warn(`.repos missing in ${mainCheckout}; running \`pnpm vendor\` to restore it`);
   execFileSync("pnpm", ["vendor"], { cwd: mainCheckout, stdio: "inherit" });
 };
+
+const trustCodexHooks = (mainCheckout) =>
+  execFileSync(
+    "pnpm",
+    [
+      "--filter",
+      "@cogwork/cli",
+      "exec",
+      "tsx",
+      "src/trust-codex-hooks.ts",
+      mainCheckout,
+      process.env.CODEX_HOME?.trim() || join(homedir(), ".codex"),
+    ],
+    { cwd: mainCheckout, stdio: "inherit" },
+  );
 
 const targetIn = (mainCheckout, relative) => {
   const target = join(mainCheckout, relative);
@@ -63,6 +79,7 @@ const hydrate = (mainCheckout, relative) => {
 
 const main = () => {
   const mainCheckout = resolveMainCheckout();
+  trustCodexHooks(mainCheckout);
   if (mainCheckout === worktreeRoot) {
     console.log("setup-worktree: running in the main checkout; nothing to hydrate");
     return;
