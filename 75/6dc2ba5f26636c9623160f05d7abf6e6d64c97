@@ -1,0 +1,44 @@
+packages/engine/src/daemon.ts
+  s_a4f7576244239f::t_bfe0685b4e12b2 46,310
+  s_a4f7576244239f::t_2136fe7d2f03e5 278-284
+packages/engine/src/commands.test.ts
+  s_a4f7576244239f::t_92168229155716 372
+  s_a4f7576244239f::t_6629efeb9520b0 93-101
+  s_a4f7576244239f::t_fed7b504016574 69-92,102-103,417,421,436-445
+  s_a4f7576244239f::t_cf52fb46f512af 1281
+  s_a4f7576244239f::t_6232697631453d 52
+  s_a4f7576244239f::t_08402ae6446c39 447,1280,1282-1283,1285,1287-1298,1300
+  s_a4f7576244239f::t_edccf241f9974a 104-109,418,425,446,1301
+  s_a4f7576244239f::t_68af95d23679ce 1284
+  s_a4f7576244239f::t_7568adee006289 1286,1299
+  s_a4f7576244239f::t_965d7d4e98c713 341,350,390-391,401
+  s_a4f7576244239f::t_172a2803d001eb 448
+  s_a4f7576244239f::t_358289c428f9eb 1302
+packages/engine/src/commands.ts
+  s_a4f7576244239f::t_bfe0685b4e12b2 14-15,46,301-314
+  s_455a6b561beaa8::t_c085722cd74e7c 315-324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "756dc2ba5f26636c9623160f05d7abf6e6d64c97",
+  "prompts": {},
+  "sessions": {
+    "s_455a6b561beaa8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06aea-928a-7ac0-b713-f5c89bf2d519",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a4f7576244239f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c90-0d33-7f51-99b1-4056f2717a9e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
