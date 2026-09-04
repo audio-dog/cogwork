@@ -1,0 +1,29 @@
+scripts/setup-worktree.mjs
+  s_777b251643bf2e::t_1f302417d9e0bc 38,47,50,99
+  s_777b251643bf2e::t_0db1c3a8b482ca 83,97-98
+  s_a119ac5c1019b3::t_694b47badc638b 100-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2e9d93423194ebb8146192ddb36a77e61d30ca5f",
+  "prompts": {},
+  "sessions": {
+    "s_777b251643bf2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de5-9582-7b31-a35e-4391798377b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a119ac5c1019b3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e3d-7e56-7032-be83-d4959c139e82",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
