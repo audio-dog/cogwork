@@ -1,11 +1,74 @@
-import { defaultControlStore, WorkspaceId } from "@cogwork/contracts";
+import {
+  defaultControlStore,
+  HarnessItem,
+  HarnessName,
+  HarnessOptionCatalog,
+  HarnessOverview,
+  HarnessState,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { operationSettingAtomKey } from "../daemon/atoms";
-import { operationSettingUpdate, settingCell } from "./operation-settings";
+import { availableHarnessCatalogs, operationSettingUpdate, settingCell } from "./operation-settings";
 
 const workspace = Schema.decodeSync(WorkspaceId)("w");
 const other = Schema.decodeSync(WorkspaceId)("other");
+
+const harnessItem = (harness: string, catalog: HarnessOptionCatalog | null) =>
+  HarnessItem.make({
+    harness: Schema.decodeSync(HarnessName)(harness),
+    version: null,
+    state: HarnessState.cases.Ready.make({}),
+    models: catalog?.models.map(({ value }) => value) ?? [],
+    catalog,
+  });
+
+const optionCatalog = (
+  policyProfiles: ReadonlyArray<"read-only" | "full">,
+  efforts?: ReadonlyArray<{ readonly value: string; readonly label: string }>,
+) =>
+  HarnessOptionCatalog.make({
+    models: [
+      { value: "model-a", label: "Model A" },
+      { value: "gpt-5.6-sol", label: "GPT 5.6 Sol" },
+    ],
+    ...(efforts ? { efforts } : {}),
+    policyProfiles,
+    provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
+  });
+
+describe("availableHarnessCatalogs", () => {
+  it("keeps published labels and absence of effort while excluding unusable harnesses", () => {
+    const overview = HarnessOverview.make({
+      harnesses: [
+        harnessItem("codex", optionCatalog(["read-only", "full"])),
+        harnessItem("provider", optionCatalog(["full"])),
+        harnessItem("cursor", optionCatalog([])),
+        harnessItem("broken", null),
+      ],
+      checkedAtMillis: 1,
+    });
+
+    const catalogs = availableHarnessCatalogs(overview);
+
+    expect(catalogs.map(({ harness }) => harness)).toEqual(["codex", "provider"]);
+    expect(catalogs[0]?.models[0]?.label).toBe("Model A");
+    expect(catalogs[0]?.policyProfiles).toEqual(["read-only", "full"]);
+    expect(catalogs[1]?.efforts).toBeUndefined();
+    expect(catalogs[0]?.provenance).toEqual({
+      source: "cogwork-fallback",
+      fallbackVersion: "test-1",
+    });
+  });
+});
+
+const catalogs = availableHarnessCatalogs(
+  HarnessOverview.make({
+    harnesses: [harnessItem("codex", optionCatalog(["read-only", "full"]))],
+    checkedAtMillis: 1,
+  }),
+);
 
 const store = (rows: ReadonlyArray<Record<string, unknown>>): Parameters<typeof settingCell>[0] =>
   ({ ...defaultControlStore, operationSettings: rows }) as Parameters<typeof settingCell>[0];
@@ -31,12 +94,12 @@ describe("settingCell", () => {
       overlayOperation("model", "triage", "gpt-5.6-luna"),
     ]);
 
-    const triage = settingCell(controlStore, workspace, "triage", "model");
+    const triage = settingCell(controlStore, catalogs, workspace, "triage", "model");
     expect(triage.own).toBe("gpt-5.6-luna");
     expect(triage.inherited).toBe("gpt-5.6-sol");
     expect(triage.effective).toBe("gpt-5.6-luna");
 
-    const implement = settingCell(controlStore, workspace, "implement", "model");
+    const implement = settingCell(controlStore, catalogs, workspace, "implement", "model");
     expect(implement.own).toBeNull();
     expect(implement.effective).toBe("gpt-5.6-sol");
   });
@@ -46,7 +109,7 @@ describe("settingCell", () => {
       profileDefault("model", "gpt-5.6-sol"),
       overlayOperation("model", "triage", "gpt-5.6-luna", other),
     ]);
-    expect(settingCell(controlStore, workspace, "triage", "model").own).toBeNull();
+    expect(settingCell(controlStore, catalogs, workspace, "triage", "model").own).toBeNull();
   });
 
   it("counts a value equal to the default as this workspace's own", () => {
@@ -54,7 +117,7 @@ describe("settingCell", () => {
       profileDefault("model", "gpt-5.6-sol"),
       overlayOperation("model", "triage", "gpt-5.6-sol"),
     ]);
-    const cell = settingCell(controlStore, workspace, "triage", "model");
+    const cell = settingCell(controlStore, catalogs, workspace, "triage", "model");
     expect(cell.own).toBe("gpt-5.6-sol");
     expect(cell.inherited).toBe("gpt-5.6-sol");
   });
@@ -64,8 +127,8 @@ describe("settingCell", () => {
       profileDefault("harness", "codex"),
       overlayOperation("model", "triage", "gpt-4-retired"),
     ]);
-    expect(settingCell(controlStore, workspace, "triage", "model").stale).toBe(true);
-    expect(settingCell(controlStore, workspace, "implement", "model").stale).toBe(false);
+    expect(settingCell(controlStore, catalogs, workspace, "triage", "model").stale).toBe(true);
+    expect(settingCell(controlStore, catalogs, workspace, "implement", "model").stale).toBe(false);
   });
 });
 
@@ -111,7 +174,7 @@ describe("enabled", () => {
     const controlStore = store([
       { setting: "enabled", level: { _tag: "Default" }, scope: { _tag: "SettingsProfile" }, value: false },
     ]);
-    expect(settingCell(controlStore, workspace, "follow-up", "enabled").effective).toBe("false");
+    expect(settingCell(controlStore, catalogs, workspace, "follow-up", "enabled").effective).toBe("false");
     // Clearing would fall back to the profile's `false`, so "on" has to be an explicit true.
     expect(operationSettingUpdate(workspace, "follow-up", "enabled", "true")).toEqual({
       _tag: "Set",
@@ -131,8 +194,8 @@ describe("an unknown harness", () => {
       profileDefault("harness", "retired-harness"),
       profileDefault("model", "gpt-5.6-sol"),
     ]);
-    expect(settingCell(controlStore, workspace, "triage", "harness").stale).toBe(true);
-    expect(settingCell(controlStore, workspace, "triage", "model").stale).toBe(true);
+    expect(settingCell(controlStore, catalogs, workspace, "triage", "harness").stale).toBe(true);
+    expect(settingCell(controlStore, catalogs, workspace, "triage", "model").stale).toBe(true);
   });
 });
 
@@ -148,9 +211,28 @@ describe("operationSettingAtomKey", () => {
 describe("an unset harness", () => {
   it("is not stale, because there is no choice to have gone out of date", () => {
     const controlStore = store([]);
-    const cell = settingCell(controlStore, workspace, "triage", "harness");
+    const cell = settingCell(controlStore, catalogs, workspace, "triage", "harness");
     expect(cell.effective).toBeNull();
     expect(cell.stale).toBe(false);
-    expect(settingCell(controlStore, workspace, "triage", "model").stale).toBe(false);
+    expect(settingCell(controlStore, catalogs, workspace, "triage", "model").stale).toBe(false);
+  });
+});
+
+describe("a policy profile the selected harness cannot enforce", () => {
+  it("is stale", () => {
+    const controlStore = store([
+      profileDefault("harness", "codex"),
+      profileDefault("permission-profile", "full"),
+    ]);
+    const readOnlyCatalogs = availableHarnessCatalogs(
+      HarnessOverview.make({
+        harnesses: [harnessItem("codex", optionCatalog(["read-only"]))],
+        checkedAtMillis: 1,
+      }),
+    );
+
+    expect(settingCell(controlStore, readOnlyCatalogs, workspace, "triage", "permission-profile").stale).toBe(
+      true,
+    );
   });
 });

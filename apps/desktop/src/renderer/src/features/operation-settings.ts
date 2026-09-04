@@ -1,13 +1,17 @@
 import {
   type ControlStore,
+  type HarnessName,
+  type HarnessOptionCatalog,
+  type HarnessOverview,
   LifecycleStage,
   type OperationSettingName,
   type OperationSettingRow,
   type OperationSettingUpdate,
+  type RunPlanPolicyProfile,
   resolveOperationSetting,
   type WorkspaceId,
 } from "@cogwork/contracts";
-import { catalogFor } from "./harness-catalog";
+import { providerLabel } from "./provider-presentation";
 
 /** `operationSettingRefusal` refuses any workflow but this one, so it is fixed today. */
 export const codingWorkflow = "coding";
@@ -25,6 +29,27 @@ export const operationSummaries: Record<LifecycleStage, string> = {
   implement: "Writes the change and opens a pull request.",
   "follow-up": "Answers failing checks and review comments on its own pull request.",
 };
+
+export type HarnessCatalog = HarnessOptionCatalog & { readonly harness: HarnessName };
+
+export const availableHarnessCatalogs = (overview: HarnessOverview | null) =>
+  overview?.harnesses.flatMap(({ harness, catalog }) =>
+    catalog && catalog.policyProfiles.length > 0 ? [{ harness, ...catalog }] : [],
+  ) ?? [];
+
+export const catalogFor = (catalogs: ReadonlyArray<HarnessCatalog>, harness: string | null) =>
+  catalogs.find((candidate) => candidate.harness === harness) ?? null;
+
+const policyProfileLabels: Record<RunPlanPolicyProfile, string> = {
+  "read-only": "Read only",
+  full: "Full",
+};
+
+export const policyProfileChoices = (catalog: HarnessCatalog | null) =>
+  catalog?.policyProfiles.map((value) => ({ value, label: policyProfileLabels[value] })) ?? [];
+
+export const defaultProfile = (operation: LifecycleStage) =>
+  operation === "implement" || operation === "follow-up" ? "full" : "read-only";
 
 /**
  * One setting of one operation. `own` is what this page has set; `inherited` is what would
@@ -54,6 +79,7 @@ const asDisplayValue = (value: ReturnType<typeof resolveOperationSetting>) => {
 
 export const settingCell = (
   controlStore: ControlStore | null,
+  catalogs: ReadonlyArray<HarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
   setting: OperationSettingName,
@@ -74,7 +100,7 @@ export const settingCell = (
     own,
     inherited,
     effective,
-    stale: isStale(setting, effective, controlStore, workspace, operation),
+    stale: isStale(setting, effective, controlStore, catalogs, workspace, operation),
   };
 };
 
@@ -83,14 +109,21 @@ const isStale = (
   setting: OperationSettingName,
   value: string | null,
   controlStore: ControlStore | null,
+  catalogs: ReadonlyArray<HarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
 ) => {
   if (value === null) return false;
-  if (setting === "harness") return catalogFor(value) === null;
-  if (setting !== "model" && setting !== "effort") return false;
-  const catalog = catalogFor(settingCell(controlStore, workspace, operation, "harness").effective);
+  if (setting === "harness") return catalogFor(catalogs, value) === null;
+  if (setting !== "model" && setting !== "effort" && setting !== "permission-profile") return false;
+  const catalog = catalogFor(
+    catalogs,
+    settingCell(controlStore, catalogs, workspace, operation, "harness").effective,
+  );
   if (!catalog) return true;
+  if (setting === "permission-profile") {
+    return !catalog.policyProfiles.some((profile) => profile === value);
+  }
   const options = setting === "model" ? catalog.models : (catalog.efforts ?? []);
   return !options.some((option) => option.value === value);
 };
@@ -98,13 +131,15 @@ const isStale = (
 /** A one-line summary of an operation, for a collapsed row. */
 export const operationSummaryLine = (
   controlStore: ControlStore | null,
+  catalogs: ReadonlyArray<HarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
 ) => {
-  const harness = settingCell(controlStore, workspace, operation, "harness").effective;
-  const model = settingCell(controlStore, workspace, operation, "model").effective;
-  const effort = settingCell(controlStore, workspace, operation, "effort").effective;
-  const parts = [catalogFor(harness)?.label ?? harness, model, effort].filter(
+  const harness = settingCell(controlStore, catalogs, workspace, operation, "harness").effective;
+  const model = settingCell(controlStore, catalogs, workspace, operation, "model").effective;
+  const effort = settingCell(controlStore, catalogs, workspace, operation, "effort").effective;
+  const harnessLabel = harness && catalogFor(catalogs, harness) ? providerLabel(harness) : harness;
+  const parts = [harnessLabel, model, effort].filter(
     (part): part is string => typeof part === "string" && part.length > 0,
   );
   return parts.length === 0 ? "Inherited" : parts.join(" · ");
