@@ -25,6 +25,7 @@ import type * as HttpClientResponse from "effect/unstable/http/HttpClientRespons
 import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
 import { type CreateIssueInput, defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
+import type { OpenedPullRequest, OpenPullRequestInput } from "../source-control";
 import {
   boardMissing,
   decodeProjectPriorities,
@@ -108,6 +109,11 @@ const IssueSchema = Schema.Struct({
 const CreatedIssueSchema = Schema.Struct({
   number: Schema.Finite,
   labels: Schema.Array(LabelName),
+});
+
+const CreatedPullSchema = Schema.Struct({
+  number: Schema.Finite,
+  html_url: Schema.String,
 });
 
 const PullSchema = Schema.Struct({
@@ -258,6 +264,7 @@ export const graphQlData = (
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
+const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
@@ -559,6 +566,23 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     );
   });
 
+  const createPull = Effect.fn("github.createPull")(function* (
+    repo: GitHubRepoRef,
+    input: OpenPullRequestInput,
+  ) {
+    const acceptedBody = yield* sendAcceptedJsonOnce(repo, HttpClientRequest.post(repoPath(repo, "/pulls")), {
+      head: input.headBranch,
+      base: input.baseBranch,
+      title: input.title,
+      body: input.body,
+    });
+    if (Option.isNone(acceptedBody)) {
+      return yield* unavailable("GitHub pull request response body was unavailable");
+    }
+    const created = yield* Effect.mapError(decodeCreatedPull(acceptedBody.value), toUnavailable);
+    return { number: created.number, url: created.html_url } satisfies OpenedPullRequest;
+  });
+
   // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
   const graphql = Effect.fn("github.graphql")(function* (
     repo: GitHubRepoRef,
@@ -705,6 +729,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         );
       }),
     createIssue,
+    createPull,
     addLabel,
     removeLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
       withTransientRetry(

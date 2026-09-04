@@ -150,6 +150,60 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("opens a pull request and returns its number and URL", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse({ number: 480, html_url: "https://github.com/colonylabs/cogwork/pull/480" }, 201),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const opened = yield* client.createPull(repo, {
+        headBranch: "472-open-pull-request",
+        baseBranch: "main",
+        title: "Open pull requests from the engine",
+        body: "Closes #472",
+      });
+
+      assert.deepStrictEqual(opened, {
+        number: 480,
+        url: "https://github.com/colonylabs/cogwork/pull/480",
+      });
+      assert.strictEqual(fetch.mock.calls.length, 1);
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.method, "POST");
+      assert.strictEqual(request.url, "https://api.github.com/repos/colonylabs/cogwork/pulls");
+      assert.strictEqual(request.headers.get("authorization"), "Bearer test-token");
+      assert.deepStrictEqual(yield* Effect.promise(() => request.json()), {
+        head: "472-open-pull-request",
+        base: "main",
+        title: "Open pull requests from the engine",
+        body: "Closes #472",
+      });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("surfaces a rejected pull request write as a typed error", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, 422)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(
+        client.createPull(repo, {
+          headBranch: "472-open-pull-request",
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #472",
+        }),
+      );
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(fetch.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("applies labels that GitHub silently drops during issue creation", () => {
     const response = vi
       .fn<() => Response>()
