@@ -135,10 +135,9 @@ export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
    */
   readonly mcpProjection?: "workspace" | "native";
   /**
-   * Whether this descriptor has no native file events, so the runtime supplies its
-   * File-diff feed from the checkout. A transport fact, deliberately not read off
-   * the capability profile: the profile describes delivery quality for a client, and
-   * letting a more honest label switch the feed off is the wrong coupling.
+   * Whether the runtime supplies this descriptor's File-diff feed from the checkout.
+   * A transport fact, never read off the capability profile: a more honest profile
+   * label must not switch the feed off.
    */
   readonly runtimeFileDiffFeed?: boolean;
   readonly messages?: (
@@ -558,8 +557,6 @@ const publicFileEvent = (event: AgUiEvent) => {
   // A touched-but-unchanged file still reports a change; an empty diff would render
   // as an activity entry with nothing in it.
   if (event.value.diff === "") return false;
-  // A native feed reports whatever its harness touched, so it gets the same segment
-  // and reserved-scratch filter the runtime's own feed applies at the source.
   return !ignored(event.value.path);
 };
 
@@ -628,16 +625,12 @@ const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abortController: Abo
   },
 });
 
-// The one File-diff feed, opened onto this Run's checkout. A descriptor without
-// native file events gets the same watcher the owned tools use, so both ends of the
-// client contract are bounded by the same batching, debounce, `git check-ignore`
-// pass, and per-file diff cap rather than by two separate implementations.
-//
-// Watching the checkout rather than reading the harness's own reported file changes
-// is deliberate. Codex reports a `file_change` item only for its own `apply_patch`
-// tool, so an edit made through the shell — `sed`, a build script, or the very
-// `pnpm install` behind #512 — carries no such item, and a feed derived from them
-// would silently under-report every shell-driven write.
+// Not derived from the harness's own reported changes: Codex reports `file_change`
+// only for its `apply_patch` tool, so a shell-driven edit carries no such item.
+// Holding the terminal event on the drain means a stalled `git diff` would hold the
+// Run, so the drain gets its own bound.
+const feedDrainDeadline = "10 seconds";
+
 const checkoutFileDiffs = (
   checkoutPath: string,
   secretValues: ReadonlyArray<string>,
@@ -651,8 +644,40 @@ const checkoutFileDiffs = (
     }),
   ).pipe(
     Stream.map((event) => scrubEvent(event, secretValues)),
+    Stream.interruptWhen(Effect.andThen(stop, Effect.sleep(feedDrainDeadline))),
     tolerateFeedDeath("checkout file-diff feed stopped"),
   );
+
+// A client stops reading at the terminal event, so the feed must drain first.
+// `RUN_ERROR` is not held: the stream fails right behind it.
+const mergeCheckoutFileDiffs = Effect.fn("ExternalHarnessRuntime.mergeCheckoutFileDiffs")(function* (
+  harnessEvents: Stream.Stream<AgUiEvent, HarnessError>,
+  checkoutPath: string,
+  secretValues: ReadonlyArray<string>,
+) {
+  const harnessDone = yield* Deferred.make<void>();
+  const withheldTerminal = yield* Ref.make<AgUiEvent | null>(null);
+  return Stream.merge(
+    harnessEvents.pipe(
+      Stream.filterEffect((event) =>
+        AgUiEvent.guards.RUN_FINISHED(event)
+          ? Effect.map(Ref.set(withheldTerminal, event), () => false)
+          : Effect.succeed(true),
+      ),
+      Stream.ensuring(Deferred.succeed(harnessDone, undefined)),
+    ),
+    checkoutFileDiffs(checkoutPath, secretValues, Deferred.await(harnessDone)),
+    { haltStrategy: "both" },
+  ).pipe(
+    Stream.concat(
+      Stream.unwrap(
+        Effect.map(Ref.get(withheldTerminal), (event) =>
+          event === null ? Stream.empty : Stream.make(event),
+        ),
+      ),
+    ),
+  );
+});
 
 const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
@@ -671,9 +696,7 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
     workspace: defineWorkspace(workspaceDefinition),
     lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
     ...(policy ? { policy } : {}),
-    // The runtime owns the File-diff feed, so the Sandbox watcher stays off: it
-    // retains one diff promise per filesystem event for the whole Run and cannot be
-    // told to skip a tree, which is how a generated directory exhausted the daemon.
+    // Kept off: turning it on retains one diff promise per filesystem event for the whole Run.
     fileEvents: false,
   });
   const abortController = new AbortController();
@@ -717,55 +740,26 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
               catch: descriptor.diagnostics,
             }).pipe(
               Effect.mapError((error) => scrubHarnessError(error, secretValues)),
-              Effect.flatMap((opened) =>
-                Effect.gen(function* () {
-                  const harnessDone = yield* Deferred.make<void>();
-                  const harnessEvents = withUsage(
-                    resolved,
-                    descriptor.estimateUsage ?? preserveUsage,
-                    bridgeChat(
-                      abortOnReturn(opened.stream, opened.abortController),
-                      descriptor.turnDiagnostics ?? descriptor.diagnostics,
-                      descriptor.turnDiagnostics ?? descriptor.diagnostics,
-                    ).pipe(
-                      Stream.map((event) => normalizeFileEvent(event, resolved.checkout.path)),
-                      Stream.filter(publicFileEvent),
-                      Stream.map((event) => scrubEvent(event, secretValues)),
-                      Stream.mapError((error) => scrubHarnessError(error, secretValues)),
-                      Stream.ensuring(Effect.sync(() => opened.abortController.abort())),
-                    ),
-                  );
-                  if (!descriptor.transport.runtimeFileDiffFeed) return harnessEvents;
-                  // A client stops reading a Run at its terminal event, so the feed has to
-                  // drain before that event goes out or the agent's last write is recorded
-                  // and never shown. `RUN_FINISHED` is held back and re-emitted once the
-                  // feed has finished; `RUN_ERROR` is left in place, because the stream
-                  // fails right behind it and a held event would be lost with it.
-                  const finished = yield* Ref.make<AgUiEvent | null>(null);
-                  // The harness's end stops the feed instead of interrupting it, and the
-                  // merge waits for both sides, so the debounce gets to flush.
-                  return Stream.merge(
-                    harnessEvents.pipe(
-                      Stream.filterEffect((event) =>
-                        AgUiEvent.guards.RUN_FINISHED(event)
-                          ? Effect.map(Ref.set(finished, event), () => false)
-                          : Effect.succeed(true),
-                      ),
-                      Stream.ensuring(Deferred.succeed(harnessDone, undefined)),
-                    ),
-                    checkoutFileDiffs(resolved.checkout.path, secretValues, Deferred.await(harnessDone)),
-                    { haltStrategy: "both" },
+              Effect.flatMap((opened) => {
+                const harnessEvents = withUsage(
+                  resolved,
+                  descriptor.estimateUsage ?? preserveUsage,
+                  bridgeChat(
+                    abortOnReturn(opened.stream, opened.abortController),
+                    descriptor.turnDiagnostics ?? descriptor.diagnostics,
+                    descriptor.turnDiagnostics ?? descriptor.diagnostics,
                   ).pipe(
-                    Stream.concat(
-                      Stream.unwrap(
-                        Effect.map(Ref.get(finished), (event) =>
-                          event === null ? Stream.empty : Stream.make(event),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
+                    Stream.map((event) => normalizeFileEvent(event, resolved.checkout.path)),
+                    Stream.filter(publicFileEvent),
+                    Stream.map((event) => scrubEvent(event, secretValues)),
+                    Stream.mapError((error) => scrubHarnessError(error, secretValues)),
+                    Stream.ensuring(Effect.sync(() => opened.abortController.abort())),
+                  ),
+                );
+                return descriptor.transport.runtimeFileDiffFeed
+                  ? mergeCheckoutFileDiffs(harnessEvents, resolved.checkout.path, secretValues)
+                  : Effect.succeed(harnessEvents);
+              }),
             ),
           ),
           Effect.withSpan("ExternalHarnessRuntime.run"),
