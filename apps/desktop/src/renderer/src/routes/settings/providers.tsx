@@ -19,6 +19,7 @@ import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { createContext, type ReactNode, use, useState } from "react";
+import { PageContainer } from "../../components/page-container";
 import { ProviderGlyphIcon } from "../../components/provider-glyph";
 import { useFocusFlash } from "../../components/settings-parts";
 import { harnessesAtom } from "../../daemon/atoms";
@@ -369,20 +370,18 @@ function ProvidersBody() {
 function ProvidersSettings() {
   const { ref, flashing, flashKey } = useFocusFlash(settingEntry("harness-state").id);
   return (
-    <Providers>
-      {/* The settings shell centres its column at `max-w-2xl`; this breaks out of it. */}
-      <div
-        key={flashKey}
-        ref={ref}
-        className={cn(
-          "relative left-1/2 flex w-[min(64rem,calc(100vw-var(--sidebar-width)-4rem))] -translate-x-1/2 scroll-mt-8 flex-col gap-4 rounded-lg",
-          flashing && "settings-focus-flash",
-        )}
-      >
-        <ProvidersHeader />
-        <ProvidersBody />
-      </div>
-    </Providers>
+    <PageContainer width="wide" className="pt-2">
+      <Providers>
+        <div
+          key={flashKey}
+          ref={ref}
+          className={cn("flex scroll-mt-8 flex-col gap-4 rounded-lg", flashing && "settings-focus-flash")}
+        >
+          <ProvidersHeader />
+          <ProvidersBody />
+        </div>
+      </Providers>
+    </PageContainer>
   );
 }
 
