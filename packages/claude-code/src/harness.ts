@@ -306,7 +306,7 @@ const nativeCatalog = Effect.fn("ClaudeCode.nativeCatalog")((executable: string)
           runtimeHost: "local-process",
           harnessVersion: version,
         },
-      } satisfies Harness.HarnessOptionCatalog;
+      } satisfies Harness.HarnessCatalogSourceResult;
     }),
   ).pipe(Effect.orElseSucceed(() => null)),
 );
