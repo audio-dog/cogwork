@@ -4,7 +4,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
 import { Separator } from "@cogwork/ui/components/separator";
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
-import { RiBox3Line, RiEqualizerLine, RiPulseLine, RiSearchLine, RiSettings3Line } from "@remixicon/react";
+import { RiBox3Line, RiEqualizerLine, RiPulseLine, RiSearchLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { kindIcons } from "../features/configuration-icons";
@@ -21,7 +21,6 @@ import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionHeader, ListSectionRows } from "./customize-list";
 import { CustomizePlaceMenu, PlaceFilterNotApplicable } from "./customize-place-menu";
 import { McpFacet } from "./mcp-facet";
-import { OperationSettingsFacet } from "./operation-settings-facet";
 import { PluginsFacet } from "./plugins-facet";
 
 function FacetPillContent({ facet }: { facet: Facet }) {
@@ -36,13 +35,6 @@ function FacetPillContent({ facet }: { facet: Facet }) {
     return (
       <>
         <RiBox3Line data-icon="inline-start" />
-        {facetLabel(facet)}
-      </>
-    );
-  if (facet === "operations")
-    return (
-      <>
-        <RiSettings3Line data-icon="inline-start" />
         {facetLabel(facet)}
       </>
     );
@@ -185,19 +177,6 @@ export function McpServersFacetView() {
         <CustomizePlaceMenu kind="mcp-server" />
       </CustomizeFilters>
       <McpFacet />
-    </CustomizeFrame>
-  );
-}
-
-export function OperationSettingsFacetView() {
-  return (
-    <CustomizeFrame>
-      <CustomizeFilters active="operations">
-        <PlaceFilterNotApplicable>
-          Operation settings resolve by level, then by Scope. This view shows Coding · Implement.
-        </PlaceFilterNotApplicable>
-      </CustomizeFilters>
-      <OperationSettingsFacet />
     </CustomizeFrame>
   );
 }
