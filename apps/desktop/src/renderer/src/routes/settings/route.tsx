@@ -28,11 +28,9 @@ function SettingsShell() {
         <div className="flex h-full min-h-0 flex-col">
           <div className="h-11 shrink-0 [-webkit-app-region:drag]" />
           <ScrollArea className="min-h-0 flex-1">
-            <div className="mx-auto w-full max-w-2xl px-8 pt-2 pb-12">
-              <SettingsFocusProvider focus={focus} jump={jump}>
-                <Outlet />
-              </SettingsFocusProvider>
-            </div>
+            <SettingsFocusProvider focus={focus} jump={jump}>
+              <Outlet />
+            </SettingsFocusProvider>
           </ScrollArea>
         </div>
       </SidebarInset>
