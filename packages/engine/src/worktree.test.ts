@@ -1,5 +1,6 @@
 import { WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -45,12 +46,30 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
     fastForwarded: yield* Ref.make<ReadonlyArray<string>>([]),
     rebased: yield* Ref.make<ReadonlyArray<string>>([]),
     operationProbes: yield* Ref.make<ReadonlyArray<string>>([]),
+    divergenceChecks: yield* Ref.make<
+      ReadonlyArray<{
+        readonly path: string;
+        readonly remote: string;
+        readonly branch: string;
+        readonly headBranch: string | undefined;
+      }>
+    >([]),
     linked: yield* Ref.make<ReadonlyArray<{ readonly target: string; readonly linkPath: string }>>([]),
     commands: yield* Ref.make<ReadonlyArray<{ readonly cwd: string; readonly command: string }>>([]),
   };
 });
 
 type Recorder = Effect.Success<ReturnType<typeof makeRecorder>>;
+
+class ReadinessRecorder extends Context.Service<ReadinessRecorder, Recorder>()(
+  "@cogwork/engine/worktree.test/ReadinessRecorder",
+) {
+  static readonly layer = Layer.effect(ReadinessRecorder, makeRecorder());
+}
+
+class ReadinessWorktree extends Context.Service<ReadinessWorktree, Worktree.WorktreeManagerService>()(
+  "@cogwork/engine/worktree.test/ReadinessWorktree",
+) {}
 
 const inSync: BranchDivergence = { ahead: 0, behind: 0 };
 
@@ -60,6 +79,7 @@ const fakeGit = (
     readonly worktrees?: ReadonlyArray<WorktreeEntry>;
     readonly remoteBranches?: ReadonlyArray<string>;
     readonly divergence?: BranchDivergence;
+    readonly divergenceByBase?: Readonly<Record<string, BranchDivergence>>;
     readonly operation?: GitOperationInProgress;
     readonly addFailure?: GitError;
     readonly rebaseFailure?: GitError;
@@ -79,8 +99,10 @@ const fakeGit = (
     listWorktrees: (_repoPath: string) => Effect.succeed(options.worktrees ?? []),
     fastForward: (worktreePath: string, _remote: string, _branch: string) =>
       Ref.update(recorder.fastForwarded, (log) => [...log, worktreePath]),
-    divergence: (_worktreePath: string, _remote: string, _branch: string) =>
-      Effect.succeed(options.divergence ?? inSync),
+    divergence: (path: string, remote: string, branch: string, headBranch?: string) =>
+      Ref.update(recorder.divergenceChecks, (log) => [...log, { path, remote, branch, headBranch }]).pipe(
+        Effect.map(() => options.divergenceByBase?.[branch] ?? options.divergence ?? inSync),
+      ),
     operationInProgress: (worktreePath: string) =>
       Ref.update(recorder.operationProbes, (log) => [...log, worktreePath]).pipe(
         Effect.map(() => options.operation ?? null),
@@ -104,6 +126,23 @@ const fakeFs = (recorder: Recorder, stats: Readonly<Record<string, FileStat>>) =
 
 const provide = (git: GitService, fs: WorktreeFsService) =>
   Layer.mergeAll(Layer.succeed(Git, git), Layer.succeed(WorktreeFs, fs));
+
+const readinessLayer = (options: Parameters<typeof fakeGit>[1]) => {
+  const dependencies = Layer.merge(
+    Layer.effect(
+      Git,
+      Effect.map(ReadinessRecorder, (recorder) => fakeGit(recorder, options)),
+    ),
+    Layer.effect(
+      WorktreeFs,
+      Effect.map(ReadinessRecorder, (recorder) => fakeFs(recorder, {})),
+    ),
+  );
+  return Layer.effect(ReadinessWorktree, Worktree.make).pipe(
+    Layer.provide(dependencies),
+    Layer.provideMerge(ReadinessRecorder.layer),
+  );
+};
 
 describe("Worktree.ensure", () => {
   it.effect("creates a worktree from origin/main when the branch has no remote", () =>
@@ -443,6 +482,115 @@ describe("Worktree.ensure", () => {
         { cwd: "/repo.worktrees/13-worktree-lifecycle", command: "pnpm install" },
       ]);
     }),
+  );
+});
+
+describe("Worktree.pullRequestReadiness", () => {
+  it.effect("declines when the worktree is not on the branch the engine cut", () =>
+    Effect.gen(function* () {
+      const recorder = yield* ReadinessRecorder;
+      const manager = yield* ReadinessWorktree;
+
+      const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
+
+      if (!Worktree.PullRequestReadiness.$is("Declined")(result)) {
+        return assert.fail("expected the gate to decline");
+      }
+      assert.include(result.reason, "another-branch");
+      assert.deepStrictEqual(yield* Ref.get(recorder.fetched), []);
+    }).pipe(
+      Effect.provide(
+        readinessLayer({
+          worktrees: [{ path: worktreePath(), branch: "another-branch" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("declines when the head is not ahead of the base", () =>
+    Effect.gen(function* () {
+      const recorder = yield* ReadinessRecorder;
+      const manager = yield* ReadinessWorktree;
+
+      const result = yield* manager.pullRequestReadiness(workspaceWith({ baseBranch: "trunk" }), item);
+
+      if (!Worktree.PullRequestReadiness.$is("Declined")(result)) {
+        return assert.fail("expected the gate to decline");
+      }
+      assert.include(result.reason, "not ahead of origin/trunk");
+      assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), [
+        {
+          path: worktreePath(),
+          remote: "origin",
+          branch: Worktree.branchName(item),
+          headBranch: undefined,
+        },
+        {
+          path: worktreePath(),
+          remote: "origin",
+          branch: "trunk",
+          headBranch: Worktree.branchName(item),
+        },
+      ]);
+    }).pipe(
+      Effect.provide(
+        readinessLayer({
+          worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
+          divergenceByBase: {
+            [Worktree.branchName(item)]: inSync,
+            trunk: { ahead: 0, behind: 0 },
+          },
+        }),
+      ),
+    ),
+  );
+
+  it.effect("declines when the local head has not been pushed", () =>
+    Effect.gen(function* () {
+      const recorder = yield* ReadinessRecorder;
+      const manager = yield* ReadinessWorktree;
+
+      const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
+
+      if (!Worktree.PullRequestReadiness.$is("Declined")(result)) {
+        return assert.fail("expected the gate to decline");
+      }
+      assert.include(result.reason, "does not match origin");
+      assert.lengthOf(yield* Ref.get(recorder.divergenceChecks), 1);
+    }).pipe(
+      Effect.provide(
+        readinessLayer({
+          worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
+          divergence: { ahead: 1, behind: 0 },
+        }),
+      ),
+    ),
+  );
+
+  it.effect("returns the engine-owned head and base when the gate passes", () =>
+    Effect.gen(function* () {
+      const recorder = yield* ReadinessRecorder;
+      const manager = yield* ReadinessWorktree;
+
+      const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
+
+      assert.deepStrictEqual(result, {
+        _tag: "Ready",
+        headBranch: Worktree.branchName(item),
+        baseBranch: "main",
+      });
+      assert.deepStrictEqual(yield* Ref.get(recorder.fetched), ["origin"]);
+    }).pipe(
+      Effect.provide(
+        readinessLayer({
+          worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
+          divergenceByBase: {
+            [Worktree.branchName(item)]: inSync,
+            main: { ahead: 2, behind: 1 },
+          },
+        }),
+      ),
+    ),
   );
 });
 

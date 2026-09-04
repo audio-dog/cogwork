@@ -1,4 +1,5 @@
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -100,6 +101,20 @@ export interface ReconcileOutcome {
   readonly tornDown: ReadonlyArray<string>;
   readonly reaped: ReadonlyArray<string>;
 }
+
+export type PullRequestReadiness = Data.TaggedEnum<{
+  Ready: {
+    readonly headBranch: string;
+    readonly baseBranch: string;
+  };
+  Declined: {
+    readonly reason: string;
+  };
+}>;
+
+export const PullRequestReadiness = Data.taggedEnum<PullRequestReadiness>();
+
+const declinedPullRequestReadiness = (reason: string) => PullRequestReadiness.Declined({ reason });
 
 const labelOf = (entry: WorktreeEntry) => entry.branch ?? entry.path;
 
@@ -264,6 +279,40 @@ export const make = Effect.gen(function* () {
     return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
   }, Effect.trackDuration(worktreeEnsureDuration));
 
+  const pullRequestReadiness = Effect.fn("Worktree.pullRequestReadiness")(
+    function* (workspace: RegisteredWorkspace, item: WorkItemRef) {
+      const config = workspace.config.worktrees;
+      const repoPath = workspace.config.checkoutPath;
+      const remote = remoteOf(config);
+      const baseBranch = baseBranchOf(config);
+      const headBranch = branchName(item);
+      const worktreePath = pathFor(repoPath, config, headBranch);
+      const entries = yield* git.listWorktrees(repoPath);
+      const actualBranch = entries.find((entry) => entry.path === worktreePath)?.branch ?? null;
+      if (actualBranch !== headBranch) {
+        return declinedPullRequestReadiness(
+          `worktree ${worktreePath} is on ${actualBranch ?? "no branch"}, expected ${headBranch}`,
+        );
+      }
+
+      yield* git.fetch(repoPath, remote);
+      const pushed = yield* git.divergence(worktreePath, remote, headBranch);
+      if (pushed.ahead > 0 || pushed.behind > 0) {
+        return declinedPullRequestReadiness(
+          `local head ${headBranch} does not match ${remote}/${headBranch}`,
+        );
+      }
+      const divergence = yield* git.divergence(worktreePath, remote, baseBranch, headBranch);
+      if (divergence.ahead === 0) {
+        return declinedPullRequestReadiness(`head ${headBranch} is not ahead of ${remote}/${baseBranch}`);
+      }
+      return PullRequestReadiness.Ready({ headBranch, baseBranch });
+    },
+    Effect.catchTag("GitError", (error) =>
+      Effect.succeed(declinedPullRequestReadiness(`git gate failed: ${error.message}`)),
+    ),
+  );
+
   const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {
     return yield* managed(workspace.config.checkoutPath, workspace.config.worktrees);
   });
@@ -328,7 +377,7 @@ export const make = Effect.gen(function* () {
     } satisfies ReconcileOutcome;
   });
 
-  return { ensure, list, remove, reconcile } as const;
+  return { ensure, pullRequestReadiness, list, remove, reconcile } as const;
 });
 
 export type WorktreeManagerService = Effect.Success<typeof make>;
