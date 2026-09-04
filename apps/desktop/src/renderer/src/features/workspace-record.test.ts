@@ -1,7 +1,13 @@
-import { applyDaemonEvent, DaemonEvent, initialBoard, type WorkspaceId } from "@cogwork/contracts";
+import {
+  applyDaemonEvent,
+  DaemonEvent,
+  initialBoard,
+  type WorkspaceId,
+  WorkspaceState,
+} from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { workspaceLabelById } from "./workspace-record";
+import { seededDraft, workspaceLabelById, workspaceUpdateFromDraft } from "./workspace-record";
 
 const decodeDaemonEvent = Schema.decodeUnknownSync(DaemonEvent);
 
@@ -17,6 +23,12 @@ const registered = (name: string, displayName?: string) =>
         ...(displayName ? { displayName } : {}),
         checkoutPath: "/tmp/checkout",
         issueTracker: "github",
+        record: {
+          name: displayName ?? name,
+          checkoutPath: "/tmp/checkout",
+          issueTracker: { type: "github" },
+          linearHistory: false,
+        },
         poll: { status: "ok" },
         contributions: [],
         availability: [],
@@ -45,5 +57,52 @@ describe("workspaceLabelById", () => {
     expect(workspaceLabelById(initialBoard, id("01a05d92-f5a6-769c-99d7-b8f5332baa72"))).toBe(
       "01a05d92-f5a6-769c-99d7-b8f5332baa72",
     );
+  });
+});
+
+describe("workspace record draft", () => {
+  it("round-trips every editable registration field", () => {
+    const state = Schema.decodeSync(WorkspaceState)({
+      _tag: "Registered",
+      name: "01a05d92-f135-7e4a-b80b-40484b5d9775",
+      displayName: "cogwork",
+      checkoutPath: "/repos/cogwork",
+      issueTracker: "linear",
+      record: {
+        name: "cogwork",
+        checkoutPath: "/repos/cogwork",
+        gitRemote: "git@github.com:acme/cogwork.git",
+        issueTracker: {
+          type: "linear",
+          connectionId: "linear/acme",
+          teams: ["ENG"],
+          organization: "acme",
+          roleLabels: { "ready-for-agent": "agent-ready" },
+        },
+        sourceControl: {
+          type: "github",
+          connectionId: "github/acme",
+          repo: "acme/cogwork",
+          botAllowlist: ["dependabot"],
+        },
+        linearHistory: true,
+        worktrees: {
+          root: "/worktrees",
+          linkPaths: ["config/a,b.json"],
+          setup: ["pnpm install --filter=a,b"],
+        },
+        concurrency: 3,
+        mcpSkills: [],
+      },
+      poll: { status: "ok" },
+      contributions: [],
+    });
+
+    const draft = seededDraft(state);
+    const update = workspaceUpdateFromDraft(draft);
+    if (!WorkspaceState.guards.Registered(state)) return expect.fail("expected record");
+    const { checkoutPath: _checkoutPath, ...expected } = state.record;
+
+    expect(update).toEqual(expected);
   });
 });

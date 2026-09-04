@@ -1,14 +1,91 @@
-import { type Board, PollState, type WorkspaceId, WorkspaceState } from "@cogwork/contracts";
+import {
+  type Board,
+  McpSkill,
+  PollState,
+  type WorkspaceId,
+  WorkspaceState,
+  WorkspaceUpdate,
+} from "@cogwork/contracts";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
-/** The columns this page can read back and write. #457 restores the rest with its act. */
 export interface WorkspaceRecordDraft {
   readonly displayName: string;
   readonly checkoutPath: string;
+  readonly gitRemote: string;
+  readonly issueTrackerType: "github" | "linear";
+  readonly issueTrackerConnectionId: string;
+  readonly issueTrackerRepo: string;
+  readonly teams: string;
+  readonly organization: string;
+  readonly trackerActorLogin: string;
+  readonly trackerActorUserId: string;
+  readonly assigneeAllowlist: string;
+  readonly trackerBotAllowlist: string;
+  readonly needsTriageLabel: string;
+  readonly readyForAgentLabel: string;
+  readonly needsInfoLabel: string;
+  readonly readyForHumanLabel: string;
+  readonly wontfixLabel: string;
+  readonly priorityProject: string;
+  readonly priorityField: string;
+  readonly linearHistory: boolean;
+  readonly sourceControlType: "none" | "github";
+  readonly sourceControlConnectionId: string;
+  readonly sourceControlRepo: string;
+  readonly sourceControlActorLogin: string;
+  readonly sourceControlBotAllowlist: string;
+  readonly worktreeRoot: string;
+  readonly worktreeRemote: string;
+  readonly worktreeBaseBranch: string;
+  readonly worktreeLinkPaths: string;
+  readonly worktreeSetup: string;
+  readonly worktreeReapAfterMillis: string;
+  readonly concurrency: string;
+  readonly mcpSkills: string;
 }
 
-export const emptyDraft: WorkspaceRecordDraft = { displayName: "", checkoutPath: "" };
+export const emptyDraft: WorkspaceRecordDraft = {
+  displayName: "",
+  checkoutPath: "",
+  gitRemote: "",
+  issueTrackerType: "github",
+  issueTrackerConnectionId: "unbound",
+  issueTrackerRepo: "",
+  teams: "",
+  organization: "",
+  trackerActorLogin: "",
+  trackerActorUserId: "",
+  assigneeAllowlist: "",
+  trackerBotAllowlist: "",
+  needsTriageLabel: "",
+  readyForAgentLabel: "",
+  needsInfoLabel: "",
+  readyForHumanLabel: "",
+  wontfixLabel: "",
+  priorityProject: "",
+  priorityField: "",
+  linearHistory: false,
+  sourceControlType: "none",
+  sourceControlConnectionId: "unbound",
+  sourceControlRepo: "",
+  sourceControlActorLogin: "",
+  sourceControlBotAllowlist: "",
+  worktreeRoot: "",
+  worktreeRemote: "",
+  worktreeBaseBranch: "",
+  worktreeLinkPaths: "",
+  worktreeSetup: "",
+  worktreeReapAfterMillis: "",
+  concurrency: "",
+  mcpSkills: "[]",
+};
 
-/** How many top-level draft keys differ. The save bar counts them. */
+const joined = (values: readonly string[] | undefined, separator = ", ") => values?.join(separator) ?? "";
+const encodeMcpSkills = Schema.encodeSync(Schema.fromJsonString(Schema.Array(McpSkill)));
+const decodeMcpSkills = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Array(McpSkill)));
+const decodeWorkspaceUpdate = Schema.decodeUnknownOption(WorkspaceUpdate);
+
 export const changedFieldCount = (draft: WorkspaceRecordDraft, against: WorkspaceRecordDraft) =>
   (Object.keys(draft) as ReadonlyArray<keyof WorkspaceRecordDraft>).filter(
     (key) => JSON.stringify(draft[key]) !== JSON.stringify(against[key]),
@@ -16,11 +93,128 @@ export const changedFieldCount = (draft: WorkspaceRecordDraft, against: Workspac
 
 export const seededDraft = (workspace: WorkspaceState): WorkspaceRecordDraft =>
   WorkspaceState.match(workspace, {
-    Registered: ({ displayName, name, checkoutPath }) => ({ displayName: displayName ?? name, checkoutPath }),
+    Registered: (registered) => {
+      const record = registered.record;
+      const tracker = record.issueTracker;
+      const sourceControl = record.sourceControl;
+      const worktrees = record.worktrees;
+      return {
+        displayName: record.name,
+        checkoutPath: record.checkoutPath,
+        gitRemote: record.gitRemote ?? "",
+        issueTrackerType: tracker.type === "linear" ? "linear" : "github",
+        issueTrackerConnectionId: tracker.connectionId,
+        issueTrackerRepo: tracker.repo ?? "",
+        teams: joined(tracker.teams),
+        organization: tracker.organization ?? "",
+        trackerActorLogin: tracker.actorLogin ?? "",
+        trackerActorUserId: tracker.actorUserId ?? "",
+        assigneeAllowlist: joined(tracker.assigneeAllowlist),
+        trackerBotAllowlist: joined(tracker.botAllowlist),
+        needsTriageLabel: tracker.roleLabels?.["needs-triage"] ?? "",
+        readyForAgentLabel: tracker.roleLabels?.["ready-for-agent"] ?? "",
+        needsInfoLabel: tracker.roleLabels?.["needs-info"] ?? "",
+        readyForHumanLabel: tracker.roleLabels?.["ready-for-human"] ?? "",
+        wontfixLabel: tracker.roleLabels?.wontfix ?? "",
+        priorityProject: tracker.priority?.project.toString() ?? "",
+        priorityField: tracker.priority?.field ?? "",
+        linearHistory: record.linearHistory,
+        sourceControlType: sourceControl?.type === "github" ? "github" : "none",
+        sourceControlConnectionId: sourceControl?.connectionId ?? "unbound",
+        sourceControlRepo: sourceControl?.repo ?? "",
+        sourceControlActorLogin: sourceControl?.actorLogin ?? "",
+        sourceControlBotAllowlist: joined(sourceControl?.botAllowlist),
+        worktreeRoot: worktrees?.root ?? "",
+        worktreeRemote: worktrees?.remote ?? "",
+        worktreeBaseBranch: worktrees?.baseBranch ?? "",
+        worktreeLinkPaths: joined(worktrees?.linkPaths, "\n"),
+        worktreeSetup: joined(worktrees?.setup, "\n"),
+        worktreeReapAfterMillis: worktrees?.reapAfterMillis?.toString() ?? "",
+        concurrency: record.concurrency?.toString() ?? "",
+        mcpSkills: encodeMcpSkills(record.mcpSkills ?? []),
+      };
+    },
     Failed: () => emptyDraft,
   });
 
-/** The id an act can target. A Failed workspace input may never have been minted one. */
+const optional = (value: string) => value.trim() || undefined;
+const list = (value: string) => {
+  const values = value
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return values.length > 0 ? values : undefined;
+};
+const lines = (value: string) => {
+  const values = value
+    .split("\n")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return values.length > 0 ? values : undefined;
+};
+const positiveNumber = (value: string) => {
+  if (!value.trim()) return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : Number.NaN;
+};
+
+export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
+  const mcpSkills = Option.getOrUndefined(decodeMcpSkills(draft.mcpSkills));
+  if (!mcpSkills) return null;
+  const roleLabels = {
+    "needs-triage": optional(draft.needsTriageLabel),
+    "ready-for-agent": optional(draft.readyForAgentLabel),
+    "needs-info": optional(draft.needsInfoLabel),
+    "ready-for-human": optional(draft.readyForHumanLabel),
+    wontfix: optional(draft.wontfixLabel),
+  };
+  const priorityProject = positiveNumber(draft.priorityProject);
+  const worktrees = {
+    root: optional(draft.worktreeRoot),
+    remote: optional(draft.worktreeRemote),
+    baseBranch: optional(draft.worktreeBaseBranch),
+    linkPaths: lines(draft.worktreeLinkPaths),
+    setup: lines(draft.worktreeSetup),
+    reapAfterMillis: positiveNumber(draft.worktreeReapAfterMillis),
+  };
+  const hasWorktrees = Object.values(worktrees).some((value) => value !== undefined);
+  return Option.getOrNull(
+    decodeWorkspaceUpdate({
+      name: draft.displayName,
+      gitRemote: optional(draft.gitRemote),
+      issueTracker: {
+        type: draft.issueTrackerType,
+        connectionId: draft.issueTrackerConnectionId,
+        repo: optional(draft.issueTrackerRepo),
+        teams: list(draft.teams),
+        organization: optional(draft.organization),
+        actorLogin: optional(draft.trackerActorLogin),
+        actorUserId: optional(draft.trackerActorUserId),
+        assigneeAllowlist: list(draft.assigneeAllowlist),
+        botAllowlist: list(draft.trackerBotAllowlist),
+        roleLabels: Object.values(roleLabels).some(Boolean) ? roleLabels : undefined,
+        priority: priorityProject
+          ? { project: priorityProject, field: optional(draft.priorityField) }
+          : undefined,
+      },
+      sourceControl:
+        draft.sourceControlType === "github"
+          ? {
+              type: "github",
+              connectionId: draft.sourceControlConnectionId,
+              repo: optional(draft.sourceControlRepo),
+              actorLogin: optional(draft.sourceControlActorLogin),
+              botAllowlist: list(draft.sourceControlBotAllowlist),
+            }
+          : undefined,
+      mcpSkills,
+      linearHistory: draft.linearHistory,
+      worktrees: hasWorktrees ? worktrees : undefined,
+      concurrency: positiveNumber(draft.concurrency),
+    }),
+  );
+};
+
 export const workspaceIdentity = (workspace: WorkspaceState) =>
   WorkspaceState.match<WorkspaceId | null>(workspace, {
     Registered: ({ name }) => name,
@@ -39,7 +233,6 @@ export const workspaceLabel = (workspace: WorkspaceState) =>
     Failed: ({ displayName, name, source }) => displayName ?? name ?? source,
   });
 
-/** Register mints the WorkspaceId as a UUIDv7, so no surface should print one at a person. */
 export const workspaceLabelById = (board: Board, workspace: WorkspaceId) => {
   const state = board.workspaces.get(workspace);
   return state ? workspaceLabel(state) : workspace;
@@ -52,32 +245,28 @@ export interface WorkspaceHealth {
 }
 
 export const workspaceHealth = (workspace: WorkspaceState, dangling: boolean): WorkspaceHealth => {
-  if (WorkspaceState.guards.Failed(workspace)) {
+  if (WorkspaceState.guards.Failed(workspace))
     return { tone: "failed", label: "Workspace input failed", detail: workspace.message };
-  }
-  if (dangling) {
+  if (dangling)
     return {
       tone: "failed",
       label: "Connection removed",
       detail: "Establish it again on Connections to start polling.",
     };
-  }
-  if (PollState.guards.paused(workspace.poll)) {
+  if (PollState.guards.paused(workspace.poll))
     return {
       tone: "paused",
       label: `Polling paused · ${workspace.poll.reason}`,
       detail: workspace.poll.message,
     };
-  }
-  if (PollState.guards.pending(workspace.poll)) {
+  if (PollState.guards.pending(workspace.poll))
     return {
       tone: "pending",
       label: "Waiting for the first poll",
       detail: "The reconcile worker has not answered yet.",
     };
-  }
   const blocked = workspace.availability.filter((entry) => !entry.available);
-  if (blocked.length > 0) {
+  if (blocked.length > 0)
     return {
       tone: "pending",
       label: `${blocked.length} operation${blocked.length === 1 ? "" : "s"} cannot run`,
@@ -85,6 +274,5 @@ export const workspaceHealth = (workspace: WorkspaceState, dangling: boolean): W
         .map((entry) => `${entry.operation}: ${entry.causes.map((cause) => cause.message).join(", ")}`)
         .join(" · "),
     };
-  }
   return { tone: "ok", label: "Polling", detail: "The reconcile worker is reading this workspace." };
 };

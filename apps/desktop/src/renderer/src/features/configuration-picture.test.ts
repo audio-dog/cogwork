@@ -5,12 +5,19 @@ import { Authority, Diagnostic, LoadState } from "./configuration-model";
 import { configurationPicture } from "./configuration-picture";
 
 const workspace = Schema.decodeSync(WorkspaceId)("example");
+const workspaceRecord = (name: string, checkoutPath: string) => ({
+  name,
+  checkoutPath,
+  issueTracker: { type: "github" as const },
+  linearHistory: false,
+});
 const registeredWorkspace = Schema.decodeSync(WorkspaceState)({
   _tag: "Registered",
   name: workspace,
   displayName: "Example",
   checkoutPath: "/repos/example",
   issueTracker: "github",
+  record: workspaceRecord("Example", "/repos/example"),
   poll: { status: "ok" },
   contributions: [
     {
@@ -130,6 +137,7 @@ describe("configurationPicture", () => {
         displayName: name,
         checkoutPath,
         issueTracker: "github",
+        record: workspaceRecord(name, checkoutPath),
         poll: { status: "ok" },
         contributions: [userServer, userSkill, { ...sharedRepoServer, file: `${checkoutPath}/tools.json` }],
       });
@@ -197,6 +205,7 @@ describe("configurationPicture", () => {
         displayName: name,
         checkoutPath: `/repos/${name}`,
         issueTracker: "github",
+        record: workspaceRecord(name, `/repos/${name}`),
         poll: { status: "ok" },
         contributions: [userServer],
       });
@@ -252,6 +261,7 @@ describe("configurationPicture", () => {
       displayName: "Example",
       checkoutPath: "/repos/example",
       issueTracker: "github",
+      record: workspaceRecord("Example", "/repos/example"),
       poll: { status: "ok" },
       contributions: [userServer],
     });
