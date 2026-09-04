@@ -1,6 +1,10 @@
 import { Connection, connectionIdOf } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
-import { connectionItems, trackerSelectionPatch } from "./workspace-setting-rows";
+import {
+  connectionItems,
+  sourceControlSelectionPatch,
+  trackerSelectionPatch,
+} from "./workspace-setting-rows";
 
 describe("workspace Connection choices", () => {
   it("offers established Connections without an unbound choice", () => {
@@ -42,6 +46,28 @@ describe("workspace Connection choices", () => {
     expect(trackerSelectionPatch([github], "linear")).toEqual({
       issueTrackerType: "linear",
       issueTrackerConnectionId: "unbound",
+    });
+  });
+
+  it("replaces the Connection when the source control provider changes", () => {
+    const github = Connection.make({
+      id: connectionIdOf("github", "acme"),
+      system: "github",
+      account: "acme",
+      status: "established",
+    });
+
+    expect(sourceControlSelectionPatch([github], "github")).toEqual({
+      sourceControlType: "github",
+      sourceControlConnectionId: github.id,
+    });
+    expect(sourceControlSelectionPatch([], "github")).toEqual({
+      sourceControlType: "github",
+      sourceControlConnectionId: "unbound",
+    });
+    expect(sourceControlSelectionPatch([github], "none")).toEqual({
+      sourceControlType: "none",
+      sourceControlConnectionId: "unbound",
     });
   });
 });

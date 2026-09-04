@@ -122,6 +122,19 @@ export const trackerSelectionPatch = (
   issueTrackerConnectionId: connectionItems(connections, issueTrackerType)[0]?.value ?? "unbound",
 });
 
+export const sourceControlSelectionPatch = (
+  connections: readonly Connection[],
+  sourceControlType: "none" | "github",
+) => {
+  if (sourceControlType === "none") {
+    return { sourceControlType, sourceControlConnectionId: "unbound" };
+  }
+  return {
+    sourceControlType,
+    sourceControlConnectionId: connectionItems(connections, sourceControlType)[0]?.value ?? "unbound",
+  };
+};
+
 function ConnectionSelect({
   system,
   field,
@@ -366,7 +379,7 @@ function TriageRows() {
 
 function SourceControlRows() {
   const {
-    state: { draft },
+    state: { draft, connections },
     actions: { patch },
     meta: { disabled },
   } = useWorkspaceRecord();
@@ -388,7 +401,9 @@ function SourceControlRows() {
           value={draft.sourceControlType}
           disabled={disabled}
           onValueChange={(value) => {
-            if (value === "none" || value === "github") patch({ sourceControlType: value });
+            if (value === "none" || value === "github") {
+              patch(sourceControlSelectionPatch(connections, value));
+            }
           }}
         >
           <SelectTrigger aria-label="Source control provider" className="w-56">
