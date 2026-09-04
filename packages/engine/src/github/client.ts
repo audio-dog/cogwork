@@ -689,6 +689,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return yield* withPaginationDeadline(collectClosingReferencePages(repo));
   });
 
+  const pullReferences = (repo: GitHubRepoRef, headBranch?: string) =>
+    headBranch ? Effect.succeed(new Map<number, ReadonlyArray<number>>()) : pullClosingReferences(repo);
+
   const collectIssuePages: (
     repo: GitHubRepoRef,
     page?: number,
@@ -711,7 +714,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
       const json = yield* fetchJson(repo, repoPath(repo, openPullsPath(repo, headBranch)));
-      const references = yield* pullClosingReferences(repo);
+      const references = yield* pullReferences(repo, headBranch);
       const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
       return pulls.map(
         (pull): RawPull => ({
