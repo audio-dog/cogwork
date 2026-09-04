@@ -15,6 +15,7 @@ const defaultTriagePrompt = [
   'You are running the triage playbook for work item {id} ("{title}") in this repository checkout.',
   "Follow the `{skill}` skill to triage {id}: read the issue and its comments, explore the codebase,",
   "verify the claim where you can, and decide the correct next state.",
+  "Read the checkout, never write to it: leave every file exactly as you found it.",
 ].join("\n");
 
 const defaultImplementPrompt = [
