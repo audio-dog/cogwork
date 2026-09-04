@@ -835,6 +835,12 @@ const declinedPullRequestWorktree = (reason: string) =>
     pullRequestReadiness: () => Effect.succeed(PullRequestReadiness.Declined({ reason })),
   }));
 
+const failedPullRequestReadinessWorktree = (failure: GitError) =>
+  worktreeDouble(() => ({
+    ...worktreeStub,
+    pullRequestReadiness: () => Effect.fail(failure),
+  }));
+
 const resumeRecordingWorktree = worktreeDouble((probe) => ({
   ensure: (_workspace, item, options) =>
     Ref.update(probe.ensured, (xs) => [...xs, options?.resume ?? false]).pipe(
@@ -1010,10 +1016,13 @@ class PullRequestCalls extends Context.Service<
   );
 }
 
-const pullRequestProvider = (
-  existingHead: string | null = null,
-  openError: IssueTrackerError | null = null,
-) =>
+interface PullRequestProviderOptions {
+  readonly existingHead?: string;
+  readonly findError?: IssueTrackerError;
+  readonly openError?: IssueTrackerError;
+}
+
+const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
   Layer.merge(
     Layer.effect(
       SourceControlProvider,
@@ -1023,14 +1032,18 @@ const pullRequestProvider = (
           observe: () => Effect.succeed(new Map()),
           findOpenPullRequest: () =>
             Ref.update(probe.observations, (count) => count + 1).pipe(
-              Effect.map(() => (existingHead ? { number: 22, url: "https://example.test/pull/22" } : null)),
+              Effect.flatMap(() => {
+                if (options.findError) return Effect.fail(options.findError);
+                if (!options.existingHead) return Effect.succeed(null);
+                return Effect.succeed({ number: 22, url: "https://example.test/pull/22" });
+              }),
             ),
           comment: () => Effect.void,
           openPullRequest: (_workspace, input) =>
             Ref.update(probe.opened, (opened) => [...opened, input]).pipe(
               Effect.flatMap(() =>
-                openError
-                  ? Effect.fail(openError)
+                options.openError
+                  ? Effect.fail(options.openError)
                   : Effect.succeed({ number: 23, url: "https://example.test/pull/23" }),
               ),
             ),
@@ -2233,10 +2246,12 @@ describe("Executor.execute", () => {
         provide(
           [runner(readyForPrEvents)],
           worktreeStubLayer,
-          pullRequestProvider(
-            null,
-            new IssueTrackerError({ reason: "unavailable", message: "pull request endpoint unavailable" }),
-          ),
+          pullRequestProvider({
+            openError: new IssueTrackerError({
+              reason: "unavailable",
+              message: "pull request endpoint unavailable",
+            }),
+          }),
           trackerRecorder(
             undefined,
             new IssueTrackerError({ reason: "unavailable", message: "tracker endpoint unavailable" }),
@@ -2245,6 +2260,66 @@ describe("Executor.execute", () => {
       ),
     ),
   );
+
+  it.effect("records and releases a retryable failure when the git gate fails", () => {
+    const failure = new GitError({
+      command: "fetch origin",
+      message: "git fetch origin timed out",
+      reason: "timeout",
+    });
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const log = yield* Ref.get(calls);
+      assert.strictEqual(log.find((call) => call.method === "attemptFailed")?.reason, failure.message);
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.isFalse(log.some((call) => call.method === "handOff"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          failedPullRequestReadinessWorktree(failure),
+          pullRequestProvider(),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    );
+  });
+
+  it.effect("records and releases a retryable failure when pull request lookup fails", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: "pull request lookup unavailable",
+    });
+    return Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.strictEqual(yield* Ref.get(probe.observations), 1);
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
+      const log = yield* Ref.get(calls);
+      assert.strictEqual(log.find((call) => call.method === "attemptFailed")?.reason, failure.message);
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.isFalse(log.some((call) => call.method === "handOff"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          worktreeStubLayer,
+          pullRequestProvider({ findError: failure }),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    );
+  });
 
   it.effect("records replay output without applying its structured outcome", () => {
     return Effect.gen(function* () {
@@ -2483,9 +2558,11 @@ describe("Executor.execute", () => {
       ]);
     }).pipe(
       Effect.provide(
-        provide([runner(readyForPrEvents)], worktreeStubLayer, pullRequestProvider(implementBranch)).pipe(
-          Layer.provideMerge(PullRequestCalls.layer),
-        ),
+        provide(
+          [runner(readyForPrEvents)],
+          worktreeStubLayer,
+          pullRequestProvider({ existingHead: implementBranch }),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
       ),
     ),
   );

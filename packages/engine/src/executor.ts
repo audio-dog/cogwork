@@ -1076,15 +1076,9 @@ export const make = Effect.gen(function* () {
     return yield* PullRequestReadiness.$match(readiness, {
       Declined: (declined) => Effect.succeed(declined),
       Ready: (ready) =>
-        sourceControl.findOpenPullRequest(workspace, ready.headBranch).pipe(
-          Effect.match({
-            onFailure: (error) =>
-              PullRequestReadiness.Declined({
-                reason: `could not verify open pull requests: ${error.message}`,
-              }),
-            onSuccess: (existing) => existingPullRequestReadiness(ready.headBranch, existing) ?? ready,
-          }),
-        ),
+        sourceControl
+          .findOpenPullRequest(workspace, ready.headBranch)
+          .pipe(Effect.map((existing) => existingPullRequestReadiness(ready.headBranch, existing) ?? ready)),
     });
   });
 
@@ -1103,6 +1097,30 @@ export const make = Effect.gen(function* () {
     return ClaimDisposition.Hold({});
   });
 
+  const pullRequestFailureRetryable = (error: GitError | IssueTrackerError) => {
+    if (error._tag === "GitError") return true;
+    return !issueTrackerErrorIsPermanent(error);
+  };
+
+  const applyPullRequestFailure = Effect.fn("Executor.applyPullRequestFailure")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    runId: RunId,
+    acc: RunAccumulator,
+    harnessName: HarnessName,
+    error: GitError | IssueTrackerError,
+  ) {
+    return yield* applyFailure(
+      workspace,
+      item,
+      runId,
+      pullRequestFailureRetryable(error),
+      error.message,
+      harnessName,
+      acc.handle,
+    );
+  });
+
   const openPullRequest = Effect.fn("Executor.openPullRequest")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -1111,33 +1129,30 @@ export const make = Effect.gen(function* () {
     result: Extract<ImplementStageResult, { readonly outcome: "ready-for-pr" }>,
     harnessName: HarnessName,
   ) {
-    const readiness = yield* pullRequestReadiness(workspace, item);
-    return yield* PullRequestReadiness.$match(readiness, {
-      Declined: ({ reason }) => declinePullRequest(runId, acc, reason),
-      Ready: ({ headBranch, baseBranch }) => {
-        const create = sourceControl.openPullRequest(workspace, {
-          headBranch,
-          baseBranch,
-          title: result.title,
-          body: result.body,
-        });
-        return create.pipe(
-          Effect.matchEffect({
-            onFailure: (error) =>
-              applyFailure(
-                workspace,
-                item,
-                runId,
-                !issueTrackerErrorIsPermanent(error),
-                error.message,
-                harnessName,
-                acc.handle,
-              ),
-            onSuccess: () => applyImplementSuccess(workspace, item, runId, acc),
+    return yield* pullRequestReadiness(workspace, item).pipe(
+      Effect.matchEffect({
+        onFailure: (error) => applyPullRequestFailure(workspace, item, runId, acc, harnessName, error),
+        onSuccess: (readiness) =>
+          PullRequestReadiness.$match(readiness, {
+            Declined: ({ reason }) => declinePullRequest(runId, acc, reason),
+            Ready: ({ headBranch, baseBranch }) =>
+              sourceControl
+                .openPullRequest(workspace, {
+                  headBranch,
+                  baseBranch,
+                  title: result.title,
+                  body: result.body,
+                })
+                .pipe(
+                  Effect.matchEffect({
+                    onFailure: (error) =>
+                      applyPullRequestFailure(workspace, item, runId, acc, harnessName, error),
+                    onSuccess: () => applyImplementSuccess(workspace, item, runId, acc),
+                  }),
+                ),
           }),
-        );
-      },
-    });
+      }),
+    );
   });
 
   const decodeImplementResult = (acc: RunAccumulator) =>
