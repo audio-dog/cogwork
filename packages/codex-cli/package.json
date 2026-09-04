@@ -15,16 +15,20 @@
   "dependencies": {
     "@cogwork/contracts": "workspace:*",
     "@cogwork/engine": "workspace:*",
+    "@feojs/regex": "0.0.1-alpha.0",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-codex": "catalog:",
     "@tanstack/ai-sandbox": "catalog:",
     "@tanstack/ai-sandbox-local-process": "catalog:",
-    "effect": "catalog:effect"
+    "effect": "catalog:effect",
+    "proper-lockfile": "4.1.2",
+    "smol-toml": "1.3.4"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:effect",
     "@effect/vitest": "catalog:effect",
     "@tanstack/ai-persistence": "catalog:",
+    "@types/proper-lockfile": "4.1.4",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
