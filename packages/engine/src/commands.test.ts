@@ -164,6 +164,7 @@ const emptyCalls: TrackerCalls = { handBack: [], reclassify: [], handOff: [], re
 const providerStub = Layer.succeed(SourceControlProvider, {
   observe: () => Effect.succeed(new Map<WorkItemId, PrSignals>()),
   comment: () => Effect.void,
+  openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 });
 
 const trackerLayer = (

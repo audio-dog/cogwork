@@ -150,6 +150,97 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("opens a pull request and returns its number and URL", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse({ number: 480, html_url: "https://github.com/colonylabs/cogwork/pull/480" }, 201),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const opened = yield* client.createPull(repo, {
+        headBranch: "472-open-pull-request",
+        baseBranch: "main",
+        title: "Open pull requests from the engine",
+        body: "Closes #472",
+      });
+
+      assert.deepStrictEqual(opened, {
+        number: 480,
+        url: "https://github.com/colonylabs/cogwork/pull/480",
+      });
+      assert.strictEqual(fetch.mock.calls.length, 1);
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.method, "POST");
+      assert.strictEqual(request.url, "https://api.github.com/repos/colonylabs/cogwork/pulls");
+      assert.strictEqual(request.headers.get("authorization"), "Bearer test-token");
+      assert.deepStrictEqual(yield* Effect.promise(() => request.json()), {
+        head: "472-open-pull-request",
+        base: "main",
+        title: "Open pull requests from the engine",
+        body: "Closes #472",
+      });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("surfaces a rejected pull request write as a typed error", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, 422)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(
+        client.createPull(repo, {
+          headBranch: "472-open-pull-request",
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #472",
+        }),
+      );
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(fetch.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("recovers an accepted pull request when its response body stalls", () => {
+    const response = vi
+      .fn<() => Response>()
+      .mockReturnValueOnce(hangingResponse("{", 201))
+      .mockReturnValue(
+        jsonResponse([{ number: 480, html_url: "https://github.com/colonylabs/cogwork/pull/480" }]),
+      );
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response()));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(
+        client.createPull(repo, {
+          headBranch: "472-open-pull-request",
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #472",
+        }),
+      );
+      yield* TestClock.adjust("1 minute");
+      assert.deepStrictEqual(yield* Fiber.join(operation), {
+        number: 480,
+        url: "https://github.com/colonylabs/cogwork/pull/480",
+      });
+      assert.strictEqual(fetch.mock.calls.length, 2);
+      const requests = fetch.mock.calls.map(([input, init]) => new Request(input, init));
+      assert.deepStrictEqual(
+        requests.map((request) => request.method),
+        ["POST", "GET"],
+      );
+      assert.strictEqual(
+        requests[1]?.url,
+        "https://api.github.com/repos/colonylabs/cogwork/pulls?state=open&head=colonylabs%3A472-open-pull-request&base=main&per_page=1",
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("applies labels that GitHub silently drops during issue creation", () => {
     const response = vi
       .fn<() => Response>()

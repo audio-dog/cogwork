@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { checkState } from "../ci";
 import type { BaseDivergence, PrReview } from "../follow-up";
+import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace } from "../projector";
 import { type PrSignals, SourceControlProvider, type SourceControlProviderService } from "../source-control";
 import { branchName, ticketSlug } from "../worktree";
@@ -271,6 +272,17 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
         const target = sourceControlTargetFor(workspace);
         if (!target) return;
         yield* commentOnPull(target, item, body);
+      }),
+    openPullRequest: (workspace, input) =>
+      Effect.gen(function* () {
+        const target = sourceControlTargetFor(workspace);
+        if (!target) {
+          return yield* new IssueTrackerError({
+            reason: "unavailable",
+            message: "GitHub source control target is not configured",
+          });
+        }
+        return yield* client.createPull(target, input);
       }),
   };
 };
