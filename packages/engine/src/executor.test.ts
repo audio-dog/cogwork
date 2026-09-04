@@ -126,7 +126,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", actorLogin: "cogwork-bot" },
   }),
 };
 
@@ -171,7 +171,7 @@ const implementWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", actorLogin: "cogwork-bot" },
   }),
 };
 
@@ -188,7 +188,7 @@ const mcpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", actorLogin: "cogwork-bot" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
   }),
 };
@@ -199,7 +199,7 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", actorLogin: "cogwork-bot" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
     ],
@@ -368,7 +368,7 @@ const followUpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", actorLogin: "cogwork-bot" },
   }),
 };
 
@@ -466,7 +466,7 @@ const disabledWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 

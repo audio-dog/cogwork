@@ -184,6 +184,7 @@ class PublishedItemCount extends Context.Service<PublishedItemCount, Ref.Ref<num
 describe("workspace observation", () => {
   const workspace: Registry.RegisteredWorkspace = {
     ...registeredWorkspace,
+    repository: "acme/example",
     config: Schema.decodeSync(WorkspaceConfig)({
       name: "example",
       checkoutPath: "/repos/example",
@@ -195,19 +196,18 @@ describe("workspace observation", () => {
       sourceControl: {
         type: "github",
         connectionId: "github/acme",
-        repo: "acme/example",
       },
     }),
   };
   const githubWorkspace: Registry.RegisteredWorkspace = {
     ...workspace,
+    repository: "acme/example",
     config: Schema.decodeSync(WorkspaceConfig)({
       name: "github-example",
       checkoutPath: "/repos/github-example",
       issueTracker: {
         type: "github",
         connectionId: "github/acme",
-        repo: "acme/example",
       },
     }),
   };
@@ -592,13 +592,13 @@ describe("reconcile worker", () => {
   );
   const connectedGithubWorkspace: Registry.RegisteredWorkspace = {
     ...registeredWorkspace,
+    repository: "acme/example",
     config: Schema.decodeSync(WorkspaceConfig)({
       name: "example",
       checkoutPath: "/repos/example",
       issueTracker: {
         type: "github",
         connectionId: "github/acme",
-        repo: "acme/example",
       },
     }),
   };
