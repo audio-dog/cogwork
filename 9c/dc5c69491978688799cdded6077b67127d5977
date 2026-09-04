@@ -1,0 +1,33 @@
+packages/contracts/src/harness.test.ts
+  s_a4f7576244239f::t_1d50cd353c7bfe 21
+  s_a4f7576244239f::t_4e344488a8a770 19-20,22-28
+  s_403f2a66fda66c::t_3bdaf31771018c 4,29
+packages/contracts/src/harness.ts
+  s_a4f7576244239f::t_a4d0435252b1f5 37-40
+packages/contracts/src/rpc.ts
+  s_a4f7576244239f::t_a4d0435252b1f5 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9cdc5c69491978688799cdded6077b67127d5977",
+  "prompts": {},
+  "sessions": {
+    "s_403f2a66fda66c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8e095da5-0202-4b43-80c3-762f822af38f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a4f7576244239f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c90-0d33-7f51-99b1-4056f2717a9e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
