@@ -8,6 +8,23 @@ import * as Schema from "effect/Schema";
 import lockfile, { type LockOptions } from "proper-lockfile";
 import { parse as parseToml, stringify as stringifyToml, TomlDate, type TomlPrimitive } from "smol-toml";
 
+const isSupportedMatcher = (matcher: string) => matcher === "*" || isSupportedRustRegex(matcher);
+
+const isTomlValue = (value: unknown): boolean => {
+  if (value === null) return false;
+  if (typeof value === "number") return !Number.isInteger(value) || Number.isSafeInteger(value);
+  if (Array.isArray(value)) return value.every(isTomlValue);
+  if (typeof value !== "object") return true;
+  return Object.values(value).every(isTomlValue);
+};
+
+const Matcher = Schema.String.check(
+  Schema.makeFilter(isSupportedMatcher, { expected: "a valid Codex Hook matcher" }),
+);
+const TomlJsonObject = Schema.JsonObject.check(
+  Schema.makeFilter(isTomlValue, { expected: "JSON representable as TOML" }),
+);
+
 const CommandHook = Schema.Struct({
   type: Schema.Literal("command"),
   command: Schema.String,
@@ -23,7 +40,7 @@ const McpToolHook = Schema.Struct({
   type: Schema.Literal("mcp_tool"),
   server: Schema.String,
   tool: Schema.String,
-  input: Schema.optional(Schema.JsonObject),
+  input: Schema.optional(TomlJsonObject),
   timeout: Schema.optional(Schema.Natural),
   statusMessage: Schema.optional(Schema.String),
 });
@@ -31,7 +48,7 @@ const McpToolHook = Schema.Struct({
 const UnsupportedHook = Schema.Struct({ type: Schema.Literals(["prompt", "agent"]) });
 const HookHandler = Schema.Union([CommandHook, McpToolHook, UnsupportedHook]);
 const MatcherGroup = Schema.Struct({
-  matcher: Schema.optional(Schema.String),
+  matcher: Schema.optional(Matcher),
   hooks: Schema.optional(Schema.Array(HookHandler)),
 });
 const HookGroups = Schema.optional(Schema.Array(MatcherGroup));
@@ -149,16 +166,6 @@ const normalizedTimeout = (event: EventDefinition, timeout: number | undefined) 
 const matcherForEvent = (event: EventDefinition, matcher: string | undefined) =>
   event.acceptsMatcher ? matcher : undefined;
 
-const isSupportedMatcher = (matcher: string) => matcher === "*" || isSupportedRustRegex(matcher);
-
-const isTomlValue = (value: unknown): boolean => {
-  if (value === null) return false;
-  if (typeof value === "number") return !Number.isInteger(value) || Number.isSafeInteger(value);
-  if (Array.isArray(value)) return value.every(isTomlValue);
-  if (typeof value !== "object") return true;
-  return Object.values(value).every(isTomlValue);
-};
-
 const normalizedCommand = (event: EventDefinition, handler: typeof CommandHook.Type) => ({
   type: handler.type,
   command:
@@ -192,7 +199,6 @@ const normalizedHandler = (event: EventDefinition, handler: typeof HookHandler.T
   if (handler.type === "mcp_tool") {
     if (event.configName === "SessionEnd") return null;
     if (handler.server.trim() === "" || handler.tool.trim() === "") return null;
-    if (!isTomlValue(handler.input ?? {})) throw new Error("MCP Hook input is not representable as TOML");
     return normalizedMcpTool(handler);
   }
   return null;
@@ -220,9 +226,6 @@ const entriesForEvent = (
 ) =>
   groups.flatMap((group, groupIndex) => {
     const matcher = matcherForEvent(event, group.matcher);
-    if (!isSupportedMatcher(matcher ?? "")) {
-      throw new Error(`Unsupported Codex Hook matcher: ${matcher}`);
-    }
     return (group.hooks ?? []).flatMap((handler, handlerIndex) => {
       const normalized = normalizedHandler(event, handler);
       if (!normalized) return [];
@@ -258,24 +261,26 @@ const HookState = Schema.Struct({
 
 const HookStates = Schema.Record(Schema.String, HookState);
 
-const asTomlTable = (value: TomlPrimitive | undefined): TomlTable | null => {
+const isTomlTable = (value: unknown): value is TomlTable => {
   if (typeof value !== "object" || value === null || Array.isArray(value) || value instanceof TomlDate) {
-    return null;
+    return false;
   }
-  return value;
+  return true;
 };
 
-const optionalTomlTable = (name: string, value: TomlPrimitive | undefined) => {
+const asTomlTable = (value: unknown) => (isTomlTable(value) ? value : null);
+
+const TomlTableSchema = Schema.declare<TomlTable>(isTomlTable, { identifier: "TOML table" });
+
+const optionalTomlTable = (value: TomlPrimitive | undefined) => {
   if (value === undefined) return {};
-  const table = asTomlTable(value);
-  if (table) return table;
-  throw new Error(`${name} must be a TOML table`);
+  return Schema.decodeUnknownSync(TomlTableSchema)(value);
 };
 
 const parsedConfig = (contents: string) => {
   const config = parseToml(contents);
-  const hooks = optionalTomlTable("hooks", config.hooks);
-  const state = optionalTomlTable("hooks.state", hooks.state);
+  const hooks = optionalTomlTable(config.hooks);
+  const state = optionalTomlTable(hooks.state);
   const decodedState = Schema.decodeUnknownSync(HookStates)(state);
   return { config, hooks, state, decodedState };
 };
@@ -286,9 +291,10 @@ const trustConfigUpdate = (contents: string, entries: ReadonlyArray<CodexHookTru
   if (!changed) return { changed, contents };
   const updatedState: TomlTable = Object.fromEntries([
     ...Object.entries(state),
-    ...entries.map(
-      (entry) => [entry.key, { ...(asTomlTable(state[entry.key]) ?? {}), trusted_hash: entry.hash }] as const,
-    ),
+    ...entries.map((entry): [string, TomlTable] => [
+      entry.key,
+      { ...(asTomlTable(state[entry.key]) ?? {}), trusted_hash: entry.hash },
+    ]),
   ]);
   return { changed, contents: stringifyToml({ ...config, hooks: { ...hooks, state: updatedState } }) };
 };
