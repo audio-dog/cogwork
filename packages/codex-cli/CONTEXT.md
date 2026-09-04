@@ -41,8 +41,14 @@ available. It is the opt-in compatibility probe for the pinned adapter and the i
 _Avoid_: Daemon startup check, provider fallback
 
 **Unattended runtime policy**:
-The shared Sandbox Policy maps through TanStack's coarse Codex controls. Read-only Runs use Codex
-`read-only`; full Runs use `workspace-write`, so native file changes stay in the prepared Worktree.
+Every Run uses Codex `workspace-write`, so native file changes stay in the prepared Worktree.
+Codex's `read-only` mode denies the network as well as the disk, and the switch that reopens it
+(`sandbox_workspace_write.network_access`) is read only under `workspace-write`; a permission
+profile would separate the two, but `codex exec` refuses one beside the `--sandbox` argument the
+adapter always sends. A read-only Run therefore keeps the Issue tracker its triage Operation reads
+and loses its native write ban, which is why this Harness reports `policyFidelity: "none"`. The
+Operation's own instructions carry the ban instead. Claude Code denies the write tools by name, so
+the inequality is Codex's alone.
 The descriptor also grants linked Worktrees their resolved shared Git metadata directory with
 Codex `--add-dir`. Codex CLI owns
 authentication through its host login; Cogwork's credential store is not consulted.

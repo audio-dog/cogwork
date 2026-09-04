@@ -20,7 +20,7 @@ const externalProfiles = [
     name: Schema.decodeSync(HarnessName)("codex"),
     session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
     structuredOutput: "native",
-    policyFidelity: "profile-only",
+    policyFidelity: "none",
     fileEventFidelity: "best-effort",
     usageQuality: "metered",
     journal: true,
