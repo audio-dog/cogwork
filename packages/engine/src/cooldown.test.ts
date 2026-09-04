@@ -22,11 +22,13 @@ describe("Cooldown", () => {
   it.effect("holds the active window instead of replacing it", () =>
     Effect.gen(function* () {
       const cooldowns = yield* Cooldown.make;
+      const now = yield* Clock.currentTimeMillis;
       const opened = yield* cooldowns.enter("claim", 30_000);
       yield* TestClock.adjust("10 seconds");
 
       const held = yield* cooldowns.enter("claim", 5_000);
 
+      assert.strictEqual(opened.retryAtMillis, now + 30_000);
       assert.deepStrictEqual(held, { entered: false, retryAtMillis: opened.retryAtMillis });
       assert.strictEqual(yield* cooldowns.heldUntil("claim"), opened.retryAtMillis);
     }),
