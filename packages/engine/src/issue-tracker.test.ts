@@ -14,7 +14,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",
-    issueTracker: { type: "github", repo: "owner/a" },
+    issueTracker: { type: "github" },
   }),
 };
 
