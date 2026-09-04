@@ -1,0 +1,19 @@
+packages/engine/src/registry.ts
+  s_49994cea1f08ab::t_b7865dfb6cc651 365
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "afd6a024738545fa04e3a80d2786bdda5ce7ed70",
+  "prompts": {},
+  "sessions": {
+    "s_49994cea1f08ab": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e16-ab2b-7aa1-8ab8-4e65613f60c4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
