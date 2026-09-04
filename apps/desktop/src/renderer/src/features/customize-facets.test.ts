@@ -3,8 +3,8 @@ import { contributionKinds } from "./configuration-model";
 import { defaultFacet, facetFromSlug, facetLabel, facetSlug, facets } from "./customize-facets";
 
 describe("facet slugs", () => {
-  it("covers Plugins, Operation settings, and every contribution kind", () => {
-    expect(facets).toEqual(["plugins", "operations", ...contributionKinds]);
+  it("covers Plugins and every contribution kind", () => {
+    expect(facets).toEqual(["plugins", ...contributionKinds]);
   });
 
   it("round-trips every facet through its slug", () => {
@@ -17,6 +17,7 @@ describe("facet slugs", () => {
   });
 
   it("rejects an unknown slug so the route can redirect", () => {
+    expect(facetFromSlug("operations")).toBeUndefined();
     expect(facetFromSlug("nope")).toBeUndefined();
     expect(facetFromSlug("")).toBeUndefined();
     expect(facetFromSlug("mcp-server")).toBeUndefined();
@@ -28,7 +29,6 @@ describe("facet slugs", () => {
 
   it("labels a facet without leaking the kind id", () => {
     expect(facetLabel("plugins")).toBe("Plugins");
-    expect(facetLabel("operations")).toBe("Operations");
     expect(facetLabel("mcp-server")).toBe("MCP servers");
   });
 });
