@@ -1,0 +1,21 @@
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_93ea2e5aa7b09e::t_32f5474008f2cd 88-89
+  s_93ea2e5aa7b09e::t_0c7be9cb25e639 26-29
+  s_93ea2e5aa7b09e::t_cb1cee68b70ae8 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e8e1d22ef24ef44c1e5eee76b863fa2320d5e84a",
+  "prompts": {},
+  "sessions": {
+    "s_93ea2e5aa7b09e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06df8-4787-7d70-8949-325cad9d285f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
