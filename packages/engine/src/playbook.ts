@@ -1,14 +1,49 @@
-import type { LifecycleStage, McpSkill, OperationNeed, WorkspaceConfig } from "@cogwork/contracts";
+import type {
+  FollowUpResultOutcome,
+  ImplementResultOutcome,
+  LifecycleStage,
+  McpSkill,
+  OperationNeed,
+  TriageResultRole,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
 import * as Duration from "effect/Duration";
 import { day } from "./time";
 
-export interface OperationDefinition {
+export type SuccessfulCoordinationOutcome = "triaged" | "implemented" | "followedUp";
+
+export type OperationOutcome =
+  | {
+      readonly coordination: SuccessfulCoordinationOutcome;
+      readonly attempt: "succeeded";
+    }
+  | {
+      readonly coordination: "attemptFailed";
+      readonly attempt: "failed";
+      readonly retryable: boolean;
+    };
+
+type StageOutcomeTable<ResultField extends string, Outcome extends string> = {
+  readonly resultField: ResultField;
+  readonly outcomes: Readonly<Record<Outcome, OperationOutcome>>;
+};
+
+interface OperationOutcomeTables {
+  readonly triage: StageOutcomeTable<"role", TriageResultRole>;
+  readonly implement: StageOutcomeTable<"outcome", ImplementResultOutcome>;
+  readonly "follow-up": StageOutcomeTable<"outcome", FollowUpResultOutcome>;
+}
+
+export type OperationOutcomeTable = OperationOutcomeTables[LifecycleStage];
+
+export interface OperationDefinition<Stage extends LifecycleStage = LifecycleStage> {
   readonly skill: string;
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
   readonly mcpSkills: ReadonlyArray<McpSkill>;
   readonly needs: ReadonlyArray<OperationNeed>;
+  readonly outcomeTable: OperationOutcomeTables[Stage];
 }
 
 const defaultTriagePrompt = [
@@ -34,53 +69,93 @@ const defaultFollowUpPrompt = [
   "Linear history for this repository is {linearHistory}.",
 ].join("\n");
 
-interface StageDefaults {
+interface StageDefaults<Stage extends LifecycleStage> {
   readonly skill: string;
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
   readonly needs: ReadonlyArray<OperationNeed>;
+  readonly outcomeTable: OperationOutcomeTables[Stage];
 }
 
-const resolveStageConfig = (config: WorkspaceConfig, defaults: StageDefaults) => ({
+const succeeded = (coordination: SuccessfulCoordinationOutcome) =>
+  ({
+    coordination,
+    attempt: "succeeded",
+  }) satisfies OperationOutcome;
+
+const nonRetryableFailure = {
+  coordination: "attemptFailed",
+  attempt: "failed",
+  retryable: false,
+} satisfies OperationOutcome;
+
+const triageOutcomes: Readonly<Record<TriageResultRole, OperationOutcome>> = {
+  "ready-for-agent": succeeded("triaged"),
+  "needs-info": succeeded("triaged"),
+  "ready-for-human": succeeded("triaged"),
+  wontfix: succeeded("triaged"),
+};
+
+const implementOutcomes: Readonly<Record<ImplementResultOutcome, OperationOutcome>> = {
+  "opened-pr": succeeded("implemented"),
+  stuck: nonRetryableFailure,
+};
+
+const followUpOutcomes: Readonly<Record<FollowUpResultOutcome, OperationOutcome>> = {
+  pushed: succeeded("followedUp"),
+  noop: succeeded("followedUp"),
+  stuck: nonRetryableFailure,
+};
+
+const resolveStageConfig = <Stage extends LifecycleStage>(
+  config: WorkspaceConfig,
+  defaults: StageDefaults<Stage>,
+) => ({
   ...defaults,
   mcpSkills: config.mcpSkills ?? [],
 });
 
 export const resolveTriage = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, {
+  resolveStageConfig<"triage">(config, {
     skill: "triage-agent",
     promptTemplate: defaultTriagePrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
     needs: [],
+    outcomeTable: { resultField: "role", outcomes: triageOutcomes },
   });
 
 export const resolveImplement = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, {
+  resolveStageConfig<"implement">(config, {
     skill: "implement-agent",
     promptTemplate: defaultImplementPrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
     needs: [],
+    outcomeTable: { resultField: "outcome", outcomes: implementOutcomes },
   });
 
 export const resolveFollowUp = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, {
+  resolveStageConfig<"follow-up">(config, {
     skill: "follow-up-agent",
     promptTemplate: defaultFollowUpPrompt,
     resumeMaxAgeMillis: Duration.toMillis(day),
     resumeMaxTokens: null,
     needs: [],
+    outcomeTable: { resultField: "outcome", outcomes: followUpOutcomes },
   });
 
-const stageResolvers: Record<LifecycleStage, (config: WorkspaceConfig) => OperationDefinition> = {
+const stageResolvers: {
+  readonly [Stage in LifecycleStage]: (config: WorkspaceConfig) => OperationDefinition<Stage>;
+} = {
   triage: resolveTriage,
   implement: resolveImplement,
   "follow-up": resolveFollowUp,
 };
 
-export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) => stageResolvers[stage](config);
+export const resolveStage = <Stage extends LifecycleStage>(config: WorkspaceConfig, stage: Stage) =>
+  stageResolvers[stage](config);
 
 const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
