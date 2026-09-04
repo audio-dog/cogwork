@@ -1,0 +1,41 @@
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_a4f7576244239f::t_e4ab3a6891a10c 6-11,14,36,42-43,45-47,52-55,62-69
+  s_a4f7576244239f::t_0e69b81f99a3ff 4,70-78
+apps/desktop/src/renderer/src/features/harnesses-view.ts
+  s_a4f7576244239f::t_0e69b81f99a3ff 53-54
+  s_a4f7576244239f::t_1889117635bbab 10,14-18,51
+  s_95f18976083bad::t_5443f762fcb429 52
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_a4f7576244239f::t_0d74bbc88bb72b 53,81,97,126,168
+  s_a4f7576244239f::t_dc3d19953a9e6b 27-30,32-33,95,106-111
+  s_a4f7576244239f::t_1889117635bbab 14,18,25,50,80,92-94,104,125,128,134,137,140-167,169-171,225,284
+  s_a4f7576244239f::t_0b9b54bbc342cf 64-75,90,335,342
+  s_a4f7576244239f::t_0e69b81f99a3ff 31,84
+  s_a4f7576244239f::t_d5ecfdac58b346 91
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_a4f7576244239f::t_1889117635bbab 89-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4bb44cfb245c51a81b78c778f67ad10cadcc6a6f",
+  "prompts": {},
+  "sessions": {
+    "s_95f18976083bad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c94-4194-74f3-b308-57fddbfe48dc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a4f7576244239f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c90-0d33-7f51-99b1-4056f2717a9e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
