@@ -1,0 +1,19 @@
+packages/contracts/src/triage.test.ts
+  s_95138d1a68f5e2::t_b8641151de5512 21,37,64,80,93,108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "64d904b99b060651e8969012e0a0aaf7db69d16c",
+  "prompts": {},
+  "sessions": {
+    "s_95138d1a68f5e2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06af5-bbc6-7db2-b865-baa5fc02deed",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
