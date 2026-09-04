@@ -1,0 +1,6 @@
+{
+  "jsPlugins": ["./plugin.mjs"],
+  "rules": {
+    "cogwork/no-switch": "error"
+  }
+}

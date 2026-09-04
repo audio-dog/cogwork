@@ -1,0 +1,10 @@
+{
+  "jsPlugins": ["./plugin.mjs"],
+  "rules": {
+    "cogwork/no-effect-sync-throw": "error",
+    "cogwork/no-iife-wrapper": "error",
+    "cogwork/no-runtime-runfork": "error",
+    "cogwork/no-switch": "error",
+    "cogwork/no-wire-union-tag-comparison": "error"
+  }
+}
