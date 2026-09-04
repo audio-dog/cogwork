@@ -1,0 +1,19 @@
+packages/engine/src/cooldown.test.ts
+  s_cd262825f018c0::t_8256d18e132b40 1-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a21673d9f5eebf49aaadd3fbd28615c1c8bb156d",
+  "prompts": {},
+  "sessions": {
+    "s_cd262825f018c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06d6b-ecc7-7ec1-be74-6ca93f8e3cbb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
