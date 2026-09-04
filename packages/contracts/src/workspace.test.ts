@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { IssueTrackerConfig, linearTeams } from "./workspace";
+import { IssueTrackerConfig, linearTeams, SourceControlConfig } from "./workspace";
 
 const tracker = (over: Partial<typeof IssueTrackerConfig.Encoded>) =>
   Schema.decodeSync(IssueTrackerConfig)({ type: "linear", ...over });
@@ -35,5 +35,29 @@ describe("linearTeams", () => {
 
   it("is empty for a non-Linear tracker", () => {
     assert.deepStrictEqual([...linearTeams(Schema.decodeSync(IssueTrackerConfig)({ type: "github" }))], []);
+  });
+});
+
+describe("workspace account bindings", () => {
+  it("drops legacy tracker actor selectors", () => {
+    const decoded = Schema.decodeUnknownSync(IssueTrackerConfig)({
+      type: "github",
+      actorLogin: "legacy-login",
+      actorUserId: "legacy-user-id",
+    });
+    const encoded = Schema.encodeSync(IssueTrackerConfig)(decoded);
+
+    assert.isFalse("actorLogin" in encoded);
+    assert.isFalse("actorUserId" in encoded);
+  });
+
+  it("drops the legacy source-control actor selector", () => {
+    const decoded = Schema.decodeUnknownSync(SourceControlConfig)({
+      type: "github",
+      actorLogin: "legacy-login",
+    });
+    const encoded = Schema.encodeSync(SourceControlConfig)(decoded);
+
+    assert.isFalse("actorLogin" in encoded);
   });
 });

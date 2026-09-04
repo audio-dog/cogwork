@@ -32,8 +32,6 @@ export const IssueTrackerConfig = Schema.Struct({
   repo: Schema.optional(TrimmedNonEmptyString),
   teams: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   organization: Schema.optional(TrimmedNonEmptyString),
-  actorLogin: Schema.optional(TrimmedNonEmptyString),
-  actorUserId: Schema.optional(TrimmedNonEmptyString),
   assigneeAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   roleLabels: Schema.optional(TriageRoleLabels),
@@ -50,7 +48,6 @@ export const SourceControlConfig = Schema.Struct({
   type: SourceControlType,
   connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
   repo: Schema.optional(TrimmedNonEmptyString),
-  actorLogin: Schema.optional(TrimmedNonEmptyString),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
 });
 export type SourceControlConfig = typeof SourceControlConfig.Type;
