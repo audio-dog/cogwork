@@ -1,0 +1,29 @@
+packages/claude-code/src/harness.ts
+  s_93ea2e5aa7b09e::t_bdaf845a13c59d 37-38,65,75,94-99,101-102,117,391,439
+  s_93ea2e5aa7b09e::t_b5daee687b0bbb 16,93,344
+  s_93ea2e5aa7b09e::t_cb1cee68b70ae8 40
+  s_93ea2e5aa7b09e::t_e562208c3d8a93 77,100
+packages/claude-code/src/harness.test.ts
+  s_93ea2e5aa7b09e::t_b5daee687b0bbb 682,688,697
+  s_93ea2e5aa7b09e::t_a727b22f3a3f67 687
+  s_93ea2e5aa7b09e::t_cb1cee68b70ae8 40-43
+  s_93ea2e5aa7b09e::t_32f5474008f2cd 26-31,37-39,89-93,335-336,400,407-408,413-415,556,681,683-686,701-703,772-792,813
+  s_93ea2e5aa7b09e::t_bdaf845a13c59d 512
+  s_93ea2e5aa7b09e::t_daa6a7f4c100cd 689-696,698-700
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ab788361f513930f256da738f67f5eefb648d54b",
+  "prompts": {},
+  "sessions": {
+    "s_93ea2e5aa7b09e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06df8-4787-7d70-8949-325cad9d285f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
