@@ -1,0 +1,32 @@
+packages/engine/src/external-harness-runtime.ts
+  s_0f51d1349591c8::t_57a9874d77c27a 69,560,654-656
+packages/engine/src/external-harness-runtime.test.ts
+  s_0f51d1349591c8::t_143ec2fe3d1df0 2,225-228,230,536-537,539-545,554,572-576
+  s_0f51d1349591c8::t_c0a8d7556a6559 212-213
+  s_0f51d1349591c8::t_cc283bb07b4c7e 183-211,214-224,229,231-235,519-535,538,546-553,555-571,577
+  s_f5daaf16dcb4b5::t_339119f85dfa69 578-579
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c78f7080bf7cfb00d3f20f40b32505303c74a408",
+  "prompts": {},
+  "sessions": {
+    "s_0f51d1349591c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c9b-424b-7912-adb5-8c0e7e6df544",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f5daaf16dcb4b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c9b-78c3-7f80-87ee-627a4932b479",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
