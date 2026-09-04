@@ -1,0 +1,21 @@
+scripts/test-measure.mjs
+  s_95f18976083bad::t_c8c499596f371e 56
+  s_95f18976083bad::t_21139008ba96ca 9,11-12,14,20,42,44,48
+  s_95f18976083bad::t_502e946f941a2c 18-19,57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2e395cce3e0b247d5352a5282262565d0bd0e797",
+  "prompts": {},
+  "sessions": {
+    "s_95f18976083bad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c94-4194-74f3-b308-57fddbfe48dc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
