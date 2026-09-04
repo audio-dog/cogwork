@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/features/customize-facets.test.ts
+  s_30209941fd1db9::t_c71229c7fad909 6-7,20
+apps/desktop/src/renderer/src/features/customize-facets.ts
+  s_30209941fd1db9::t_9c6f9d474ff2e5 3,15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "bb418350dc1db3ee81248e6f1eed1c5df961bf64",
+  "prompts": {},
+  "sessions": {
+    "s_30209941fd1db9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dea-04d9-7cd2-9f9c-cccd3a0d18e2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
