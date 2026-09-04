@@ -1,4 +1,5 @@
 import {
+  type AgUiEvent,
   agUiIsFileDiffEvent,
   FILE_DIFF_EVENT,
   HarnessName,
@@ -178,6 +179,22 @@ const cancellableAsyncIterable = <Value>(values: ReadonlyArray<Value>, cancellat
     };
   },
 });
+
+const watchProbeSandbox = (probe: { watches: number }) => {
+  const handle = sandboxHandle("watch-probe-sandbox");
+  return {
+    ...handle,
+    fs: {
+      ...handle.fs,
+      list: () => Promise.resolve([]),
+      exists: () => Promise.resolve(true),
+      watch: () => {
+        probe.watches += 1;
+        return Promise.resolve({ stop: () => Promise.resolve() });
+      },
+    },
+  } satisfies SandboxHandle;
+};
 
 const sandboxHandle = (id: string) =>
   ({
@@ -460,6 +477,41 @@ describe("external Harness runtime", () => {
           assert.deepStrictEqual(probe.chatOptions[0]?.systemPrompts, []);
           assert.deepStrictEqual(destructions, [true]);
         }),
+    );
+
+    it.effect("ends a Run whose checkout feed never sees an event", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-harness-feed-" });
+        const created: Array<string> = [];
+        const watchProbe = { watches: 0 };
+        const base = descriptor(terminalEvents, new ControlledProbe());
+        const harness = makeHarness({ ...base, transport: { runtimeFileDiffFeed: true } }, created, [], {
+          provider: {
+            ...controlledProvider(created, []),
+            create: () => Promise.resolve(watchProbeSandbox(watchProbe)),
+          },
+        });
+        const seen: Array<AgUiEvent> = [];
+
+        yield* harness
+          .run({
+            plan: RunPlan.make({ ...request, sandbox: { ...request.sandbox, workspace: checkout } }),
+            session: freshSession,
+            mcpCredentials: new Map(),
+          })
+          .pipe(Stream.runForEach((event) => Effect.sync(() => seen.push(event))));
+
+        assert.strictEqual(watchProbe.watches, 0);
+        assert.isFalse(
+          seen.some((event) => event.type === EventType.CUSTOM && event.name === "sandbox.file"),
+        );
+        assert.deepNestedInclude(seen.at(-1), { type: EventType.RUN_FINISHED });
+        assert.lengthOf(
+          seen.filter((event) => event.type === EventType.RUN_FINISHED),
+          1,
+        );
+      }),
     );
 
     it.effect("keeps Operating Instructions resources host-provisioned and readable", () =>

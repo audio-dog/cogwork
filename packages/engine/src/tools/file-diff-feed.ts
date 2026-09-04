@@ -1,6 +1,7 @@
 import { createHash, type Hash } from "node:crypto";
 import { type AgUiEvent, agUiFileDiffEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
 import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
+import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -286,9 +287,16 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
   return diff === "" ? null : fileDiffEvent(relTo(event.path), diff);
 });
 
-const IGNORED_SEGMENTS = [".git", "node_modules", ".repos"];
+// Refused by segment because `git check-ignore` is skipped without a base SHA, and
+// that path synthesizes a whole-file patch per file instead.
+const IGNORED_SEGMENTS = [".git", "node_modules", ".repos", ".pnpm-store"];
 
-export const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
+// Anchored to a whole root entry so it cannot hide a nested file the agent wrote:
+// the checkout is the agent's, and it can create any name it likes inside it.
+const reservedScratch = /^\.tanstack-[^/]*$/;
+
+export const ignored = (rel: string) =>
+  rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment)) || reservedScratch.test(rel);
 
 const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
   stream.pipe(
@@ -417,15 +425,37 @@ const classifyWorktreeEvent = Effect.fn("Tools.classifyWorktreeEvent")(function*
   return { type: exists ? "change" : "delete", path, timestamp: 0 } satisfies SandboxFileEvent;
 });
 
+/** Interruption is a consumer tearing the feed down, not a death. */
+export const tolerateFeedDeath =
+  (message: string) =>
+  <A, E, R>(feed: Stream.Stream<A, E, R>) =>
+    feed.pipe(
+      Stream.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Stream.empty
+          : Stream.fromEffect(Effect.logWarning(message, { cause })).pipe(Stream.drain),
+      ),
+    );
+
 export const watchWorktreeDiffs = (
   sandbox: WorktreeSandbox,
   baseSha: string,
+  /** Completes to end the source, flushing the debounce. Omitting it drops whatever the debounce holds. */
+  stop?: Effect.Effect<void>,
 ): Stream.Stream<AgUiEvent, ToolError, FileSystem.FileSystem> =>
   Stream.unwrap(
     FileSystem.FileSystem.pipe(
       Effect.map((fs) =>
         fs.watch(sandbox.root, { recursive: true }).pipe(
           Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
+          // Not `Stream.haltWhen`: it polls between pulls, and the watcher's pull
+          // blocks while the checkout is idle, so an idle feed would never stop.
+          (source) =>
+            stop
+              ? Stream.merge(source, Stream.fromEffect(stop).pipe(Stream.drain), {
+                  haltStrategy: "either",
+                })
+              : source,
           Stream.filter((event) => !ignored(event.path)),
           Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
           Stream.mapEffect((events) => configuredIgnoredEvents(sandbox, baseSha, events)),

@@ -5,6 +5,7 @@ export {
   FILE_DIFF_EVENT,
   fileDiffEvent,
   toFileDiffEvent,
+  tolerateFeedDeath,
   watchWorktreeDiffs,
 } from "./file-diff-feed";
 export {

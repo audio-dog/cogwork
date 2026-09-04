@@ -365,6 +365,74 @@ describe("file diff feed", () => {
     }).pipe(Effect.provide(ExecCalls.layer)),
   );
 
+  it.effect("starts no diff work for a burst of ignored-segment churn", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const baseSha = yield* resolveBaseSha(original);
+      const calls = yield* ExecCalls;
+      const sandbox = yield* withExecProbe(original);
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+        Stream.take(1),
+        Stream.runHead,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* Effect.forEach(
+        Array.from({ length: 1_000 }, (_, index) => `.pnpm-store/v11/files/${index}`),
+        (path) => Queue.offer(events, { _tag: "Create", path }),
+        { discard: true },
+      );
+      yield* writeFile(original, { path: "seed.txt", content: "seed changed\n" });
+      yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
+      const commands = yield* settleDiff(calls);
+      const head = yield* Fiber.join(fiber);
+
+      if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
+      const value = yield* decodeDiffValue(head.value.value);
+      assert.strictEqual(value.path, "seed.txt");
+      assert.isFalse(commands.some((command) => command.includes(".pnpm-store")));
+      assert.lengthOf(
+        commands.filter((command) => command.startsWith("git diff")),
+        1,
+      );
+    }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
+  it.effect("flushes a debounced diff when the caller stops the feed", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const baseSha = yield* resolveBaseSha(original);
+      const sandbox = yield* withExecProbe(original);
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const stop = yield* Deferred.make<void>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha, Deferred.await(stop)).pipe(
+        Stream.runHead,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* writeFile(original, { path: "seed.txt", content: "written just before the stop\n" });
+      yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+
+      // Clock never reaches the 250ms debounce, so only the flush can produce it.
+      yield* Deferred.succeed(stop, undefined);
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("100 millis");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("100 millis");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      const head = yield* Fiber.join(fiber);
+
+      if (Option.isNone(head)) return assert.fail("stopping the feed dropped the pending diff");
+      const value = yield* decodeDiffValue(head.value.value);
+      assert.strictEqual(value.path, "seed.txt");
+      assert.include(value.diff, "+written just before the stop");
+    }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
   it.effect("skips directory events before starting diff subprocesses", () =>
     Effect.gen(function* () {
       const original = yield* openSandbox();
