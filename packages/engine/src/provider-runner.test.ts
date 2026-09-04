@@ -10,6 +10,7 @@ import {
 } from "@tanstack/ai-persistence";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -277,6 +278,31 @@ describe("providerRunner", () => {
         assert.strictEqual(options.threadId, sessionId);
       }),
     30000,
+  );
+
+  it.live("aborts the chat request when the provider stream is interrupted", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const captured = Promise.withResolvers<RunChatOptions>();
+      const runChat: RunChat = (options) => {
+        captured.resolve(options);
+        return {
+          [Symbol.asyncIterator]: () => ({
+            next: () => Promise.withResolvers<IteratorResult<StreamChunk>>().promise,
+          }),
+        };
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+      const fiber = yield* Stream.runDrain(runner.run(request({ checkoutPath }))).pipe(
+        Effect.provide(providerRunnerLayer()),
+        Effect.forkChild,
+      );
+      const chatOptions = yield* Effect.promise(() => captured.promise);
+
+      yield* Fiber.interrupt(fiber);
+
+      assert.isTrue(chatOptions.abortController.signal.aborted);
+    }),
   );
 
   it.live("runs owned tools with the caller's HTTP client", () =>

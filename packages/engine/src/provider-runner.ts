@@ -229,7 +229,10 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             providerMiddleware(name, persistence, instructions),
           );
 
-          const abortController = new AbortController();
+          const abortController = yield* Effect.acquireRelease(
+            Effect.sync(() => new AbortController()),
+            (controller) => Effect.sync(() => controller.abort()),
+          );
           const chatStream = runChat({
             adapter,
             messages,
@@ -258,7 +261,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
               ),
             ),
             { haltStrategy: "left" },
-          ).pipe(Stream.ensuring(Effect.sync(() => abortController.abort())));
+          );
         }),
       ),
   };
