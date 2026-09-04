@@ -490,14 +490,17 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return Effect.void;
   };
 
-  const call = Effect.fn("linear.call")(function* <A>(
-    ref: LinearTeamRef,
-    run: (sdk: LinearSdk) => PromiseLike<A>,
-  ) {
-    const credential = yield* Effect.mapError(
+  const credentialFor = (ref: LinearTeamRef) =>
+    Effect.mapError(
       credentials.bearerToken(ref.account),
       (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
     );
+
+  const callWithCredential = Effect.fn("linear.callWithCredential")(function* <A>(
+    ref: LinearTeamRef,
+    credential: Credential,
+    run: (sdk: LinearSdk) => PromiseLike<A>,
+  ) {
     return yield* Effect.retry(
       Effect.gen(function* () {
         const attemptStartedAt = yield* Clock.currentTimeMillis;
@@ -516,6 +519,14 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
         Effect.flatMap(Clock.currentTimeMillis, (nowMillis) => noteFailure(ref, nowMillis, error)),
       ),
     );
+  });
+
+  const call = Effect.fn("linear.call")(function* <A>(
+    ref: LinearTeamRef,
+    run: (sdk: LinearSdk) => PromiseLike<A>,
+  ) {
+    const credential = yield* credentialFor(ref);
+    return yield* callWithCredential(ref, credential, run);
   });
 
   // The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
@@ -620,6 +631,11 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   });
 
   return {
+    authenticatedUserId: Effect.fn("linear.authenticatedUserId")(function* (ref: LinearTeamRef) {
+      const credential = yield* credentialFor(ref);
+      if (credential.identity) return credential.identity.actorUserId;
+      return yield* callWithCredential(ref, credential, (sdk) => sdk.viewer.then((viewer) => viewer.id));
+    }),
     observeIssues,
     listWorkflowStates: (ref: LinearTeamRef) =>
       Effect.map(loadTeam(ref, metaShape), (team): ReadonlyArray<RawWorkflowState> => team.states.nodes),
