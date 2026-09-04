@@ -1,5 +1,5 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
+import { ExternalHarnessRuntime, Harness, HarnessBridge, type OperationPolicy, Tools } from "@cogwork/engine";
 import {
   CODEX_MODELS,
   type CodexAuthMode,
@@ -306,6 +306,23 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
   };
 };
 
+// A read-only Operation wants no file writes but still needs the tracker: triage reads its
+// work item with `gh`. Codex's `--sandbox read-only` denies both, and its network switch
+// (`sandbox_workspace_write.network_access`) only reaches `workspace-write`, so the portable
+// policy's `network: "allow"` was silently dropped and every triage run lost the tracker.
+// A named permission profile splits the two: `:read-only` disk, network on. Naming a profile
+// makes Codex ignore `--sandbox` entirely, which is what lets this override the adapter's flag.
+const readOnlyPermissionProfile = "cogwork-read-only";
+
+const permissionProfileConfig: Record<OperationPolicy.OperationPolicyProfile, Record<string, string>> = {
+  "read-only": {
+    default_permissions: tomlString(readOnlyPermissionProfile),
+    [`permissions.${readOnlyPermissionProfile}.extends`]: tomlString(":read-only"),
+    [`permissions.${readOnlyPermissionProfile}.network.enabled`]: "true",
+  },
+  full: {},
+};
+
 const codexDescriptor = (
   options: CodexRunnerOptions,
 ): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>, CodexAuthMode> => {
@@ -355,6 +372,7 @@ const codexDescriptor = (
     sharedGit: "required",
     makeAdapter: ({ model, authentication, request }) => {
       const mcp = codexMcpProjection(request.mcp);
+      const config = { ...permissionProfileConfig[request.policy], ...mcp.config };
       return makeAdapter(model, {
         authMode: authentication,
         approvalPolicy: "never",
@@ -362,7 +380,7 @@ const codexDescriptor = (
         ...(request.checkout.sharedGitDirectory
           ? { additionalDirectories: [request.checkout.sharedGitDirectory] }
           : {}),
-        ...(Object.keys(mcp.config).length > 0 ? { config: mcp.config } : {}),
+        ...(Object.keys(config).length > 0 ? { config } : {}),
         ...(Object.keys(mcp.env).length > 0 ? { env: mcp.env } : {}),
       });
     },

@@ -513,6 +513,17 @@ describe("codexRunner", () => {
             assert.include(capture.args, 'approval_policy="never"');
             assert.notInclude(capture.args, "danger-full-access");
             if (!readOnly) assert.include(capture.args, "sandbox_workspace_write.network_access=true");
+            // A read-only Operation still reads its work item with `gh`. `--sandbox read-only`
+            // denies the network as well as the disk, and Codex reads its network switch only
+            // under `workspace-write`, so the named profile carries the split that policy asks
+            // for. Naming a profile is also what makes Codex ignore the `--sandbox` argument.
+            if (readOnly) {
+              assert.include(capture.args, 'default_permissions="cogwork-read-only"');
+              assert.include(capture.args, 'permissions.cogwork-read-only.extends=":read-only"');
+              assert.include(capture.args, "permissions.cogwork-read-only.network.enabled=true");
+            } else {
+              assert.notInclude(capture.args, 'default_permissions="cogwork-read-only"');
+            }
           }
         }),
       ),
