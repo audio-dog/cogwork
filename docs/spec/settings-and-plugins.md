@@ -206,8 +206,8 @@ where the setting lives, and an id never changes when a setting moves.
 Four Scopes — **Settings profile** (principal), **Runtime host** (machine), **Workspace input**
 (repo, committed), **Private workspace overlay** (principal-owned, per-workspace, uncommitted).
 Cogwork mints every Scope identity (`Principal` constant; `HostId` at the store's first open;
-`WorkspaceId` at register; the overlay key is the pair). Folder path and git remote are re-binding
-hints, never identity.
+`WorkspaceId` at register; the overlay key is the pair). Checkout path is a re-binding hint, never
+identity.
 
 Two families with different Scope sets, and the empty cells are empty by decision:
 

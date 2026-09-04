@@ -54,7 +54,7 @@ The Scope case never reaches validation: ADR 0013's empty cells are made unrepre
 
 Deregister deletes the workspace record, its Runtime host binding, and every Private workspace overlay row keyed by its `WorkspaceId`, in one transaction. This answers the `NO ACTION` foreign key ADR 0015 left as a forcing function. It does **not** delete Run history: those rows are the disposable ledger region, they carry no foreign key to a settings row, and losing a workspace should not erase what it did.
 
-Re-bind writes the checkout-path record alone. Identity survives a move, which is why ADR 0013 keeps folder path and git remote as re-binding hints rather than as identity.
+Re-bind writes the checkout-path record alone. Identity survives a move, which is why ADR 0013 keeps checkout path as a re-binding hint rather than as identity.
 
 *Rejected:* a soft-delete tombstone (nothing reads it — an install is machine-local and a re-register is cheap), and deregister-as-two-acts (leaves a workspace no Run can use between them).
 
