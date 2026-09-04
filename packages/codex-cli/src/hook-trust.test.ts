@@ -317,6 +317,15 @@ trusted_hash = "sha256:existing"
     );
   });
 
+  it("fails closed when MCP input loses its JSON numeric type", () => {
+    assert.throws(() =>
+      codexHookTrustEntries(
+        hooksPath,
+        '{"hooks":{"PreToolUse":[{"hooks":[{"type":"mcp_tool","server":"security","tool":"scan","input":{"threshold":1.0}}]}]}}',
+      ),
+    );
+  });
+
   it("skips unsupported Hook shapes", () => {
     const entries = codexHookTrustEntries(
       hooksPath,

@@ -6,10 +6,24 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as Schema from "effect/Schema";
+import { isLosslessNumber, parse as parseLosslessJson } from "lossless-json";
 import lockfile, { type LockOptions } from "proper-lockfile";
 import { parse as parseToml, stringify as stringifyToml, TomlDate, type TomlPrimitive } from "smol-toml";
 
 const isSupportedMatcher = (matcher: string) => matcher === "*" || isSupportedRustRegex(matcher);
+const integerJsonPattern = /^-?(?:0|[1-9]\d*)$/;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const hasMcpFloat = (value: unknown, insideMcpInput = false): boolean => {
+  if (isLosslessNumber(value)) return insideMcpInput && !integerJsonPattern.test(value.value);
+  if (Array.isArray(value)) return value.some((entry) => hasMcpFloat(entry, insideMcpInput));
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(([key, entry]) =>
+    hasMcpFloat(entry, insideMcpInput || (value.type === "mcp_tool" && key === "input")),
+  );
+};
 
 const isTomlValue = (value: unknown): boolean => {
   if (value === null) return false;
@@ -25,6 +39,11 @@ const Matcher = Schema.String.check(
 const HooksFileJson = Schema.JsonObject.check(
   Schema.makeFilter((value) => Object.keys(value).every((key) => key === "description" || key === "hooks"), {
     expected: "a Codex Hooks file without unknown top-level fields",
+  }),
+);
+const ExactMcpNumberInput = Schema.Unknown.check(
+  Schema.makeFilter((value) => !hasMcpFloat(value), {
+    expected: "MCP Hook input without floating-point JSON numbers",
   }),
 );
 const TomlJsonObject = Schema.JsonObject.check(
@@ -257,6 +276,7 @@ const entriesForEvent = (
   });
 
 export const codexHookTrustEntries = (sourcePath: string, contents: string) => {
+  Schema.decodeUnknownSync(ExactMcpNumberInput)(parseLosslessJson(contents));
   const json = Schema.decodeSync(Schema.fromJsonString(HooksFileJson))(contents);
   const parsed = Schema.decodeSync(HooksFile)(json);
   const hooks = parsed.hooks;
