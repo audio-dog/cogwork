@@ -18,7 +18,7 @@ import type {
 import { byStageThenPriority } from "@cogwork/contracts";
 import * as Chunk from "effect/Chunk";
 import * as Data from "effect/Data";
-import { consecutiveFailures, isExhausted } from "./exhaustion";
+import { exhaustionOf } from "./exhaustion";
 import {
   type FollowUpContext,
   followUpContext,
@@ -168,8 +168,7 @@ const classifyOne = (
   const stage = observedStage(item);
   if (!stage) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
-  const failures = consecutiveFailures(item, stage);
-  if (isExhausted(failures)) return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  if (exhaustionOf(item, stage).exhausted) return Outcome.NeedsHuman({ reason: "ready-for-human" });
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   if (availability?.get(stage)?.available === false && !isStalledFollowUp(stage, followUp)) {
     return Outcome.Drop({});
@@ -212,7 +211,7 @@ export const classifiedItemOf = (item: ObservedItem) =>
   });
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
-  const priorFailures = consecutiveFailures(item, stage);
+  const priorFailures = exhaustionOf(item, stage).failedAttempts;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   return {
     id: item.id,
