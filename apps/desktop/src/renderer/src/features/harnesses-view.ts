@@ -7,12 +7,15 @@ export const versionLabel = (version: string | null) => {
 export interface HarnessSummary {
   readonly headline: string;
   readonly detail: string | null;
-  readonly attention: "none" | "warning" | "fatal";
+  readonly attention: "none" | "muted" | "warning" | "fatal";
   readonly signIn: string | null;
 }
 
-export const harnessSummary = (state: HarnessState): HarnessSummary =>
-  HarnessState.match<HarnessSummary>(state, {
+export const harnessSummary = (item: HarnessItem): HarnessSummary => {
+  if (!item.enabled) {
+    return { headline: "Disabled", detail: null, attention: "muted", signIn: null };
+  }
+  return HarnessState.match<HarnessSummary>(item.state, {
     Ready: () => ({ headline: "Ready", detail: null, attention: "none", signIn: null }),
     NotInstalled: ({ diagnostic }) => ({
       headline: "Not found",
@@ -45,6 +48,10 @@ export const harnessSummary = (state: HarnessState): HarnessSummary =>
       signIn: null,
     }),
   });
+};
+
+export const orderHarnesses = (items: ReadonlyArray<HarnessItem>) =>
+  items.toSorted((left, right) => Number(left.enabled) - Number(right.enabled));
 
 export const installedVersion = (item: HarnessItem) => {
   const reported = versionLabel(item.version);

@@ -11,19 +11,26 @@ import {
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@cogwork/ui/components/item";
 import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { Skeleton } from "@cogwork/ui/components/skeleton";
+import { Switch } from "@cogwork/ui/components/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cogwork/ui/components/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { createContext, type ReactNode, use, useState } from "react";
 import { ProviderGlyphIcon } from "../../components/provider-glyph";
 import { useFocusFlash } from "../../components/settings-parts";
-import { harnessesAtom } from "../../daemon/atoms";
+import { harnessesAtom, setHarnessEnabledAtom } from "../../daemon/atoms";
 import { relativeTime } from "../../features/format";
-import { harnessSummary, installedVersion, versionLabel } from "../../features/harnesses-view";
+import {
+  type HarnessSummary,
+  harnessSummary,
+  installedVersion,
+  orderHarnesses,
+  versionLabel,
+} from "../../features/harnesses-view";
 import { providerGlyph, providerLabel } from "../../features/provider-presentation";
 import { settingEntry } from "../../features/settings-catalog";
 import { useNow } from "../../features/use-now";
@@ -40,9 +47,10 @@ interface ProvidersValue {
   readonly actions: {
     readonly select: (harness: HarnessName) => void;
     readonly check: () => void;
+    readonly setEnabled: (harness: HarnessName, enabled: boolean) => void;
   };
   // A probe spawns every installed harness's CLI; stacking them up must stay impossible.
-  readonly meta: { readonly checking: boolean };
+  readonly meta: { readonly checking: boolean; readonly changing: boolean };
 }
 
 const ProvidersContext = createContext<ProvidersValue | null>(null);
@@ -53,39 +61,54 @@ const useProviders = () => {
   return value;
 };
 
+const loadState = (overview: unknown, failed: boolean) => {
+  if (overview) return "ready" as const;
+  if (failed) return "failed" as const;
+  return "loading" as const;
+};
+
+const checkLabel = (checking: boolean, checkedAtMillis: number | null, now: number) => {
+  if (checking) return "Checking…";
+  if (checkedAtMillis) return `Checked ${relativeTime(checkedAtMillis, now)}`;
+  return "Check again";
+};
+
 function Providers({ children }: { readonly children: ReactNode }) {
   const queried = useAtomValue(harnessesAtom);
   const refresh = useAtomRefresh(harnessesAtom);
   const [chosen, setChosen] = useState<HarnessName | null>(null);
+  const setEnabled = useAtomSet(setHarnessEnabledAtom, { mode: "promiseExit" });
+  const enablement = useAtomValue(setHarnessEnabledAtom);
 
   const overview = queried._tag === "Success" ? queried.value : null;
-  const providers = overview?.harnesses ?? [];
+  const providers = orderHarnesses(overview?.harnesses ?? []);
   const value: ProvidersValue = {
     state: {
       providers,
       selected: providers.find((item) => item.harness === chosen) ?? providers[0],
       checkedAtMillis: overview?.checkedAtMillis ?? null,
-      load: overview ? "ready" : queried._tag === "Failure" ? "failed" : "loading",
+      load: loadState(overview, queried._tag === "Failure"),
     },
-    actions: { select: setChosen, check: refresh },
-    meta: { checking: queried.waiting },
+    actions: {
+      select: setChosen,
+      check: refresh,
+      setEnabled: (harness, enabled) => setEnabled({ payload: { harness, enabled } }).then(refresh),
+    },
+    meta: { checking: queried.waiting, changing: enablement.waiting },
   };
   return <ProvidersContext value={value}>{children}</ProvidersContext>;
 }
 
 /* ------------------------------------------------------------------------------ small pieces */
 
-function AttentionDot({ attention }: { readonly attention: "none" | "warning" | "fatal" }) {
+function AttentionDot({ attention }: { readonly attention: HarnessSummary["attention"] }) {
   if (attention === "none") return null;
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "size-1.5 shrink-0 rounded-full",
-        attention === "fatal" ? "bg-destructive" : "bg-warning",
-      )}
-    />
-  );
+  const color = {
+    muted: "bg-muted-foreground",
+    warning: "bg-warning",
+    fatal: "bg-destructive",
+  }[attention];
+  return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", color)} />;
 }
 
 function VersionCode({ version }: { readonly version: string | null }) {
@@ -99,39 +122,53 @@ function VersionCode({ version }: { readonly version: string | null }) {
 function ProviderRow({ item }: { readonly item: HarnessItem }) {
   const {
     state: { selected },
-    actions: { select },
+    actions: { select, setEnabled },
+    meta: { changing },
   } = useProviders();
-  const summary = harnessSummary(item.state);
+  const summary = harnessSummary(item);
   const active = item.harness === selected?.harness;
   return (
     <Item
       size="sm"
-      render={<button type="button" onClick={() => select(item.harness)} aria-pressed={active} />}
       className={cn(
-        "min-h-19 cursor-pointer items-start text-left",
+        "min-h-19 items-start text-left",
         active && "bg-foreground/8",
         !active && "hover:bg-foreground/4",
+        !item.enabled && "opacity-60",
       )}
     >
-      <ItemMedia variant="icon">
-        {/* ItemMedia sizes a bare svg to `size-4`; its `:not([class*='size-'])` selector yields to this. */}
-        <ProviderGlyphIcon glyph={providerGlyph(item.harness)} className="size-5" />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle className="flex min-w-0 items-center gap-2">
-          <span className="truncate">{providerLabel(item.harness)}</span>
-          <VersionCode version={item.version} />
-        </ItemTitle>
-        <ItemDescription className="flex items-start gap-1.5">
-          <span className="flex h-[1.45em] shrink-0 items-center">
-            <AttentionDot attention={summary.attention} />
-          </span>
-          <span className="line-clamp-2 [overflow-wrap:anywhere]">
-            {summary.headline}
-            {summary.detail ? ` · ${summary.detail}` : null}
-          </span>
-        </ItemDescription>
-      </ItemContent>
+      <button
+        type="button"
+        onClick={() => select(item.harness)}
+        aria-pressed={active}
+        className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 text-left"
+      >
+        <ItemMedia variant="icon">
+          <ProviderGlyphIcon glyph={providerGlyph(item.harness)} className="size-5" />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle className="flex min-w-0 items-center gap-2">
+            <span className="truncate">{providerLabel(item.harness)}</span>
+            <VersionCode version={item.version} />
+          </ItemTitle>
+          <ItemDescription className="flex items-start gap-1.5">
+            <span className="flex h-[1.45em] shrink-0 items-center">
+              <AttentionDot attention={summary.attention} />
+            </span>
+            <span className="line-clamp-2 [overflow-wrap:anywhere]">
+              {summary.headline}
+              {summary.detail ? ` · ${summary.detail}` : null}
+            </span>
+          </ItemDescription>
+        </ItemContent>
+      </button>
+      <Switch
+        size="sm"
+        checked={item.enabled}
+        disabled={changing}
+        aria-label={`${item.enabled ? "Disable" : "Enable"} ${providerLabel(item.harness)}`}
+        onCheckedChange={(enabled) => setEnabled(item.harness, enabled)}
+      />
     </Item>
   );
 }
@@ -185,7 +222,7 @@ function SignInCommand({ command }: { readonly command: string }) {
 
 function ConfigurationTab({ item }: { readonly item: HarnessItem }) {
   const installed = installedVersion(item);
-  const summary = harnessSummary(item.state);
+  const summary = harnessSummary(item);
   return (
     <div className="flex flex-col gap-4 py-4">
       <div className="grid gap-x-4 gap-y-2.5 px-4 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
@@ -244,7 +281,7 @@ function ProviderDetail() {
     state: { selected },
   } = useProviders();
   if (!selected) return null;
-  const summary = harnessSummary(selected.state);
+  const summary = harnessSummary(selected);
   return (
     <div className="min-w-0 lg:min-h-0">
       <div className="flex min-w-0 flex-col lg:h-full lg:min-h-0">
@@ -295,17 +332,14 @@ function ProvidersHeader() {
     meta: { checking },
   } = useProviders();
   const now = useNow();
+  const label = checkLabel(checking, checkedAtMillis, now);
   return (
     <div className="flex items-center justify-between gap-4">
       <h1 className="font-heading text-2xl font-semibold tracking-tight">Providers</h1>
       <Tooltip>
         <TooltipTrigger render={<Button size="sm" variant="ghost" disabled={checking} onClick={check} />}>
           <RiRefreshLine data-icon="inline-start" />
-          {checking
-            ? "Checking…"
-            : checkedAtMillis
-              ? `Checked ${relativeTime(checkedAtMillis, now)}`
-              : "Check again"}
+          {label}
         </TooltipTrigger>
         <TooltipContent side="top">Check again</TooltipContent>
       </Tooltip>
