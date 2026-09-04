@@ -90,7 +90,7 @@ function Providers({ children }: { readonly children: ReactNode }) {
 
   const overview = queried._tag === "Success" ? queried.value : null;
   const boardControlStore = BoardResult.$is("Success")(boardResult) ? boardResult.board.controlStore : null;
-  const { controlStore, pending, settled } = harnessEnablementView(boardControlStore, enablementOverlay);
+  const { controlStore, settled } = harnessEnablementView(boardControlStore, enablementOverlay);
   if (settled) setEnablementOverlay(null);
   const providers = applyHarnessEnablement(overview?.harnesses ?? [], controlStore);
   const value: ProvidersValue = {
@@ -107,10 +107,10 @@ function Providers({ children }: { readonly children: ReactNode }) {
       setEnabled: (harness, enabled) =>
         setEnabled({ payload: { harness, enabled } }).then((exit) => {
           if (!Exit.isSuccess(exit)) return;
-          setEnablementOverlay({ base: boardControlStore, updated: exit.value, harness, enabled });
+          setEnablementOverlay({ base: boardControlStore, updated: exit.value });
         }),
     },
-    meta: { checking: queried.waiting, changing: enablement.waiting || pending },
+    meta: { checking: queried.waiting, changing: enablement.waiting },
   };
   return <ProvidersContext value={value}>{children}</ProvidersContext>;
 }

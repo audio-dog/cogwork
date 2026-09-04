@@ -1,10 +1,4 @@
-import {
-  type ControlStore,
-  type HarnessItem,
-  type HarnessName,
-  HarnessState,
-  harnessEnabled,
-} from "@cogwork/contracts";
+import { type ControlStore, type HarnessItem, HarnessState, harnessEnabled } from "@cogwork/contracts";
 
 export const applyHarnessEnablement = (
   items: ReadonlyArray<HarnessItem>,
@@ -20,21 +14,15 @@ export const applyHarnessEnablement = (
 export interface HarnessEnablementOverlay {
   readonly base: ControlStore | null;
   readonly updated: ControlStore;
-  readonly harness: HarnessName;
-  readonly enabled: boolean;
 }
 
 export const harnessEnablementView = (
   controlStore: ControlStore | null,
   overlay: HarnessEnablementOverlay | null,
 ) => {
-  if (overlay === null) return { controlStore, pending: false, settled: false };
-  const published =
-    controlStore !== null &&
-    controlStore !== overlay.base &&
-    harnessEnabled(controlStore.harnessSettings, overlay.harness) === overlay.enabled;
-  if (published) return { controlStore, pending: false, settled: true };
-  return { controlStore: overlay.updated, pending: true, settled: false };
+  if (overlay === null) return { controlStore, settled: false };
+  if (controlStore !== overlay.base) return { controlStore, settled: true };
+  return { controlStore: overlay.updated, settled: false };
 };
 
 export const versionLabel = (version: string | null) => {

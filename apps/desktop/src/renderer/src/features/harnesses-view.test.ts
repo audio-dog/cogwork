@@ -103,14 +103,13 @@ describe("harnessEnablementView", () => {
       harnessSettings: [{ harness, enabled: false }],
     };
 
-    expect(harnessEnablementView(board, { base: board, updated, harness, enabled: false })).toEqual({
+    expect(harnessEnablementView(board, { base: board, updated })).toEqual({
       controlStore: updated,
-      pending: true,
       settled: false,
     });
   });
 
-  it("keeps the mutation result through an unrelated Control store change", () => {
+  it("accepts the next Control store when another client overwrote the setting", () => {
     const base = defaultControlStore;
     const board = { ...base };
     const harness = Schema.decodeSync(HarnessName)("codex");
@@ -119,10 +118,9 @@ describe("harnessEnablementView", () => {
       harnessSettings: [{ harness, enabled: false }],
     };
 
-    expect(harnessEnablementView(board, { base, updated, harness, enabled: false })).toEqual({
-      controlStore: updated,
-      pending: true,
-      settled: false,
+    expect(harnessEnablementView(board, { base, updated })).toEqual({
+      controlStore: board,
+      settled: true,
     });
   });
 
@@ -132,9 +130,8 @@ describe("harnessEnablementView", () => {
     const updated = { ...base, harnessSettings: [{ harness, enabled: false }] };
     const board = { ...updated };
 
-    expect(harnessEnablementView(board, { base, updated, harness, enabled: false })).toEqual({
+    expect(harnessEnablementView(board, { base, updated })).toEqual({
       controlStore: board,
-      pending: false,
       settled: true,
     });
   });
