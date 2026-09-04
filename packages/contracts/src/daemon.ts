@@ -7,7 +7,7 @@ import { Claim } from "./coordination";
 import { PluginInstall } from "./plugin";
 import { ContributionSettingRow, OperationSettingRow } from "./settings";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
-import { OperationNeedKind, WorkspaceConcurrency } from "./workspace";
+import { OperationNeedKind, WorkspaceConcurrency, WorkspaceRegistration } from "./workspace";
 
 export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
@@ -174,6 +174,7 @@ export const WorkspaceInfo = Schema.Struct({
   displayName: Schema.optional(TrimmedNonEmptyString),
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerType,
+  record: WorkspaceRegistration,
   poll: PollState,
   contributions: Schema.Array(LocalContribution),
   availability: OperationAvailabilityList,

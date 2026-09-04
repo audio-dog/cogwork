@@ -65,6 +65,7 @@ export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
   ...(info.displayName ? { displayName: info.displayName } : {}),
   checkoutPath: info.checkoutPath,
   issueTracker: info.issueTracker,
+  record: info.record,
   poll: info.poll,
   contributions: info.contributions,
   availability: info.availability,
