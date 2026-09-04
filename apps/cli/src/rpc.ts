@@ -26,7 +26,7 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { layer as credentialsLayer } from "./credentials";
 import { layer as ledgerLayer } from "./ledger";
-import { contextFsLayer, worktreeManagerLayer } from "./platform";
+import { contextFsLayer, gitLayer, worktreeManagerLayer } from "./platform";
 
 export interface DaemonOptions {
   readonly socketPath: string;
@@ -320,7 +320,7 @@ export const serverLayer = (options: DaemonOptions) =>
         }),
       ),
     ),
-  );
+  ).pipe(Layer.provide(gitLayer));
 
 export const clientLayer = (socketPath: string) =>
   daemonRpcDeadlineLayer(daemonRpcDeadline).pipe(
