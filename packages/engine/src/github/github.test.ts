@@ -337,7 +337,7 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
   mergeable: [{ pull: 200, state: "dirty" }],
 });
 
-describe("github work source adapter", () => {
+describe("GitHub adapters", () => {
   it.effect("derives the actionable set from labels and bot-PR state", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
