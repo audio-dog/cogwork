@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { isSupported as isSupportedRustRegex } from "@feojs/regex";
 import * as Effect from "effect/Effect";
@@ -221,7 +222,7 @@ const canonicalJson = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null) return value;
   return Object.fromEntries(
     Object.entries(value)
-      .sort(([left], [right]) => (left < right ? -1 : Number(left > right)))
+      .sort(([left], [right]) => Buffer.compare(Buffer.from(left), Buffer.from(right)))
       .map(([key, entry]) => [key, canonicalJson(entry)]),
   );
 };

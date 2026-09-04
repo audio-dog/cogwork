@@ -72,6 +72,36 @@ describe("Codex Hook trust", () => {
     );
   });
 
+  it("matches Codex's UTF-8 object key order", () => {
+    assert.deepStrictEqual(
+      codexHookTrustEntries(
+        "/repo/.codex/hooks.json",
+        JSON.stringify({
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [
+                  {
+                    type: "mcp_tool",
+                    server: "security",
+                    tool: "scan",
+                    input: { "\ue000": 1, "\u{10000}": 2 },
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      ),
+      [
+        {
+          key: "/repo/.codex/hooks.json:pre_tool_use:0:0",
+          hash: "sha256:007ef96be38acb2271a9308752516c02f0f3a84afdc13cf4802b02416550a5bd",
+        },
+      ],
+    );
+  });
+
   it("adds each Hook without changing existing Hook state", () => {
     const existing = `[hooks.state."/repo/.codex/hooks.json:pre_tool_use:0:0"]
 enabled = false
