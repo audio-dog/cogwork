@@ -1,50 +1,52 @@
 # cogwork
 
-Orchestration control plane for AI coding agents — discover work from an issue tracker,
-schedule runs under concurrency and budget limits, and drive harnesses (Cursor ACP today;
-the provider runner next).
+cogwork is a productivity assistant for software engineers. Its first capability is coding
+orchestration: it finds work, classifies and schedules it, runs agent workflows, records the
+results, and brings completed changes to a pull request for human review.
+
+The project is pre-release, local, and single-user today.
+
+## Runtime
+
+- The Electron desktop app is mission control and the primary daemon host on a laptop. It shows
+  work and live runs while the engine operates in the background.
+- The engine reconciles issue trackers, schedules work within concurrency and budget limits,
+  prepares worktrees, and records each run.
+- The owned provider runner uses TanStack AI to run the model loop against configured model
+  providers.
+- The shared external-harness runtime drives Claude Code and Codex today, with a fail-closed Cursor
+  ACP adapter on the same seam.
 
 ## Packages
 
 | Package | Role |
 |---|---|
-| **contracts** (`packages/contracts`) | Shared schemas and vocabulary (`WorkItem`, `Run`, `Claim`, harness terms) |
-| **engine** (`packages/engine`) | Daemon, reconcile, scheduler, executor, worktrees, tracker/provider adapters |
-| **cli** (`apps/cli`) | `cogwork` client and headless daemon host |
-| **cursor-acp** (`packages/cursor-acp`) | Cursor harness adapter over ACP |
+| [**contracts**](./packages/contracts/CONTEXT.md) | Shared schemas and orchestration vocabulary |
+| [**engine**](./packages/engine/CONTEXT.md) | Daemon, scheduler, executor, owned runner, worktrees, and service adapters |
+| [**cli**](./apps/cli/CONTEXT.md) | `cogwork` client and headless daemon host |
+| [**desktop**](./apps/desktop/CONTEXT.md) | Electron mission-control app and primary laptop daemon host |
+| [**claude-code**](./packages/claude-code/CONTEXT.md) | Claude Code harness adapter |
+| [**codex-cli**](./packages/codex-cli/CONTEXT.md) | Codex CLI harness adapter |
+| [**cursor-acp**](./packages/cursor-acp/CONTEXT.md) | Cursor harness adapter over ACP |
 
-Playbook skills for headless stages live in `packages/engine/skills/`.
-
-Start with [`CONTEXT-MAP.md`](./CONTEXT-MAP.md) for how the pieces connect, then the
-per-package `CONTEXT.md`.
+Start with the [Context Map](./CONTEXT-MAP.md) for how the major contexts connect. Detailed product
+direction lives in [Product](./docs/agents/product.md), and operation playbooks live in
+[`packages/engine/operating-instructions`](./packages/engine/operating-instructions/).
 
 ## Setup
 
+From the repository root:
+
 ```bash
 pnpm install
-pnpm vendor   # shallow-clone Effect v4 into .repos/effect for agent/human reference
+pnpm vendor effect
 pnpm typecheck
+pnpm build
 pnpm test
-pnpm dev      # run every package's dev server (the desktop app today)
+pnpm format-and-lint
 ```
 
-## Vendored reference source
-
-The Effect v4 API is beta and shifts release-to-release, so the exact source we depend on is
-vendored locally for agents (and humans) to read:
-
-```bash
-pnpm vendor
-```
-
-This shallow-clones the Effect monorepo into `.repos/effect`, pinned to the **exact installed**
-`effect` version (read from `packages/engine`, currently `4.0.0-beta.102` via the `effect` catalog),
-so the reference can never drift from the dependency. `.repos/` is git-ignored, and re-running is
-idempotent — it no-ops when `.repos/effect` already matches the installed version and re-clones when
-the version changes.
-
-## Agent toolkit (moved)
-
-The single-source generator that syncs rules, commands, subagents, and MCP config across
-Claude Code, Cursor, and Codex used to live here as `packages/sync`. It now lives in
-[taylorfsteele/sync](https://github.com/taylorfsteele/sync).
+`pnpm vendor effect` hydrates `.repos/effect` with the Effect source version installed by this
+workspace. The ignored reference checkout lets agents and people inspect the exact API locally.
+Re-running the command is safe: it does nothing when the checkout already matches and refreshes it
+when the dependency changes.
