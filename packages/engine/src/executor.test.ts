@@ -493,7 +493,26 @@ class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<C
 const record = (calls: Ref.Ref<ReadonlyArray<Call>>, entry: Call) =>
   Ref.update(calls, (xs) => [...xs, entry]);
 
-function trackerRecorder(claimFailure?: IssueTrackerError) {
+const ensureClaimWriteActive = Effect.fn("ExecutorTest.ensureClaimWriteActive")(function* (
+  writeActive: Ref.Ref<boolean> | undefined,
+) {
+  if (!writeActive) return;
+  if (yield* Ref.get(writeActive)) return;
+  return yield* Effect.die(new Error("Item claimed outside the Control store write gate"));
+});
+
+const recordClaim = (
+  calls: Ref.Ref<ReadonlyArray<Call>>,
+  itemId: string,
+  claimWriteActive: Ref.Ref<boolean> | undefined,
+  claimFailure: IssueTrackerError | undefined,
+) =>
+  ensureClaimWriteActive(claimWriteActive).pipe(
+    Effect.andThen(record(calls, { method: "claim", item: itemId })),
+    Effect.andThen(claimFailure ? Effect.fail(claimFailure) : Effect.void),
+  );
+
+function trackerRecorder(claimFailure?: IssueTrackerError, claimWriteActive?: Ref.Ref<boolean>) {
   return Layer.effect(
     IssueTracker,
     Effect.map(
@@ -502,11 +521,7 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
         rateLimitScope: () => null,
         observe: () => Effect.succeed([]),
         createIssue: () => Effect.void,
-        claim: (_workspace, itemId) => {
-          const recorded = record(calls, { method: "claim", item: itemId });
-          if (!claimFailure) return recorded;
-          return recorded.pipe(Effect.andThen(Effect.fail(claimFailure)));
-        },
+        claim: (_workspace, itemId) => recordClaim(calls, itemId, claimWriteActive, claimFailure),
         release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
         note: (_workspace, itemId, detail) => record(calls, { method: "note", item: itemId, note: detail }),
         triaged: (_workspace, itemId, outcome) =>
@@ -2042,6 +2057,29 @@ describe("Executor.execute", () => {
           [],
           observedWriteGateControlStoreLayer(writeActive),
           assertRunAcceptanceInsideWriteGate(writeActive),
+        ),
+      ),
+    );
+  });
+
+  it.effect("claims an item while holding the Control store write gate", () => {
+    const writeActive = Ref.makeUnsafe(false);
+
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(undefined, writeActive),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          observedWriteGateControlStoreLayer(writeActive),
         ),
       ),
     );
@@ -3817,6 +3855,33 @@ describe("Executor.execute", () => {
           pluginManagerStub,
           [],
           controlStoreLayer(runnableStages, [], [{ harness: cursor, enabled: false }]),
+        ),
+      ),
+    );
+  });
+
+  it.effect("claims a stalled follow-up while holding the Control store write gate", () => {
+    const stalledItem = {
+      ...followUpItem,
+      followUp: { ...followUpItem.followUp, noProgress: 3, stalled: true },
+    };
+    const writeActive = Ref.makeUnsafe(false);
+
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      assert.isTrue(yield* execute(executor, followUpWorkspace, stalledItem));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(followUpEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(undefined, writeActive),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          observedWriteGateControlStoreLayer(writeActive),
         ),
       ),
     );
