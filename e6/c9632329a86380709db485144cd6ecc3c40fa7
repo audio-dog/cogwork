@@ -1,0 +1,21 @@
+packages/engine/src/classify.ts
+  s_20ee436f7692cd::t_f329edfb840abc 21,171,214
+packages/engine/src/recovery.ts
+  s_20ee436f7692cd::t_9e86b8fb4ccac3 18,21,107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e6c9632329a86380709db485144cd6ecc3c40fa7",
+  "prompts": {},
+  "sessions": {
+    "s_20ee436f7692cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06d99-1931-7a33-a8b3-f315a5b6b11d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
