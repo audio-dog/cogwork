@@ -1,10 +1,13 @@
 import type { SessionKind } from "@cogwork/contracts";
+import * as Data from "effect/Data";
 
 export type ResumeReason = "no-session" | "fresh-requested" | "worktree-recreated" | "stale" | "token-limit";
 
-export type ResumeDecision =
-  | { readonly kind: "resume" }
-  | { readonly kind: "fresh"; readonly reason: ResumeReason };
+export type ResumeDecision = Data.TaggedEnum<{
+  Resume: { readonly kind: "resume" };
+  Fresh: { readonly kind: "fresh"; readonly reason: ResumeReason };
+}>;
+export const ResumeDecision = Data.taggedEnum<ResumeDecision>();
 
 export interface ResumeInputs {
   readonly sessionKind: SessionKind | null;
@@ -35,13 +38,14 @@ const overTokenLimit = (inputs: ResumeInputs) =>
 // The age and token caps guard an opaque handle, whose history the harness keeps
 // out of reach and lets grow unbounded; an owned-transcript session compacts
 // inside the provider runner's own loop, so the caps skip it.
-export const decideResume = (inputs: ResumeInputs): ResumeDecision => {
-  if (!resumable(inputs)) return { kind: "fresh", reason: "no-session" };
-  if (inputs.fresh) return { kind: "fresh", reason: "fresh-requested" };
-  if (inputs.worktreeRecreated) return { kind: "fresh", reason: "worktree-recreated" };
-  if (inputs.sessionKind === "opaque-handle") {
-    if (agedOut(inputs)) return { kind: "fresh", reason: "stale" };
-    if (overTokenLimit(inputs)) return { kind: "fresh", reason: "token-limit" };
+export const decideResume = (inputs: ResumeInputs) => {
+  if (!resumable(inputs)) return ResumeDecision.Fresh({ kind: "fresh", reason: "no-session" });
+  if (inputs.fresh) return ResumeDecision.Fresh({ kind: "fresh", reason: "fresh-requested" });
+  if (inputs.worktreeRecreated) {
+    return ResumeDecision.Fresh({ kind: "fresh", reason: "worktree-recreated" });
   }
-  return { kind: "resume" };
+  if (inputs.sessionKind !== "opaque-handle") return ResumeDecision.Resume({ kind: "resume" });
+  if (agedOut(inputs)) return ResumeDecision.Fresh({ kind: "fresh", reason: "stale" });
+  if (overTokenLimit(inputs)) return ResumeDecision.Fresh({ kind: "fresh", reason: "token-limit" });
+  return ResumeDecision.Resume({ kind: "resume" });
 };

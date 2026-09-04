@@ -7,7 +7,7 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { decideSessionChoice, type SessionChoice, type SessionChoiceInputs } from "./session-choice";
+import { decideSessionChoice, SessionChoice, type SessionChoiceInputs } from "./session-choice";
 
 const selectedHarness = Schema.decodeSync(HarnessName)("codex");
 const otherHarness = Schema.decodeSync(HarnessName)("claude-code");
@@ -51,23 +51,23 @@ const inputs = (over: Partial<SessionChoiceInputs> = {}) =>
     ...over,
   }) satisfies SessionChoiceInputs;
 
-const continuation = {
+const continuation = SessionChoice.Continuation({
   session: sessionId,
   prompt: "continuation",
   operations: "current",
-} satisfies SessionChoice;
+});
 
-const combined = {
+const combined = SessionChoice.Combined({
   session: null,
   prompt: "combined",
   operations: "current",
-} satisfies SessionChoice;
+});
 
-const full = {
+const full = SessionChoice.FreshRecovery({
   session: null,
   prompt: "full",
   operations: "fresh-recovery",
-} satisfies SessionChoice;
+});
 
 const expectChoice = (over: Partial<SessionChoiceInputs>, expected: SessionChoice) => {
   assert.deepStrictEqual(decideSessionChoice(inputs(over)), expected);
@@ -79,21 +79,21 @@ describe("decideSessionChoice", () => {
       expectChoice({}, continuation);
     });
 
-    it("starts a new session with both prompts when fresh was requested", () => {
-      expectChoice({ fresh: true }, combined);
+    it("uses only the full prompt and fresh-recovery operations when fresh was requested", () => {
+      expectChoice({ fresh: true }, full);
     });
 
-    it("starts a new session with both prompts when the previous session cannot resume", () => {
-      expectChoice({ session: opaqueSession({ handle: null }) }, combined);
+    it("uses fresh-recovery operations when the previous session cannot resume", () => {
+      expectChoice({ session: opaqueSession({ handle: null }) }, full);
     });
 
-    it("keeps both prompts when fresh is requested for an already unresumable session", () => {
+    it("keeps fresh-recovery operations when fresh is requested for an unresumable session", () => {
       expectChoice(
         {
           session: opaqueSession({ handle: null }),
           fresh: true,
         },
-        combined,
+        full,
       );
     });
 
@@ -121,16 +121,12 @@ describe("decideSessionChoice", () => {
       expectChoice({ session: ownedSession() }, continuation);
     });
 
-    it("starts a new session when an opaque session has no handle", () => {
-      expectChoice({ session: opaqueSession({ handle: null }) }, combined);
-    });
-
     it("starts a new session when an opaque session is stale", () => {
-      expectChoice({ now: 20_000 }, combined);
+      expectChoice({ now: 20_000 }, full);
     });
 
     it("starts a new session when an opaque session is over the token limit", () => {
-      expectChoice({ lastRunTotalTokens: 2_000 }, combined);
+      expectChoice({ lastRunTotalTokens: 2_000 }, full);
     });
 
     it("does not age out an owned transcript", () => {
@@ -145,7 +141,7 @@ describe("decideSessionChoice", () => {
     });
 
     it("starts a new session after any worktree recreation", () => {
-      expectChoice({ worktreeRecreated: true }, combined);
+      expectChoice({ worktreeRecreated: true }, full);
     });
   });
 
