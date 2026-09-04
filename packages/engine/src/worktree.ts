@@ -298,8 +298,12 @@ export const make = Effect.gen(function* () {
     }
 
     yield* git.fetch(repoPath, remote);
-    const pushed = yield* git.divergence(worktreePath, remote, headBranch);
-    if (pushed.ahead > 0 || pushed.behind > 0) {
+    const remoteHeadExists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
+    if (!remoteHeadExists) {
+      return declinedPullRequestReadiness(`head ${headBranch} has not been pushed to ${remote}`);
+    }
+    const headDivergence = yield* git.divergence(worktreePath, remote, headBranch);
+    if (headDivergence.ahead > 0 || headDivergence.behind > 0) {
       return declinedPullRequestReadiness(`local head ${headBranch} does not match ${remote}/${headBranch}`);
     }
     const divergence = yield* git.divergence(worktreePath, remote, baseBranch, headBranch);

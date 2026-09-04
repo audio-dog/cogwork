@@ -562,6 +562,7 @@ describe("Worktree.pullRequestReadiness", () => {
       Effect.provide(
         readinessLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
+          remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: {
             [Worktree.branchName(item)]: inSync,
             trunk: { ahead: 0, behind: 0 },
@@ -581,13 +582,12 @@ describe("Worktree.pullRequestReadiness", () => {
       if (!Worktree.PullRequestReadiness.$is("Declined")(result)) {
         return assert.fail("expected the gate to decline");
       }
-      assert.include(result.reason, "does not match origin");
-      assert.lengthOf(yield* Ref.get(recorder.divergenceChecks), 1);
+      assert.include(result.reason, "has not been pushed to origin");
+      assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), []);
     }).pipe(
       Effect.provide(
         readinessLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
-          divergence: { ahead: 1, behind: 0 },
         }),
       ),
     ),
@@ -610,6 +610,7 @@ describe("Worktree.pullRequestReadiness", () => {
       Effect.provide(
         readinessLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
+          remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: {
             [Worktree.branchName(item)]: inSync,
             main: { ahead: 2, behind: 1 },
