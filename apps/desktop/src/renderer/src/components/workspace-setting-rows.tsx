@@ -109,6 +109,11 @@ function DraftTextarea({
   );
 }
 
+export const connectionItems = (connections: readonly Connection[], system: "github" | "linear") =>
+  connections
+    .filter((connection) => connection.system === system)
+    .map((connection) => ({ value: connection.id, label: connection.account }));
+
 function ConnectionSelect({
   system,
   field,
@@ -123,11 +128,8 @@ function ConnectionSelect({
     actions: { patch },
     meta: { disabled },
   } = useWorkspaceRecord();
-  const available = connections.filter((connection) => connection.system === system);
-  const items = [
-    { value: "unbound", label: available.length === 0 ? "None established yet" : "Not connected" },
-    ...available.map((connection) => ({ value: connection.id, label: connection.account })),
-  ];
+  const items = connectionItems(connections, system);
+  const placeholder = items.length === 0 ? "None established yet" : "Choose Connection";
   return (
     <WorkspaceField.Group className="w-auto gap-2">
       <Select
@@ -139,7 +141,7 @@ function ConnectionSelect({
         }}
       >
         <SelectTrigger aria-label={label} className="w-56">
-          <SelectValue />
+          <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
@@ -151,7 +153,7 @@ function ConnectionSelect({
           </SelectGroup>
         </SelectContent>
       </Select>
-      {available.length === 0 ? (
+      {items.length === 0 ? (
         <Button nativeButton={false} variant="link" size="sm" render={<Link to="/connections" />}>
           Establish Connection
         </Button>
