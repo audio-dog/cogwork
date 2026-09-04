@@ -1,0 +1,19 @@
+.github/workflows/pull-request.yml
+  s_92ab8f4f5605f3::t_fdfef2b51b9dbe 24-25,27,37-38,40,56-57,59,72-73,75,91-92,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8f8a2414ab8776f6d0426fc2b78dafa9a96327d6",
+  "prompts": {},
+  "sessions": {
+    "s_92ab8f4f5605f3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06af7-5a1f-75e0-b0d1-3daca26a49d2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
