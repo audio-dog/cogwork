@@ -1,0 +1,25 @@
+apps/cli/src/harness-commands.ts
+  s_a4f7576244239f::t_7cebe6c00b0796 24,57
+  s_a4f7576244239f::t_8d9d101220347f 36,46-49,56,58
+  s_a4f7576244239f::t_ae99e0ce7f43f1 1-23,25-35,37-45,50-55,59-63
+apps/cli/src/cli.ts
+  s_a4f7576244239f::t_ae99e0ce7f43f1 16,43
+apps/cli/src/harness-commands.test.ts
+  s_a4f7576244239f::t_ae99e0ce7f43f1 1-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "27bcab244a097439b53c1e4f6fd9ee5f945b7159",
+  "prompts": {},
+  "sessions": {
+    "s_a4f7576244239f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c90-0d33-7f51-99b1-4056f2717a9e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
