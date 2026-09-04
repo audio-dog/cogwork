@@ -1,0 +1,21 @@
+packages/engine/src/playbook.test.ts
+  s_d2c41d3cf117ad::t_c6711f896b06c2 19
+packages/engine/src/mcp-skill.test.ts
+  s_d2c41d3cf117ad::t_c6711f896b06c2 61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6c721b20a71d80145df46ae8396a94e705e50afe",
+  "prompts": {},
+  "sessions": {
+    "s_d2c41d3cf117ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e04-3496-7013-b71e-9b8b46cf5882",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
