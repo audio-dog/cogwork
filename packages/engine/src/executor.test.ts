@@ -5,6 +5,7 @@ import {
   DaemonEvent,
   DeclaredVersion,
   defaultControlStore,
+  type HarnessEnablement,
   HarnessName,
   LocalContribution,
   localOwnerId,
@@ -1168,6 +1169,7 @@ class SelectedHarness extends Context.Service<SelectedHarness, Ref.Ref<ReadonlyA
         establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
         revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
         removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
+        setHarnessEnabled: () => Effect.die(new Error("unexpected Harness enablement update")),
         updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
         installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
         uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
@@ -1184,8 +1186,9 @@ const selectHarness = (rows: ReadonlyArray<OperationSettingRow>) =>
 const controlStoreLayer = (
   operationSettings: ReadonlyArray<OperationSettingRow>,
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
+  harnessSettings: ReadonlyArray<HarnessEnablement> = [],
 ) => {
-  const picture = { ...defaultControlStore, operationSettings, contributionSettings };
+  const picture = { ...defaultControlStore, operationSettings, contributionSettings, harnessSettings };
   const gate = Semaphore.makeUnsafe(1);
   return Layer.succeed(ControlStore, {
     health: "available",
@@ -1195,6 +1198,7 @@ const controlStoreLayer = (
     establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
     revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
     removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
+    setHarnessEnabled: () => Effect.die(new Error("unexpected Harness enablement update")),
     updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
     installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
     uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
@@ -1235,6 +1239,7 @@ const changingControlStoreLayer = (
         establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
         revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
         removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
+        setHarnessEnabled: () => Effect.die(new Error("unexpected Harness enablement update")),
         updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
         installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
         uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
@@ -1432,6 +1437,40 @@ describe("Executor.execute", () => {
       assert.deepStrictEqual(availability.causes, []);
     }).pipe(Effect.provide(provide([transientPreflight])));
   });
+
+  it.effect("refuses a disabled Harness before claim", () =>
+    Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      const availability = yield* executor.availabilityOf(implementWorkspace, implementItem);
+      const accepted = yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.isFalse(availability.available);
+      assert.isFalse(accepted);
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      assert.deepStrictEqual(availability.causes, [
+        {
+          _tag: "RuntimeHostFactFailed",
+          fact: "harness",
+          message: "cursor Harness is disabled on this Runtime host",
+        },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(successEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages, [], [{ harness: cursor, enabled: false }]),
+        ),
+      ),
+    ),
+  );
 
   it.effect("triages an eligible item into a proposal note, label advance, and ledgered run", () => {
     return Effect.gen(function* () {

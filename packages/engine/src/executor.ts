@@ -21,6 +21,7 @@ import {
   agUiIsStructuredOutputComplete,
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
+  harnessEnabled,
   ImplementStageResultCompletion,
   issueTrackerErrorIsPermanent,
   LifecycleStage,
@@ -1343,6 +1344,10 @@ export const make = Effect.gen(function* () {
   const harnessAvailability = Effect.fn("Executor.harnessAvailability")(function* (
     resolved: ResolvedOperation,
   ) {
+    const picture = yield* controlStore.picture;
+    if (!harnessEnabled(picture.harnessSettings, resolved.stage.harness)) {
+      return hostFailure("harness", `${resolved.stage.harness} Harness is disabled on this Runtime host`);
+    }
     return yield* harness
       .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort)
       .pipe(
