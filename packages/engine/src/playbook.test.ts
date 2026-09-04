@@ -126,13 +126,15 @@ describe("buildImplementPrompt", () => {
     assert.notInclude(prompt, "IMPLEMENT-RESULT");
   });
 
-  it("tells the agent to reuse an existing pull request for the branch instead of opening a second", () => {
+  it("tells the agent to prepare pull request content for the engine", () => {
     const prompt = buildImplementPrompt(resolveImplement(config()), {
       id: "#15",
       title: "Implement playbook",
     });
-    assert.include(prompt, "Only one pull request should ever exist for this branch");
-    assert.include(prompt, "push your work to that one instead of opening another");
+    assert.include(prompt, "The engine opens the pull request");
+    assert.include(prompt, "Push the prepared branch");
+    assert.include(prompt, "Return a ready-for-pr result");
+    assert.notInclude(prompt, "open a pull request that references");
   });
 });
 
@@ -145,7 +147,9 @@ describe("buildContinuationNudge", () => {
     assert.include(nudge, "prepared Worktree as ground truth");
     assert.include(nudge, "Do not trust the ragged tail");
     assert.include(nudge, "say COMPLETE and stop");
-    assert.include(nudge, "keep using it and never open a second one");
+    assert.include(nudge, "prepare the pull request title and body for the engine");
+    assert.include(nudge, "push the prepared branch");
+    assert.notInclude(nudge, "open a second one");
     assert.notInclude(nudge, "implement-agent");
   });
 });
