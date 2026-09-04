@@ -1,0 +1,19 @@
+packages/engine/src/playbook.ts
+  s_b230861a31ae42::t_578c5f6412cc50 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4bfd65836135949e2ce5716f4006175abfa4dc96",
+  "prompts": {},
+  "sessions": {
+    "s_b230861a31ae42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d547d04-dd85-4e77-a00c-613f35a5cfef",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
