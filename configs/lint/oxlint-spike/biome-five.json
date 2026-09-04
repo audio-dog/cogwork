@@ -1,0 +1,15 @@
+{
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false
+    }
+  },
+  "plugins": [
+    "./biome/no-effect-sync-throw.grit",
+    "./biome/no-iife-wrapper.grit",
+    "./biome/no-runtime-runfork.grit",
+    "./biome/no-switch.grit",
+    "./biome/no-wire-union-tag-comparison.grit"
+  ]
+}

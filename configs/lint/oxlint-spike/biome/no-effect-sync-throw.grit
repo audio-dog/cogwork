@@ -1,0 +1,12 @@
+language js(typescript, jsx)
+
+any {
+  `Effect.sync($fn)` as $call where {
+    $fn <: contains `throw $_`,
+    register_diagnostic(span=$call, message="Rule: do not throw inside Effect.sync. Why: Effect.sync is documented as not throwing, so a thrown value becomes a defect rather than a typed failure and escapes the error channel. Fix: use Effect.try with a catch that builds a typed error, or return Effect.fail for an expected failure.", severity="error")
+  },
+  `Effect.sync<$types>($fn)` as $call where {
+    $fn <: contains `throw $_`,
+    register_diagnostic(span=$call, message="Rule: do not throw inside Effect.sync. Why: Effect.sync is documented as not throwing, so a thrown value becomes a defect rather than a typed failure and escapes the error channel. Fix: use Effect.try with a catch that builds a typed error, or return Effect.fail for an expected failure.", severity="error")
+  }
+}
