@@ -41,6 +41,7 @@ import {
   workspaceIdentity,
   workspaceKey,
   workspaceLabel,
+  workspaceRecordDraftError,
   workspaceRecordWritable,
   workspaceUpdateFromDraft,
 } from "../features/workspace-record";
@@ -76,9 +77,9 @@ interface WorkspaceDraftEdits {
   readonly draft: WorkspaceRecordDraft;
 }
 
-const draftError = (pathRefused: boolean, recordRefused: boolean) => {
+const draftError = (pathRefused: boolean, recordRefused: boolean, draft: WorkspaceRecordDraft) => {
   if (pathRefused) return "Use an absolute path.";
-  if (recordRefused) return "Check the workspace fields. JSON and positive numbers must be valid.";
+  if (recordRefused) return workspaceRecordDraftError(draft);
   return null;
 };
 
@@ -150,7 +151,10 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
     },
     saving: (rebindPending && rebindTarget === identity) || (updatePending && updateTarget === identity),
     // The provider keeps a failure until the next act, so only this page's own submit shows it.
-    saveError: draftError(pathRefused, recordRefused) ?? submittedUpdateError ?? submittedRebindError,
+    saveError:
+      draftError(pathRefused, recordRefused, draft ?? emptyDraft) ??
+      submittedUpdateError ??
+      submittedRebindError,
     save: () => {
       if (!activeEdits || !baseline || !identity) {
         setDraft(null);

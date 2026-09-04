@@ -12,6 +12,7 @@ import {
   emptyDraft,
   seededDraft,
   workspaceLabelById,
+  workspaceRecordDraftError,
   workspaceRecordWritable,
   workspaceUpdateFromDraft,
 } from "./workspace-record";
@@ -158,6 +159,23 @@ describe("workspace record draft", () => {
         sourceControlType: "github",
       }),
     ).toBeNull();
+  });
+
+  it("names the missing Connection that prevents save", () => {
+    expect(workspaceRecordDraftError(emptyDraft)).toBe("Choose an issue tracker Connection.");
+    expect(
+      workspaceRecordDraftError({
+        ...emptyDraft,
+        issueTrackerConnectionId: "github/acme",
+        sourceControlType: "github",
+      }),
+    ).toBe("Choose a source control Connection.");
+    expect(
+      workspaceRecordDraftError({
+        ...emptyDraft,
+        issueTrackerConnectionId: "github/acme",
+      }),
+    ).toBe("Check the workspace fields. JSON and positive numbers must be valid.");
   });
 
   it("holds every normalized field after submission", () => {

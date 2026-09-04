@@ -169,9 +169,18 @@ const priorityFrom = (draft: WorkspaceRecordDraft) => {
     field: optional(draft.priorityField),
   };
 };
-const connectionsAreBound = (draft: WorkspaceRecordDraft) =>
-  draft.issueTrackerConnectionId !== "unbound" &&
-  (draft.sourceControlType !== "github" || draft.sourceControlConnectionId !== "unbound");
+const missingConnectionError = (draft: WorkspaceRecordDraft) => {
+  if (draft.issueTrackerConnectionId === "unbound") return "Choose an issue tracker Connection.";
+  if (draft.sourceControlType === "github" && draft.sourceControlConnectionId === "unbound") {
+    return "Choose a source control Connection.";
+  }
+  return null;
+};
+
+export const workspaceRecordDraftError = (draft: WorkspaceRecordDraft) =>
+  missingConnectionError(draft) ?? "Check the workspace fields. JSON and positive numbers must be valid.";
+
+const connectionsAreBound = (draft: WorkspaceRecordDraft) => missingConnectionError(draft) === null;
 
 export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
   if (!connectionsAreBound(draft)) return null;
