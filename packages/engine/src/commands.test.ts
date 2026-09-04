@@ -70,15 +70,15 @@ const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
   checkoutPath: "/repos/acme",
   gitRemote: "git@github.com:acme/repo.git",
-  issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/repo" },
+  issueTracker: { type: "github", connectionId: "github/acme" },
   linearHistory: false,
   concurrency: 2,
 });
 const unboundRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "unbound",
   checkoutPath: "/repos/unbound",
-  issueTracker: { type: "github", repo: "acme/repo" },
-  sourceControl: { type: "github", repo: "acme/repo" },
+  issueTracker: { type: "github" },
+  sourceControl: { type: "github" },
 });
 const mismatchedRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "mismatch",
@@ -1495,7 +1495,6 @@ describe("Connection mutations", () => {
       sourceControl: {
         type: "github",
         connectionId: github,
-        repo: "acme/repo",
       },
     });
     const registries = Layer.mergeAll(
