@@ -502,13 +502,10 @@ describe("external Harness runtime", () => {
           })
           .pipe(Stream.runForEach((event) => Effect.sync(() => seen.push(event))));
 
-        // The Sandbox watcher retains one diff promise per filesystem event for the
-        // whole Run and cannot be told to skip a tree. Leaving it off is what bounds
-        // the daemon, so the Run must never start it.
         assert.strictEqual(watchProbe.watches, 0);
-        // The Run waits for the feed as well as the harness, so the terminal event
-        // arriving last is the observable form of "the feed was stopped and drained".
-        // The stop contract itself is covered in the feed's own tests.
+        assert.isFalse(
+          seen.some((event) => event.type === EventType.CUSTOM && event.name === "sandbox.file"),
+        );
         assert.deepNestedInclude(seen.at(-1), { type: EventType.RUN_FINISHED });
         assert.lengthOf(
           seen.filter((event) => event.type === EventType.RUN_FINISHED),
@@ -961,16 +958,6 @@ describe("external Harness runtime", () => {
             type: EventType.CUSTOM,
             name: "file.changed",
             value: { path: "/checkout/src/.tanstack-nested.ts", diff: "diff --git a/n b/n" },
-          },
-          // The reserved namespace covers what the projection writes inside its own
-          // tree, not just the root entry naming it.
-          {
-            type: EventType.CUSTOM,
-            name: "file.changed",
-            value: {
-              path: "/checkout/.tanstack-projected-abc123/AGENTS.md",
-              diff: "diff --git a/p b/p",
-            },
           },
           {
             type: EventType.CUSTOM,

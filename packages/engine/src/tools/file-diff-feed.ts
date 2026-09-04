@@ -287,26 +287,16 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
   return diff === "" ? null : fileDiffEvent(relTo(event.path), diff);
 });
 
-// `git check-ignore` is the general answer to what a Run should not diff, but it
-// cannot run before the checkout has a base SHA — and a checkout with no commit
-// yet synthesizes a whole-file patch for every file it sees instead. These are the
-// generated trees big enough to exhaust a Run on that path, so they are refused by
-// segment before any diff work starts.
+// Refused by segment because `git check-ignore` is skipped without a base SHA, and
+// that path synthesizes a whole-file patch per file instead.
 const IGNORED_SEGMENTS = [".git", "node_modules", ".repos", ".pnpm-store"];
 
-// `.tanstack-*` at the checkout root is TanStack's reserved scratch namespace — the
-// Workspace projection marker, the per-run output schema, and the projected skills
-// tree land there, and none of them are the agent's work. Matched on the root
-// segment so the projected tree's contents go with it: a watcher sees writes inside
-// that tree which a harness's own event feed never reports.
-const reservedScratch = /^\.tanstack-/;
+// Anchored to a whole root entry so it cannot hide a nested file the agent wrote:
+// the checkout is the agent's, and it can create any name it likes inside it.
+const reservedScratch = /^\.tanstack-[^/]*$/;
 
-export const ignored = (rel: string) => {
-  const segments = rel.split("/");
-  return (
-    segments.some((segment) => IGNORED_SEGMENTS.includes(segment)) || reservedScratch.test(segments[0] ?? "")
-  );
-};
+export const ignored = (rel: string) =>
+  rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment)) || reservedScratch.test(rel);
 
 const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
   stream.pipe(
@@ -435,14 +425,10 @@ const classifyWorktreeEvent = Effect.fn("Tools.classifyWorktreeEvent")(function*
   return { type: exists ? "change" : "delete", path, timestamp: 0 } satisfies SandboxFileEvent;
 });
 
-/**
- * Live diffs are a nicety: a dead feed must not end a Run, but it must leave a
- * trace. Interruption is a consumer tearing the feed down rather than a death, so
- * only a real cause is worth a warning.
- */
+/** Interruption is a consumer tearing the feed down, not a death. */
 export const tolerateFeedDeath =
   (message: string) =>
-  <A, E, R>(feed: Stream.Stream<A, E, R>): Stream.Stream<A, never, R> =>
+  <A, E, R>(feed: Stream.Stream<A, E, R>) =>
     feed.pipe(
       Stream.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
@@ -454,12 +440,7 @@ export const tolerateFeedDeath =
 export const watchWorktreeDiffs = (
   sandbox: WorktreeSandbox,
   baseSha: string,
-  /**
-   * Completes to stop watching. Halting the source rather than interrupting the
-   * feed is what lets the debounce flush, so a file written just before the caller
-   * stopped needing the feed still reaches the client. Omit to watch until
-   * interruption, which drops whatever the debounce still holds.
-   */
+  /** Completes to end the source, flushing the debounce. Omitting it drops whatever the debounce holds. */
   stop?: Effect.Effect<void>,
 ): Stream.Stream<AgUiEvent, ToolError, FileSystem.FileSystem> =>
   Stream.unwrap(
@@ -467,10 +448,8 @@ export const watchWorktreeDiffs = (
       Effect.map((fs) =>
         fs.watch(sandbox.root, { recursive: true }).pipe(
           Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
-          // `Stream.haltWhen` polls between pulls, and the watcher's pull blocks
-          // while the checkout is idle, so it would never notice. Racing the stop
-          // as a merged side ends the source with a normal completion instead,
-          // which is what the debounce downstream needs in order to flush.
+          // Not `Stream.haltWhen`: it polls between pulls, and the watcher's pull
+          // blocks while the checkout is idle, so an idle feed would never stop.
           (source) =>
             stop
               ? Stream.merge(source, Stream.fromEffect(stop).pipe(Stream.drain), {
