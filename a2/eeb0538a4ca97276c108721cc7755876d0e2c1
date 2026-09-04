@@ -1,0 +1,40 @@
+packages/engine/src/github/host.ts
+  s_3c4a42d9eee4a6::t_4a8fbae9502c0b 104
+  s_3c4a42d9eee4a6::t_07f3498ec3f478 11,94,106
+packages/engine/src/coordination-tracker.test.ts
+  s_3c4a42d9eee4a6::t_4a8fbae9502c0b 132
+packages/engine/src/coordination-tracker.ts
+  s_3c4a42d9eee4a6::t_4a8fbae9502c0b 45,85
+packages/engine/src/github/github.test.ts
+  s_3c4a42d9eee4a6::t_678cafb14a66a9 609-627
+  s_3c4a42d9eee4a6::t_138c87450e421f 158,254-267,632-634,655
+  s_777b251643bf2e::t_de8136ff0d904b 628-631,635
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_3c4a42d9eee4a6::t_07f3498ec3f478 9
+packages/engine/src/linear/host.ts
+  s_3c4a42d9eee4a6::t_4a8fbae9502c0b 118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a2eeb0538a4ca97276c108721cc7755876d0e2c1",
+  "prompts": {},
+  "sessions": {
+    "s_3c4a42d9eee4a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e01-7017-7e73-805c-5fb3c397c7c0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_777b251643bf2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de5-9582-7b31-a35e-4391798377b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
