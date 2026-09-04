@@ -404,9 +404,13 @@ const writeHarnessEnabled = Effect.fn("ControlStore.writeHarnessEnabled")(functi
   harness: HarnessName,
   enabled: boolean,
 ) {
+  if (enabled) {
+    yield* sql`DELETE FROM harness_settings WHERE harness = ${harness}`;
+    return;
+  }
   yield* sql`
     INSERT INTO harness_settings (harness, enabled)
-    VALUES (${harness}, ${enabled ? 1 : 0})
+    VALUES (${harness}, 0)
     ON CONFLICT (harness)
     DO UPDATE SET enabled = excluded.enabled
   `;

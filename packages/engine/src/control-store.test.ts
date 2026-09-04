@@ -768,9 +768,7 @@ layer(NodeServices.layer)((it) => {
       ]);
 
       const enabled = yield* withStore(storePath, (store) => store.setHarnessEnabled(codex, true));
-      assert.deepStrictEqual(enabled.harnessSettings, [
-        HarnessEnablement.make({ harness: codex, enabled: true }),
-      ]);
+      assert.deepStrictEqual(enabled.harnessSettings, []);
     }),
   );
 
