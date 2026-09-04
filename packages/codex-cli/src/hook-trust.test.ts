@@ -326,6 +326,15 @@ trusted_hash = "sha256:existing"
     );
   });
 
+  it("rejects JSON strings Codex cannot decode as Unicode", () => {
+    assert.throws(() =>
+      codexHookTrustEntries(
+        hooksPath,
+        '{"description":"\\ud800","hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"scan"}]}]}}',
+      ),
+    );
+  });
+
   it("skips unsupported Hook shapes", () => {
     const entries = codexHookTrustEntries(
       hooksPath,

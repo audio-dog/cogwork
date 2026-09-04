@@ -12,6 +12,7 @@ import { parse as parseToml, stringify as stringifyToml, TomlDate, type TomlPrim
 
 const isSupportedMatcher = (matcher: string) => matcher === "*" || isSupportedRustRegex(matcher);
 const integerJsonPattern = /^-?(?:0|[1-9]\d*)$/;
+const loneSurrogatePattern = /[\uD800-\uDFFF]/u;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -22,6 +23,15 @@ const hasMcpFloat = (value: unknown, insideMcpInput = false): boolean => {
   if (!isRecord(value)) return false;
   return Object.entries(value).some(([key, entry]) =>
     hasMcpFloat(entry, insideMcpInput || (value.type === "mcp_tool" && key === "input")),
+  );
+};
+
+const hasMalformedUnicode = (value: unknown): boolean => {
+  if (typeof value === "string") return loneSurrogatePattern.test(value);
+  if (Array.isArray(value)) return value.some(hasMalformedUnicode);
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(
+    ([key, entry]) => loneSurrogatePattern.test(key) || hasMalformedUnicode(entry),
   );
 };
 
@@ -44,6 +54,11 @@ const HooksFileJson = Schema.JsonObject.check(
 const ExactMcpNumberInput = Schema.Unknown.check(
   Schema.makeFilter((value) => !hasMcpFloat(value), {
     expected: "MCP Hook input without floating-point JSON numbers",
+  }),
+);
+const WellFormedUnicodeInput = Schema.Unknown.check(
+  Schema.makeFilter((value) => !hasMalformedUnicode(value), {
+    expected: "JSON without malformed Unicode",
   }),
 );
 const TomlJsonObject = Schema.JsonObject.check(
@@ -276,7 +291,9 @@ const entriesForEvent = (
   });
 
 export const codexHookTrustEntries = (sourcePath: string, contents: string) => {
-  Schema.decodeUnknownSync(ExactMcpNumberInput)(parseLosslessJson(contents));
+  const losslessJson = parseLosslessJson(contents);
+  Schema.decodeUnknownSync(ExactMcpNumberInput)(losslessJson);
+  Schema.decodeUnknownSync(WellFormedUnicodeInput)(losslessJson);
   const json = Schema.decodeSync(Schema.fromJsonString(HooksFileJson))(contents);
   const parsed = Schema.decodeSync(HooksFile)(json);
   const hooks = parsed.hooks;
