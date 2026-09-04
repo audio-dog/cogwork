@@ -1,0 +1,28 @@
+apps/cli/src/harness-commands.ts
+  s_a4f7576244239f::t_61f95023bf6ae9 17-18,23,38,47,57
+  s_007ea1dc216c0f::t_352733264e9f5a 49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "157586edc672526842f70867b3e6b7aa62d0c4d6",
+  "prompts": {},
+  "sessions": {
+    "s_007ea1dc216c0f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06d38-a9d9-79e1-b50a-f33f16aa6d59",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a4f7576244239f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c90-0d33-7f51-99b1-4056f2717a9e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
