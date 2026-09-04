@@ -19,16 +19,19 @@ import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
+import * as Cause from "effect/Cause";
+import * as Exit from "effect/Exit";
 import { createContext, type ReactNode, use, useState } from "react";
 import { ProviderGlyphIcon } from "../../components/provider-glyph";
 import { useFocusFlash } from "../../components/settings-parts";
 import { harnessesAtom, setHarnessEnabledAtom } from "../../daemon/atoms";
+import { BoardResult, useBoard } from "../../features/activity-session";
 import { relativeTime } from "../../features/format";
 import {
+  applyHarnessEnablement,
   type HarnessSummary,
   harnessSummary,
   installedVersion,
-  orderHarnesses,
   versionLabel,
 } from "../../features/harnesses-view";
 import { providerGlyph, providerLabel } from "../../features/provider-presentation";
@@ -43,6 +46,7 @@ interface ProvidersValue {
     readonly selected: HarnessItem | undefined;
     readonly checkedAtMillis: number | null;
     readonly load: "loading" | "ready" | "failed";
+    readonly mutationFailure: string | null;
   };
   readonly actions: {
     readonly select: (harness: HarnessName) => void;
@@ -61,10 +65,10 @@ const useProviders = () => {
   return value;
 };
 
-const loadState = (overview: unknown, failed: boolean) => {
-  if (overview) return "ready" as const;
-  if (failed) return "failed" as const;
-  return "loading" as const;
+const loadState = (overview: unknown, failed: boolean): ProvidersValue["state"]["load"] => {
+  if (overview) return "ready";
+  if (failed) return "failed";
+  return "loading";
 };
 
 const checkLabel = (checking: boolean, checkedAtMillis: number | null, now: number) => {
@@ -74,6 +78,7 @@ const checkLabel = (checking: boolean, checkedAtMillis: number | null, now: numb
 };
 
 function Providers({ children }: { readonly children: ReactNode }) {
+  const boardResult = useBoard();
   const queried = useAtomValue(harnessesAtom);
   const refresh = useAtomRefresh(harnessesAtom);
   const [chosen, setChosen] = useState<HarnessName | null>(null);
@@ -81,18 +86,23 @@ function Providers({ children }: { readonly children: ReactNode }) {
   const enablement = useAtomValue(setHarnessEnabledAtom);
 
   const overview = queried._tag === "Success" ? queried.value : null;
-  const providers = orderHarnesses(overview?.harnesses ?? []);
+  const controlStore = BoardResult.$is("Success")(boardResult) ? boardResult.board.controlStore : null;
+  const providers = applyHarnessEnablement(overview?.harnesses ?? [], controlStore);
   const value: ProvidersValue = {
     state: {
       providers,
       selected: providers.find((item) => item.harness === chosen) ?? providers[0],
       checkedAtMillis: overview?.checkedAtMillis ?? null,
       load: loadState(overview, queried._tag === "Failure"),
+      mutationFailure: enablement._tag === "Failure" ? Cause.pretty(enablement.cause) : null,
     },
     actions: {
       select: setChosen,
       check: refresh,
-      setEnabled: (harness, enabled) => setEnabled({ payload: { harness, enabled } }).then(refresh),
+      setEnabled: (harness, enabled) =>
+        setEnabled({ payload: { harness, enabled } }).then((exit) => {
+          if (Exit.isSuccess(exit)) refresh();
+        }),
     },
     meta: { checking: queried.waiting, changing: enablement.waiting },
   };
@@ -103,12 +113,17 @@ function Providers({ children }: { readonly children: ReactNode }) {
 
 function AttentionDot({ attention }: { readonly attention: HarnessSummary["attention"] }) {
   if (attention === "none") return null;
-  const color = {
-    muted: "bg-muted-foreground",
-    warning: "bg-warning",
-    fatal: "bg-destructive",
-  }[attention];
-  return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", color)} />;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "size-1.5 shrink-0 rounded-full",
+        attention === "muted" && "bg-muted-foreground",
+        attention === "warning" && "bg-warning",
+        attention === "fatal" && "bg-destructive",
+      )}
+    />
+  );
 }
 
 function VersionCode({ version }: { readonly version: string | null }) {
@@ -392,12 +407,23 @@ function ProvidersFrame() {
 
 function ProvidersBody() {
   const {
-    state: { load, selected },
+    state: { load, mutationFailure, selected },
   } = useProviders();
   if (load === "failed") return <ProvidersFailure />;
   if (load === "loading") return <ProvidersLoading />;
   if (!selected) return <ProvidersNone />;
-  return <ProvidersFrame />;
+  return (
+    <div className="flex flex-col gap-4">
+      {mutationFailure ? (
+        <Alert variant="destructive">
+          <RiAlertLine />
+          <AlertTitle>Cogwork could not change this provider.</AlertTitle>
+          <AlertDescription>{mutationFailure}</AlertDescription>
+        </Alert>
+      ) : null}
+      <ProvidersFrame />
+    </div>
+  );
 }
 
 function ProvidersSettings() {

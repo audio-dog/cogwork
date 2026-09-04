@@ -1,7 +1,13 @@
-import { HarnessItem, HarnessName, HarnessSignIn, HarnessState } from "@cogwork/contracts";
+import {
+  defaultControlStore,
+  HarnessItem,
+  HarnessName,
+  HarnessSignIn,
+  HarnessState,
+} from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { harnessSummary, installedVersion, orderHarnesses, versionLabel } from "./harnesses-view";
+import { applyHarnessEnablement, harnessSummary, installedVersion, versionLabel } from "./harnesses-view";
 
 const item = (
   state: HarnessState,
@@ -70,12 +76,15 @@ describe("harnessSummary", () => {
   });
 });
 
-describe("orderHarnesses", () => {
-  it("puts disabled Harnesses first", () => {
-    const ready = HarnessState.cases.Ready.make({});
-    const enabled = item(ready, null);
-    const disabled = item(ready, null, [], false);
-    expect(orderHarnesses([enabled, disabled])).toEqual([disabled, enabled]);
+describe("applyHarnessEnablement", () => {
+  it("applies live Control store changes to an older probe result", () => {
+    const codex = item(HarnessState.cases.Ready.make({}), null);
+    const controlStore = {
+      ...defaultControlStore,
+      harnessSettings: [{ harness: codex.harness, enabled: false }],
+    };
+
+    expect(applyHarnessEnablement([codex], controlStore)[0]?.enabled).toBe(false);
   });
 });
 

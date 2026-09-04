@@ -1,4 +1,16 @@
-import { type HarnessItem, HarnessState } from "@cogwork/contracts";
+import { type ControlStore, type HarnessItem, HarnessState, harnessEnabled } from "@cogwork/contracts";
+
+export const applyHarnessEnablement = (
+  items: ReadonlyArray<HarnessItem>,
+  controlStore: ControlStore | null,
+) => {
+  if (!controlStore) return items;
+  return items.map((item) => ({
+    ...item,
+    enabled: harnessEnabled(controlStore.harnessSettings, item.harness),
+  }));
+};
+
 export const versionLabel = (version: string | null) => {
   if (!version) return null;
   return /^\d/.test(version) ? `v${version}` : version;
@@ -49,9 +61,6 @@ export const harnessSummary = (item: HarnessItem): HarnessSummary => {
     }),
   });
 };
-
-export const orderHarnesses = (items: ReadonlyArray<HarnessItem>) =>
-  items.toSorted((left, right) => Number(left.enabled) - Number(right.enabled));
 
 export const installedVersion = (item: HarnessItem) => {
   const reported = versionLabel(item.version);
