@@ -1,0 +1,19 @@
+packages/engine/src/workspace-registry.test.ts
+  s_49994cea1f08ab::t_94977d9b0ea5b6 292
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7c85cd002e2535968783cc3bea3ef993aefda3fe",
+  "prompts": {},
+  "sessions": {
+    "s_49994cea1f08ab": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e16-ab2b-7aa1-8ab8-4e65613f60c4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
