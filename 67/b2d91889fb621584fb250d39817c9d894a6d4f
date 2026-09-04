@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_4c8cd823764032::t_dae3f7fc1bd69e 139-153,157-170
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_4c8cd823764032::t_0dcaa7964b8296 94-134,137,231-234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "67b2d91889fb621584fb250d39817c9d894a6d4f",
+  "prompts": {},
+  "sessions": {
+    "s_4c8cd823764032": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dfc-1b38-7750-b2c5-60b4a0d9ce93",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
