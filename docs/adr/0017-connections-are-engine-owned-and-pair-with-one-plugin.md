@@ -226,3 +226,14 @@ not. A Connection may also authenticate an Engine port with no Plugin over it, s
 bundle must never stop the daemon reconciling. Uninstall shows a notice naming the Connection as still
 established, and does **not** offer to remove it: **Connections** stays the only surface that writes
 Connection state.
+
+## Amendment (2026-09-04) — GitHub repository identity comes from the checkout
+
+[#452](https://github.com/colonylabs/cogwork/issues/452) removes `issueTracker.repo` and
+`sourceControl.repo`. No supported workspace observes work or pull requests in a different repository
+from its checkout. A Linear tracker with GitHub source control is cross-system, not cross-repository.
+
+The selected worktree remote, `origin` by default, is now the repository authority. Registration,
+reload, and re-bind derive its GitHub `owner/repository` from that remote. Provider type, Connection,
+actor identity, and bot settings remain explicit. A GitHub tracker or source control provider fails
+closed when the selected remote is missing or is not a supported GitHub SSH or HTTPS URL.
