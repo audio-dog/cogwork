@@ -53,7 +53,7 @@ const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace =>
   config: Schema.decodeSync(WorkspaceConfig)({
     name,
     checkoutPath: `/repos/${name}`,
-    issueTracker: { type: "github", repo: `owner/${name}`, actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", repo: `owner/${name}` },
   }),
   ...(concurrency === undefined ? {} : { workspaceLimit: concurrency }),
 });
