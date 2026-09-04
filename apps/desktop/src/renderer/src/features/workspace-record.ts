@@ -169,8 +169,12 @@ const priorityFrom = (draft: WorkspaceRecordDraft) => {
     field: optional(draft.priorityField),
   };
 };
+const connectionsAreBound = (draft: WorkspaceRecordDraft) =>
+  draft.issueTrackerConnectionId !== "unbound" &&
+  (draft.sourceControlType !== "github" || draft.sourceControlConnectionId !== "unbound");
 
 export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
+  if (!connectionsAreBound(draft)) return null;
   const mcpSkills = Option.getOrUndefined(decodeMcpSkills(draft.mcpSkills.trim() || "[]"));
   if (!mcpSkills) return null;
   const roleLabels = {

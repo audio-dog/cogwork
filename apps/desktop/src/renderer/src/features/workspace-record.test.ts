@@ -131,6 +131,7 @@ describe("workspace record draft", () => {
       workspaceUpdateFromDraft({
         ...emptyDraft,
         displayName: "cogwork",
+        issueTrackerConnectionId: "github/acme",
         priorityProject: "not-a-project-number",
       }),
     ).toBeNull();
@@ -141,15 +142,29 @@ describe("workspace record draft", () => {
       workspaceUpdateFromDraft({
         ...emptyDraft,
         displayName: "cogwork",
+        issueTrackerConnectionId: "github/acme",
         mcpSkills: "",
       })?.mcpSkills,
     ).toEqual([]);
+  });
+
+  it("rejects unbound Connections before save", () => {
+    expect(workspaceUpdateFromDraft({ ...emptyDraft, displayName: "cogwork" })).toBeNull();
+    expect(
+      workspaceUpdateFromDraft({
+        ...emptyDraft,
+        displayName: "cogwork",
+        issueTrackerConnectionId: "github/acme",
+        sourceControlType: "github",
+      }),
+    ).toBeNull();
   });
 
   it("holds every normalized field after submission", () => {
     const draft = {
       ...emptyDraft,
       displayName: "  cogwork  ",
+      issueTrackerConnectionId: "github/acme",
       gitRemote: "  origin  ",
       issueTrackerRepo: "  acme/cogwork  ",
       teams: " ENG, APP ",
