@@ -108,7 +108,6 @@ interface WorkspaceRow {
   readonly id: string;
   readonly name: string;
   readonly checkoutPath: string;
-  readonly gitRemote: string | null;
   readonly issueTracker: string;
   readonly sourceControl: string | null;
   readonly mcpSkills: string | null;
@@ -263,7 +262,6 @@ const selectRows = Effect.fn("WorkspaceRegistry.selectRows")(function* (sql: Sql
     id,
     name,
     checkout_path AS checkoutPath,
-    git_remote AS gitRemote,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
     mcp_skills AS mcpSkills,
@@ -298,7 +296,6 @@ const selectWorkspaceRow = Effect.fn("WorkspaceRegistry.selectWorkspaceRow")(fun
     id,
     name,
     checkout_path AS checkoutPath,
-    git_remote AS gitRemote,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
     mcp_skills AS mcpSkills,
@@ -365,14 +362,13 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
 ) {
   const worktrees = registration.worktrees;
   const [row] = yield* sql<WorkspaceRow>`INSERT INTO workspaces (
-    id, name, checkout_path, git_remote, issue_tracker, source_control, mcp_skills, linear_history,
+    id, name, checkout_path, issue_tracker, source_control, mcp_skills, linear_history,
     worktree_root, worktree_remote, worktree_base_branch, worktree_link_paths, worktree_setup,
     worktree_reap_after_millis, concurrency
   ) VALUES (
     ${id},
     ${registration.name},
     ${registration.checkoutPath},
-    ${registration.gitRemote ?? null},
     ${encodeIssueTracker(registration.issueTracker)},
     ${registration.sourceControl ? encodeSourceControl(registration.sourceControl) : null},
     ${registration.mcpSkills ? encodeMcpSkills(registration.mcpSkills) : null},
@@ -388,7 +384,6 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
     id,
     name,
     checkout_path AS checkoutPath,
-    git_remote AS gitRemote,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
     mcp_skills AS mcpSkills,

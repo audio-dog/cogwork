@@ -69,7 +69,6 @@ const interruptionGate = Latch.makeUnsafe();
 const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
   checkoutPath: "/repos/acme",
-  gitRemote: "git@github.com:acme/repo.git",
   issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/repo" },
   linearHistory: false,
   concurrency: 2,

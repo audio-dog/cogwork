@@ -306,7 +306,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "first clone",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           sourceControl: { type: "github", repo: "acme/repo" },
           linearHistory: false,
@@ -324,7 +323,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "first clone",
           checkoutPath: secondCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           linearHistory: false,
         }),
@@ -427,7 +425,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "moving workspace",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           sourceControl: { type: "github", repo: "acme/repo" },
           linearHistory: true,
