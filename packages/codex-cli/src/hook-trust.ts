@@ -1,8 +1,12 @@
 import { createHash } from "node:crypto";
+import { isSupported as isSupportedRustRegex } from "@feojs/regex";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import type { PlatformError } from "effect/PlatformError";
 import * as Schema from "effect/Schema";
+import lockfile, { type LockOptions } from "proper-lockfile";
+import { parse as parseToml, stringify as stringifyToml, TomlDate, type TomlPrimitive } from "smol-toml";
 
 const CommandHook = Schema.Struct({
   type: Schema.Literal("command"),
@@ -31,25 +35,26 @@ const MatcherGroup = Schema.Struct({
   hooks: Schema.optional(Schema.Array(HookHandler)),
 });
 const HookGroups = Schema.optional(Schema.Array(MatcherGroup));
+const HookEvents = Schema.Struct({
+  PreToolUse: HookGroups,
+  PermissionRequest: HookGroups,
+  PostToolUse: HookGroups,
+  PreCompact: HookGroups,
+  PostCompact: HookGroups,
+  SessionStart: HookGroups,
+  SessionEnd: HookGroups,
+  UserPromptSubmit: HookGroups,
+  SubagentStart: HookGroups,
+  SubagentStop: HookGroups,
+  Stop: HookGroups,
+});
 const HooksFile = Schema.Struct({
   description: Schema.optional(Schema.String),
-  hooks: Schema.Struct({
-    PreToolUse: HookGroups,
-    PermissionRequest: HookGroups,
-    PostToolUse: HookGroups,
-    PreCompact: HookGroups,
-    PostCompact: HookGroups,
-    SessionStart: HookGroups,
-    SessionEnd: HookGroups,
-    UserPromptSubmit: HookGroups,
-    SubagentStart: HookGroups,
-    SubagentStop: HookGroups,
-    Stop: HookGroups,
-  }),
+  hooks: Schema.optional(HookEvents),
 });
 
 interface EventDefinition {
-  readonly configName: keyof typeof HooksFile.Type.hooks;
+  readonly configName: keyof typeof HookEvents.Type;
   readonly keyName: string;
   readonly acceptsMatcher: boolean;
   readonly acceptsAdditionalContext: boolean;
@@ -129,27 +134,30 @@ export class CodexHookTrustError extends Schema.TaggedError<CodexHookTrustError>
 }) {}
 
 const defaultAdditionalContextLimit = 2_500;
+const configLockOptions = {
+  realpath: false,
+  retries: { retries: 200, factor: 1, minTimeout: 50, maxTimeout: 50, randomize: true },
+  stale: 5_000,
+  update: 1_000,
+} satisfies LockOptions;
 
 const normalizedTimeout = (event: EventDefinition, timeout: number | undefined) => {
   if (event.configName !== "SessionEnd") return Math.max(timeout ?? 600, 1);
   return Math.min(Math.max(timeout ?? 1, 1), 3);
 };
 
-const exactMatcherPattern = /^[A-Za-z0-9_|]*$/;
-
-const validMatcher = (matcher: string) => {
-  if (matcher === "" || matcher === "*") return true;
-  if (exactMatcherPattern.test(matcher)) return true;
-  try {
-    new RegExp(matcher);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 const matcherForEvent = (event: EventDefinition, matcher: string | undefined) =>
   event.acceptsMatcher ? matcher : undefined;
+
+const isSupportedMatcher = (matcher: string) => isSupportedRustRegex(matcher);
+
+const isTomlValue = (value: unknown): boolean => {
+  if (value === null) return false;
+  if (typeof value === "number") return !Number.isInteger(value) || Number.isSafeInteger(value);
+  if (Array.isArray(value)) return value.every(isTomlValue);
+  if (typeof value !== "object") return true;
+  return Object.values(value).every(isTomlValue);
+};
 
 const normalizedCommand = (event: EventDefinition, handler: typeof CommandHook.Type) => ({
   type: handler.type,
@@ -184,6 +192,7 @@ const normalizedHandler = (event: EventDefinition, handler: typeof HookHandler.T
   if (handler.type === "mcp_tool") {
     if (event.configName === "SessionEnd") return null;
     if (handler.server.trim() === "" || handler.tool.trim() === "") return null;
+    if (!isTomlValue(handler.input ?? {})) throw new Error("MCP Hook input is not representable as TOML");
     return normalizedMcpTool(handler);
   }
   return null;
@@ -194,7 +203,7 @@ const canonicalJson = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null) return value;
   return Object.fromEntries(
     Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => (left < right ? -1 : Number(left > right)))
       .map(([key, entry]) => [key, canonicalJson(entry)]),
   );
 };
@@ -209,77 +218,93 @@ const entriesForEvent = (
   event: EventDefinition,
   groups: ReadonlyArray<typeof MatcherGroup.Type>,
 ) =>
-  groups.flatMap((group, groupIndex) =>
-    !validMatcher(matcherForEvent(event, group.matcher) ?? "")
-      ? []
-      : (group.hooks ?? []).flatMap((handler, handlerIndex) => {
-          const normalized = normalizedHandler(event, handler);
-          if (!normalized) return [];
-          const identity = {
-            event_name: event.keyName,
-            ...(matcherForEvent(event, group.matcher) === undefined
-              ? {}
-              : { matcher: matcherForEvent(event, group.matcher) }),
-            hooks: [normalized],
-          };
-          return [
-            {
-              key: `${sourcePath}:${event.keyName}:${groupIndex}:${handlerIndex}`,
-              hash: hookHash(identity),
-            },
-          ];
-        }),
-  );
+  groups.flatMap((group, groupIndex) => {
+    const matcher = matcherForEvent(event, group.matcher);
+    if (!isSupportedMatcher(matcher ?? "")) {
+      throw new Error(`Unsupported Codex Hook matcher: ${matcher}`);
+    }
+    return (group.hooks ?? []).flatMap((handler, handlerIndex) => {
+      const normalized = normalizedHandler(event, handler);
+      if (!normalized) return [];
+      const identity = {
+        event_name: event.keyName,
+        ...(matcher === undefined ? {} : { matcher }),
+        hooks: [normalized],
+      };
+      return [
+        {
+          key: `${sourcePath}:${event.keyName}:${groupIndex}:${handlerIndex}`,
+          hash: hookHash(identity),
+        },
+      ];
+    });
+  });
 
 export const codexHookTrustEntries = (sourcePath: string, contents: string) => {
   const parsed = Schema.decodeSync(Schema.fromJsonString(HooksFile))(contents);
+  const hooks = parsed.hooks;
+  if (!hooks) return [];
   return eventDefinitions.flatMap((event) =>
-    entriesForEvent(sourcePath, event, parsed.hooks[event.configName] ?? []),
+    entriesForEvent(sourcePath, event, hooks[event.configName] ?? []),
   );
 };
 
-const tomlString = (value: string) => JSON.stringify(value);
-const tableHeader = (key: string) => `[hooks.state.${tomlString(key)}]`;
-const trustedHashLine = (hash: string) => `trusted_hash = ${tomlString(hash)}`;
-const sectionEnd = (lines: ReadonlyArray<string>, start: number) => {
-  const next = lines.findIndex((line, index) => index > start && /^\s*\[/.test(line));
-  return next === -1 ? lines.length : next;
+type TomlTable = Record<string, TomlPrimitive>;
+
+const HookState = Schema.Struct({
+  enabled: Schema.optional(Schema.Boolean),
+  trusted_hash: Schema.optional(Schema.String),
+});
+
+const HookStates = Schema.Record(Schema.String, HookState);
+
+const asTomlTable = (value: TomlPrimitive | undefined): TomlTable | null => {
+  if (typeof value !== "object" || value === null || Array.isArray(value) || value instanceof TomlDate) {
+    return null;
+  }
+  return value;
 };
 
-const upsertTrustEntry = (contents: string, entry: CodexHookTrustEntry) => {
-  const lines = contents.split("\n");
-  const start = lines.findIndex((line) => line.trim() === tableHeader(entry.key));
-  if (start === -1) {
-    const prefix = contents.length === 0 ? "" : `${contents.replace(/\n*$/, "")}\n\n`;
-    return `${prefix}${tableHeader(entry.key)}\n${trustedHashLine(entry.hash)}\n`;
-  }
-  const end = sectionEnd(lines, start);
-  const hashIndex = lines.findIndex(
-    (line, index) => index > start && index < end && /^\s*trusted_hash\s*=/.test(line),
-  );
-  if (hashIndex === -1) {
-    return [...lines.slice(0, start + 1), trustedHashLine(entry.hash), ...lines.slice(start + 1)].join("\n");
-  }
-  return lines.map((line, index) => (index === hashIndex ? trustedHashLine(entry.hash) : line)).join("\n");
+const optionalTomlTable = (name: string, value: TomlPrimitive | undefined) => {
+  if (value === undefined) return {};
+  const table = asTomlTable(value);
+  if (table) return table;
+  throw new Error(`${name} must be a TOML table`);
+};
+
+const parsedConfig = (contents: string) => {
+  const config = parseToml(contents);
+  const hooks = optionalTomlTable("hooks", config.hooks);
+  const state = optionalTomlTable("hooks.state", hooks.state);
+  const decodedState = Schema.decodeUnknownSync(HookStates)(state);
+  return { config, hooks, state, decodedState };
+};
+
+const trustConfigUpdate = (contents: string, entries: ReadonlyArray<CodexHookTrustEntry>) => {
+  const { config, hooks, state, decodedState } = parsedConfig(contents);
+  const changed = entries.some((entry) => decodedState[entry.key]?.trusted_hash !== entry.hash);
+  if (!changed) return { changed, contents };
+  const updatedState: TomlTable = Object.fromEntries([
+    ...Object.entries(state),
+    ...entries.map(
+      (entry) => [entry.key, { ...(asTomlTable(state[entry.key]) ?? {}), trusted_hash: entry.hash }] as const,
+    ),
+  ]);
+  return { changed, contents: stringifyToml({ ...config, hooks: { ...hooks, state: updatedState } }) };
 };
 
 export const upsertCodexHookTrust = (contents: string, entries: ReadonlyArray<CodexHookTrustEntry>) =>
-  entries.reduce(upsertTrustEntry, contents);
+  trustConfigUpdate(contents, entries).contents;
 
-const trustedHash = (contents: string, key: string) => {
-  const lines = contents.split("\n");
-  const start = lines.findIndex((line) => line.trim() === tableHeader(key));
-  if (start === -1) return null;
-  const end = sectionEnd(lines, start);
-  const match = lines
-    .slice(start + 1, end)
-    .map((line) => /^\s*trusted_hash\s*=\s*"([^"]+)"\s*$/.exec(line))
-    .find((candidate) => candidate !== null);
-  return match?.[1] ?? null;
+export const untrustedCodexHooks = (config: string, entries: ReadonlyArray<CodexHookTrustEntry>) => {
+  const { decodedState } = parsedConfig(config);
+  return entries
+    .filter((entry) => {
+      const state = decodedState[entry.key];
+      return state?.enabled === false || state?.trusted_hash !== entry.hash;
+    })
+    .map(({ key }) => key);
 };
-
-export const untrustedCodexHooks = (config: string, entries: ReadonlyArray<CodexHookTrustEntry>) =>
-  entries.filter((entry) => trustedHash(config, entry.key) !== entry.hash).map(({ key }) => key);
 
 const parseTrustEntries = (sourcePath: string, contents: string) =>
   Effect.try({
@@ -289,6 +314,56 @@ const parseTrustEntries = (sourcePath: string, contents: string) =>
         message: `Cannot verify Codex Hooks in ${sourcePath}: ${String(cause)}`,
       }),
   });
+
+const isNotFound = (error: PlatformError) => error.reason._tag === "NotFound";
+
+const readConfig = (fs: FileSystem.FileSystem, configPath: string) =>
+  fs.readFileString(configPath).pipe(Effect.catchIf(isNotFound, () => Effect.succeed("")));
+
+const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
+
+const configFailure = (action: string, configPath: string, cause: unknown) =>
+  new CodexHookTrustError({
+    message: `Cannot ${action} Codex Hook trust in ${configPath}: ${messageOf(cause)}`,
+  });
+
+const inspectConfig = (configPath: string, config: string, entries: ReadonlyArray<CodexHookTrustEntry>) =>
+  Effect.try({
+    try: () => untrustedCodexHooks(config, entries),
+    catch: (cause) => configFailure("read", configPath, cause),
+  });
+
+const updateConfig = (configPath: string, config: string, entries: ReadonlyArray<CodexHookTrustEntry>) =>
+  Effect.try({
+    try: () => trustConfigUpdate(config, entries),
+    catch: (cause) => configFailure("update", configPath, cause),
+  });
+
+const withConfigLock = <A, E, R>(configPath: string, effect: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.tryPromise({
+      try: () => lockfile.lock(configPath, configLockOptions),
+      catch: (cause) => configFailure("lock", configPath, cause),
+    }),
+    () => effect,
+    (release) =>
+      Effect.tryPromise({
+        try: () => release(),
+        catch: (cause) => configFailure("unlock", configPath, cause),
+      }),
+  );
+
+const replaceConfig = Effect.fn("CodexHookTrust.replaceConfig")(function* (
+  fs: FileSystem.FileSystem,
+  directory: string,
+  configPath: string,
+  contents: string,
+) {
+  const pendingPath = yield* fs.makeTempFileScoped({ directory, prefix: ".config.toml." });
+  yield* fs.writeFileString(pendingPath, contents, { flag: "w", mode: 0o600 });
+  yield* fs.chmod(pendingPath, 0o600);
+  yield* fs.rename(pendingPath, configPath);
+});
 
 export const verifyCodexHookTrust = Effect.fn("CodexHookTrust.verify")(function* (
   sourcePath: string,
@@ -300,11 +375,11 @@ export const verifyCodexHookTrust = Effect.fn("CodexHookTrust.verify")(function*
     .readFileString(sourcePath)
     .pipe(Effect.flatMap((contents) => parseTrustEntries(sourcePath, contents)));
   if (entries.length === 0) return;
-  const config = yield* fs.readFileString(configPath).pipe(Effect.orElseSucceed(() => ""));
-  const untrusted = untrustedCodexHooks(config, entries);
+  const config = yield* readConfig(fs, configPath);
+  const untrusted = yield* inspectConfig(configPath, config, entries);
   if (untrusted.length === 0) return;
   return yield* new CodexHookTrustError({
-    message: `Codex Hook trust is missing or stale: ${untrusted.join(", ")}`,
+    message: `Codex Hook is disabled or its trust is missing or stale: ${untrusted.join(", ")}`,
   });
 });
 
@@ -320,11 +395,16 @@ export const writeCodexHookTrust = Effect.fn("CodexHookTrust.write")(function* (
     .readFileString(normalizedSourcePath)
     .pipe(Effect.flatMap((contents) => parseTrustEntries(normalizedSourcePath, contents)));
   if (entries.length === 0) return entries;
-  const config = yield* fs.readFileString(configPath).pipe(Effect.orElseSucceed(() => ""));
-  const updated = upsertCodexHookTrust(config, entries);
-  if (updated === config) return entries;
-  yield* fs.makeDirectory(path.dirname(configPath), { recursive: true, mode: 0o700 });
-  yield* fs.writeFileString(configPath, updated);
-  yield* fs.chmod(configPath, 0o600);
-  return entries;
+  const directory = path.dirname(configPath);
+  yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
+  return yield* withConfigLock(
+    configPath,
+    Effect.gen(function* () {
+      const config = yield* readConfig(fs, configPath);
+      const updated = yield* updateConfig(configPath, config, entries);
+      if (!updated.changed) return entries;
+      yield* replaceConfig(fs, directory, configPath, updated.contents).pipe(Effect.scoped);
+      return entries;
+    }),
+  );
 });

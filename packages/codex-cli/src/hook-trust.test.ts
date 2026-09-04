@@ -41,6 +41,37 @@ describe("Codex Hook trust", () => {
     ]);
   });
 
+  it("matches Codex's ordinal object key order", () => {
+    assert.deepStrictEqual(
+      codexHookTrustEntries(
+        "/repo/.codex/hooks.json",
+        JSON.stringify({
+          hooks: {
+            PreToolUse: [
+              {
+                matcher: "(?i)^bash$",
+                hooks: [
+                  {
+                    type: "mcp_tool",
+                    server: "security",
+                    tool: "scan",
+                    input: { a: 1, B: 2, nested: { z: 1, A: 2 } },
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      ),
+      [
+        {
+          key: "/repo/.codex/hooks.json:pre_tool_use:0:0",
+          hash: "sha256:3d83be8f7219f4699c4151ec1bfabd4f97402e2b2f1b3edea8a8eb3107f736c6",
+        },
+      ],
+    );
+  });
+
   it("adds each Hook without changing existing Hook state", () => {
     const existing = `[hooks.state."/repo/.codex/hooks.json:pre_tool_use:0:0"]
 enabled = false
@@ -51,16 +82,22 @@ trusted_hash = "sha256:existing"
       { key: "/repo/.codex/hooks.json:post_tool_use:0:0", hash: "sha256:added" },
     ];
 
-    assert.strictEqual(
-      upsertCodexHookTrust(existing, entries),
-      `[hooks.state."/repo/.codex/hooks.json:pre_tool_use:0:0"]
-enabled = false
-trusted_hash = "sha256:updated"
+    const updated = upsertCodexHookTrust(existing, entries);
 
-[hooks.state."/repo/.codex/hooks.json:post_tool_use:0:0"]
-trusted_hash = "sha256:added"
-`,
-    );
+    assert.include(updated, "enabled = false");
+    assert.include(updated, 'trusted_hash = "sha256:updated"');
+    assert.include(updated, 'trusted_hash = "sha256:added"');
+    assert.deepStrictEqual(untrustedCodexHooks(updated, entries), [entries[0]?.key]);
+  });
+
+  it("understands alternate TOML syntax without duplicating Hook state", () => {
+    const key = "/repo/.codex/hooks.json:post_tool_use:0:0";
+    const entry = { key, hash: "sha256:updated" };
+    const existing = `[hooks.state.'${key}']\ntrusted_hash='sha256:old' # prior trust\n`;
+    const updated = upsertCodexHookTrust(existing, [entry]);
+
+    assert.deepStrictEqual(untrustedCodexHooks(updated, [entry]), []);
+    assert.strictEqual(updated.match(/post_tool_use:0:0/g)?.length, 1);
   });
 
   it.effect("writes repository Hook trust into the Codex user config", () =>
@@ -85,6 +122,28 @@ trusted_hash = "sha256:added"
     }).pipe(Effect.scoped, Effect.provide(Layer.merge(NodeFileSystem.layer, Path.layer))),
   );
 
+  it.effect("serializes concurrent trust writes without losing entries", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "codex-hook-trust-concurrent-" });
+      const firstPath = `${root}/first/hooks.json`;
+      const secondPath = `${root}/second/hooks.json`;
+      const configPath = `${root}/codex/config.toml`;
+      yield* fs.makeDirectory(`${root}/first`, { recursive: true });
+      yield* fs.makeDirectory(`${root}/second`, { recursive: true });
+      yield* fs.writeFileString(firstPath, hooksJson);
+      yield* fs.writeFileString(secondPath, hooksJson);
+
+      const [first, second] = yield* Effect.all(
+        [writeCodexHookTrust(firstPath, configPath), writeCodexHookTrust(secondPath, configPath)],
+        { concurrency: "unbounded" },
+      );
+      const config = yield* fs.readFileString(configPath);
+
+      assert.deepStrictEqual(untrustedCodexHooks(config, [...first, ...second]), []);
+    }).pipe(Effect.scoped, Effect.provide(Layer.merge(NodeFileSystem.layer, Path.layer))),
+  );
+
   it("names a missing Hook entry", () => {
     const entries = codexHookTrustEntries(hooksPath, hooksJson);
 
@@ -104,16 +163,48 @@ trusted_hash = "sha256:added"
     assert.deepStrictEqual(untrustedCodexHooks(upsertCodexHookTrust("", entries), entries), []);
   });
 
-  it("skips Hook shapes Codex does not trust", () => {
+  it("names a disabled Hook even when its checksum is current", () => {
+    const entries = codexHookTrustEntries(hooksPath, hooksJson);
+    const disabled = upsertCodexHookTrust(`[hooks.state."${entries[0]?.key}"]\nenabled = false\n`, entries);
+    assert.deepStrictEqual(untrustedCodexHooks(disabled, entries), [entries[0]?.key]);
+  });
+
+  it("fails closed on matcher syntax rejected by Codex", () => {
+    assert.throws(() =>
+      codexHookTrustEntries(
+        hooksPath,
+        JSON.stringify({
+          hooks: {
+            PreToolUse: [{ matcher: "(?=bash)", hooks: [{ type: "command", command: "scan" }] }],
+          },
+        }),
+      ),
+    );
+  });
+
+  it("fails closed on MCP input Codex cannot hash as TOML", () => {
+    assert.throws(() =>
+      codexHookTrustEntries(
+        hooksPath,
+        JSON.stringify({
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [{ type: "mcp_tool", server: "security", tool: "scan", input: { path: null } }],
+              },
+            ],
+          },
+        }),
+      ),
+    );
+  });
+
+  it("skips unsupported Hook shapes", () => {
     const entries = codexHookTrustEntries(
       hooksPath,
       JSON.stringify({
         hooks: {
           PostToolUse: [
-            {
-              matcher: "[",
-              hooks: [{ type: "command", command: "echo invalid matcher" }],
-            },
             {
               hooks: [{ type: "prompt" }],
             },
