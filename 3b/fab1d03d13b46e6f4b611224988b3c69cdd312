@@ -1,0 +1,29 @@
+configs/lint/oxlint-spike/plugin.mjs
+  s_ff1b0862c84cda::t_8e168ecfc992f5 4-5,130-137,154-155,167
+  s_ff1b0862c84cda::t_fcdb77220aeb11 6-7,45-51,75,120-129
+  s_ff1b0862c84cda::t_4ecf210d0ea75e 10-11,14-44,52-74,76-96,138-153,170
+  s_ff1b0862c84cda::t_bc3627d32ed051 2-3,97-119,165-166,168-169,171
+  s_ff1b0862c84cda::t_ed1ab950da5ab7 1,8-9,12-13,156-164,172
+configs/lint/oxlint-spike/oxlint-one.json
+  s_ff1b0862c84cda::t_af021947979ba9 1-6
+configs/lint/oxlint-spike/oxlint-zero.json
+  s_ff1b0862c84cda::t_af021947979ba9 1
+configs/lint/oxlint-spike/oxlint-five.json
+  s_ff1b0862c84cda::t_af021947979ba9 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3bfab1d03d13b46e6f4b611224988b3c69cdd312",
+  "prompts": {},
+  "sessions": {
+    "s_ff1b0862c84cda": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de4-7937-74c3-99cc-e3b66be25ac4",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
