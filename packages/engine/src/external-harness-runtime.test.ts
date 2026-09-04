@@ -479,8 +479,10 @@ describe("external Harness runtime", () => {
         }),
     );
 
-    it.effect("never asks the Sandbox to watch a checkout the runtime feeds itself", () =>
+    it.effect("ends a Run whose checkout feed never sees an event", () =>
       Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-harness-feed-" });
         const created: Array<string> = [];
         const watchProbe = { watches: 0 };
         const base = descriptor(terminalEvents, new ControlledProbe());
@@ -493,15 +495,24 @@ describe("external Harness runtime", () => {
         const seen: Array<AgUiEvent> = [];
 
         yield* harness
-          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
+          .run({
+            plan: RunPlan.make({ ...request, sandbox: { ...request.sandbox, workspace: checkout } }),
+            session: freshSession,
+            mcpCredentials: new Map(),
+          })
           .pipe(Stream.runForEach((event) => Effect.sync(() => seen.push(event))));
 
         // The Sandbox watcher retains one diff promise per filesystem event for the
         // whole Run and cannot be told to skip a tree. Leaving it off is what bounds
         // the daemon, so the Run must never start it.
         assert.strictEqual(watchProbe.watches, 0);
-        assert.isFalse(
-          seen.some((event) => event.type === EventType.CUSTOM && event.name === "sandbox.file"),
+        // The Run waits for the feed as well as the harness, so the terminal event
+        // arriving last is the observable form of "the feed was stopped and drained".
+        // The stop contract itself is covered in the feed's own tests.
+        assert.deepNestedInclude(seen.at(-1), { type: EventType.RUN_FINISHED });
+        assert.lengthOf(
+          seen.filter((event) => event.type === EventType.RUN_FINISHED),
+          1,
         );
       }),
     );
@@ -950,6 +961,16 @@ describe("external Harness runtime", () => {
             type: EventType.CUSTOM,
             name: "file.changed",
             value: { path: "/checkout/src/.tanstack-nested.ts", diff: "diff --git a/n b/n" },
+          },
+          // The reserved namespace covers what the projection writes inside its own
+          // tree, not just the root entry naming it.
+          {
+            type: EventType.CUSTOM,
+            name: "file.changed",
+            value: {
+              path: "/checkout/.tanstack-projected-abc123/AGENTS.md",
+              diff: "diff --git a/p b/p",
+            },
           },
           {
             type: EventType.CUSTOM,

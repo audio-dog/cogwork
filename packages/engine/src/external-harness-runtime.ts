@@ -548,12 +548,6 @@ const normalizeFileEvent = (event: AgUiEvent, checkoutPath: string) => {
   return { ...normalized, value: { ...normalized.value, diff: boundedDiff(normalized.value.diff) } };
 };
 
-// `.tanstack-*` at the checkout root is TanStack's reserved scratch namespace — the
-// Workspace projection marker, the per-run output schema, and the projected skills
-// tree all land there, and none of them are the agent's work. Anchored to a single
-// root segment so it cannot also hide a nested file the agent did write.
-const reservedScratch = /^\.tanstack-[^/]*$/;
-
 const publicFileEvent = (event: AgUiEvent) => {
   // A native file event that could not carry the shared contract keeps its native
   // name through `normalizeFileEvent`. TanStack's payload makes `diff` optional, so
@@ -564,9 +558,8 @@ const publicFileEvent = (event: AgUiEvent) => {
   // A touched-but-unchanged file still reports a change; an empty diff would render
   // as an activity entry with nothing in it.
   if (event.value.diff === "") return false;
-  if (reservedScratch.test(event.value.path)) return false;
   // A native feed reports whatever its harness touched, so it gets the same segment
-  // filter the runtime's own feed applies at the source.
+  // and reserved-scratch filter the runtime's own feed applies at the source.
   return !ignored(event.value.path);
 };
 

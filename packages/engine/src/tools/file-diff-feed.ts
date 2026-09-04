@@ -294,7 +294,19 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
 // segment before any diff work starts.
 const IGNORED_SEGMENTS = [".git", "node_modules", ".repos", ".pnpm-store"];
 
-export const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
+// `.tanstack-*` at the checkout root is TanStack's reserved scratch namespace — the
+// Workspace projection marker, the per-run output schema, and the projected skills
+// tree land there, and none of them are the agent's work. Matched on the root
+// segment so the projected tree's contents go with it: a watcher sees writes inside
+// that tree which a harness's own event feed never reports.
+const reservedScratch = /^\.tanstack-/;
+
+export const ignored = (rel: string) => {
+  const segments = rel.split("/");
+  return (
+    segments.some((segment) => IGNORED_SEGMENTS.includes(segment)) || reservedScratch.test(segments[0] ?? "")
+  );
+};
 
 const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
   stream.pipe(
