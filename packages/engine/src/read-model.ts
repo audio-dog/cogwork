@@ -26,6 +26,18 @@ export const classifiedItemsOf = (state: WorkspaceReconcileState): ReadonlyArray
 
 export const classifiedItemWithPr = (item: ObservedItem): ClassifiedItem | null => classifiedItemOf(item);
 
+const workspaceRecordOf = (workspace: RegisteredWorkspace) =>
+  workspace.record ?? {
+    name: workspace.config.displayName ?? workspace.config.name,
+    checkoutPath: workspace.config.checkoutPath,
+    issueTracker: workspace.config.issueTracker,
+    linearHistory: workspace.config.linearHistory,
+    ...(workspace.config.sourceControl ? { sourceControl: workspace.config.sourceControl } : {}),
+    ...(workspace.config.mcpSkills ? { mcpSkills: workspace.config.mcpSkills } : {}),
+    ...(workspace.config.worktrees ? { worktrees: workspace.config.worktrees } : {}),
+    ...(workspace.workspaceLimit ? { concurrency: workspace.workspaceLimit } : {}),
+  };
+
 export const currentReconcileStatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot) => {
   const names = new Set(registry.workspaces.map((workspace) => workspace.config.name));
   return snapshot.workspaces.filter((state) => names.has(state.name));
@@ -39,6 +51,7 @@ export const workspaceInfoOf = (
   ...(workspace.config.displayName ? { displayName: workspace.config.displayName } : {}),
   checkoutPath: workspace.config.checkoutPath,
   issueTracker: workspace.config.issueTracker.type,
+  record: workspaceRecordOf(workspace),
   poll: state?.poll ?? pendingPoll,
   contributions: workspace.contributions,
   availability: state?.availability ?? [],
