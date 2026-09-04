@@ -160,6 +160,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         );
 
   return {
+    authenticatedUserId: () => guard(Effect.succeed(bot.id)),
     observeIssues: (ref, coordination, assigneeIds = null) =>
       guard(
         Effect.gen(function* () {
@@ -260,7 +261,6 @@ const workspace: RegisteredWorkspace = {
     issueTracker: {
       type: "linear",
       teams: ["AUD"],
-      actorUserId: bot.id,
     },
   }),
 };
@@ -285,7 +285,6 @@ const multiTeamWorkspace: RegisteredWorkspace = {
     issueTracker: {
       type: "linear",
       teams: ["GRO", "BIL"],
-      actorUserId: bot.id,
     },
   }),
 };
