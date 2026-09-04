@@ -14,6 +14,7 @@
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test && node --test configs/lint/tests/rules.test.mjs",
+    "test:measure": "node scripts/test-measure.mjs",
     "test:lint-rules": "node --test configs/lint/tests/rules.test.mjs",
     "vendor": "node scripts/vendor.mjs",
     "setup-worktree": "node scripts/setup-worktree.mjs",
