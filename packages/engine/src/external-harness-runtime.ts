@@ -66,7 +66,7 @@ import {
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
 import { SessionStore } from "./session-store";
-import { boundedDiff, ignored } from "./tools/file-diff-feed";
+import { boundedDiff, fileDiffIgnoredSegments, ignored } from "./tools/file-diff-feed";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
 type AdapterOptions<Adapter extends AnyTextAdapter> = Adapter["~types"]["providerOptions"];
@@ -557,6 +557,7 @@ const normalizeFileEvent = (event: AgUiEvent, checkoutPath: string) => {
 const reservedScratch = /^\.tanstack-[^/]*$/;
 
 const publicFileEvent = (event: AgUiEvent) => {
+  if (AgUiEvent.guards.CUSTOM(event) && event.name === "sandbox.file") return false;
   // A native file event that could not carry the shared contract keeps its native
   // name through `normalizeFileEvent`. TanStack's payload makes `diff` optional, so
   // this is a real shape, and it has no diff to show — drop it rather than persist
@@ -650,7 +651,9 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   const model = descriptor.projectModel(request);
   const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
   const adapter = descriptor.makeAdapter({ model, authentication: nativeAuthentication, request });
-  const fileEvents = descriptor.transport.sandboxFileDiffs ? { diff: true } : false;
+  const fileEvents = descriptor.transport.sandboxFileDiffs
+    ? { diff: true, ignore: [...fileDiffIgnoredSegments] }
+    : false;
   const sandbox = defineSandbox({
     id: `cogwork-${descriptor.name}`,
     provider,
