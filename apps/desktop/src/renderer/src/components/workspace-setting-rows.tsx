@@ -114,6 +114,14 @@ export const connectionItems = (connections: readonly Connection[], system: "git
     .filter((connection) => connection.system === system)
     .map((connection) => ({ value: connection.id, label: connection.account }));
 
+export const trackerSelectionPatch = (
+  connections: readonly Connection[],
+  issueTrackerType: "github" | "linear",
+) => ({
+  issueTrackerType,
+  issueTrackerConnectionId: connectionItems(connections, issueTrackerType)[0]?.value ?? "unbound",
+});
+
 function ConnectionSelect({
   system,
   field,
@@ -201,7 +209,7 @@ function IdentityRows() {
 
 function IssueTrackerRows() {
   const {
-    state: { draft },
+    state: { draft, connections },
     actions: { patch },
     meta: { disabled },
   } = useWorkspaceRecord();
@@ -223,7 +231,7 @@ function IssueTrackerRows() {
           value={draft.issueTrackerType}
           disabled={disabled}
           onValueChange={(value) => {
-            if (value === "github" || value === "linear") patch({ issueTrackerType: value });
+            if (value === "github" || value === "linear") patch(trackerSelectionPatch(connections, value));
           }}
         >
           <SelectTrigger aria-label="Issue tracker" className="w-56">
