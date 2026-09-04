@@ -242,6 +242,7 @@ const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerServi
 const providerStub = Layer.succeed(SourceControlProvider, {
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
+  findOpenPullRequest: () => Effect.succeed(null),
   openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 });
 
