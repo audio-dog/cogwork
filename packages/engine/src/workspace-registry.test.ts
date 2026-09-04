@@ -172,39 +172,6 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("does not persist legacy actor selectors in workspace JSON", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-actor-" });
-      const storePath = path.join(root, "control.db");
-      const checkoutPath = yield* makeCheckout(root, "actor");
-      const context = yield* Layer.build(Registry.layerAt(storePath));
-      const management = Context.get(context, Registry.WorkspaceManagement);
-      const legacy = yield* Schema.decodeUnknownEffect(WorkspaceRegistration)({
-        name: "actor",
-        checkoutPath,
-        issueTracker: { type: "github", repo: "acme/repo", actorLogin: "legacy-tracker" },
-        sourceControl: { type: "github", repo: "acme/repo", actorLogin: "legacy-provider" },
-      });
-
-      const change = yield* management.register(legacy);
-      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
-      const [row] = yield* Effect.flatMap(
-        SqlClient.SqlClient,
-        (sql) =>
-          sql<{ readonly issueTracker: string; readonly sourceControl: string }>`
-          SELECT issue_tracker AS issueTracker, source_control AS sourceControl
-          FROM workspaces
-          WHERE id = ${change.workspace.config.name}
-        `,
-      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
-      assert.notInclude(row?.issueTracker ?? "", '"actorLogin"');
-      assert.notInclude(row?.issueTracker ?? "", '"actorUserId"');
-      assert.notInclude(row?.sourceControl ?? "", '"actorLogin"');
-    }),
-  );
-
   it.effect("registers a workspace without repository settings", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

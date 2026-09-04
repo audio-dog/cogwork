@@ -111,23 +111,25 @@ class CredentialInvalidations extends Context.Service<
 }
 
 const stubCredentials = (
-  token: string | null,
-  source: CredentialSource,
-  identity: CredentialIdentity | null = null,
+  credential: {
+    readonly token: string;
+    readonly source: CredentialSource;
+    readonly identity: CredentialIdentity | null;
+  } | null,
 ) =>
   Layer.effect(
     CredentialStore,
     Effect.map(CredentialInvalidations, (invalidated) => ({
       resolveSource: () => Effect.die("unexpected credential source resolution"),
       bearerToken: (account) =>
-        token === null
+        credential === null
           ? Effect.fail(
               new CredentialError({
                 account: account.key,
                 message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
               }),
             )
-          : Effect.succeed({ source, token: Redacted.make(token), identity }),
+          : Effect.succeed({ ...credential, token: Redacted.make(credential.token) }),
       persist: () => Effect.void,
       invalidate: (account) => Ref.update(invalidated, (accounts) => [...accounts, account.key]),
       providerKey: (account) =>
@@ -139,11 +141,12 @@ const stubCredentials = (
     })),
   ).pipe(Layer.provideMerge(CredentialInvalidations.layer));
 
-const withToken = (
-  token: string | null = "test-key",
-  source: CredentialSource = "env",
-  identity: CredentialIdentity | null = null,
-) => Effect.provide(clientLayer.pipe(Layer.provideMerge(stubCredentials(token, source, identity))));
+const withToken = (token: string | null = "test-key", source: CredentialSource = "env") =>
+  Effect.provide(
+    clientLayer.pipe(
+      Layer.provideMerge(stubCredentials(token === null ? null : { token, source, identity: null })),
+    ),
+  );
 
 const claimLabelName = "cogwork:claimed";
 
@@ -194,10 +197,17 @@ describe("linear client", () => {
       assert.strictEqual(yield* client.authenticatedUserId(ref), "stored-user");
       assert.strictEqual(fetchStub.mock.calls.length, 0);
     }).pipe(
-      withToken("oauth-token", "stored-oauth", {
-        organization: "acme",
-        actorUserId: "stored-user",
-      }),
+      Effect.provide(
+        clientLayer.pipe(
+          Layer.provideMerge(
+            stubCredentials({
+              token: "oauth-token",
+              source: "stored-oauth",
+              identity: { organization: "acme", actorUserId: "stored-user" },
+            }),
+          ),
+        ),
+      ),
     );
   });
 
