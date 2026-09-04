@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_4399801e8e8169::t_d81d1b04cb0b2d 387,391,433
+apps/desktop/src/renderer/src/routes/_app/workspaces/$workspaceId.tsx
+  s_4399801e8e8169::t_b870815692b83b 2,13-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7abb10e2a703656163bad39c37d8d52fd23ebc18",
+  "prompts": {},
+  "sessions": {
+    "s_4399801e8e8169": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06856-baa7-7d31-9fe5-7b0db7df2456",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
