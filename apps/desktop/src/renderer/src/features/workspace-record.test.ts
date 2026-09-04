@@ -136,11 +136,37 @@ describe("workspace record draft", () => {
     ).toBeNull();
   });
 
-  it("holds the normalized display name after submission", () => {
-    const draft = { ...emptyDraft, displayName: "  cogwork  " };
+  it("holds every normalized field after submission", () => {
+    const draft = {
+      ...emptyDraft,
+      displayName: "  cogwork  ",
+      gitRemote: "  origin  ",
+      issueTrackerRepo: "  acme/cogwork  ",
+      teams: " ENG, APP ",
+      assigneeAllowlist: " taylor, cogwork ",
+      priorityProject: " 12 ",
+      priorityField: " Priority ",
+      worktreeRoot: " /worktrees ",
+      worktreeLinkPaths: " package.json \n config.json ",
+      worktreeReapAfterMillis: " 60000 ",
+      concurrency: " 3 ",
+    };
     const update = workspaceUpdateFromDraft(draft);
 
     expect(update).not.toBeNull();
-    expect(draftAfterSubmission(draft, "/repos/cogwork", update).displayName).toBe("cogwork");
+    expect(draftAfterSubmission(draft, "/repos/cogwork", update)).toMatchObject({
+      displayName: "cogwork",
+      checkoutPath: "/repos/cogwork",
+      gitRemote: "origin",
+      issueTrackerRepo: "acme/cogwork",
+      teams: "ENG, APP",
+      assigneeAllowlist: "taylor, cogwork",
+      priorityProject: "12",
+      priorityField: "Priority",
+      worktreeRoot: "/worktrees",
+      worktreeLinkPaths: "package.json\nconfig.json",
+      worktreeReapAfterMillis: "60000",
+      concurrency: "3",
+    });
   });
 });

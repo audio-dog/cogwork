@@ -91,49 +91,50 @@ export const changedFieldCount = (draft: WorkspaceRecordDraft, against: Workspac
     (key) => JSON.stringify(draft[key]) !== JSON.stringify(against[key]),
   ).length;
 
+const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: string }) => {
+  const tracker = record.issueTracker;
+  const sourceControl = record.sourceControl;
+  const worktrees = record.worktrees;
+  return {
+    displayName: record.name,
+    checkoutPath: record.checkoutPath,
+    gitRemote: record.gitRemote ?? "",
+    issueTrackerType: tracker.type === "linear" ? "linear" : "github",
+    issueTrackerConnectionId: tracker.connectionId,
+    issueTrackerRepo: tracker.repo ?? "",
+    teams: joined(tracker.teams),
+    organization: tracker.organization ?? "",
+    trackerActorLogin: tracker.actorLogin ?? "",
+    trackerActorUserId: tracker.actorUserId ?? "",
+    assigneeAllowlist: joined(tracker.assigneeAllowlist),
+    trackerBotAllowlist: joined(tracker.botAllowlist),
+    needsTriageLabel: tracker.roleLabels?.["needs-triage"] ?? "",
+    readyForAgentLabel: tracker.roleLabels?.["ready-for-agent"] ?? "",
+    needsInfoLabel: tracker.roleLabels?.["needs-info"] ?? "",
+    readyForHumanLabel: tracker.roleLabels?.["ready-for-human"] ?? "",
+    wontfixLabel: tracker.roleLabels?.wontfix ?? "",
+    priorityProject: tracker.priority?.project.toString() ?? "",
+    priorityField: tracker.priority?.field ?? "",
+    linearHistory: record.linearHistory,
+    sourceControlType: sourceControl?.type === "github" ? "github" : "none",
+    sourceControlConnectionId: sourceControl?.connectionId ?? "unbound",
+    sourceControlRepo: sourceControl?.repo ?? "",
+    sourceControlActorLogin: sourceControl?.actorLogin ?? "",
+    sourceControlBotAllowlist: joined(sourceControl?.botAllowlist),
+    worktreeRoot: worktrees?.root ?? "",
+    worktreeRemote: worktrees?.remote ?? "",
+    worktreeBaseBranch: worktrees?.baseBranch ?? "",
+    worktreeLinkPaths: joined(worktrees?.linkPaths, "\n"),
+    worktreeSetup: joined(worktrees?.setup, "\n"),
+    worktreeReapAfterMillis: worktrees?.reapAfterMillis?.toString() ?? "",
+    concurrency: record.concurrency?.toString() ?? "",
+    mcpSkills: encodeMcpSkills(record.mcpSkills ?? []),
+  } satisfies WorkspaceRecordDraft;
+};
+
 export const seededDraft = (workspace: WorkspaceState): WorkspaceRecordDraft =>
   WorkspaceState.match(workspace, {
-    Registered: (registered) => {
-      const record = registered.record;
-      const tracker = record.issueTracker;
-      const sourceControl = record.sourceControl;
-      const worktrees = record.worktrees;
-      return {
-        displayName: record.name,
-        checkoutPath: record.checkoutPath,
-        gitRemote: record.gitRemote ?? "",
-        issueTrackerType: tracker.type === "linear" ? "linear" : "github",
-        issueTrackerConnectionId: tracker.connectionId,
-        issueTrackerRepo: tracker.repo ?? "",
-        teams: joined(tracker.teams),
-        organization: tracker.organization ?? "",
-        trackerActorLogin: tracker.actorLogin ?? "",
-        trackerActorUserId: tracker.actorUserId ?? "",
-        assigneeAllowlist: joined(tracker.assigneeAllowlist),
-        trackerBotAllowlist: joined(tracker.botAllowlist),
-        needsTriageLabel: tracker.roleLabels?.["needs-triage"] ?? "",
-        readyForAgentLabel: tracker.roleLabels?.["ready-for-agent"] ?? "",
-        needsInfoLabel: tracker.roleLabels?.["needs-info"] ?? "",
-        readyForHumanLabel: tracker.roleLabels?.["ready-for-human"] ?? "",
-        wontfixLabel: tracker.roleLabels?.wontfix ?? "",
-        priorityProject: tracker.priority?.project.toString() ?? "",
-        priorityField: tracker.priority?.field ?? "",
-        linearHistory: record.linearHistory,
-        sourceControlType: sourceControl?.type === "github" ? "github" : "none",
-        sourceControlConnectionId: sourceControl?.connectionId ?? "unbound",
-        sourceControlRepo: sourceControl?.repo ?? "",
-        sourceControlActorLogin: sourceControl?.actorLogin ?? "",
-        sourceControlBotAllowlist: joined(sourceControl?.botAllowlist),
-        worktreeRoot: worktrees?.root ?? "",
-        worktreeRemote: worktrees?.remote ?? "",
-        worktreeBaseBranch: worktrees?.baseBranch ?? "",
-        worktreeLinkPaths: joined(worktrees?.linkPaths, "\n"),
-        worktreeSetup: joined(worktrees?.setup, "\n"),
-        worktreeReapAfterMillis: worktrees?.reapAfterMillis?.toString() ?? "",
-        concurrency: record.concurrency?.toString() ?? "",
-        mcpSkills: encodeMcpSkills(record.mcpSkills ?? []),
-      };
-    },
+    Registered: ({ record }) => draftFromRecord(record),
     Failed: ({ displayName, source }) => ({
       ...emptyDraft,
       displayName: displayName ?? "",
@@ -227,11 +228,10 @@ export const draftAfterSubmission = (
   draft: WorkspaceRecordDraft,
   checkoutPath: string,
   update: WorkspaceUpdate | null,
-) => ({
-  ...draft,
-  displayName: update?.name ?? draft.displayName,
-  checkoutPath,
-});
+) => {
+  if (!update) return { ...draft, checkoutPath };
+  return draftFromRecord({ ...update, checkoutPath });
+};
 
 export const workspaceRecordWritable = (workspace: WorkspaceState) =>
   WorkspaceState.guards.Registered(workspace);
