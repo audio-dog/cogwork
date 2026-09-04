@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/routes/settings/scheduling.tsx
+  s_4a681223b22e5e::t_0cf6c0c19c1a0e 2,6,8-15
+apps/desktop/src/renderer/src/routes/settings/appearance.tsx
+  s_4a681223b22e5e::t_0cf6c0c19c1a0e 2,6,8-15
+apps/desktop/src/renderer/src/routes/settings/general.tsx
+  s_4a681223b22e5e::t_0cf6c0c19c1a0e 2,6,8-15
+apps/desktop/src/renderer/src/routes/settings/route.tsx
+  s_4a681223b22e5e::t_0cf6c0c19c1a0e 31-33
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_4a681223b22e5e::t_d4039aa06bc0eb 22,373-384
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "27768ea1f50ee2befa76d934ae32e4bdf04746f1",
+  "prompts": {},
+  "sessions": {
+    "s_4a681223b22e5e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06af7-9173-7430-be59-73695d71b7fb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
