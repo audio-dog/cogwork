@@ -52,7 +52,7 @@ The `models` subcommand: lists the model catalog for the providers a key resolve
 _Avoid_: A picker UI (that's the desktop's job; this is the read-only list), listing every provider regardless of credentials
 
 **workspace**:
-The daemon-backed management group. `register` admits a checkout and mints its `WorkspaceId`; `re-bind` changes that identity's checkout path; `deregister` removes the registration and private tree without erasing Run history. All three require a running daemon.
+The daemon-backed management group. `register` admits a checkout and mints its `WorkspaceId`; `update` replaces its mutable non-path record from schema-decoded JSON; `re-bind` changes that identity's checkout path; `deregister` removes the registration and private tree without erasing Run history. All four require a running daemon.
 _Avoid_: The `worktree` command, which manages disposable checkouts under one registered Workspace
 
 **Watch**:
