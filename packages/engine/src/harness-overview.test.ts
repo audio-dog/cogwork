@@ -14,6 +14,8 @@ import { harnessOverview, harnessStateOf } from "./harness-overview";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
 
+const harness = Schema.decodeSync(HarnessName);
+
 const readyReadiness: HarnessReadiness = {
   operational: { status: "ready", retryable: false, diagnostic: "ready" },
   installation: { status: "installed", version: "1.2.3" },
@@ -117,7 +119,7 @@ const runner = (
   name: string,
   overrides: Partial<Pick<HarnessRunner, "readiness" | "catalogSources" | "signIn">> = {},
 ): HarnessRunner => ({
-  name: Schema.decodeSync(HarnessName)(name),
+  name: harness(name),
   sessionKind: "opaque-handle",
   projectedMembers: [],
   planMiddleware: [],
@@ -147,6 +149,15 @@ const runner = (
 });
 
 describe("harnessOverview", () => {
+  it.effect("carries stored enablement beside readiness", () =>
+    Effect.gen(function* () {
+      const overview = yield* harnessOverview([{ harness: harness("codex"), enabled: false }]);
+
+      assert.isFalse(overview.harnesses[0]?.enabled);
+      assert.isTrue(overview.harnesses[1]?.enabled);
+    }).pipe(Effect.provide(probeLayer([runner("codex"), runner("cursor")]))),
+  );
+
   it.effect("lists every registered harness with its models", () =>
     Effect.gen(function* () {
       const overview = yield* harnessOverview();
