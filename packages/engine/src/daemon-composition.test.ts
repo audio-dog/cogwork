@@ -46,6 +46,7 @@ const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   ensure: () => Effect.die("unused"),
+  pullRequestReadiness: () => Effect.die("unused"),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
