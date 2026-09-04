@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ConnectionsSurface } from "../../components/connections-surface";
+import { PageContainer } from "../../components/page-container";
 
 export const Route = createFileRoute("/_app/connections")({
   component: ConnectionsRoute,
@@ -7,8 +8,8 @@ export const Route = createFileRoute("/_app/connections")({
 
 function ConnectionsRoute() {
   return (
-    <div className="mx-auto w-full max-w-5xl px-8 pt-6 pb-12">
+    <PageContainer width="wide" className="pt-6">
       <ConnectionsSurface />
-    </div>
+    </PageContainer>
   );
 }

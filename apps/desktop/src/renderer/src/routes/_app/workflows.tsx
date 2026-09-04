@@ -1,6 +1,7 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiNodeTree } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
+import { PageContainer } from "../../components/page-container";
 
 export const Route = createFileRoute("/_app/workflows")({
   component: WorkflowsRoute,
@@ -8,7 +9,7 @@ export const Route = createFileRoute("/_app/workflows")({
 
 function WorkflowsRoute() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl px-8 py-16">
+    <PageContainer width="readable" className="flex py-16">
       <Empty className="w-full">
         <EmptyHeader>
           <EmptyMedia variant="icon">
@@ -18,6 +19,6 @@ function WorkflowsRoute() {
           <EmptyDescription>Operations and their settings will live here.</EmptyDescription>
         </EmptyHeader>
       </Empty>
-    </div>
+    </PageContainer>
   );
 }
