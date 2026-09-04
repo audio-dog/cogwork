@@ -29,7 +29,7 @@ A repo registered with the daemon under a minted `WorkspaceId`: a checkout path 
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:
-Who the daemon acts *as* on a tracker — `issueTracker.actorUserId` (Linear user UUID) and `actorLogin` (GitHub login, on the tracker or the `sourceControl` block). It stamps claims and coordination comments and marks which comments/PRs are the daemon's own. One identity per workspace. (Renamed from `botUserId`/`botLogin`, since it can be any human or service account, not only a bot.)
+Who the daemon acts *as* on a tracker — the authenticated account discovered from the bound **Connection**. It stamps claims and coordination comments and marks which comments and pull requests are the daemon's own. A workspace stores only the Connection binding; it has no separate actor selector.
 _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
