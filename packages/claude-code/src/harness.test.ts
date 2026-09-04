@@ -23,12 +23,24 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { type ClaudeCodeRunnerOptions, claudeCodeCatalogSources, claudeCodeRunner } from "./harness";
+import {
+  type ClaudeCodeRunnerOptions,
+  claudeCodeCatalogSources,
+  claudeCodeRunner,
+  inlineSettingsArgument,
+} from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("claude");
 const companionName = Schema.decodeSync(HarnessName)("companion");
 const hostAuthentication = { mode: "host" } as const;
 const byokAuthentication = { mode: "byok" } as const;
+const authenticationByMode = {
+  host: hostAuthentication,
+  byok: byokAuthentication,
+} satisfies Record<
+  ClaudeCodeRunnerOptions["authentication"]["mode"],
+  ClaudeCodeRunnerOptions["authentication"]
+>;
 
 const companionRunner = {
   name: companionName,
@@ -74,9 +86,11 @@ const environmentValue = (name: string) => {
   const value = Reflect.get(process.env, name);
   return typeof value === "string" ? value : undefined;
 };
-const inheritedAnthropicEnvironment = {
-  apiKey: environmentValue("ANTHROPIC_API_KEY"),
-  authToken: environmentValue("ANTHROPIC_AUTH_TOKEN"),
+const inheritedEnvironment = {
+  ANTHROPIC_API_KEY: environmentValue("ANTHROPIC_API_KEY"),
+  ANTHROPIC_AUTH_TOKEN: environmentValue("ANTHROPIC_AUTH_TOKEN"),
+  GITHUB_TOKEN: environmentValue("GITHUB_TOKEN"),
+  GH_TOKEN: environmentValue("GH_TOKEN"),
 };
 
 const persistence = memoryPersistence();
@@ -318,6 +332,8 @@ const Capture = Schema.Struct({
   apiKeyPresent: Schema.Boolean,
   apiKeyVersion: Schema.NullOr(Schema.String),
   authToken: Schema.NullOr(Schema.String),
+  githubToken: Schema.NullOr(Schema.String),
+  ghToken: Schema.NullOr(Schema.String),
 });
 
 const NativeSandboxSettings = Schema.fromJsonString(
@@ -381,19 +397,22 @@ const restoreEnvironment = (name: string, value: string | undefined) => {
   return Reflect.set(process.env, name, value);
 };
 
-const withInheritedAnthropicEnvironment = <Value, Error, Requirements>(
+const withInheritedCredentialEnvironment = <Value, Error, Requirements>(
   effect: Effect.Effect<Value, Error, Requirements>,
 ) =>
   Effect.acquireUseRelease(
     Effect.sync(() => {
       Reflect.set(process.env, "ANTHROPIC_API_KEY", "inherited-api-key");
       Reflect.set(process.env, "ANTHROPIC_AUTH_TOKEN", "inherited-auth-token");
+      Reflect.set(process.env, "GITHUB_TOKEN", "inherited-github-token");
+      Reflect.set(process.env, "GH_TOKEN", "inherited-gh-token");
     }),
     () => effect,
     () =>
       Effect.sync(() => {
-        restoreEnvironment("ANTHROPIC_API_KEY", inheritedAnthropicEnvironment.apiKey);
-        restoreEnvironment("ANTHROPIC_AUTH_TOKEN", inheritedAnthropicEnvironment.authToken);
+        for (const [name, value] of Object.entries(inheritedEnvironment)) {
+          restoreEnvironment(name, value);
+        }
       }),
   );
 
@@ -490,7 +509,7 @@ describe("Claude Code Harness", () => {
           authentication: hostAuthentication,
           claudeExecutable: fakeClaudeExecutable(" --not-authenticated"),
         }).readiness();
-        const scrubbed = yield* withInheritedAnthropicEnvironment(
+        const scrubbed = yield* withInheritedCredentialEnvironment(
           claudeCodeRunner({
             name,
             authentication: hostAuthentication,
@@ -534,7 +553,7 @@ describe("Claude Code Harness", () => {
     it.effect("runs host auth with mandatory Workspace projection, native events, and usage", () =>
       Effect.gen(function* () {
         const { handle, harness } = yield* makeLiveHarness(" --emit-change --commit-mcp-config");
-        const events = yield* withInheritedAnthropicEnvironment(
+        const events = yield* withInheritedCredentialEnvironment(
           harness.run(makeRequest(handle.id, { mcp: true })).pipe(Stream.runCollect),
         );
         const capture = yield* captureFrom(events);
@@ -659,6 +678,29 @@ describe("Claude Code Harness", () => {
       10_000,
     );
 
+    it.effect("accepts safe inline settings and rejects settings containing spaces", () =>
+      Effect.gen(function* () {
+        const safe = '{"sandbox":{"enabled":true}}';
+        const unsafe = '{"hooks":{"PreToolUse":[{"command":"/path with space/hook"}]}}';
+
+        assert.strictEqual(inlineSettingsArgument(safe), safe);
+        const cause = yield* Effect.try({
+          try: () => inlineSettingsArgument(unsafe),
+          catch: (cause) => {
+            if (Schema.is(Harness.HarnessError)(cause)) return cause;
+            return new Harness.HarnessError({
+              reason: "launch",
+              retryable: false,
+              message: "Inline settings threw an unexpected error",
+            });
+          },
+        }).pipe(Effect.flip);
+        assert.include(cause.message, unsafe);
+        assert.strictEqual(cause.reason, "launch");
+        assert.isFalse(cause.retryable);
+      }),
+    );
+
     it.effect("cancels the Claude child when its Harness stream is interrupted", () =>
       Effect.gen(function* () {
         const { handle, harness } = yield* makeLiveHarness(" --hang");
@@ -727,6 +769,27 @@ describe("Claude Code Harness", () => {
   });
 
   it.layer(byokHarnessLayer)((it) => {
+    it.effect("scrubs source-control credentials in every authentication mode", () =>
+      withInheritedCredentialEnvironment(
+        Effect.forEach(Object.values(authenticationByMode), (authentication) =>
+          Effect.gen(function* () {
+            const { handle, harness } = yield* makeLiveHarness("", authentication);
+            const events = yield* harness.run(makeRequest(handle.id)).pipe(Stream.runCollect);
+            return yield* captureFrom(events);
+          }),
+        ).pipe(
+          Effect.tap((captures) =>
+            Effect.sync(() => {
+              for (const capture of captures) {
+                assert.isNull(capture.githubToken);
+                assert.isNull(capture.ghToken);
+              }
+            }),
+          ),
+        ),
+      ),
+    );
+
     it.effect("reports BYOK availability without requiring host login", () =>
       Effect.gen(function* () {
         const readiness = yield* claudeCodeRunner({
@@ -747,7 +810,7 @@ describe("Claude Code Harness", () => {
     it.effect("injects and scrubs BYOK beside an MCP bearer", () =>
       Effect.gen(function* () {
         const { handle, harness } = yield* makeLiveHarness("", byokAuthentication);
-        const events = yield* withInheritedAnthropicEnvironment(
+        const events = yield* withInheritedCredentialEnvironment(
           harness.run(makeRequest(handle.id, { mcp: true })).pipe(Stream.runCollect),
         );
         const capture = yield* captureFrom(events);
