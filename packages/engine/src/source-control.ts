@@ -37,6 +37,11 @@ export interface SourceControlProviderService {
     body: string,
   ) => Effect.Effect<void, IssueTrackerError>;
 
+  readonly findOpenPullRequest: (
+    workspace: RegisteredWorkspace,
+    headBranch: string,
+  ) => Effect.Effect<OpenedPullRequest | null, IssueTrackerError>;
+
   readonly openPullRequest: (
     workspace: RegisteredWorkspace,
     input: OpenPullRequestInput,
@@ -51,6 +56,7 @@ export class SourceControlProvider extends Context.Service<
 const noProvider: SourceControlProviderService = {
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
+  findOpenPullRequest: () => Effect.succeed(null),
   openPullRequest: () =>
     Effect.fail(
       new IssueTrackerError({ reason: "unavailable", message: "source control provider is not configured" }),

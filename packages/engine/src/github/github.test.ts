@@ -418,6 +418,24 @@ describe("GitHub adapters", () => {
     }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 
+  it.effect("finds an open pull request for the exact same-repository head", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const found = yield* provider.findOpenPullRequest(workspace, "474-ready");
+      assert.deepStrictEqual(found, {
+        number: 474,
+        url: "https://github.com/owner/repo/pull/474",
+      });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          pulls: [pull({ number: 474, headRef: "474-ready", authorAssociation: "NONE" })],
+        }),
+      ),
+    ),
+  );
+
   it.effect("preserves a pull request provider failure in the typed error channel", () =>
     Effect.gen(function* () {
       const provider = yield* SourceControlProvider;

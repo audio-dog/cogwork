@@ -54,6 +54,17 @@ export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTa
   return targetFromRepo(source.repo, source.connectionId, source.actorLogin, source.botAllowlist);
 };
 
+const missingSourceControlTarget = () =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    message: "GitHub source control target is not configured",
+  });
+
+const sourceControlTarget = (workspace: RegisteredWorkspace) => {
+  const target = sourceControlTargetFor(workspace);
+  return target ? Effect.succeed(target) : Effect.fail(missingSourceControlTarget());
+};
+
 // The engine cuts an item's branch as `branchName(item)`, whose stable prefix is `ticketSlug(item.id)`.
 // A PR belongs to the item when its head branch is that slug or a `slug-…` extension of it — the `-`
 // keeps `12` from swallowing `120`, mirroring the worktree reaper's ownership check.
@@ -182,6 +193,9 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   const sameRepositoryHead = (target: GitHubTarget, pull: RawPull) =>
     pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase();
 
+  const exactHeadPull = (target: GitHubTarget, headBranch: string, pulls: ReadonlyArray<RawPull>) =>
+    pulls.find((pull) => pull.headRef === headBranch && sameRepositoryHead(target, pull)) ?? null;
+
   const rank = (target: GitHubTarget, item: WorkItem, branch: string, pull: RawPull) =>
     [
       sameRepositoryHead(target, pull) ? 1 : 0,
@@ -273,15 +287,15 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
         if (!target) return;
         yield* commentOnPull(target, item, body);
       }),
+    findOpenPullRequest: Effect.fn("github.findOpenPullRequest")(function* (workspace, headBranch) {
+      const target = yield* sourceControlTarget(workspace);
+      const pulls = yield* client.listPulls(target, headBranch);
+      const pull = exactHeadPull(target, headBranch, pulls);
+      return pull ? { number: pull.number, url: pull.url } : null;
+    }),
     openPullRequest: (workspace, input) =>
       Effect.gen(function* () {
-        const target = sourceControlTargetFor(workspace);
-        if (!target) {
-          return yield* new IssueTrackerError({
-            reason: "unavailable",
-            message: "GitHub source control target is not configured",
-          });
-        }
+        const target = yield* sourceControlTarget(workspace);
         return yield* client.createPull(target, input);
       }),
   };
