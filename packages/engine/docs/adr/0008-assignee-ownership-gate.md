@@ -6,7 +6,7 @@ We gate eligibility on an **assignee allowlist**. A workspace may set `issueTrac
 
 The gate is a **precondition, not an action**. It is re-evaluated on every poll and only ever *declines* to act. It never releases a claim, never interrupts an in-flight run, never posts a note. If a ticket we've already claimed and opened a PR for loses its owner, the current run finishes and releases its claim as it always did, and the next poll simply stops picking it up — the PR goes quiet. The ticketing system stays the source of truth for ownership; we honor an unassignment by declining, not by unwinding.
 
-The allowlist (whose tickets the daemon may pick up) is deliberately separate from the `actorUserId`/`actorLogin` identity (who the daemon acts *as* when it claims and comments). The same rename that introduced the gate dropped "bot" from those identity fields, since they can now be any human or service account, not just a bot.
+The allowlist (whose tickets the daemon may pick up) is deliberately separate from the bound Connection's authenticated account (who the daemon acts *as* when it claims and comments). The account can belong to a human or a service, not only a bot.
 
 ## Considered Options
 
