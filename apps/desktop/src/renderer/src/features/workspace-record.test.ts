@@ -7,7 +7,14 @@ import {
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { seededDraft, workspaceLabelById, workspaceUpdateFromDraft } from "./workspace-record";
+import {
+  draftAfterSubmission,
+  emptyDraft,
+  seededDraft,
+  workspaceLabelById,
+  workspaceRecordWritable,
+  workspaceUpdateFromDraft,
+} from "./workspace-record";
 
 const decodeDaemonEvent = Schema.decodeUnknownSync(DaemonEvent);
 
@@ -104,5 +111,36 @@ describe("workspace record draft", () => {
     const { checkoutPath: _checkoutPath, ...expected } = state.record;
 
     expect(update).toEqual(expected);
+  });
+
+  it("keeps failed workspace records read-only while preserving their checkout path", () => {
+    const state = Schema.decodeSync(WorkspaceState)({
+      _tag: "Failed",
+      name: "01a05d92-f135-7e4a-b80b-40484b5d9775",
+      displayName: "cogwork",
+      source: "/repos/cogwork",
+      message: "Workspace input failed",
+    });
+
+    expect(seededDraft(state).checkoutPath).toBe("/repos/cogwork");
+    expect(workspaceRecordWritable(state)).toBe(false);
+  });
+
+  it("rejects an invalid priority project instead of clearing it", () => {
+    expect(
+      workspaceUpdateFromDraft({
+        ...emptyDraft,
+        displayName: "cogwork",
+        priorityProject: "not-a-project-number",
+      }),
+    ).toBeNull();
+  });
+
+  it("holds the normalized display name after submission", () => {
+    const draft = { ...emptyDraft, displayName: "  cogwork  " };
+    const update = workspaceUpdateFromDraft(draft);
+
+    expect(update).not.toBeNull();
+    expect(draftAfterSubmission(draft, "/repos/cogwork", update).displayName).toBe("cogwork");
   });
 });

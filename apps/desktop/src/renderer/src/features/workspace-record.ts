@@ -134,7 +134,11 @@ export const seededDraft = (workspace: WorkspaceState): WorkspaceRecordDraft =>
         mcpSkills: encodeMcpSkills(record.mcpSkills ?? []),
       };
     },
-    Failed: () => emptyDraft,
+    Failed: ({ displayName, source }) => ({
+      ...emptyDraft,
+      displayName: displayName ?? "",
+      checkoutPath: source,
+    }),
   });
 
 const optional = (value: string) => value.trim() || undefined;
@@ -157,6 +161,13 @@ const positiveNumber = (value: string) => {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : Number.NaN;
 };
+const priorityFrom = (draft: WorkspaceRecordDraft) => {
+  if (!draft.priorityProject.trim()) return undefined;
+  return {
+    project: positiveNumber(draft.priorityProject),
+    field: optional(draft.priorityField),
+  };
+};
 
 export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
   const mcpSkills = Option.getOrUndefined(decodeMcpSkills(draft.mcpSkills));
@@ -168,7 +179,6 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
     "ready-for-human": optional(draft.readyForHumanLabel),
     wontfix: optional(draft.wontfixLabel),
   };
-  const priorityProject = positiveNumber(draft.priorityProject);
   const worktrees = {
     root: optional(draft.worktreeRoot),
     remote: optional(draft.worktreeRemote),
@@ -193,9 +203,7 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
         assigneeAllowlist: list(draft.assigneeAllowlist),
         botAllowlist: list(draft.trackerBotAllowlist),
         roleLabels: Object.values(roleLabels).some(Boolean) ? roleLabels : undefined,
-        priority: priorityProject
-          ? { project: priorityProject, field: optional(draft.priorityField) }
-          : undefined,
+        priority: priorityFrom(draft),
       },
       sourceControl:
         draft.sourceControlType === "github"
@@ -214,6 +222,19 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
     }),
   );
 };
+
+export const draftAfterSubmission = (
+  draft: WorkspaceRecordDraft,
+  checkoutPath: string,
+  update: WorkspaceUpdate | null,
+) => ({
+  ...draft,
+  displayName: update?.name ?? draft.displayName,
+  checkoutPath,
+});
+
+export const workspaceRecordWritable = (workspace: WorkspaceState) =>
+  WorkspaceState.guards.Registered(workspace);
 
 export const workspaceIdentity = (workspace: WorkspaceState) =>
   WorkspaceState.match<WorkspaceId | null>(workspace, {
