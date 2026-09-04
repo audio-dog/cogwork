@@ -1,0 +1,20 @@
+apps/cli/src/trust-codex-hooks.ts
+  s_777b251643bf2e::t_0233f199e4b4d0 1-4,6-28,30-32
+  s_777b251643bf2e::t_23de26db0ebc61 5,29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ed4f44168f9b216334fe4d3570aa1263e327c4a0",
+  "prompts": {},
+  "sessions": {
+    "s_777b251643bf2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06de5-9582-7b31-a35e-4391798377b9",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
