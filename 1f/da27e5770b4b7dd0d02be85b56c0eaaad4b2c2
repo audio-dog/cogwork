@@ -1,0 +1,22 @@
+packages/contracts/src/scheduler-defaults.ts
+  s_a4f7576244239f::t_7bdee6c88a143e 17
+packages/contracts/src/daemon.ts
+  s_a4f7576244239f::t_7bdee6c88a143e 7
+  s_a4f7576244239f::t_ac97d5d959bba1 250-253
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1fda27e5770b4b7dd0d02be85b56c0eaaad4b2c2",
+  "prompts": {},
+  "sessions": {
+    "s_a4f7576244239f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c90-0d33-7f51-99b1-4056f2717a9e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
