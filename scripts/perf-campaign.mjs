@@ -174,8 +174,14 @@ const run = async (minutes) => {
   say("campaign complete — stop the app, then run: node scripts/perf-campaign.mjs readout");
 };
 
-const sqlite = (database, query) =>
-  capture("sqlite3", ["-json", `file:${database}?mode=ro&immutable=1`, query]);
+// A live daemon keeps recent rows in the write-ahead log. `immutable=1` ignores that log, so it is
+// only safe once the daemon has stopped and checkpointed — and it is the only thing that opens the
+// store after that, when SQLite can no longer create the shared-memory file it wants.
+const sqlite = (database, query) => {
+  const plain = capture("sqlite3", ["-json", `file:${database}?mode=ro`, query]);
+  if (plain !== "") return plain;
+  return capture("sqlite3", ["-json", `file:${database}?mode=ro&immutable=1`, query]);
+};
 
 const rows = (database, query) => {
   const output = sqlite(database, query);
@@ -258,6 +264,18 @@ const reportWindow = (manifest, record) => {
     );
   }
 
+  const dropped = rows(
+    manifest.telemetryStore,
+    `select coalesce(json_extract(state,'$.count'), 0) as drops from metrics
+     where name='cogwork_daemon_event_bus_dropped_events_total'
+     and timestamp between ${from} and ${to} order by timestamp desc limit 1;`,
+  )[0];
+  console.log(
+    dropped
+      ? `(f) daemon event bus dropped ${dropped.drops} events`
+      : "(f) daemon event bus drops: the counter never reached the store — treat as unrecorded, not as zero",
+  );
+
   const control = join(daemonHome, "control.db");
   const events = rows(
     control,
@@ -285,9 +303,19 @@ const readout = () => {
   console.log(`descriptor limit ${manifest.fileDescriptorLimit}`);
   for (const record of manifest.windows) reportWindow(manifest, record);
 
-  console.log("\n=== (a) process exits in the desktop log ===");
-  const exits = capture("grep", ["-aE", "Engine closed|process-gone|restart budget", desktopLogPath]);
-  console.log(exits ? exits.split("\n").slice(-12).join("\n") : "no exit lines found");
+  const first = millis(manifest.windows[0].startedAt);
+  const last = millis(manifest.windows[manifest.windows.length - 1].endedAt ?? stamp());
+  console.log("\n=== (a) process exits during the campaign ===");
+  const scanned = capture("grep", ["-aE", "Engine closed|process-gone|restart budget", desktopLogPath]);
+  // electron-log writes local time as `[YYYY-MM-DD HH:MM:SS.mmm]`; lines outside the campaign are
+  // history from earlier sessions and would read as this campaign's crashes.
+  const inCampaign = scanned.split("\n").filter((line) => {
+    const at = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/.exec(line);
+    if (!at) return false;
+    const when = new Date(at[1].replace(" ", "T")).getTime();
+    return when >= first && when <= last;
+  });
+  console.log(inCampaign.length ? inCampaign.join("\n") : "no process exited during either window");
 };
 
 const command = process.argv[2];
