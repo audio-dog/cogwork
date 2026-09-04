@@ -195,6 +195,23 @@ trusted_hash = "sha256:existing"
     assert.lengthOf(entries, 1);
   });
 
+  it("ignores matchers for matcherless events", () => {
+    const entries = codexHookTrustEntries(
+      hooksPath,
+      JSON.stringify({
+        hooks: {
+          Stop: [{ matcher: "(?=ignored)", hooks: [{ type: "command", command: "scan" }] }],
+        },
+      }),
+    );
+
+    assert.lengthOf(entries, 1);
+  });
+
+  it("rejects unknown top-level Hook fields", () => {
+    assert.throws(() => codexHookTrustEntries(hooksPath, JSON.stringify({ hooks: {}, bogus: true })));
+  });
+
   it("fails closed on MCP input Codex cannot hash as TOML", () => {
     assert.throws(() =>
       codexHookTrustEntries(

@@ -21,6 +21,11 @@ const isTomlValue = (value: unknown): boolean => {
 const Matcher = Schema.String.check(
   Schema.makeFilter(isSupportedMatcher, { expected: "a valid Codex Hook matcher" }),
 );
+const HooksFileJson = Schema.JsonObject.check(
+  Schema.makeFilter((value) => Object.keys(value).every((key) => key === "description" || key === "hooks"), {
+    expected: "a Codex Hooks file without unknown top-level fields",
+  }),
+);
 const TomlJsonObject = Schema.JsonObject.check(
   Schema.makeFilter(isTomlValue, { expected: "JSON representable as TOML" }),
 );
@@ -48,7 +53,7 @@ const McpToolHook = Schema.Struct({
 const UnsupportedHook = Schema.Struct({ type: Schema.Literals(["prompt", "agent"]) });
 const HookHandler = Schema.Union([CommandHook, McpToolHook, UnsupportedHook]);
 const MatcherGroup = Schema.Struct({
-  matcher: Schema.optional(Matcher),
+  matcher: Schema.optional(Schema.String),
   hooks: Schema.optional(Schema.Array(HookHandler)),
 });
 const HookGroups = Schema.optional(Schema.Array(MatcherGroup));
@@ -163,8 +168,10 @@ const normalizedTimeout = (event: EventDefinition, timeout: number | undefined) 
   return Math.min(Math.max(timeout ?? 1, 1), 3);
 };
 
-const matcherForEvent = (event: EventDefinition, matcher: string | undefined) =>
-  event.acceptsMatcher ? matcher : undefined;
+const matcherForEvent = (event: EventDefinition, matcher: string | undefined) => {
+  if (!event.acceptsMatcher || matcher === undefined) return undefined;
+  return Schema.decodeSync(Matcher)(matcher);
+};
 
 const normalizedCommand = (event: EventDefinition, handler: typeof CommandHook.Type) => ({
   type: handler.type,
@@ -244,7 +251,8 @@ const entriesForEvent = (
   });
 
 export const codexHookTrustEntries = (sourcePath: string, contents: string) => {
-  const parsed = Schema.decodeSync(Schema.fromJsonString(HooksFile))(contents);
+  const json = Schema.decodeSync(Schema.fromJsonString(HooksFileJson))(contents);
+  const parsed = Schema.decodeSync(HooksFile)(json);
   const hooks = parsed.hooks;
   if (!hooks) return [];
   return eventDefinitions.flatMap((event) =>
