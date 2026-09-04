@@ -18,6 +18,7 @@ import type {
 import { byStageThenPriority } from "@cogwork/contracts";
 import * as Chunk from "effect/Chunk";
 import * as Data from "effect/Data";
+import { exhaustionOf } from "./exhaustion";
 import {
   type FollowUpContext,
   followUpContext,
@@ -146,13 +147,7 @@ export const observedStage = (item: ObservedItem) => {
   return null;
 };
 
-export const maxAttemptsPerStage = 3;
-
-export const consecutiveFailures = (item: ObservedItem, stage: LifecycleStage) => {
-  const forStage = item.attempts.filter((attempt) => attempt.stage === stage);
-  const lastNonFailure = forStage.findLastIndex((attempt) => attempt.outcome !== "failed");
-  return forStage.length - (lastNonFailure + 1);
-};
+export { consecutiveFailures, maxAttemptsPerStage } from "./exhaustion";
 
 const ownedByActor = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined) =>
   !allowlist || item.assignees.some((assignee) => allowlist.includes(assignee));
@@ -173,8 +168,7 @@ const classifyOne = (
   const stage = observedStage(item);
   if (!stage) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
-  const failures = consecutiveFailures(item, stage);
-  if (failures >= maxAttemptsPerStage) return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  if (exhaustionOf(item, stage).exhausted) return Outcome.NeedsHuman({ reason: "ready-for-human" });
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   if (availability?.get(stage)?.available === false && !isStalledFollowUp(stage, followUp)) {
     return Outcome.Drop({});
@@ -217,7 +211,7 @@ export const classifiedItemOf = (item: ObservedItem) =>
   });
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
-  const priorFailures = consecutiveFailures(item, stage);
+  const priorFailures = exhaustionOf(item, stage).failedAttempts;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   return {
     id: item.id,
