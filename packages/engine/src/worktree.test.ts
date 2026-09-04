@@ -82,12 +82,16 @@ const fakeGit = (
     readonly divergenceByBase?: Readonly<Record<string, BranchDivergence>>;
     readonly operation?: GitOperationInProgress;
     readonly addFailure?: GitError;
+    readonly fetchFailure?: GitError;
     readonly rebaseFailure?: GitError;
   },
 ) => {
   const remotes = new Set(options.remoteBranches ?? []);
   return {
-    fetch: (_repoPath: string, remote: string) => Ref.update(recorder.fetched, (log) => [...log, remote]),
+    fetch: (_repoPath: string, remote: string) =>
+      options.fetchFailure
+        ? Effect.fail(options.fetchFailure)
+        : Ref.update(recorder.fetched, (log) => [...log, remote]),
     remoteBranchExists: (_repoPath: string, _remote: string, branch: string) =>
       Effect.succeed(remotes.has(branch)),
     addWorktree: (args: AddWorktreeArgs) => {
@@ -486,6 +490,28 @@ describe("Worktree.ensure", () => {
 });
 
 describe("Worktree.pullRequestReadiness", () => {
+  it.effect("propagates git failures instead of declining the gate", () => {
+    const failure = new GitError({
+      command: "fetch origin",
+      message: "git fetch origin timed out",
+      reason: "timeout",
+    });
+    return Effect.gen(function* () {
+      const manager = yield* ReadinessWorktree;
+
+      const error = yield* Effect.flip(manager.pullRequestReadiness(workspaceWith(), item));
+
+      assert.strictEqual(error, failure);
+    }).pipe(
+      Effect.provide(
+        readinessLayer({
+          worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
+          fetchFailure: failure,
+        }),
+      ),
+    );
+  });
+
   it.effect("declines when the worktree is not on the branch the engine cut", () =>
     Effect.gen(function* () {
       const recorder = yield* ReadinessRecorder;
