@@ -40,7 +40,7 @@ The `login key --provider <id>` subcommand: the bring-your-own-key path. It read
 _Avoid_: A `--key` flag (that leaks the secret), a separate provider secret file
 
 **connection**:
-The daemon-backed management group for `establish`, `re-connect`, and `remove`. Establishment accepts an environment-variable name, an API key read from stdin, or an existing browser-login grant. Removal reports the Workspace ids left dangling.
+The daemon-backed management group for `establish`, `re-connect`, and `remove`. Establishment and re-connect read an API key from stdin by default. `--env` selects an environment-variable name, and Linear's `--stored` selects an existing browser-login grant. Cogwork does not load `~/.cogwork/.env`; environment references resolve only from the daemon process environment. Removal reports the Workspace ids left dangling.
 _Avoid_: Putting an API key in argv, editing the Control store directly
 
 **login linear**:
