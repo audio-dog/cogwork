@@ -1207,6 +1207,42 @@ const controlStoreLayer = (
   } satisfies ControlStoreService);
 };
 
+function mutableHarnessControlStoreLayer(settings: Ref.Ref<ReadonlyArray<HarnessEnablement>>) {
+  const gate = Semaphore.makeUnsafe(1);
+  return Layer.succeed(ControlStore, {
+    health: "available",
+    seed: { ...defaultControlStore, operationSettings: runnableStages },
+    picture: Ref.get(settings).pipe(
+      Effect.map((harnessSettings) => ({
+        ...defaultControlStore,
+        operationSettings: runnableStages,
+        harnessSettings,
+      })),
+    ),
+    setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
+    establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
+    revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
+    removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
+    setHarnessEnabled: (harness, enabled) =>
+      Ref.update(settings, (current) => [
+        ...current.filter((setting) => setting.harness !== harness),
+        ...(enabled ? [] : [{ harness, enabled }]),
+      ]).pipe(
+        Effect.andThen(Ref.get(settings)),
+        Effect.map((harnessSettings) => ({
+          ...defaultControlStore,
+          operationSettings: runnableStages,
+          harnessSettings,
+        })),
+      ),
+    updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+    installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
+    uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
+    updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
+    withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
+  } satisfies ControlStoreService);
+}
+
 const changingControlStoreLayer = (
   firstOperationSettings: ReadonlyArray<OperationSettingRow>,
   secondOperationSettings: ReadonlyArray<OperationSettingRow>,
@@ -1286,6 +1322,49 @@ const failRunAcceptance = (retryable: boolean) => (layer: Layer.Layer<RunLedger.
       } satisfies RunLedger.RunLedgerService;
     }),
   ).pipe(Layer.provide(layer));
+
+const assertRunAcceptanceInsideWriteGate =
+  (writeActive: Ref.Ref<boolean>) => (layer: Layer.Layer<RunLedger.RunLedger>) =>
+    Layer.effect(
+      RunLedger.RunLedger,
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        return {
+          ...ledger,
+          acceptRun: (record, plan) =>
+            Ref.get(writeActive).pipe(
+              Effect.flatMap((active) =>
+                active
+                  ? ledger.acceptRun(record, plan)
+                  : Effect.die(new Error("Run accepted outside the Control store write gate")),
+              ),
+            ),
+        } satisfies RunLedger.RunLedgerService;
+      }),
+    ).pipe(Layer.provide(layer));
+
+const observedWriteGateControlStoreLayer = (writeActive: Ref.Ref<boolean>) => {
+  const gate = Semaphore.makeUnsafe(1);
+  const picture = { ...defaultControlStore, operationSettings: runnableStages };
+  return Layer.succeed(ControlStore, {
+    health: "available",
+    seed: picture,
+    picture: Effect.succeed(picture),
+    setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
+    establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
+    revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
+    removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
+    setHarnessEnabled: () => Effect.die(new Error("unexpected Harness enablement update")),
+    updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+    installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
+    uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
+    updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
+    withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      gate.withPermits(1)(
+        Ref.set(writeActive, true).pipe(Effect.andThen(effect), Effect.ensuring(Ref.set(writeActive, false))),
+      ),
+  } satisfies ControlStoreService);
+};
 
 function provide(
   runners: ReadonlyArray<TestRunner>,
@@ -1441,6 +1520,7 @@ describe("Executor.execute", () => {
   it.effect("refuses a disabled Harness before claim", () =>
     Effect.gen(function* () {
       const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
       const availability = yield* executor.availabilityOf(implementWorkspace, implementItem);
       const accepted = yield* execute(executor, implementWorkspace, implementItem);
@@ -1448,6 +1528,7 @@ describe("Executor.execute", () => {
       assert.isFalse(availability.available);
       assert.isFalse(accepted);
       assert.deepStrictEqual(yield* Ref.get(calls), []);
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
       assert.deepStrictEqual(availability.causes, [
         {
           _tag: "RuntimeHostFactFailed",
@@ -1458,7 +1539,7 @@ describe("Executor.execute", () => {
     }).pipe(
       Effect.provide(
         provide(
-          [runner(successEvents)],
+          [runner(successEvents), runner(implementEvents, fullHarnessExecution, { name: codex })],
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
@@ -1471,6 +1552,66 @@ describe("Executor.execute", () => {
       ),
     ),
   );
+
+  it.effect("refuses a resumed Run on a disabled Harness before claim", () => {
+    const resumedItem = {
+      ...implementItem,
+      resume: { session: previousSession, reason: "interrupted" },
+    } satisfies EligibleWork;
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, implementWorkspace, resumedItem));
+      assert.isFalse((yield* Ref.get(calls)).some((call) => call.method === "claim"));
+      assert.strictEqual((yield* Ref.get(requests)).length, 0);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages, [], [{ harness: cursor, enabled: false }]),
+        ),
+      ),
+    );
+  });
+
+  it.effect("admits the selected Harness again after it is enabled", () => {
+    const settings = Ref.makeUnsafe<ReadonlyArray<HarnessEnablement>>([{ harness: cursor, enabled: false }]);
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      const store = yield* ControlStore;
+
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      yield* store.withWrite(store.setHarnessEnabled(cursor, true));
+      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+      assert.strictEqual((yield* Ref.get(requests)).length, 1);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          mutableHarnessControlStoreLayer(settings),
+        ),
+      ),
+    );
+  });
 
   it.effect("triages an eligible item into a proposal note, label advance, and ledgered run", () => {
     return Effect.gen(function* () {
@@ -1879,6 +2020,30 @@ describe("Executor.execute", () => {
         ),
       ),
       Effect.scoped,
+    );
+  });
+
+  it.effect("accepts a Run while holding the Control store write gate", () => {
+    const writeActive = Ref.makeUnsafe(false);
+
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          observedWriteGateControlStoreLayer(writeActive),
+          assertRunAcceptanceInsideWriteGate(writeActive),
+        ),
+      ),
     );
   });
 
@@ -2507,6 +2672,46 @@ describe("Executor.execute", () => {
       assert.strictEqual(finished?.status, "succeeded");
       assert.strictEqual(yield* handleOf(ledger, finished?.session), "sess-42");
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
+  });
+
+  it.effect("lets an accepted Run finish after its Harness is disabled", () => {
+    const settings = Ref.makeUnsafe<ReadonlyArray<HarnessEnablement>>([]);
+
+    return Effect.gen(function* () {
+      const release = yield* HarnessGate;
+      const executor = yield* Executor.Executor;
+      const ledger = yield* RunLedger.RunLedger;
+      const store = yield* ControlStore;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
+
+      yield* DaemonEventBus.runActivityStream(Stream.fromSubscription(subscription)).pipe(
+        Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
+        Stream.runHead,
+      );
+      yield* store.withWrite(store.setHarnessEnabled(cursor, false));
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(running);
+
+      const [finished] = yield* ledger.listRuns(10);
+      assert.strictEqual(finished?.status, "succeeded");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [gatedRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          mutableHarnessControlStoreLayer(settings),
+        ),
+      ),
+      Effect.scoped,
+    );
   });
 
   it.effect("holds the claim when the run is interrupted so recovery can resume it", () => {
@@ -3583,6 +3788,35 @@ describe("Executor.execute", () => {
           [],
           ContextCleanupCalls.contextAssemblerLayer,
           missingPluginCredentialLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("does not claim a stalled follow-up for a disabled Harness", () => {
+    const stalledItem = {
+      ...followUpItem,
+      followUp: { ...followUpItem.followUp, noProgress: 3, stalled: true },
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, followUpWorkspace, stalledItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(followUpEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages, [], [{ harness: cursor, enabled: false }]),
         ),
       ),
     );
