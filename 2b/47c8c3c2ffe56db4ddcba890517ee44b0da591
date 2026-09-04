@@ -1,0 +1,47 @@
+packages/contracts/CONTEXT.md
+  s_486c47cd4bd6e6::t_2af79cc1239fcc 391
+packages/engine/src/harness.test.ts
+  s_486c47cd4bd6e6::t_6d34a23d8a6562 211
+  s_486c47cd4bd6e6::t_275bc0ee5fee90 199-200,206-210,212-218,225-226
+packages/contracts/src/triage.test.ts
+  s_486c47cd4bd6e6::t_e514f5d83c974d 158-164
+  s_486c47cd4bd6e6::t_a1b8caa667e597 71,89
+  s_486c47cd4bd6e6::t_387206728b41e5 153-155
+  s_486c47cd4bd6e6::t_9f83eda5d6ab4e 151-152,156-157,165
+  s_486c47cd4bd6e6::t_41029646668c24 64,70,82,88
+  s_486c47cd4bd6e6::t_132a4b199bb639 68-69
+  s_486c47cd4bd6e6::t_132f0e0a9a66b0 80-81,83-84,86-87,90,92-98
+  s_486c47cd4bd6e6::t_44ff56a716021f 73-75
+  s_486c47cd4bd6e6::t_6d34a23d8a6562 85
+  s_486c47cd4bd6e6::t_bba9ccc33b2788 91
+  s_a119ac5c1019b3::t_e4a62dd96106c9 72
+packages/contracts/src/triage.ts
+  s_486c47cd4bd6e6::t_9f83eda5d6ab4e 87,89,91-94
+  s_486c47cd4bd6e6::t_6d34a23d8a6562 40,90
+  s_486c47cd4bd6e6::t_3b56403cf0614f 30,33-34,38-39,41-56
+  s_486c47cd4bd6e6::t_387206728b41e5 88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2b47c8c3c2ffe56db4ddcba890517ee44b0da591",
+  "prompts": {},
+  "sessions": {
+    "s_486c47cd4bd6e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e2c-5bad-7641-87ba-305ed27d3f1c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a119ac5c1019b3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e3d-7e56-7032-be83-d4959c139e82",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
