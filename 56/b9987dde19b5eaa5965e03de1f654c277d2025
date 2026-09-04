@@ -1,0 +1,31 @@
+patches/@tanstack__ai-sandbox@0.5.4.patch
+  s_0f51d1349591c8::t_3290f40f06b337 1-489
+pnpm-workspace.yaml
+  s_0f51d1349591c8::t_3290f40f06b337 47
+pnpm-lock.yaml
+  s_8d7e58e8afdaa4::t_334ba1996f769d 79,341,344,347,381,384,387,443,446,449,498,501,6903,6907,6919,6922,6924,6927,6965,6967,6969
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "56b9987dde19b5eaa5965e03de1f654c277d2025",
+  "prompts": {},
+  "sessions": {
+    "s_0f51d1349591c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c9b-424b-7912-adb5-8c0e7e6df544",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8d7e58e8afdaa4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ca1-2a62-7ba1-91dd-2409b7234e84",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
