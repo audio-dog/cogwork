@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { connectionIdOf, DaemonRpcs, HarnessName, HarnessState, WorkspaceConfig } from "@cogwork/contracts";
+import {
+  connectionIdOf,
+  DaemonRpcs,
+  HarnessName,
+  HarnessOptionCatalog,
+  HarnessState,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -32,6 +39,11 @@ import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
 
 const pushSchemaMock = vi.hoisted(() => vi.fn());
+const encodeHarnessOptionCatalog = Schema.encodeSync(HarnessOptionCatalog);
+const encodeCatalog = (catalog: HarnessOptionCatalog | null) => {
+  if (!catalog) return assert.fail("expected a Harness option catalog");
+  return encodeHarnessOptionCatalog(catalog);
+};
 
 vi.mock("drizzle-kit/payload/sqlite", () =>
   vi
@@ -285,7 +297,7 @@ describe("daemon server composition", () => {
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 
-  it.effect("reports the registered harness, its version and its models over RPC", () =>
+  it.effect("reports the registered harness and its option catalog over RPC", () =>
     Effect.gen(function* () {
       const result = yield* inspectUnavailableDaemon();
       const item = result.harnesses.harnesses[0];
@@ -295,6 +307,11 @@ describe("daemon server composition", () => {
       assert.strictEqual(item?.version, "1");
       assert.isTrue(HarnessState.guards.Ready(item?.state ?? HarnessState.cases.Ready.make({})));
       assert.deepStrictEqual(item?.models, ["test"]);
+      assert.deepStrictEqual(encodeCatalog(item?.catalog), {
+        models: [{ value: "test", label: "Test" }],
+        policyProfiles: ["read-only", "full"],
+        provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
+      });
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 });

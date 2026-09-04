@@ -1,5 +1,11 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { HarnessItem, HarnessOverview, HarnessSignIn, HarnessState } from "@cogwork/contracts";
+import {
+  HarnessItem,
+  type HarnessOptionCatalog,
+  HarnessOverview,
+  HarnessSignIn,
+  HarnessState,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { Harness, type HarnessError, type HarnessReadiness, type HarnessService } from "./harness";
@@ -41,6 +47,7 @@ const unreachable = (name: HarnessName, message: string) =>
     version: null,
     state: HarnessState.cases.Unknown.make({ diagnostic: diagnostic(message) }),
     models: [],
+    catalog: null,
   });
 
 const overviewItem = Effect.fn("Harness.overviewItem")(function* (
@@ -48,16 +55,15 @@ const overviewItem = Effect.fn("Harness.overviewItem")(function* (
   name: HarnessName,
 ) {
   const readiness = yield* harness.readiness(name);
-  const models: ReadonlyArray<string> = yield* harness.catalog(name).pipe(
-    Effect.map((catalog) => catalog.models.map((choice) => choice.value)),
-    // No catalog source answered. The state already carries why the Harness cannot run.
-    Effect.catchTag("HarnessError", () => Effect.succeed<ReadonlyArray<string>>([])),
-  );
+  const catalog = yield* harness
+    .catalog(name)
+    .pipe(Effect.catchTag("HarnessError", () => Effect.succeed<HarnessOptionCatalog | null>(null)));
   return HarnessItem.make({
     harness: name,
     version: readiness.installation.version,
     state: harnessStateOf(readiness, harness.signIn(name)),
-    models,
+    models: catalog?.models.map((choice) => choice.value) ?? [],
+    catalog,
   });
 });
 
