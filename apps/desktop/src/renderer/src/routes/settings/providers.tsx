@@ -29,7 +29,9 @@ import { BoardResult, useBoard } from "../../features/activity-session";
 import { relativeTime } from "../../features/format";
 import {
   applyHarnessEnablement,
+  type HarnessEnablementOverlay,
   type HarnessSummary,
+  harnessEnablementView,
   harnessSummary,
   installedVersion,
   versionLabel,
@@ -82,11 +84,14 @@ function Providers({ children }: { readonly children: ReactNode }) {
   const queried = useAtomValue(harnessesAtom);
   const refresh = useAtomRefresh(harnessesAtom);
   const [chosen, setChosen] = useState<HarnessName | null>(null);
+  const [enablementOverlay, setEnablementOverlay] = useState<HarnessEnablementOverlay | null>(null);
   const setEnabled = useAtomSet(setHarnessEnabledAtom, { mode: "promiseExit" });
   const enablement = useAtomValue(setHarnessEnabledAtom);
 
   const overview = queried._tag === "Success" ? queried.value : null;
-  const controlStore = BoardResult.$is("Success")(boardResult) ? boardResult.board.controlStore : null;
+  const boardControlStore = BoardResult.$is("Success")(boardResult) ? boardResult.board.controlStore : null;
+  const { controlStore, pending, settled } = harnessEnablementView(boardControlStore, enablementOverlay);
+  if (settled) setEnablementOverlay(null);
   const providers = applyHarnessEnablement(overview?.harnesses ?? [], controlStore);
   const value: ProvidersValue = {
     state: {
@@ -101,10 +106,11 @@ function Providers({ children }: { readonly children: ReactNode }) {
       check: refresh,
       setEnabled: (harness, enabled) =>
         setEnabled({ payload: { harness, enabled } }).then((exit) => {
-          if (Exit.isSuccess(exit)) refresh();
+          if (!Exit.isSuccess(exit)) return;
+          setEnablementOverlay({ base: boardControlStore, updated: exit.value, harness, enabled });
         }),
     },
-    meta: { checking: queried.waiting, changing: enablement.waiting },
+    meta: { checking: queried.waiting, changing: enablement.waiting || pending },
   };
   return <ProvidersContext value={value}>{children}</ProvidersContext>;
 }

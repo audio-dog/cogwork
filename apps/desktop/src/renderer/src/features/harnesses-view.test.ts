@@ -7,7 +7,13 @@ import {
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { applyHarnessEnablement, harnessSummary, installedVersion, versionLabel } from "./harnesses-view";
+import {
+  applyHarnessEnablement,
+  harnessEnablementView,
+  harnessSummary,
+  installedVersion,
+  versionLabel,
+} from "./harnesses-view";
 
 const item = (
   state: HarnessState,
@@ -85,6 +91,52 @@ describe("applyHarnessEnablement", () => {
     };
 
     expect(applyHarnessEnablement([codex], controlStore)[0]?.enabled).toBe(false);
+  });
+});
+
+describe("harnessEnablementView", () => {
+  it("uses the mutation result until the Board publishes a new Control store", () => {
+    const board = defaultControlStore;
+    const harness = Schema.decodeSync(HarnessName)("codex");
+    const updated = {
+      ...board,
+      harnessSettings: [{ harness, enabled: false }],
+    };
+
+    expect(harnessEnablementView(board, { base: board, updated, harness, enabled: false })).toEqual({
+      controlStore: updated,
+      pending: true,
+      settled: false,
+    });
+  });
+
+  it("keeps the mutation result through an unrelated Control store change", () => {
+    const base = defaultControlStore;
+    const board = { ...base };
+    const harness = Schema.decodeSync(HarnessName)("codex");
+    const updated = {
+      ...base,
+      harnessSettings: [{ harness, enabled: false }],
+    };
+
+    expect(harnessEnablementView(board, { base, updated, harness, enabled: false })).toEqual({
+      controlStore: updated,
+      pending: true,
+      settled: false,
+    });
+  });
+
+  it("uses the Board after it publishes the submitted enablement", () => {
+    const base = defaultControlStore;
+    const harness = Schema.decodeSync(HarnessName)("codex");
+    const updated = { ...base, harnessSettings: [{ harness, enabled: false }] };
+    const board = { ...updated };
+
+    expect(harnessEnablementView(board, { base, updated, harness, enabled: false })).toEqual({
+      controlStore: board,
+      pending: false,
+      settled: true,
+    });
   });
 });
 
