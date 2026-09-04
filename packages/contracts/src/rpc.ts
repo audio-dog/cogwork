@@ -37,6 +37,7 @@ import {
   WorkspaceNotFound,
   WorkspaceRegistration,
   WorkspaceRegistrationError,
+  WorkspaceUpdate,
 } from "./workspace";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
@@ -181,6 +182,12 @@ export const RegisterWorkspace = Rpc.make("RegisterWorkspace", {
   error: WorkspaceRegistrationError,
 });
 
+export const UpdateWorkspace = Rpc.make("UpdateWorkspace", {
+  payload: { workspace: WorkspaceId, update: WorkspaceUpdate },
+  success: WorkspaceState,
+  error: Schema.Union([WorkspaceNotFound, WorkspaceManagementError, WorkspaceRegistrationError]),
+});
+
 export const InstallPlugin = Rpc.make("InstallPlugin", {
   payload: { pluginId: PluginId },
   success: PluginMutationResult,
@@ -233,6 +240,7 @@ export const DaemonCommands = RpcGroup.make(
   SetContributionSetting,
   SetOperationSetting,
   RegisterWorkspace,
+  UpdateWorkspace,
   InstallPlugin,
   UninstallPlugin,
   EstablishConnection,
