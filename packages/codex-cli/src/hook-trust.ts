@@ -6,6 +6,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as Schema from "effect/Schema";
+import { validate as validateUniqueJsonKeys } from "json-dup-key-validator";
 import { isLosslessNumber, parse as parseLosslessJson } from "lossless-json";
 import lockfile, { type LockOptions } from "proper-lockfile";
 import { parse as parseToml, stringify as stringifyToml, TomlDate, type TomlPrimitive } from "smol-toml";
@@ -45,6 +46,11 @@ const isTomlValue = (value: unknown): boolean => {
 
 const Matcher = Schema.String.check(
   Schema.makeFilter(isSupportedMatcher, { expected: "a valid Codex Hook matcher" }),
+);
+const DuplicateFreeJsonText = Schema.String.check(
+  Schema.makeFilter((contents) => validateUniqueJsonKeys(contents) === undefined, {
+    expected: "JSON without duplicate keys",
+  }),
 );
 const HooksFileJson = Schema.JsonObject.check(
   Schema.makeFilter((value) => Object.keys(value).every((key) => key === "description" || key === "hooks"), {
@@ -291,6 +297,7 @@ const entriesForEvent = (
   });
 
 export const codexHookTrustEntries = (sourcePath: string, contents: string) => {
+  Schema.decodeSync(DuplicateFreeJsonText)(contents);
   const losslessJson = parseLosslessJson(contents);
   Schema.decodeUnknownSync(ExactMcpNumberInput)(losslessJson);
   Schema.decodeUnknownSync(WellFormedUnicodeInput)(losslessJson);

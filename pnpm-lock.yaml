@@ -390,6 +390,9 @@ importers:
       effect:
         specifier: catalog:effect
         version: 4.0.0-rc.112
+      json-dup-key-validator:
+        specifier: 1.0.3
+        version: 1.0.3
       lossless-json:
         specifier: 4.3.1
         version: 4.3.1
@@ -409,6 +412,9 @@ importers:
       '@tanstack/ai-persistence':
         specifier: 'catalog:'
         version: 0.5.4(@tanstack/ai@0.52.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
+      '@types/json-dup-key-validator':
+        specifier: 1.0.2
+        version: 1.0.2
       '@types/proper-lockfile':
         specifier: 4.1.4
         version: 4.1.4
@@ -2576,6 +2582,9 @@ packages:
   '@types/jsesc@2.5.1':
     resolution: {integrity: sha512-9VN+6yxLOPLOav+7PwjZbxiID2bVaeq0ED4qSQmdQTdjnXJSaCVKTR58t15oqH1H5t8Ng2ZX1SabJVoN9Q34bw==}
 
+  '@types/json-dup-key-validator@1.0.2':
+    resolution: {integrity: sha512-zJSAGITlz2nFT7xcKsvns8UifwSJpKuhgsdZj7+WoxiixiGnIefNiLK2uNhEICRkI9S2ccU6RYdqPS7iJRtU7Q==}
+
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
@@ -2884,6 +2893,9 @@ packages:
 
   babel-plugin-react-compiler@1.0.0:
     resolution: {integrity: sha512-Ixm8tFfoKKIPYdCCKYTsqv+Fd4IJ0DQqMyEimo+pxUOMUR9cVPlwTrFt9Avu+3cb6Zp3mAzl+t1MrG2fxxKsxw==}
+
+  backslash@0.2.2:
+    resolution: {integrity: sha512-PKRYPE2LLTtNUYz1dszquxKSBs6XyLyJRHgFpY5rlq7y3DscDx239k5Gm+zenoY47OU4CApan1o0k2R8ptZC1Q==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -4022,6 +4034,9 @@ packages:
 
   json-buffer@3.0.1:
     resolution: {integrity: sha512-4bV5BfR2mqfQTJm+V5tPPdf+ZpuhiIvTuAB5g8kcrXOZpTT/QwwVRWBywX1ozr6lEuPdbHxwaJlm9G6mI2sfSQ==}
+
+  json-dup-key-validator@1.0.3:
+    resolution: {integrity: sha512-JvJcV01JSiO7LRz7DY1Fpzn4wX2rJ3dfNTiAfnlvLNdhhnm0Pgdvhi2SGpENrZn7eSg26Ps3TPhOcuD/a4STXQ==}
 
   json-parse-even-better-errors@2.3.1:
     resolution: {integrity: sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==}
@@ -7383,6 +7398,8 @@ snapshots:
 
   '@types/jsesc@2.5.1': {}
 
+  '@types/json-dup-key-validator@1.0.2': {}
+
   '@types/keyv@3.1.4':
     dependencies:
       '@types/node': 26.4.0
@@ -7664,6 +7681,8 @@ snapshots:
   babel-plugin-react-compiler@1.0.0:
     dependencies:
       '@babel/types': 7.29.8
+
+  backslash@0.2.2: {}
 
   balanced-match@1.0.2: {}
 
@@ -8737,6 +8756,10 @@ snapshots:
       bignumber.js: 9.3.1
 
   json-buffer@3.0.1: {}
+
+  json-dup-key-validator@1.0.3:
+    dependencies:
+      backslash: 0.2.2
 
   json-parse-even-better-errors@2.3.1: {}
 

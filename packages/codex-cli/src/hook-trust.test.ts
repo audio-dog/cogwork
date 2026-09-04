@@ -335,6 +335,10 @@ trusted_hash = "sha256:existing"
     );
   });
 
+  it("rejects equal duplicate JSON keys", () => {
+    assert.throws(() => codexHookTrustEntries(hooksPath, '{"hooks":{},"hooks":{}}'));
+  });
+
   it("skips unsupported Hook shapes", () => {
     const entries = codexHookTrustEntries(
       hooksPath,
