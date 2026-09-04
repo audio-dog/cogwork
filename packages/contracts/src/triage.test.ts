@@ -18,7 +18,7 @@ import {
 describe("StageResult", () => {
   it.effect("decodes a tagged triage result with a canonical role and non-empty proposal", () =>
     Effect.gen(function* () {
-      const result = yield* Schema.decodeUnknownEffect(StageResult)({
+      const result = yield* Schema.decodeEffect(StageResult)({
         _tag: "triage",
         role: "ready-for-agent",
         proposal: "  Ship the verified fix.  ",
@@ -34,7 +34,7 @@ describe("StageResult", () => {
   it.effect("rejects an empty triage proposal", () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
-        Schema.decodeUnknownEffect(StageResult)({
+        Schema.decodeEffect(StageResult)({
           _tag: "triage",
           role: "ready-for-agent",
           proposal: "   ",
@@ -61,7 +61,7 @@ describe("StageResult", () => {
 
   it.effect("decodes an implement result with a summary", () =>
     Effect.gen(function* () {
-      const result = yield* Schema.decodeUnknownEffect(StageResult)({
+      const result = yield* Schema.decodeEffect(StageResult)({
         _tag: "implement",
         outcome: "opened-pr",
         summary: "Opened PR #110.",
@@ -77,7 +77,7 @@ describe("StageResult", () => {
   it.effect("rejects an implement result without a summary", () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
-        Schema.decodeUnknownEffect(StageResult)({
+        Schema.decodeEffect(StageResult)({
           _tag: "implement",
           outcome: "stuck",
           summary: "   ",
@@ -90,7 +90,7 @@ describe("StageResult", () => {
 
   it.effect("decodes a follow-up result with a summary", () =>
     Effect.gen(function* () {
-      const result = yield* Schema.decodeUnknownEffect(StageResult)({
+      const result = yield* Schema.decodeEffect(StageResult)({
         _tag: "follow-up",
         outcome: "noop",
         summary: "  Checks already green.  ",
@@ -105,7 +105,7 @@ describe("StageResult", () => {
 
   it.effect("decodes a structured follow-up completion through the shared schema", () =>
     Effect.gen(function* () {
-      const completion = yield* Schema.decodeUnknownEffect(FollowUpStageResultCompletion)({
+      const completion = yield* Schema.decodeEffect(FollowUpStageResultCompletion)({
         raw: '{"_tag":"follow-up","outcome":"pushed","summary":"Fixed it."}',
         object: {
           _tag: "follow-up",
