@@ -1,0 +1,21 @@
+packages/engine/src/control-store.test.ts
+  s_a4f7576244239f::t_6e2abaf7438f1b 771
+packages/engine/src/control-store.ts
+  s_a4f7576244239f::t_6e2abaf7438f1b 407-410,413
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d1b338c7d4c286b5bdbc20a35d12090de9eba54d",
+  "prompts": {},
+  "sessions": {
+    "s_a4f7576244239f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c90-0d33-7f51-99b1-4056f2717a9e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
