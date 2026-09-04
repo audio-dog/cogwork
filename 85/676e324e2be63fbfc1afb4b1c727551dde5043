@@ -1,0 +1,36 @@
+apps/cli/src/status.test.ts
+  s_4c8cd823764032::t_468ca853d004c7 16-21
+apps/cli/src/workspace-commands.ts
+  s_4c8cd823764032::t_b052912ef379e2 24,34
+  s_4c8cd823764032::t_5daf3e8255daf8 1,32-33,35-36,90-96,120-133,149-156,165-170,178
+apps/cli/src/workspace-commands.test.ts
+  s_4c8cd823764032::t_62143256fe3c86 43-48
+  s_4c8cd823764032::t_5daf3e8255daf8 57-58,70-91
+  s_4c8cd823764032::t_b052912ef379e2 3,5-10,59-61,63-69
+  s_4c8cd823764032::t_c8dbf932fa1c64 62
+  s_9bddc5183e91c9::t_b7a405b9b69450 92-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "85676e324e2be63fbfc1afb4b1c727551dde5043",
+  "prompts": {},
+  "sessions": {
+    "s_4c8cd823764032": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dfc-1b38-7750-b2c5-60b4a0d9ce93",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9bddc5183e91c9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dfd-c832-78d0-b9d6-b016f29fee22",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
