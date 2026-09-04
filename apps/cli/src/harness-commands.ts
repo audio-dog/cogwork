@@ -14,11 +14,13 @@ const socketFlag = Flag.string("socket").pipe(
 );
 const harnessArgument = Argument.string("harness");
 const decodeHarness = Schema.decodeUnknownEffect(HarnessName);
+const enablementLabel = (enabled: boolean) => (enabled ? "enabled" : "disabled");
+const provideClient = (socket: string) => Effect.provide(clientLayer(socket));
 
 export const formatHarnesses = (overview: HarnessOverview) =>
   overview.harnesses
     .toSorted((left, right) => Number(left.enabled) - Number(right.enabled))
-    .map((item) => `${item.harness}\t${item.enabled ? "enabled" : "disabled"}\t${item.state._tag}`)
+    .map((item) => `${item.harness}\t${enablementLabel(item.enabled)}\t${item.state._tag}`)
     .join("\n");
 
 const listHarnesses = Effect.fn("harness.list")(function* () {
@@ -27,14 +29,13 @@ const listHarnesses = Effect.fn("harness.list")(function* () {
 });
 
 const setHarnessEnabled = Effect.fn("harness.setEnabled")(function* (options: {
-  readonly socket: string;
   readonly harness: string;
   readonly enabled: boolean;
 }) {
   const harness = yield* decodeHarness(options.harness);
   const client = yield* makeDaemonClient();
   yield* client.SetHarnessEnabled({ harness, enabled: options.enabled });
-  yield* Console.log(`${harness} Harness ${options.enabled ? "enabled" : "disabled"}.`);
+  yield* Console.log(`${harness} Harness ${enablementLabel(options.enabled)}.`);
 });
 
 const enableCommand = (enabled: boolean) =>
@@ -43,9 +44,9 @@ const enableCommand = (enabled: boolean) =>
     harness: harnessArgument,
   }).pipe(
     Command.withHandler((options) =>
-      setHarnessEnabled({ ...options, enabled }).pipe(
+      setHarnessEnabled({ harness: options.harness, enabled }).pipe(
         Effect.scoped,
-        Effect.provide(clientLayer(options.socket)),
+        provideClient(options.socket),
       ),
     ),
   );
@@ -53,9 +54,7 @@ const enableCommand = (enabled: boolean) =>
 export const harnessCommand = Command.make("harness").pipe(
   Command.withSubcommands([
     Command.make("list", { socket: socketFlag }).pipe(
-      Command.withHandler((options) =>
-        listHarnesses().pipe(Effect.scoped, Effect.provide(clientLayer(options.socket))),
-      ),
+      Command.withHandler((options) => listHarnesses().pipe(Effect.scoped, provideClient(options.socket))),
     ),
     enableCommand(true),
     enableCommand(false),
