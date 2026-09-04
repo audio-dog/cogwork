@@ -286,9 +286,18 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
   return diff === "" ? null : fileDiffEvent(relTo(event.path), diff);
 });
 
-const IGNORED_SEGMENTS = [".git", "node_modules", ".repos"];
+export const fileDiffIgnoredSegments = [
+  ".git",
+  "node_modules",
+  ".repos",
+  ".pnpm-store",
+  ".turbo",
+  "dist",
+  "out",
+];
 
-export const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
+export const ignored = (rel: string) =>
+  rel.split("/").some((segment) => fileDiffIgnoredSegments.includes(segment));
 
 const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
   stream.pipe(
