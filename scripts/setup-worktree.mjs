@@ -35,7 +35,7 @@ const vendorRepos = (mainCheckout) => {
   execFileSync("pnpm", ["vendor"], { cwd: mainCheckout, stdio: "inherit" });
 };
 
-const trustCodexHooks = (mainCheckout) =>
+const trustCodexHooks = (sharedCheckout) =>
   execFileSync(
     "pnpm",
     [
@@ -44,10 +44,10 @@ const trustCodexHooks = (mainCheckout) =>
       "exec",
       "tsx",
       "src/trust-codex-hooks.ts",
-      mainCheckout,
+      sharedCheckout,
       process.env.CODEX_HOME?.trim() || join(homedir(), ".codex"),
     ],
-    { cwd: worktreeRoot, stdio: "inherit", timeout: 30_000 },
+    { cwd: sharedCheckout, stdio: "inherit", timeout: 30_000 },
   );
 
 const targetIn = (mainCheckout, relative) => {
@@ -80,9 +80,7 @@ const hydrate = (mainCheckout, relative) => {
   console.log(`setup-worktree: linked ${relative} -> ${target}`);
 };
 
-const main = () => {
-  const mainCheckout = resolveMainCheckout();
-  trustCodexHooks(resolveSharedCheckout());
+const hydrateWorktree = (mainCheckout) => {
   if (mainCheckout === worktreeRoot) {
     console.log("setup-worktree: running in the main checkout; nothing to hydrate");
     return;
@@ -94,6 +92,11 @@ const main = () => {
       warn(`skipping ${relative}: ${describe(error)}`);
     }
   }
+};
+
+const main = () => {
+  hydrateWorktree(resolveMainCheckout());
+  trustCodexHooks(resolveSharedCheckout());
 };
 
 try {
