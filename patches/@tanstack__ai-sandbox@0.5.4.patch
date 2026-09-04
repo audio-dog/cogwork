@@ -1,0 +1,489 @@
+diff --git a/dist/esm/file-diff.d.ts b/dist/esm/file-diff.d.ts
+index 433347e3248683b3ea843b4abead6bc0eac090d9..1b7adb2dc6f4bd5ec0cf6b8f1163e937a3de5320 100644
+--- a/dist/esm/file-diff.d.ts
++++ b/dist/esm/file-diff.d.ts
+@@ -12,8 +12,11 @@ export declare function buildFileHookEvent(handle: SandboxHandle, root: string,
+ export interface ResolvedFileEvents {
+     enabled: boolean;
+     diff: boolean;
++    ignore?: Array<string>;
+ }
+ /** Normalize the `fileEvents` option (`boolean | { diff?: boolean }`). */
+ export declare function resolveFileEvents(opt: boolean | {
+     diff?: boolean;
++    ignore?: Array<string>;
+ } | undefined): ResolvedFileEvents;
++export declare function fileEventIsIgnored(handle: SandboxHandle, root: string, baseSha: string, event: SandboxFileEvent, logger?: InternalLogger): Promise<boolean>;
+diff --git a/dist/esm/file-diff.js b/dist/esm/file-diff.js
+index 8610b5059d65d639dfd13c1599e8228a443be963..128d92be358527b13123c5530f040e0c0964fcef 100644
+--- a/dist/esm/file-diff.js
++++ b/dist/esm/file-diff.js
+@@ -152,10 +152,30 @@ function resolveFileEvents(opt) {
+ 	};
+ 	return {
+ 		enabled: true,
+-		diff: opt.diff === true
++		diff: opt.diff === true,
++		...opt.ignore ? { ignore: opt.ignore } : {}
+ 	};
+ }
++async function fileEventIsIgnored(handle, root, baseSha, event, logger) {
++	if (baseSha === "") return false;
++	try {
++		const result = await handle.process.exec(`git check-ignore -q -- ${q(relTo(root, event.path))}`, { cwd: root });
++		if (result.exitCode === 0) return true;
++		if (result.exitCode === 1) return false;
++		logger?.warn("sandbox file ignore check exited non-zero", {
++			path: event.path,
++			exitCode: result.exitCode,
++			stderr: result.stderr
++		});
++	} catch (error) {
++		logger?.warn("sandbox file ignore check failed", {
++			path: event.path,
++			error
++		});
++	}
++	return false;
++}
+ //#endregion
+-export { buildFileHookEvent, resolveFileEvents };
++export { buildFileHookEvent, fileEventIsIgnored, resolveFileEvents };
+ 
+ //# sourceMappingURL=file-diff.js.map
+diff --git a/dist/esm/middleware.js b/dist/esm/middleware.js
+index 74b7bbca9f7bc2c3365691378f100406ed5b04c4..e5ff7a75f5f9f38d6fcb25446da751c313364775 100644
+--- a/dist/esm/middleware.js
++++ b/dist/esm/middleware.js
+@@ -9,7 +9,7 @@ import "./bootstrap.js";
+ import { ensureSandboxWithOutcome } from "./sandbox.js";
+ import { ProjectionCapability, provideWorkspaceProjection } from "./projection.js";
+ import { provideSandboxDurability, resolveSandboxDurability } from "./durability.js";
+-import { buildFileHookEvent, resolveFileEvents } from "./file-diff.js";
++import { buildFileHookEvent, fileEventIsIgnored, resolveFileEvents } from "./file-diff.js";
+ import { createToolHistoryRecorder, stripObservedToolCalls } from "./tool-history.js";
+ import { watchWorkspace } from "./watch.js";
+ import { defineChatMiddleware, provideDetachableRun, provideRunDetached, wasCancelRequested } from "@tanstack/ai";
+@@ -35,6 +35,52 @@ import { getPendingTurn, getRunDisconnect, getSandboxRuntime } from "@tanstack/a
+ * chunks), not from here — middleware setup runs before streaming begins.
+ */
+ var runState = /* @__PURE__ */ new WeakMap();
++const MAX_ACTIVE_FILE_DIFFS = 8;
++const MAX_QUEUED_FILE_DIFF_PATHS = 256;
++function createFileDiffScheduler(logger) {
++	const active = /* @__PURE__ */ new Set();
++	const queued = /* @__PURE__ */ new Map();
++	const state = {
++		stopped: false,
++		overflowLogged: false
++	};
++	const startNext = () => {
++		if (state.stopped || active.size >= MAX_ACTIVE_FILE_DIFFS) return;
++		const next = queued.entries().next();
++		if (next.done) return;
++		const [path, run] = next.value;
++		queued.delete(path);
++		const task = run().finally(() => {
++			active.delete(task);
++			startNext();
++		});
++		active.add(task);
++		startNext();
++	};
++	return {
++		schedule: (path, task) => {
++			if (state.stopped) return;
++			if (queued.has(path)) {
++				queued.set(path, task);
++				return;
++			}
++			if (active.size + queued.size >= MAX_ACTIVE_FILE_DIFFS + MAX_QUEUED_FILE_DIFF_PATHS) {
++				if (!state.overflowLogged) {
++					state.overflowLogged = true;
++					logger?.warn("sandbox file diff queue reached capacity");
++				}
++				return;
++			}
++			queued.set(path, task);
++			startNext();
++		},
++		stop: async () => {
++			state.stopped = true;
++			queued.clear();
++			await Promise.allSettled(active);
++		}
++	};
++}
+ function stopSnapshotLease(state, options = {}) {
+ 	if (options.closePortable) state.snapshotClosed = true;
+ 	if (state.snapshotStop) return state.snapshotStop;
+@@ -96,7 +142,7 @@ async function drainWatcher(state, phase) {
+ 			error
+ 		});
+ 	}
+-	await Promise.allSettled(state.pendingDiffs);
++	await state.diffScheduler.stop();
+ 	if (state.watcher) state.logger?.sandbox("sandbox watcher stopped", { phase });
+ }
+ function canPublishPortableSnapshot(state, lease) {
+@@ -243,7 +289,7 @@ function withSandbox(definition, options) {
+ 			const state = {
+ 				ensureCtx,
+ 				snapshotRenewalGeneration: 0,
+-				pendingDiffs: [],
++				diffScheduler: createFileDiffScheduler(logger),
+ 				toolHistory: createToolHistoryRecorder(),
+ 				...logger ? { logger } : {},
+ 				...durability ? { durability } : {}
+@@ -382,27 +428,34 @@ function withSandbox(definition, options) {
+ 				const hooks = definition.hooks;
+ 				await hooks?.onReady?.(handle);
+ 				const fe = resolveFileEvents(definition.fileEvents);
+-				const pendingDiffs = state.pendingDiffs;
+ 				let watcher;
+ 				if (fe.enabled) {
+ 					watcher = await watchWorkspace(handle, {
+ 						onEvent: (event) => {
++							if (fe.diff) {
++								state.diffScheduler.schedule(event.path, async () => {
++									if (await fileEventIsIgnored(handle, watchRoot, baseSha, event, logger)) return;
++									const enriched = buildFileHookEvent(handle, watchRoot, baseSha, event, logger);
++									await dispatchDefinitionHooks(hooks, enriched, logger);
++									runtime?.emit(enriched);
++									try {
++										const diff = await enriched.diff();
++										runtime?.emitFileDiff({ path: event.path, diff });
++									} catch (error) {
++										logger?.warn("sandbox file diff emit failed", {
++											path: event.path,
++											error
++										});
++									}
++								});
++								return;
++							}
+ 							const enriched = buildFileHookEvent(handle, watchRoot, baseSha, event, logger);
+ 							dispatchDefinitionHooks(hooks, enriched, logger);
+ 							runtime?.emit(enriched);
+-							if (fe.diff) pendingDiffs.push(enriched.diff().then((diff) => {
+-								runtime?.emitFileDiff({
+-									path: event.path,
+-									diff
+-								});
+-							}).catch((error) => {
+-								logger?.warn("sandbox file diff emit failed", {
+-									path: event.path,
+-									error
+-								});
+-							}));
+ 						},
+ 						root: watchRoot,
++						...fe.ignore ? { ignore: fe.ignore } : {},
+ 						...ctx.signal !== void 0 ? { signal: ctx.signal } : {},
+ 						...logger !== void 0 ? { logger } : {}
+ 					});
+diff --git a/dist/esm/sandbox.d.ts b/dist/esm/sandbox.d.ts
+index 913b324750fd5abdb973b9a28df5f67ac0e3dee3..310f9c847b730fee1facf2a10bb7599670a80ca6 100644
+--- a/dist/esm/sandbox.d.ts
++++ b/dist/esm/sandbox.d.ts
+@@ -35,6 +35,10 @@ export interface SandboxLifecycle {
+      */
+     snapshotMaxAge?: string;
+ }
++export interface SandboxFileEventsOptions {
++    diff?: boolean;
++    ignore?: Array<string>;
++}
+ export interface SandboxConfig {
+     id: string;
+     provider: SandboxProvider;
+@@ -45,9 +49,7 @@ export interface SandboxConfig {
+     hooks?: SandboxHooks;
+     /** Watch the workspace for file events (default true). `false` disables the
+      *  watcher; `{ diff: true }` also emits a per-file `sandbox.file.diff` event. */
+-    fileEvents?: boolean | {
+-        diff?: boolean;
+-    };
++    fileEvents?: boolean | SandboxFileEventsOptions;
+ }
+ /** Context passed to `ensure()` by `withSandbox` (or advanced callers). */
+ export interface SandboxEnsureContext {
+@@ -75,9 +77,7 @@ export interface SandboxDefinition {
+     readonly hooks?: SandboxHooks;
+     /** Watch the workspace for file events (default true). `false` disables the
+      *  watcher; `{ diff: true }` also emits a per-file `sandbox.file.diff` event. */
+-    readonly fileEvents?: boolean | {
+-        diff?: boolean;
+-    };
++    readonly fileEvents?: boolean | SandboxFileEventsOptions;
+     /** Compound instance key for a given run context. */
+     key: (ctx: SandboxEnsureContext) => string;
+     /** Resume-or-create the sandbox for this thread/run. */
+diff --git a/src/file-diff.ts b/src/file-diff.ts
+index bb0f1ffeeb309e0eeba04a792a0350a8e0abdd75..2c4c3dd89c60046577b4b576a52c2ced535dcbd8 100644
+--- a/src/file-diff.ts
++++ b/src/file-diff.ts
+@@ -228,13 +228,47 @@ export function buildFileHookEvent(
+ export interface ResolvedFileEvents {
+   enabled: boolean
+   diff: boolean
++  ignore?: Array<string>
+ }
+ 
+ /** Normalize the `fileEvents` option (`boolean | { diff?: boolean }`). */
+ export function resolveFileEvents(
+-  opt: boolean | { diff?: boolean } | undefined,
++  opt: boolean | { diff?: boolean; ignore?: Array<string> } | undefined,
+ ): ResolvedFileEvents {
+   if (opt === false) return { enabled: false, diff: false }
+   if (opt === undefined || opt === true) return { enabled: true, diff: false }
+-  return { enabled: true, diff: opt.diff === true }
++  return {
++    enabled: true,
++    diff: opt.diff === true,
++    ...(opt.ignore ? { ignore: opt.ignore } : {}),
++  }
++}
++
++export async function fileEventIsIgnored(
++  handle: SandboxHandle,
++  root: string,
++  baseSha: string,
++  event: SandboxFileEvent,
++  logger?: InternalLogger,
++): Promise<boolean> {
++  if (baseSha === '') return false
++  try {
++    const result = await handle.process.exec(
++      `git check-ignore -q -- ${q(relTo(root, event.path))}`,
++      { cwd: root },
++    )
++    if (result.exitCode === 0) return true
++    if (result.exitCode === 1) return false
++    logger?.warn('sandbox file ignore check exited non-zero', {
++      path: event.path,
++      exitCode: result.exitCode,
++      stderr: result.stderr,
++    })
++  } catch (error) {
++    logger?.warn('sandbox file ignore check failed', {
++      path: event.path,
++      error,
++    })
++  }
++  return false
+ }
+diff --git a/src/middleware.ts b/src/middleware.ts
+index aba99a20932262570dc48c7578c6406aad92d54c..9aa214c1d06a21c705e23958079b6ef54e73ee7b 100644
+--- a/src/middleware.ts
++++ b/src/middleware.ts
+@@ -39,7 +39,11 @@ import {
+ } from './durability'
+ import { SandboxInstanceStoreCapability } from './instance-store'
+ import { computeWorkspaceHash } from './key'
+-import { buildFileHookEvent, resolveFileEvents } from './file-diff'
++import {
++  buildFileHookEvent,
++  fileEventIsIgnored,
++  resolveFileEvents,
++} from './file-diff'
+ import { ProjectionCapability, provideWorkspaceProjection } from './projection'
+ import { resolveAllSecrets, resolveSecret } from './secrets'
+ import {
+@@ -125,10 +129,7 @@ interface SandboxRunState {
+   privateHandle?: boolean
+   ensureCtx: SandboxEnsureContext
+   watcher?: SandboxWatchHandle
+-  /** In-flight `enriched.diff()` promises queued by the `fileEvents.diff`
+-   * watcher callback, awaited before teardown so a pending diff isn't
+-   * dropped when the run finishes/aborts/errors mid-computation. */
+-  pendingDiffs: Array<Promise<void>>
++  diffScheduler: FileDiffScheduler
+   /** Logger captured at setup, so terminal hooks can log watcher teardown. */
+   logger?: InternalLogger
+   /**
+@@ -147,6 +148,56 @@ interface SandboxRunState {
+ 
+ const runState = new WeakMap<object, SandboxRunState>()
+ 
++const MAX_ACTIVE_FILE_DIFFS = 8
++const MAX_QUEUED_FILE_DIFF_PATHS = 256
++
++interface FileDiffScheduler {
++  schedule: (path: string, task: () => Promise<void>) => void
++  stop: () => Promise<void>
++}
++
++function createFileDiffScheduler(logger?: InternalLogger): FileDiffScheduler {
++  const active = new Set<Promise<void>>()
++  const queued = new Map<string, () => Promise<void>>()
++  const state = { stopped: false, overflowLogged: false }
++  const startNext = () => {
++    if (state.stopped || active.size >= MAX_ACTIVE_FILE_DIFFS) return
++    const next = queued.entries().next()
++    if (next.done) return
++    const [path, run] = next.value
++    queued.delete(path)
++    const task = run().finally(() => {
++      active.delete(task)
++      startNext()
++    })
++    active.add(task)
++    startNext()
++  }
++  return {
++    schedule: (path, task) => {
++      if (state.stopped) return
++      if (queued.has(path)) {
++        queued.set(path, task)
++        return
++      }
++      if (active.size + queued.size >= MAX_ACTIVE_FILE_DIFFS + MAX_QUEUED_FILE_DIFF_PATHS) {
++        if (!state.overflowLogged) {
++          state.overflowLogged = true
++          logger?.warn('sandbox file diff queue reached capacity')
++        }
++        return
++      }
++      queued.set(path, task)
++      startNext()
++    },
++    stop: async () => {
++      state.stopped = true
++      queued.clear()
++      await Promise.allSettled(active)
++    },
++  }
++}
++
+ function stopSnapshotLease(
+   state: SandboxRunState,
+   options: { closePortable?: boolean } = {},
+@@ -226,7 +277,7 @@ async function drainWatcher(
+   } catch (error) {
+     state.logger?.warn('sandbox watcher stop failed', { phase, error })
+   }
+-  await Promise.allSettled(state.pendingDiffs)
++  await state.diffScheduler.stop()
+   if (state.watcher) state.logger?.sandbox('sandbox watcher stopped', { phase })
+ }
+ 
+@@ -620,7 +671,7 @@ export function withSandbox<TOffset extends string = string>(
+       const state: SandboxRunState = {
+         ensureCtx,
+         snapshotRenewalGeneration: 0,
+-        pendingDiffs: [],
++        diffScheduler: createFileDiffScheduler(logger),
+         toolHistory: createToolHistoryRecorder(),
+         ...(logger ? { logger } : {}),
+         ...(durability ? { durability } : {}),
+@@ -900,15 +951,28 @@ export function withSandbox<TOffset extends string = string>(
+         await hooks?.onReady?.(handle)
+ 
+         const fe = resolveFileEvents(definition.fileEvents)
+-        // THE SAME array the run state already holds, not a fresh one. The watcher
+-        // callback below closes over this reference, and `drainWatcher` awaits
+-        // `state.pendingDiffs` — a second array would silently drop every in-flight
+-        // diff from the teardown drain.
+-        const pendingDiffs = state.pendingDiffs
+         let watcher: SandboxWatchHandle | undefined
+         if (fe.enabled) {
+           watcher = await watchWorkspace(handle, {
+             onEvent: (event: SandboxFileEvent) => {
++              if (fe.diff) {
++                state.diffScheduler.schedule(event.path, async () => {
++                  if (await fileEventIsIgnored(handle, watchRoot, baseSha, event, logger)) return
++                  const enriched = buildFileHookEvent(handle, watchRoot, baseSha, event, logger)
++                  await dispatchDefinitionHooks(hooks, enriched, logger)
++                  runtime?.emit(enriched)
++                  try {
++                    const diff = await enriched.diff()
++                    runtime?.emitFileDiff({ path: event.path, diff })
++                  } catch (error) {
++                    logger?.warn('sandbox file diff emit failed', {
++                      path: event.path,
++                      error,
++                    })
++                  }
++                })
++                return
++              }
+               const enriched = buildFileHookEvent(
+                 handle,
+                 watchRoot,
+@@ -918,21 +982,6 @@ export function withSandbox<TOffset extends string = string>(
+               )
+               void dispatchDefinitionHooks(hooks, enriched, logger)
+               runtime?.emit(enriched)
+-              if (fe.diff) {
+-                pendingDiffs.push(
+-                  enriched
+-                    .diff()
+-                    .then((diff) => {
+-                      runtime?.emitFileDiff({ path: event.path, diff })
+-                    })
+-                    .catch((error: unknown) => {
+-                      logger?.warn('sandbox file diff emit failed', {
+-                        path: event.path,
+-                        error,
+-                      })
+-                    }),
+-                )
+-              }
+             },
+             // Watch the SAME root the enrichment layer relativizes against
+             // (`buildFileHookEvent(handle, watchRoot, …)` and the `baseSha`
+@@ -940,6 +989,7 @@ export function withSandbox<TOffset extends string = string>(
+             // enrichment uses `watchRoot`, so a custom `workspace.root` makes the
+             // two look at different directories and git pathspecs break.
+             root: watchRoot,
++            ...(fe.ignore ? { ignore: fe.ignore } : {}),
+             ...(ctx.signal !== undefined ? { signal: ctx.signal } : {}),
+             ...(logger !== undefined ? { logger } : {}),
+           })
+@@ -949,11 +999,6 @@ export function withSandbox<TOffset extends string = string>(
+           })
+         }
+ 
+-        // MUTATE the object registered above rather than `set`-ing a second one: an
+-        // abort that landed mid-setup already captured a reference to it (and may
+-        // already be draining `pendingDiffs`), so replacing the entry would hand the
+-        // teardown path a different object than the watcher writes into.
+-        // `pendingDiffs` needs no copying — it IS `state.pendingDiffs`.
+         if (watcher) state.watcher = watcher
+       } catch (error) {
+         await drainWatcher(state, 'error')
+diff --git a/src/sandbox.ts b/src/sandbox.ts
+index f8058c35e9ed316e09fa2ed437267bd8150dd287..3f03544197ba4a78d5ff582dc522d59a557bc6c3 100644
+--- a/src/sandbox.ts
++++ b/src/sandbox.ts
+@@ -53,6 +53,11 @@ export interface SandboxLifecycle {
+   snapshotMaxAge?: string
+ }
+ 
++export interface SandboxFileEventsOptions {
++  diff?: boolean
++  ignore?: Array<string>
++}
++
+ export interface SandboxConfig {
+   id: string
+   provider: SandboxProvider
+@@ -63,7 +68,7 @@ export interface SandboxConfig {
+   hooks?: SandboxHooks
+   /** Watch the workspace for file events (default true). `false` disables the
+    *  watcher; `{ diff: true }` also emits a per-file `sandbox.file.diff` event. */
+-  fileEvents?: boolean | { diff?: boolean }
++  fileEvents?: boolean | SandboxFileEventsOptions
+ }
+ 
+ /** Context passed to `ensure()` by `withSandbox` (or advanced callers). */
+@@ -90,7 +95,7 @@ export interface SandboxDefinition {
+   readonly hooks?: SandboxHooks
+   /** Watch the workspace for file events (default true). `false` disables the
+    *  watcher; `{ diff: true }` also emits a per-file `sandbox.file.diff` event. */
+-  readonly fileEvents?: boolean | { diff?: boolean }
++  readonly fileEvents?: boolean | SandboxFileEventsOptions
+   /** Compound instance key for a given run context. */
+   key: (ctx: SandboxEnsureContext) => string
+   /** Resume-or-create the sandbox for this thread/run. */
