@@ -1,0 +1,19 @@
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_d2c41d3cf117ad::t_1393de6f22c59f 229-239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "84bd35837f8da9e316db47ef712ea688c7c96387",
+  "prompts": {},
+  "sessions": {
+    "s_d2c41d3cf117ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e04-3496-7013-b71e-9b8b46cf5882",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
