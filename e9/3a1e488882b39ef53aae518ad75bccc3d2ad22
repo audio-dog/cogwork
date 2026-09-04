@@ -1,0 +1,28 @@
+packages/engine/src/retry-policy.ts
+  s_1031643ab598c0::t_e83cd46a226e22 65-68
+  s_1031643ab598c0::t_e65313c11c8205 60-61
+  s_1031643ab598c0::t_6b846fb4e6840c 64,76
+  s_1031643ab598c0::t_78eb79b9125a73 1-27,29,35-37,39-59,62-63,69-74
+  s_1031643ab598c0::t_cfe5fd815c2a89 28,30-34,38,75
+packages/engine/src/retry-policy.test.ts
+  s_1031643ab598c0::t_6b846fb4e6840c 14-16,18,21,44,96,100,104,108,112,116,120
+  s_1031643ab598c0::t_9d70e8dd7f84c4 1-13,17,19-20,22-43,45-76,92-95,98-99,101-103,105-106,109-110,113-115,117-119,128-129
+  s_1031643ab598c0::t_2d388b4243cc78 77-91,107,111,124
+  s_1031643ab598c0::t_67c9bcca150c76 97,121-123,125-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e93a1e488882b39ef53aae518ad75bccc3d2ad22",
+  "prompts": {},
+  "sessions": {
+    "s_1031643ab598c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06d96-834b-73d2-8a7d-a93a1c89edbe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
