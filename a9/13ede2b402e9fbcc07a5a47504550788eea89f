@@ -1,0 +1,19 @@
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_a4f7576244239f::t_404fc939493261 147-158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a913ede2b402e9fbcc07a5a47504550788eea89f",
+  "prompts": {},
+  "sessions": {
+    "s_a4f7576244239f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c90-0d33-7f51-99b1-4056f2717a9e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
