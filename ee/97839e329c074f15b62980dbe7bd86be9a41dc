@@ -1,0 +1,20 @@
+packages/engine/src/run-control.test.ts
+  s_cd262825f018c0::t_758bfd5afb64c2 1,20,22,24
+  s_cd262825f018c0::t_8256d18e132b40 2-19,21,23,25-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ee97839e329c074f15b62980dbe7bd86be9a41dc",
+  "prompts": {},
+  "sessions": {
+    "s_cd262825f018c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06d6b-ecc7-7ec1-be74-6ca93f8e3cbb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
