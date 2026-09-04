@@ -89,7 +89,6 @@ describe("workspaceRegistrationFrom", () => {
       workspaceRegistrationFrom({
         name: "  Cogwork  ",
         checkoutPath: "  /Users/taylor/sites/cogwork  ",
-        gitRemote: "  git@github.com:colonylabs/cogwork.git  ",
         tracker: "github",
         issueTrackerConnectionId: "github/acme",
         repository: "  colonylabs/cogwork  ",
@@ -101,7 +100,6 @@ describe("workspaceRegistrationFrom", () => {
     ).toEqual({
       name: "Cogwork",
       checkoutPath: "/Users/taylor/sites/cogwork",
-      gitRemote: "git@github.com:colonylabs/cogwork.git",
       issueTracker: { type: "github", connectionId: "github/acme", repo: "colonylabs/cogwork" },
       linearHistory: false,
     });
@@ -112,7 +110,6 @@ describe("workspaceRegistrationFrom", () => {
       workspaceRegistrationFrom({
         name: "cogwork",
         checkoutPath: "/Users/taylor/sites/cogwork",
-        gitRemote: "",
         tracker: "linear",
         issueTrackerConnectionId: "linear/acme",
         repository: "",
@@ -140,7 +137,6 @@ describe("workspaceRegistrationFrom", () => {
       workspaceRegistrationFrom({
         name: "",
         checkoutPath: "relative/path",
-        gitRemote: "",
         tracker: "github",
         issueTrackerConnectionId: "",
         repository: "",
