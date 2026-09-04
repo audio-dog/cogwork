@@ -30,6 +30,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { type CodexRunnerOptions, codexRunner, defaultCodexModel, type MakeCodexAdapter } from "./harness";
+import { codexHookTrustEntries, upsertCodexHookTrust } from "./hook-trust";
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const freshSession = Schema.decodeSync(SessionId)("session-codex-fresh");
@@ -308,6 +309,44 @@ const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkil
     bearer: Redacted.make(secret),
   },
 ];
+
+const repositoryHooks = JSON.stringify({
+  hooks: {
+    PostToolUse: [
+      {
+        matcher: "apply_patch|Edit|Write",
+        hooks: [
+          {
+            type: "command",
+            command: "node scripts/format-edited-files.mjs",
+            timeout: 120,
+            statusMessage: "Formatting edited files",
+          },
+        ],
+      },
+    ],
+  },
+});
+
+const hookedRepository = Effect.fn("test.hookedRepository")(function* (
+  handle: SandboxHandle,
+  trust: "missing" | "stale" | "trusted",
+) {
+  const checkoutPath = yield* initializeRepository(handle);
+  const fs = yield* FileSystem.FileSystem;
+  const codexHome = `${handle.id}/codex-home`;
+  const hooksPath = `${checkoutPath}/.codex/hooks.json`;
+  yield* fs.makeDirectory(`${checkoutPath}/.codex`, { recursive: true });
+  yield* fs.makeDirectory(codexHome, { recursive: true });
+  yield* fs.writeFileString(hooksPath, repositoryHooks);
+  const entries = codexHookTrustEntries(yield* fs.realPath(hooksPath), repositoryHooks);
+  if (trust !== "missing") {
+    const trustedEntries =
+      trust === "trusted" ? entries : entries.map(({ key }) => ({ key, hash: "sha256:stale" }));
+    yield* fs.writeFileString(`${codexHome}/config.toml`, upsertCodexHookTrust("", trustedEntries));
+  }
+  return { checkoutPath, codexHome, hookKey: entries[0]?.key ?? "" };
+});
 
 describe("repository fixtures", () => {
   it.effect("keeps identity out of the repository config", () =>
@@ -604,6 +643,67 @@ describe("codexRunner", () => {
           yield* harness.run(makeRequest({ checkoutPath, session: freshSession })).pipe(Stream.runDrain);
 
           assert.deepStrictEqual(calls[0]?.additionalDirectories, [commonDirectory]);
+        }),
+      ),
+    );
+
+    it.effect("refuses a Run before launch when repository Hook trust is missing", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const { checkoutPath, codexHome, hookKey } = yield* hookedRepository(handle, "missing");
+          const adapterCalls: Array<CodexTextConfig> = [];
+          const harness = Harness.make([
+            runner({
+              environment: { ...process.env, CODEX_HOME: codexHome },
+              makeAdapter: (model, config) => {
+                adapterCalls.push(config);
+                return codexText(model, config);
+              },
+            }),
+          ]);
+
+          const error = yield* harness
+            .run(makeRequest({ checkoutPath, session: freshSession }))
+            .pipe(Stream.runDrain, Effect.flip);
+
+          assert.strictEqual(error.reason, "workspace");
+          assert.isFalse(error.retryable);
+          assert.include(error.message, hookKey);
+          assert.lengthOf(adapterCalls, 0);
+        }),
+      ),
+    );
+
+    it.effect("refuses a Run before launch when repository Hook trust is stale", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const { checkoutPath, codexHome, hookKey } = yield* hookedRepository(handle, "stale");
+          const harness = Harness.make([runner({ environment: { ...process.env, CODEX_HOME: codexHome } })]);
+
+          const error = yield* harness
+            .run(makeRequest({ checkoutPath, session: freshSession }))
+            .pipe(Stream.runDrain, Effect.flip);
+
+          assert.strictEqual(error.reason, "workspace");
+          assert.include(error.message, hookKey);
+        }),
+      ),
+    );
+
+    it.effect("starts a Run when every repository Hook is trusted", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const { checkoutPath, codexHome } = yield* hookedRepository(handle, "trusted");
+          const harness = Harness.make([runner({ environment: { ...process.env, CODEX_HOME: codexHome } })]);
+
+          const events = yield* collectEvents(
+            harness.run(makeRequest({ checkoutPath, session: freshSession })),
+          );
+
+          assert.lengthOf(structuredCompletions(events), 1);
         }),
       ),
     );

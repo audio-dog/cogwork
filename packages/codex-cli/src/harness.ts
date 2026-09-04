@@ -1,3 +1,4 @@
+import * as os from "node:os";
 import type { HarnessName } from "@cogwork/contracts";
 import { ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
 import {
@@ -12,7 +13,9 @@ import {
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
+import { verifyCodexHookTrust } from "./hook-trust";
 
 export type CodexEffort = NonNullable<CodexTextProviderOptions["modelReasoningEffort"]>;
 
@@ -260,6 +263,28 @@ const hostAuthentication = () =>
     secrets: {},
   } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication);
 
+const codexHome = (environment: NodeJS.ProcessEnv) =>
+  environment.CODEX_HOME?.trim() || `${os.homedir()}/.codex`;
+
+const verifyRepositoryHookTrust = (
+  environment: NodeJS.ProcessEnv,
+  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+) => {
+  return Effect.gen(function* () {
+    const sharedGitDirectory = request.checkout.sharedGitDirectory;
+    if (!sharedGitDirectory) return;
+    const path = yield* Path.Path;
+    const rootCheckout = path.dirname(sharedGitDirectory);
+    yield* verifyCodexHookTrust(
+      path.join(rootCheckout, ".codex", "hooks.json"),
+      path.join(codexHome(environment), "config.toml"),
+    );
+  }).pipe(
+    Effect.provide(Path.layer),
+    Effect.mapError((error) => harnessError("workspace", false, error.message)),
+  );
+};
+
 const tomlString = (value: string) =>
   `"${value
     .replace(/\\/g, "\\\\")
@@ -391,5 +416,6 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
     authentication: hostAuthentication,
     sandboxProvider: ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({ scrubEnv }),
     sandboxPolicy: (request) => Effect.succeed(Tools.policyForProfile(request.policy)),
+    launchPreflight: (request) => verifyRepositoryHookTrust(options.environment, request),
   });
 };
