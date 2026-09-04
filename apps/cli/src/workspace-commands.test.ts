@@ -1,7 +1,13 @@
 import { WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { formatRebindResult, formatRegistrationResult } from "./workspace-commands";
+import {
+  decodeWorkspaceUpdateJson,
+  formatRebindResult,
+  formatRegistrationResult,
+  formatUpdateResult,
+} from "./workspace-commands";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const workspaceState = Schema.decodeSync(WorkspaceState);
@@ -34,11 +40,55 @@ describe("formatRebindResult", () => {
           displayName: "Cogwork",
           checkoutPath: "/repos/moved",
           issueTracker: "github",
+          record: {
+            name: "Cogwork",
+            checkoutPath: "/repos/moved",
+            issueTracker: { type: "github" },
+            linearHistory: false,
+          },
           poll: { status: "pending" },
           contributions: [],
         }),
       ),
       `Re-bound Cogwork (${name}) to /repos/moved.`,
+    );
+  });
+});
+
+describe("formatUpdateResult", () => {
+  it.effect("schema-decodes the JSON update input", () =>
+    Effect.gen(function* () {
+      const update = yield* decodeWorkspaceUpdateJson(
+        '{"name":"Cogwork","issueTracker":{"type":"github","connectionId":"github/acme"},"linearHistory":false,"concurrency":3}',
+      );
+
+      assert.strictEqual(update.name, "Cogwork");
+      assert.strictEqual(update.concurrency, 3);
+    }),
+  );
+
+  it("reports the edited workspace name", () => {
+    const name = workspaceId("0198f16a-21d7-7000-8000-000000000001");
+
+    assert.strictEqual(
+      formatUpdateResult(
+        workspaceState({
+          _tag: "Registered",
+          name,
+          displayName: "Cogwork",
+          checkoutPath: "/repos/cogwork",
+          issueTracker: "github",
+          record: {
+            name: "Cogwork",
+            checkoutPath: "/repos/cogwork",
+            issueTracker: { type: "github" },
+            linearHistory: false,
+          },
+          poll: { status: "pending" },
+          contributions: [],
+        }),
+      ),
+      "Updated Cogwork.",
     );
   });
 });
