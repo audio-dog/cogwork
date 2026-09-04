@@ -1,0 +1,22 @@
+packages/engine/src/run-plan.ts
+  s_3f3e8641e0fd13::t_53790c196b8338 926-928
+packages/engine/src/run-plan.test.ts
+  s_3f3e8641e0fd13::t_53790c196b8338 8,25,407,415-416,493-494
+  s_3f3e8641e0fd13::t_743414ed578aa4 484-486
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "fcdf78f282a36428a39d139f1286222178bef4fd",
+  "prompts": {},
+  "sessions": {
+    "s_3f3e8641e0fd13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c9b-77a5-78f2-9193-68d9157a2fe9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
