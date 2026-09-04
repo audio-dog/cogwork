@@ -1,0 +1,39 @@
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_9bddc5183e91c9::t_d4ea1b9eb7b915 40-41,44-45
+  s_9bddc5183e91c9::t_a7e06865da09c7 95,102-103
+  s_9bddc5183e91c9::t_6d095f2114371b 42-43
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_9bddc5183e91c9::t_ad59ad5409f750 13-18,71-80
+  s_9bddc5183e91c9::t_b074c2534aa94d 81,256-270
+  s_9bddc5183e91c9::t_12806e15561ca1 82-83
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_9bddc5183e91c9::t_d4ea1b9eb7b915 25,178,180-221,223-224
+  s_9bddc5183e91c9::t_6d095f2114371b 32-35,222
+  s_49994cea1f08ab::t_7e546ecd741f51 31
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_9bddc5183e91c9::t_a7e06865da09c7 396
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2b8aa31bda840d3764375364bb7095c7361252c2",
+  "prompts": {},
+  "sessions": {
+    "s_49994cea1f08ab": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e16-ab2b-7aa1-8ab8-4e65613f60c4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9bddc5183e91c9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dfd-c832-78d0-b9d6-b016f29fee22",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
