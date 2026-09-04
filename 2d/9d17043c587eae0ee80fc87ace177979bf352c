@@ -1,0 +1,26 @@
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_9bddc5183e91c9::t_ed10b3a58ec0db 32-35,66-72,97,102,112,120,130-131,177,197-198,214,217-236
+  s_9bddc5183e91c9::t_f46e99a4e9a4cc 1-9,13,18-22,24-31,36-64
+  s_9bddc5183e91c9::t_a603d0d658661d 23
+  s_9bddc5183e91c9::t_88de063805e242 65
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_9bddc5183e91c9::t_7f36ec5672d242 14
+  s_9bddc5183e91c9::t_25a9b871a080f4 3-5,10,33-53,82,103,112,117-122,124-126,134,138-140
+  s_9bddc5183e91c9::t_f5cb2c2befefa7 141-142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2d9d17043c587eae0ee80fc87ace177979bf352c",
+  "prompts": {},
+  "sessions": {
+    "s_9bddc5183e91c9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dfd-c832-78d0-b9d6-b016f29fee22",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
