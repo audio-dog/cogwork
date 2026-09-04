@@ -1,14 +1,11 @@
 import { WorkspaceId, WorkspaceRegistration, WorkspaceState } from "@cogwork/contracts";
-import { Git } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import { defaultSocketPath } from "./paths";
-import { gitLayer } from "./platform";
 import { clientLayer, makeDaemonClient } from "./rpc";
 
 const socketFlag = Flag.string("socket").pipe(
@@ -28,15 +25,6 @@ const readRegistration = Effect.fn("workspace.readRegistration")(function* (inpu
   return yield* fs.readFileString(inputPath).pipe(Effect.flatMap(decodeRegistration));
 });
 
-const captureRemote = Effect.fn("workspace.captureRemote")(function* (registration: WorkspaceRegistration) {
-  if (registration.gitRemote) return registration;
-  const git = yield* Git.Git;
-  const gitRemote = yield* git
-    .remoteUrl(registration.checkoutPath, registration.worktrees?.remote ?? "origin")
-    .pipe(Effect.orElseSucceed(() => undefined));
-  return { ...registration, ...(gitRemote ? { gitRemote } : {}) };
-});
-
 export const formatRegistrationResult = (requestedName: string, workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
     Registered: (registered) =>
@@ -51,7 +39,7 @@ const runRegister = Effect.fn("workspace.register")(function* (options: {
   readonly socket: string;
   readonly input: string;
 }) {
-  const registration = yield* readRegistration(options.input).pipe(Effect.flatMap(captureRemote));
+  const registration = yield* readRegistration(options.input);
   const client = yield* makeDaemonClient();
   const workspace = yield* client.RegisterWorkspace({ registration });
   const message = formatRegistrationResult(registration.name, workspace);
@@ -63,10 +51,7 @@ export const registerWorkspace = Effect.fn("workspace.registerWithLayers")(funct
   readonly socket: string;
   readonly input: string;
 }) {
-  return yield* runRegister(options).pipe(
-    Effect.scoped,
-    Effect.provide(Layer.mergeAll(clientLayer(options.socket), gitLayer)),
-  );
+  return yield* runRegister(options).pipe(Effect.scoped, Effect.provide(clientLayer(options.socket)));
 });
 
 export const formatRebindResult = (workspace: WorkspaceState) =>
