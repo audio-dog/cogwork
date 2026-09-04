@@ -11,6 +11,8 @@ import {
   ContributionSettingScope,
   ContributionSettingUpdate,
   type DaemonLimitUpdate,
+  type HarnessName,
+  HarnessNotRegistered,
   type OperationSettingUpdate,
   type PluginFailure,
   type PluginId,
@@ -41,6 +43,7 @@ import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
+import { Harness } from "./harness";
 import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
 import { applyHandbackBarrier } from "./observe";
 import { operationSettingRefusal } from "./operation-policy";
@@ -285,6 +288,30 @@ export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(funct
   const controlStore = yield* store.withWrite(
     Effect.gen(function* () {
       const updated = yield* store.updateOperationSetting(payload.update);
+      yield* worker.invalidateAvailability();
+      return updated;
+    }),
+  );
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  const published = yield* publisher.publishControlStore(controlStore);
+  yield* publisher.publishWorkspaces();
+  return published;
+});
+
+export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function* (payload: {
+  readonly harness: HarnessName;
+  readonly enabled: boolean;
+}) {
+  const harness = yield* Harness;
+  if (!harness.names.includes(payload.harness)) {
+    return yield* HarnessNotRegistered.make({ harness: payload.harness });
+  }
+  const store = yield* ControlStore;
+  const publisher = yield* DaemonEventPublisher;
+  const worker = yield* ReconcileWorker;
+  const controlStore = yield* store.withWrite(
+    Effect.gen(function* () {
+      const updated = yield* store.setHarnessEnabled(payload.harness, payload.enabled);
       yield* worker.invalidateAvailability();
       return updated;
     }),

@@ -43,6 +43,7 @@ import {
   removeConnection,
   setContributionSetting,
   setDaemonLimit,
+  setHarnessEnabled,
   setOperationSetting,
   setScheduling,
   uninstallPlugin,
@@ -274,7 +275,13 @@ export const handlersLayer = DaemonRpcs.toLayer({
     return yield* (yield* ConnectionStore).overview;
   }),
   GetHarnesses: Effect.fn("Daemon.GetHarnesses")(function* () {
-    return yield* harnessOverview();
+    const store = yield* ControlStore;
+    if (store.health === "unavailable") return yield* harnessOverview();
+    const settings = yield* store.picture.pipe(
+      Effect.map((picture) => picture.harnessSettings),
+      Effect.catchTag("ControlStoreFailure", () => Effect.succeed([])),
+    );
+    return yield* harnessOverview(settings);
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
@@ -300,6 +307,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   SetDaemonLimit: setDaemonLimit,
   SetContributionSetting: setContributionSetting,
+  SetHarnessEnabled: setHarnessEnabled,
   SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
   InstallPlugin: installPlugin,
