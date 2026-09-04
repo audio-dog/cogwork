@@ -1,0 +1,28 @@
+packages/codex-cli/src/harness.test.ts
+  s_b230861a31ae42::t_f801d50f18443c 516-526
+packages/codex-cli/src/harness.ts
+  s_b230861a31ae42::t_794701f42d054a 317
+  h_46518a29d4dd91 2
+  s_b230861a31ae42::t_2f87d1af76960a 309-316,318-325,375,383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e5adbcdf4ac15e7afeb8403ebbe76f5a7171793b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b230861a31ae42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d547d04-dd85-4e77-a00c-613f35a5cfef",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
