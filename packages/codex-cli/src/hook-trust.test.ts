@@ -266,6 +266,40 @@ trusted_hash = "sha256:existing"
     );
   });
 
+  it("normalizes nullable Codex option fields", () => {
+    assert.deepStrictEqual(
+      codexHookTrustEntries(
+        hooksPath,
+        JSON.stringify({
+          description: null,
+          hooks: {
+            PreToolUse: [
+              {
+                matcher: null,
+                hooks: [
+                  {
+                    type: "command",
+                    command: "scan",
+                    commandWindows: null,
+                    timeout: null,
+                    statusMessage: null,
+                    additionalContextLimit: null,
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      ),
+      [
+        {
+          key: `${hooksPath}:pre_tool_use:0:0`,
+          hash: "sha256:fe61bf7d22f196fe020a0972af00c02010c2c7e8b20ee1c8eddf470521d7eafe",
+        },
+      ],
+    );
+  });
+
   it("fails closed on MCP input Codex cannot hash as TOML", () => {
     assert.throws(() =>
       codexHookTrustEntries(

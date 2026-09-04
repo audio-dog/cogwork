@@ -34,12 +34,12 @@ const TomlJsonObject = Schema.JsonObject.check(
 const CommandHook = Schema.Struct({
   type: Schema.Literal("command"),
   command: Schema.String,
-  commandWindows: Schema.optional(Schema.String),
-  command_windows: Schema.optional(Schema.String),
-  timeout: Schema.optional(Schema.Natural),
+  commandWindows: Schema.optional(Schema.NullOr(Schema.String)),
+  command_windows: Schema.optional(Schema.NullOr(Schema.String)),
+  timeout: Schema.optional(Schema.NullOr(Schema.Natural)),
   async: Schema.optional(Schema.Boolean),
-  statusMessage: Schema.optional(Schema.String),
-  additionalContextLimit: Schema.optional(Schema.Natural),
+  statusMessage: Schema.optional(Schema.NullOr(Schema.String)),
+  additionalContextLimit: Schema.optional(Schema.NullOr(Schema.Natural)),
 }).check(
   Schema.makeFilter(
     (handler) => handler.commandWindows === undefined || handler.command_windows === undefined,
@@ -52,14 +52,14 @@ const McpToolHook = Schema.Struct({
   server: Schema.String,
   tool: Schema.String,
   input: Schema.optional(TomlJsonObject),
-  timeout: Schema.optional(Schema.Natural),
-  statusMessage: Schema.optional(Schema.String),
+  timeout: Schema.optional(Schema.NullOr(Schema.Natural)),
+  statusMessage: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 const UnsupportedHook = Schema.Struct({ type: Schema.Literals(["prompt", "agent"]) });
 const HookHandler = Schema.Union([CommandHook, McpToolHook, UnsupportedHook]);
 const MatcherGroup = Schema.Struct({
-  matcher: Schema.optional(Schema.String),
+  matcher: Schema.optional(Schema.NullOr(Schema.String)),
   hooks: Schema.optional(Schema.Array(HookHandler)),
 });
 const HookGroups = Schema.optional(Schema.Array(MatcherGroup));
@@ -77,7 +77,7 @@ const HookEvents = Schema.Struct({
   Stop: HookGroups,
 });
 const HooksFile = Schema.Struct({
-  description: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
   hooks: Schema.optional(HookEvents),
 });
 
@@ -169,13 +169,13 @@ const configLockOptions = {
   update: 1_000,
 } satisfies LockOptions;
 
-const normalizedTimeout = (event: EventDefinition, timeout: number | undefined) => {
+const normalizedTimeout = (event: EventDefinition, timeout: number | null | undefined) => {
   if (event.configName !== "SessionEnd") return Math.max(timeout ?? 600, 1);
   return Math.min(Math.max(timeout ?? 1, 1), 3);
 };
 
-const matcherForEvent = (event: EventDefinition, matcher: string | undefined) => {
-  if (!event.acceptsMatcher || matcher === undefined) return undefined;
+const matcherForEvent = (event: EventDefinition, matcher: string | null | undefined) => {
+  if (!event.acceptsMatcher || matcher === undefined || matcher === null) return undefined;
   return Schema.decodeSync(Matcher)(matcher);
 };
 
@@ -187,9 +187,9 @@ const normalizedCommand = (event: EventDefinition, handler: typeof CommandHook.T
       : handler.command,
   timeout: normalizedTimeout(event, handler.timeout),
   async: handler.async ?? false,
-  ...(handler.statusMessage === undefined ? {} : { statusMessage: handler.statusMessage }),
+  ...(typeof handler.statusMessage === "string" ? { statusMessage: handler.statusMessage } : {}),
   ...(event.acceptsAdditionalContext &&
-  handler.additionalContextLimit !== undefined &&
+  typeof handler.additionalContextLimit === "number" &&
   handler.additionalContextLimit !== defaultAdditionalContextLimit
     ? { additionalContextLimit: handler.additionalContextLimit }
     : {}),
@@ -201,7 +201,7 @@ const normalizedMcpTool = (handler: typeof McpToolHook.Type) => ({
   tool: handler.tool,
   input: handler.input ?? {},
   timeout: Math.max(handler.timeout ?? 600, 1),
-  ...(handler.statusMessage === undefined ? {} : { statusMessage: handler.statusMessage }),
+  ...(typeof handler.statusMessage === "string" ? { statusMessage: handler.statusMessage } : {}),
 });
 
 const normalizedHandler = (event: EventDefinition, handler: typeof HookHandler.Type) => {
