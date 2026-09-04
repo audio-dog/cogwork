@@ -1,6 +1,7 @@
 import { createHash, type Hash } from "node:crypto";
 import { type AgUiEvent, agUiFileDiffEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
 import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
+import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -286,7 +287,12 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
   return diff === "" ? null : fileDiffEvent(relTo(event.path), diff);
 });
 
-const IGNORED_SEGMENTS = [".git", "node_modules", ".repos"];
+// `git check-ignore` is the general answer to what a Run should not diff, but it
+// cannot run before the checkout has a base SHA — and a checkout with no commit
+// yet synthesizes a whole-file patch for every file it sees instead. These are the
+// generated trees big enough to exhaust a Run on that path, so they are refused by
+// segment before any diff work starts.
+const IGNORED_SEGMENTS = [".git", "node_modules", ".repos", ".pnpm-store"];
 
 export const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
 
@@ -417,6 +423,22 @@ const classifyWorktreeEvent = Effect.fn("Tools.classifyWorktreeEvent")(function*
   return { type: exists ? "change" : "delete", path, timestamp: 0 } satisfies SandboxFileEvent;
 });
 
+/**
+ * Live diffs are a nicety: a dead feed must not end a Run, but it must leave a
+ * trace. Interruption is a consumer tearing the feed down rather than a death, so
+ * only a real cause is worth a warning.
+ */
+export const tolerateFeedDeath =
+  (message: string) =>
+  <A, E, R>(feed: Stream.Stream<A, E, R>): Stream.Stream<A, never, R> =>
+    feed.pipe(
+      Stream.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Stream.empty
+          : Stream.fromEffect(Effect.logWarning(message, { cause })).pipe(Stream.drain),
+      ),
+    );
+
 export const watchWorktreeDiffs = (
   sandbox: WorktreeSandbox,
   baseSha: string,
@@ -433,7 +455,16 @@ export const watchWorktreeDiffs = (
       Effect.map((fs) =>
         fs.watch(sandbox.root, { recursive: true }).pipe(
           Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
-          (source) => (stop ? source.pipe(Stream.haltWhen(stop)) : source),
+          // `Stream.haltWhen` polls between pulls, and the watcher's pull blocks
+          // while the checkout is idle, so it would never notice. Racing the stop
+          // as a merged side ends the source with a normal completion instead,
+          // which is what the debounce downstream needs in order to flush.
+          (source) =>
+            stop
+              ? Stream.merge(source, Stream.fromEffect(stop).pipe(Stream.drain), {
+                  haltStrategy: "either",
+                })
+              : source,
           Stream.filter((event) => !ignored(event.path)),
           Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
           Stream.mapEffect((events) => configuredIgnoredEvents(sandbox, baseSha, events)),

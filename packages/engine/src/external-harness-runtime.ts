@@ -41,7 +41,6 @@ import {
   withSandbox,
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
-import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -68,7 +67,7 @@ import {
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
 import { SessionStore } from "./session-store";
-import { boundedDiff, ignored, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { boundedDiff, ignored, tolerateFeedDeath, watchWorktreeDiffs } from "./tools/file-diff-feed";
 import { openWorktreeSandbox, resolveBaseSha } from "./tools/sandbox";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
@@ -641,9 +640,11 @@ const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abortController: Abo
 // client contract are bounded by the same batching, debounce, `git check-ignore`
 // pass, and per-file diff cap rather than by two separate implementations.
 //
-// Live diffs are a nicety: a dead feed must not end the Run, but it must leave a
-// trace — recursive watching cannot exclude subtrees, so a large generated tree can
-// still exhaust the host's watch descriptors.
+// Watching the checkout rather than reading the harness's own reported file changes
+// is deliberate. Codex reports a `file_change` item only for its own `apply_patch`
+// tool, so an edit made through the shell — `sed`, a build script, or the very
+// `pnpm install` behind #512 — carries no such item, and a feed derived from them
+// would silently under-report every shell-driven write.
 const checkoutFileDiffs = (
   checkoutPath: string,
   secretValues: ReadonlyArray<string>,
@@ -657,14 +658,7 @@ const checkoutFileDiffs = (
     }),
   ).pipe(
     Stream.map((event) => scrubEvent(event, secretValues)),
-    Stream.catchCause((cause) =>
-      // Interruption is the merge tearing the feed down, not a death.
-      Cause.hasInterruptsOnly(cause)
-        ? Stream.empty
-        : Stream.fromEffect(Effect.logWarning("checkout file-diff feed stopped", { cause })).pipe(
-            Stream.drain,
-          ),
-    ),
+    tolerateFeedDeath("checkout file-diff feed stopped"),
   );
 
 const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(

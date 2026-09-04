@@ -365,6 +365,42 @@ describe("file diff feed", () => {
     }).pipe(Effect.provide(ExecCalls.layer)),
   );
 
+  it.effect("flushes a debounced diff when the caller stops the feed", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const baseSha = yield* resolveBaseSha(original);
+      const sandbox = yield* withExecProbe(original);
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const stop = yield* Deferred.make<void>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha, Deferred.await(stop)).pipe(
+        Stream.runHead,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* writeFile(original, { path: "seed.txt", content: "written just before the stop\n" });
+      yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+
+      // Stopping the feed has to deliver this diff on its own. The clock only moves
+      // far enough for the ignore batch to close, never the 250ms debounce, so the
+      // flush is the only thing that can produce it — this is the write a consumer
+      // loses when it interrupts the feed instead of stopping it.
+      yield* Deferred.succeed(stop, undefined);
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("100 millis");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 29 }));
+      yield* TestClock.adjust("100 millis");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 29 }));
+      const head = yield* Fiber.join(fiber);
+
+      if (Option.isNone(head)) return assert.fail("stopping the feed dropped the pending diff");
+      const value = yield* decodeDiffValue(head.value.value);
+      assert.strictEqual(value.path, "seed.txt");
+      assert.include(value.diff, "+written just before the stop");
+    }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
   it.effect("skips directory events before starting diff subprocesses", () =>
     Effect.gen(function* () {
       const original = yield* openSandbox();
