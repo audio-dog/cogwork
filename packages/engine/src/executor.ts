@@ -1345,6 +1345,9 @@ export const make = Effect.gen(function* () {
   const disabledHarnessCause = (harnessName: HarnessName) =>
     hostFailure("harness", `${harnessName} Harness is disabled on this Runtime host`);
 
+  const unavailableHarnessCause = (message: string) =>
+    hostFailure("harness", `Harness enablement is unavailable: ${message}`);
+
   const currentHarnessDisablement = (picture: ControlStorePicture, harnessName: HarnessName) => {
     if (harnessEnabled(picture.harnessSettings, harnessName)) return null;
     return disabledHarnessCause(harnessName);
@@ -1353,7 +1356,7 @@ export const make = Effect.gen(function* () {
   const selectedHarnessDisablement = (picture: ControlStorePicture, harnessName: HarnessName | null) =>
     harnessName ? currentHarnessDisablement(picture, harnessName) : null;
 
-  const harnessAvailability = Effect.fn("Executor.harnessAvailability")(function* (
+  const readHarnessAvailability = Effect.fn("Executor.readHarnessAvailability")(function* (
     resolved: ResolvedOperation,
   ) {
     const picture = yield* controlStore.picture;
@@ -1376,6 +1379,14 @@ export const make = Effect.gen(function* () {
         }),
       );
   });
+
+  const harnessAvailability = Effect.fn("Executor.harnessAvailability")((resolved: ResolvedOperation) =>
+    readHarnessAvailability(resolved).pipe(
+      Effect.catchTag("ControlStoreFailure", (error) =>
+        Effect.succeed(unavailableHarnessCause(error.message)),
+      ),
+    ),
+  );
 
   const connectionAvailability = Effect.fn("Executor.connectionAvailability")(function* () {
     return yield* connections.overview.pipe(
@@ -1682,7 +1693,13 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
   ) {
     const startedAtMillis = yield* Clock.currentTimeMillis;
-    const admission = yield* controlStore.withWrite(claimCurrentHarness(workspace, item, startedAtMillis));
+    const admission = yield* controlStore
+      .withWrite(claimCurrentHarness(workspace, item, startedAtMillis))
+      .pipe(
+        Effect.catchTag("ControlStoreFailure", (error) =>
+          Effect.succeed({ claimed: false, cause: unavailableHarnessCause(error.message) }),
+        ),
+      );
     if (admission.cause) {
       return { claimed: yield* decline(workspace, item, [admission.cause]), startedAtMillis };
     }

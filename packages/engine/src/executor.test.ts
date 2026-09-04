@@ -2,6 +2,8 @@ import {
   AgUiEvent,
   ConnectionId,
   type ContributionSettingRow,
+  ControlStoreFailure,
+  type ControlStore as ControlStorePicture,
   DaemonEvent,
   DeclaredVersion,
   defaultControlStore,
@@ -1202,13 +1204,14 @@ const controlStoreLayer = (
   operationSettings: ReadonlyArray<OperationSettingRow>,
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
   harnessSettings: ReadonlyArray<HarnessEnablement> = [],
+  read: Effect.Effect<ControlStorePicture, ControlStoreFailure, never> | null = null,
 ) => {
   const picture = { ...defaultControlStore, operationSettings, contributionSettings, harnessSettings };
   const gate = Semaphore.makeUnsafe(1);
   return Layer.succeed(ControlStore, {
     health: "available",
     seed: picture,
-    picture: Effect.succeed(picture),
+    picture: read ?? Effect.succeed(picture),
     setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
     establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
     revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
@@ -1530,6 +1533,80 @@ describe("Executor.execute", () => {
       assert.isTrue(availability.available);
       assert.deepStrictEqual(availability.causes, []);
     }).pipe(Effect.provide(provide([transientPreflight])));
+  });
+
+  it.effect("declines when the Harness enablement reread fails", () => {
+    const reads = Ref.makeUnsafe(0);
+    const picture = { ...defaultControlStore, operationSettings: runnableStages };
+    const failure = ControlStoreFailure.make({
+      operation: "read Control store",
+      message: "store read failed",
+    });
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(
+            runnableStages,
+            [],
+            [],
+            Ref.getAndUpdate(reads, (count) => count + 1).pipe(
+              Effect.flatMap((count) => (count === 0 ? Effect.succeed(picture) : Effect.fail(failure))),
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+
+  it.effect("declines a stalled follow-up when Harness enablement cannot be read", () => {
+    const stalledItem = {
+      ...followUpItem,
+      followUp: { ...followUpItem.followUp, noProgress: 3, stalled: true },
+    };
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, followUpWorkspace, stalledItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(followUpEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(
+            runnableStages,
+            [],
+            [],
+            Effect.fail(
+              ControlStoreFailure.make({ operation: "read Control store", message: "store read failed" }),
+            ),
+          ),
+        ),
+      ),
+    );
   });
 
   it.effect("refuses a disabled Harness before claim", () =>
