@@ -1,0 +1,43 @@
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_4c8cd823764032::t_157bfcd80124b6 25-29,61-65,114-118,163-170,195
+  s_4c8cd823764032::t_efd276c99fd095 96,105,132
+  s_4c8cd823764032::t_3827c09f7a5b1a 122
+  s_4c8cd823764032::t_70a520b5e7a881 97
+  s_4c8cd823764032::t_de6b3c9add06a7 148-154,176-177
+  s_4c8cd823764032::t_708f1d9da07d12 142-145,196-198,200-209,248,250,256,262,269
+  s_4c8cd823764032::t_33e94349f3a4e2 1-10,15-24,30-45,48-60,66-87,98-104,106-113,119-121,123-131,133-136,140-141,146-147,155-162,171-175,178-194,199,210-216
+  s_3c4a42d9eee4a6::t_ddd8e148af12ca 217
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_4c8cd823764032::t_73433796b6bbeb 10,62-88,94-102,105
+  s_4c8cd823764032::t_dc2781918b33d2 104,106
+  s_4c8cd823764032::t_468ca853d004c7 26-31,103
+  s_4c8cd823764032::t_a7340b943b61c9 89-93
+  s_4c8cd823764032::t_56f2da696905ad 1-7
+  s_3c4a42d9eee4a6::t_dcba06e59444ba 107-108
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_4c8cd823764032::t_468ca853d004c7 8-13,20,140,208,264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3ed32f7e32367d1a66f7b43b5b314e9e227f1d51",
+  "prompts": {},
+  "sessions": {
+    "s_3c4a42d9eee4a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06e01-7017-7e73-805c-5fb3c397c7c0",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_4c8cd823764032": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dfc-1b38-7750-b2c5-60b4a0d9ce93",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
