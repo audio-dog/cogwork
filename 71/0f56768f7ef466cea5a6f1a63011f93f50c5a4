@@ -1,0 +1,19 @@
+packages/engine/src/tools/file-diff-feed.ts
+  s_0f51d1349591c8::t_57a9874d77c27a 289-297,299-300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "710f56768f7ef466cea5a6f1a63011f93f50c5a4",
+  "prompts": {},
+  "sessions": {
+    "s_0f51d1349591c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c9b-424b-7912-adb5-8c0e7e6df544",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
