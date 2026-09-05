@@ -80,7 +80,16 @@ const helperRole = (command) => {
   return type === undefined ? null : (helperRoles.get(type) ?? null);
 };
 
-const engineChildRole = (command) => (commandName(command) === "git" ? "git" : "harness");
+const harnessCommands = new Set(["codex", "cursor-agent", "claude"]);
+
+// The engine's subtree holds far more than agents: package managers, build tools, shells and the
+// harness CLI's own helpers. Counting all of it as "harness" overstated the agent count sevenfold
+// in the first campaign, so only the agent CLI itself carries that name.
+const engineChildRole = (command) => {
+  const name = commandName(command);
+  if (name === "git") return "git";
+  return harnessCommands.has(name) ? "harness" : "engine-child";
+};
 
 const targets = (table, children) => {
   const engine = [...table.values()].find((row) => isEngine(row.command));
@@ -105,8 +114,10 @@ const targets = (table, children) => {
 const fileDescriptorCounts = (pids) => {
   const counts = new Map(pids.map((pid) => [pid, 0]));
   if (pids.length === 0) return counts;
+  // lsof lists cwd, txt, rtd and every mapped region beside the numbered descriptors. Counting
+  // those inflated the first campaign's figures by about half, so match only a numeric FD column.
   for (const line of capture("lsof", ["-nP", "-p", pids.join(",")]).split("\n")) {
-    const match = /^\S+\s+(\d+)\s/.exec(line);
+    const match = /^\S+\s+(\d+)\s+\S+\s+(\d+)[rwu-]/.exec(line);
     const pid = match ? Number(match[1]) : undefined;
     if (pid === undefined || !counts.has(pid)) continue;
     counts.set(pid, (counts.get(pid) ?? 0) + 1);
