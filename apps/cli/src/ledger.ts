@@ -60,9 +60,13 @@ const runValues = (record: RunRecord) => ({
   harness: record.harness,
   branch: record.branch,
   session: record.session,
+  claimDisposition: record.claimDisposition ?? null,
   startedAt: record.startedAtMillis,
   ...runColumns(record),
 });
+
+const claimDispositionUpdate = (record: Pick<RunRecord, "claimDisposition">) =>
+  record.claimDisposition === undefined ? {} : { claimDisposition: record.claimDisposition };
 
 const sessionValues = (session: Session) => ({
   id: session.id,
@@ -119,6 +123,7 @@ const runRecordSelection = {
   totalTokens: runs.totalTokens,
   estimated: runs.estimated,
   status: runs.status,
+  claimDisposition: runs.claimDisposition,
   startedAt: runs.startedAt,
   endedAt: runs.endedAt,
 };
@@ -141,6 +146,7 @@ const runRecordFromRow = (row: {
   readonly totalTokens: number | null;
   readonly estimated: boolean | null;
   readonly status: string;
+  readonly claimDisposition: string | null;
   readonly startedAt: number;
   readonly endedAt: number | null;
 }) => ({
@@ -153,6 +159,7 @@ const runRecordFromRow = (row: {
   session: row.session,
   usage: usageOf(row),
   status: row.status,
+  ...(row.claimDisposition === null ? {} : { claimDisposition: row.claimDisposition }),
   startedAtMillis: row.startedAt,
   endedAtMillis: row.endedAt,
 });
@@ -322,7 +329,13 @@ const make = Effect.fn("ledger.make")(function* () {
     },
 
     updateRun: (runId: RunId, patch: RunLedger.RunUpdate) =>
-      write("updateRun", () => db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).run()),
+      write("updateRun", () =>
+        db
+          .update(runs)
+          .set({ ...runColumns(patch), ...claimDispositionUpdate(patch) })
+          .where(eq(runs.id, runId))
+          .run(),
+      ),
 
     setRunSession: (runId: RunId, session: SessionId) =>
       write("setRunSession", () => db.update(runs).set({ session }).where(eq(runs.id, runId)).run()),
