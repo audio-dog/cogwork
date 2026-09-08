@@ -42,7 +42,7 @@ The scheduler's graceful stop: it picks no further candidates and gives the runs
 _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, graceful kill
 
 **Claim recovery**:
-The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when it has no run and the scheduler does not hold the work item in flight.
+The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when no current run requires it and the scheduler does not hold the work item in flight. A terminal run whose factual gate decline recorded `claimDisposition: hold` still requires its current claim.
 _Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
 
 **Claim hold-off**:
