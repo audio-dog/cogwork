@@ -1,0 +1,36 @@
+packages/engine/src/executor.test.ts
+  s_8558828ce285d0::t_2f5554bcf00962 212-221
+  s_8558828ce285d0::t_7cc48694506e8c 244
+  s_8558828ce285d0::t_55a7202b604b33 1437
+  s_8558828ce285d0::t_3dce66ed19ebc9 230,232-240,2065,2069
+packages/engine/src/context-assembler.ts
+  s_8558828ce285d0::t_7cc48694506e8c 244-245,248,252
+  s_8558828ce285d0::t_27d96efc699ede 1,28,164,166-167,170-171,175-196,225-231,237
+  s_8558828ce285d0::t_5337241cd4e435 212-216,236,238,241,243,246-247,249-251,253
+packages/engine/src/context-assembler.test.ts
+  s_8558828ce285d0::t_7cc48694506e8c 20-24,40,48,374-375,385,389,392,449
+  s_8558828ce285d0::t_fe282ab5035dd3 1-7,33,50-53,366-372,376-384,386-388,390-391,393-397,399-401,405-406
+  s_8558828ce285d0::t_93c29e10a7acd3 41-42,79-92,373,398,402-404
+  s_8558828ce285d0::t_05b52b80f027db 43-44
+  s_8558828ce285d0::t_dfbcb3e92fefb6 78
+  s_8558828ce285d0::t_42cdd8a1d0f8d7 93
+  s_8558828ce285d0::t_ed1bd8ab79cca4 407
+packages/engine/src/executor.ts
+  s_8558828ce285d0::t_16d828d548b93b 674
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "598bcb685dbd6f30c89397ce8e0c475c4a816369",
+  "prompts": {},
+  "sessions": {
+    "s_8558828ce285d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0826e-10d4-7982-ab56-b4c2aab465fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
