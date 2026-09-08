@@ -1,0 +1,39 @@
+packages/engine/src/testing/git-invocation-counting.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 1-80
+scripts/count-worktree-git-invocations.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 1-115
+apps/cli/src/commands.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 162-164,180,245
+packages/engine/src/control-store.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 56-84,88-89,94-95
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 1-72
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 26,68-73,76,86,100
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 2,17-21,76,80,95-99,111-115,119
+package.json
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 16,18,26-27,30-31
+packages/engine/src/executor.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 47,56,59-60,74-80,97,100,543,546,548,555,557,564-573,576,578-581,596-617,623,638,854,857,864-865,883,896-911,916-926,931-939,998,1040,1044,1161,1164,1550,1765
+packages/engine/src/retry-policy.ts
+  s_343dd710cf5e3c::t_5d60a3fe8d35f6 70
+pnpm-lock.yaml
+  s_343dd710cf5e3c::t_603578fa0c96a8 87-92,99-101,105-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "c4bf03a8a1365c40a8decff46edecbd924d75d3a",
+  "prompts": {},
+  "sessions": {
+    "s_343dd710cf5e3c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08277-030f-7d41-bbb3-6c128efc79fd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
