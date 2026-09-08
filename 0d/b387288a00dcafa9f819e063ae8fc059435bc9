@@ -1,0 +1,19 @@
+pnpm-workspace.yaml
+  s_d556dc6b317e23::t_8df81d2f20866d 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "0db387288a00dcafa9f819e063ae8fc059435bc9",
+  "prompts": {},
+  "sessions": {
+    "s_d556dc6b317e23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08232-574d-7e71-b260-9e0f5257936f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
