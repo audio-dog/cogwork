@@ -1,16 +1,16 @@
 import { type Git, Registry, Worktree } from "@cogwork/engine";
 import * as Console from "effect/Console";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import { defaultControlStorePath } from "./paths";
 import { worktreeManagerLayer } from "./platform";
 
-class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()("WorkspaceNotFound", {
-  detail: Schema.String,
-}) {
+class WorktreeWorkspaceNotFound extends Data.TaggedError("WorktreeWorkspaceNotFound")<{
+  readonly detail: string;
+}> {
   override get message() {
     return this.detail;
   }
@@ -32,7 +32,9 @@ const branchFlag = Flag.string("branch").pipe(Flag.withDescription("Worktree bra
 const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (name: string) {
   const registry = yield* (yield* Registry.WorkspaceRegistry).state;
   const workspace = Registry.findWorkspace(registry, name);
-  if (!workspace) return yield* new WorkspaceNotFound({ detail: `workspace "${name}" not found` });
+  if (!workspace) {
+    return yield* new WorktreeWorkspaceNotFound({ detail: `workspace "${name}" not found` });
+  }
   return workspace;
 });
 
