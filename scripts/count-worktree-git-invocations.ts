@@ -26,11 +26,19 @@ const gitEnvironment = {
 };
 
 const nodeDependencies = Layer.merge(NodeFileSystem.layer, NodePath.layer);
+const withGitEnvironment = (command: ChildProcess.Command) => {
+  if (!ChildProcess.isStandardCommand(command)) return ChildProcess.setEnv(command, gitEnvironment);
+  return ChildProcess.make(command.command, command.args, {
+    ...command.options,
+    env: { ...command.options.env, ...gitEnvironment },
+    extendEnv: true,
+  });
+};
 const platformLayer = Layer.mergeAll(
   Layer.effect(
     ChildProcessSpawner.ChildProcessSpawner,
     Effect.map(ChildProcessSpawner.ChildProcessSpawner, (spawner) =>
-      ChildProcessSpawner.make((command) => spawner.spawn(ChildProcess.setEnv(command, gitEnvironment))),
+      ChildProcessSpawner.make((command) => spawner.spawn(withGitEnvironment(command))),
     ),
   ).pipe(Layer.provide(NodeChildProcessSpawner.layer.pipe(Layer.provide(nodeDependencies)))),
   nodeDependencies,
