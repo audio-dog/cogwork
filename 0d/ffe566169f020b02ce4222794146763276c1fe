@@ -1,0 +1,32 @@
+packages/engine/src/playbook.test.ts
+  s_01b77d13e2a0b1::t_89ee44b9c6c4f8 13-14,296-301,303-310
+  s_01b77d13e2a0b1::t_89286f98fb2525 295,302
+  s_7e3527ced6a016::t_34d74c3b39865f 11,311-312
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_01b77d13e2a0b1::t_991a459be3072c 87
+  s_01b77d13e2a0b1::t_dc13164c97037e 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "0dffe566169f020b02ce4222794146763276c1fe",
+  "prompts": {},
+  "sessions": {
+    "s_01b77d13e2a0b1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08356-92b4-7fe2-9b1f-a3c03901b89e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    },
+    "s_7e3527ced6a016": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0821f-452b-71f0-9c2b-63fd24cbb690",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
