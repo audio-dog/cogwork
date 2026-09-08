@@ -9,7 +9,7 @@ import {
   type CodexTextProviderOptions,
   codexText,
 } from "@tanstack/ai-codex";
-import type { SandboxHandle, SandboxHooks } from "@tanstack/ai-sandbox";
+import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
@@ -22,7 +22,6 @@ export interface CodexRunnerOptions {
   readonly name: HarnessName;
   readonly environment: NodeJS.ProcessEnv;
   readonly codexExecutable?: string;
-  readonly fileHooks?: SandboxHooks;
   readonly makeAdapter?: MakeCodexAdapter;
 }
 
@@ -379,7 +378,7 @@ const codexDescriptor = (
     transport: {
       instructionProjection: "system-prompt",
       mcpProjection: "native",
-      sandboxFileDiffs: true,
+      runtimeFileDiffFeed: true,
     },
     diagnostics: codexLaunchDiagnostics,
     turnDiagnostics: codexTurnDiagnostics,
@@ -392,6 +391,5 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
     authentication: hostAuthentication,
     sandboxProvider: ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({ scrubEnv }),
     sandboxPolicy: (request) => Effect.succeed(Tools.policyForProfile(request.policy)),
-    ...(options.fileHooks ? { fileHooks: options.fileHooks } : {}),
   });
 };

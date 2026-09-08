@@ -18,6 +18,12 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "suspicious": {
+        "noDuplicateTestHooks": "error",
+        "noExportsInTest": "error",
+        "noFocusedTests": "error",
+        "noSkippedTests": "error"
+      },
       "style": {
         "useFilenamingConvention": {
           "level": "error",

@@ -25,6 +25,7 @@ import type * as HttpClientResponse from "effect/unstable/http/HttpClientRespons
 import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
 import { type CreateIssueInput, defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
+import type { OpenedPullRequest, OpenPullRequestInput } from "../source-control";
 import {
   boardMissing,
   decodeProjectPriorities,
@@ -108,6 +109,11 @@ const IssueSchema = Schema.Struct({
 const CreatedIssueSchema = Schema.Struct({
   number: Schema.Finite,
   labels: Schema.Array(LabelName),
+});
+
+const CreatedPullSchema = Schema.Struct({
+  number: Schema.Finite,
+  html_url: Schema.String,
 });
 
 const PullSchema = Schema.Struct({
@@ -258,6 +264,8 @@ export const graphQlData = (
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
+const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
+const decodeCreatedPulls = Schema.decodeUnknownEffect(Schema.Array(CreatedPullSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
@@ -287,6 +295,9 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
 });
+
+const openedPull = (created: typeof CreatedPullSchema.Type) =>
+  ({ number: created.number, url: created.html_url }) satisfies OpenedPullRequest;
 
 export const parseIssues = Effect.fn("github.parseIssues")(function* (repo: GitHubRepoRef, json: unknown) {
   const issues = yield* Effect.mapError(decodeIssues(json), toUnavailable);
@@ -559,6 +570,43 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     );
   });
 
+  const recoverCreatedPull = Effect.fn("github.recoverCreatedPull")(function* (
+    repo: GitHubRepoRef,
+    input: OpenPullRequestInput,
+  ) {
+    const query = new URLSearchParams({
+      state: "open",
+      head: `${repo.owner}:${input.headBranch}`,
+      base: input.baseBranch,
+      per_page: "1",
+    });
+    const json = yield* fetchJson(repo, repoPath(repo, `/pulls?${query}`));
+    const [created] = yield* Effect.mapError(decodeCreatedPulls(json), toUnavailable);
+    if (!created) {
+      return yield* unavailable(
+        "GitHub accepted pull request creation but no matching pull request was found",
+      );
+    }
+    return openedPull(created);
+  });
+
+  const createPull = Effect.fn("github.createPull")(function* (
+    repo: GitHubRepoRef,
+    input: OpenPullRequestInput,
+  ) {
+    const acceptedBody = yield* sendAcceptedJsonOnce(repo, HttpClientRequest.post(repoPath(repo, "/pulls")), {
+      head: input.headBranch,
+      base: input.baseBranch,
+      title: input.title,
+      body: input.body,
+    });
+    if (Option.isNone(acceptedBody)) {
+      return yield* recoverCreatedPull(repo, input);
+    }
+    const created = yield* Effect.mapError(decodeCreatedPull(acceptedBody.value), toUnavailable);
+    return openedPull(created);
+  });
+
   // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
   const graphql = Effect.fn("github.graphql")(function* (
     repo: GitHubRepoRef,
@@ -705,6 +753,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         );
       }),
     createIssue,
+    createPull,
     addLabel,
     removeLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
       withTransientRetry(

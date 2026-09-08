@@ -975,6 +975,7 @@ class PostedComments extends Context.Service<PostedComments, Ref.Ref<ReadonlyArr
 const noopProvider: SourceControlProviderService = {
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
+  openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 };
 
 const noopProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
@@ -989,6 +990,7 @@ const recordingProvider: Layer.Layer<SourceControlProvider | PostedComments> = L
     (posted): SourceControlProviderService => ({
       observe: () => Effect.succeed(new Map()),
       comment: (_workspace, item, body) => Ref.update(posted, (xs) => [...xs, { item: item.id, body }]),
+      openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
     }),
   ),
 ).pipe(Layer.provideMerge(PostedComments.layer));
@@ -999,6 +1001,7 @@ const unavailableCommentProvider: SourceControlProviderService = {
     Effect.fail(
       new IssueTrackerError({ reason: "unavailable", message: "GitHub comment endpoint unavailable" }),
     ),
+  openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 };
 
 const unavailableCommentProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(

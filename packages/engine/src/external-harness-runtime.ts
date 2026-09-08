@@ -34,7 +34,6 @@ import {
   provideWorkspaceProjection,
   resolveAllSecrets,
   resolveHarnessCwd,
-  type SandboxHooks,
   type SandboxPolicy,
   type SandboxProvider,
   type Secrets,
@@ -42,10 +41,12 @@ import {
   withSandbox,
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
@@ -66,7 +67,8 @@ import {
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
 import { SessionStore } from "./session-store";
-import { boundedDiff, ignored } from "./tools/file-diff-feed";
+import { boundedDiff, ignored, tolerateFeedDeath, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { openWorktreeSandbox, resolveBaseSha } from "./tools/sandbox";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
 type AdapterOptions<Adapter extends AnyTextAdapter> = Adapter["~types"]["providerOptions"];
@@ -133,15 +135,11 @@ export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
    */
   readonly mcpProjection?: "workspace" | "native";
   /**
-   * Whether this descriptor's file activity comes from the Sandbox watcher rather
-   * than its own native events. A transport fact, deliberately not read off the
-   * capability profile: the profile describes delivery quality for a client, and
-   * letting a more honest label switch the watcher off is the wrong coupling.
-   *
-   * The watcher is also the only thing that dispatches `fileHooks`, so a descriptor
-   * that accepts hooks must set this or they are accepted and never called.
+   * Whether the runtime supplies this descriptor's File-diff feed from the checkout.
+   * A transport fact, never read off the capability profile: a more honest profile
+   * label must not switch the feed off.
    */
-  readonly sandboxFileDiffs?: boolean;
+  readonly runtimeFileDiffFeed?: boolean;
   readonly messages?: (
     request: ExternalHarnessResolvedRequest,
   ) => ReadonlyArray<ModelMessage | AdapterMessage<Adapter>>;
@@ -186,7 +184,6 @@ export interface ExternalHarnessRuntimeInputs {
   readonly authentication: (request: HarnessRequest) => ExternalInputEffect<ExternalHarnessAuthentication>;
   readonly sandboxProvider: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<SandboxProvider>;
   readonly sandboxPolicy?: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<SandboxPolicy>;
-  readonly fileHooks?: SandboxHooks;
 }
 
 const preparedWorkspace = { source: { type: "none" } } satisfies WorkspaceDefinition;
@@ -550,12 +547,6 @@ const normalizeFileEvent = (event: AgUiEvent, checkoutPath: string) => {
   return { ...normalized, value: { ...normalized.value, diff: boundedDiff(normalized.value.diff) } };
 };
 
-// `.tanstack-*` at the checkout root is TanStack's reserved scratch namespace — the
-// Workspace projection marker, the per-run output schema, and the projected skills
-// tree all land there, and none of them are the agent's work. Anchored to a single
-// root segment so it cannot also hide a nested file the agent did write.
-const reservedScratch = /^\.tanstack-[^/]*$/;
-
 const publicFileEvent = (event: AgUiEvent) => {
   // A native file event that could not carry the shared contract keeps its native
   // name through `normalizeFileEvent`. TanStack's payload makes `diff` optional, so
@@ -566,10 +557,6 @@ const publicFileEvent = (event: AgUiEvent) => {
   // A touched-but-unchanged file still reports a change; an empty diff would render
   // as an activity entry with nothing in it.
   if (event.value.diff === "") return false;
-  if (reservedScratch.test(event.value.path)) return false;
-  // The Sandbox watcher only skips `.git` and `node_modules`, and `defineSandbox`
-  // exposes no ignore list. Share the owned feed's segments so one list serves both
-  // ends of the same client contract.
   return !ignored(event.value.path);
 };
 
@@ -638,9 +625,62 @@ const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abortController: Abo
   },
 });
 
+// Not derived from the harness's own reported changes: Codex reports `file_change`
+// only for its `apply_patch` tool, so a shell-driven edit carries no such item.
+// Holding the terminal event on the drain means a stalled `git diff` would hold the
+// Run, so the drain gets its own bound.
+const feedDrainDeadline = "10 seconds";
+
+const checkoutFileDiffs = (
+  checkoutPath: string,
+  secretValues: ReadonlyArray<string>,
+  stop: Effect.Effect<void>,
+) =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const sandbox = yield* openWorktreeSandbox(checkoutPath);
+      const baseSha = yield* resolveBaseSha(sandbox);
+      return watchWorktreeDiffs(sandbox, baseSha, stop);
+    }),
+  ).pipe(
+    Stream.map((event) => scrubEvent(event, secretValues)),
+    Stream.interruptWhen(Effect.andThen(stop, Effect.sleep(feedDrainDeadline))),
+    tolerateFeedDeath("checkout file-diff feed stopped"),
+  );
+
+// A client stops reading at the terminal event, so the feed must drain first.
+// `RUN_ERROR` is not held: the stream fails right behind it.
+const mergeCheckoutFileDiffs = Effect.fn("ExternalHarnessRuntime.mergeCheckoutFileDiffs")(function* (
+  harnessEvents: Stream.Stream<AgUiEvent, HarnessError>,
+  checkoutPath: string,
+  secretValues: ReadonlyArray<string>,
+) {
+  const harnessDone = yield* Deferred.make<void>();
+  const withheldTerminal = yield* Ref.make<AgUiEvent | null>(null);
+  return Stream.merge(
+    harnessEvents.pipe(
+      Stream.filterEffect((event) =>
+        AgUiEvent.guards.RUN_FINISHED(event)
+          ? Effect.map(Ref.set(withheldTerminal, event), () => false)
+          : Effect.succeed(true),
+      ),
+      Stream.ensuring(Deferred.succeed(harnessDone, undefined)),
+    ),
+    checkoutFileDiffs(checkoutPath, secretValues, Deferred.await(harnessDone)),
+    { haltStrategy: "both" },
+  ).pipe(
+    Stream.concat(
+      Stream.unwrap(
+        Effect.map(Ref.get(withheldTerminal), (event) =>
+          event === null ? Stream.empty : Stream.make(event),
+        ),
+      ),
+    ),
+  );
+});
+
 const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
-  inputs: ExternalHarnessRuntimeInputs,
   request: ExternalHarnessResolvedRequest,
   provider: SandboxProvider,
   workspaceDefinition: WorkspaceDefinition,
@@ -650,15 +690,14 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   const model = descriptor.projectModel(request);
   const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
   const adapter = descriptor.makeAdapter({ model, authentication: nativeAuthentication, request });
-  const fileEvents = descriptor.transport.sandboxFileDiffs ? { diff: true } : false;
   const sandbox = defineSandbox({
     id: `cogwork-${descriptor.name}`,
     provider,
     workspace: defineWorkspace(workspaceDefinition),
     lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
     ...(policy ? { policy } : {}),
-    fileEvents,
-    ...(inputs.fileHooks ? { hooks: inputs.fileHooks } : {}),
+    // Kept off: turning it on retains one diff promise per filesystem event for the whole Run.
+    fileEvents: false,
   });
   const abortController = new AbortController();
   const middleware = [
@@ -697,13 +736,12 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
         resolveExternalLaunch(descriptor, inputs, request).pipe(
           Effect.flatMap(({ resolved, provider, workspaceDefinition, secretValues, policy }) =>
             Effect.try({
-              try: () =>
-                openChat(descriptor, inputs, resolved, provider, workspaceDefinition, policy, secretValues),
+              try: () => openChat(descriptor, resolved, provider, workspaceDefinition, policy, secretValues),
               catch: descriptor.diagnostics,
             }).pipe(
               Effect.mapError((error) => scrubHarnessError(error, secretValues)),
-              Effect.map((opened) =>
-                withUsage(
+              Effect.flatMap((opened) => {
+                const harnessEvents = withUsage(
                   resolved,
                   descriptor.estimateUsage ?? preserveUsage,
                   bridgeChat(
@@ -717,8 +755,11 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                     Stream.mapError((error) => scrubHarnessError(error, secretValues)),
                     Stream.ensuring(Effect.sync(() => opened.abortController.abort())),
                   ),
-                ),
-              ),
+                );
+                return descriptor.transport.runtimeFileDiffFeed
+                  ? mergeCheckoutFileDiffs(harnessEvents, resolved.checkout.path, secretValues)
+                  : Effect.succeed(harnessEvents);
+              }),
             ),
           ),
           Effect.withSpan("ExternalHarnessRuntime.run"),

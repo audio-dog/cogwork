@@ -608,27 +608,6 @@ describe("codexRunner", () => {
       ),
     );
 
-    it.effect("forwards common Sandbox hooks", () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const handle = yield* createSandbox();
-          const ready: Array<string> = [];
-          const harness = Harness.make([
-            runner({
-              fileHooks: {
-                onReady: (sandbox) => {
-                  ready.push(sandbox.id);
-                },
-              },
-            }),
-          ]);
-          yield* runInRepository(harness, handle);
-
-          assert.lengthOf(ready, 1);
-        }),
-      ),
-    );
-
     it.effect("classifies emitted Codex authentication errors after preserving the event", () =>
       Effect.scoped(
         Effect.gen(function* () {

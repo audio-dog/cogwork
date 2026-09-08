@@ -11,7 +11,6 @@ import {
 } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { withPersistence } from "@tanstack/ai-persistence";
-import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
@@ -35,6 +34,7 @@ import {
   openWorktreeSandbox,
   policyForProfile,
   resolveBaseSha,
+  tolerateFeedDeath,
   watchWorktreeDiffs,
 } from "./tools";
 
@@ -229,7 +229,10 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             providerMiddleware(name, persistence, instructions),
           );
 
-          const abortController = new AbortController();
+          const abortController = yield* Effect.acquireRelease(
+            Effect.sync(() => new AbortController()),
+            (controller) => Effect.sync(() => controller.abort()),
+          );
           const chatStream = runChat({
             adapter,
             messages,
@@ -247,18 +250,9 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           // inotify watches, and recursive watching cannot exclude subtrees.
           return Stream.merge(
             bridgeChat(chatStream),
-            watchWorktreeDiffs(sandbox, baseSha).pipe(
-              Stream.catchCause((cause) =>
-                // Interruption is the merge tearing the feed down, not a death.
-                Cause.hasInterruptsOnly(cause)
-                  ? Stream.empty
-                  : Stream.fromEffect(Effect.logWarning("worktree diff feed stopped", { cause })).pipe(
-                      Stream.drain,
-                    ),
-              ),
-            ),
+            watchWorktreeDiffs(sandbox, baseSha).pipe(tolerateFeedDeath("worktree diff feed stopped")),
             { haltStrategy: "left" },
-          ).pipe(Stream.ensuring(Effect.sync(() => abortController.abort())));
+          );
         }),
       ),
   };

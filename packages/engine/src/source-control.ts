@@ -3,12 +3,24 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type { ObservedPr } from "./follow-up";
-import type { IssueTrackerError } from "./issue-tracker";
+import { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 
 // Everything the provider can learn about a pull request by reading it. The follow-up marker is the
 // tracker's coordination state, not the PR's, so it is attached during composition rather than here.
 export type PrSignals = Omit<ObservedPr, "followUp">;
+
+export interface OpenPullRequestInput {
+  readonly headBranch: string;
+  readonly baseBranch: string;
+  readonly title: string;
+  readonly body: string;
+}
+
+export interface OpenedPullRequest {
+  readonly number: number;
+  readonly url: string;
+}
 
 export interface SourceControlProviderService {
   readonly observe: (
@@ -24,6 +36,11 @@ export interface SourceControlProviderService {
     item: WorkItem,
     body: string,
   ) => Effect.Effect<void, IssueTrackerError>;
+
+  readonly openPullRequest: (
+    workspace: RegisteredWorkspace,
+    input: OpenPullRequestInput,
+  ) => Effect.Effect<OpenedPullRequest, IssueTrackerError>;
 }
 
 export class SourceControlProvider extends Context.Service<
@@ -34,6 +51,10 @@ export class SourceControlProvider extends Context.Service<
 const noProvider: SourceControlProviderService = {
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
+  openPullRequest: () =>
+    Effect.fail(
+      new IssueTrackerError({ reason: "unavailable", message: "source control provider is not configured" }),
+    ),
 };
 
 // The binding for a workspace with no source control provider — a Linear tracker with no

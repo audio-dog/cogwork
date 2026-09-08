@@ -66,6 +66,7 @@ const tracker = (tracked: TrackerItem): IssueTrackerService => ({
 const provider = (signals: PrSignals): SourceControlProviderService => ({
   observe: () => Effect.succeed(new Map([[id("#7"), signals]])),
   comment: () => Effect.void,
+  openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 });
 
 const pr: PrSignals = {

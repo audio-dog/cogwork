@@ -11,6 +11,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as Argument from "effect/unstable/cli/Argument";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
@@ -25,9 +26,6 @@ const envFlag = Flag.string("env").pipe(
   Flag.withDescription("Environment variable containing the token"),
   Flag.optional,
 );
-const apiKeyFlag = Flag.boolean("api-key").pipe(
-  Flag.withDescription("Read an API key from stdin and store it"),
-);
 const storedFlag = Flag.boolean("stored").pipe(
   Flag.withDescription("Use an existing stored browser-login credential"),
 );
@@ -36,6 +34,20 @@ const accountArgument = Argument.string("account");
 const connectionIdArgument = Argument.string("connection-id");
 const decodeSystem = Schema.decodeUnknownEffect(ConnectionSystem);
 const decodeConnectionId = Schema.decodeUnknownEffect(ConnectionId);
+
+type ApiKeySource = Extract<ConnectionEstablishment["source"], { readonly _tag: "ApiKey" }>;
+type ConnectionSourceOptions = {
+  readonly env: Option.Option<string>;
+  readonly stored: boolean;
+};
+
+const apiKeyInputLimit = 64 * 1024;
+const apiKeyInputFailure = (message: string) =>
+  new ConnectionFailure({
+    operation: "read Connection API key",
+    connectionId: null,
+    message,
+  });
 
 export const formatConnectionMutation = (
   verb: "Established" | "Re-connected" | "Removed",
@@ -48,57 +60,64 @@ export const formatConnectionMutation = (
   return [`${verb} Connection.`, ...warning].join("\n");
 };
 
-const sourceOf = Effect.fn("connection.source")(function* (
-  options: {
-    readonly env: Option.Option<string>;
-    readonly apiKey: boolean;
-    readonly stored: boolean;
-  },
+export const resolveConnectionSource = Effect.fn("connection.source")(function* (
+  options: ConnectionSourceOptions,
   system: ConnectionSystemType,
+  readApiKey: Effect.Effect<ApiKeySource, ConnectionFailure>,
 ) {
-  const selected = Number(Option.isSome(options.env)) + Number(options.apiKey) + Number(options.stored);
-  if (selected !== 1) {
+  if (Option.isSome(options.env) && options.stored) {
     return yield* new ConnectionFailure({
       operation: "parse Connection source",
       connectionId: null,
-      message: "choose exactly one of --env, --api-key, or --stored",
+      message: "--env and --stored cannot be used together; omit both to read an API key from stdin",
     });
   }
-  const environment = Option.getOrUndefined(options.env);
-  if (environment) return { _tag: "Env", name: environment } satisfies ConnectionEstablishment["source"];
-  if (options.stored && system === "linear")
-    return { _tag: "Stored" } satisfies ConnectionEstablishment["source"];
-  if (options.stored) {
+  if (Option.isSome(options.env))
+    return { _tag: "Env", name: options.env.value } satisfies ConnectionEstablishment["source"];
+  if (!options.stored) return yield* readApiKey;
+  if (system !== "linear") {
     return yield* new ConnectionFailure({
       operation: "parse Connection source",
       connectionId: null,
       message: "--stored is available only for Linear browser login",
     });
   }
-  yield* Console.error("Paste the API key, then press Enter and Ctrl-D:");
-  const key = yield* Effect.tryPromise({
-    try: () => Array.fromAsync(process.stdin).then((chunks) => Buffer.concat(chunks).toString("utf8").trim()),
-    catch: (error) =>
-      new ConnectionFailure({
-        operation: "read Connection API key",
-        connectionId: null,
-        message: error instanceof Error ? error.message : String(error),
-      }),
-  });
-  if (key) return { _tag: "ApiKey", key: Redacted.make(key) } satisfies ConnectionEstablishment["source"];
-  return yield* new ConnectionFailure({
-    operation: "read Connection API key",
-    connectionId: null,
-    message: "API key is empty",
-  });
+  return { _tag: "Stored" } satisfies ConnectionEstablishment["source"];
 });
+
+export const readApiKeyFrom = Effect.fn("connection.readApiKeyFrom")(function* (
+  input: AsyncIterable<Uint8Array>,
+) {
+  const bytes = yield* Stream.fromAsyncIterable(input, (error) =>
+    apiKeyInputFailure(error instanceof Error ? error.message : String(error)),
+  ).pipe(
+    Stream.runFoldEffect(
+      () => Buffer.alloc(0),
+      (buffer, chunk) => {
+        const combined = Buffer.concat([buffer, chunk]);
+        if (combined.length <= apiKeyInputLimit) return Effect.succeed(combined);
+        return Effect.fail(apiKeyInputFailure("API key input exceeds 64 KiB"));
+      },
+    ),
+  );
+  const key = bytes.toString("utf8").trim();
+  if (key) return { _tag: "ApiKey", key: Redacted.make(key) } satisfies ConnectionEstablishment["source"];
+  return yield* apiKeyInputFailure("API key is empty");
+});
+
+const readApiKey = Effect.fn("connection.readApiKey")(function* () {
+  yield* Console.error("Paste the API key, then press Enter and Ctrl-D:");
+  return yield* readApiKeyFrom(process.stdin);
+});
+
+const sourceOf = (options: ConnectionSourceOptions, system: ConnectionSystemType) =>
+  resolveConnectionSource(options, system, readApiKey());
 
 const mutate = Effect.fn("connection.mutate")(function* (options: {
   readonly socket: string;
   readonly system: string;
   readonly account: string;
   readonly env: Option.Option<string>;
-  readonly apiKey: boolean;
   readonly stored: boolean;
   readonly operation: "establish" | "re-connect";
 }) {
@@ -138,7 +157,6 @@ export const connectionCommand = Command.make("connection").pipe(
       system: systemArgument,
       account: accountArgument,
       env: envFlag,
-      apiKey: apiKeyFlag,
       stored: storedFlag,
     }).pipe(Command.withHandler((options) => runMutation({ ...options, operation: "establish" }))),
     Command.make("re-connect", {
@@ -146,7 +164,6 @@ export const connectionCommand = Command.make("connection").pipe(
       system: systemArgument,
       account: accountArgument,
       env: envFlag,
-      apiKey: apiKeyFlag,
       stored: storedFlag,
     }).pipe(Command.withHandler((options) => runMutation({ ...options, operation: "re-connect" }))),
     Command.make("remove", {
