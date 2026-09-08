@@ -230,6 +230,17 @@ const noBotWorkspace: RegisteredWorkspace = {
   }),
 };
 
+const missingTargetWorkspace: RegisteredWorkspace = {
+  source: "linear.workspace.ts",
+  contributions: [],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "missing-target",
+    checkoutPath: "/repos/missing-target",
+    issueTracker: { type: "linear" },
+    sourceControl: { type: "github" },
+  }),
+};
+
 const trustsCursorBot: RegisteredWorkspace = {
   source: "gh.workspace.ts",
   contributions: [],
@@ -415,6 +426,23 @@ describe("GitHub adapters", () => {
         number: 480,
         url: "https://github.com/owner/repo/pull/480",
       });
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("refuses pull request creation permanently without a GitHub target", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const error = yield* Effect.flip(
+        provider.openPullRequest(missingTargetWorkspace, {
+          headBranch: "474-ready",
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #474",
+        }),
+      );
+
+      assert.strictEqual(error.reason, "unavailable");
+      assert.isFalse(error.retryable);
     }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 

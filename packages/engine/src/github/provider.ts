@@ -57,6 +57,7 @@ export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTa
 const missingSourceControlTarget = () =>
   new IssueTrackerError({
     reason: "unavailable",
+    retryable: false,
     message: "GitHub source control target is not configured",
   });
 

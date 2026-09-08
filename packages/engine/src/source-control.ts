@@ -59,7 +59,11 @@ const noProvider: SourceControlProviderService = {
   findOpenPullRequest: () => Effect.succeed(null),
   openPullRequest: () =>
     Effect.fail(
-      new IssueTrackerError({ reason: "unavailable", message: "source control provider is not configured" }),
+      new IssueTrackerError({
+        reason: "unavailable",
+        retryable: false,
+        message: "source control provider is not configured",
+      }),
     ),
 };
 
