@@ -1,0 +1,33 @@
+apps/cli/src/process-profile-ipc.ts
+  s_da1185e89617fb::t_aac0f689ee5c7e 126-136
+  s_da1185e89617fb::t_357af4472b61f8 177-181
+  s_da1185e89617fb::t_a76d313a7c74d3 11,143,146-150,156,170
+  s_da1185e89617fb::t_304602fcf716a5 25-32
+  s_da1185e89617fb::t_9a4dbf4df93da9 125,137-139,141,144,175,182-191,205-211
+  s_da1185e89617fb::t_b2d9305aa33d3a 8,17,64,100,196
+  s_da1185e89617fb::t_cf2eacfaad23a0 22,33-63,176
+  s_da1185e89617fb::t_32c623e7b35571 10,18
+  s_da1185e89617fb::t_eb13ad88cca6de 9
+  s_da1185e89617fb::t_2be418ce35aaa3 15,140,142,145,151-154,157-169,171-174
+  s_da1185e89617fb::t_538f66fa68e5e1 155
+apps/cli/src/profile-fd-streams.ts
+  s_da1185e89617fb::t_2be418ce35aaa3 5-6
+  s_da1185e89617fb::t_32c623e7b35571 2-4,7
+  s_da1185e89617fb::t_ef3c1e8938a7f3 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "d76b5a40ac3f93f0bdc14c3818b16eac48f76483",
+  "prompts": {},
+  "sessions": {
+    "s_da1185e89617fb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0825f-6b08-7792-82b5-a0dcb4c0ba67",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
