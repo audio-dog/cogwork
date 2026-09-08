@@ -1,4 +1,5 @@
 import * as Cause from "effect/Cause";
+import * as Data from "effect/Data";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -13,9 +14,11 @@ import { SocketCloseError, SocketOpenError } from "effect/unstable/socket/Socket
 import type { DaemonRpcBridge } from "../../../shared/ipc";
 import { recordProtocolInboxChange, resetProtocolInboxDepth } from "./process-health";
 
-type Incoming =
-  | { readonly _tag: "data"; readonly frame: Uint8Array }
-  | { readonly _tag: "closed"; readonly reason: string | null };
+type Incoming = Data.TaggedEnum<{
+  data: { readonly frame: Uint8Array };
+  closed: { readonly reason: string | null };
+}>;
+const Incoming = Data.taggedEnum<Incoming>();
 
 const defectError = (message: string, cause: unknown): RpcClientError =>
   new RpcClientError({ reason: new RpcClientDefect({ message, cause }) });
@@ -70,11 +73,11 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
       };
       const offData = bridge.onData((message) => {
         if (message.sessionId !== conn.sessionId) return;
-        offerIncoming({ _tag: "data", frame: message.frame });
+        offerIncoming(Incoming.data({ frame: message.frame }));
       });
       const offClosed = bridge.onClosed((message) => {
         if (message.sessionId !== conn.sessionId) return;
-        offerIncoming({ _tag: "closed", reason: message.reason });
+        offerIncoming(Incoming.closed({ reason: message.reason }));
       });
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
@@ -89,14 +92,11 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
 
       const routeResponse = (response: FromServerEncoded) => {
         if (response._tag === "Pong") return Effect.void;
-        if ("requestId" in response) {
-          const clientId = requestClientMap.get(response.requestId);
-          if (clientId !== undefined) {
-            if (response._tag === "Exit") requestClientMap.delete(response.requestId);
-            return writeResponse(clientId, response);
-          }
-        }
-        return broadcast(response);
+        if (!("requestId" in response)) return broadcast(response);
+        const clientId = requestClientMap.get(response.requestId);
+        if (clientId === undefined) return broadcast(response);
+        if (response._tag === "Exit") requestClientMap.delete(response.requestId);
+        return writeResponse(clientId, response);
       };
 
       const processFrame = (frame: Uint8Array) =>
@@ -108,12 +108,15 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
           Effect.catchTag("RpcClientError", (error) => broadcast({ _tag: "ClientProtocolError", error })),
         );
 
+      const processIncoming = Incoming.$match({
+        data: ({ frame }) => processFrame(frame),
+        closed: ({ reason }) => Effect.fail(closeError(reason)),
+      });
+
       const consume = (inbox: Queue.Queue<Incoming>) =>
         Queue.take(inbox).pipe(
           Effect.tap(() => Effect.sync(() => recordProtocolInboxChange(-1))),
-          Effect.flatMap((message) =>
-            message._tag === "closed" ? Effect.fail(closeError(message.reason)) : processFrame(message.frame),
-          ),
+          Effect.flatMap(processIncoming),
           Effect.forever,
         );
 
