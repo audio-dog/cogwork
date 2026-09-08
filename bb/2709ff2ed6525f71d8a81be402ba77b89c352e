@@ -1,0 +1,24 @@
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  s_e6eab6b4a8c15b::t_1ebc35adc8e7ea 1-103
+docs/spec/performance-observability.md
+  s_e6eab6b4a8c15b::t_d4f614a1eb0cc3 5,112,121-147,150
+  s_e6eab6b4a8c15b::t_cd91b3c2b60816 151
+packages/engine/CONTEXT.md
+  s_e6eab6b4a8c15b::t_9a35d467285b27 238,240-248,254-256,259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "bb2709ff2ed6525f71d8a81be402ba77b89c352e",
+  "prompts": {},
+  "sessions": {
+    "s_e6eab6b4a8c15b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a98c3798-6f8c-48fd-a9bd-7efe794e76cb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
