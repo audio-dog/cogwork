@@ -1,0 +1,22 @@
+packages/engine/src/github/client.test.ts
+  s_b0245c7559a829::t_d61d6284ce37fc 458-463,465-486
+  s_b0245c7559a829::t_feac7449ba624f 464
+packages/engine/src/github/client.ts
+  s_b0245c7559a829::t_5b734e0cf4f129 325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "0bab116f502bf7f687926f1dc6ba545377b0b956",
+  "prompts": {},
+  "sessions": {
+    "s_b0245c7559a829": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08239-c01b-7410-853e-46016e7a6f7a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
