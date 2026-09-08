@@ -290,7 +290,7 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("mints identities, keeps clone hints non-identifying, and reloads from the Control store", () =>
+  it.effect("mints distinct identities for duplicate display names and reloads from the Control store", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -307,7 +307,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "first clone",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           sourceControl: { type: "github", repo: "acme/repo" },
           linearHistory: false,
@@ -325,7 +324,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "first clone",
           checkoutPath: secondCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           linearHistory: false,
         }),
@@ -428,7 +426,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "moving workspace",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           sourceControl: { type: "github", repo: "acme/repo" },
           linearHistory: true,
@@ -462,7 +459,6 @@ layer(NodeServices.layer)((it) => {
 
       const renamedUpdate = workspaceUpdate({
         name: "renamed workspace",
-        gitRemote: "git@github.com:acme/renamed.git",
         issueTracker: { type: "linear", teams: ["ENG"] },
         sourceControl: { type: "github", repo: "acme/renamed" },
         mcpSkills: [],
@@ -482,7 +478,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "renamed workspace",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/renamed.git",
           issueTracker: { type: "linear", connectionId: "unbound", teams: ["ENG"] },
           sourceControl: {
             type: "github",

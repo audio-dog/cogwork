@@ -89,7 +89,6 @@ export type WorkspaceBindingWorktreeConfig = typeof WorkspaceBindingWorktreeConf
 
 const workspaceUpdateFields = {
   name: TrimmedNonEmptyString,
-  gitRemote: Schema.optional(TrimmedNonEmptyString),
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),

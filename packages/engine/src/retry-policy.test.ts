@@ -1,4 +1,4 @@
-import { ControlStoreFailure } from "@cogwork/contracts";
+import { ControlStoreFailure, IssueTrackerError } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { ContextAssemblerError } from "./context-assembler";
 import { ContextFsError } from "./context-fs";
@@ -118,6 +118,18 @@ describe("decideRetry", () => {
 
   it("hands off after a non-retryable Run ledger failure", () => {
     assert.deepStrictEqual(decide(ledgerFailure(false)), nonRetryableDecision);
+  });
+
+  it("keeps a temporary issue tracker refusal retryable", () => {
+    const failure = new IssueTrackerError({ reason: "auth", retryable: false, message: "unauthorized" });
+
+    assert.deepStrictEqual(decide(failure), maxAttemptsDecision);
+  });
+
+  it("hands off after a permanent issue tracker refusal", () => {
+    const failure = new IssueTrackerError({ reason: "unavailable", retryable: false, message: "denied" });
+
+    assert.deepStrictEqual(decide(failure), nonRetryableDecision);
   });
 
   it("carries the attempt count into a retryable failure's hand-off cause", () => {

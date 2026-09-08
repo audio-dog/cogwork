@@ -36,11 +36,11 @@ export class TriageStageResult extends Schema.TaggedClass<TriageStageResult>()("
   }
 }
 
-export const ImplementResultOutcome = Schema.Literals(["opened-pr", "stuck"]);
+export const ImplementResultOutcome = Schema.Literals(["opened-pr", "ready-for-pr", "stuck"]);
 export type ImplementResultOutcome = typeof ImplementResultOutcome.Type;
 
-export class ImplementStageResult extends Schema.TaggedClass<ImplementStageResult>()("implement", {
-  outcome: ImplementResultOutcome,
+class OpenedPrImplementResult extends Schema.TaggedClass<OpenedPrImplementResult>()("implement", {
+  outcome: Schema.Literal("opened-pr"),
   summary: TrimmedNonEmptyString,
 }) {
   get resultKey() {
@@ -51,6 +51,41 @@ export class ImplementStageResult extends Schema.TaggedClass<ImplementStageResul
     return this.summary;
   }
 }
+
+class ReadyForPrImplementResult extends Schema.TaggedClass<ReadyForPrImplementResult>()("implement", {
+  outcome: Schema.Literal("ready-for-pr"),
+  summary: TrimmedNonEmptyString,
+  title: TrimmedNonEmptyString,
+  body: TrimmedNonEmptyString,
+}) {
+  get resultKey() {
+    return this.outcome;
+  }
+
+  get detail() {
+    return this.summary;
+  }
+}
+
+class StuckImplementResult extends Schema.TaggedClass<StuckImplementResult>()("implement", {
+  outcome: Schema.Literal("stuck"),
+  summary: TrimmedNonEmptyString,
+}) {
+  get resultKey() {
+    return this.outcome;
+  }
+
+  get detail() {
+    return this.summary;
+  }
+}
+
+export const ImplementStageResult = Schema.Union([
+  OpenedPrImplementResult,
+  ReadyForPrImplementResult,
+  StuckImplementResult,
+]).pipe(Schema.toTaggedUnion("outcome"));
+export type ImplementStageResult = typeof ImplementStageResult.Type;
 
 export const FollowUpResultOutcome = Schema.Literals(["pushed", "noop", "stuck"]);
 export type FollowUpResultOutcome = typeof FollowUpResultOutcome.Type;
@@ -68,9 +103,7 @@ export class FollowUpStageResult extends Schema.TaggedClass<FollowUpStageResult>
   }
 }
 
-export const StageResult = Schema.Union([TriageStageResult, ImplementStageResult, FollowUpStageResult]).pipe(
-  Schema.toTaggedUnion("_tag"),
-);
+export const StageResult = Schema.Union([TriageStageResult, ImplementStageResult, FollowUpStageResult]);
 export type StageResult = typeof StageResult.Type;
 
 export const TriageStageResultCompletion = Schema.Struct({
@@ -92,7 +125,21 @@ const standardSchema = <S extends Schema.Codec<unknown, unknown, never, never>>(
   Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(schema));
 
 const triageStageResultSchema = standardSchema(Schema.Struct(TriageStageResult.fields));
-const implementStageResultSchema = standardSchema(Schema.Struct(ImplementStageResult.fields));
+const implementStageResultInput = Schema.TaggedStruct("implement", {
+  outcome: ImplementResultOutcome,
+  summary: TrimmedNonEmptyString,
+  title: Schema.NullOr(TrimmedNonEmptyString),
+  body: Schema.NullOr(TrimmedNonEmptyString),
+});
+const hasRequiredPullRequestContent = (result: typeof implementStageResultInput.Type) =>
+  result.outcome !== "ready-for-pr" || (result.title !== null && result.body !== null);
+const implementStageResultSchema = standardSchema(
+  implementStageResultInput.check(
+    Schema.makeFilter(hasRequiredPullRequestContent, {
+      message: "ready-for-pr requires title and body",
+    }),
+  ),
+);
 const followUpStageResultSchema = standardSchema(Schema.Struct(FollowUpStageResult.fields));
 
 export type StageResultJsonSchema =

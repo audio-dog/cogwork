@@ -14,6 +14,7 @@ import { day } from "./time";
 export type OperationOutcome = Data.TaggedEnum<{
   Triaged: { readonly result: TriageResultRole };
   Implemented: { readonly result: "opened-pr" };
+  PullRequestReady: { readonly result: "ready-for-pr" };
   FollowedUp: { readonly result: Exclude<FollowUpResultOutcome, "stuck"> };
   Failed: { readonly result: "stuck"; readonly retryable: boolean };
 }>;
@@ -31,7 +32,7 @@ type StageOutcomeTable<Outcome extends string, SuccessTag extends SuccessfulOper
 
 export interface OperationOutcomeTables {
   readonly triage: StageOutcomeTable<TriageResultRole, "Triaged">;
-  readonly implement: StageOutcomeTable<ImplementResultOutcome, "Implemented">;
+  readonly implement: StageOutcomeTable<ImplementResultOutcome, "Implemented" | "PullRequestReady">;
   readonly "follow-up": StageOutcomeTable<FollowUpResultOutcome, "FollowedUp">;
 }
 
@@ -58,7 +59,7 @@ const defaultImplementPrompt = [
   'You are running the implement playbook for work item {id} ("{title}") in this repository checkout.',
   "You are on a fresh branch dedicated to {id}, with no human in the session.",
   "Follow the `{skill}` skill to implement {id}: read the issue and its comments as the brief, make the change,",
-  "pass the local gate, commit, and open a pull request that references {id}.",
+  "pass the local gate, commit, and prepare the pull request title and body for the engine.",
 ].join("\n");
 
 const defaultFollowUpPrompt = [
@@ -93,6 +94,7 @@ const triageOutcomes = [
 
 const implementOutcomes = [
   OperationOutcome.Implemented({ result: "opened-pr" }),
+  OperationOutcome.PullRequestReady({ result: "ready-for-pr" }),
   nonRetryableFailure,
 ] satisfies OperationOutcomeTables["implement"]["outcomes"];
 
@@ -198,8 +200,8 @@ export const buildTriagePrompt = (resolved: OperationDefinition, item: PromptIte
 
 const implementFooter = [
   "",
-  "Only one pull request should ever exist for this branch. Before opening one, check whether a pull request",
-  "for this branch is already open; if it is, push your work to that one instead of opening another.",
+  "Push the prepared branch. The engine opens the pull request after it verifies that branch. Do not open one yourself.",
+  "Return a ready-for-pr result with the title and body the engine should use.",
 ].join("\n");
 
 export const buildImplementPrompt = (resolved: OperationDefinition, item: PromptItem) =>
@@ -211,9 +213,8 @@ export const buildContinuationNudge = (worktreePath: string) =>
     `Nothing has changed except that time passed. Inspect ${worktreePath} to see how far you got, then`,
     "treat the prepared Worktree as ground truth, including files already written. Do not trust the ragged tail",
     "of the interrupted native transcript over that state. Then",
-    "continue from exactly where you stopped. Do not start over and do not redo completed work. If a pull",
-    "request for this branch already exists, keep using it and never open a second one. If the task is",
-    "already complete, say COMPLETE and stop.",
+    "continue from exactly where you stopped. Do not start over and do not redo completed work. When the task",
+    "is complete, push the prepared branch and prepare the pull request title and body for the engine. Then say COMPLETE and stop.",
   ].join("\n");
 
 export const buildFollowUpPrompt = (

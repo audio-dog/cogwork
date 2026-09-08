@@ -61,16 +61,38 @@ describe("StageResult", () => {
 
   it.effect("decodes an implement result with a summary", () =>
     Effect.gen(function* () {
-      const result = yield* Schema.decodeEffect(StageResult)({
+      const encoded: unknown = {
         _tag: "implement",
         outcome: "opened-pr",
         summary: "Opened PR #110.",
-      });
+        title: null,
+        body: null,
+      };
+      const result = yield* Schema.decodeUnknownEffect(StageResult)(encoded);
 
-      assert.isTrue(Schema.is(ImplementStageResult)(result));
-      if (result._tag !== "implement") return assert.fail("expected an implement result");
-      assert.strictEqual(result.outcome, "opened-pr");
+      if (!ImplementStageResult.guards["opened-pr"](result)) {
+        return assert.fail("expected an opened-pr implement result");
+      }
       assert.strictEqual(result.summary, "Opened PR #110.");
+    }),
+  );
+
+  it.effect("decodes a ready-for-pr implement result with pull request content", () =>
+    Effect.gen(function* () {
+      const encoded: unknown = {
+        _tag: "implement",
+        outcome: "ready-for-pr",
+        summary: "Implementation complete.",
+        title: "Open pull requests from the engine",
+        body: "Closes #474",
+      };
+      const result = yield* Schema.decodeUnknownEffect(StageResult)(encoded);
+
+      if (!ImplementStageResult.guards["ready-for-pr"](result)) {
+        return assert.fail("expected a ready-for-pr implement result");
+      }
+      assert.strictEqual(result.title, "Open pull requests from the engine");
+      assert.strictEqual(result.body, "Closes #474");
     }),
   );
 
@@ -126,6 +148,40 @@ describe("StageResult", () => {
     }
     assert.strictEqual(stageResultCompletionSchema("follow-up"), FollowUpStageResultCompletion);
   });
+
+  it("projects implement results as a structured-output-compatible root object", () => {
+    const schema = stageResultJsonSchema("implement")["~standard"].jsonSchema.input({
+      target: "draft-2020-12",
+    });
+    assert.strictEqual(schema.type, "object");
+    assert.notProperty(schema, "anyOf");
+    assert.sameMembers(Array.isArray(schema.required) ? schema.required : [], [
+      "_tag",
+      "outcome",
+      "summary",
+      "title",
+      "body",
+    ]);
+  });
+
+  it.effect("rejects null pull request content through the structured-output schema", () =>
+    Effect.gen(function* () {
+      const schema = stageResultJsonSchema("implement");
+      const result = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "implement",
+            outcome: "ready-for-pr",
+            summary: "Implementation complete.",
+            title: null,
+            body: null,
+          }),
+        ),
+      );
+
+      assert.isDefined(result.issues);
+    }),
+  );
 });
 
 describe("resolvePriority", () => {
