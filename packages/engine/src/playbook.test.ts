@@ -8,7 +8,10 @@ import {
   TriageStageResult,
   WorkspaceConfig,
 } from "@cogwork/contracts";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import {
   buildContinuationNudge,
@@ -287,6 +290,30 @@ describe("buildImplementPrompt", () => {
     assert.include(prompt, "Return a ready-for-pr result");
     assert.notInclude(prompt, "open a pull request that references");
   });
+});
+
+describe("implement Operating Instructions", () => {
+  it.effect("keeps pull-request opening engine-owned", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const instructions = yield* fs.readFileString(
+        decodeURIComponent(
+          new URL("../operating-instructions/implement-agent/INSTRUCTIONS.md", import.meta.url).pathname,
+        ),
+      );
+      const pullRequestOpeningLines = instructions
+        .split("\n")
+        .filter(
+          (line) =>
+            /\b(?:open(?:s|ing)?|creat(?:e|es|ing))\b/i.test(line) && /\b(?:PR|pull request)\b/i.test(line),
+        );
+
+      assert.lengthOf(pullRequestOpeningLines, 4);
+      assert.include(instructions, "Never open or merge a pull request");
+      assert.include(instructions, "Commit and push the engine-owned branch");
+      assert.include(instructions, "Return `ready-for-pr` with that title and body");
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
 });
 
 describe("buildContinuationNudge", () => {
