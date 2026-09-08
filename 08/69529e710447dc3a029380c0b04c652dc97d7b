@@ -1,0 +1,23 @@
+scripts/test-compare.mjs
+  s_66a0e441ad731e::t_7482e47a268677 217
+scripts/test-compare.test.mjs
+  s_66a0e441ad731e::t_10f91e888f3511 34-35,41-46,49-51,53-54
+  s_66a0e441ad731e::t_7482e47a268677 36-40,52
+  s_66a0e441ad731e::t_e167b0c699f073 47-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "0869529e710447dc3a029380c0b04c652dc97d7b",
+  "prompts": {},
+  "sessions": {
+    "s_66a0e441ad731e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebc-6bc4-7961-840d-44c04273a080",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
