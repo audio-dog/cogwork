@@ -1,0 +1,32 @@
+packages/engine/src/credential-store.ts
+  s_51ee95bf8bd751::t_2cc96419a0a8e1 209-211,213,452-453,465-466
+  s_c70eafe42d8db6::t_80595d42bc77d6 212
+packages/engine/src/credential-store.test.ts
+  s_51ee95bf8bd751::t_5dd56f2a09b251 299-308,310-326,328-337
+  s_51ee95bf8bd751::t_6f1bddf9caaa9a 309
+  s_51ee95bf8bd751::t_2ccdc5810a05ea 327
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "cc20fff9ef1942648cf0b985bdbc15fd8138d4c1",
+  "prompts": {},
+  "sessions": {
+    "s_51ee95bf8bd751": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08285-ded3-7c81-a6c7-1e5ccdd1b5a0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    },
+    "s_c70eafe42d8db6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082b2-380a-7c22-b882-ef7b5d0459be",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
