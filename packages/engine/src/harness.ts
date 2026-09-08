@@ -14,6 +14,7 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import type * as Path from "effect/Path";
 import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -170,6 +171,7 @@ export type HarnessRunnerEnv =
   | ContextAssembler
   | CredentialStore
   | FileSystem.FileSystem
+  | Path.Path
   | HttpClient.HttpClient;
 
 export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessError", {
@@ -262,7 +264,7 @@ export interface HarnessService {
   readonly planMiddleware: (harness: HarnessName) => ReadonlyArray<RunPlanMiddlewareName>;
 }
 
-/** @effect-expect-leaking ContextAssembler | CredentialStore | FileSystem | HttpClient | SessionStore */
+/** @effect-expect-leaking ContextAssembler | CredentialStore | FileSystem | HttpClient | Path | SessionStore */
 export class Harness extends Context.Service<Harness, HarnessService>()("@cogwork/engine/harness") {}
 
 const unknownHarness = (harness: HarnessName) =>

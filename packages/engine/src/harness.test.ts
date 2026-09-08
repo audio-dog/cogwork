@@ -4,6 +4,7 @@ import { memoryPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -51,6 +52,7 @@ const harnessRunnerLayer = Layer.mergeAll(
   Layer.succeed(ContextAssembler, harnessServices.contextAssembler),
   Layer.succeed(CredentialStore, harnessServices.credentialStore),
   Layer.succeed(FileSystem.FileSystem, harnessServices.fileSystem),
+  Path.layer,
   FetchHttpClient.layer,
 );
 

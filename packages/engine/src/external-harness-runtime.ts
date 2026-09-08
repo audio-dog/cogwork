@@ -457,7 +457,7 @@ const resolveSharedGitDirectory = Effect.fn("ExternalHarnessRuntime.resolveShare
         .readFileString(commonDirectoryPath)
         .pipe(Effect.orElseSucceed(() => "."));
       return yield* fs.realPath(path.resolve(gitDirectory, commonDirectory.trim()));
-    }).pipe(Effect.provide(Path.layer)),
+    }),
 );
 
 const sharedGitDirectory = (
