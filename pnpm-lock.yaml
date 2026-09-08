@@ -84,15 +84,27 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.11
         version: 2.5.11
+      '@cogwork/contracts':
+        specifier: workspace:*
+        version: link:packages/contracts
+      '@effect/platform-node':
+        specifier: catalog:effect
+        version: 4.0.0-rc.112(effect@4.0.0-rc.112)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/tsgo':
         specifier: 'catalog:'
         version: 0.38.0
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      effect:
+        specifier: catalog:effect
+        version: 4.0.0-rc.112
       node:
         specifier: runtime:^24.20.0
         version: runtime:24.20.0
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
       turbo:
         specifier: ^2.10.12
         version: 2.10.12
