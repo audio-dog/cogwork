@@ -1,0 +1,21 @@
+packages/engine/src/workspace-registry.test.ts
+  s_343dd710cf5e3c::t_c4fd669e39be1a 296-324
+packages/engine/src/registry.ts
+  s_343dd710cf5e3c::t_15a169e2990ee5 184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "f72a2d10c69c87cbde55e871d3fb837b10b06246",
+  "prompts": {},
+  "sessions": {
+    "s_343dd710cf5e3c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08277-030f-7d41-bbb3-6c128efc79fd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
