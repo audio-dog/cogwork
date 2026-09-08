@@ -150,6 +150,10 @@ interface WorkspaceIdentityRow {
 
 const McpSkills = Schema.Array(McpSkill);
 const WorktreeValues = Schema.Array(TrimmedNonEmptyString);
+const LegacyGitHubRepository = Schema.Struct({
+  type: Schema.Literal("github"),
+  repo: TrimmedNonEmptyString,
+});
 const WorkspaceBindingColumns = Schema.Struct({
   mcpSkills: Schema.NullOr(Schema.fromJsonString(McpSkills)),
   worktreeLinkPaths: Schema.NullOr(Schema.fromJsonString(WorktreeValues)),
@@ -161,6 +165,9 @@ const decodeIssueTracker = Schema.decodeUnknownEffect(Schema.fromJsonString(Issu
 const decodeIssueTrackerOption = Schema.decodeUnknownOption(Schema.fromJsonString(IssueTrackerConfig));
 const decodeSourceControl = Schema.decodeUnknownEffect(Schema.fromJsonString(SourceControlConfig));
 const decodeSourceControlOption = Schema.decodeUnknownOption(Schema.fromJsonString(SourceControlConfig));
+const decodeLegacyGitHubRepositoryOption = Schema.decodeUnknownOption(
+  Schema.fromJsonString(LegacyGitHubRepository),
+);
 const decodeWorkspaceBindingColumns = Schema.decodeUnknownEffect(WorkspaceBindingColumns);
 const decodeWorkspaceConfig = Schema.decodeUnknownEffect(WorkspaceConfig);
 const decodeWorkspaceRegistration = Schema.decodeUnknownEffect(WorkspaceRegistration);
@@ -179,6 +186,10 @@ const managementError = (operation: string) => (error: unknown) =>
   isWorkspaceNotFound(error) ? error : new WorkspaceManagementError({ operation, message: messageOf(error) });
 
 const present = <A>(value: A | null) => (value === null ? undefined : value);
+
+const legacyRepository = (row: WorkspaceRow) =>
+  Option.getOrUndefined(decodeLegacyGitHubRepositoryOption(row.issueTracker))?.repo ??
+  Option.getOrUndefined(decodeLegacyGitHubRepositoryOption(row.sourceControl))?.repo;
 
 const repositoryFromRemoteUrl = (remoteUrl: string) => {
   const match =
@@ -490,7 +501,7 @@ const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChan
     Effect.catchTag("WorkspaceRegistrationError", (error) =>
       Effect.succeed({
         _tag: "Failed" as const,
-        failure: workspaceFailure(row, error.message, present(row.lastRepository)),
+        failure: workspaceFailure(row, error.message, present(row.lastRepository) ?? legacyRepository(row)),
       }),
     ),
   );
@@ -557,14 +568,23 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
   return row;
 });
 
-const persistWorkspaceRepository = Effect.fn("WorkspaceRegistry.persistWorkspaceRepository")(function* (
+const persistRepository = Effect.fn("WorkspaceRegistry.persistRepository")(function* (
   sql: SqlClient.SqlClient,
-  workspace: RegisteredWorkspace,
+  workspaceId: WorkspaceId,
+  repository: string | undefined,
 ) {
   yield* sql`UPDATE workspaces
-    SET last_repository = ${workspace.repository ?? null}
-    WHERE id = ${workspace.config.name}`;
+    SET last_repository = ${repository ?? null}
+    WHERE id = ${workspaceId}`;
 });
+
+const persistWorkspaceRepository = (sql: SqlClient.SqlClient, workspace: RegisteredWorkspace) =>
+  persistRepository(sql, workspace.config.name, workspace.repository);
+
+const persistFailureRepository = (sql: SqlClient.SqlClient, failure: RegisteredWorkspaceFailure) => {
+  if (!failure.name || !failure.repository) return Effect.void;
+  return persistRepository(sql, failure.name, failure.repository);
+};
 
 const persistRegistrationRepository = Effect.fn("WorkspaceRegistry.persistRegistrationRepository")(function* (
   sql: SqlClient.SqlClient,
@@ -580,6 +600,9 @@ const persistStateRepositories = Effect.fn("WorkspaceRegistry.persistStateReposi
   state: RegistryState,
 ) {
   yield* Effect.forEach(state.workspaces, (workspace) => persistWorkspaceRepository(sql, workspace), {
+    discard: true,
+  });
+  yield* Effect.forEach(state.failures, (failure) => persistFailureRepository(sql, failure), {
     discard: true,
   });
 });

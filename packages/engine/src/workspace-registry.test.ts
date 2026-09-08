@@ -390,6 +390,58 @@ layer(NodeServices.layer)((it) => {
     }).pipe(Effect.provide(RemoteUrls.layer)),
   );
 
+  it.effect("seeds the repository fallback from a legacy workspace row", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-upgrade-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "upgrade");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@github.com:acme/current.git"]]));
+      const initialContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const management = Context.get(initialContext, Registry.WorkspaceManagement);
+      const change = yield* management.register(githubRegistration("upgrade", checkoutPath));
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces
+          SET last_repository = NULL,
+              issue_tracker = ${JSON.stringify({ type: "github", connectionId: "unbound", repo: "acme/legacy" })}
+          WHERE id = ${change.workspace.config.name}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/current.git"]]));
+      const upgradedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const upgradedState = yield* Context.get(upgradedContext, Registry.WorkspaceRegistry).state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(upgradedState, change.workspace.config.name)?.repository,
+        "acme/legacy",
+      );
+
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces
+          SET issue_tracker = ${JSON.stringify({ type: "github", connectionId: "unbound" })}
+          WHERE id = ${change.workspace.config.name}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      const reloadedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const reloadedState = yield* Context.get(reloadedContext, Registry.WorkspaceRegistry).state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(reloadedState, change.workspace.config.name)?.repository,
+        "acme/legacy",
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
   it.effect("reports a required remote that is not GitHub", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
