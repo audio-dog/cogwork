@@ -347,6 +347,49 @@ layer(NodeServices.layer)((it) => {
     }).pipe(Effect.provide(RemoteUrls.layer)),
   );
 
+  it.effect("keeps the last derived repository after restart when the remote cannot be derived", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-restart-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "restart");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@github.com:acme/repo.git"]]));
+      const initialContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const management = Context.get(initialContext, Registry.WorkspaceManagement);
+      const change = yield* management.register(githubRegistration("restart", checkoutPath));
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/repo.git"]]));
+      const restartedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const restartedRegistry = Context.get(restartedContext, Registry.WorkspaceRegistry);
+      const state = yield* restartedRegistry.state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(state, change.workspace.config.name)?.repository,
+        "acme/repo",
+      );
+
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@github.com:acme/moved.git"]]));
+      yield* restartedRegistry.refresh;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/moved.git"]]));
+      const movedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const movedState = yield* Context.get(movedContext, Registry.WorkspaceRegistry).state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(movedState, change.workspace.config.name)?.repository,
+        "acme/moved",
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
   it.effect("reports a required remote that is not GitHub", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

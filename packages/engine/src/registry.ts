@@ -20,6 +20,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { type ScanAuthoringTreesRequest, scanAuthoringTrees } from "./authoring-tree";
 import { bootControlStoreLayer, ControlStore, readOnlyControlStoreClientLayer } from "./control-store";
@@ -130,6 +131,7 @@ interface WorkspaceRow {
   readonly name: string;
   readonly checkoutPath: string;
   readonly gitRemote: string | null;
+  readonly lastRepository: string | null;
   readonly issueTracker: string;
   readonly sourceControl: string | null;
   readonly mcpSkills: string | null;
@@ -350,6 +352,7 @@ const selectRows = Effect.fn("WorkspaceRegistry.selectRows")(function* (sql: Sql
     name,
     checkout_path AS checkoutPath,
     git_remote AS gitRemote,
+    last_repository AS lastRepository,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
     mcp_skills AS mcpSkills,
@@ -385,6 +388,7 @@ const selectWorkspaceRow = Effect.fn("WorkspaceRegistry.selectWorkspaceRow")(fun
     name,
     checkout_path AS checkoutPath,
     git_remote AS gitRemote,
+    last_repository AS lastRepository,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
     mcp_skills AS mcpSkills,
@@ -410,6 +414,24 @@ const updateCheckoutPath = Effect.fn("WorkspaceRegistry.updateCheckoutPath")(fun
   yield* sql`UPDATE workspaces
     SET checkout_path = ${checkoutPath}
     WHERE id = ${workspace}`;
+});
+
+const rebindWorkspaceRow = Effect.fn("WorkspaceRegistry.rebindWorkspaceRow")(function* (
+  sql: SqlClient.SqlClient,
+  workspace: WorkspaceId,
+  checkoutPath: string,
+) {
+  const current = yield* selectWorkspaceRow(sql, workspace);
+  if (!current) return yield* new WorkspaceNotFound({ workspace });
+  const existing = yield* selectWorkspaceBinding(sql, checkoutPath);
+  if (existing && existing.id !== workspace) {
+    return yield* new WorkspaceManagementError({
+      operation: "re-bind workspace",
+      message: `Workspace checkout path is already registered as ${existing.id}`,
+    });
+  }
+  yield* sql.withTransaction(updateCheckoutPath(sql, workspace, checkoutPath));
+  return { ...current, checkoutPath };
 });
 
 const updateWorkspaceRow = Effect.fn("WorkspaceRegistry.updateWorkspaceRow")(function* (
@@ -438,6 +460,7 @@ const updateWorkspaceRow = Effect.fn("WorkspaceRegistry.updateWorkspaceRow")(fun
       name,
       checkout_path AS checkoutPath,
       git_remote AS gitRemote,
+      last_repository AS lastRepository,
       issue_tracker AS issueTracker,
       source_control AS sourceControl,
       mcp_skills AS mcpSkills,
@@ -471,7 +494,10 @@ const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChan
       ),
     ),
     Effect.catchTag("WorkspaceRegistrationError", (error) =>
-      Effect.succeed({ _tag: "Failed" as const, failure: workspaceFailure(row, error.message) }),
+      Effect.succeed({
+        _tag: "Failed" as const,
+        failure: workspaceFailure(row, error.message, present(row.lastRepository)),
+      }),
     ),
   );
 });
@@ -523,6 +549,7 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
     name,
     checkout_path AS checkoutPath,
     git_remote AS gitRemote,
+    last_repository AS lastRepository,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
     mcp_skills AS mcpSkills,
@@ -536,6 +563,33 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
     concurrency`;
   if (!row) return yield* registrationError(`Workspace ${id} was not stored`);
   return row;
+});
+
+const persistWorkspaceRepository = Effect.fn("WorkspaceRegistry.persistWorkspaceRepository")(function* (
+  sql: SqlClient.SqlClient,
+  workspace: RegisteredWorkspace,
+) {
+  yield* sql`UPDATE workspaces
+    SET last_repository = ${workspace.repository ?? null}
+    WHERE id = ${workspace.config.name}`;
+});
+
+const persistRegistrationRepository = Effect.fn("WorkspaceRegistry.persistRegistrationRepository")(function* (
+  sql: SqlClient.SqlClient,
+  change: WorkspaceRegistrationChange,
+) {
+  if (change._tag === "Failed") return change;
+  yield* persistWorkspaceRepository(sql, change.workspace);
+  return change;
+});
+
+const persistStateRepositories = Effect.fn("WorkspaceRegistry.persistStateRepositories")(function* (
+  sql: SqlClient.SqlClient,
+  state: RegistryState,
+) {
+  yield* Effect.forEach(state.workspaces, (workspace) => persistWorkspaceRepository(sql, workspace), {
+    discard: true,
+  });
 });
 
 const withoutWorkspace = (state: RegistryState, name: WorkspaceId | undefined) => {
@@ -577,6 +631,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
       const git = yield* Git;
       const sql = yield* SqlClient.SqlClient;
       const store = yield* ControlStore;
+      const managementGate = Semaphore.makeUnsafe(1);
       const cogworkHome = path.dirname(controlStorePath);
       const authoringRoots = { cogworkHome, userAgentsDir };
       const privateWorkspaceRoot = path.join(cogworkHome, "workspaces");
@@ -595,6 +650,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         return yield* loadAvailableState(sql, loadingServices, authoringRoots);
       });
       const initial = yield* loadState();
+      yield* store.withWrite(persistStateRepositories(sql, initial));
       const cell = yield* Ref.make({ state: initial, revision: 0 });
       const commitChange = Effect.fn("WorkspaceRegistry.commitChange")(
         (change: WorkspaceRegistrationChange) =>
@@ -614,19 +670,24 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
             revision: current.revision + 1,
           },
         ]);
-      const commitRefresh = (expectedRevision: number, state: RegistryState) =>
-        Ref.modify(cell, (current) => {
-          if (current.revision !== expectedRevision) return [current.state, current];
-          const next = withPreviousRepositories(current.state, state);
-          return [next, { state: next, revision: current.revision + 1 }];
-        });
+      const commitRefresh = Effect.fn("WorkspaceRegistry.commitRefresh")(function* (
+        expectedRevision: number,
+        state: RegistryState,
+      ) {
+        const current = yield* Ref.get(cell);
+        if (current.revision !== expectedRevision) return current.state;
+        const next = withPreviousRepositories(current.state, state);
+        yield* persistStateRepositories(sql, next);
+        yield* Ref.set(cell, { state: next, revision: current.revision + 1 });
+        return next;
+      });
       const registry: WorkspaceRegistryService = {
         state: Ref.get(cell).pipe(Effect.map((current) => current.state)),
         refresh: Ref.get(cell).pipe(
           Effect.flatMap(({ revision }) =>
             loadState().pipe(
+              Effect.flatMap((state) => store.withWrite(commitRefresh(revision, state))),
               Effect.mapError((error) => registrationError(error)),
-              Effect.flatMap((state) => commitRefresh(revision, state)),
             ),
           ),
         ),
@@ -642,7 +703,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
           ...registration,
           checkoutPath: path.resolve(registration.checkoutPath),
         };
-        return yield* store.withWrite(
+        const row = yield* store.withWrite(
           selectWorkspaceBinding(sql, normalizedRegistration.checkoutPath).pipe(
             Effect.mapError((error) => registrationError(error)),
             Effect.flatMap((existing) => {
@@ -659,8 +720,13 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
                 Effect.mapError((error) => registrationError(error)),
               ),
             ),
-            Effect.flatMap((row) => loadRegistrationChange(loadingServices, row, authoringRoots)),
+          ),
+        );
+        const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
+        return yield* store.withWrite(
+          persistRegistrationRepository(sql, change).pipe(
             Effect.flatMap(commitChange),
+            Effect.mapError((error) => registrationError(error)),
           ),
         );
       });
@@ -681,48 +747,13 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
           });
         }
         const normalizedPath = path.resolve(checkoutPath);
+        const row = yield* store
+          .withWrite(rebindWorkspaceRow(sql, workspace, normalizedPath))
+          .pipe(Effect.mapError(managementError("re-bind workspace")));
+        const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
         return yield* store.withWrite(
-          selectWorkspaceRow(sql, workspace).pipe(
-            Effect.flatMap(
-              (
-                current,
-              ): Effect.Effect<WorkspaceRegistrationChange, WorkspaceManagementError | WorkspaceNotFound> => {
-                if (!current) return Effect.fail(new WorkspaceNotFound({ workspace }));
-                return selectWorkspaceBinding(sql, normalizedPath).pipe(
-                  Effect.flatMap(
-                    (
-                      existing,
-                    ): Effect.Effect<
-                      WorkspaceRegistrationChange,
-                      WorkspaceManagementError | WorkspaceNotFound
-                    > => {
-                      if (existing && existing.id !== workspace) {
-                        return Effect.fail(
-                          new WorkspaceManagementError({
-                            operation: "re-bind workspace",
-                            message: `Workspace checkout path is already registered as ${existing.id}`,
-                          }),
-                        );
-                      }
-                      return sql
-                        .withTransaction(updateCheckoutPath(sql, workspace, normalizedPath))
-                        .pipe(
-                          Effect.andThen(
-                            loadRegistrationChange(
-                              loadingServices,
-                              { ...current, checkoutPath: normalizedPath },
-                              authoringRoots,
-                            ),
-                          ),
-                          Effect.flatMap(commitChange),
-                          Effect.mapError(managementError("re-bind workspace")),
-                        );
-                    },
-                  ),
-                  Effect.mapError(managementError("re-bind workspace")),
-                );
-              },
-            ),
+          persistRegistrationRepository(sql, change).pipe(
+            Effect.flatMap(commitChange),
             Effect.mapError(managementError("re-bind workspace")),
           ),
         );
@@ -737,9 +768,12 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
             message: store.message,
           });
         }
+        const row = yield* store
+          .withWrite(sql.withTransaction(updateWorkspaceRow(sql, workspace, workspaceUpdate)))
+          .pipe(Effect.mapError(managementError("update workspace")));
+        const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
         return yield* store.withWrite(
-          sql.withTransaction(updateWorkspaceRow(sql, workspace, workspaceUpdate)).pipe(
-            Effect.flatMap((row) => loadRegistrationChange(loadingServices, row, authoringRoots)),
+          persistRegistrationRepository(sql, change).pipe(
             Effect.flatMap(commitChange),
             Effect.mapError(managementError("update workspace")),
           ),
@@ -785,7 +819,13 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         );
       });
       return Context.make(WorkspaceRegistry, registry).pipe(
-        Context.add(WorkspaceManagement, { register, update, deregister, rebind }),
+        Context.add(WorkspaceManagement, {
+          register: (registration) => managementGate.withPermits(1)(register(registration)),
+          update: (workspace, workspaceUpdate) =>
+            managementGate.withPermits(1)(update(workspace, workspaceUpdate)),
+          deregister: (workspace) => managementGate.withPermits(1)(deregister(workspace)),
+          rebind: (workspace, checkoutPath) => managementGate.withPermits(1)(rebind(workspace, checkoutPath)),
+        }),
       );
     }),
   );
