@@ -546,13 +546,26 @@ const withoutWorkspace = (state: RegistryState, name: WorkspaceId | undefined) =
   };
 };
 
+const withPreviousRepository = (state: RegistryState, failure: RegisteredWorkspaceFailure) => {
+  if (failure.repository || !failure.name) return failure;
+  const repository = findWorkspaceIssueTrackerBinding(state, failure.name)?.repository;
+  if (!repository) return failure;
+  return { ...failure, repository };
+};
+
+const withPreviousRepositories = (previous: RegistryState, next: RegistryState) => ({
+  ...next,
+  failures: next.failures.map((failure) => withPreviousRepository(previous, failure)),
+});
+
 const foldRegistration = (state: RegistryState, change: WorkspaceRegistrationChange) => {
   if (change._tag === "Registered") {
     const current = withoutWorkspace(state, change.workspace.config.name);
     return { ...current, workspaces: [...current.workspaces, change.workspace] };
   }
-  const current = withoutWorkspace(state, change.failure.name);
-  return { ...current, failures: [...current.failures, change.failure] };
+  const failure = withPreviousRepository(state, change.failure);
+  const current = withoutWorkspace(state, failure.name);
+  return { ...current, failures: [...current.failures, failure] };
 };
 
 export const layer = (controlStorePath: string, userAgentsDir: string) =>
@@ -604,7 +617,8 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
       const commitRefresh = (expectedRevision: number, state: RegistryState) =>
         Ref.modify(cell, (current) => {
           if (current.revision !== expectedRevision) return [current.state, current];
-          return [state, { state, revision: current.revision + 1 }];
+          const next = withPreviousRepositories(current.state, state);
+          return [next, { state: next, revision: current.revision + 1 }];
         });
       const registry: WorkspaceRegistryService = {
         state: Ref.get(cell).pipe(Effect.map((current) => current.state)),

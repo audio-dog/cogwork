@@ -322,6 +322,31 @@ layer(NodeServices.layer)((it) => {
     }).pipe(Effect.provide(RemoteUrls.layer)),
   );
 
+  it.effect("keeps the last derived repository when refresh cannot derive the remote", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-refresh-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "refresh");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@github.com:acme/repo.git"]]));
+      const context = yield* Layer.build(Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+      const registry = Context.get(context, Registry.WorkspaceRegistry);
+      const change = yield* management.register(githubRegistration("refresh", checkoutPath));
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/repo.git"]]));
+      const state = yield* registry.refresh;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(state, change.workspace.config.name)?.repository,
+        "acme/repo",
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
   it.effect("reports a required remote that is not GitHub", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
