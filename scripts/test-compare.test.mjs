@@ -31,6 +31,27 @@ describe("test comparison statistics", () => {
     assert.deepEqual(calls, ["worktrees", "directory"]);
   });
 
+  it("keeps a completed comparison when cleanup fails", async (context) => {
+    const report = { verdict: "inconclusive" };
+    const writes = [];
+    context.mock.method(process.stderr, "write", (chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+
+    const result = await withCleanups(
+      async () => report,
+      [
+        async () => {
+          throw new Error("worktree cleanup failed");
+        },
+      ],
+    );
+
+    assert.equal(result, report);
+    assert.equal(writes.join(""), "Cleanup failed: worktree cleanup failed\n");
+  });
+
   it("classifies a narrow interval beyond parity", () => {
     const base = [100, 100, 100, 100, 100];
     assert.equal(analyzeDurations(base, [99, 99, 99, 99, 99]).verdict, "faster");

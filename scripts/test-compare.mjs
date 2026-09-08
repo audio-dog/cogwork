@@ -214,7 +214,7 @@ export const withCleanups = async (operation, cleanups) => {
   const cleanupResults = await runCleanups(cleanups);
   if ("error" in operationResult) throw operationResult.error;
   const cleanupFailure = cleanupResults.find((result) => "error" in result);
-  if (cleanupFailure) throw cleanupFailure.error;
+  if (cleanupFailure) process.stderr.write(`Cleanup failed: ${describe(cleanupFailure.error)}\n`);
   return operationResult.value;
 };
 
