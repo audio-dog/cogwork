@@ -12,6 +12,7 @@ const picture = (revision: number, globalConcurrency: number): ControlStore => (
   operationSettings: [],
   connections: [],
   pluginInstalls: [],
+  harnessSettings: [],
   contributionSettings: [],
 });
 

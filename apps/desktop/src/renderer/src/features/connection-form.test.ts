@@ -23,6 +23,11 @@ const issuesOf = (result: ReturnType<typeof validate>) => {
 };
 
 describe("Connection form", () => {
+  it("opens ready for a pasted API key", () => {
+    expect(emptyEstablishmentFields("github").source).toBe("ApiKey");
+    expect(credentialSourcesFor("github")[0]?.value).toBe("ApiKey");
+  });
+
   it("offers a saved login only where the system has a browser login", () => {
     expect(credentialSourcesFor("github").map((source) => source.value)).toEqual(["ApiKey", "Env"]);
     expect(credentialSourcesFor("linear").map((source) => source.value)).toEqual(["ApiKey", "Env", "Stored"]);
@@ -41,7 +46,6 @@ describe("Connection form", () => {
     expect(issuesOf(validate({ account: "acme", source: "Env", environment: "" }))).toEqual([
       { path: ["environment"], message: "Name the environment variable to read." },
     ]);
-    // A saved login carries no typed credential, so neither field gates it.
     expect(
       issuesOf(validate({ system: "linear", account: "acme", source: "Stored", environment: "" })),
     ).toEqual([]);

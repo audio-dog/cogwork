@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AvailabilityCause,
   ControlStoreFailure,
+  ControlStore as ControlStorePicture,
   FileContribution,
   HarnessName,
   OperationAvailability,
@@ -21,6 +22,7 @@ import {
   agUiIsStructuredOutputComplete,
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
+  harnessEnabled,
   ImplementStageResult,
   ImplementStageResultCompletion,
   issueTrackerErrorIsPermanent,
@@ -1461,9 +1463,26 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const harnessAvailability = Effect.fn("Executor.harnessAvailability")(function* (
+  const disabledHarnessCause = (harnessName: HarnessName) =>
+    hostFailure("harness", `${harnessName} Harness is disabled on this Runtime host`);
+
+  const unavailableHarnessCause = (message: string) =>
+    hostFailure("harness", `Harness enablement is unavailable: ${message}`);
+
+  const currentHarnessDisablement = (picture: ControlStorePicture, harnessName: HarnessName) => {
+    if (harnessEnabled(picture.harnessSettings, harnessName)) return null;
+    return disabledHarnessCause(harnessName);
+  };
+
+  const selectedHarnessDisablement = (picture: ControlStorePicture, harnessName: HarnessName | null) =>
+    harnessName ? currentHarnessDisablement(picture, harnessName) : null;
+
+  const readHarnessAvailability = Effect.fn("Executor.readHarnessAvailability")(function* (
     resolved: ResolvedOperation,
   ) {
+    const picture = yield* controlStore.picture;
+    const disablement = currentHarnessDisablement(picture, resolved.stage.harness);
+    if (disablement) return disablement;
     return yield* harness
       .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort)
       .pipe(
@@ -1481,6 +1500,14 @@ export const make = Effect.gen(function* () {
         }),
       );
   });
+
+  const harnessAvailability = Effect.fn("Executor.harnessAvailability")((resolved: ResolvedOperation) =>
+    readHarnessAvailability(resolved).pipe(
+      Effect.catchTag("ControlStoreFailure", (error) =>
+        Effect.succeed(unavailableHarnessCause(error.message)),
+      ),
+    ),
+  );
 
   const connectionAvailability = Effect.fn("Executor.connectionAvailability")(function* () {
     return yield* connections.overview.pipe(
@@ -1741,6 +1768,107 @@ export const make = Effect.gen(function* () {
     return { ...planned, record };
   });
 
+  const acceptPlannedRunIfHarnessEnabled = Effect.fn("Executor.acceptPlannedRunIfHarnessEnabled")(function* (
+    runId: RunId,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    startedAtMillis: number,
+    planned: Effect.Success<ReturnType<typeof planSession>>,
+  ) {
+    const picture = yield* controlStore.picture;
+    if (selectedHarnessDisablement(picture, planned.selectedOps.resolved.harness)) return null;
+    return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
+  });
+
+  const acceptEnabledHarnessRun = Effect.fn("Executor.acceptEnabledHarnessRun")(function* (
+    runId: RunId,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    startedAtMillis: number,
+    planned: Effect.Success<ReturnType<typeof planSession>>,
+  ) {
+    if (controlStore.health === "unavailable") return yield* controlStore.picture;
+    const accepted = yield* controlStore.withWrite(
+      acceptPlannedRunIfHarnessEnabled(runId, workspace, item, startedAtMillis, planned),
+    );
+    if (accepted) return accepted;
+    yield* noteUnavailableResume(workspace, item, [
+      disabledHarnessCause(planned.selectedOps.resolved.harness),
+    ]);
+    return null;
+  });
+
+  const claimCurrentHarness = Effect.fn("Executor.claimCurrentHarness")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    startedAtMillis: number,
+  ) {
+    const resolved = yield* resolvePlanStage(workspace, item.stage);
+    const picture = yield* controlStore.picture;
+    const cause = selectedHarnessDisablement(picture, resolved?.stage.harness ?? null);
+    if (cause) return { claimed: false, cause };
+    return { claimed: yield* tryClaim(workspace, item, startedAtMillis), cause: null };
+  });
+
+  const claimEnabledItem = Effect.fn("Executor.claimEnabledItem")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const startedAtMillis = yield* Clock.currentTimeMillis;
+    const admission = yield* controlStore
+      .withWrite(claimCurrentHarness(workspace, item, startedAtMillis))
+      .pipe(
+        Effect.catchTag("ControlStoreFailure", (error) =>
+          Effect.succeed({ claimed: false, cause: unavailableHarnessCause(error.message) }),
+        ),
+      );
+    if (admission.cause) {
+      return { claimed: yield* decline(workspace, item, [admission.cause]), startedAtMillis };
+    }
+    return { claimed: admission.claimed, startedAtMillis };
+  });
+
+  const handoffClaimedStalled = Effect.fn("Executor.handoffClaimedStalled")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    yield* handoffStalled(workspace, item).pipe(
+      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
+    );
+    return true;
+  });
+
+  const execute = Effect.fn("Executor.execute")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    observation: RunPlanObservation,
+  ) {
+    if (isStalledFollowUp(item.stage, item.followUp)) {
+      const admission = yield* claimEnabledItem(workspace, item);
+      if (!admission.claimed) return false;
+      return yield* handoffClaimedStalled(workspace, item);
+    }
+    const checked = yield* evaluateAvailability(workspace, item.stage);
+    if (!checked.resolved || !checked.availability.available) {
+      return yield* decline(workspace, item, checked.availability.causes);
+    }
+    const stageOps = opsFor(workspace, item, checked.resolved);
+    const admission = yield* claimEnabledItem(workspace, item);
+    if (!admission.claimed) return false;
+    yield* runClaimed(workspace, item, stageOps, admission.startedAtMillis, observation).pipe(
+      Effect.tap(
+        ClaimDisposition.$match({
+          Hold: () => Effect.void,
+          Release: () => releaseClaim(workspace, item.id),
+        }),
+      ),
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit) || Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id),
+      ),
+    );
+    return true;
+  });
+
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -1777,7 +1905,7 @@ export const make = Effect.gen(function* () {
         previous,
         observation,
       );
-      return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
+      return yield* acceptEnabledHarnessRun(runId, workspace, item, startedAtMillis, planned);
     });
     return yield* runControl.run(
       runId,
@@ -1854,51 +1982,6 @@ export const make = Effect.gen(function* () {
       yield* releaseClaim(workspace, item.id);
     }
     return false;
-  });
-
-  const claimAndHandoffStalled = Effect.fn("Executor.claimAndHandoffStalled")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-  ) {
-    const startedAtMillis = yield* Clock.currentTimeMillis;
-    const claimed = yield* tryClaim(workspace, item, startedAtMillis);
-    if (!claimed) return false;
-    yield* handoffStalled(workspace, item).pipe(
-      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
-    );
-    return true;
-  });
-
-  const execute = Effect.fn("Executor.execute")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    observation: RunPlanObservation,
-  ) {
-    if (isStalledFollowUp(item.stage, item.followUp)) {
-      return yield* claimAndHandoffStalled(workspace, item);
-    }
-    const checked = yield* evaluateAvailability(workspace, item.stage);
-    if (!checked.resolved || !checked.availability.available) {
-      return yield* decline(workspace, item, checked.availability.causes);
-    }
-    const stageOps = opsFor(workspace, item, checked.resolved);
-    const startedAtMillis = yield* Clock.currentTimeMillis;
-    const claimed = yield* tryClaim(workspace, item, startedAtMillis);
-    if (!claimed) {
-      return false;
-    }
-    yield* runClaimed(workspace, item, stageOps, startedAtMillis, observation).pipe(
-      Effect.tap(
-        ClaimDisposition.$match({
-          Hold: () => Effect.void,
-          Release: () => releaseClaim(workspace, item.id),
-        }),
-      ),
-      Effect.onExit((exit) =>
-        Exit.isSuccess(exit) || Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id),
-      ),
-    );
-    return true;
   });
 
   return { availabilityOf, execute, refreshAvailability };
