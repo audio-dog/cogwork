@@ -1,3 +1,4 @@
+import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { StructuredOutputCompleteValue } from "./ag-ui";
 import { TrimmedNonEmptyString } from "./base-schemas";
@@ -25,7 +26,15 @@ export type TriageResultRole = typeof TriageResultRole.Type;
 export class TriageStageResult extends Schema.TaggedClass<TriageStageResult>()("triage", {
   role: TriageResultRole,
   proposal: TrimmedNonEmptyString,
-}) {}
+}) {
+  get resultKey() {
+    return this.role;
+  }
+
+  get detail() {
+    return this.proposal;
+  }
+}
 
 export const ImplementResultOutcome = Schema.Literals(["opened-pr", "stuck"]);
 export type ImplementResultOutcome = typeof ImplementResultOutcome.Type;
@@ -33,7 +42,15 @@ export type ImplementResultOutcome = typeof ImplementResultOutcome.Type;
 export class ImplementStageResult extends Schema.TaggedClass<ImplementStageResult>()("implement", {
   outcome: ImplementResultOutcome,
   summary: TrimmedNonEmptyString,
-}) {}
+}) {
+  get resultKey() {
+    return this.outcome;
+  }
+
+  get detail() {
+    return this.summary;
+  }
+}
 
 export const FollowUpResultOutcome = Schema.Literals(["pushed", "noop", "stuck"]);
 export type FollowUpResultOutcome = typeof FollowUpResultOutcome.Type;
@@ -41,9 +58,19 @@ export type FollowUpResultOutcome = typeof FollowUpResultOutcome.Type;
 export class FollowUpStageResult extends Schema.TaggedClass<FollowUpStageResult>()("follow-up", {
   outcome: FollowUpResultOutcome,
   summary: TrimmedNonEmptyString,
-}) {}
+}) {
+  get resultKey() {
+    return this.outcome;
+  }
 
-export const StageResult = Schema.Union([TriageStageResult, ImplementStageResult, FollowUpStageResult]);
+  get detail() {
+    return this.summary;
+  }
+}
+
+export const StageResult = Schema.Union([TriageStageResult, ImplementStageResult, FollowUpStageResult]).pipe(
+  Schema.toTaggedUnion("_tag"),
+);
 export type StageResult = typeof StageResult.Type;
 
 export const TriageStageResultCompletion = Schema.Struct({
@@ -92,6 +119,24 @@ const stageResultSchemas: Record<LifecycleStage, StageResultSchemas> = {
 export const stageResultJsonSchema = (stage: LifecycleStage) => stageResultSchemas[stage].json;
 
 export const stageResultCompletionSchema = (stage: LifecycleStage) => stageResultSchemas[stage].completion;
+
+type StageResultCompletion =
+  | typeof TriageStageResultCompletion.Type
+  | typeof ImplementStageResultCompletion.Type
+  | typeof FollowUpStageResultCompletion.Type;
+
+type StageResultCompletionDecoder = (
+  input: unknown,
+) => Effect.Effect<StageResultCompletion, Schema.SchemaError>;
+
+const stageResultCompletionDecoders: Record<LifecycleStage, StageResultCompletionDecoder> = {
+  triage: Schema.decodeUnknownEffect(TriageStageResultCompletion),
+  implement: Schema.decodeUnknownEffect(ImplementStageResultCompletion),
+  "follow-up": Schema.decodeUnknownEffect(FollowUpStageResultCompletion),
+};
+
+export const decodeStageResultCompletion = (stage: LifecycleStage, input: unknown) =>
+  stageResultCompletionDecoders[stage](input);
 
 export const NeedsHumanReason = Schema.Literals(["needs-info", "ready-for-human"]);
 export type NeedsHumanReason = typeof NeedsHumanReason.Type;
