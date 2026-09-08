@@ -33,12 +33,16 @@ const execute = (file, args, workspaceRoot) =>
     maxBuffer: 10 * 1024 * 1024,
   });
 
+const writeCapturedOutput = (result) => {
+  process.stderr.write(result?.stdout ?? "");
+  process.stderr.write(result?.stderr ?? "");
+};
+
 const run = async (file, args, workspaceRoot) => {
   try {
     return await execute(file, args, workspaceRoot);
   } catch (error) {
-    process.stderr.write(error?.stdout ?? "");
-    process.stderr.write(error?.stderr ?? "");
+    writeCapturedOutput(error);
     throw error;
   }
 };
@@ -57,8 +61,9 @@ const completedTestRuns = {
 export const recoverCompletedTestRun = (error, suite) => {
   const output = { stdout: error?.stdout ?? "", stderr: error?.stderr ?? "" };
   const completed = Number.isInteger(error?.code) && completedTestRuns[suite]?.(output.stdout);
-  if (!completed) throw error;
-  return output;
+  if (completed) return output;
+  writeCapturedOutput(output);
+  throw error;
 };
 
 const runMeasuredTests = async (file, args, workspaceRoot, suite) => {
@@ -81,13 +86,25 @@ const nodeTestCount = (output) => {
   return Number(match[1]);
 };
 
-const nodeTestArgs = (workspaceRoot) => {
-  const testFiles = nodeTestPatterns.flatMap((pattern) => globSync(pattern, { cwd: workspaceRoot }));
+const nodeTestFiles = (workspaceRoot) =>
+  nodeTestPatterns.flatMap((pattern) => globSync(pattern, { cwd: workspaceRoot }));
+
+const nodeTestArgs = (testFiles) => ["--test", "--test-reporter=tap", ...testFiles];
+
+const requiredNodeTestArgs = (workspaceRoot) => {
+  const testFiles = nodeTestFiles(workspaceRoot);
   if (testFiles.length === 0) throw new Error(`No root Node test files found in ${workspaceRoot}`);
-  return ["--test", "--test-reporter=tap", ...testFiles];
+  return nodeTestArgs(testFiles);
 };
 
-const runNodeTests = (workspaceRoot) => run(process.execPath, nodeTestArgs(workspaceRoot), workspaceRoot);
+const runNodeTests = (workspaceRoot) =>
+  run(process.execPath, requiredNodeTestArgs(workspaceRoot), workspaceRoot);
+
+export const runMeasuredNodeTests = (workspaceRoot) => {
+  const testFiles = nodeTestFiles(workspaceRoot);
+  if (testFiles.length === 0) return Promise.resolve({ stdout: "# tests 0\n", stderr: "" });
+  return runMeasuredTests(process.execPath, nodeTestArgs(testFiles), workspaceRoot, "node");
+};
 
 export const vitestTestArgs = (turboPath, reporterPath) => [
   turboPath,
@@ -110,12 +127,7 @@ const measure = async (workspaceRoot) => {
     workspaceRoot,
     "vitest",
   );
-  const nodeTests = await runMeasuredTests(
-    process.execPath,
-    nodeTestArgs(workspaceRoot),
-    workspaceRoot,
-    "node",
-  );
+  const nodeTests = await runMeasuredNodeTests(workspaceRoot);
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
   console.log(JSON.stringify({ durationMs, testCount }));

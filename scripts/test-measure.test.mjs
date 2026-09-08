@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { recoverCompletedTestRun, vitestTestArgs } from "./test-measure.mjs";
+import { recoverCompletedTestRun, runMeasuredNodeTests, vitestTestArgs } from "./test-measure.mjs";
 
 const exec = promisify(execFile);
 const execEnvironment = Object.fromEntries(
@@ -57,7 +57,20 @@ test("node-only excludes lint-rule tests", async () => {
   }
 });
 
-test("recovers only complete test failures", () => {
+test("measurement treats missing root Node tests as zero", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cogwork-test-measure-"));
+
+  try {
+    assert.deepEqual(await runMeasuredNodeTests(root), {
+      stdout: "# tests 0\n",
+      stderr: "",
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("recovers only complete test failures", (context) => {
   const completeVitestFailure = Object.assign(new Error("tests failed"), {
     code: 1,
     stdout: "cogwork-test-count:2\ncogwork-test-count:3\nTasks: 1 successful, 2 total\n",
@@ -74,6 +87,7 @@ test("recovers only complete test failures", () => {
     stdout: completeVitestFailure.stdout,
     stderr: "",
   });
+  context.mock.method(process.stderr, "write", () => true);
 
   assert.deepEqual(recoverCompletedTestRun(completeVitestFailure, "vitest"), {
     stdout: completeVitestFailure.stdout,
@@ -85,4 +99,20 @@ test("recovers only complete test failures", () => {
 
 test("measured Turbo runs every task after a failure", () => {
   assert.ok(vitestTestArgs("turbo", "reporter").includes("--continue=always"));
+});
+
+test("incomplete measured runs print captured output", (context) => {
+  const writes = [];
+  const failure = Object.assign(new Error("tests stopped"), {
+    code: 1,
+    stdout: "partial stdout\n",
+    stderr: "partial stderr\n",
+  });
+  context.mock.method(process.stderr, "write", (chunk) => {
+    writes.push(String(chunk));
+    return true;
+  });
+
+  assert.throws(() => recoverCompletedTestRun(failure, "vitest"), failure);
+  assert.equal(writes.join(""), "partial stdout\npartial stderr\n");
 });
