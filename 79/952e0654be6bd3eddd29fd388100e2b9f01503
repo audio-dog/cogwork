@@ -1,0 +1,19 @@
+docs/spec/per-workspace-operating-instructions.md
+  s_bd27954a7b4363::t_771e5c5d5ef9ce 1-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "79952e0654be6bd3eddd29fd388100e2b9f01503",
+  "prompts": {},
+  "sessions": {
+    "s_bd27954a7b4363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cbec2a29-cdae-46e8-acf6-1a95c4899851",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
