@@ -25,7 +25,7 @@ The stable key tying a work item to its pull request across systems. GitHub nume
 _Avoid_: PR reference, branch name (the full branch also carries a title slug that can drift)
 
 **Workspace**:
-A repo registered with the daemon under a minted `WorkspaceId`: a checkout path bound to an issue tracker and, optionally, a source control provider, plus workflow and operation settings. Checkout path and git remote are re-binding hints, never identity. The unit of isolation and per-repo configuration.
+A repo registered with the daemon under a minted `WorkspaceId`: a checkout path bound to an issue tracker and, optionally, a source control provider, plus workflow and operation settings. Checkout path is a re-binding hint, never identity. The unit of isolation and per-repo configuration.
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:
@@ -126,7 +126,7 @@ The surface that owns Connection **establishment** — connect, re-connect, remo
 _Avoid_: Integration, connector, Customize, Plugins, setup wizard, *paired install* (retired — it never said what was paired with what, and named an act nobody refers to twice)
 
 **Workspaces**:
-The surface that owns what the daemon operates over and under on this machine: register and deregister a **Workspace**, re-bind its checkout path, set its Operation settings, and set the daemon's runtime limits. Named for its dominant subject; Operation settings live with the Workspace whose Runs they govern, while the workspace record's columns and the limits are machine facts (ADR 0016). (Restoring the **Control store**'s pre-migration copy was withdrawn with ADR 0015's 2026-08-27 amendment.)
+The surface that owns what the daemon operates over and under on this machine: register, update and deregister a **Workspace**, re-bind its checkout path, set its Operation settings, and set the daemon's runtime limits. `WorkspaceState.Registered` publishes the complete stored registration record. Update replaces its mutable non-path columns without touching Private workspace overlay rows. Named for its dominant subject; Operation settings live with the Workspace whose Runs they govern, while the workspace record's columns and the limits are machine facts (ADR 0016). (Restoring the **Control store**'s pre-migration copy was withdrawn with ADR 0015's 2026-08-27 amendment.)
 **Register is the trust act.** Registering admits the repository's Workspace input Authoring tree — see **Scope** and ADR 0018. There is no repository settings file behind this surface: `register` writes the workspace record instead.
 _Avoid_: Settings (already on Customize's _Avoid_ line), Engine (the machinery being managed, not a pane), Daemon, Workspace (the singular is the registered repo, not the surface), machine config
 
@@ -299,6 +299,7 @@ _Avoid_: Run manifest, resolved stage, harness request, operation settings
 
 **Run**:
 One execution of one run plan by one harness, captured with its events, outcome, usage, and timings. The run records what was projected and observed without changing its plan.
+A terminal run records `claimDisposition: hold` when a factual gate decline intentionally keeps the current claim. Recovery ignores that hold once a newer claim supersedes the run.
 _Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
@@ -388,7 +389,7 @@ The projection of an accepted Run Plan handed to one Harness: checkout path, wor
 _Avoid_: Run plan (the complete engine-owned input), prompt, job
 
 **Operation result**:
-The tagged, Effect-Schema-defined value an operation returns through the harness stream. The shared kernel owns each operation's schema: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary. Prose remains ordinary streamed output and is never parsed as an operation result.
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. The shared kernel owns each operation's schema: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; implement returns `opened-pr`, `stuck`, or `ready-for-pr`, whose pull request title and body the Engine uses after its gate passes; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary. Prose remains ordinary streamed output and is never parsed as an operation result.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Operating-instructions package**:

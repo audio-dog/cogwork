@@ -87,16 +87,23 @@ export type WorkspaceConcurrency = typeof WorkspaceConcurrency.Type;
 export const WorkspaceBindingWorktreeConfig = WorktreeConfig;
 export type WorkspaceBindingWorktreeConfig = typeof WorkspaceBindingWorktreeConfig.Type;
 
-export const WorkspaceRegistration = Schema.Struct({
+const workspaceUpdateFields = {
   name: TrimmedNonEmptyString,
-  checkoutPath: TrimmedNonEmptyString,
-  gitRemote: Schema.optional(TrimmedNonEmptyString),
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
   linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
   worktrees: Schema.optional(WorkspaceBindingWorktreeConfig),
   concurrency: Schema.optional(WorkspaceConcurrency),
+} as const;
+
+export const WorkspaceUpdate = Schema.Struct(workspaceUpdateFields);
+export type WorkspaceUpdate = typeof WorkspaceUpdate.Type;
+export type WorkspaceUpdateInput = Schema.Codec.Encoded<typeof WorkspaceUpdate>;
+
+export const WorkspaceRegistration = Schema.Struct({
+  ...workspaceUpdateFields,
+  checkoutPath: TrimmedNonEmptyString,
 });
 export type WorkspaceRegistration = typeof WorkspaceRegistration.Type;
 export type WorkspaceRegistrationInput = Schema.Codec.Encoded<typeof WorkspaceRegistration>;

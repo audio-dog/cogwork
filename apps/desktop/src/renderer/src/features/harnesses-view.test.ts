@@ -27,6 +27,7 @@ const item = (
     version,
     state,
     models,
+    catalog: null,
   });
 
 describe("versionLabel", () => {

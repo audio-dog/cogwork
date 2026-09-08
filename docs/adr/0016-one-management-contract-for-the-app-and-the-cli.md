@@ -54,7 +54,7 @@ The Scope case never reaches validation: ADR 0013's empty cells are made unrepre
 
 Deregister deletes the workspace record, its Runtime host binding, and every Private workspace overlay row keyed by its `WorkspaceId`, in one transaction. This answers the `NO ACTION` foreign key ADR 0015 left as a forcing function. It does **not** delete Run history: those rows are the disposable ledger region, they carry no foreign key to a settings row, and losing a workspace should not erase what it did.
 
-Re-bind writes the checkout-path record alone. Identity survives a move, which is why ADR 0013 keeps folder path and git remote as re-binding hints rather than as identity.
+Re-bind writes the checkout-path record alone. Identity survives a move, which is why ADR 0013 keeps checkout path as a re-binding hint rather than as identity.
 
 *Rejected:* a soft-delete tombstone (nothing reads it — an install is machine-local and a re-register is cheap), and deregister-as-two-acts (leaves a workspace no Run can use between them).
 
@@ -144,6 +144,20 @@ attribution, because updating the app is the act.
 An app update lands at **load**: Cogwork re-reads disk at Run assembly, so the next Run gets what is
 there and a Run in flight keeps what it was given. That is a rule, not a command, and the act list
 stays closed.
+
+## Amendment (2026-09-04) — a workspace record can be updated without deregistration
+
+[#457](https://github.com/colonylabs/cogwork/issues/457) adds **update** to the workspace acts. The
+closed list now reads **register · update · deregister · re-bind the checkout path**.
+
+`WorkspaceState.Registered` carries the complete stored registration record. This keeps the
+Control-store-owned columns on the existing self-seeding workspace stream without adding a query or
+projecting effective settings. The record contains Connection references, never credentials.
+
+Update replaces every mutable non-path column in one transaction. `WorkspaceId` is the command key
+and cannot change. Checkout path remains exclusive to re-bind. Private workspace overlay rows are
+outside the transaction and remain unchanged. The next reconciliation and Run read the updated
+registry value. The app and CLI use the same schema-decoded command, and last write still wins.
 
 ## Amendment (2026-09-04) — Harness enablement is a management act
 

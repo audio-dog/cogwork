@@ -115,6 +115,7 @@ const providerStub = (prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [])
   Layer.succeed(SourceControlProvider, {
     observe: () => Effect.succeed(new Map(prs)),
     comment: () => Effect.void,
+    findOpenPullRequest: () => Effect.succeed(null),
     openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
   });
 
@@ -219,6 +220,7 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({ observe: () => Effect.fail(auth) }), {
         observe: () => Effect.succeed(new Map()),
         comment: () => Effect.void,
+        findOpenPullRequest: () => Effect.succeed(null),
         openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(workspace));
@@ -232,6 +234,7 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({}), {
         observe: () => Effect.fail(auth),
         comment: () => Effect.void,
+        findOpenPullRequest: () => Effect.succeed(null),
         openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(workspace));
@@ -245,6 +248,7 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({}), {
         observe: () => Effect.fail(auth),
         comment: () => Effect.void,
+        findOpenPullRequest: () => Effect.succeed(null),
         openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(githubWorkspace));
@@ -987,6 +991,7 @@ class BootstrapRecoveryCalls extends Context.Service<BootstrapRecoveryCalls, Ref
 describe("daemon heartbeats", () => {
   const worktreeStub = Layer.succeed(WorktreeManager, {
     ensure: () => Effect.die("unused"),
+    pullRequestReadiness: () => Effect.die("unused"),
     list: () => Effect.succeed([]),
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -1022,7 +1027,7 @@ describe("daemon heartbeats", () => {
     EventPublisher.DaemonEventPublisher,
     Effect.map(PublishedItemCount, (publishes) => ({
       publishItems: () => Ref.update(publishes, (count) => count + 1),
-      publishWorkspaces: () => Effect.void,
+      publishWorkspaces: () => Effect.succeed([]),
       publishWorkspaceRemoved: Effect.succeed,
       publishScheduler: () =>
         Effect.succeed({
