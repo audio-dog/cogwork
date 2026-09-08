@@ -60,6 +60,24 @@ class CredentialConfigurationGate extends Context.Service<
   );
 }
 
+class FailingConnectionWrite extends Context.Service<
+  FailingConnectionWrite,
+  Ref.Ref<{ readonly attempts: number; readonly connection: Connection }>
+>()("@cogwork/engine/connection.test/FailingConnectionWrite") {
+  static readonly layer = Layer.effect(
+    FailingConnectionWrite,
+    Ref.make({
+      attempts: 0,
+      connection: Connection.make({
+        id: connectionIdOf("github", "octocat"),
+        system: "github",
+        account: "octocat",
+        status: "revoked",
+      }),
+    }),
+  );
+}
+
 const controlStoreService = {
   health: "available",
   seed: defaultControlStore,
@@ -301,36 +319,51 @@ describe("Connection verification", () => {
     ),
   );
 
-  it.effect("keeps the re-connect source when the Control store write fails", () =>
+  it.effect("keeps a revoked Connection revoked when the Control store write fails", () =>
     Effect.gen(function* () {
       const connections = yield* ConnectionStore;
+      const id = connectionIdOf("github", "octocat");
       const failure = yield* Effect.flip(
         connections.establish({ system: "github", source: { _tag: "GitHubCli" } }, "octocat"),
       );
 
       assert.strictEqual(failure._tag, "ConnectionFailure");
+      assert.strictEqual((yield* connections.find(id))?.status, "revoked");
       assert.deepStrictEqual(yield* Ref.get(yield* ConfiguredCredentials), []);
     }).pipe(
       Effect.provide(
         layer.pipe(
           Layer.provide(Layer.succeed(ConnectionVerifier, { verify: () => Effect.succeed("octocat") })),
           Layer.provide(
-            Layer.succeed(ControlStore, {
-              ...controlStoreService,
-              picture: Effect.succeed({
-                ...defaultControlStore,
-                connections: [
-                  Connection.make({
-                    id: connectionIdOf("github", "octocat"),
-                    system: "github",
-                    account: "octocat",
-                    status: "established",
-                  }),
-                ],
-              }),
-              establishConnection: () =>
-                Effect.fail(ControlStoreFailure.make({ operation: "establish Connection", message: "busy" })),
-            }),
+            Layer.effect(
+              ControlStore,
+              Effect.map(FailingConnectionWrite, (state) => ({
+                ...controlStoreService,
+                picture: Ref.get(state).pipe(
+                  Effect.map(({ connection }) => ({ ...defaultControlStore, connections: [connection] })),
+                ),
+                establishConnection: (connection) =>
+                  Ref.updateAndGet(state, (current) => ({
+                    ...current,
+                    attempts: current.attempts + 1,
+                  })).pipe(
+                    Effect.flatMap((current) => {
+                      if (current.attempts === 1) {
+                        return Effect.fail(
+                          ControlStoreFailure.make({
+                            operation: "establish Connection",
+                            message: "busy",
+                          }),
+                        );
+                      }
+                      const established = Connection.make({ ...connection, status: "established" });
+                      return Ref.set(state, { ...current, connection: established }).pipe(
+                        Effect.map(() => ({ ...defaultControlStore, connections: [established] })),
+                      );
+                    }),
+                  ),
+              })),
+            ).pipe(Layer.provide(FailingConnectionWrite.layer)),
           ),
           Layer.provideMerge(
             Layer.effect(

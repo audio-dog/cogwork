@@ -251,8 +251,11 @@ export const layer = Layer.effect(
             .establishConnection(connection)
             .pipe(Effect.mapError((error) => unavailable("establish Connection", id, error.message))),
         ).pipe(
-          Effect.andThen(credentials.configureConnection(id, input.source)),
-          Effect.onError(() => rollback.pipe(Effect.ignore)),
+          Effect.andThen(
+            credentials
+              .configureConnection(id, input.source)
+              .pipe(Effect.onError(() => rollback.pipe(Effect.ignore))),
+          ),
         ),
       );
       return connection;
