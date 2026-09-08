@@ -163,6 +163,25 @@ describe("StageResult", () => {
       "body",
     ]);
   });
+
+  it.effect("rejects null pull request content through the structured-output schema", () =>
+    Effect.gen(function* () {
+      const schema = stageResultJsonSchema("implement");
+      const result = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "implement",
+            outcome: "ready-for-pr",
+            summary: "Implementation complete.",
+            title: null,
+            body: null,
+          }),
+        ),
+      );
+
+      assert.isDefined(result.issues);
+    }),
+  );
 });
 
 describe("resolvePriority", () => {

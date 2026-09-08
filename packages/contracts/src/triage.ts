@@ -84,13 +84,20 @@ const standardSchema = <S extends Schema.Codec<unknown, unknown, never, never>>(
   Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(schema));
 
 const triageStageResultSchema = standardSchema(Schema.Struct(TriageStageResult.fields));
+const implementStageResultInput = Schema.TaggedStruct("implement", {
+  outcome: ImplementResultOutcome,
+  summary: TrimmedNonEmptyString,
+  title: Schema.NullOr(TrimmedNonEmptyString),
+  body: Schema.NullOr(TrimmedNonEmptyString),
+});
+const hasRequiredPullRequestContent = (result: typeof implementStageResultInput.Type) =>
+  result.outcome !== "ready-for-pr" || (result.title !== null && result.body !== null);
 const implementStageResultSchema = standardSchema(
-  Schema.TaggedStruct("implement", {
-    outcome: ImplementResultOutcome,
-    summary: TrimmedNonEmptyString,
-    title: Schema.NullOr(TrimmedNonEmptyString),
-    body: Schema.NullOr(TrimmedNonEmptyString),
-  }),
+  implementStageResultInput.check(
+    Schema.makeFilter(hasRequiredPullRequestContent, {
+      message: "ready-for-pr requires title and body",
+    }),
+  ),
 );
 const followUpStageResultSchema = standardSchema(Schema.Struct(FollowUpStageResult.fields));
 
