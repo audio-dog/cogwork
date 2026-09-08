@@ -1,0 +1,31 @@
+scripts/test-measure.test.mjs
+  s_2d4a93510e0bcb::t_ef569dba58392f 59
+  s_2d4a93510e0bcb::t_376d44b6671317 2-3,20,22-24,26,28,30-35,37-39
+  s_da1185e89617fb::t_b2bda104c9c63e 42,46-48,57
+scripts/test-measure.mjs
+  s_2d4a93510e0bcb::t_ef569dba58392f 2,25-28,30,32-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "3c4ad24a75528ec96a6bcb4f9aaba64eb9b923c9",
+  "prompts": {},
+  "sessions": {
+    "s_2d4a93510e0bcb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebb-5da8-7041-b038-274987a2b9a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    },
+    "s_da1185e89617fb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0825f-6b08-7792-82b5-a0dcb4c0ba67",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
