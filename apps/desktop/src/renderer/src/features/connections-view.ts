@@ -1,10 +1,16 @@
 import type { ConnectionItem, ConnectionOverview, ConnectionSystem } from "@cogwork/contracts";
 
-export const readyConnections = (overview: ConnectionOverview | null | undefined) =>
-  overview?.connections.flatMap((item) => {
-    if (!item.connection || item.readiness._tag !== "Ready") return [];
-    return [item.connection];
-  }) ?? [];
+const workspaceConnectionChoice = (item: ConnectionItem, bindings: readonly string[]) => {
+  if (!item.connection) return [];
+  if (item.readiness._tag === "Ready") return [item.connection];
+  if (bindings.includes(item.connection.id)) return [item.connection];
+  return [];
+};
+
+export const workspaceConnectionChoices = (
+  overview: ConnectionOverview | null | undefined,
+  bindings: readonly string[],
+) => overview?.connections.flatMap((item) => workspaceConnectionChoice(item, bindings)) ?? [];
 
 export const connectionSystemLabel = (system: ConnectionSystem) =>
   system === "github" ? "GitHub" : "Linear";
