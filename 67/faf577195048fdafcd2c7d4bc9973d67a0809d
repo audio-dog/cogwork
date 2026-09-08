@@ -1,0 +1,19 @@
+packages/claude-code/src/harness.test.ts
+  s_51ee95bf8bd751::t_d194772563ac9e 12,124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "67faf577195048fdafcd2c7d4bc9973d67a0809d",
+  "prompts": {},
+  "sessions": {
+    "s_51ee95bf8bd751": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08285-ded3-7c81-a6c7-1e5ccdd1b5a0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
