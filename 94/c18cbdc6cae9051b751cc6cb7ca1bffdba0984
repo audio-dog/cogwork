@@ -1,0 +1,27 @@
+packages/cursor-acp/src/harness.test.ts
+  s_478f64a5a802f9::t_efbe25bc80f380 17-18,23,232-235,241-243,245-262
+  s_478f64a5a802f9::t_932117e707fccf 236-240,244
+  s_478f64a5a802f9::t_7de28eeaadc5d6 322,354
+  s_478f64a5a802f9::t_5595efdb9759fc 318-320,350-352
+  s_478f64a5a802f9::t_8b0ed75c3c2da1 263-300
+packages/cursor-acp/src/harness.ts
+  s_478f64a5a802f9::t_5d8981a1c1db8a 249-252,263,293,305,390-400
+  s_478f64a5a802f9::t_5595efdb9759fc 277
+  s_478f64a5a802f9::t_8b0ed75c3c2da1 274-276
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "94c18cbdc6cae9051b751cc6cb7ca1bffdba0984",
+  "prompts": {},
+  "sessions": {
+    "s_478f64a5a802f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082b0-3f74-73b2-8adb-86a0b57608c1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
