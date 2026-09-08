@@ -19,17 +19,13 @@ import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
-  type FollowUpStageResult,
-  FollowUpStageResultCompletion,
+  decodeStageResultCompletion,
   harnessEnabled,
-  ImplementStageResultCompletion,
   issueTrackerErrorIsPermanent,
   LifecycleStage,
   PluginContributionLoad,
   RunId,
   sessionHandle,
-  type TriageStageResult,
-  TriageStageResultCompletion,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
@@ -67,6 +63,8 @@ import {
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
+  OperationOutcome,
+  type OperationOutcomeTable,
 } from "./playbook";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
@@ -109,6 +107,7 @@ interface RunAccumulator {
   readonly handle: string | null;
   readonly usage: TokenUsage | null;
   readonly structuredOutputs: ReadonlyArray<unknown>;
+  readonly deferredTerminal: AgUiEvent | null;
 }
 
 interface PreparedHarnessRequest {
@@ -145,19 +144,9 @@ interface PreparedMcpServer extends ResolvedMcpSkill {
   readonly unavailableReason: string | null;
 }
 
-interface TriageAccumulator extends RunAccumulator {
-  readonly structuredOutputs: ReadonlyArray<unknown>;
-  readonly deferredTerminal: AgUiEvent | null;
-}
-
 const emptyAccumulator: RunAccumulator = {
   handle: null,
   usage: null,
-  structuredOutputs: [],
-};
-
-const emptyTriageAccumulator: TriageAccumulator = {
-  ...emptyAccumulator,
   structuredOutputs: [],
   deferredTerminal: null,
 };
@@ -167,7 +156,7 @@ const emptyTriageAccumulator: TriageAccumulator = {
 export const meteredTotalTokens = (usage: TokenUsage | null | undefined) =>
   usage && !usage.estimated ? (usage.totalTokens ?? null) : null;
 
-interface CommonStageOps {
+interface StageOps {
   readonly resolved: ResolvedStage;
   readonly planStage: ResolvedOperation;
   readonly branch: string | null;
@@ -176,24 +165,6 @@ interface CommonStageOps {
   readonly resume: boolean;
   readonly resumePolicy: boolean;
 }
-
-interface TriageStageOps extends CommonStageOps {
-  readonly kind: "triage";
-  readonly complete: (
-    record: RunRecord,
-    acc: TriageAccumulator,
-  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
-}
-
-interface TextStageOps extends CommonStageOps {
-  readonly kind: "text";
-  readonly complete: (
-    runId: RunId,
-    acc: RunAccumulator,
-  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
-}
-
-type StageOps = TriageStageOps | TextStageOps;
 
 class SessionRestarted extends Data.TaggedError("SessionRestarted")<Record<string, never>> {}
 
@@ -241,12 +212,6 @@ const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null
     },
     () => withHandle(acc, handle),
   );
-
-const mergeTriageEvent = (acc: TriageAccumulator, event: AgUiEvent, handle: string | null) =>
-  ({
-    ...mergeEvent(acc, event, handle),
-    deferredTerminal: acc.deferredTerminal,
-  }) satisfies TriageAccumulator;
 
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 const successfulTerminal = (event: AgUiEvent) =>
@@ -753,21 +718,13 @@ export const make = Effect.gen(function* () {
     record: RunRecord,
     acc: RunAccumulator,
     event: AgUiEvent,
+    deferTerminal: boolean,
   ) {
-    const handle = yield* recorder.record(record, event);
-    return mergeEvent(acc, event, handle);
-  });
-
-  const foldTriageEvent = Effect.fn("Executor.foldTriageEvent")(function* (
-    record: RunRecord,
-    acc: TriageAccumulator,
-    event: AgUiEvent,
-  ) {
-    if (successfulTerminal(event)) {
-      return { ...mergeTriageEvent(acc, event, acc.handle), deferredTerminal: event };
+    if (deferTerminal && successfulTerminal(event)) {
+      return { ...mergeEvent(acc, event, acc.handle), deferredTerminal: event };
     }
     const handle = yield* recorder.record(record, event);
-    return mergeTriageEvent(acc, event, handle);
+    return mergeEvent(acc, event, handle);
   });
 
   const foldStream = <A, E, R>(
@@ -799,12 +756,6 @@ export const make = Effect.gen(function* () {
     );
   };
 
-  const foldRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(record, request, emptyAccumulator, (acc, event) => foldEvent(record, acc, event));
-
-  const foldTriageRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(record, request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
-
   const guardResume = (event: AgUiEvent, expected: string) => {
     if (!agUiIsSessionHandleEvent(event) || event.value.sessionId === expected) return Effect.void;
     return Effect.fail(new SessionRestarted({}));
@@ -823,32 +774,17 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-  const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(record, request, emptyAccumulator, (acc, event) =>
-      guardResume(event, expected).pipe(Effect.andThen(foldEvent(record, acc, event))),
-    ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
-
-  const foldTriageResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(record, request, emptyTriageAccumulator, (acc, event) =>
-      guardResume(event, expected).pipe(Effect.andThen(foldTriageEvent(record, acc, event))),
-    ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
-
-  const foldOutcome = Effect.fn("Executor.foldOutcome")(function* (
+  const foldHarness = Effect.fn("Executor.foldHarness")(function* (
     record: RunRecord,
     request: HarnessRequest,
+    deferTerminal: boolean,
   ) {
     const expected = yield* handleOf(ledger, request.session);
-    if (!expected) return yield* foldRun(record, request);
-    return yield* foldResume(record, request, expected);
-  });
-
-  const foldTriageOutcome = Effect.fn("Executor.foldTriageOutcome")(function* (
-    record: RunRecord,
-    request: HarnessRequest,
-  ) {
-    const expected = yield* handleOf(ledger, request.session);
-    if (!expected) return yield* foldTriageRun(record, request);
-    return yield* foldTriageResume(record, request, expected);
+    const fold = foldStream(record, request, emptyAccumulator, (acc, event) => {
+      if (!expected) return foldEvent(record, acc, event, deferTerminal);
+      return guardResume(event, expected).pipe(Effect.andThen(foldEvent(record, acc, event, deferTerminal)));
+    });
+    return yield* fold.pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
   });
 
   const reportDecidedFailure = Effect.fn("Executor.reportDecidedFailure")(function* (
@@ -920,130 +856,19 @@ export const make = Effect.gen(function* () {
     yield* settleRun(runId, yield* reportFailure(workspace, item, failure, harnessName, handle));
   });
 
-  const applyStuck = Effect.fn("Executor.applyStuck")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    runId: RunId,
-    reason: string,
-    harnessName: HarnessName,
-    handle: string | null,
-  ) {
-    const update = yield* reportDecidedFailure(
-      workspace,
-      item,
-      nonRetryableDecision,
-      reason,
-      harnessName,
-      handle,
-    );
-    yield* settleRun(runId, update);
-  });
-
-  const applyTriageSuccess = Effect.fn("Executor.applyTriageSuccess")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    runId: RunId,
-    acc: RunAccumulator,
-    result: TriageStageResult,
-  ) {
-    const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* issueTracker.triaged(workspace, item.id, {
-      role: result.role,
-      proposal: triageProposalBody(result.proposal),
-      atMillis: endedAtMillis,
-    });
-    yield* settleRun(runId, {
-      status: "succeeded",
-      usage: acc.usage,
-      endedAtMillis,
-    });
-  });
-
   const structuredResultError = (message: string) =>
     new HarnessError({ reason: "turn", retryable: true, message });
 
-  const expectSingleStructuredResult = (
+  const expectSingleStructuredResult = Effect.fn("Executor.expectSingleStructuredResult")(function* (
     stage: "triage" | "implement" | "follow-up",
     acc: Pick<RunAccumulator, "structuredOutputs">,
-  ) => {
+  ) {
     if (acc.structuredOutputs.length !== 1) {
-      return Effect.fail(
-        structuredResultError(
-          `expected exactly one structured ${stage} result, received ${acc.structuredOutputs.length}`,
-        ),
+      return yield* structuredResultError(
+        `expected exactly one structured ${stage} result, received ${acc.structuredOutputs.length}`,
       );
     }
-    return Effect.succeed(acc.structuredOutputs[0]);
-  };
-
-  const decodeTriageResult = (acc: TriageAccumulator) =>
-    expectSingleStructuredResult("triage", acc).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(TriageStageResultCompletion)),
-      Effect.mapError((error) => structuredResultError(`invalid structured triage result: ${error.message}`)),
-      Effect.map((completion) => completion.object),
-    );
-
-  const completeTriage = Effect.fn("Executor.completeTriage")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    record: RunRecord,
-    acc: TriageAccumulator,
-    harnessName: HarnessName,
-  ) {
-    return yield* decodeTriageResult(acc).pipe(
-      Effect.matchEffect({
-        onFailure: (error) =>
-          recorder
-            .record(record, failedTerminal)
-            .pipe(Effect.andThen(applyFailure(workspace, item, record.id, error, harnessName, acc.handle))),
-        onSuccess: (result) =>
-          recorder
-            .record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" })
-            .pipe(Effect.andThen(applyTriageSuccess(workspace, item, record.id, acc, result))),
-      }),
-    );
-  });
-
-  const applyImplementSuccess = Effect.fn("Executor.applyImplementSuccess")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    runId: RunId,
-    acc: RunAccumulator,
-  ) {
-    const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* issueTracker.implemented(workspace, item.id, { atMillis: endedAtMillis });
-    yield* settleRun(runId, {
-      status: "succeeded",
-      usage: acc.usage,
-      endedAtMillis,
-    });
-  });
-
-  const decodeImplementResult = (acc: RunAccumulator) =>
-    expectSingleStructuredResult("implement", acc).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(ImplementStageResultCompletion)),
-      Effect.mapError((error) =>
-        structuredResultError(`invalid structured implement result: ${error.message}`),
-      ),
-      Effect.map((completion) => completion.object),
-    );
-
-  const completeImplement = Effect.fn("Executor.completeImplement")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    runId: RunId,
-    acc: RunAccumulator,
-    harnessName: HarnessName,
-  ) {
-    return yield* decodeImplementResult(acc).pipe(
-      Effect.matchEffect({
-        onFailure: (error) => applyFailure(workspace, item, runId, error, harnessName, acc.handle),
-        onSuccess: (result) =>
-          result.outcome === "opened-pr"
-            ? applyImplementSuccess(workspace, item, runId, acc)
-            : applyStuck(workspace, item, runId, result.summary, harnessName, acc.handle),
-      }),
-    );
+    return acc.structuredOutputs[0];
   });
 
   const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
@@ -1059,7 +884,6 @@ export const make = Effect.gen(function* () {
     const resolved = planStage.stage;
     const fullPrompt = buildTriagePrompt(resolved, item);
     return {
-      kind: "triage",
       resolved,
       planStage,
       branch: null,
@@ -1068,8 +892,6 @@ export const make = Effect.gen(function* () {
         prompt: fullPrompt,
         session: null,
       }),
-      complete: (record: RunRecord, acc: TriageAccumulator) =>
-        completeTriage(workspace, item, record, acc, resolved.harness),
       fullPrompt,
       resume: false,
       resumePolicy: false,
@@ -1081,13 +903,10 @@ export const make = Effect.gen(function* () {
     const branch = branchName(item);
     const fullPrompt = buildImplementPrompt(resolved, item);
     return {
-      kind: "text",
       resolved,
       planStage,
       branch,
       prepare: prepareImplement(workspace, item, fullPrompt),
-      complete: (runId: RunId, acc: RunAccumulator) =>
-        completeImplement(workspace, item, runId, acc, resolved.harness),
       fullPrompt,
       resume: false,
       resumePolicy: false,
@@ -1116,55 +935,6 @@ export const make = Effect.gen(function* () {
           }),
         ),
       );
-  });
-
-  const applyFollowUpSuccess = Effect.fn("Executor.applyFollowUpSuccess")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    runId: RunId,
-    acc: RunAccumulator,
-    context: FollowUpContext,
-    result: FollowUpStageResult,
-  ) {
-    const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* postFollowUpSummary(workspace, item, result.summary);
-    yield* issueTracker.followedUp(workspace, item.id, {
-      marker: followUpMarker(context, noProgressAfterRound(context, result.outcome)),
-      atMillis: endedAtMillis,
-    });
-    yield* settleRun(runId, {
-      status: "succeeded",
-      usage: acc.usage,
-      endedAtMillis,
-    });
-  });
-
-  const decodeFollowUpResult = (acc: RunAccumulator) =>
-    expectSingleStructuredResult("follow-up", acc).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(FollowUpStageResultCompletion)),
-      Effect.mapError((error) =>
-        structuredResultError(`invalid structured follow-up result: ${error.message}`),
-      ),
-      Effect.map((completion) => completion.object),
-    );
-
-  const completeFollowUp = Effect.fn("Executor.completeFollowUp")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    runId: RunId,
-    acc: RunAccumulator,
-    context: FollowUpContext,
-    harnessName: HarnessName,
-  ) {
-    return yield* decodeFollowUpResult(acc).pipe(
-      Effect.matchEffect({
-        onFailure: (error) => applyFailure(workspace, item, runId, error, harnessName, acc.handle),
-        onSuccess: (result) =>
-          result.outcome === "stuck"
-            ? applyStuck(workspace, item, runId, result.summary, harnessName, acc.handle)
-            : applyFollowUpSuccess(workspace, item, runId, acc, context, result),
-      }),
-    );
   });
 
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
@@ -1197,18 +967,161 @@ export const make = Effect.gen(function* () {
     const context = item.followUp ?? defaultFollowUp;
     const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
     return {
-      kind: "text",
       resolved,
       planStage,
       branch,
       prepare: prepareFollowUp(workspace, item, branch, context, fullPrompt),
-      complete: (runId: RunId, acc: RunAccumulator) =>
-        completeFollowUp(workspace, item, runId, acc, context, resolved.harness),
       fullPrompt,
       resume: false,
       resumePolicy: true,
     } satisfies StageOps;
   };
+
+  const outcomeForResult = (table: OperationOutcomeTable, result: string) =>
+    table.outcomes.find((outcome) => outcome.result === result) ?? null;
+
+  const decodeOperationOutcome = (stage: LifecycleStage, table: OperationOutcomeTable, acc: RunAccumulator) =>
+    expectSingleStructuredResult(stage, acc).pipe(
+      Effect.flatMap((input) => decodeStageResultCompletion(stage, input)),
+      Effect.mapError((error) =>
+        structuredResultError(`invalid structured ${stage} result: ${error.message}`),
+      ),
+      Effect.flatMap((completion) => {
+        const outcome = outcomeForResult(table, completion.object.resultKey);
+        if (outcome) return Effect.succeed({ detail: completion.object.detail, outcome });
+        return Effect.fail(structuredResultError("structured result has no declared operation outcome"));
+      }),
+    );
+
+  const applyTriaged = Effect.fn("Executor.applyTriaged")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    proposal: string,
+    outcome: Extract<OperationOutcome, { readonly _tag: "Triaged" }>,
+    atMillis: number,
+  ) {
+    yield* issueTracker.triaged(workspace, item.id, {
+      role: outcome.result,
+      proposal: triageProposalBody(proposal),
+      atMillis,
+    });
+  });
+
+  const applyImplemented = Effect.fn("Executor.applyImplemented")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    atMillis: number,
+  ) {
+    yield* issueTracker.implemented(workspace, item.id, { atMillis });
+  });
+
+  const applyFollowedUp = Effect.fn("Executor.applyFollowedUp")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    summary: string,
+    outcome: Extract<OperationOutcome, { readonly _tag: "FollowedUp" }>,
+    atMillis: number,
+  ) {
+    yield* postFollowUpSummary(workspace, item, summary);
+    const context = item.followUp ?? defaultFollowUp;
+    yield* issueTracker.followedUp(workspace, item.id, {
+      marker: followUpMarker(context, noProgressAfterRound(context, outcome.result)),
+      atMillis,
+    });
+  });
+
+  const applySuccessfulOutcome = Effect.fn("Executor.applySuccessfulOutcome")(function* <R>(
+    record: RunRecord,
+    acc: RunAccumulator,
+    apply: (atMillis: number) => Effect.Effect<void, IssueTrackerError, R>,
+  ) {
+    const endedAtMillis = yield* Clock.currentTimeMillis;
+    yield* apply(endedAtMillis);
+    yield* settleRun(record.id, {
+      status: "succeeded",
+      usage: acc.usage,
+      endedAtMillis,
+    });
+  });
+
+  const retryableOperationDecision = (attempts: number) =>
+    ({ retryable: true, handoffCause: { kind: "max-attempts", attempts } }) satisfies RetryDecision;
+
+  const operationDecision = (
+    outcome: Extract<OperationOutcome, { readonly _tag: "Failed" }>,
+    attempts: number,
+  ) => {
+    if (!outcome.retryable) return nonRetryableDecision;
+    return retryableOperationDecision(attempts);
+  };
+
+  const applyOperationFailure = Effect.fn("Executor.applyOperationFailure")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    record: RunRecord,
+    acc: RunAccumulator,
+    detail: string,
+    outcome: Extract<OperationOutcome, { readonly _tag: "Failed" }>,
+  ) {
+    const update = yield* reportDecidedFailure(
+      workspace,
+      item,
+      operationDecision(outcome, item.priorFailures + 1),
+      detail,
+      record.harness,
+      acc.handle,
+    );
+    yield* settleRun(record.id, update);
+  });
+
+  const applyOperationOutcome = Effect.fn("Executor.applyOperationOutcome")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    record: RunRecord,
+    acc: RunAccumulator,
+    detail: string,
+    outcome: OperationOutcome,
+  ) {
+    return yield* OperationOutcome.$match(outcome, {
+      Failed: (outcome) => applyOperationFailure(workspace, item, record, acc, detail, outcome),
+      FollowedUp: (outcome) =>
+        applySuccessfulOutcome(record, acc, (atMillis) =>
+          applyFollowedUp(workspace, item, detail, outcome, atMillis),
+        ),
+      Implemented: () =>
+        applySuccessfulOutcome(record, acc, (atMillis) => applyImplemented(workspace, item, atMillis)),
+      Triaged: (outcome) =>
+        applySuccessfulOutcome(record, acc, (atMillis) =>
+          applyTriaged(workspace, item, detail, outcome, atMillis),
+        ),
+    });
+  });
+
+  const completeOperation = Effect.fn("Executor.completeOperation")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    ops: StageOps,
+    record: RunRecord,
+    acc: RunAccumulator,
+  ) {
+    const recordCompletionTerminal = (status: "failed" | "succeeded") => {
+      if (item.stage !== "triage") return Effect.succeed(null);
+      if (status === "failed") return recorder.record(record, failedTerminal);
+      return recorder.record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" });
+    };
+    return yield* decodeOperationOutcome(item.stage, ops.resolved.outcomeTable, acc).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          recordCompletionTerminal("failed").pipe(
+            Effect.andThen(applyFailure(workspace, item, record.id, error, record.harness, acc.handle)),
+          ),
+        onSuccess: ({ detail, outcome }) =>
+          recordCompletionTerminal("succeeded").pipe(
+            Effect.andThen(applyOperationOutcome(workspace, item, record, acc, detail, outcome)),
+          ),
+      }),
+    );
+  });
 
   const handoffStalled = Effect.fn("Executor.handoffStalled")(function* (
     workspace: RegisteredWorkspace,
@@ -1580,13 +1493,11 @@ export const make = Effect.gen(function* () {
       );
 
     if (isReplayHarness(record.harness)) {
-      return yield* settleRecorded(foldOutcome(record, request));
+      return yield* settleRecorded(foldHarness(record, request, false));
     }
-
-    if (ops.kind === "triage") {
-      return yield* settle(foldTriageOutcome(record, request), (acc) => ops.complete(record, acc));
-    }
-    return yield* settle(foldOutcome(record, request), (acc) => ops.complete(runId, acc));
+    return yield* settle(foldHarness(record, request, item.stage === "triage"), (acc) =>
+      completeOperation(workspace, item, ops, record, acc),
+    );
   });
 
   const acceptPlannedRun = Effect.fn("Executor.acceptPlannedRun")(function* (

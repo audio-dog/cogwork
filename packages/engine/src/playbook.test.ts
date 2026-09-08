@@ -76,22 +76,22 @@ describe("operation outcome tables", () => {
     {
       name: "ready-for-agent",
       result: triageResult("ready-for-agent"),
-      expected: { coordination: "triaged", attempt: "succeeded" },
+      expected: { _tag: "Triaged", result: "ready-for-agent" },
     },
     {
       name: "needs-info",
       result: triageResult("needs-info"),
-      expected: { coordination: "triaged", attempt: "succeeded" },
+      expected: { _tag: "Triaged", result: "needs-info" },
     },
     {
       name: "ready-for-human",
       result: triageResult("ready-for-human"),
-      expected: { coordination: "triaged", attempt: "succeeded" },
+      expected: { _tag: "Triaged", result: "ready-for-human" },
     },
     {
       name: "wontfix",
       result: triageResult("wontfix"),
-      expected: { coordination: "triaged", attempt: "succeeded" },
+      expected: { _tag: "Triaged", result: "wontfix" },
     },
   ] satisfies ReadonlyArray<{
     readonly name: TriageResultRole;
@@ -103,12 +103,12 @@ describe("operation outcome tables", () => {
     {
       name: "opened-pr",
       result: implementResult("opened-pr"),
-      expected: { coordination: "implemented", attempt: "succeeded" },
+      expected: { _tag: "Implemented", result: "opened-pr" },
     },
     {
       name: "stuck",
       result: implementResult("stuck"),
-      expected: { coordination: "attemptFailed", attempt: "failed", retryable: false },
+      expected: { _tag: "Failed", result: "stuck", retryable: false },
     },
   ] satisfies ReadonlyArray<{
     readonly name: ImplementResultOutcome;
@@ -120,17 +120,17 @@ describe("operation outcome tables", () => {
     {
       name: "pushed",
       result: followUpResult("pushed"),
-      expected: { coordination: "followedUp", attempt: "succeeded" },
+      expected: { _tag: "FollowedUp", result: "pushed" },
     },
     {
       name: "noop",
       result: followUpResult("noop"),
-      expected: { coordination: "followedUp", attempt: "succeeded" },
+      expected: { _tag: "FollowedUp", result: "noop" },
     },
     {
       name: "stuck",
       result: followUpResult("stuck"),
-      expected: { coordination: "attemptFailed", attempt: "failed", retryable: false },
+      expected: { _tag: "Failed", result: "stuck", retryable: false },
     },
   ] satisfies ReadonlyArray<{
     readonly name: FollowUpResultOutcome;
@@ -143,14 +143,16 @@ describe("operation outcome tables", () => {
 
     it("declares every result", () => {
       assert.deepStrictEqual(
-        Object.keys(table.outcomes),
+        table.outcomes.map(({ result }) => result),
         triageCases.map(({ name }) => name),
       );
     });
 
     it.each(triageCases)("maps $name to triaged success", ({ result, expected }) => {
-      assert.strictEqual(table.resultField, "role");
-      assert.deepStrictEqual(table.outcomes[result.role], expected);
+      assert.deepStrictEqual(
+        table.outcomes.find((outcome) => outcome.result === result.role),
+        expected,
+      );
     });
   });
 
@@ -159,14 +161,16 @@ describe("operation outcome tables", () => {
 
     it("declares every result", () => {
       assert.deepStrictEqual(
-        Object.keys(table.outcomes),
+        table.outcomes.map(({ result }) => result),
         implementCases.map(({ name }) => name),
       );
     });
 
     it.each(implementCases)("maps $name to its current completion", ({ result, expected }) => {
-      assert.strictEqual(table.resultField, "outcome");
-      assert.deepStrictEqual(table.outcomes[result.outcome], expected);
+      assert.deepStrictEqual(
+        table.outcomes.find((outcome) => outcome.result === result.outcome),
+        expected,
+      );
     });
   });
 
@@ -175,14 +179,16 @@ describe("operation outcome tables", () => {
 
     it("declares every result", () => {
       assert.deepStrictEqual(
-        Object.keys(table.outcomes),
+        table.outcomes.map(({ result }) => result),
         followUpCases.map(({ name }) => name),
       );
     });
 
     it.each(followUpCases)("maps $name to its current completion", ({ result, expected }) => {
-      assert.strictEqual(table.resultField, "outcome");
-      assert.deepStrictEqual(table.outcomes[result.outcome], expected);
+      assert.deepStrictEqual(
+        table.outcomes.find((outcome) => outcome.result === result.outcome),
+        expected,
+      );
     });
   });
 });
