@@ -1,0 +1,14 @@
+package.json
+  h_46518a29d4dd91 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "60e499630decc02c206ba9a6d8babe9b1cc8b611",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
