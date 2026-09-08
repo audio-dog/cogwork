@@ -86,7 +86,7 @@ const setGlobalLimit = (value) => {
   return capture(process.execPath, [tsx, entry, "limits", "set", "global-concurrency", String(value)]);
 };
 
-const preflight = async () => {
+const preflight = async (profiling) => {
   if (await daemonListening()) {
     say("a daemon is listening — stop the app first, then run preflight again");
     process.exitCode = 1;
@@ -101,7 +101,11 @@ const preflight = async () => {
   const preferences = existsSync(preferencesPath)
     ? JSON.parse(readFileSync(preferencesPath, "utf8"))
     : { closeToHide: true };
-  writeFileSync(preferencesPath, JSON.stringify({ ...preferences, profiling: true }));
+  // The V8 CPU profiler keeps its samples in the daemon heap and adds latency to the event loop —
+  // the two signals a campaign exists to measure. Crash forensics (the fatal-error report and the
+  // near-heap-limit snapshot) are unconditional in engine-command.ts and do not need this flag, so
+  // a measurement run leaves it off and only a diagnostic run asks for it.
+  writeFileSync(preferencesPath, JSON.stringify({ ...preferences, profiling }));
 
   const sampler = spawn(
     process.execPath,
@@ -114,6 +118,7 @@ const preflight = async () => {
     repoRoot,
     commit: capture("git", ["-C", repoRoot, "rev-parse", "HEAD"]),
     fileDescriptorLimit: capture("sh", ["-c", "ulimit -n"]),
+    profiling,
     preflightAt: stamp(),
     samplerPid: sampler.pid,
     processPressureCsv: csvPath,
@@ -123,7 +128,9 @@ const preflight = async () => {
     windows: [],
   });
 
-  say(`profiling enabled, sampler running as pid ${sampler.pid}, manifest at ${manifestPath}`);
+  say(
+    `profiling ${profiling ? "ON — the profiler perturbs loop delay and daemon heap" : "off"}, sampler running as pid ${sampler.pid}, manifest at ${manifestPath}`,
+  );
   say("now do the two things only a human can do:");
   say(`  1. start the app:  cd ${repoRoot} && pnpm dev`);
   say("  2. open one item tab and leave it open");
@@ -390,6 +397,9 @@ const readout = () => {
   }
   console.log(`commit ${manifest.commit}`);
   console.log(`descriptor limit ${manifest.fileDescriptorLimit}`);
+  if (manifest.profiling) {
+    console.log("WARNING: the daemon ran under --cpu-prof --heap-prof, which inflates loop delay and heap");
+  }
   try {
     for (const record of manifest.windows) reportWindow(manifest, record);
   } catch (error) {
@@ -446,12 +456,26 @@ const reportProcessExits = (manifest) => {
 };
 
 const command = process.argv[2];
-const minutesArgument = Number.parseInt(process.argv[3] ?? "20", 10);
+const flags = process.argv.slice(3).filter((argument) => argument.startsWith("--"));
+const positional = process.argv.slice(3).filter((argument) => !argument.startsWith("--"));
 
-if (command === "preflight") await preflight();
-else if (command === "run") await run(minutesArgument);
-else if (command === "readout") readout();
+const minutesFrom = (argument) => {
+  if (argument === undefined) return 20;
+  const parsed = Number.parseInt(argument, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+if (command === "preflight") await preflight(flags.includes("--profile"));
+else if (command === "run") {
+  const minutes = minutesFrom(positional[0]);
+  // A NaN deadline compares false, so an unvalidated argument would close both windows at once and
+  // report a complete campaign over two empty windows.
+  if (minutes === null) {
+    say(`not a positive number of minutes: ${positional[0]}`);
+    process.exitCode = 1;
+  } else await run(minutes);
+} else if (command === "readout") readout();
 else {
-  say("usage: perf-campaign.mjs preflight | run [minutes] | readout");
+  say("usage: perf-campaign.mjs preflight [--profile] | run [minutes] | readout");
   process.exitCode = 1;
 }

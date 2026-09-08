@@ -128,7 +128,9 @@ the engine's own. Suspect 3 (descriptor and process pressure) therefore has **no
    one.
 4. **The profiling flags off.** The campaign daemon ran under `--cpu-prof --heap-prof` throughout.
    The V8 CPU profiler holds its samples in the daemon heap and adds latency, so it perturbs the two
-   signals the campaign exists to measure. No metric read back here requires it.
+   signals the campaign exists to measure, and every number above carries that perturbation. No
+   metric read back here requires it. `preflight` now leaves profiling off unless asked with
+   `--profile`, and the readout says so when a run was profiled.
 
 ## A note for #416's design
 
