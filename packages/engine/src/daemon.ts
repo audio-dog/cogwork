@@ -43,9 +43,11 @@ import {
   removeConnection,
   setContributionSetting,
   setDaemonLimit,
+  setHarnessEnabled,
   setOperationSetting,
   setScheduling,
   uninstallPlugin,
+  updateWorkspace,
 } from "./commands";
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
@@ -274,7 +276,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
     return yield* (yield* ConnectionStore).overview;
   }),
   GetHarnesses: Effect.fn("Daemon.GetHarnesses")(function* () {
-    return yield* harnessOverview();
+    const store = yield* ControlStore;
+    if (store.health === "unavailable") return yield* store.picture;
+    const picture = yield* store.picture;
+    return yield* harnessOverview(picture.harnessSettings);
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
@@ -300,8 +305,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   SetDaemonLimit: setDaemonLimit,
   SetContributionSetting: setContributionSetting,
+  SetHarnessEnabled: setHarnessEnabled,
   SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
+  UpdateWorkspace: updateWorkspace,
   InstallPlugin: installPlugin,
   UninstallPlugin: uninstallPlugin,
   EstablishConnection: establishConnection,

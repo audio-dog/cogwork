@@ -16,7 +16,7 @@
       "passThroughEnv": ["NODE_PATH", "ELECTRON_*", "REMOTE_DEBUGGING_PORT"]
     },
     "test": {
-      "dependsOn": ["transit", "^test"]
+      "dependsOn": ["transit"]
     },
     "transit": {
       "dependsOn": ["^transit"]

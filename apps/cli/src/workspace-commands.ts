@@ -1,4 +1,4 @@
-import { WorkspaceId, WorkspaceRegistration, WorkspaceState } from "@cogwork/contracts";
+import { WorkspaceId, WorkspaceRegistration, WorkspaceState, WorkspaceUpdate } from "@cogwork/contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -18,6 +18,7 @@ export const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription(
 const checkoutFlag = Flag.string("checkout").pipe(Flag.withDescription("New absolute checkout path"));
 
 const decodeRegistration = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceRegistration));
+export const decodeWorkspaceUpdateJson = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceUpdate));
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId);
 
 const readRegistration = Effect.fn("workspace.readRegistration")(function* (inputPath: string) {
@@ -25,6 +26,10 @@ const readRegistration = Effect.fn("workspace.readRegistration")(function* (inpu
   return yield* fs.readFileString(inputPath).pipe(Effect.flatMap(decodeRegistration));
 });
 
+const readUpdate = Effect.fn("workspace.readUpdate")(function* (inputPath: string) {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* fs.readFileString(inputPath).pipe(Effect.flatMap(decodeWorkspaceUpdateJson));
+});
 export const formatRegistrationResult = (requestedName: string, workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
     Registered: (registered) =>
@@ -66,6 +71,13 @@ export const formatRebindResult = (workspace: WorkspaceState) =>
     },
   });
 
+export const formatUpdateResult = (workspace: WorkspaceState) =>
+  WorkspaceState.match(workspace, {
+    Failed: (failed) =>
+      `Updated ${failed.displayName ?? failed.name ?? failed.source}, but Workspace input failed: ${failed.message}`,
+    Registered: (registered) => `Updated ${registered.displayName ?? registered.name}.`,
+  });
+
 const runDeregister = Effect.fn("workspace.deregister")(function* (options: {
   readonly socket: string;
   readonly workspace: string;
@@ -89,6 +101,20 @@ const runRebind = Effect.fn("workspace.rebind")(function* (options: {
   yield* Console.log(message);
 });
 
+const runUpdate = Effect.fn("workspace.update")(function* (options: {
+  readonly socket: string;
+  readonly workspace: string;
+  readonly input: string;
+}) {
+  const workspace = yield* decodeWorkspaceId(options.workspace);
+  const update = yield* readUpdate(options.input);
+  const client = yield* makeDaemonClient();
+  const updated = yield* client.UpdateWorkspace({ workspace, update });
+  const message = formatUpdateResult(updated);
+  if (WorkspaceState.guards.Failed(updated)) return yield* Console.error(message);
+  yield* Console.log(message);
+});
+
 export const deregisterWorkspace = Effect.fn("workspace.deregisterWithLayers")(function* (options: {
   readonly socket: string;
   readonly workspace: string;
@@ -104,6 +130,14 @@ export const rebindWorkspace = Effect.fn("workspace.rebindWithLayers")(function*
   return yield* runRebind(options).pipe(Effect.scoped, Effect.provide(clientLayer(options.socket)));
 });
 
+export const updateWorkspace = Effect.fn("workspace.updateWithLayers")(function* (options: {
+  readonly socket: string;
+  readonly workspace: string;
+  readonly input: string;
+}) {
+  return yield* runUpdate(options).pipe(Effect.scoped, Effect.provide(clientLayer(options.socket)));
+});
+
 const registerCommand = Command.make("register", { socket: socketFlag, input: inputFlag }).pipe(
   Command.withHandler(registerWorkspace),
 );
@@ -112,6 +146,12 @@ const deregisterCommand = Command.make("deregister", { socket: socketFlag, works
   Command.withHandler(deregisterWorkspace),
 );
 
+const updateCommand = Command.make("update", {
+  socket: socketFlag,
+  workspace: workspaceFlag,
+  input: inputFlag,
+}).pipe(Command.withHandler(updateWorkspace));
+
 const rebindCommand = Command.make("re-bind", {
   socket: socketFlag,
   workspace: workspaceFlag,
@@ -119,5 +159,5 @@ const rebindCommand = Command.make("re-bind", {
 }).pipe(Command.withHandler(rebindWorkspace));
 
 export const workspaceCommand = Command.make("workspace").pipe(
-  Command.withSubcommands([registerCommand, deregisterCommand, rebindCommand]),
+  Command.withSubcommands([registerCommand, updateCommand, deregisterCommand, rebindCommand]),
 );

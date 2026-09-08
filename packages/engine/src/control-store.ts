@@ -14,6 +14,8 @@ import {
   DaemonLimits as DaemonLimitsSchema,
   type DaemonLimitUpdate,
   defaultDaemonLimits,
+  HarnessEnablement,
+  type HarnessName,
   LifecycleStage,
   type OperationSettingCell,
   type OperationSettingRow,
@@ -68,6 +70,10 @@ export type ControlStoreService =
       readonly removeConnection: (
         connectionId: ConnectionId,
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
+      readonly setHarnessEnabled: (
+        harness: HarnessName,
+        enabled: boolean,
+      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
       readonly updateOperationSetting: (
         update: OperationSettingUpdate,
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
@@ -93,6 +99,10 @@ export type ControlStoreService =
       readonly establishConnection: (connection: Connection) => Effect.Effect<never, ControlStoreFailure>;
       readonly revokeConnection: (connectionId: ConnectionId) => Effect.Effect<never, ControlStoreFailure>;
       readonly removeConnection: (connectionId: ConnectionId) => Effect.Effect<never, ControlStoreFailure>;
+      readonly setHarnessEnabled: (
+        harness: HarnessName,
+        enabled: boolean,
+      ) => Effect.Effect<never, ControlStoreFailure>;
       readonly updateOperationSetting: (
         update: OperationSettingUpdate,
       ) => Effect.Effect<never, ControlStoreFailure>;
@@ -222,6 +232,28 @@ const decodeStoredContributionSettingRows = Schema.decodeUnknownEffect(
 
 const decodeStoredOperationSettingRows = Schema.decodeUnknownEffect(Schema.Array(StoredOperationSettingRow));
 
+const StoredHarnessSetting = Schema.Struct({
+  harness: Schema.String,
+  enabled: Schema.Literals([0, 1]),
+});
+type StoredHarnessSetting = typeof StoredHarnessSetting.Type;
+const decodeStoredHarnessSettings = Schema.decodeUnknownEffect(Schema.Array(StoredHarnessSetting));
+const decodeHarnessSettings = Schema.decodeUnknownEffect(Schema.Array(HarnessEnablement));
+
+const readHarnessSettings = Effect.fn("ControlStore.readHarnessSettings")(function* (
+  sql: SqlClient.SqlClient,
+) {
+  const stored = yield* sql<StoredHarnessSetting>`
+    SELECT harness, enabled
+    FROM harness_settings
+    ORDER BY harness
+  `;
+  const rows = yield* decodeStoredHarnessSettings(stored);
+  return yield* decodeHarnessSettings(
+    rows.map((row) => ({ harness: row.harness, enabled: row.enabled === 1 })),
+  );
+});
+
 const StoredPluginInstall = Schema.Struct({
   pluginId: Schema.String,
   resolvedIdentity: Schema.String,
@@ -349,14 +381,40 @@ const readPicture = (sql: SqlClient.SqlClient) =>
       WHERE id = 1
     `;
     const daemonLimits = yield* decodeDaemonLimits(row);
-    const [connections, operationSettings, pluginInstalls, contributionSettings] = yield* Effect.all([
-      readConnections(sql),
-      readOperationSettings(sql),
-      readPluginInstalls(sql),
-      readContributionSettings(sql),
-    ]);
-    return { daemonLimits, connections, operationSettings, pluginInstalls, contributionSettings };
+    const [connections, harnessSettings, operationSettings, pluginInstalls, contributionSettings] =
+      yield* Effect.all([
+        readConnections(sql),
+        readHarnessSettings(sql),
+        readOperationSettings(sql),
+        readPluginInstalls(sql),
+        readContributionSettings(sql),
+      ]);
+    return {
+      daemonLimits,
+      connections,
+      harnessSettings,
+      operationSettings,
+      pluginInstalls,
+      contributionSettings,
+    };
   });
+
+const writeHarnessEnabled = Effect.fn("ControlStore.writeHarnessEnabled")(function* (
+  sql: SqlClient.SqlClient,
+  harness: HarnessName,
+  enabled: boolean,
+) {
+  if (enabled) {
+    yield* sql`DELETE FROM harness_settings WHERE harness = ${harness}`;
+    return;
+  }
+  yield* sql`
+    INSERT INTO harness_settings (harness, enabled)
+    VALUES (${harness}, 0)
+    ON CONFLICT (harness)
+    DO UPDATE SET enabled = excluded.enabled
+  `;
+});
 
 const storedContributionScope = (scope: ContributionSettingCell["scope"]) =>
   ContributionSettingScope.match(scope, {
@@ -575,6 +633,17 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       }),
     );
   });
+  const setHarnessEnabled = Effect.fn("ControlStore.setHarnessEnabled")(function* (
+    harness: HarnessName,
+    enabled: boolean,
+  ) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        yield* writeHarnessEnabled(sql, harness, enabled);
+        return yield* readPicture(sql);
+      }),
+    );
+  });
   const updateOperationSetting = Effect.fn("ControlStore.updateOperationSetting")(function* (
     update: OperationSettingUpdate,
   ) {
@@ -647,6 +716,8 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       revokeConnection(connectionId).pipe(Effect.mapError(storeFailure("revoke Connection"))),
     removeConnection: (connectionId: ConnectionId) =>
       removeConnection(connectionId).pipe(Effect.mapError(storeFailure("remove Connection"))),
+    setHarnessEnabled: (harness: HarnessName, enabled: boolean) =>
+      setHarnessEnabled(harness, enabled).pipe(Effect.mapError(storeFailure("set Harness enablement"))),
     updateOperationSetting: (update: OperationSettingUpdate) =>
       updateOperationSetting(update).pipe(Effect.mapError(storeFailure("update Operation setting"))),
     installPlugin: (
@@ -916,6 +987,7 @@ const unavailable = (message: string): ControlStoreService => {
     establishConnection: () => Effect.fail(failure),
     revokeConnection: () => Effect.fail(failure),
     removeConnection: () => Effect.fail(failure),
+    setHarnessEnabled: () => Effect.fail(failure),
     updateOperationSetting: () => Effect.fail(failure),
     installPlugin: () => Effect.fail(failure),
     uninstallPlugin: () => Effect.fail(failure),
