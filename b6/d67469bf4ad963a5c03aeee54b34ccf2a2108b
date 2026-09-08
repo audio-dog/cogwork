@@ -1,0 +1,41 @@
+apps/cli/src/rpc.ts
+  s_c70eafe42d8db6::t_58d6a5e259193d 24,152,165,167,171-172
+  s_c70eafe42d8db6::t_a89c3fddef383b 144-145,153
+  s_c70eafe42d8db6::t_56b4d41a3c2e28 12,16,129,147-148,150-151,154,156-164,166,168,170,262
+  s_c70eafe42d8db6::t_7a816414ef0b6b 23,131-135,176,180-181,183,215,224-235,241,243-247,261,263-287,301-305,312-314,321
+  s_c70eafe42d8db6::t_080ad9b78024b2 214,222,236-240,248,251
+  s_51ee95bf8bd751::t_5d113035ba791b 130
+apps/cli/src/rpc.test.ts
+  s_c70eafe42d8db6::t_080ad9b78024b2 4,255
+  s_c70eafe42d8db6::t_a89c3fddef383b 196,198-206,208-209,212-217,220,223-224,226-230
+  s_c70eafe42d8db6::t_7e6d4d70a714d7 218
+  s_c70eafe42d8db6::t_694c7e64e5bf76 238,257-260
+  s_c70eafe42d8db6::t_d4dc037f22ec1e 239-250,261
+  s_c70eafe42d8db6::t_b791139478e2c1 6,11,16,197,207,210-211,219,221-222,225,231,233-234,236,252-254,256,266
+  s_c70eafe42d8db6::t_b8ac2bcbfc6d9a 58-71,232,235,237,251,262-265
+  s_51ee95bf8bd751::t_7231016d7a9bf0 267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "b6d67469bf4ad963a5c03aeee54b34ccf2a2108b",
+  "prompts": {},
+  "sessions": {
+    "s_51ee95bf8bd751": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08285-ded3-7c81-a6c7-1e5ccdd1b5a0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    },
+    "s_c70eafe42d8db6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082b2-380a-7c22-b882-ef7b5d0459be",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
