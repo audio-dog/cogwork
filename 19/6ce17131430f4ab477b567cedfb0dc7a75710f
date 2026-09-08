@@ -1,0 +1,22 @@
+packages/engine/src/github/cli-credential.ts
+  s_e4aced227df686::t_8dd663db0556db 17-18,84,96-109,127
+packages/engine/src/github/cli-credential.test.ts
+  s_e4aced227df686::t_f733b5cb172c1f 83,88,92-93,95-101
+  s_e4aced227df686::t_1272917964bf06 137-139,154,156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "196ce17131430f4ab477b567cedfb0dc7a75710f",
+  "prompts": {},
+  "sessions": {
+    "s_e4aced227df686": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08199-e7bd-7192-a391-0f2b515261a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
