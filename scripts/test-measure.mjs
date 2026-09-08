@@ -56,6 +56,7 @@ export const measure = async (runTestCommand = run) => {
   const startedAt = performance.now();
   const reporterPath = pathToFileURL(scriptPath).href;
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
+  const tsxPath = fileURLToPath(import.meta.resolve("tsx/cli"));
   const vitest = await runTestCommand(process.execPath, [
     turboPath,
     "test",
@@ -68,14 +69,18 @@ export const measure = async (runTestCommand = run) => {
   const nodeTests = await runTestCommand(process.execPath, [
     "--test",
     "--test-reporter=tap",
-    "configs/lint/tests/rules.test.mjs",
     "scripts/test-measure.test.mjs",
   ]);
+  const gitMeasurement = await runTestCommand(process.execPath, [
+    tsxPath,
+    "scripts/count-worktree-git-invocations.ts",
+  ]);
+  process.stderr.write(gitMeasurement.stdout);
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
   console.log(JSON.stringify({ durationMs, testCount }));
 
-  if (vitest.failed || nodeTests.failed) process.exitCode = 1;
+  if ([vitest, nodeTests, gitMeasurement].some(({ failed }) => failed)) process.exitCode = 1;
 };
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
