@@ -1,0 +1,19 @@
+packages/engine/src/github/client.ts
+  s_b0245c7559a829::t_839ba9a2b9dcf8 331,443
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "db6a4f8471ecd154a8af62e902a30400b5ab7cdc",
+  "prompts": {},
+  "sessions": {
+    "s_b0245c7559a829": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08239-c01b-7410-853e-46016e7a6f7a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
