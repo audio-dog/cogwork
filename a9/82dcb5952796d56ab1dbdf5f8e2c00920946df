@@ -1,0 +1,24 @@
+packages/engine/src/run-ledger.ts
+  s_13cd74ff5da436::t_63e5970f57c593 31
+  s_13cd74ff5da436::t_d4828cd851d8fe 58
+packages/engine/src/executor.test.ts
+  s_13cd74ff5da436::t_1d7e8f0b2cb068 2820
+packages/engine/src/executor.ts
+  s_13cd74ff5da436::t_63e5970f57c593 1098
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "a982dcb5952796d56ab1dbdf5f8e2c00920946df",
+  "prompts": {},
+  "sessions": {
+    "s_13cd74ff5da436": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a081b1-0fc1-79f1-9029-27582a53217f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
