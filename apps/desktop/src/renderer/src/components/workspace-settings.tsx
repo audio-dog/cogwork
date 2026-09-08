@@ -29,6 +29,7 @@ import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
+import { workspaceConnectionChoices } from "../features/connections-view";
 import { operationSettingUpdate } from "../features/operation-settings";
 import {
   changedFieldCount,
@@ -90,7 +91,7 @@ const draftError = (pathRefused: boolean, recordRefused: boolean, draft: Workspa
  */
 function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
   const {
-    state: { status, workspaces, controlStore, connections },
+    state: { status, workspaces, controlStore, connectionOverview },
     actions: { rebind, update },
     meta: { rebindPending, rebindError, rebindTarget, updatePending, updateError, updateTarget },
   } = useWorkspaces();
@@ -121,6 +122,10 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
     setSubmitted({ update: false, rebind: false });
   }
   const draft = activeEdits ?? baseline;
+  const connections = workspaceConnectionChoices(connectionOverview, [
+    draft?.issueTrackerConnectionId ?? "unbound",
+    draft?.sourceControlConnectionId ?? "unbound",
+  ]);
   const submittedUpdateError = submitted.update && updateTarget === identity ? updateError : null;
   const submittedRebindError = submitted.rebind && rebindTarget === identity ? rebindError : null;
 
