@@ -1,0 +1,19 @@
+apps/cli/src/worktree-commands.ts
+  s_e639aa08e35147::t_4809a4cfaa5325 3,11-13,35-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "95fb7e09fb3960b966b7d934e86ff1b524ddc70e",
+  "prompts": {},
+  "sessions": {
+    "s_e639aa08e35147": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082b2-d7fc-7882-86ee-d76e80b38249",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
