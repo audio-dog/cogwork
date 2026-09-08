@@ -1,0 +1,29 @@
+packages/engine/src/github/client.ts
+  s_b0245c7559a829::t_ea5f43bbefbb5f 351
+  s_b0245c7559a829::t_e499b805dd9035 341,350
+  s_b0245c7559a829::t_c6e8b700bcb4be 331-338,340,342,346-349
+  s_b0245c7559a829::t_919bcf613add27 181,339,343-345,352
+  s_b0245c7559a829::t_3ef383c8e12306 369-377,438-439,443-479
+packages/engine/src/github/client.test.ts
+  s_b0245c7559a829::t_d06dd5e2e7e668 444-447
+  s_b0245c7559a829::t_30d809f2c9d5f1 33-41,430-432,458-468,470-479,489
+  s_b0245c7559a829::t_2b9dd3f86164d9 25,30,480-482
+  s_b0245c7559a829::t_c85ee7ca37441e 469
+  s_b0245c7559a829::t_231bd661edf070 483-488,490-493
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "8411099e6cdaaa4f401e0abad886ce31e32bc02c",
+  "prompts": {},
+  "sessions": {
+    "s_b0245c7559a829": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08239-c01b-7410-853e-46016e7a6f7a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
