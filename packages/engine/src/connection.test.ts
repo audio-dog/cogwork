@@ -2,6 +2,7 @@ import {
   Connection,
   type ConnectionId,
   type ConnectionReadiness,
+  ControlStoreFailure,
   connectionIdOf,
   defaultControlStore,
   IssueTrackerError,
@@ -148,7 +149,6 @@ describe("Connection verification", () => {
       const outcome = yield* Effect.flip(
         connections.establish({
           system: "github",
-          account: "acme",
           source: { _tag: "ApiKey", key: Redacted.make("Hello") },
         }),
       );
@@ -196,6 +196,142 @@ describe("Connection verification", () => {
                 } satisfies ControlStoreService;
               }),
             ).pipe(Layer.provideMerge(EstablishedConnections.layer)),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("uses the verified GitHub login as the Connection account", () =>
+    Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const connection = yield* connections.establish({
+        system: "github",
+        source: { _tag: "GitHubCli" },
+      });
+
+      assert.strictEqual(connection.id, connectionIdOf("github", "octocat"));
+      assert.strictEqual(connection.account, "octocat");
+      assert.deepStrictEqual(yield* Ref.get(yield* ConfiguredCredentials), [connection.id]);
+      assert.deepStrictEqual(yield* Ref.get(yield* EstablishedConnections), [connection.id]);
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(Layer.succeed(ConnectionVerifier, { verify: () => Effect.succeed("octocat") })),
+          Layer.provideMerge(
+            Layer.effect(
+              CredentialStore,
+              Effect.map(ConfiguredCredentials, (configured) => ({
+                ...unusedCredentialStore,
+                resolveSource: () =>
+                  Effect.succeed({
+                    source: "github-cli" as const,
+                    token: Redacted.make("secret"),
+                    identity: null,
+                  }),
+                configureConnection: (connectionId) =>
+                  Ref.update(configured, (current) => [...current, connectionId]),
+              })),
+            ).pipe(Layer.provideMerge(ConfiguredCredentials.layer)),
+          ),
+          Layer.provideMerge(
+            Layer.effect(
+              ControlStore,
+              Effect.map(EstablishedConnections, (established) => ({
+                ...controlStoreService,
+                establishConnection: (connection: Connection) =>
+                  Ref.update(established, (current) => [...current, connection.id]).pipe(
+                    Effect.map(() => defaultControlStore),
+                  ),
+              })),
+            ).pipe(Layer.provideMerge(EstablishedConnections.layer)),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("refuses a different discovered account before replacing a re-connect source", () =>
+    Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const failure = yield* Effect.flip(
+        connections.establish({ system: "github", source: { _tag: "GitHubCli" } }, "fixed-account"),
+      );
+
+      assert.include(failure.message, 'Connection is established for "fixed-account"');
+      assert.deepStrictEqual(yield* Ref.get(yield* ConfiguredCredentials), []);
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(Layer.succeed(ConnectionVerifier, { verify: () => Effect.succeed("other-account") })),
+          Layer.provide(controlStoreLayer),
+          Layer.provideMerge(
+            Layer.effect(
+              CredentialStore,
+              Effect.map(ConfiguredCredentials, (configured) => ({
+                ...unusedCredentialStore,
+                resolveSource: () =>
+                  Effect.succeed({
+                    source: "github-cli" as const,
+                    token: Redacted.make("secret"),
+                    identity: null,
+                  }),
+                configureConnection: (connectionId) =>
+                  Ref.update(configured, (current) => [...current, connectionId]),
+              })),
+            ).pipe(Layer.provideMerge(ConfiguredCredentials.layer)),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("keeps the re-connect source when the Control store write fails", () =>
+    Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const failure = yield* Effect.flip(
+        connections.establish({ system: "github", source: { _tag: "GitHubCli" } }, "octocat"),
+      );
+
+      assert.strictEqual(failure._tag, "ConnectionFailure");
+      assert.deepStrictEqual(yield* Ref.get(yield* ConfiguredCredentials), []);
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(Layer.succeed(ConnectionVerifier, { verify: () => Effect.succeed("octocat") })),
+          Layer.provide(
+            Layer.succeed(ControlStore, {
+              ...controlStoreService,
+              picture: Effect.succeed({
+                ...defaultControlStore,
+                connections: [
+                  Connection.make({
+                    id: connectionIdOf("github", "octocat"),
+                    system: "github",
+                    account: "octocat",
+                    status: "established",
+                  }),
+                ],
+              }),
+              establishConnection: () =>
+                Effect.fail(ControlStoreFailure.make({ operation: "establish Connection", message: "busy" })),
+            }),
+          ),
+          Layer.provideMerge(
+            Layer.effect(
+              CredentialStore,
+              Effect.map(ConfiguredCredentials, (configured) => ({
+                ...unusedCredentialStore,
+                resolveSource: () =>
+                  Effect.succeed({
+                    source: "github-cli" as const,
+                    token: Redacted.make("secret"),
+                    identity: null,
+                  }),
+                configureConnection: (connectionId) =>
+                  Ref.update(configured, (current) => [...current, connectionId]),
+              })),
+            ).pipe(Layer.provideMerge(ConfiguredCredentials.layer)),
           ),
         ),
       ),

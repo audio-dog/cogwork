@@ -1,6 +1,6 @@
 import {
   Connection,
-  type ConnectionEstablishment,
+  ConnectionEstablishment,
   ConnectionFailure,
   type ConnectionId,
   ConnectionNotReady,
@@ -47,16 +47,50 @@ export const credentialAccountFor = (connection: Connection): CredentialAccount 
   oauthClientId: null,
 });
 
+const credentialAccountForEstablishment = (input: ConnectionEstablishment) =>
+  ConnectionEstablishment.match(input, {
+    github: () => ({
+      key: "github",
+      issueTracker: "github",
+      organization: null,
+      tokenEnv: "GITHUB_TOKEN",
+      clientCredentials: null,
+      oauthClientId: null,
+    }),
+    linear: ({ account }) => ({
+      key: `linear/${account}`,
+      issueTracker: "linear",
+      organization: account,
+      tokenEnv: "LINEAR_API_KEY",
+      clientCredentials: null,
+      oauthClientId: null,
+    }),
+  });
+
+const knownConnectionId = (input: ConnectionEstablishment, expectedAccount?: string) => {
+  const requested = ConnectionEstablishment.match(input, {
+    github: () => null,
+    linear: ({ account }) => account,
+  });
+  if (requested !== null) return connectionIdOf(input.system, requested);
+  if (expectedAccount !== undefined) return connectionIdOf(input.system, expectedAccount);
+  return null;
+};
+
 const unavailable = (operation: string, connectionId: ConnectionId | null, message: string) =>
   new ConnectionFailure({ operation, connectionId, message });
 
-const unreadable = (connectionId: ConnectionId, error: { readonly message: string }) =>
+const unreadable = (connectionId: ConnectionId | null, error: { readonly message: string }) =>
   new ConnectionNotReady({
     connectionId,
     message: `Cogwork could not read the credential: ${error.message}`,
   });
 
-const refused = (connectionId: ConnectionId, system: ConnectionSystem, error: { readonly message: string }) =>
+const refused = (
+  connectionId: ConnectionId | null,
+  system: ConnectionSystem,
+  error: { readonly message: string },
+) =>
   new ConnectionNotReady({
     connectionId,
     message: `${system === "github" ? "GitHub" : "Linear"} rejected the credential: ${error.message}`,
@@ -80,6 +114,7 @@ export interface ConnectionStoreService {
   // survives the RPC seam, so the message alone has to say what happened.
   readonly establish: (
     input: ConnectionEstablishment,
+    expectedAccount?: string,
   ) => Effect.Effect<Connection, ConnectionFailure | ConnectionNotReady | CredentialError>;
   readonly revoke: (connectionId: ConnectionId) => Effect.Effect<void, ConnectionFailure>;
   readonly remove: (connectionId: ConnectionId) => Effect.Effect<void, ConnectionFailure | CredentialError>;
@@ -104,11 +139,7 @@ const missingStore: ConnectionStoreService = {
     ),
   establish: (input) =>
     Effect.fail(
-      unavailable(
-        "establish Connection",
-        connectionIdOf(input.system, input.account),
-        "Connection store unavailable",
-      ),
+      unavailable("establish Connection", knownConnectionId(input), "Connection store unavailable"),
     ),
   revoke: (connectionId) =>
     Effect.fail(unavailable("revoke Connection", connectionId, "Connection store unavailable")),
@@ -179,27 +210,47 @@ export const layer = Layer.effect(
       });
     });
 
-    const establish = Effect.fn("ConnectionStore.establish")(function* (input: ConnectionEstablishment) {
-      const id = connectionIdOf(input.system, input.account);
-      const connection = Connection.make({
-        id,
-        system: input.system,
-        account: input.account,
-        status: "established",
-      });
-      // Resolve and check the proposed credential *before* configuring it. Persisting first and
-      // checking after would leave a rejected credential on disk, and on a re-connect it would have
-      // already overwritten the working one it was meant to replace.
+    const establish = Effect.fn("ConnectionStore.establish")(function* (
+      input: ConnectionEstablishment,
+      expectedAccount?: string,
+    ) {
+      const expectedConnectionId = knownConnectionId(input, expectedAccount);
+      const previous = expectedConnectionId ? yield* find(expectedConnectionId) : null;
+      // Verification precedes both writes. The Control store writes first so its failure cannot replace a
+      // working source; a source-write failure restores the prior Control record.
       const candidate = yield* credentials
-        .resolveSource(credentialAccountFor(connection), input.source)
-        .pipe(Effect.mapError((error) => unreadable(id, error)));
-      yield* verifier
+        .resolveSource(credentialAccountForEstablishment(input), input.source)
+        .pipe(Effect.mapError((error) => unreadable(expectedConnectionId, error)));
+      const discoveredAccount = yield* verifier
         .verify(input.system, candidate)
-        .pipe(Effect.mapError((error) => refused(id, input.system, error)));
-      yield* credentials.configureConnection(id, input.source);
+        .pipe(Effect.mapError((error) => refused(expectedConnectionId, input.system, error)));
+      const account = ConnectionEstablishment.match(input, {
+        github: () => discoveredAccount,
+        linear: ({ account }) => account,
+      });
+      if (!account) {
+        return yield* new ConnectionNotReady({
+          connectionId: null,
+          message: "GitHub did not report the authenticated account",
+        });
+      }
+      if (expectedAccount !== undefined && account !== expectedAccount) {
+        return yield* new ConnectionNotReady({
+          connectionId: connectionIdOf(input.system, expectedAccount),
+          message: `Connection is established for "${expectedAccount}". Switch back to that account or remove it before connecting to "${account}".`,
+        });
+      }
+      const id = connectionIdOf(input.system, account);
+      const connection = Connection.make({ id, system: input.system, account, status: "established" });
       yield* controlStore
         .establishConnection(connection)
         .pipe(Effect.mapError((error) => unavailable("establish Connection", id, error.message)));
+      const rollback = previous
+        ? controlStore.establishConnection(previous)
+        : controlStore.removeConnection(connection.id);
+      yield* credentials
+        .configureConnection(id, input.source)
+        .pipe(Effect.tapError(() => rollback.pipe(Effect.ignore)));
       return connection;
     });
 
