@@ -1,0 +1,34 @@
+packages/engine/src/source-control.ts
+  s_13cd74ff5da436::t_2be92ea66e7e6f 62-66
+packages/engine/src/github/provider.ts
+  s_13cd74ff5da436::t_4ab39b77827e1d 60
+packages/engine/src/source-control.test.ts
+  s_13cd74ff5da436::t_1ce7deba044a6e 1-35
+packages/engine/src/github/github.test.ts
+  s_13cd74ff5da436::t_cb1a47a6870ab4 233-243,432-445
+  s_8558828ce285d0::t_c1ed0713dc847e 446-448
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "2356b3b76593130c84cba59a94e7435ecb565364",
+  "prompts": {},
+  "sessions": {
+    "s_13cd74ff5da436": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a081b1-0fc1-79f1-9029-27582a53217f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    },
+    "s_8558828ce285d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0826e-10d4-7982-ab56-b4c2aab465fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
