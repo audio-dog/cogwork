@@ -109,6 +109,20 @@ describe("harnessEnablementView", () => {
     });
   });
 
+  it("keeps the mutation result while the Board is unavailable", () => {
+    const base = defaultControlStore;
+    const harness = Schema.decodeSync(HarnessName)("codex");
+    const updated = {
+      ...base,
+      harnessSettings: [{ harness, enabled: false }],
+    };
+
+    expect(harnessEnablementView(null, { base, updated })).toEqual({
+      controlStore: updated,
+      settled: false,
+    });
+  });
+
   it("accepts the next Control store when another client overwrote the setting", () => {
     const base = defaultControlStore;
     const board = { ...base };

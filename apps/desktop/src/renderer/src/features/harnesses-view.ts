@@ -21,6 +21,7 @@ export const harnessEnablementView = (
   overlay: HarnessEnablementOverlay | null,
 ) => {
   if (overlay === null) return { controlStore, settled: false };
+  if (controlStore === null) return { controlStore: overlay.updated, settled: false };
   if (controlStore !== overlay.base) return { controlStore, settled: true };
   return { controlStore: overlay.updated, settled: false };
 };
