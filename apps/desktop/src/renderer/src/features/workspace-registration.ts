@@ -23,6 +23,7 @@ interface WorkspaceSubmission {
   readonly outcome: unknown | null;
 }
 
+const decodeWorkspaceRegistration = Schema.decodeUnknownOption(WorkspaceRegistration);
 const trimmed = (value: string) => value.trim();
 const optional = (value: string) => trimmed(value) || undefined;
 const teamsFrom = (value: string) => [...new Set(value.split(",").map(trimmed).filter(Boolean))];
@@ -64,13 +65,16 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
   const gitRemote = optional(draft.gitRemote);
   const issueTrackerConnectionId = trimmed(draft.issueTrackerConnectionId);
   if (!issueTrackerConnectionId) return null;
+  const registration = {
+    name,
+    checkoutPath,
+    ...(gitRemote ? { gitRemote } : {}),
+    linearHistory: false,
+  };
   if (draft.tracker === "github") {
     return {
-      name,
-      checkoutPath,
-      ...(gitRemote ? { gitRemote } : {}),
+      ...registration,
       issueTracker: { type: "github", connectionId: issueTrackerConnectionId },
-      linearHistory: false,
     };
   }
 
@@ -79,9 +83,7 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
   const organization = optional(draft.linearOrganization);
   const sourceControl = githubSourceControlFrom(optional(draft.sourceControlConnectionId));
   return {
-    name,
-    checkoutPath,
-    ...(gitRemote ? { gitRemote } : {}),
+    ...registration,
     issueTracker: {
       type: "linear",
       connectionId: issueTrackerConnectionId,
@@ -89,12 +91,11 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
       ...(organization ? { organization } : {}),
     },
     ...(sourceControl ? { sourceControl } : {}),
-    linearHistory: false,
   };
 };
 
 export const workspaceRegistrationFrom = (draft: WorkspaceRegistrationDraft) => {
   const input = registrationInputFrom(draft);
   if (!input) return null;
-  return Option.getOrNull(Schema.decodeUnknownOption(WorkspaceRegistration)(input));
+  return Option.getOrNull(decodeWorkspaceRegistration(input));
 };

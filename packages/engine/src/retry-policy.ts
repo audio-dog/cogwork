@@ -67,7 +67,7 @@ const maxAttemptsDecision = (attempts: number) =>
     handoffCause: { kind: "max-attempts", attempts },
   }) satisfies RetryDecision;
 
-const nonRetryableDecision = {
+export const nonRetryableDecision = {
   retryable: false,
   handoffCause: { kind: "non-retryable" },
 } satisfies RetryDecision;
