@@ -43,6 +43,7 @@ import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
+import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
 import type { HandBackOutcome, HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import { PluginManager } from "./plugin";
@@ -59,6 +60,47 @@ const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const wsid = Schema.decodeSync(WorkspaceId);
 const harness = Schema.decodeSync(HarnessName);
+const commandHarnessRunner: HarnessRunner = {
+  name: harness("cursor"),
+  sessionKind: "opaque-handle",
+  projectedMembers: [],
+  planMiddleware: [],
+  execution: fullHarnessExecution,
+  capabilities: {
+    authenticationModes: ["host"],
+    session: { affinity: "runtime-host", fork: false, humanAttach: false },
+    structuredOutput: "none",
+    policyFidelity: "exact",
+    fileEventFidelity: "absent",
+    usageQuality: "none",
+    readinessDiagnostics: false,
+    journal: false,
+    takeover: false,
+  },
+  authentication: { mode: "host", reference: "test" },
+  catalogSources: {
+    fallback: staticCatalogSource(
+      { models: [{ value: "test", label: "Test" }] },
+      { source: "cogwork-fallback", fallbackVersion: "test" },
+    ),
+  },
+  readiness: () =>
+    Effect.succeed({
+      operational: { status: "ready", retryable: false, diagnostic: "ready" },
+      installation: { status: "installed", version: "test" },
+      compatibility: { status: "compatible", requirement: null },
+      authentication: { mode: "host", status: "available", diagnostic: "available" },
+      diagnostics: [],
+    }),
+  preflight: () => Effect.void,
+  run: () => Stream.die("unused"),
+};
+const reconcileStubLayer = Layer.succeed(Reconcile.ReconcileWorker, {
+  submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+  submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+  snapshot: Effect.succeed({ generation: 0, observedAtMillis: 0, workspaces: [] }),
+  invalidateAvailability: () => Effect.void,
+});
 const interruptionGate = Latch.makeUnsafe();
 const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
@@ -291,6 +333,7 @@ const picture: ControlStorePicture = {
   connections: [],
   pluginInstalls: [],
   contributionSettings: [],
+  harnessSettings: [],
 };
 
 interface ControlStoreStubOptions {
@@ -299,6 +342,7 @@ interface ControlStoreStubOptions {
   readonly setDaemonLimit?: ControlStoreService["setDaemonLimit"];
   readonly updateContributionSetting?: ControlStoreService["updateContributionSetting"];
   readonly updateOperationSetting?: ControlStoreService["updateOperationSetting"];
+  readonly setHarnessEnabled?: ControlStoreService["setHarnessEnabled"];
 }
 
 const controlStoreStub = ({
@@ -320,6 +364,7 @@ const controlStoreStub = ({
       connections: picture.connections,
       pluginInstalls: picture.pluginInstalls,
       contributionSettings: picture.contributionSettings,
+      harnessSettings: picture.harnessSettings,
     }),
   updateOperationSetting = (update) =>
     Effect.succeed({
@@ -337,6 +382,8 @@ const controlStoreStub = ({
         Clear: () => [],
       }),
     }),
+  setHarnessEnabled = (harness, enabled) =>
+    Effect.succeed({ ...picture, harnessSettings: [{ harness, enabled }] }),
 }: ControlStoreStubOptions = {}) =>
   Layer.succeed(ControlStore, {
     health: "available",
@@ -346,6 +393,7 @@ const controlStoreStub = ({
     establishConnection: () => Effect.succeed(picture),
     revokeConnection: () => Effect.succeed(picture),
     removeConnection: () => Effect.succeed(picture),
+    setHarnessEnabled,
     updateOperationSetting,
     installPlugin: () => Effect.succeed(picture),
     uninstallPlugin: () => Effect.succeed(picture),
@@ -361,13 +409,15 @@ const daemonLayer = (
   plugins: Layer.Layer<PluginManager> = pluginManagerLayer,
   connections = connectionStoreLayer,
   runControl: Layer.Layer<RunControl.RunControl> = RunControl.layer,
+  harnessRunners: ReadonlyArray<HarnessRunner> = [],
+  reconcile = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source))),
 ) =>
   Daemon.handlersLayer.pipe(
-    Layer.provideMerge(harnessProbeTestLayer()),
+    Layer.provideMerge(harnessProbeTestLayer(harnessRunners)),
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
     Layer.provideMerge(Daemon.daemonInfoLayer),
     Layer.provideMerge(eventPublisherLayer),
-    Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source)))),
+    Layer.provideMerge(reconcile),
     Layer.provideMerge(registries),
     Layer.provideMerge(scheduler),
     Layer.provideMerge(engineServices),
@@ -376,6 +426,19 @@ const daemonLayer = (
     Layer.provideMerge(connections),
     Layer.provideMerge(plugins),
     Layer.provideMerge(source),
+  );
+
+const daemonLayerWithHarness = (source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>) =>
+  daemonLayer(
+    source,
+    schedulerStub(),
+    controlStoreStub(),
+    registryServices,
+    pluginManagerLayer,
+    connectionStoreLayer,
+    RunControl.layer,
+    [commandHarnessRunner],
+    reconcileStubLayer,
   );
 
 const registrationServices = (contributions: readonly LocalContribution[] = []) => {
@@ -1069,6 +1132,40 @@ describe("SetOperationSetting", () => {
         return assert.fail("expected Operation setting refusal");
       assert.strictEqual(failure.source, "triage Operation Definition");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+});
+
+describe("Harness management", () => {
+  it.effect("reports the registered Harness through RPC", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const overview = yield* client.GetHarnesses();
+      const item = overview.harnesses[0];
+
+      assert.strictEqual(item?.harness, "cursor");
+      assert.isTrue(item?.enabled);
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("returns disabled Harness state", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetHarnessEnabled({ harness: harness("cursor"), enabled: false });
+      assert.deepStrictEqual(returned.harnessSettings, [{ harness: harness("cursor"), enabled: false }]);
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("refuses a Harness that is not registered", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const failure = yield* Effect.flip(
+        client.SetHarnessEnabled({ harness: harness("unknown"), enabled: false }),
+      );
+
+      assert.strictEqual(failure._tag, "HarnessNotRegistered");
+      if (failure._tag !== "HarnessNotRegistered") return assert.fail("expected Harness refusal");
+      assert.strictEqual(failure.harness, "unknown");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}))), Effect.scoped),
   );
 });
 

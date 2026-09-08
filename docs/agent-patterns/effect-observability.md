@@ -39,7 +39,7 @@ return yield* Effect.gen(function* () {
 }).pipe(Effect.annotateLogs(correlation), Effect.annotateSpans(correlation));
 ```
 
-It is also the only place in the repo that does this. Everywhere else, each log call rebuilds the same fields by hand:
+The scheduler (`runJob`), the reconcile tick, and the recovery pass annotate their roots the same way. The shape to avoid is each log call rebuilding the same fields by hand:
 
 ```ts
 // Avoid: the enclosing workflow already knows workspace and item
@@ -104,7 +104,11 @@ pollWorkspace(workspace).pipe(
 
 ## One telemetry layer, provided last
 
-`telemetryLayer` in `apps/cli/src/telemetry.ts` already has the right shape — `Layer.unwrap` over a config read, with `NodeSdk.layerEmpty` when no endpoint is configured. It currently exports traces only. `NodeSdk.Configuration` also accepts `metricReader` and `logRecordProcessor`, so metrics and logs join without changing the shape; extend that file rather than wiring a second pipeline.
+`telemetryLayer(options)` in `apps/cli/src/telemetry.ts` is the one pipeline: it composes
+`localTelemetryLayer(...)` with `otlpTelemetryLayer()`, where the OTLP half keeps the `Layer.unwrap`
+shape — a config read choosing `NodeSdk.layerEmpty` when no endpoint is configured — and exports
+traces, metrics (`metricReader`), and logs (`logRecordProcessor`). Extend that file rather than
+wiring a second pipeline.
 
 The alternative route is Effect's own exporters (`effect/unstable/observability`: `OtlpTracer`, `OtlpMetrics`, `OtlpLogger` plus `OtlpSerialization` and an `HttpClient`), which drops the `@opentelemetry/*` dependencies entirely. Moving is a deliberate decision, not a side effect of adding a metric; until then, everything goes through the NodeSdk layer.
 
@@ -118,7 +122,7 @@ Either way the rule from the ai-docs holds: provide the observability layer at t
 - Outcome attributes derive from `Exit`; `interrupt` is its own outcome, never counted as `failure`.
 - Noisy periodic effects disable the tracer via `References.TracerEnabled`; log volume is tuned via `References.MinimumLogLevel` in a layer, not by deleting calls.
 - Services that settle or persist state (`run-ledger`, `harness`, `git` are silent today) emit one structured log per state transition an operator would ask about — no more.
-- Telemetry wiring lives only in `apps/cli/src/telemetry.ts` (and its desktop equivalent), one `Layer.unwrap`-ed layer provided last.
+- Telemetry wiring lives only in `apps/cli/src/telemetry.ts`, provided last. The desktop app has no telemetry layer yet; when it gets one, it follows the same shape.
 
 ## Sources
 
@@ -128,8 +132,11 @@ Either way the rule from the ai-docs holds: provide the observability layer at t
 - `.repos/effect/packages/effect/src/Logger.ts`: `formatStructured` carries `annotations` and `spans` as first-class fields.
 - `.repos/effect/ai-docs/src/08_observability/10_logging.ts` and `20_otlp-tracing.ts`: annotate-at-the-pipe-tail, `References.MinimumLogLevel`, and the provide-observability-last rule.
 - `.agents/skills/effect-ts/references/guide-observability.md`.
-- `packages/engine/src/executor.ts`: `runClaimed`'s correlation annotation — the in-repo exemplar.
-- `packages/engine/src/scheduler.ts` and `packages/engine/src/reconcile.ts`: the budget/in-flight state and suppressed rate-limit logs that want metrics.
-- `apps/cli/src/telemetry.ts`: the config-gated `Layer.unwrap` telemetry layer to extend.
+- `packages/engine/src/executor.ts`: `runClaimed`'s correlation annotation — the in-repo exemplar,
+  with `scheduler.ts`, `reconcile.ts`, and `recovery.ts` annotating their roots the same way.
+- `packages/engine/src/scheduler.ts` and `packages/engine/src/reconcile.ts`: metrics defined next to
+  the suppressed logs (`budgetExhaustedTicks`, `rateLimitHits`) — the metrics-not-grep exemplar.
+- `apps/cli/src/telemetry.ts`: the one telemetry pipeline (`localTelemetryLayer` +
+  config-gated `otlpTelemetryLayer`).
 - `.repos/t3code/apps/server/src/observability/Metrics.ts`, `Attributes.ts`, and `RpcInstrumentation.ts`: module-scope metrics, attribute compaction, `Exit`-derived outcomes, and `TracerEnabled` suppression.
 - `.repos/t3code/packages/client-runtime/src/connection/supervisor.ts`: root span per retry attempt linked with `Effect.linkSpans`.

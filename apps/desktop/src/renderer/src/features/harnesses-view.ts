@@ -1,4 +1,31 @@
-import { type HarnessItem, HarnessState } from "@cogwork/contracts";
+import { type ControlStore, type HarnessItem, HarnessState, harnessEnabled } from "@cogwork/contracts";
+
+export const applyHarnessEnablement = (
+  items: ReadonlyArray<HarnessItem>,
+  controlStore: ControlStore | null,
+) => {
+  if (!controlStore) return items;
+  return items.map((item) => ({
+    ...item,
+    enabled: harnessEnabled(controlStore.harnessSettings, item.harness),
+  }));
+};
+
+export interface HarnessEnablementOverlay {
+  readonly base: ControlStore | null;
+  readonly updated: ControlStore;
+}
+
+export const harnessEnablementView = (
+  controlStore: ControlStore | null,
+  overlay: HarnessEnablementOverlay | null,
+) => {
+  if (overlay === null) return { controlStore, settled: false };
+  if (controlStore === null) return { controlStore: overlay.updated, settled: false };
+  if (controlStore !== overlay.base) return { controlStore, settled: true };
+  return { controlStore: overlay.updated, settled: false };
+};
+
 export const versionLabel = (version: string | null) => {
   if (!version) return null;
   return /^\d/.test(version) ? `v${version}` : version;
@@ -7,12 +34,15 @@ export const versionLabel = (version: string | null) => {
 export interface HarnessSummary {
   readonly headline: string;
   readonly detail: string | null;
-  readonly attention: "none" | "warning" | "fatal";
+  readonly attention: "none" | "muted" | "warning" | "fatal";
   readonly signIn: string | null;
 }
 
-export const harnessSummary = (state: HarnessState): HarnessSummary =>
-  HarnessState.match<HarnessSummary>(state, {
+export const harnessSummary = (item: HarnessItem): HarnessSummary => {
+  if (!item.enabled) {
+    return { headline: "Disabled", detail: null, attention: "muted", signIn: null };
+  }
+  return HarnessState.match<HarnessSummary>(item.state, {
     Ready: () => ({ headline: "Ready", detail: null, attention: "none", signIn: null }),
     NotInstalled: ({ diagnostic }) => ({
       headline: "Not found",
@@ -45,6 +75,7 @@ export const harnessSummary = (state: HarnessState): HarnessSummary =>
       signIn: null,
     }),
   });
+};
 
 export const installedVersion = (item: HarnessItem) => {
   const reported = versionLabel(item.version);

@@ -61,6 +61,11 @@ export const contributionSettings = sqliteTable(
   ],
 );
 
+export const harnessSettings = sqliteTable("harness_settings", {
+  harness: text("harness").primaryKey(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+});
+
 export const operationSettings = sqliteTable(
   "operation_settings",
   {
