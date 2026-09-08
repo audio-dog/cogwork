@@ -2598,7 +2598,10 @@ describe("Executor.execute", () => {
       yield* execute(executor, implementWorkspace, implementItem);
 
       const log = yield* Ref.get(calls);
-      assert.strictEqual(log.find((call) => call.method === "attemptFailed")?.reason, failure.message);
+      assert.strictEqual(
+        log.find((call) => call.method === "attemptFailed")?.reason,
+        "git fetch origin: git fetch origin timed out",
+      );
       assert.isTrue(log.some((call) => call.method === "release"));
       assert.isFalse(log.some((call) => call.method === "handOff"));
       const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);

@@ -11,7 +11,7 @@ Every process has exactly one Effect runtime, and every external handle inside i
 - A handle held in a mutable field with a hand-written `dispose()` is a scope written by hand, minus the guarantees. `state.socket !== socket` stale-callback guards are the tell.
 - Observable process state is a `SubscriptionRef`, not an `onStatus` callback. Restart budgets and poll intervals are `Schedule`s, not counters and recursion.
 
-The in-repo contrast is the desktop app: the renderer's daemon protocol solves connect–reconnect–fan-out with `Queue`, `Deferred`, `Effect.addFinalizer`, `Schedule.spaced`, and `forkScoped`, while the main process solves the same socket problem next door with mutable cells, `removeAllListeners`, and no retry. The runtime currently stops at the IPC boundary; this pattern is how the other half gets one.
+The in-repo exemplar is the desktop app, on both sides of the IPC boundary: the renderer's daemon protocol solves connect–reconnect–fan-out with `Queue`, `Deferred`, `Effect.addFinalizer`, an exponential jittered `Schedule`, and `forkScoped`, and the main process owns one `ManagedRuntime` (built at `app.whenReady`, disposed through `quit.ts`) with scope-owned sockets, per-renderer scopes, and a supervised engine child. The one remaining raw edge is the injected `spawn` in `apps/desktop/src/main/index.ts`.
 
 ## Choose the smallest operator
 
@@ -40,7 +40,7 @@ NodeRuntime.runMain(
 
 `Layer.launch` turns an all-layers app into the `Effect<never>` that `runMain` runs. It never returns, so it is wrong for a host that must keep its own event loop.
 
-That host — Electron main is ours — is the second shape: build one `ManagedRuntime` where the host starts (`app.whenReady`), call `runtime.runPromise(...)` from its handlers, and `runtime.dispose()` where it stops (`will-quit`). `dispose()` closes the runtime's root scope, so every finalizer registered along the way runs; the idempotence that `control.engineStopped` and `event.preventDefault()` hand-roll today comes for free.
+That host — Electron main is ours — is the second shape: build one `ManagedRuntime` where the host starts (`app.whenReady`), call `runtime.runPromise(...)` from its handlers, and `runtime.dispose()` where it stops. `dispose()` closes the runtime's root scope, so every finalizer registered along the way runs; the host keeps only the one guard it needs itself (`quit.ts`'s `state.permitted`, which lets the second quit proceed instead of re-running shutdown).
 
 ```ts
 export const appMemoMap = Layer.makeMemoMapUnsafe();
@@ -74,7 +74,7 @@ const isDaemonListening = (socketPath: string) =>
   }).pipe(Effect.timeout("500 millis"), Effect.orElseSucceed(() => false));
 ```
 
-Each resume path closes its own socket; the returned cleanup covers only interruption — here, the path where `Effect.timeout` wins, which `socket-probe.ts` hand-threads through `socket.setTimeout`. The recursive poll around it (`wait-for-socket.ts`, `signal.aborted` checks and a self-call) becomes a schedule:
+Each resume path closes its own socket; the returned cleanup covers only interruption — here, the path where `Effect.timeout` wins. This is the shape `socket-probe.ts` ships. The poll around it (`wait-for-socket.ts`) is a schedule, not recursion with `signal.aborted` checks:
 
 ```ts
 const waitForDaemonListening = (socketPath: string) =>
@@ -104,15 +104,15 @@ A Node `Readable` does not need even that: `NodeStream.fromReadable({ evaluate: 
 
 ## Handles belong to scopes
 
-`daemon-bridge.ts` is the shape to retire: a mutable `{ socket }` cell, `removeAllListeners()` in a manual `detach`, stale-callback identity guards, and a `dispose` the caller must remember. The first-party replacement is `NodeSocket.makeNet({ path: socketPath, openTimeout: "10 seconds" })`, which returns a `Socket` whose teardown is a scope finalizer — the connect promise, the probe timeout, and the disposal bookkeeping all disappear into the option and the scope.
+`daemon-bridge.ts` is the shipped shape: `NodeSocket.makeNet({ path: socketPath, openTimeout: "10 seconds" })` returns a `Socket` whose teardown is a scope finalizer — the connect promise, the probe timeout, and the disposal bookkeeping all live in the option and the scope. The retired shape it replaced — a mutable `{ socket }` cell, `removeAllListeners()` in a manual `detach`, stale-callback identity guards, and a `dispose` the caller must remember — is a scope written by hand, minus the guarantees.
 
-The caller-side bookkeeping is the same finding: the IPC layer keeps a `Map<number, DaemonBridgePort>` keyed by renderer id and tears entries down on a `destroyed` event. That is a scope per renderer written by hand; open a child `Scope` per renderer, run the socket in it, close the scope on `destroyed`.
+The caller side follows: `ipc.ts` opens a child `Scope.fork` per renderer session, runs the socket in it, and closes the scope on `destroyed`. Do not reintroduce the hand-written version (a `Map` keyed by renderer id with manual teardown).
 
 This does not move any protocol logic. The CONTEXT.md rule that `main` is a dumb pipe — never decoding RPC, all client logic in the renderer — constrains what main understands, not how it owns its socket. A scope-owned `Socket` relaying opaque frames is still a dumb pipe.
 
 ## A subprocess is acquired, and its release is a kill ladder
 
-The supervised engine child is owned by class fields today, and `stop()` awaits an exit that may never come — a child that ignores SIGTERM hangs quit forever. The idiomatic shape acquires the process and gives the release a bounded escalation:
+A `stop()` that awaits an exit that may never come hangs quit forever when the child ignores SIGTERM. The idiomatic shape — shipped by `engine-supervisor.ts` — acquires the process and gives the release a bounded escalation:
 
 ```ts
 const child = yield* Effect.acquireRelease(spawnEngine(command), (proc) => {
@@ -126,19 +126,19 @@ const child = yield* Effect.acquireRelease(spawnEngine(command), (proc) => {
 
 The exit event becomes awaitable by completing a `Deferred` from `child.once("exit", ...)` at spawn time. Release never fails and never hangs; closing the owning scope (the `ManagedRuntime`'s, on `will-quit`) is the whole shutdown story.
 
-Prefer not building this by hand at all: `ChildProcess.make` + `ChildProcessSpawner` (`effect/unstable/process` — v4's rename of `Command`; `effect/unstable/cli/Command` is argument parsing, a different thing) carries the ladder as `forceKillAfter`, and streams stdout/stderr. The CLI already runs its subprocesses through `ChildProcessSpawner`; the desktop supervisor is the only shipping raw `spawn` in the repo.
+Prefer not building this by hand at all: `ChildProcess.make` + `ChildProcessSpawner` (`effect/unstable/process` — v4's rename of `Command`; `effect/unstable/cli/Command` is argument parsing, a different thing) carries the ladder as `forceKillAfter`, and streams stdout/stderr. The CLI already runs its subprocesses through `ChildProcessSpawner`; the injected `spawn` in `apps/desktop/src/main/index.ts` is the only shipping raw `spawn` in the repo — the remaining migration.
 
 ## Status is a SubscriptionRef, restarts are a Schedule
 
-The supervisor's `#status` field, equality dedupe, and `onStatus` callback are `SubscriptionRef` written by hand. Put the ref on the service interface — the shape t3code uses for `networkStatus` — and consumers subscribe to `.changes` as a stream; the IPC broadcast becomes one `Stream.runForEach` fork instead of a callback threaded through options.
+Status other code watches goes on the service interface as a `SubscriptionRef` — the shape both `engine-supervisor.ts` and t3code's `networkStatus` use — and consumers subscribe to `.changes` as a stream. A hand-written version (a private status field, equality dedupe, an `onStatus` callback threaded through options) is `SubscriptionRef` minus the guarantees.
 
 ```ts
 readonly status: SubscriptionRef.SubscriptionRef<EngineStatus>;
 ```
 
-The `#restarts` counter and `#maxRestarts` cap are `Schedule.recurs(3)` on the supervise loop; `#shuttingDown` is the interruption distinction the fiber-lifecycle pattern already names (`Cause.hasInterruptsOnly`), not a boolean.
+A restart budget is `Schedule.recurs(restartBudget)` on the supervise loop, not a counter and a cap; shutdown-versus-crash is the interruption distinction the fiber-lifecycle pattern already names (`Cause.hasInterruptsOnly`), not a boolean.
 
-The same edge discipline applies inside harness adapters: cursor-acp's manual `reader.read()` loop with `try/finally { releaseLock() }` is `Stream.fromReadableStream`, and its `outbound.tail` promise chain is a one-permit `Semaphore` — the repo's own lint suppressions (`asyncFunction:off`) mark exactly these seams.
+The same edge discipline applies inside harness adapters: cursor-acp reads its `ReadableStream` through `Stream.fromReadableStream` and serializes outbound writes with a one-permit `Semaphore` — not a manual `reader.read()` loop or a promise-chain tail.
 
 ## Cogwork conventions
 
@@ -160,8 +160,9 @@ The same edge discipline applies inside harness adapters: cursor-acp's manual `r
 - `.repos/effect/ai-docs/src/01_effect/06_running/10_run-main.ts` and `20_layer-launch.ts`: the two entrypoint shapes.
 - `.repos/effect/ai-docs/src/04_integration/10_managed-runtime.ts`: shared `MemoMap`, one runtime for a non-Effect host, dispose on shutdown signal.
 - `apps/cli/src/main.ts`: the in-repo `runMain` entrypoint.
-- `apps/desktop/src/renderer/src/daemon/protocol.ts`: the in-repo exemplar — scope-owned subscriptions, `Deferred` connection gate, `Schedule.spaced` reconnect.
-- `apps/desktop/src/main/engine-supervisor.ts`, `daemon-bridge.ts`, `socket-probe.ts`, `wait-for-socket.ts`, `ipc.ts`: the hand-rolled shapes this pattern replaces.
+- `apps/desktop/src/renderer/src/daemon/protocol.ts`: the renderer exemplar — scope-owned subscriptions, `Deferred` connection gate, exponential jittered reconnect.
+- `apps/desktop/src/main/engine-supervisor.ts`, `daemon-bridge.ts`, `socket-probe.ts`, `wait-for-socket.ts`, `ipc.ts`, `quit.ts`: the main-process exemplars — kill ladder, scope-owned sockets, per-renderer scopes, `SubscriptionRef` status, idempotent shutdown.
+- `apps/desktop/src/main/index.ts`: the one remaining raw `spawn` (injected as the supervisor's `SpawnEngine`).
 - `apps/desktop/CONTEXT.md` ("Engine supervisor", "RPC relay"): the behavioral spec, including the dumb-pipe rule this pattern preserves.
 - `packages/engine/src/daemon.ts`: the shared-credential-store comment — the memoization invariant a second runtime must not break.
 - `.repos/opencode/packages/core/src/cross-spawn-spawner.ts`: the production SIGTERM→SIGKILL release ladder and `NodeStream.fromReadable` stdout.

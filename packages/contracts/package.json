@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@catenarycloud/linteffect": "^0.0.7",
+    "@cogwork/test-config": "workspace:*",
     "@effect/vitest": "catalog:effect",
     "typescript": "catalog:",
     "vitest": "catalog:"
