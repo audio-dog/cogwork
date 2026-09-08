@@ -327,7 +327,7 @@ setting.** Anything that reaches them reaches `isolate: false`.
 | `deps.optimizer` (`.ssr` for `node` environments; `.web` was renamed `.client` in v4) | **No.** It changes how dependencies are *built*, not how modules are shared. | Vitest "bundles external libraries listed in the `include` option into single files using esbuild… By bundling them into one file we can save a lot of time", and the docs say plainly that with "a lot of tests, this might improve their performance" ([deps](https://vitest.dev/config/deps)). This is the most direct answer to "every file re-imports Effect": bundle Effect once. | **Highest-value safe experiment.** Requires explicitly listing Effect packages in `optimizer.ssr.include`. Note Effect's own root config does the opposite for one native module — `optimizeDeps: { exclude: ["bun:sqlite"] }` (`.repos/effect/vitest.config.ts:58-60`) — so expect per-package exceptions. |
 | `server.deps.inline` | **No.** It forces a dependency through Vite's transform pipeline instead of being externalised. | Usually *increases* cost — it adds transform work. It is a correctness tool (ESM/CJS interop), not a speed tool. | Not a lever for this problem. |
 | `test.projects` in one root config vs one Vitest process per package | **No.** Projects are a *scheduling* construct. Isolation is still per-file, and each project can set its own `isolate`, `pool` and `environment`. | The real win is one Vite server and one scheduler instead of N (§4), not fewer imports. | Structurally the most valuable change available — see §4. |
-| `test.dir` | No. | Speeds file *discovery* only. Already effectively bounded by `include: ["src/**/*.test.{ts,tsx}"]` (`configs/vitest/base.ts:11`). | No further gain. |
+| `test.dir` | No. | Speeds file *discovery* only. Already effectively bounded by `include: ["src/**/*.test.{ts,tsx}"]` (`configs/test/base.ts`). | No further gain. |
 
 The honest summary: nothing except sharing a module registry removes the per-file re-import of
 Effect, and sharing the registry is what broke. What is available is making each import *cheaper* —
@@ -587,7 +587,7 @@ Nothing else about the loop is re-researched here.
 
 **Try and measure, do not assume.**
 
-6. **`deps.optimizer.ssr.include` listing the Effect packages,** in `configs/vitest/base.ts`. It is
+6. **`deps.optimizer.ssr.include` listing the Effect packages,** in `configs/test/base.ts`. It is
    the only documented mechanism that attacks the measured problem — "every file re-imports Effect" —
    at its root, by bundling those imports once, and it shares no mutable module state, so it cannot
    reproduce the `isolate: false` failure. Highest expected value of anything in §3.

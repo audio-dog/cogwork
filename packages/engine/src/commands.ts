@@ -10,7 +10,11 @@ import {
   ContributionSettingRefused,
   ContributionSettingScope,
   ContributionSettingUpdate,
+  type ControlStoreFailure,
+  type ControlStore as ControlStorePicture,
   type DaemonLimitUpdate,
+  type HarnessName,
+  HarnessNotRegistered,
   type OperationSettingUpdate,
   type PluginFailure,
   type PluginId,
@@ -29,6 +33,7 @@ import {
   WorkspaceManagementError,
   type WorkspaceRegistration,
   WorkspaceRegistrationError,
+  type WorkspaceUpdate,
   workspaceFailureState,
   workspaceStateFromInfo,
 } from "@cogwork/contracts";
@@ -38,9 +43,10 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { ConnectionStore } from "./connection";
-import { ControlStore } from "./control-store";
+import { ControlStore, type ControlStoreService } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
+import { Harness } from "./harness";
 import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
 import { applyHandbackBarrier } from "./observe";
 import { operationSettingRefusal } from "./operation-policy";
@@ -274,25 +280,38 @@ export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payl
   );
 });
 
+const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutation")(function* (
+  store: ControlStoreService,
+  update: Effect.Effect<ControlStorePicture, ControlStoreFailure>,
+) {
+  const publisher = yield* DaemonEventPublisher;
+  const worker = yield* ReconcileWorker;
+  const controlStore = yield* store.withWrite(update.pipe(Effect.tap(() => worker.invalidateAvailability())));
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  const published = yield* publisher.publishControlStore(controlStore);
+  yield* publisher.publishWorkspaces();
+  return published;
+});
+
 export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(function* (payload: {
   readonly update: OperationSettingUpdate;
 }) {
   const refusal = operationSettingRefusal(payload.update);
   if (refusal !== null) return yield* refusal;
   const store = yield* ControlStore;
-  const publisher = yield* DaemonEventPublisher;
-  const worker = yield* ReconcileWorker;
-  const controlStore = yield* store.withWrite(
-    Effect.gen(function* () {
-      const updated = yield* store.updateOperationSetting(payload.update);
-      yield* worker.invalidateAvailability();
-      return updated;
-    }),
-  );
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  const published = yield* publisher.publishControlStore(controlStore);
-  yield* publisher.publishWorkspaces();
-  return published;
+  return yield* publishAvailabilityMutation(store, store.updateOperationSetting(payload.update));
+});
+
+export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function* (payload: {
+  readonly harness: HarnessName;
+  readonly enabled: boolean;
+}) {
+  const harness = yield* Harness;
+  if (!harness.names.includes(payload.harness)) {
+    return yield* HarnessNotRegistered.make({ harness: payload.harness });
+  }
+  const store = yield* ControlStore;
+  return yield* publishAvailabilityMutation(store, store.setHarnessEnabled(payload.harness, payload.enabled));
 });
 
 const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
@@ -423,6 +442,30 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
   );
   yield* publisher.publishControlStore(controlStore);
   return workspace;
+});
+
+export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (payload: {
+  readonly workspace: WorkspaceId;
+  readonly update: WorkspaceUpdate;
+}) {
+  const { issueTracker, sourceControl } = payload.update;
+  yield* requireConfiguredBinding(
+    issueTracker.connectionId,
+    yield* connectionSystemFor(issueTracker.type),
+    "issueTracker",
+  );
+  if (sourceControl) {
+    yield* requireConfiguredBinding(sourceControl.connectionId, "github", "sourceControl");
+  }
+  const management = yield* WorkspaceManagement;
+  const publisher = yield* DaemonEventPublisher;
+  const worker = yield* ReconcileWorker;
+  const change = yield* management.update(payload.workspace, payload.update);
+  const state = workspaceStateFromChange(change);
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  const published = yield* publisher.publishWorkspaces();
+  yield* publisher.publishScheduler();
+  return published.find((workspace) => workspace.name === payload.workspace) ?? state;
 });
 
 export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {

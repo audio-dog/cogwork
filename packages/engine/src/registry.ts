@@ -7,8 +7,9 @@ import {
   WorkspaceId,
   WorkspaceManagementError,
   WorkspaceNotFound,
-  type WorkspaceRegistration,
+  WorkspaceRegistration,
   WorkspaceRegistrationError,
+  type WorkspaceUpdate,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -81,6 +82,10 @@ export interface WorkspaceManagementService {
   readonly deregister: (
     workspace: WorkspaceId,
   ) => Effect.Effect<WorkspaceId, WorkspaceManagementError | WorkspaceNotFound>;
+  readonly update: (
+    workspace: WorkspaceId,
+    update: WorkspaceUpdate,
+  ) => Effect.Effect<WorkspaceRegistrationChange, WorkspaceManagementError | WorkspaceNotFound>;
   readonly rebind: (
     workspace: WorkspaceId,
     checkoutPath: string,
@@ -101,6 +106,13 @@ export const managementReadOnlyLayer = Layer.succeed(WorkspaceManagement, {
     Effect.fail(
       new WorkspaceManagementError({
         operation: "deregister workspace",
+        message: "Workspace registry is read-only",
+      }),
+    ),
+  update: () =>
+    Effect.fail(
+      new WorkspaceManagementError({
+        operation: "update workspace",
         message: "Workspace registry is read-only",
       }),
     ),
@@ -150,6 +162,7 @@ const decodeSourceControl = Schema.decodeUnknownEffect(Schema.fromJsonString(Sou
 const decodeSourceControlOption = Schema.decodeUnknownOption(Schema.fromJsonString(SourceControlConfig));
 const decodeWorkspaceBindingColumns = Schema.decodeUnknownEffect(WorkspaceBindingColumns);
 const decodeWorkspaceConfig = Schema.decodeUnknownEffect(WorkspaceConfig);
+const decodeWorkspaceRegistration = Schema.decodeUnknownEffect(WorkspaceRegistration);
 const encodeIssueTracker = Schema.encodeSync(Schema.fromJsonString(IssueTrackerConfig));
 const encodeSourceControl = Schema.encodeSync(Schema.fromJsonString(SourceControlConfig));
 const encodeMcpSkills = Schema.encodeSync(Schema.fromJsonString(McpSkills));
@@ -293,15 +306,26 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   const binding = yield* decodeWorkspaceBindingColumns(row).pipe(
     Effect.mapError((error) => registrationError(error)),
   );
-  const config = yield* decodeWorkspaceConfig({
-    name: input.name,
-    displayName: row.name,
+  const record = yield* decodeWorkspaceRegistration({
+    name: row.name,
     checkoutPath: row.checkoutPath,
+    gitRemote: present(row.gitRemote),
     issueTracker: input.issueTracker,
     sourceControl: input.sourceControl,
     mcpSkills: present(binding.mcpSkills),
     worktrees: worktreesFrom(row, binding),
     linearHistory: row.linearHistory === 1,
+    concurrency: present(row.concurrency),
+  }).pipe(Effect.mapError((error) => registrationError(error)));
+  const config = yield* decodeWorkspaceConfig({
+    name: input.name,
+    displayName: record.name,
+    checkoutPath: record.checkoutPath,
+    issueTracker: record.issueTracker,
+    sourceControl: record.sourceControl,
+    mcpSkills: record.mcpSkills,
+    worktrees: record.worktrees,
+    linearHistory: record.linearHistory,
   }).pipe(Effect.mapError((error) => registrationError(error)));
   const contributions = yield* services
     .scanAuthoringTrees({
@@ -314,6 +338,7 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
     source: `control-store:${row.id}`,
     ...(input.repository ? { repository: input.repository } : {}),
     config,
+    record,
     contributions,
     workspaceLimit: present(row.concurrency),
   } satisfies RegisteredWorkspace;
@@ -385,6 +410,47 @@ const updateCheckoutPath = Effect.fn("WorkspaceRegistry.updateCheckoutPath")(fun
   yield* sql`UPDATE workspaces
     SET checkout_path = ${checkoutPath}
     WHERE id = ${workspace}`;
+});
+
+const updateWorkspaceRow = Effect.fn("WorkspaceRegistry.updateWorkspaceRow")(function* (
+  sql: SqlClient.SqlClient,
+  workspace: WorkspaceId,
+  update: WorkspaceUpdate,
+) {
+  const worktrees = update.worktrees;
+  const [row] = yield* sql<WorkspaceRow>`UPDATE workspaces SET
+    name = ${update.name},
+    git_remote = ${update.gitRemote ?? null},
+    issue_tracker = ${encodeIssueTracker(update.issueTracker)},
+    source_control = ${update.sourceControl ? encodeSourceControl(update.sourceControl) : null},
+    mcp_skills = ${update.mcpSkills ? encodeMcpSkills(update.mcpSkills) : null},
+    linear_history = ${update.linearHistory ? 1 : 0},
+    worktree_root = ${worktrees?.root ?? null},
+    worktree_remote = ${worktrees?.remote ?? null},
+    worktree_base_branch = ${worktrees?.baseBranch ?? null},
+    worktree_link_paths = ${worktrees?.linkPaths ? encodeWorktreeValues(worktrees.linkPaths) : null},
+    worktree_setup = ${worktrees?.setup ? encodeWorktreeValues(worktrees.setup) : null},
+    worktree_reap_after_millis = ${worktrees?.reapAfterMillis ?? null},
+    concurrency = ${update.concurrency ?? null}
+    WHERE id = ${workspace}
+    RETURNING
+      id,
+      name,
+      checkout_path AS checkoutPath,
+      git_remote AS gitRemote,
+      issue_tracker AS issueTracker,
+      source_control AS sourceControl,
+      mcp_skills AS mcpSkills,
+      linear_history AS linearHistory,
+      worktree_root AS worktreeRoot,
+      worktree_remote AS worktreeRemote,
+      worktree_base_branch AS worktreeBaseBranch,
+      worktree_link_paths AS worktreeLinkPaths,
+      worktree_setup AS worktreeSetup,
+      worktree_reap_after_millis AS worktreeReapAfterMillis,
+      concurrency`;
+  if (!row) return yield* new WorkspaceNotFound({ workspace });
+  return row;
 });
 
 const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChange")(function* (
@@ -647,6 +713,24 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
           ),
         );
       });
+      const update = Effect.fn("WorkspaceManagement.update")(function* (
+        workspace: WorkspaceId,
+        workspaceUpdate: WorkspaceUpdate,
+      ) {
+        if (store.health === "unavailable") {
+          return yield* new WorkspaceManagementError({
+            operation: "update workspace",
+            message: store.message,
+          });
+        }
+        return yield* store.withWrite(
+          sql.withTransaction(updateWorkspaceRow(sql, workspace, workspaceUpdate)).pipe(
+            Effect.flatMap((row) => loadRegistrationChange(loadingServices, row, authoringRoots)),
+            Effect.flatMap(commitChange),
+            Effect.mapError(managementError("update workspace")),
+          ),
+        );
+      });
       const deregister = Effect.fn("WorkspaceManagement.deregister")(function* (workspace: WorkspaceId) {
         if (store.health === "unavailable") {
           return yield* new WorkspaceManagementError({
@@ -687,7 +771,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         );
       });
       return Context.make(WorkspaceRegistry, registry).pipe(
-        Context.add(WorkspaceManagement, { register, deregister, rebind }),
+        Context.add(WorkspaceManagement, { register, update, deregister, rebind }),
       );
     }),
   );

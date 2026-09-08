@@ -114,6 +114,7 @@ describe("Scheduler.configFromControlStore", () => {
       operationSettings: [],
       connections: [],
       pluginInstalls: [],
+      harnessSettings: [],
       contributionSettings: [],
     });
 

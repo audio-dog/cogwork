@@ -5,6 +5,7 @@ import {
   type OperationSettingRow,
   operationSettingNames,
   RunId,
+  RunPlanMcpServer,
   type SettingResolutionCase,
   settingResolutionCases,
   WorkItemId,
@@ -12,6 +13,7 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
@@ -20,6 +22,8 @@ import type { RegisteredWorkspace } from "./projector";
 import {
   assembleRunPlan,
   availabilityCauses,
+  type BuildRunPlanInput,
+  buildRunPlan,
   engineAdmissibleSettingScope,
   engineSettingScopeDirection,
   projectedContributionName,
@@ -349,6 +353,150 @@ describe("stage settings come from Operation settings", () => {
 });
 
 describe("Run Plan assembly", () => {
+  it("pairs admitted MCP credentials by contribution identity regardless of server order", () => {
+    const contributions = [
+      {
+        id: "plugin:github/mcp/github",
+        authority: "plugin:github",
+        kind: "mcp-server",
+        localName: "github",
+        file: "/plugins/github/mcp/github.json",
+      },
+      {
+        id: "local:repo/mcp/disabled",
+        authority: "local:repo",
+        kind: "mcp-server",
+        localName: "disabled",
+        file: "/repo/.agents/mcp/disabled.json",
+      },
+      {
+        id: "plugin:linear/mcp/linear",
+        authority: "plugin:linear",
+        kind: "mcp-server",
+        localName: "linear",
+        file: "/plugins/linear/mcp/linear.json",
+      },
+    ] satisfies ReadonlyArray<FileContribution>;
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const mcpServers = [
+      {
+        identity: "plugin:linear/mcp/linear",
+        name: "linear",
+        endpoint: "https://mcp.linear.app/mcp",
+        bearer: Redacted.make("linear-token"),
+        unavailableReason: null,
+      },
+      {
+        identity: "local:repo/mcp/disabled",
+        name: "disabled",
+        endpoint: "https://disabled.example.test/mcp",
+        bearer: Redacted.make("disabled-token"),
+        unavailableReason: null,
+      },
+      {
+        identity: "plugin:github/mcp/github",
+        name: "github",
+        endpoint: "https://api.githubcopilot.com/mcp",
+        bearer: Redacted.make("github-token"),
+        unavailableReason: null,
+      },
+    ];
+    const input: Omit<BuildRunPlanInput, "mcpServers"> = {
+      runId: Schema.decodeSync(RunId)("run-identity-keyed-mcp"),
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["MCP"],
+      middleware: [],
+      context,
+      contributions,
+      provenanceStamps: [],
+    };
+
+    const forward = buildRunPlan({ ...input, mcpServers });
+    const reversed = buildRunPlan({ ...input, mcpServers: mcpServers.toReversed() });
+    const credentials = (assembly: typeof forward) =>
+      [...assembly.mcpCredentials]
+        .map(([identity, credential]) => [identity, Redacted.value(credential)])
+        .sort();
+
+    assert.deepStrictEqual(credentials(forward), [
+      ["plugin:github/mcp/github", "github-token"],
+      ["plugin:linear/mcp/linear", "linear-token"],
+    ]);
+    assert.deepStrictEqual(credentials(reversed), credentials(forward));
+    assert.deepStrictEqual(
+      forward.plan.mcp.map(({ identity }) => identity),
+      ["plugin:linear/mcp/linear", "plugin:github/mcp/github"],
+    );
+    assert.deepStrictEqual(
+      reversed.plan.mcp.map(({ identity }) => identity),
+      ["plugin:github/mcp/github", "plugin:linear/mcp/linear"],
+    );
+    assert.notInclude(JSON.stringify(forward.plan), "linear-token");
+    assert.notInclude(JSON.stringify(forward.plan), "github-token");
+    assert.notInclude(JSON.stringify(forward.plan), "disabled-token");
+  });
+
+  it("keys workspace MCP credentials by the identity written into the plan", () => {
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const { plan, mcpCredentials } = buildRunPlan({
+      runId: Schema.decodeSync(RunId)("run-workspace-mcp-credential"),
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["MCP"],
+      middleware: [],
+      context,
+      contributions: [],
+      mcpServers: [
+        {
+          identity: null,
+          name: "workspace-tools",
+          endpoint: "https://mcp.example.test/tools",
+          bearer: Redacted.make("workspace-token"),
+          unavailableReason: null,
+        },
+        {
+          identity: null,
+          name: "public-tools",
+          endpoint: "https://mcp.example.test/public",
+          bearer: null,
+          unavailableReason: null,
+        },
+      ],
+      provenanceStamps: [],
+    });
+    const servers = plan.mcp.filter(Schema.is(RunPlanMcpServer));
+    const workspaceServer = servers.find(({ name }) => name === "workspace-tools");
+    const publicServer = servers.find(({ name }) => name === "public-tools");
+    const workspaceCredential = workspaceServer ? mcpCredentials.get(workspaceServer.identity) : undefined;
+    assert.isDefined(workspaceServer);
+    assert.isDefined(publicServer);
+    assert.isDefined(workspaceCredential);
+    if (!workspaceServer || !publicServer || !workspaceCredential) return;
+
+    assert.isTrue(workspaceServer.authenticated);
+    assert.isFalse(publicServer.authenticated);
+    assert.strictEqual(Redacted.value(workspaceCredential), "workspace-token");
+    assert.isFalse(mcpCredentials.has(publicServer.identity));
+    assert.notInclude(JSON.stringify(plan), "workspace-token");
+  });
+
   it.effect("fails invalid plan input with a typed assembly error", () => {
     const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
     assert.isNotNull(resolved);

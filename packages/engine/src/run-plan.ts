@@ -54,6 +54,7 @@ import {
   stageResultJsonSchema,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import type { EligibleWork } from "./classify";
@@ -682,20 +683,19 @@ const unprojectedMcp = (members: ReadonlyArray<RunPlanContributionMember>) =>
 const mcpIdentity = (name: string, endpoint: string) =>
   `engine/mcp/${revisionOf(JSON.stringify({ name, endpoint }))}`;
 
-const mcpServers = (servers: ReadonlyArray<RunPlanMcpServerInput>) =>
-  servers.map((server) => {
-    const name = server.name.trim();
-    const endpoint = server.endpoint.trim();
-    const identity = server.identity ?? mcpIdentity(name, endpoint);
-    return RunPlanMcpServer.make({
-      identity,
-      name,
-      projectedName: projectedContributionName(identity),
-      endpoint,
-      authenticated: server.authenticated,
-      unavailableReason: server.unavailableReason ?? null,
-    });
+const mcpServer = (server: RunPlanMcpServerInput) => {
+  const name = server.name.trim();
+  const endpoint = server.endpoint.trim();
+  const identity = server.identity ?? mcpIdentity(name, endpoint);
+  return RunPlanMcpServer.make({
+    identity,
+    name,
+    projectedName: projectedContributionName(identity),
+    endpoint,
+    authenticated: server.authenticated,
+    unavailableReason: server.unavailableReason ?? null,
   });
+};
 
 export const admittedMcpServers = <A extends { readonly identity: string | null }>(
   servers: ReadonlyArray<A>,
@@ -713,7 +713,15 @@ export interface RunPlanMcpServerInput {
   readonly unavailableReason?: string | null;
 }
 
-export interface AssembleRunPlanInput {
+export interface RunPlanMcpServerCandidate {
+  readonly identity: string | null;
+  readonly name: string;
+  readonly endpoint: string;
+  readonly bearer: Redacted.Redacted<string> | null;
+  readonly unavailableReason?: string | null;
+}
+
+interface RunPlanAssemblyInput {
   readonly runId: RunId;
   readonly workspace: RegisteredWorkspace;
   readonly item: EligibleWork;
@@ -726,9 +734,16 @@ export interface AssembleRunPlanInput {
   readonly projectedMembers: ReadonlyArray<RunPlanMemberType>;
   readonly middleware: ReadonlyArray<RunPlanMiddlewareName>;
   readonly contributions: ReadonlyArray<FileContribution>;
-  readonly mcpServers: ReadonlyArray<RunPlanMcpServerInput>;
   readonly provenanceStamps: ReadonlyArray<ProvenanceStamp>;
   readonly unavailableContributionReasons?: ReadonlyMap<string, string>;
+}
+
+export interface AssembleRunPlanInput extends RunPlanAssemblyInput {
+  readonly mcpServers: ReadonlyArray<RunPlanMcpServerInput>;
+}
+
+export interface BuildRunPlanInput extends RunPlanAssemblyInput {
+  readonly mcpServers: ReadonlyArray<RunPlanMcpServerCandidate>;
 }
 
 export class RunPlanAssemblyError extends Schema.TaggedError<RunPlanAssemblyError>()("RunPlanAssemblyError", {
@@ -748,7 +763,31 @@ const formatAssemblyError = (cause: unknown) => {
   return `${schemaConstructorNameFromStack(cause)}: ${formatSchemaIssue(cause.cause)}`;
 };
 
-export const assembleRunPlan = (input: AssembleRunPlanInput) => {
+interface PreparedRunPlanMcpServer {
+  readonly plan: RunPlanMcpServer;
+  readonly credential: Redacted.Redacted<string> | null;
+}
+
+const preparePlanMcpServer = (server: RunPlanMcpServerInput) => ({
+  plan: mcpServer(server),
+  credential: null,
+});
+
+const prepareCandidateMcpServer = (server: RunPlanMcpServerCandidate) => ({
+  plan: mcpServer({
+    identity: server.identity,
+    name: server.name,
+    endpoint: server.endpoint,
+    authenticated: server.bearer !== null,
+    unavailableReason: server.unavailableReason,
+  }),
+  credential: server.bearer,
+});
+
+const assemble = <McpServer extends { readonly identity: string | null }>(
+  input: RunPlanAssemblyInput & { readonly mcpServers: ReadonlyArray<McpServer> },
+  prepareMcpServer: (server: McpServer) => PreparedRunPlanMcpServer,
+) => {
   const workContext = input.item.workContext;
   const observation = RunPlanObservation.make({ ...input.observation });
   const admitted = admittedContributions(
@@ -757,7 +796,8 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     input.workspace.config.name,
   );
   const admittedServers = admittedMcpServers(input.mcpServers, admitted);
-  const mcpServersForRun = mcpServers(admittedServers);
+  const preparedMcpServers = admittedServers.map(prepareMcpServer);
+  const mcpServersForRun = preparedMcpServers.map(({ plan }) => plan);
   const resolvedMcpIdentities = new Set(
     admittedServers.flatMap(({ identity }) => (identity === null ? [] : [identity])),
   );
@@ -808,7 +848,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     contentStamp("Engine Persistence", { sessionKind: input.sessionKind }),
     contentStamp("Engine Connections", connectionNames),
   ];
-  return freezeRunPlan(
+  const plan = freezeRunPlan(
     RunPlan.make({
       id: input.runId,
       operation: input.item.stage,
@@ -881,7 +921,19 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
       }),
     }),
   );
+  const mcpCredentials: ReadonlyMap<string, Redacted.Redacted<string>> = new Map(
+    preparedMcpServers.flatMap(({ plan: server, credential }) =>
+      credential === null
+        ? []
+        : [[server.identity, credential] satisfies readonly [string, Redacted.Redacted<string>]],
+    ),
+  );
+  return { plan, mcpCredentials };
 };
+
+export const buildRunPlan = (input: BuildRunPlanInput) => assemble(input, prepareCandidateMcpServer);
+
+export const assembleRunPlan = (input: AssembleRunPlanInput) => assemble(input, preparePlanMcpServer).plan;
 
 export const tryAssembleRunPlan = Effect.fn("RunPlan.tryAssemble")((input: AssembleRunPlanInput) =>
   Effect.try({
