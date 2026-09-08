@@ -72,6 +72,9 @@ export const StoredConnectionCredential = Schema.TaggedUnion({
     connectionId: ConnectionId,
     key: Schema.RedactedFromValue(TrimmedNonEmptyString),
   },
+  GitHubCli: {
+    connectionId: ConnectionId,
+  },
 });
 export type StoredConnectionCredential = typeof StoredConnectionCredential.Type;
 
@@ -114,7 +117,7 @@ export interface CredentialIdentity {
   readonly actorUserId: string;
 }
 
-export type CredentialSource = "env" | "stored-key" | "stored-oauth" | "client-credentials";
+export type CredentialSource = "env" | "stored-key" | "stored-oauth" | "client-credentials" | "github-cli";
 
 export interface Credential {
   readonly source: CredentialSource;
@@ -177,6 +180,10 @@ export interface ClientCredentialsGrant {
 export interface CredentialSources {
   readonly stored: StoredCredentials;
   readonly clientCredentials?: ClientCredentialsGrant;
+  readonly githubCli?: {
+    readonly discover: Effect.Effect<Redacted.Redacted<string>, CredentialError>;
+    readonly acquire: (account: string) => Effect.Effect<Redacted.Redacted<string>, CredentialError>;
+  };
   readonly refresh?: TokenRefresh;
 }
 
@@ -339,6 +346,26 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     });
   });
 
+  const resolveGitHubCli = Effect.fn("CredentialStore.resolveGitHubCli")(function* (
+    account: CredentialAccount,
+  ) {
+    if (account.issueTracker !== "github") {
+      return yield* new CredentialError({
+        account: account.key,
+        message: "GitHub CLI credentials are available only for GitHub Connections",
+      });
+    }
+    const source = sources.githubCli;
+    if (!source) {
+      return yield* new CredentialError({
+        account: account.key,
+        message: "GitHub CLI (`gh`) not found",
+      });
+    }
+    const token = account.organization ? yield* source.acquire(account.organization) : yield* source.discover;
+    return { source: "github-cli", token, identity: null } satisfies Credential;
+  });
+
   const resolveSource = (
     account: CredentialAccount,
     source: ConnectionSource,
@@ -346,8 +373,10 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     ConnectionSource.match(source, {
       ApiKey: ({ key }): Effect.Effect<Credential, CredentialError> =>
         Effect.succeed({ source: "stored-key", token: key, identity: null }),
-      Env: ({ name }) => envCredential({ ...account, tokenEnv: name }),
-      Stored: () => resolveStoredGrant(account),
+      Env: ({ name }): Effect.Effect<Credential, CredentialError> =>
+        envCredential({ ...account, tokenEnv: name }),
+      GitHubCli: (): Effect.Effect<Credential, CredentialError> => resolveGitHubCli(account),
+      Stored: (): Effect.Effect<Credential, CredentialError> => resolveStoredGrant(account),
     });
 
   const resolve = Effect.fn("CredentialStore.resolve")(function* (account: CredentialAccount) {
