@@ -1,4 +1,5 @@
 import {
+  type CancelRunError,
   ClassifiedItem,
   Connection,
   type ConnectionEstablishment,
@@ -18,6 +19,7 @@ import {
   type PluginOverview,
   RunId,
   type RunRecord,
+  type RunStatus,
   type TriageRole,
   WorkItemId,
   WorkspaceConfig,
@@ -61,6 +63,12 @@ const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const wsid = Schema.decodeSync(WorkspaceId);
 const harness = Schema.decodeSync(HarnessName);
+
+const assertAlreadyFinishedCancelError = (error: CancelRunError, status: RunStatus) => {
+  assert.strictEqual(error._tag, "CancelRunError");
+  assert.strictEqual(error.reason, "already-finished");
+  assert.strictEqual(error.status, status);
+};
 const commandHarnessRunner: HarnessRunner = {
   name: harness("cursor"),
   sessionKind: "opaque-handle",
@@ -616,22 +624,22 @@ describe("CancelRun", () => {
     }).pipe(Effect.provide(daemonLayer(recordingTracker([trackerItem()], calls))), Effect.scoped);
   });
 
-  it.effect("fails with RunNotFound for an unknown run", () =>
+  it.effect("fails with a not-found CancelRunError for an unknown run", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const error = yield* Effect.flip(client.CancelRun({ runId: rid("ghost") }));
-      assert.strictEqual(error._tag, "RunNotFound");
+      assert.strictEqual(error._tag, "CancelRunError");
+      assert.strictEqual(error.reason, "not-found");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 
-  it.effect("fails with RunAlreadyFinished for a run that is not running", () =>
+  it.effect("fails with an already-finished CancelRunError for a run that is not running", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
       yield* ledger.insertRun(runRecord({ status: "succeeded", endedAtMillis: 10 }));
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const error = yield* Effect.flip(client.CancelRun({ runId: rid("run-1") }));
-      assert.strictEqual(error._tag, "RunAlreadyFinished");
-      if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
+      assertAlreadyFinishedCancelError(error, "succeeded");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 
@@ -661,8 +669,7 @@ describe("CancelRun", () => {
       yield* Deferred.succeed(finishCancel, undefined);
 
       const error = yield* Fiber.join(cancelling);
-      assert.strictEqual(error._tag, "RunAlreadyFinished");
-      if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
+      assertAlreadyFinishedCancelError(error, "succeeded");
       assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
     }).pipe(
       Effect.provide(
