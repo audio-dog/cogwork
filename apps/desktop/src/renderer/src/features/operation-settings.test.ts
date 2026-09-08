@@ -1,5 +1,6 @@
 import {
   defaultControlStore,
+  HarnessEnablement,
   HarnessItem,
   HarnessName,
   HarnessOptionCatalog,
@@ -15,12 +16,16 @@ import {
   catalogChoiceLabel,
   catalogChoiceMatches,
   harnessCatalogLoad,
+  harnessIsDisabled,
   operationSettingUpdate,
+  selectableHarnessCatalogs,
   settingCell,
+  unavailableHarnessLabel,
 } from "./operation-settings";
 
 const workspace = Schema.decodeSync(WorkspaceId)("w");
 const other = Schema.decodeSync(WorkspaceId)("other");
+const harness = Schema.decodeSync(HarnessName);
 
 const harnessItem = (harness: string, catalog: HarnessOptionCatalog | null) =>
   HarnessItem.make({
@@ -102,6 +107,36 @@ const catalogs = availableHarnessCatalogs(
     checkedAtMillis: 1,
   }),
 );
+
+describe("selectableHarnessCatalogs", () => {
+  it("omits disabled Harnesses from new choices", () => {
+    const controlStore = {
+      ...defaultControlStore,
+      harnessSettings: [HarnessEnablement.make({ harness: harness("codex"), enabled: false })],
+    };
+
+    expect(selectableHarnessCatalogs(controlStore, catalogs)).toEqual([]);
+  });
+
+  it("identifies a disabled Harness without a published catalog", () => {
+    const disabled = harness("claude");
+
+    expect(
+      harnessIsDisabled(
+        {
+          ...defaultControlStore,
+          harnessSettings: [HarnessEnablement.make({ harness: disabled, enabled: false })],
+        },
+        disabled,
+      ),
+    ).toBe(true);
+  });
+
+  it("distinguishes an enabled unavailable Harness from a disabled one", () => {
+    expect(unavailableHarnessLabel("claude", false)).toBe("claude · no longer offered");
+    expect(unavailableHarnessLabel("claude", true)).toBe("claude · disabled");
+  });
+});
 
 const store = (rows: ReadonlyArray<Record<string, unknown>>): Parameters<typeof settingCell>[0] =>
   ({ ...defaultControlStore, operationSettings: rows }) as Parameters<typeof settingCell>[0];

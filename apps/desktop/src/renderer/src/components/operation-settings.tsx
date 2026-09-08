@@ -46,13 +46,16 @@ import {
   catalogChoiceMatches,
   catalogFor,
   type HarnessCatalog,
+  harnessIsDisabled,
   operationLabels,
   operationSummaries,
   operationSummaryLine,
   operations,
   policyProfileChoices,
   type SettingCell,
+  selectableHarnessCatalogs,
   settingCell,
+  unavailableHarnessLabel,
 } from "../features/operation-settings";
 import { providerGlyph, providerLabel } from "../features/provider-presentation";
 import { ProviderGlyphIcon } from "./provider-glyph";
@@ -145,36 +148,48 @@ function HarnessRail({
 function HarnessModelPicker({
   harnessSpec,
   modelSpec,
+  catalogs,
   onPick,
 }: {
   readonly harnessSpec: ControlSpec;
   readonly modelSpec: ControlSpec;
+  readonly catalogs: readonly HarnessCatalog[];
   readonly onPick: (harness: string, model: string) => void;
 }) {
   const {
-    state: { catalogs },
+    state: { catalogs: allCatalogs, controlStore },
     meta: { disabled },
   } = useOperationSettings();
   const effectiveHarness = harnessSpec.cell.effective;
-  const effectiveCatalog = catalogFor(catalogs, effectiveHarness);
+  const effectiveCatalog = catalogFor(allCatalogs, effectiveHarness);
   // Null until the rail is picked, so a live harness change still moves the popover.
   const [chosenRail, setChosenRail] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const railCatalog = catalogFor(catalogs, chosenRail) ?? effectiveCatalog ?? catalogs[0];
+  const stale = modelSpec.cell.stale || harnessSpec.cell.stale;
+  const disabledHarness = harnessIsDisabled(controlStore, effectiveHarness);
+  const retiredHarness = effectiveHarness !== null && effectiveCatalog === null && !disabledHarness;
+  const railCatalog =
+    catalogFor(catalogs, chosenRail) ?? catalogFor(catalogs, effectiveHarness) ?? catalogs[0];
   if (!railCatalog) {
     return (
-      <Button variant="outline" className="w-64 justify-start" aria-label="Harness and model" disabled>
-        <span className="truncate text-muted-foreground">No Harness catalog available</span>
+      <Button variant="outline" className="w-64 justify-start gap-2" aria-label="Harness and model" disabled>
+        {effectiveCatalog ? <ProviderGlyphIcon glyph={providerGlyph(effectiveCatalog.harness)} /> : null}
+        <span className="truncate">
+          {unavailableHarnessLabel(
+            effectiveCatalog ? providerLabel(effectiveCatalog.harness) : effectiveHarness,
+            disabledHarness,
+          )}
+        </span>
       </Button>
     );
   }
   const rail = railCatalog.harness;
-  const stale = modelSpec.cell.stale || harnessSpec.cell.stale;
-  const retiredHarness = effectiveHarness !== null && effectiveCatalog === null;
   const shown = railCatalog.models.filter((model) => catalogChoiceMatches(model, query));
   const own = modelSpec.cell.own !== null;
-  const triggerLabel = labelOf(modelSpec, modelSpec.cell.effective);
+  const modelLabel = labelOf(modelSpec, modelSpec.cell.effective);
+  const harnessLabel = effectiveCatalog ? providerLabel(effectiveCatalog.harness) : effectiveHarness;
+  const triggerLabel = disabledHarness ? `${harnessLabel} disabled · ${modelLabel}` : modelLabel;
 
   return (
     <Popover
@@ -342,6 +357,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   const cell = (setting: OperationSettingName) =>
     settingCell(controlStore, catalogs, workspace, operation, setting);
   const catalog = catalogFor(catalogs, cell("harness").effective);
+  const selectableCatalogs = selectableHarnessCatalogs(controlStore, catalogs);
   const set = (setting: OperationSettingName, value: string | null) => write(setting, operation, value);
   // Harness, model and effort are chosen together, so they revert together — an effort left
   // behind can outlive the catalog that offered it.
@@ -369,7 +385,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
     {
       key: "harness",
       label: "Harness",
-      options: catalogs.map((entry) => ({
+      options: selectableCatalogs.map((entry) => ({
         value: entry.harness,
         label: providerLabel(entry.harness),
       })),
@@ -410,6 +426,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
         <HarnessModelPicker
           harnessSpec={harnessSpec}
           modelSpec={modelSpec}
+          catalogs={selectableCatalogs}
           onPick={(harness, model) => {
             set("harness", harness);
             set("model", model);

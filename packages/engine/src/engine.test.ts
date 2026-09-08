@@ -115,6 +115,7 @@ const providerStub = (prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [])
   Layer.succeed(SourceControlProvider, {
     observe: () => Effect.succeed(new Map(prs)),
     comment: () => Effect.void,
+    openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
   });
 
 const sources = <R = never>(
@@ -218,6 +219,7 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({ observe: () => Effect.fail(auth) }), {
         observe: () => Effect.succeed(new Map()),
         comment: () => Effect.void,
+        openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(workspace));
 
@@ -230,6 +232,7 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({}), {
         observe: () => Effect.fail(auth),
         comment: () => Effect.void,
+        openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(workspace));
 
@@ -242,6 +245,7 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({}), {
         observe: () => Effect.fail(auth),
         comment: () => Effect.void,
+        openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(githubWorkspace));
 
@@ -904,6 +908,7 @@ const availableControlStore = Layer.succeed(ControlStore, {
   establishConnection: () => Effect.succeed(defaultControlStore),
   revokeConnection: () => Effect.succeed(defaultControlStore),
   removeConnection: () => Effect.succeed(defaultControlStore),
+  setHarnessEnabled: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
   installPlugin: () => Effect.succeed(defaultControlStore),
   uninstallPlugin: () => Effect.succeed(defaultControlStore),

@@ -4,6 +4,7 @@ import {
   type HarnessName,
   type HarnessOptionCatalog,
   type HarnessOverview,
+  harnessEnabled,
   LifecycleStage,
   type OperationSettingName,
   type OperationSettingRow,
@@ -46,6 +47,25 @@ export const harnessCatalogLoad = (overview: HarnessOverview | null, failed: boo
 
 export const catalogFor = (catalogs: ReadonlyArray<HarnessCatalog>, harness: string | null) =>
   catalogs.find((candidate) => candidate.harness === harness) ?? null;
+
+export const selectableHarnessCatalogs = (
+  controlStore: ControlStore | null,
+  catalogs: ReadonlyArray<HarnessCatalog>,
+) => {
+  if (!controlStore) return catalogs;
+  return catalogs.filter((catalog) => harnessEnabled(controlStore.harnessSettings, catalog.harness));
+};
+
+export const harnessIsDisabled = (controlStore: ControlStore | null, harness: string | null) => {
+  if (!controlStore || !harness) return false;
+  return controlStore.harnessSettings.some((setting) => setting.harness === harness && !setting.enabled);
+};
+
+export const unavailableHarnessLabel = (harness: string | null, disabled: boolean) => {
+  if (!harness) return "No Harness enabled";
+  if (disabled) return `${harness} · disabled`;
+  return `${harness} · no longer offered`;
+};
 
 const policyProfileLabels: Record<RunPlanPolicyProfile, string> = {
   "read-only": "Read only",

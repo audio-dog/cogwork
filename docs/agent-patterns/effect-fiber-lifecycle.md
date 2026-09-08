@@ -134,5 +134,6 @@ The one smell: a bare `Effect.never` outside any scope, used as a lazy "keep the
 - `packages/engine/src/reconcile.ts`: the supervised worker loop with a bounded receipt await — the in-repo exemplar of this pattern's supervision section.
 - `packages/engine/src/run-control.ts`: the in-repo `FiberMap` registry keyed by run id (`cancel` must still read-and-interrupt in one atomic step, not `has` then `remove`).
 - `packages/engine/src/tools/owned-tools.ts`: the Promise-shaped tool boundary.
+- `apps/cli/src/platform.ts`: the `git rebase --abort` cleanup wired through `Effect.onExit` — the source of this doc's example.
 - `.repos/opencode/packages/opencode/src/control-plane/workspace.ts`: `FiberMap` keyed by workspace id for sync loops.
 - `.repos/opencode/packages/opencode/src/effect/runner.ts`: converting interrupt-only causes into a typed `Cancelled` failure.

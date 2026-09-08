@@ -1,11 +1,29 @@
-import { HarnessItem, HarnessName, HarnessSignIn, HarnessState } from "@cogwork/contracts";
+import {
+  defaultControlStore,
+  HarnessItem,
+  HarnessName,
+  HarnessSignIn,
+  HarnessState,
+} from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { harnessSummary, installedVersion, versionLabel } from "./harnesses-view";
+import {
+  applyHarnessEnablement,
+  harnessEnablementView,
+  harnessSummary,
+  installedVersion,
+  versionLabel,
+} from "./harnesses-view";
 
-const item = (state: HarnessState, version: string | null, models: ReadonlyArray<string> = []) =>
+const item = (
+  state: HarnessState,
+  version: string | null,
+  models: ReadonlyArray<string> = [],
+  enabled = true,
+) =>
   HarnessItem.make({
     harness: Schema.decodeSync(HarnessName)("codex"),
+    enabled,
     version,
     state,
     models,
@@ -28,29 +46,109 @@ describe("versionLabel", () => {
 
 describe("harnessSummary", () => {
   it("keeps a ready harness quiet", () => {
-    const summary = harnessSummary(HarnessState.cases.Ready.make({}));
+    const summary = harnessSummary(item(HarnessState.cases.Ready.make({}), null));
     expect(summary).toEqual({ headline: "Ready", detail: null, attention: "none", signIn: null });
   });
 
   it("treats a missing install as fatal and everything else as a warning", () => {
     expect(
-      harnessSummary(HarnessState.cases.NotInstalled.make({ diagnostic: "not on PATH" })).attention,
+      harnessSummary(item(HarnessState.cases.NotInstalled.make({ diagnostic: "not on PATH" }), null))
+        .attention,
     ).toBe("fatal");
-    expect(harnessSummary(HarnessState.cases.Unavailable.make({ diagnostic: "broke" })).attention).toBe(
-      "warning",
-    );
+    expect(
+      harnessSummary(item(HarnessState.cases.Unavailable.make({ diagnostic: "broke" }), null)).attention,
+    ).toBe("warning");
   });
 
   it("surfaces the sign-in command the harness declared", () => {
     const summary = harnessSummary(
-      HarnessState.cases.NotSignedIn.make({ signIn: HarnessSignIn.make({ command: "codex login" }) }),
+      item(
+        HarnessState.cases.NotSignedIn.make({ signIn: HarnessSignIn.make({ command: "codex login" }) }),
+        null,
+      ),
     );
     expect(summary.headline).toBe("Not signed in");
     expect(summary.signIn).toBe("codex login");
   });
 
   it("says nothing about signing in when the harness declared no command", () => {
-    expect(harnessSummary(HarnessState.cases.NotSignedIn.make({ signIn: null })).signIn).toBeNull();
+    expect(
+      harnessSummary(item(HarnessState.cases.NotSignedIn.make({ signIn: null }), null)).signIn,
+    ).toBeNull();
+  });
+
+  it("puts disabled ahead of readiness", () => {
+    const summary = harnessSummary(item(HarnessState.cases.Ready.make({}), null, [], false));
+    expect(summary).toEqual({ headline: "Disabled", detail: null, attention: "muted", signIn: null });
+  });
+});
+
+describe("applyHarnessEnablement", () => {
+  it("applies live Control store changes to an older probe result", () => {
+    const codex = item(HarnessState.cases.Ready.make({}), null);
+    const controlStore = {
+      ...defaultControlStore,
+      harnessSettings: [{ harness: codex.harness, enabled: false }],
+    };
+
+    expect(applyHarnessEnablement([codex], controlStore)[0]?.enabled).toBe(false);
+  });
+});
+
+describe("harnessEnablementView", () => {
+  it("uses the mutation result until the Board publishes a new Control store", () => {
+    const board = defaultControlStore;
+    const harness = Schema.decodeSync(HarnessName)("codex");
+    const updated = {
+      ...board,
+      harnessSettings: [{ harness, enabled: false }],
+    };
+
+    expect(harnessEnablementView(board, { base: board, updated })).toEqual({
+      controlStore: updated,
+      settled: false,
+    });
+  });
+
+  it("keeps the mutation result while the Board is unavailable", () => {
+    const base = defaultControlStore;
+    const harness = Schema.decodeSync(HarnessName)("codex");
+    const updated = {
+      ...base,
+      harnessSettings: [{ harness, enabled: false }],
+    };
+
+    expect(harnessEnablementView(null, { base, updated })).toEqual({
+      controlStore: updated,
+      settled: false,
+    });
+  });
+
+  it("accepts the next Control store when another client overwrote the setting", () => {
+    const base = defaultControlStore;
+    const board = { ...base };
+    const harness = Schema.decodeSync(HarnessName)("codex");
+    const updated = {
+      ...base,
+      harnessSettings: [{ harness, enabled: false }],
+    };
+
+    expect(harnessEnablementView(board, { base, updated })).toEqual({
+      controlStore: board,
+      settled: true,
+    });
+  });
+
+  it("uses the Board after it publishes the submitted enablement", () => {
+    const base = defaultControlStore;
+    const harness = Schema.decodeSync(HarnessName)("codex");
+    const updated = { ...base, harnessSettings: [{ harness, enabled: false }] };
+    const board = { ...updated };
+
+    expect(harnessEnablementView(board, { base, updated })).toEqual({
+      controlStore: board,
+      settled: true,
+    });
   });
 });
 

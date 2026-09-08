@@ -1,6 +1,19 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString } from "./base-schemas";
-import { RunPlanPolicyProfile } from "./run-plan";
+import { RunPlanPolicyProfile } from "./settings";
+
+export class HarnessEnablement extends Schema.Class<HarnessEnablement>("HarnessEnablement")({
+  harness: HarnessName,
+  enabled: Schema.Boolean,
+}) {}
+
+export const harnessEnabled = (settings: ReadonlyArray<HarnessEnablement>, harness: HarnessName) =>
+  settings.find((setting) => setting.harness === harness)?.enabled ?? true;
+
+export class HarnessNotRegistered extends Schema.TaggedError<HarnessNotRegistered>()("HarnessNotRegistered", {
+  harness: HarnessName,
+}) {}
 
 /** Cogwork never runs this: the credential is harness-owned, so a person runs it themselves. */
 export class HarnessSignIn extends Schema.Class<HarnessSignIn>("HarnessSignIn")({
@@ -51,11 +64,18 @@ export class HarnessOptionCatalog extends Schema.Class<HarnessOptionCatalog>("Ha
 
 export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
   harness: HarnessName,
+  enabled: Schema.Boolean.pipe(
+    Schema.withConstructorDefault(Effect.succeed(true)),
+    Schema.withDecodingDefaultKey(Effect.succeed(true)),
+  ),
   /** As the Harness reported it, so a non-semver release tag survives. */
   version: Schema.NullOr(TrimmedNonEmptyString),
   state: HarnessState,
   models: Schema.Array(TrimmedNonEmptyString),
-  catalog: Schema.NullOr(HarnessOptionCatalog),
+  catalog: Schema.NullOr(HarnessOptionCatalog).pipe(
+    Schema.withConstructorDefault(Effect.succeed(null)),
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
 }) {}
 
 export class HarnessOverview extends Schema.Class<HarnessOverview>("HarnessOverview")({

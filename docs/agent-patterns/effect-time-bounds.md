@@ -26,7 +26,7 @@ Work that leaves the process can stall forever. Effect makes the deadline and th
 
 ## Classify before retrying
 
-The GitHub client is the house pattern. The predicate reads a tagged error field, the schedule is a named constant next to the client, the options form combines condition, timing, and a cap, and each attempt carries its own deadline inside the retry (`withTransientAttemptDeadline`), so a hung connection fails the attempt instead of outliving the whole policy.
+The Linear client is the house pattern. The predicate reads a tagged error field, the schedule is a named constant next to the client, the options form combines condition, timing, and a cap, and each attempt carries its own deadline inside the retry (`withTransientAttemptDeadline`), so a hung connection fails the attempt instead of outliving the whole policy. The GitHub client carries the same discipline under different names (`withTransientRetry`, `withPaginationDeadline`, and an attempt deadline inlined in `execute`).
 
 ```ts
 const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
@@ -119,7 +119,8 @@ Hand-written `Math.min(base * 2 ** attempt, max)` inside a retry or wait loop si
 - `.repos/effect/packages/effect/src/Effect.ts`: `timeout`, `timeoutOption`, `timeoutOrElse`, `retry`, and the `AbortSignal` handed to `tryPromise`.
 - `.repos/effect/packages/effect/src/Schedule.ts` and `.repos/effect/cookbooks/schedule.md`: schedule composition and a problem-shape decision table.
 - `.agents/skills/effect-ts/references/guide-retries.md` and `guide-schedule.md`.
-- `packages/engine/src/github/client.ts`: `isTransient`, `transientBackoff`, the retry options form, and `withTransientAttemptDeadline` — the per-attempt bound inside the retry.
+- `packages/engine/src/linear/client.ts`: `isTransient`, `transientBackoff`, the retry options form, and `withTransientAttemptDeadline` — the per-attempt bound inside the retry.
+- `packages/engine/src/github/client.ts`: the same discipline as `withTransientRetry` and `withPaginationDeadline`, with the attempt deadline inlined in `execute`.
 - `apps/cli/src/platform.ts`: `runGit` and `worktreeFs.runCommand`, the bounded subprocess ports (`packages/engine/src/git.ts` is the port interface only).
 - `.repos/t3code/apps/server/src/server.ts`: retry with a capped exponential schedule and named permanent failures.
 - `.repos/opencode/packages/core/src/util/effect-flock.ts`: deadline-bounded backoff via `Schedule.while` on elapsed time (note: its `Schedule.either` cap is from an older beta).

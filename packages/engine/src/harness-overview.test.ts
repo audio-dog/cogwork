@@ -15,6 +15,8 @@ import { harnessOverview, harnessStateOf } from "./harness-overview";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
 
+const harness = Schema.decodeSync(HarnessName);
+
 const readyReadiness: HarnessReadiness = {
   operational: { status: "ready", retryable: false, diagnostic: "ready" },
   installation: { status: "installed", version: "1.2.3" },
@@ -124,7 +126,7 @@ const runner = (
   name: string,
   overrides: Partial<Pick<HarnessRunner, "readiness" | "catalogSources" | "execution" | "signIn">> = {},
 ): HarnessRunner => ({
-  name: Schema.decodeSync(HarnessName)(name),
+  name: harness(name),
   sessionKind: "opaque-handle",
   projectedMembers: [],
   planMiddleware: [],
@@ -154,6 +156,15 @@ const runner = (
 });
 
 describe("harnessOverview", () => {
+  it.effect("carries stored enablement beside readiness", () =>
+    Effect.gen(function* () {
+      const overview = yield* harnessOverview([{ harness: harness("codex"), enabled: false }]);
+
+      assert.isFalse(overview.harnesses[0]?.enabled);
+      assert.isTrue(overview.harnesses[1]?.enabled);
+    }).pipe(Effect.provide(probeLayer([runner("codex"), runner("cursor")]))),
+  );
+
   it.effect("publishes labeled choices, fallback provenance, and each runner's policy profiles", () =>
     Effect.gen(function* () {
       const overview = yield* harnessOverview();
@@ -166,6 +177,7 @@ describe("harnessOverview", () => {
         policyProfiles: ["read-only", "full"],
         provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
       });
+      assert.deepStrictEqual(overview.harnesses[0]?.models, ["model-a"]);
       assert.strictEqual(overview.harnesses[0]?.version, "1.2.3");
     }).pipe(Effect.provide(probeLayer([runner("codex"), runner("cursor")]))),
   );
