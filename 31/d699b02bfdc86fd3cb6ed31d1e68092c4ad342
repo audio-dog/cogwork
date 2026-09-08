@@ -1,0 +1,252 @@
+apps/cli/src/login.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-2,4,20,28-32,132-135,154-157,171-174,188-191
+configs/test/tsconfig.json
+  s_b0245c7559a829::t_31b3603e4b0008 1-15
+package.json
+  s_b0245c7559a829::t_31b3603e4b0008 16,18,26-27,30-31
+packages/engine/src/observe.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 69
+packages/engine/src/github/github.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 233-243,432-465
+  s_b0245c7559a829::t_f4d9fba0d4c192 466
+packages/engine/src/testing/git-invocation-counting.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-80
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_b0245c7559a829::t_31b3603e4b0008 27,73-77,80,94,108
+docs/spec/per-workspace-operating-instructions.md
+  s_b0245c7559a829::t_31b3603e4b0008 1-124
+packages/engine/src/daemon.ts
+  s_b0245c7559a829::t_31b3603e4b0008 50,311
+packages/engine/src/harness-overview.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1,9,30-35,127,168,175-179,185,188-203,208,210-216,218-232,234-266
+packages/engine/src/source-control.ts
+  s_b0245c7559a829::t_31b3603e4b0008 40-44,59,62-66
+apps/cli/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 38
+packages/codex-cli/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 25
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_b0245c7559a829::t_31b3603e4b0008 10,18-21,40,56,76,89,91,93,124
+apps/cli/src/status.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 16-21
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-94
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_b0245c7559a829::t_31b3603e4b0008 54
+packages/engine/src/retry-policy.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1,123-133
+  s_b0245c7559a829::t_fbefb53f71ea41 134
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_b0245c7559a829::t_31b3603e4b0008 1-3,5-15,22-24,45-49,51-54,56-62,64-72,76-84,90-153,155-158,160-522,529-534
+packages/engine/src/source-control.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-35
+packages/contracts/src/run-plan.ts
+  s_b0245c7559a829::t_31b3603e4b0008 8
+packages/contracts/src/triage.ts
+  s_b0245c7559a829::t_31b3603e4b0008 30,33-39,41-42,45-56,87-101
+packages/engine/src/git.ts
+  s_b0245c7559a829::t_31b3603e4b0008 57-58
+packages/engine/src/read-model.ts
+  s_b0245c7559a829::t_31b3603e4b0008 29-40,54
+packages/engine/src/retry-policy.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-5,29,49,64,75
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-72
+packages/codex-cli/vitest.config.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1
+turbo.json
+  s_b0245c7559a829::t_31b3603e4b0008 19
+packages/engine/CONTEXT.md
+  s_b0245c7559a829::t_31b3603e4b0008 45,215,227
+packages/engine/src/event-publisher.ts
+  s_b0245c7559a829::t_31b3603e4b0008 212
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_b0245c7559a829::t_31b3603e4b0008 57,148-160
+  s_b0245c7559a829::t_dac618798eb329 161
+docs/spec/settings-and-plugins.md
+  s_b0245c7559a829::t_31b3603e4b0008 209-210
+apps/desktop/src/renderer/src/features/connections-view.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1,3-8,79-105,109-111
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-7,10-18,34-39,70-211
+  s_b0245c7559a829::t_cc1a9e39579798 212
+packages/contracts/src/settings.ts
+  s_b0245c7559a829::t_31b3603e4b0008 68-70
+apps/desktop/src/renderer/src/features/connections-view.ts
+  s_b0245c7559a829::t_31b3603e4b0008 3-13
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_b0245c7559a829::t_31b3603e4b0008 1-67
+packages/contracts/src/triage.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 64,68-75,80-98,151-184
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 8-13,20,141,209,265
+packages/engine/src/daemon-composition.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 49
+packages/engine/src/harness-overview.ts
+  s_b0245c7559a829::t_31b3603e4b0008 4,52,61-63,69-70
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_b0245c7559a829::t_31b3603e4b0008 2,17-21,76,80,95-99,111-115,119
+packages/engine/src/playbook.ts
+  s_b0245c7559a829::t_31b3603e4b0008 60,102,202-203,215-216
+packages/engine/src/worktree.ts
+  s_b0245c7559a829::t_31b3603e4b0008 2,105-118,282-315,380
+packages/contracts/vitest.config.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1
+apps/cli/vitest.config.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 30
+packages/engine/src/harness.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 199-200,206-218,225-226
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_b0245c7559a829::t_31b3603e4b0008 2,8,13-18,28,33,47-49,85,88,101-104,123,134-136
+packages/contracts/src/harness.ts
+  s_b0245c7559a829::t_31b3603e4b0008 4,36-64,75-78
+packages/engine/src/github/provider.ts
+  s_b0245c7559a829::t_31b3603e4b0008 57-68,197-199,291-296,299
+packages/engine/src/harness.ts
+  s_b0245c7559a829::t_31b3603e4b0008 3-5,62,69,71,75-76,78,333,436-441
+packages/engine/src/run-ledger.ts
+  s_b0245c7559a829::t_31b3603e4b0008 31,58
+apps/cli/src/workspace-commands.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 3,5-10,43-48,57-91
+  s_b0245c7559a829::t_999289abe969c0 92-94
+packages/claude-code/src/harness.ts
+  s_b0245c7559a829::t_31b3603e4b0008 323
+packages/engine/src/worktree.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 3,49-56,64-73,82,85,91-94,106-109,134-150,492-621
+  s_b0245c7559a829::t_42862254280d4b 622-623
+configs/test/base.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-8
+packages/engine/src/recovery.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 80-86,423-434,499,503-508,993-1002,1004
+  s_b0245c7559a829::t_a5fb18c8ba8e04 1003,1005
+packages/engine/src/executor.ts
+  s_b0245c7559a829::t_31b3603e4b0008 25,48,57,60-61,76-82,99,101,103,183-192,198,206,556,559,561,568,570,577-586,589,591-594,609-630,636,651,867,870,877-878,896,909-924,929-950,955-958,979,1018,1040-1122,1143,1145-1149,1245,1267,1270,1656,1666,1689-1690,1811-1819,1880,1885,1889
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_b0245c7559a829::t_31b3603e4b0008 3-7,12,16,35-88,117,124,131-132,140,149,154-158,160-162,170,174-178
+packages/engine/src/commands.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 27,113-118,209,462,486-511,526,539,1575-1646
+packages/engine/vitest.config.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_b0245c7559a829::t_31b3603e4b0008 1-7,45-46,54-56,58,60,65,106,113,133,139,141,160,164,172-173,176-177,179-182,188,190-191,212,226,237,257-258,354,357-360,373-382,388-391,418,449,453,469,472,485-487
+apps/cli/CONTEXT.md
+  s_b0245c7559a829::t_31b3603e4b0008 55
+apps/cli/src/workspace-commands.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1,21,29-31,47,59,74-80,104-117,133-140,149-154,162
+packages/contracts/src/run.ts
+  s_b0245c7559a829::t_31b3603e4b0008 64-66,86
+packages/cursor-acp/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 31
+packages/claude-code/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 25
+apps/cli/src/ledger.ts
+  s_b0245c7559a829::t_31b3603e4b0008 63,68-70,126,149,162,332-338
+apps/cli/src/commands.ts
+  s_b0245c7559a829::t_31b3603e4b0008 162-164,180,245
+packages/claude-code/vitest.config.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1
+packages/contracts/CONTEXT.md
+  s_b0245c7559a829::t_31b3603e4b0008 28,129,302,392
+apps/desktop/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 53
+docs/research/preventing-test-suite-performance-drift.md
+  s_b0245c7559a829::t_31b3603e4b0008 330,590
+packages/engine/src/playbook.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 69-81,119-123,280,285-288,301-303
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-10,15-44,47-85,92-131,134-139,142-247,278,280,286,292,299
+packages/engine/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 32
+packages/contracts/src/rpc.ts
+  s_b0245c7559a829::t_31b3603e4b0008 40,192-197,251
+apps/desktop/vitest.config.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1
+packages/engine/src/recovery.ts
+  s_b0245c7559a829::t_31b3603e4b0008 6,43-45,224-226,277
+packages/process-diagnostics/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 18
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_b0245c7559a829::t_31b3603e4b0008 103-104
+configs/test/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 1-18
+apps/cli/src/ledger.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 257-274
+packages/contracts/package.json
+  s_b0245c7559a829::t_31b3603e4b0008 17
+packages/contracts/src/daemon.ts
+  s_b0245c7559a829::t_31b3603e4b0008 11,178
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_b0245c7559a829::t_31b3603e4b0008 20
+packages/engine/src/workspace-registry.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1,19,293,460-499,504-505,538-539
+  s_b0245c7559a829::t_009af3955c1376 540
+packages/engine/src/event-publisher.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 246
+scripts/count-worktree-git-invocations.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-115
+packages/contracts/src/workspace.ts
+  s_b0245c7559a829::t_31b3603e4b0008 90,98-106
+packages/engine/src/github/client.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 133-167
+packages/engine/src/commands.ts
+  s_b0245c7559a829::t_31b3603e4b0008 36,447-468
+  s_b0245c7559a829::t_f45b90ca8c70ab 469-470
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_b0245c7559a829::t_31b3603e4b0008 2,26,30,32-37,40,49-51,66,69,80-90,98-100,107,109-110,117-121,124-126,128-134,143,146,157-159,161,163-166,168-169,172-179,181-186,189,191-192,217-264,281,504,513-537
+  s_b0245c7559a829::t_5ec787350c7d42 538
+packages/contracts/src/board.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 30-35,391-396
+packages/engine/src/projector.ts
+  s_b0245c7559a829::t_31b3603e4b0008 7,17
+packages/engine/src/control-store.ts
+  s_b0245c7559a829::t_31b3603e4b0008 56-84,88-89,94-95
+packages/cursor-acp/vitest.config.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1
+packages/contracts/src/board.ts
+  s_b0245c7559a829::t_31b3603e4b0008 68
+apps/cli/src/platform.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 780-791
+packages/contracts/src/daemon-event.ts
+  s_b0245c7559a829::t_31b3603e4b0008 18,35
+packages/engine/src/engine.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 118,223,237,251,994,1030
+packages/engine/src/executor.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 72-76,80,331-347,539-543,565-566,571-573,815-816,854-865,871,1021,1025-1077,1090,1102,1489,1492-1496,2521-2650,2806-2896
+  s_b0245c7559a829::t_41478a51e896c2 2897
+packages/engine/src/github/client.ts
+  s_b0245c7559a829::t_31b3603e4b0008 379-384,728-730,751-753
+packages/engine/src/control-store-create.gen.ts
+  s_b0245c7559a829::t_31b3603e4b0008 12,14
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1-10,14-24,28-139,165,170,180,188,198-199,245,265-266,282,285-320
+packages/engine/src/control-store-schema.ts
+  s_b0245c7559a829::t_31b3603e4b0008 124
+apps/cli/src/platform.ts
+  s_b0245c7559a829::t_31b3603e4b0008 178-179
+packages/process-diagnostics/vitest.config.ts
+  s_b0245c7559a829::t_31b3603e4b0008 1
+packages/engine/src/registry.ts
+  s_b0245c7559a829::t_31b3603e4b0008 10,12,76-79,103-109,155,248-249,256-266,278,350-388,428,638-655,696
+pnpm-workspace.yaml
+  s_b0245c7559a829::t_31b3603e4b0008 4
+pnpm-lock.yaml
+  s_b0245c7559a829::t_22dad930274905 87-92,99-101,105-107,181-183,269-271,345-354,379-381,422-424,450-452,490-492,557-559,585-587
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "31d699b02bfdc86fd3cb6ed31d1e68092c4ad342",
+  "prompts": {},
+  "sessions": {
+    "s_b0245c7559a829": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08239-c01b-7410-853e-46016e7a6f7a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
