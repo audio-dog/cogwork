@@ -197,6 +197,27 @@ const removeWorktrees = async (paths) => {
   if (failure) throw failure;
 };
 
+const settle = (task) =>
+  task().then(
+    (value) => ({ value }),
+    (error) => ({ error }),
+  );
+
+const runCleanups = async (cleanups) => {
+  const results = [];
+  for (const cleanup of cleanups) results.push(await settle(cleanup));
+  return results;
+};
+
+export const withCleanups = async (operation, cleanups) => {
+  const operationResult = await settle(operation);
+  const cleanupResults = await runCleanups(cleanups);
+  if ("error" in operationResult) throw operationResult.error;
+  const cleanupFailure = cleanupResults.find((result) => "error" in result);
+  if (cleanupFailure) throw cleanupFailure.error;
+  return operationResult.value;
+};
+
 const parseMeasurement = (stdout) => {
   const measurement = JSON.parse(stdout.trim());
   if (
@@ -227,7 +248,7 @@ const compareRefs = async (baseName, headName) => {
   const [baseRef, headRef] = await Promise.all([resolveRef(baseName), resolveRef(headName)]);
   const root = await mkdtemp(join(tmpdir(), "cogwork-test-compare-"));
   const worktrees = [];
-  try {
+  return withCleanups(async () => {
     const base = await addWorktree(root, "base", baseRef.sha);
     worktrees.push(base);
     await installWorktree(base);
@@ -236,10 +257,7 @@ const compareRefs = async (baseName, headName) => {
     await installWorktree(head);
     const measurements = await collectMeasurements({ base, head });
     return buildReport(baseRef, headRef, measurements);
-  } finally {
-    await removeWorktrees(worktrees);
-    await rm(root, { recursive: true, force: true });
-  }
+  }, [() => removeWorktrees(worktrees), () => rm(root, { recursive: true, force: true })]);
 };
 
 const main = async () => {

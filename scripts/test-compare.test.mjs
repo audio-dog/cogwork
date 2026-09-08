@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { analyzeDurations, buildReport, measurementOrder } from "./test-compare.mjs";
+import { analyzeDurations, buildReport, measurementOrder, withCleanups } from "./test-compare.mjs";
 
 const measurements = (durationMs) => Array.from({ length: 5 }, () => ({ durationMs, testCount: 1_800 }));
 
@@ -9,6 +9,26 @@ describe("test comparison statistics", () => {
     assert.equal(analyzeDurations([100, 100, 100, 100, 100], [120, 120, 120, 120, 120]).verdict, "slower");
     assert.equal(analyzeDurations([100, 100, 100, 100, 100], [80, 80, 80, 80, 80]).verdict, "faster");
     assert.equal(analyzeDurations([100, 101, 99, 102, 98], [100, 101, 99, 102, 98]).verdict, "inconclusive");
+  });
+
+  it("preserves the operation error while attempting every cleanup", async () => {
+    const calls = [];
+    const operationError = new Error("measurement failed");
+    const result = await withCleanups(async () => {
+      throw operationError;
+    }, [
+      async () => {
+        calls.push("worktrees");
+        throw new Error("worktree cleanup failed");
+      },
+      async () => {
+        calls.push("directory");
+        throw new Error("directory cleanup failed");
+      },
+    ]).catch((error) => error);
+
+    assert.equal(result, operationError);
+    assert.deepEqual(calls, ["worktrees", "directory"]);
   });
 
   it("classifies a narrow interval beyond parity", () => {
