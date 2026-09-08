@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import {
+  boundedDiff,
   computeDiff,
   FILE_DIFF_EVENT,
   fileDiffEvent,
@@ -29,6 +30,11 @@ const DiffValue = Schema.Struct({ path: Schema.String, diff: Schema.String });
 const decodeDiffValue = Schema.decodeUnknownEffect(DiffValue);
 const fileDiffMaxBytes = 64 * 1024;
 const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
+const testProcessSignal = (signal: AbortSignal) => AbortSignal.any([signal, AbortSignal.timeout(15_000)]);
+const gitCommand = "git --literal-pathspecs";
+const gitDiffCommand = `${gitCommand} diff`;
+const isGitDiffCommand = (command: string) => command.startsWith(gitDiffCommand);
+const isGitIgnoreCommand = (command: string) => command.startsWith("git check-ignore");
 const gitFixtureEnvironment = {
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_SYSTEM: "/dev/null",
@@ -45,6 +51,21 @@ const emptyOutput: AsyncIterable<string> = {
 
 const advanceUntil = (deferred: Deferred.Deferred<void>, duration: Duration.Input) =>
   Deferred.await(deferred).pipe(Effect.raceFirst(TestClock.adjust(duration).pipe(Effect.forever)));
+
+const chunkAtNewlines = (output: AsyncIterable<string>) => {
+  const chunks = output[Symbol.asyncIterator]();
+  const pending: Array<string> = [];
+  const next = (): Promise<IteratorResult<string>> => {
+    const piece = pending.shift();
+    if (piece !== undefined) return Promise.resolve({ done: false, value: piece });
+    return chunks.next().then((chunk) => {
+      if (chunk.done) return { done: true, value: undefined };
+      pending.push(...(chunk.value.match(/[^\n]*\n|[^\n]+$/g) ?? []));
+      return next();
+    });
+  };
+  return { [Symbol.asyncIterator]: () => ({ next }) };
+};
 
 class ExecCalls extends Context.Service<ExecCalls, Queue.Queue<string>>()(
   "@cogwork/engine/tools/file-diff-feed.test/ExecCalls",
@@ -78,6 +99,7 @@ const withExecProbe = Effect.fn("file-diff-feed.test.withExecProbe")(function* (
   const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = (command, options) =>
     sandbox.handle.process.spawn(command, options).then((process) => ({
       ...process,
+      stdout: command.includes("--raw -z --patch") ? chunkAtNewlines(process.stdout) : process.stdout,
       wait: () =>
         process.wait().then((exitCode) => {
           Queue.offerUnsafe(calls, command);
@@ -101,18 +123,83 @@ const settleDiff = Effect.fn("file-diff-feed.test.settleDiff")(function* (calls:
   yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
   yield* TestClock.adjust("100 millis");
   const ignoreCommand = yield* Stream.fromQueue(calls).pipe(
-    Stream.filter((command) => command.startsWith("git check-ignore")),
+    Stream.filter(isGitIgnoreCommand),
     Stream.runHead,
   );
   if (Option.isNone(ignoreCommand)) return assert.fail("ignore check did not complete");
   yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
   yield* TestClock.adjust("1 second");
-  const diffCommand = yield* Stream.fromQueue(calls).pipe(
-    Stream.filter((command) => command.startsWith("git diff")),
-    Stream.runHead,
-  );
+  const diffCommand = yield* Stream.fromQueue(calls).pipe(Stream.filter(isGitDiffCommand), Stream.runHead);
   if (Option.isNone(diffCommand)) return assert.fail("diff did not complete");
   return [ignoreCommand.value, diffCommand.value] as const;
+});
+
+const startBlockedBatch = Effect.fn("file-diff-feed.test.startBlockedBatch")(function* (
+  exitOn: "SIGTERM" | "SIGKILL",
+) {
+  const original = yield* openSandbox();
+  yield* writeFile(original, { path: "other.txt", content: "other\n" });
+  const commit = yield* Effect.promise((signal) =>
+    original.handle.process.exec("git add -A && git commit -q -m blocked-batch-fixture", {
+      env: gitFixtureEnvironment,
+      signal: testProcessSignal(signal),
+    }),
+  );
+  assert.strictEqual(commit.exitCode, 0, commit.stderr);
+  const baseSha = yield* resolveBaseSha(original);
+  yield* writeFile(original, { path: "seed.txt", content: "seed changed\n" });
+  yield* writeFile(original, { path: "other.txt", content: "other changed\n" });
+  const started = yield* Deferred.make<void>();
+  const terminated = yield* Deferred.make<void>();
+  const killed = yield* Deferred.make<void>();
+  const exit = Promise.withResolvers<number>();
+  const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = (command, options) => {
+    if (!command.includes("--raw -z --patch")) return original.handle.process.spawn(command, options);
+    Deferred.doneUnsafe(started, Effect.void);
+    return Promise.resolve({
+      pid: 1,
+      stdout: emptyOutput,
+      stderr: emptyOutput,
+      stdin: {
+        write: () => Promise.resolve(),
+        end: () => Promise.resolve(),
+      },
+      wait: () => exit.promise,
+      kill: (signal) => {
+        if (signal === "SIGTERM") Deferred.doneUnsafe(terminated, Effect.void);
+        if (signal === "SIGKILL") Deferred.doneUnsafe(killed, Effect.void);
+        if (signal === exitOn) exit.resolve(signal === "SIGKILL" ? 137 : 143);
+        return Promise.resolve();
+      },
+    });
+  };
+  const sandbox: WorktreeSandbox = {
+    ...original,
+    handle: {
+      ...original.handle,
+      process: { ...original.handle.process, spawn },
+    },
+  };
+  const events = yield* Queue.make<FileSystem.WatchEvent>();
+  const stop = yield* Deferred.make<void>();
+  const fiber = yield* watchWorktreeDiffs(sandbox, baseSha, Deferred.await(stop)).pipe(
+    Stream.runDrain,
+    Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+    Effect.forkChild,
+  );
+  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* Queue.offerAll(events, [
+    { _tag: "Update", path: "seed.txt" },
+    { _tag: "Update", path: "other.txt" },
+  ]);
+  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* TestClock.adjust("100 millis");
+  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* TestClock.adjust("1 second");
+  yield* Deferred.succeed(stop, undefined);
+  yield* Deferred.await(started);
+  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  return { fiber, terminated, killed };
 });
 
 describe("file diff feed", () => {
@@ -200,7 +287,7 @@ describe("file diff feed", () => {
         timestamp: 0,
       }).pipe(Effect.flip);
       assert.strictEqual(error.reason, "exec-failed");
-      assert.include(error.message, "git diff");
+      assert.include(error.message, " diff ");
     }),
   );
 
@@ -244,55 +331,217 @@ describe("file diff feed", () => {
     }),
   );
 
-  it.effect("escalates a timed-out diff subprocess to SIGKILL", () =>
+  it.effect("escalates a timed-out batched diff subprocess to SIGKILL", () =>
     Effect.gen(function* () {
-      const original = yield* openSandbox();
-      yield* writeFile(original, { path: "hung.txt", content: "hung\n" });
-      const started = yield* Deferred.make<void>();
-      const terminated = yield* Deferred.make<void>();
-      const killed = yield* Deferred.make<void>();
-      const exit = Promise.withResolvers<number>();
-      const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = () => {
-        Deferred.doneUnsafe(started, Effect.void);
-        return Promise.resolve({
-          pid: 1,
-          stdout: emptyOutput,
-          stderr: emptyOutput,
-          stdin: {
-            write: () => Promise.resolve(),
-            end: () => Promise.resolve(),
-          },
-          wait: () => exit.promise,
-          kill: (signal) => {
-            if (signal === "SIGTERM") Deferred.doneUnsafe(terminated, Effect.void);
-            if (signal === "SIGKILL") {
-              Deferred.doneUnsafe(killed, Effect.void);
-              exit.resolve(137);
-            }
-            return Promise.resolve();
-          },
-        });
-      };
-      const sandbox: WorktreeSandbox = {
-        ...original,
-        handle: {
-          ...original.handle,
-          process: { ...original.handle.process, spawn },
-        },
-      };
-      const events = yield* Queue.make<FileSystem.WatchEvent>();
-      const fiber = yield* watchWorktreeDiffs(sandbox, "").pipe(
-        Stream.runDrain,
-        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
-        Effect.flip,
-        Effect.forkChild,
-      );
-      yield* Queue.offer(events, { _tag: "Create", path: "hung.txt" });
-      yield* advanceUntil(started, "1 second");
+      const { fiber, terminated, killed } = yield* startBlockedBatch("SIGKILL");
       yield* advanceUntil(terminated, "5 minutes");
       yield* advanceUntil(killed, "5 seconds");
-      const error = yield* Fiber.join(fiber);
+      const error = yield* Fiber.join(fiber).pipe(Effect.flip);
       assert.strictEqual(error.reason, "timeout");
+    }),
+  );
+
+  it.effect("terminates an interrupted batched diff subprocess", () =>
+    Effect.gen(function* () {
+      const { fiber, terminated } = yield* startBlockedBatch("SIGTERM");
+      yield* Fiber.interrupt(fiber);
+      assert.isTrue(Option.isSome(yield* Deferred.poll(terminated)));
+    }),
+  );
+
+  it.effect("batches distinct paths without changing their file diffs", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const addedPath = ":(exclude)added file*";
+      const config = yield* Effect.promise((signal) =>
+        original.handle.process.exec("git config color.ui always", { signal: testProcessSignal(signal) }),
+      );
+      assert.strictEqual(config.exitCode, 0, config.stderr);
+      yield* writeFile(original, { path: "removed.txt", content: "removed\n" });
+      yield* writeFile(original, { path: "unchanged.txt", content: "unchanged\n" });
+      yield* writeFile(original, { path: "capped.txt", content: "small\n" });
+      const commit = yield* Effect.promise((signal) =>
+        original.handle.process.exec("git add -A && git commit -q -m batch-fixture", {
+          env: gitFixtureEnvironment,
+          signal: testProcessSignal(signal),
+        }),
+      );
+      assert.strictEqual(commit.exitCode, 0, commit.stderr);
+      const baseSha = yield* resolveBaseSha(original);
+
+      yield* writeFile(original, { path: "seed.txt", content: "seed changed🙂123456789\n" });
+      yield* writeFile(original, { path: addedPath, content: "added\n" });
+      yield* writeFile(original, { path: "capped.txt", content: `${"a".repeat(fileDiffMaxBytes * 2)}\n` });
+      yield* Effect.promise(() => original.handle.fs.remove("removed.txt"));
+
+      const expected = yield* Effect.forEach(
+        [
+          { path: "seed.txt", command: `${gitDiffCommand} '${baseSha}' -- 'seed.txt'`, exitCodes: [0] },
+          {
+            path: addedPath,
+            command: `${gitDiffCommand} --no-index -- /dev/null '${addedPath}'`,
+            exitCodes: [0, 1],
+          },
+          {
+            path: "removed.txt",
+            command: `${gitDiffCommand} '${baseSha}' -- 'removed.txt'`,
+            exitCodes: [0],
+          },
+          { path: "capped.txt", command: `${gitDiffCommand} '${baseSha}' -- 'capped.txt'`, exitCodes: [0] },
+        ],
+        ({ path, command, exitCodes }) =>
+          Effect.promise((signal) =>
+            original.handle.process.exec(command, { signal: testProcessSignal(signal) }),
+          ).pipe(
+            Effect.map((result) => {
+              assert.include(exitCodes, result.exitCode, result.stderr);
+              return [path, boundedDiff(result.stdout)] satisfies [string, string];
+            }),
+          ),
+      );
+
+      const calls = yield* ExecCalls;
+      const sandbox = yield* withExecProbe(original);
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const before = yield* Metric.value(fileDiffExecDuration);
+      const stop = yield* Deferred.make<void>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha, Deferred.await(stop)).pipe(
+        Stream.runCollect,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* Queue.offerAll(events, [
+        { _tag: "Update", path: "seed.txt" },
+        { _tag: "Create", path: addedPath },
+        { _tag: "Remove", path: "removed.txt" },
+        { _tag: "Update", path: "unchanged.txt" },
+        { _tag: "Update", path: "capped.txt" },
+        { _tag: "Update", path: "seed.txt" },
+        { _tag: "Create", path: "node_modules/ignored.txt" },
+      ]);
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("100 millis");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("1 second");
+      yield* Deferred.succeed(stop, undefined);
+      const shipped = yield* Fiber.join(fiber);
+      const after = yield* Metric.value(fileDiffExecDuration);
+
+      const actual = yield* Effect.forEach(shipped, (event) =>
+        decodeDiffValue(event.value).pipe(
+          Effect.map((value) => [value.path, value.diff] satisfies [string, string]),
+        ),
+      );
+      assert.lengthOf(actual, expected.length);
+      assert.deepEqual(Object.fromEntries(actual), Object.fromEntries(expected));
+      const gitCommands = (yield* Queue.takeAll(calls)).filter((command) => command.startsWith("git "));
+      const beforeGitProcessCount = 10;
+      assert.isAtMost(gitCommands.length, beforeGitProcessCount * 0.8);
+      assert.lengthOf(gitCommands, 5);
+      const diffCommands = gitCommands.filter(isGitDiffCommand);
+      assert.lengthOf(diffCommands, 2);
+      assert.isTrue(diffCommands.some((command) => command.includes("--raw -z --patch")));
+      assert.strictEqual(after.count - before.count, 2);
+    }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
+  it.effect("preserves external diff output by falling back to per-path commands", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      yield* writeFile(original, { path: "other.txt", content: "other\n" });
+      yield* writeFile(original, {
+        path: "external-diff.sh",
+        content:
+          '#!/bin/sh\nprintf \'diff --git a/%s b/%s\\npaths=%s/%s\\n\' "$1" "$1" "$GIT_DIFF_PATH_COUNTER" "$GIT_DIFF_PATH_TOTAL"\n',
+      });
+      const setup = yield* Effect.promise((signal) =>
+        original.handle.process.exec(
+          "chmod +x external-diff.sh && git add -A && git commit -q -m external-diff-fixture && git config diff.external ./external-diff.sh",
+          { env: gitFixtureEnvironment, signal: testProcessSignal(signal) },
+        ),
+      );
+      assert.strictEqual(setup.exitCode, 0, setup.stderr);
+      const baseSha = yield* resolveBaseSha(original);
+      yield* writeFile(original, { path: "seed.txt", content: "seed changed\n" });
+      yield* writeFile(original, { path: "other.txt", content: "other changed\n" });
+      const calls = yield* ExecCalls;
+      const sandbox = yield* withExecProbe(original);
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const stop = yield* Deferred.make<void>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha, Deferred.await(stop)).pipe(
+        Stream.runCollect,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* Queue.offerAll(events, [
+        { _tag: "Update", path: "seed.txt" },
+        { _tag: "Update", path: "other.txt" },
+      ]);
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("100 millis");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("1 second");
+      yield* Deferred.succeed(stop, undefined);
+      const shipped = yield* Fiber.join(fiber);
+      const actual = yield* Effect.forEach(shipped, (event) => decodeDiffValue(event.value));
+      assert.deepEqual(
+        actual.map(({ path, diff }) => [path, diff]),
+        [
+          ["seed.txt", "diff --git a/seed.txt b/seed.txt\npaths=1/1\n"],
+          ["other.txt", "diff --git a/other.txt b/other.txt\npaths=1/1\n"],
+        ],
+      );
+      const diffCommands = (yield* Queue.takeAll(calls)).filter(isGitDiffCommand);
+      assert.lengthOf(diffCommands, 2);
+      assert.isFalse(diffCommands.some((command) => command.includes("--raw -z --patch")));
+    }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
+  it.effect("preserves a directory-to-file diff when it shares a batch", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      yield* writeFile(original, { path: "tracked/first.txt", content: "first\n" });
+      yield* writeFile(original, { path: "tracked/second.txt", content: "second\n" });
+      const commit = yield* Effect.promise((signal) =>
+        original.handle.process.exec("git add -A && git commit -q -m directory-fixture", {
+          env: gitFixtureEnvironment,
+          signal: testProcessSignal(signal),
+        }),
+      );
+      assert.strictEqual(commit.exitCode, 0, commit.stderr);
+      const baseSha = yield* resolveBaseSha(original);
+      yield* Effect.promise(() => original.handle.fs.remove("tracked"));
+      yield* writeFile(original, { path: "tracked", content: "replacement\n" });
+      yield* writeFile(original, { path: "seed.txt", content: "seed changed\n" });
+      const expected = yield* Effect.promise((signal) =>
+        original.handle.process.exec(`${gitDiffCommand} '${baseSha}' -- 'tracked'`, {
+          signal: testProcessSignal(signal),
+        }),
+      );
+      assert.strictEqual(expected.exitCode, 0, expected.stderr);
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const stop = yield* Deferred.make<void>();
+      const fiber = yield* watchWorktreeDiffs(original, baseSha, Deferred.await(stop)).pipe(
+        Stream.runCollect,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* Queue.offerAll(events, [
+        { _tag: "Update", path: "tracked" },
+        { _tag: "Update", path: "seed.txt" },
+      ]);
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("100 millis");
+      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* TestClock.adjust("1 second");
+      yield* Deferred.succeed(stop, undefined);
+      const shipped = yield* Fiber.join(fiber);
+      const actual = yield* Effect.forEach(shipped, (event) => decodeDiffValue(event.value));
+      assert.strictEqual(actual.find(({ path }) => path === "tracked")?.diff, boundedDiff(expected.stdout));
+      assert.isTrue(actual.some(({ path }) => path === "seed.txt"));
     }),
   );
 
@@ -324,10 +573,7 @@ describe("file diff feed", () => {
       const head = yield* Fiber.join(fiber);
       if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
       assert.isAtMost(commands.length, fileEvents.length / 10);
-      assert.lengthOf(
-        commands.filter((command) => command.startsWith("git diff")),
-        1,
-      );
+      assert.lengthOf(commands.filter(isGitDiffCommand), 1);
       const value = yield* decodeDiffValue(head.value.value);
       assert.isAtMost(
         Buffer.byteLength(value.diff),
@@ -359,7 +605,7 @@ describe("file diff feed", () => {
       if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
       const value = yield* decodeDiffValue(head.value.value);
       assert.strictEqual(value.path, "seed.txt");
-      const diffCommands = commands.filter((command) => command.startsWith("git diff"));
+      const diffCommands = commands.filter(isGitDiffCommand);
       assert.lengthOf(diffCommands, 1);
       assert.notInclude(diffCommands[0], "packages/dist/bundle.js");
     }).pipe(Effect.provide(ExecCalls.layer)),
@@ -393,10 +639,7 @@ describe("file diff feed", () => {
       const value = yield* decodeDiffValue(head.value.value);
       assert.strictEqual(value.path, "seed.txt");
       assert.isFalse(commands.some((command) => command.includes(".pnpm-store")));
-      assert.lengthOf(
-        commands.filter((command) => command.startsWith("git diff")),
-        1,
-      );
+      assert.lengthOf(commands.filter(isGitDiffCommand), 1);
     }).pipe(Effect.provide(ExecCalls.layer)),
   );
 
@@ -453,7 +696,7 @@ describe("file diff feed", () => {
       yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
       yield* TestClock.adjust("100 millis");
       const ignoreCommand = yield* Stream.fromQueue(calls).pipe(
-        Stream.filter((command) => command.startsWith("git check-ignore")),
+        Stream.filter(isGitIgnoreCommand),
         Stream.runHead,
       );
       if (Option.isNone(ignoreCommand)) return assert.fail("ignore check did not complete");
@@ -465,7 +708,7 @@ describe("file diff feed", () => {
       assert.strictEqual(value.path, "seed.txt");
       const remainingCommands = yield* Queue.takeAll(calls);
       const commands = [ignoreCommand.value, ...remainingCommands];
-      const diffCommands = commands.filter((command) => command.startsWith("git diff"));
+      const diffCommands = commands.filter(isGitDiffCommand);
       assert.lengthOf(diffCommands, 1);
       assert.include(diffCommands[0], "seed.txt");
       assert.notInclude(diffCommands[0], "build");
@@ -497,10 +740,7 @@ describe("file diff feed", () => {
       yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
       yield* Queue.offer(events, { _tag: "Remove", path: "tracked" });
       yield* TestClock.adjust("100 millis");
-      yield* Stream.fromQueue(calls).pipe(
-        Stream.filter((command) => command.startsWith("git check-ignore")),
-        Stream.runHead,
-      );
+      yield* Stream.fromQueue(calls).pipe(Stream.filter(isGitIgnoreCommand), Stream.runHead);
       yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
       yield* TestClock.adjust("1 second");
       const directoryCommand = yield* Stream.fromQueue(calls).pipe(
@@ -508,7 +748,7 @@ describe("file diff feed", () => {
         Stream.runHead,
       );
       if (Option.isNone(directoryCommand)) return assert.fail("directory classification did not complete");
-      assert.notMatch(directoryCommand.value, /^git diff /);
+      assert.isFalse(isGitDiffCommand(directoryCommand.value));
       assert.isTrue(Option.isNone(yield* Queue.poll(shipped)));
       yield* Fiber.interrupt(fiber);
     }).pipe(Effect.provide(ExecCalls.layer)),
@@ -523,7 +763,7 @@ describe("file diff feed", () => {
         yield* writeFile(original, { path: "vanished.txt", content: "gone\n" });
         const addPatchStarted = yield* Deferred.make<void>();
         const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = (command, options) => {
-          if (!command.startsWith("git diff --no-index")) {
+          if (!command.startsWith(`${gitDiffCommand} --no-index`)) {
             return original.handle.process.spawn(command, options);
           }
           return original.handle.fs.remove("vanished.txt").then(() => {
