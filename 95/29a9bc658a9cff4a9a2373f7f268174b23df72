@@ -1,0 +1,25 @@
+packages/engine/src/workspace-registry.test.ts
+  s_343dd710cf5e3c::t_f127c8fb18fa81 370-371,376-388
+  s_343dd710cf5e3c::t_2355b38ae719e8 350-369,372-375,389-392
+packages/engine/src/registry.ts
+  s_343dd710cf5e3c::t_583d1cbee4847d 23,419-436,634,706,723-726,750-753,755-756,771-774,776,822-828
+  s_343dd710cf5e3c::t_75b0ce3a0c9a71 677-682,689
+  s_343dd710cf5e3c::t_d6af04d1468015 727,729
+  s_343dd710cf5e3c::t_30daa7f9dc194d 134,355,391,463,497-500,552,568-594,653,673-676,683
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "9529a9bc658a9cff4a9a2373f7f268174b23df72",
+  "prompts": {},
+  "sessions": {
+    "s_343dd710cf5e3c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08277-030f-7d41-bbb3-6c128efc79fd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
