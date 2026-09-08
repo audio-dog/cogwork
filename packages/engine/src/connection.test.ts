@@ -284,6 +284,38 @@ describe("Connection verification", () => {
     ),
   );
 
+  it.effect("retains the stored GitHub account casing on re-connect", () =>
+    Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const connection = yield* connections.establish(
+        { system: "github", source: { _tag: "GitHubCli" } },
+        "OctoCat",
+      );
+
+      assert.strictEqual(connection.id, connectionIdOf("github", "OctoCat"));
+      assert.strictEqual(connection.account, "OctoCat");
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(Layer.succeed(ConnectionVerifier, { verify: () => Effect.succeed("octocat") })),
+          Layer.provide(controlStoreLayer),
+          Layer.provide(
+            Layer.succeed(CredentialStore, {
+              ...unusedCredentialStore,
+              resolveSource: () =>
+                Effect.succeed({
+                  source: "github-cli" as const,
+                  token: Redacted.make("secret"),
+                  identity: null,
+                }),
+              configureConnection: () => Effect.void,
+            }),
+          ),
+        ),
+      ),
+    ),
+  );
+
   it.effect("refuses a different discovered account before replacing a re-connect source", () =>
     Effect.gen(function* () {
       const connections = yield* ConnectionStore;

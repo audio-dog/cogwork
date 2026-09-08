@@ -77,6 +77,9 @@ const knownConnectionId = (input: ConnectionEstablishment, expectedAccount?: str
   return null;
 };
 
+const accountsMatch = (system: ConnectionSystem, account: string, expectedAccount: string) =>
+  system === "github" ? account.toLowerCase() === expectedAccount.toLowerCase() : account === expectedAccount;
+
 const unavailable = (operation: string, connectionId: ConnectionId | null, message: string) =>
   new ConnectionFailure({ operation, connectionId, message });
 
@@ -234,14 +237,20 @@ export const layer = Layer.effect(
           message: "GitHub did not report the authenticated account",
         });
       }
-      if (expectedAccount !== undefined && account !== expectedAccount) {
+      if (expectedAccount !== undefined && !accountsMatch(input.system, account, expectedAccount)) {
         return yield* new ConnectionNotReady({
           connectionId: connectionIdOf(input.system, expectedAccount),
           message: `Connection is established for "${expectedAccount}". Switch back to that account or remove it before connecting to "${account}".`,
         });
       }
-      const id = connectionIdOf(input.system, account);
-      const connection = Connection.make({ id, system: input.system, account, status: "established" });
+      const establishedAccount = expectedAccount ?? account;
+      const id = connectionIdOf(input.system, establishedAccount);
+      const connection = Connection.make({
+        id,
+        system: input.system,
+        account: establishedAccount,
+        status: "established",
+      });
       const rollback = previous
         ? controlStore.establishConnection(previous)
         : controlStore.removeConnection(connection.id);
