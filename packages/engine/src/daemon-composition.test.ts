@@ -34,7 +34,6 @@ import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
 
 const pushSchemaMock = vi.hoisted(() => vi.fn());
-
 vi.mock("drizzle-kit/payload/sqlite", () =>
   vi
     .importActual<typeof import("drizzle-kit/payload/sqlite")>("drizzle-kit/payload/sqlite")

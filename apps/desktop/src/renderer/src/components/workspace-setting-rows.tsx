@@ -205,13 +205,6 @@ function IdentityRows() {
         </FieldContent>
         <DraftInput field="displayName" label="Workspace name" />
       </Field>
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Git remote</FieldTitle>
-          <FieldDescription>Clone hint used when Cogwork creates another checkout.</FieldDescription>
-        </FieldContent>
-        <DraftInput field="gitRemote" label="Git remote" placeholder="git@github.com:org/repo.git" />
-      </Field>
     </FieldGroup>
   );
 }

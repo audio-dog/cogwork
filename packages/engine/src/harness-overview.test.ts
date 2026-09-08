@@ -1,4 +1,4 @@
-import { HarnessName, HarnessState } from "@cogwork/contracts";
+import { HarnessName, HarnessOptionCatalog, HarnessState } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -6,6 +6,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
   fullHarnessExecution,
+  HarnessError,
   type HarnessReadiness,
   type HarnessRunner,
   staticCatalogSource,
@@ -25,6 +26,12 @@ const readyReadiness: HarnessReadiness = {
 };
 
 const readiness = (patch: Partial<HarnessReadiness>): HarnessReadiness => ({ ...readyReadiness, ...patch });
+
+const encodeHarnessOptionCatalog = Schema.encodeSync(HarnessOptionCatalog);
+const encodeCatalog = (catalog: HarnessOptionCatalog | null) => {
+  if (!catalog) return assert.fail("expected a Harness option catalog");
+  return encodeHarnessOptionCatalog(catalog);
+};
 
 describe("harnessStateOf", () => {
   it("reads Ready when every axis is positive", () => {
@@ -117,7 +124,7 @@ const probeLayer = (runners: ReadonlyArray<HarnessRunner>) =>
 
 const runner = (
   name: string,
-  overrides: Partial<Pick<HarnessRunner, "readiness" | "catalogSources" | "signIn">> = {},
+  overrides: Partial<Pick<HarnessRunner, "readiness" | "catalogSources" | "execution" | "signIn">> = {},
 ): HarnessRunner => ({
   name: harness(name),
   sessionKind: "opaque-handle",
@@ -158,32 +165,105 @@ describe("harnessOverview", () => {
     }).pipe(Effect.provide(probeLayer([runner("codex"), runner("cursor")]))),
   );
 
-  it.effect("lists every registered harness with its models", () =>
+  it.effect("publishes labeled choices, fallback provenance, and each runner's policy profiles", () =>
     Effect.gen(function* () {
       const overview = yield* harnessOverview();
       assert.deepStrictEqual(
         overview.harnesses.map((item) => item.harness),
         ["codex", "cursor"],
       );
+      assert.deepStrictEqual(encodeCatalog(overview.harnesses[0]?.catalog), {
+        models: [{ value: "model-a", label: "Model A" }],
+        policyProfiles: ["read-only", "full"],
+        provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
+      });
       assert.deepStrictEqual(overview.harnesses[0]?.models, ["model-a"]);
       assert.strictEqual(overview.harnesses[0]?.version, "1.2.3");
     }).pipe(Effect.provide(probeLayer([runner("codex"), runner("cursor")]))),
   );
 
-  it.effect("keeps the other harnesses when one catalog has no source to answer", () =>
+  it.effect("publishes runtime and native provenance and omits unsupported effort", () =>
     Effect.gen(function* () {
       const overview = yield* harnessOverview();
-      assert.deepStrictEqual(overview.harnesses[0]?.models, []);
-      assert.deepStrictEqual(overview.harnesses[1]?.models, ["model-a"]);
+      assert.deepStrictEqual(encodeCatalog(overview.harnesses[0]?.catalog), {
+        models: [{ value: "runtime", label: "Runtime" }],
+        efforts: [{ value: "high", label: "High" }],
+        policyProfiles: ["full"],
+        provenance: { source: "tanstack-runtime", packageVersion: "2.0.0" },
+      });
+      assert.deepStrictEqual(encodeCatalog(overview.harnesses[1]?.catalog), {
+        models: [{ value: "native", label: "Native" }],
+        policyProfiles: ["read-only"],
+        provenance: {
+          source: "native-discovery",
+          runtimeHost: "host-a",
+          harnessVersion: "3.0.0",
+        },
+      });
+      assert.isUndefined(overview.harnesses[1]?.catalog?.efforts);
+    }).pipe(
+      Effect.provide(
+        probeLayer([
+          runner("codex", {
+            execution: { ...fullHarnessExecution, profiles: ["full"] },
+            catalogSources: {
+              runtime: staticCatalogSource(
+                {
+                  models: [{ value: "runtime", label: "Runtime" }],
+                  efforts: [{ value: "high", label: "High" }],
+                },
+                { source: "tanstack-runtime", packageVersion: "2.0.0" },
+              ),
+              fallback: staticCatalogSource(
+                { models: [{ value: "fallback", label: "Fallback" }] },
+                { source: "cogwork-fallback", fallbackVersion: "test-1" },
+              ),
+            },
+          }),
+          runner("provider", {
+            execution: { ...fullHarnessExecution, profiles: ["read-only"] },
+            catalogSources: {
+              native: staticCatalogSource(
+                { models: [{ value: "native", label: "Native" }] },
+                {
+                  source: "native-discovery",
+                  runtimeHost: "host-a",
+                  harnessVersion: "3.0.0",
+                },
+              ),
+              fallback: staticCatalogSource(
+                { models: [{ value: "fallback", label: "Fallback" }] },
+                { source: "cogwork-fallback", fallbackVersion: "test-1" },
+              ),
+            },
+          }),
+        ]),
+      ),
+    ),
+  );
+
+  it.effect("keeps the other catalogs when one harness fails to answer", () =>
+    Effect.gen(function* () {
+      const overview = yield* harnessOverview();
+      assert.strictEqual(overview.harnesses[0]?.catalog, null);
+      assert.deepStrictEqual(
+        overview.harnesses[1]?.catalog?.models.map(({ value, label }) => ({ value, label })),
+        [{ value: "model-a", label: "Model A" }],
+      );
     }).pipe(
       Effect.provide(
         probeLayer([
           runner("codex", {
             catalogSources: {
-              fallback: staticCatalogSource(
-                { models: [] },
-                { source: "cogwork-fallback", fallbackVersion: "empty" },
-              ),
+              fallback: {
+                catalog: Effect.fail(
+                  new HarnessError({
+                    reason: "launch",
+                    retryable: true,
+                    message: "catalog lookup failed",
+                  }),
+                ),
+              },
             },
           }),
           runner("cursor"),

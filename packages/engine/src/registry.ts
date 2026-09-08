@@ -130,7 +130,6 @@ interface WorkspaceRow {
   readonly id: string;
   readonly name: string;
   readonly checkoutPath: string;
-  readonly gitRemote: string | null;
   readonly lastRepository: string | null;
   readonly issueTracker: string;
   readonly sourceControl: string | null;
@@ -311,7 +310,6 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   const record = yield* decodeWorkspaceRegistration({
     name: row.name,
     checkoutPath: row.checkoutPath,
-    gitRemote: present(row.gitRemote),
     issueTracker: input.issueTracker,
     sourceControl: input.sourceControl,
     mcpSkills: present(binding.mcpSkills),
@@ -351,7 +349,6 @@ const selectRows = Effect.fn("WorkspaceRegistry.selectRows")(function* (sql: Sql
     id,
     name,
     checkout_path AS checkoutPath,
-    git_remote AS gitRemote,
     last_repository AS lastRepository,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
@@ -387,7 +384,6 @@ const selectWorkspaceRow = Effect.fn("WorkspaceRegistry.selectWorkspaceRow")(fun
     id,
     name,
     checkout_path AS checkoutPath,
-    git_remote AS gitRemote,
     last_repository AS lastRepository,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
@@ -442,7 +438,6 @@ const updateWorkspaceRow = Effect.fn("WorkspaceRegistry.updateWorkspaceRow")(fun
   const worktrees = update.worktrees;
   const [row] = yield* sql<WorkspaceRow>`UPDATE workspaces SET
     name = ${update.name},
-    git_remote = ${update.gitRemote ?? null},
     issue_tracker = ${encodeIssueTracker(update.issueTracker)},
     source_control = ${update.sourceControl ? encodeSourceControl(update.sourceControl) : null},
     mcp_skills = ${update.mcpSkills ? encodeMcpSkills(update.mcpSkills) : null},
@@ -459,7 +454,6 @@ const updateWorkspaceRow = Effect.fn("WorkspaceRegistry.updateWorkspaceRow")(fun
       id,
       name,
       checkout_path AS checkoutPath,
-      git_remote AS gitRemote,
       last_repository AS lastRepository,
       issue_tracker AS issueTracker,
       source_control AS sourceControl,
@@ -525,14 +519,13 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
 ) {
   const worktrees = registration.worktrees;
   const [row] = yield* sql<WorkspaceRow>`INSERT INTO workspaces (
-    id, name, checkout_path, git_remote, issue_tracker, source_control, mcp_skills, linear_history,
+    id, name, checkout_path, issue_tracker, source_control, mcp_skills, linear_history,
     worktree_root, worktree_remote, worktree_base_branch, worktree_link_paths, worktree_setup,
     worktree_reap_after_millis, concurrency
   ) VALUES (
     ${id},
     ${registration.name},
     ${registration.checkoutPath},
-    ${registration.gitRemote ?? null},
     ${encodeIssueTracker(registration.issueTracker)},
     ${registration.sourceControl ? encodeSourceControl(registration.sourceControl) : null},
     ${registration.mcpSkills ? encodeMcpSkills(registration.mcpSkills) : null},
@@ -548,7 +541,6 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
     id,
     name,
     checkout_path AS checkoutPath,
-    git_remote AS gitRemote,
     last_repository AS lastRepository,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
