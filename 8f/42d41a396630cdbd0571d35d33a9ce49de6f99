@@ -1,0 +1,21 @@
+docs/research/six-to-eight-agent-measurement-campaign.md
+  s_728a5772fc96bd::t_eb81b886107db5 131-133
+scripts/perf-campaign.mjs
+  s_728a5772fc96bd::t_a6b74b5cc919b8 89,104-108,121,131-133,400-402,459-460,462-477,479
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8f42d41a396630cdbd0571d35d33a9ce49de6f99",
+  "prompts": {},
+  "sessions": {
+    "s_728a5772fc96bd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df7c6c73-8b4c-4ef6-bca0-daaf2529b1c0",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
