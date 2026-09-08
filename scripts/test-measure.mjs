@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 
 const countMarker = "cogwork-test-count:";
-const exec = promisify(execFile);
 const measuredTestStates = ["passed", "failed"];
 const scriptPath = fileURLToPath(import.meta.url);
 const vitestCountPattern = new RegExp(`${countMarker}(\\d+)`, "g");
@@ -23,22 +21,23 @@ export default class TestCountReporter {
 }
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
-const publishCommandOutput = ({ stdout = "", stderr = "" }) => process.stderr.write(stdout + stderr);
 
-export const run = async (file, args) => {
-  try {
-    const result = await exec(file, args, {
+export const run = (file, args) =>
+  new Promise((resolve, reject) => {
+    const stdout = [];
+    const child = spawn(file, args, {
       cwd: workspaceRoot,
-      encoding: "utf8",
-      maxBuffer: 10 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
     });
-    return { failed: false, ...result };
-  } catch (error) {
-    const stdout = error?.stdout ?? "";
-    const stderr = error?.stderr ?? "";
-    return { failed: true, stdout, stderr };
-  }
-};
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (output) => {
+      stdout.push(output);
+      process.stderr.write(output);
+    });
+    child.stderr.pipe(process.stderr);
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ failed: code !== 0, stdout: stdout.join("") }));
+  });
 
 const vitestCount = (output) => {
   const counts = [...output.matchAll(vitestCountPattern)];
@@ -75,7 +74,6 @@ export const measure = async (runTestCommand = run) => {
     tsxPath,
     "scripts/count-worktree-git-invocations.ts",
   ]);
-  [vitest, nodeTests, gitMeasurement].forEach(publishCommandOutput);
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
   console.log(JSON.stringify({ durationMs, testCount }));

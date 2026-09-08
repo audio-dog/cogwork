@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -14,6 +15,28 @@ test("a failed test command preserves its measurement output", async () => {
 
   assert.equal(result.failed, true);
   assert.equal(result.stdout, "measurement");
+});
+
+test("a test command streams output before it exits", async () => {
+  const script = `
+    import { run } from "./scripts/test-measure.mjs";
+    const result = await run(process.execPath, ["--eval", 'process.stdout.write("live log")']);
+    process.stdout.write(JSON.stringify(result));
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "--eval", script], {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const resultOutput = [];
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (output) => resultOutput.push(output));
+  child.stderr.setEncoding("utf8");
+  const firstOutput = once(child.stderr, "data").then(([output]) => ({ kind: "output", output }));
+  const exit = once(child, "exit").then(([status]) => ({ kind: "exit", status }));
+
+  assert.deepEqual(await Promise.race([firstOutput, exit]), { kind: "output", output: "live log" });
+  assert.deepEqual(await exit, { kind: "exit", status: 0 });
+  assert.equal(JSON.parse(resultOutput.join("")).stdout, "live log");
 });
 
 test("a failed suite publishes both measurements and exits nonzero", () => {
@@ -33,30 +56,7 @@ test("a failed suite publishes both measurements and exits nonzero", () => {
 
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).testCount, 5);
-  assert.equal(result.stderr, "cogwork-test-count:2# tests 3git measurement");
-});
-
-test("a passing suite publishes its logs outside the measurement output", () => {
-  const script = `
-    import { measure } from "./scripts/test-measure.mjs";
-    const results = [
-      { failed: false, stdout: "vitest logs\\ncogwork-test-count:2\\n", stderr: "vitest warning\\n" },
-      { failed: false, stdout: "node logs\\n# tests 3\\n", stderr: "" },
-      { failed: false, stdout: "git measurement\\n", stderr: "" },
-    ];
-    await measure(async () => results.shift());
-  `;
-  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
-    cwd: path.resolve(import.meta.dirname, ".."),
-    encoding: "utf8",
-  });
-
-  assert.equal(result.status, 0);
-  assert.equal(JSON.parse(result.stdout).testCount, 5);
-  assert.equal(
-    result.stderr,
-    "vitest logs\ncogwork-test-count:2\nvitest warning\nnode logs\n# tests 3\ngit measurement\n",
-  );
+  assert.equal(result.stderr, "");
 });
 
 test("measurement matches the root test gate", async () => {
