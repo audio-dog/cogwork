@@ -192,10 +192,10 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     return match ? pull.closingIssueNumbers.includes(Number(match[1])) : false;
   };
 
-  const sameRepositoryHead = (target: GitHubTarget, pull: RawPull) =>
+  const sameRepositoryHead = (target: GitHubRepoRef, pull: RawPull) =>
     pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase();
 
-  const exactHeadPull = (target: GitHubTarget, headBranch: string, pulls: ReadonlyArray<RawPull>) =>
+  const exactHeadPull = (target: GitHubRepoRef, headBranch: string, pulls: ReadonlyArray<RawPull>) =>
     pulls.find((pull) => pull.headRef === headBranch && sameRepositoryHead(target, pull)) ?? null;
 
   const rank = (target: GitHubTarget, item: WorkItem, branch: string, pull: RawPull) =>
