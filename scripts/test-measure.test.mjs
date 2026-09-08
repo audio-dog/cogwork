@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { recoverCompletedTestRun } from "./test-measure.mjs";
 
 const exec = promisify(execFile);
 const scriptPath = join(dirname(fileURLToPath(import.meta.url)), "test-measure.mjs");
@@ -27,4 +28,30 @@ test("node-only rejects a workspace with no configured root tests", async () => 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("recovers only complete test failures", () => {
+  const completeVitestFailure = Object.assign(new Error("tests failed"), {
+    code: 1,
+    stdout: "cogwork-test-count:2\ncogwork-test-count:3\nTasks: 1 successful, 2 total\n",
+    stderr: "",
+  });
+  const incompleteVitestFailure = Object.assign(new Error("tests stopped"), {
+    code: 1,
+    stdout: "cogwork-test-count:2\nTasks: 1 successful, 2 total\n",
+    stderr: "",
+  });
+  const timedOutVitestFailure = Object.assign(new Error("tests timed out"), {
+    code: null,
+    killed: true,
+    stdout: completeVitestFailure.stdout,
+    stderr: "",
+  });
+
+  assert.deepEqual(recoverCompletedTestRun(completeVitestFailure, "vitest"), {
+    stdout: completeVitestFailure.stdout,
+    stderr: "",
+  });
+  assert.throws(() => recoverCompletedTestRun(incompleteVitestFailure, "vitest"), incompleteVitestFailure);
+  assert.throws(() => recoverCompletedTestRun(timedOutVitestFailure, "vitest"), timedOutVitestFailure);
 });

@@ -10,6 +10,7 @@ const measuredTestStates = ["passed", "failed"];
 const scriptPath = fileURLToPath(import.meta.url);
 const vitestCountPattern = new RegExp(`${countMarker}(\\d+)`, "g");
 const nodeTestCountPattern = /^# tests (\d+)$/m;
+const turboTaskCountPattern = /Tasks:\s+\d+ successful, (\d+) total/;
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 const nodeTestPatterns = ["configs/lint/tests/*.test.mjs", "scripts/*.test.mjs"];
 const isMeasuredTest = (testCase) => measuredTestStates.includes(testCase.result().state);
@@ -25,17 +26,46 @@ export default class TestCountReporter {
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
+const execute = (file, args, workspaceRoot) =>
+  exec(file, args, {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+  });
+
 const run = async (file, args, workspaceRoot) => {
   try {
-    return await exec(file, args, {
-      cwd: workspaceRoot,
-      encoding: "utf8",
-      maxBuffer: 10 * 1024 * 1024,
-    });
+    return await execute(file, args, workspaceRoot);
   } catch (error) {
     process.stderr.write(error?.stdout ?? "");
     process.stderr.write(error?.stderr ?? "");
     throw error;
+  }
+};
+
+const completedVitestRun = (output) => {
+  const taskCount = output.match(turboTaskCountPattern)?.[1];
+  if (!taskCount) return false;
+  return Number(taskCount) === [...output.matchAll(vitestCountPattern)].length;
+};
+
+const completedTestRuns = {
+  node: (output) => nodeTestCountPattern.test(output),
+  vitest: completedVitestRun,
+};
+
+export const recoverCompletedTestRun = (error, suite) => {
+  const output = { stdout: error?.stdout ?? "", stderr: error?.stderr ?? "" };
+  const completed = Number.isInteger(error?.code) && completedTestRuns[suite]?.(output.stdout);
+  if (!completed) throw error;
+  return output;
+};
+
+const runMeasuredTests = async (file, args, workspaceRoot, suite) => {
+  try {
+    return await execute(file, args, workspaceRoot);
+  } catch (error) {
+    return recoverCompletedTestRun(error, suite);
   }
 };
 
@@ -51,17 +81,19 @@ const nodeTestCount = (output) => {
   return Number(match[1]);
 };
 
-const runNodeTests = (workspaceRoot) => {
+const nodeTestArgs = (workspaceRoot) => {
   const testFiles = nodeTestPatterns.flatMap((pattern) => globSync(pattern, { cwd: workspaceRoot }));
   if (testFiles.length === 0) throw new Error(`No root Node test files found in ${workspaceRoot}`);
-  return run(process.execPath, ["--test", "--test-reporter=tap", ...testFiles], workspaceRoot);
+  return ["--test", "--test-reporter=tap", ...testFiles];
 };
+
+const runNodeTests = (workspaceRoot) => run(process.execPath, nodeTestArgs(workspaceRoot), workspaceRoot);
 
 const measure = async (workspaceRoot) => {
   const startedAt = performance.now();
   const reporterPath = pathToFileURL(scriptPath).href;
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
-  const vitest = await run(
+  const vitest = await runMeasuredTests(
     process.execPath,
     [
       turboPath,
@@ -73,8 +105,14 @@ const measure = async (workspaceRoot) => {
       `--reporter=${reporterPath}`,
     ],
     workspaceRoot,
+    "vitest",
   );
-  const nodeTests = await runNodeTests(workspaceRoot);
+  const nodeTests = await runMeasuredTests(
+    process.execPath,
+    nodeTestArgs(workspaceRoot),
+    workspaceRoot,
+    "node",
+  );
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
   console.log(JSON.stringify({ durationMs, testCount }));
