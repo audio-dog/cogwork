@@ -1,0 +1,22 @@
+packages/contracts/CONTEXT.md
+  s_13cd74ff5da436::t_1c97a36bcc14b2 302
+packages/contracts/src/run.ts
+  s_13cd74ff5da436::t_63e5970f57c593 66
+  s_13cd74ff5da436::t_39b861b746c2eb 64-65,86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "bc439af5f1c6d1a1e0446c3099f5c8db9ff5cfa9",
+  "prompts": {},
+  "sessions": {
+    "s_13cd74ff5da436": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a081b1-0fc1-79f1-9029-27582a53217f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
