@@ -12,7 +12,7 @@ const vitestCountPattern = new RegExp(`${countMarker}(\\d+)`, "g");
 const nodeTestCountPattern = /^# tests (\d+)$/m;
 const turboTaskCountPattern = /Tasks:\s+\d+ successful, (\d+) total/;
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
-const nodeTestPatterns = ["configs/lint/tests/*.test.mjs", "scripts/*.test.mjs"];
+const nodeTestPatterns = ["scripts/*.test.mjs"];
 const isMeasuredTest = (testCase) => measuredTestStates.includes(testCase.result().state);
 
 export default class TestCountReporter {
@@ -89,21 +89,24 @@ const nodeTestArgs = (workspaceRoot) => {
 
 const runNodeTests = (workspaceRoot) => run(process.execPath, nodeTestArgs(workspaceRoot), workspaceRoot);
 
+export const vitestTestArgs = (turboPath, reporterPath) => [
+  turboPath,
+  "test",
+  "--force",
+  "--continue=always",
+  "--output-logs=full",
+  "--",
+  "--reporter=default",
+  `--reporter=${reporterPath}`,
+];
+
 const measure = async (workspaceRoot) => {
   const startedAt = performance.now();
   const reporterPath = pathToFileURL(scriptPath).href;
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
   const vitest = await runMeasuredTests(
     process.execPath,
-    [
-      turboPath,
-      "test",
-      "--force",
-      "--output-logs=full",
-      "--",
-      "--reporter=default",
-      `--reporter=${reporterPath}`,
-    ],
+    vitestTestArgs(turboPath, reporterPath),
     workspaceRoot,
     "vitest",
   );

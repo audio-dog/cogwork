@@ -6,9 +6,12 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { recoverCompletedTestRun } from "./test-measure.mjs";
+import { recoverCompletedTestRun, vitestTestArgs } from "./test-measure.mjs";
 
 const exec = promisify(execFile);
+const execEnvironment = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key !== "NODE_TEST_CONTEXT"),
+);
 const scriptPath = join(dirname(fileURLToPath(import.meta.url)), "test-measure.mjs");
 
 test("node-only rejects a workspace with no configured root tests", async () => {
@@ -22,9 +25,33 @@ test("node-only rejects a workspace with no configured root tests", async () => 
       'throw new Error("unexpected discovery");\n',
     );
     await assert.rejects(
-      exec(process.execPath, [scriptPath, "--node-only"], { cwd: root }),
+      exec(process.execPath, [scriptPath, "--node-only"], { cwd: root, env: execEnvironment }),
       /No root Node test files found/,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("node-only excludes lint-rule tests", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cogwork-test-measure-"));
+  const lintTestDirectory = join(root, "configs", "lint", "tests");
+  const scriptDirectory = join(root, "scripts");
+
+  try {
+    await mkdir(lintTestDirectory, { recursive: true });
+    await mkdir(scriptDirectory);
+    await writeFile(join(lintTestDirectory, "rules.test.mjs"), 'throw new Error("lint test ran");\n');
+    await writeFile(
+      join(scriptDirectory, "script.test.mjs"),
+      'import test from "node:test";\ntest("script", () => {});\n',
+    );
+    const result = await exec(process.execPath, [scriptPath, "--node-only"], {
+      cwd: root,
+      env: execEnvironment,
+    });
+
+    assert.match(result.stdout, /# tests 1/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -54,4 +81,8 @@ test("recovers only complete test failures", () => {
   });
   assert.throws(() => recoverCompletedTestRun(incompleteVitestFailure, "vitest"), incompleteVitestFailure);
   assert.throws(() => recoverCompletedTestRun(timedOutVitestFailure, "vitest"), timedOutVitestFailure);
+});
+
+test("measured Turbo runs every task after a failure", () => {
+  assert.ok(vitestTestArgs("turbo", "reporter").includes("--continue=always"));
 });
