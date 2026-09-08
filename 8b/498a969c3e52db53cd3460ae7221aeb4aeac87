@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_c9343543d39d61::t_b430e7d10a2495 72-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "8b498a969c3e52db53cd3460ae7221aeb4aeac87",
+  "prompts": {},
+  "sessions": {
+    "s_c9343543d39d61": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08352-6bb7-7863-bf20-71159ece7328",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
