@@ -1,0 +1,19 @@
+apps/cli/src/replay-commands.ts
+  s_e639aa08e35147::t_4809a4cfaa5325 5,28-31,37-39,45-47,49,86,116-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "435b479058353b9a266d2cd168bb3a4f9bc8448c",
+  "prompts": {},
+  "sessions": {
+    "s_e639aa08e35147": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082b2-d7fc-7882-86ee-d76e80b38249",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
