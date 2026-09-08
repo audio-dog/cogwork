@@ -1,3 +1,4 @@
+import { setImmediate as yieldImmediate } from "node:timers/promises";
 import { assert, describe, it } from "@effect/vitest";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Context from "effect/Context";
@@ -52,12 +53,20 @@ const emptyOutput: AsyncIterable<string> = {
 const advanceUntil = (deferred: Deferred.Deferred<void>, duration: Duration.Input) =>
   Deferred.await(deferred).pipe(Effect.raceFirst(TestClock.adjust(duration).pipe(Effect.forever)));
 
+const yieldToHost = () => Effect.promise(() => yieldImmediate()).pipe(Effect.repeat({ times: 9 }));
+
 const coalesceOutput = (output: AsyncIterable<string>) => ({
   [Symbol.asyncIterator]: () => {
     const iterator = Array.fromAsync(output).then((chunks) => ["", chunks.join("")][Symbol.iterator]());
     return { next: () => iterator.then((chunks) => chunks.next()) };
   },
 });
+
+const recordAfterProcessConsumerResumes = (calls: Queue.Queue<string>, command: string) => {
+  setImmediate(() => setImmediate(() => Queue.offerUnsafe(calls, command)));
+};
+
+const takeAllCalls = (calls: Queue.Queue<string>) => yieldToHost().pipe(Effect.andThen(Queue.takeAll(calls)));
 
 class ExecCalls extends Context.Service<ExecCalls, Queue.Queue<string>>()(
   "@cogwork/engine/tools/file-diff-feed.test/ExecCalls",
@@ -84,7 +93,7 @@ const withExecProbe = Effect.fn("file-diff-feed.test.withExecProbe")(function* (
   const calls = yield* ExecCalls;
   const exec: WorktreeSandbox["handle"]["process"]["exec"] = (command, options) => {
     return sandbox.handle.process.exec(command, options).then((result) => {
-      Queue.offerUnsafe(calls, command);
+      recordAfterProcessConsumerResumes(calls, command);
       return result;
     });
   };
@@ -94,7 +103,7 @@ const withExecProbe = Effect.fn("file-diff-feed.test.withExecProbe")(function* (
       stdout: command.includes("--raw -z --patch") ? coalesceOutput(process.stdout) : process.stdout,
       wait: () =>
         process.wait().then((exitCode) => {
-          Queue.offerUnsafe(calls, command);
+          recordAfterProcessConsumerResumes(calls, command);
           return exitCode;
         }),
     }));
@@ -112,14 +121,14 @@ const withExecProbe = Effect.fn("file-diff-feed.test.withExecProbe")(function* (
 });
 
 const settleDiff = Effect.fn("file-diff-feed.test.settleDiff")(function* (calls: Queue.Queue<string>) {
-  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* yieldToHost();
   yield* TestClock.adjust("100 millis");
   const ignoreCommand = yield* Stream.fromQueue(calls).pipe(
     Stream.filter(isGitIgnoreCommand),
     Stream.runHead,
   );
   if (Option.isNone(ignoreCommand)) return assert.fail("ignore check did not complete");
-  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* yieldToHost();
   yield* TestClock.adjust("1 second");
   const diffCommand = yield* Stream.fromQueue(calls).pipe(Stream.filter(isGitDiffCommand), Stream.runHead);
   if (Option.isNone(diffCommand)) return assert.fail("diff did not complete");
@@ -179,18 +188,18 @@ const startBlockedBatch = Effect.fn("file-diff-feed.test.startBlockedBatch")(fun
     Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
     Effect.forkChild,
   );
-  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* yieldToHost();
   yield* Queue.offerAll(events, [
     { _tag: "Update", path: "seed.txt" },
     { _tag: "Update", path: "other.txt" },
   ]);
-  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* yieldToHost();
   yield* TestClock.adjust("100 millis");
-  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* yieldToHost();
   yield* TestClock.adjust("1 second");
   yield* Deferred.succeed(stop, undefined);
   yield* Deferred.await(started);
-  yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+  yield* yieldToHost();
   return { fiber, terminated, killed };
 });
 
@@ -402,7 +411,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* Queue.offerAll(events, [
         { _tag: "Update", path: "seed.txt" },
         { _tag: "Create", path: addedPath },
@@ -412,9 +421,9 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         { _tag: "Update", path: "seed.txt" },
         { _tag: "Create", path: "node_modules/ignored.txt" },
       ]);
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("100 millis");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("1 second");
       yield* Deferred.succeed(stop, undefined);
       const shipped = yield* Fiber.join(fiber);
@@ -427,7 +436,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
       );
       assert.lengthOf(actual, expected.length);
       assert.deepEqual(Object.fromEntries(actual), Object.fromEntries(expected));
-      const gitCommands = (yield* Queue.takeAll(calls)).filter((command) => command.startsWith("git "));
+      const gitCommands = (yield* takeAllCalls(calls)).filter((command) => command.startsWith("git "));
       const beforeGitProcessCount = 10;
       assert.isAtMost(gitCommands.length, beforeGitProcessCount * 0.8);
       assert.lengthOf(gitCommands, 5);
@@ -466,14 +475,14 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* Queue.offerAll(events, [
         { _tag: "Update", path: "seed.txt" },
         { _tag: "Update", path: "other.txt" },
       ]);
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("100 millis");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("1 second");
       yield* Deferred.succeed(stop, undefined);
       const shipped = yield* Fiber.join(fiber);
@@ -485,7 +494,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
           ["other.txt", "diff --git a/other.txt b/other.txt\npaths=1/1\n"],
         ],
       );
-      const diffCommands = (yield* Queue.takeAll(calls)).filter(isGitDiffCommand);
+      const diffCommands = (yield* takeAllCalls(calls)).filter(isGitDiffCommand);
       assert.lengthOf(diffCommands, 2);
       assert.isFalse(diffCommands.some((command) => command.includes("--raw -z --patch")));
     }).pipe(Effect.provide(ExecCalls.layer)),
@@ -520,14 +529,14 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* Queue.offerAll(events, [
         { _tag: "Update", path: "tracked" },
         { _tag: "Update", path: "seed.txt" },
       ]);
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("100 millis");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("1 second");
       yield* Deferred.succeed(stop, undefined);
       const shipped = yield* Fiber.join(fiber);
@@ -558,7 +567,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* Queue.offerAll(events, fileEvents);
       const commands = yield* settleDiff(calls);
       assert.strictEqual((yield* Metric.value(fileDiffExecDuration)).count, before + 1);
@@ -589,7 +598,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* Queue.offer(events, { _tag: "Create", path: "packages/dist/bundle.js" });
       yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
       const commands = yield* settleDiff(calls);
@@ -616,7 +625,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* Effect.forEach(
         Array.from({ length: 1_000 }, (_, index) => `.pnpm-store/v11/files/${index}`),
         (path) => Queue.offer(events, { _tag: "Create", path }),
@@ -647,18 +656,18 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* writeFile(original, { path: "seed.txt", content: "written just before the stop\n" });
       yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
 
       // Clock never reaches the 250ms debounce, so only the flush can produce it.
       yield* Deferred.succeed(stop, undefined);
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("100 millis");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("100 millis");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       const head = yield* Fiber.join(fiber);
 
       if (Option.isNone(head)) return assert.fail("stopping the feed dropped the pending diff");
@@ -683,7 +692,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* Queue.offer(events, { _tag: "Create", path: "build" });
       yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
       yield* TestClock.adjust("100 millis");
@@ -692,13 +701,13 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Stream.runHead,
       );
       if (Option.isNone(ignoreCommand)) return assert.fail("ignore check did not complete");
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("1 second");
       const head = yield* Fiber.join(fiber);
       if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
       const value = yield* decodeDiffValue(head.value.value);
       assert.strictEqual(value.path, "seed.txt");
-      const remainingCommands = yield* Queue.takeAll(calls);
+      const remainingCommands = yield* takeAllCalls(calls);
       const commands = [ignoreCommand.value, ...remainingCommands];
       const diffCommands = commands.filter(isGitDiffCommand);
       assert.lengthOf(diffCommands, 1);
@@ -729,11 +738,11 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* Queue.offer(events, { _tag: "Remove", path: "tracked" });
       yield* TestClock.adjust("100 millis");
       yield* Stream.fromQueue(calls).pipe(Stream.filter(isGitIgnoreCommand), Stream.runHead);
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       yield* TestClock.adjust("1 second");
       const directoryCommand = yield* Stream.fromQueue(calls).pipe(
         Stream.filter((command) => command.includes("'tracked'")),
@@ -800,7 +809,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
 
       yield* writeFile(sandbox, { path: "seed.txt", content: "first\n" });
       yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
@@ -834,7 +843,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
         Effect.forkChild,
       );
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
 
       yield* writeFile(sandbox, { path: "seed.txt", content: "first\n" });
       yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
@@ -844,7 +853,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
       yield* writeFile(sandbox, { path: "seed.txt", content: "seed\n" });
       yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
       yield* settleDiff(calls);
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
       assert.isTrue(Option.isNone(yield* Queue.poll(shipped)));
 
       yield* writeFile(sandbox, { path: "seed.txt", content: "first\n" });
@@ -873,7 +882,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
         Effect.forkChild,
       );
       const sharedPrefix = "a".repeat(fileDiffMaxBytes);
-      yield* Effect.yieldNow.pipe(Effect.repeat({ times: 9 }));
+      yield* yieldToHost();
 
       yield* writeFile(sandbox, { path: "seed.txt", content: `${sharedPrefix}first\n` });
       yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
