@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString } from "./base-schemas";
+import { RunPlanPolicyProfile } from "./settings";
 
 export class HarnessEnablement extends Schema.Class<HarnessEnablement>("HarnessEnablement")({
   harness: HarnessName,
@@ -32,6 +33,35 @@ export const HarnessState = Schema.TaggedUnion({
 });
 export type HarnessState = typeof HarnessState.Type;
 
+export class HarnessCatalogChoice extends Schema.Class<HarnessCatalogChoice>("HarnessCatalogChoice")({
+  value: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+}) {}
+
+export const HarnessCatalogProvenance = Schema.Union([
+  Schema.Struct({
+    source: Schema.Literal("tanstack-runtime"),
+    packageVersion: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    source: Schema.Literal("native-discovery"),
+    runtimeHost: TrimmedNonEmptyString,
+    harnessVersion: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    source: Schema.Literal("cogwork-fallback"),
+    fallbackVersion: TrimmedNonEmptyString,
+  }),
+]).pipe(Schema.toTaggedUnion("source"));
+export type HarnessCatalogProvenance = typeof HarnessCatalogProvenance.Type;
+
+export class HarnessOptionCatalog extends Schema.Class<HarnessOptionCatalog>("HarnessOptionCatalog")({
+  models: Schema.Array(HarnessCatalogChoice),
+  efforts: Schema.optionalKey(Schema.Array(HarnessCatalogChoice)),
+  policyProfiles: Schema.Array(RunPlanPolicyProfile),
+  provenance: HarnessCatalogProvenance,
+}) {}
+
 export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
   harness: HarnessName,
   enabled: Schema.Boolean.pipe(
@@ -41,8 +71,11 @@ export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
   /** As the Harness reported it, so a non-semver release tag survives. */
   version: Schema.NullOr(TrimmedNonEmptyString),
   state: HarnessState,
-  /** The Harness option catalog's models. Empty when no catalog source answered. */
   models: Schema.Array(TrimmedNonEmptyString),
+  catalog: Schema.NullOr(HarnessOptionCatalog).pipe(
+    Schema.withConstructorDefault(Effect.succeed(null)),
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
 }) {}
 
 export class HarnessOverview extends Schema.Class<HarnessOverview>("HarnessOverview")({

@@ -23,14 +23,18 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useAtom } from "@effect/atom-react";
+import { useAtom, useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
+import { harnessesAtom, operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { workspaceConnectionChoices } from "../features/connections-view";
-import { operationSettingUpdate } from "../features/operation-settings";
+import {
+  type HarnessCatalog,
+  harnessCatalogLoad,
+  operationSettingUpdate,
+} from "../features/operation-settings";
 import {
   changedFieldCount,
   draftAfterSubmission,
@@ -211,6 +215,54 @@ function LiveOperationSettings({
   readonly workspace: WorkspaceId;
   readonly disabled: boolean;
 }) {
+  const harnesses = useAtomValue(harnessesAtom);
+  const refreshHarnesses = useAtomRefresh(harnessesAtom);
+  const overview = harnesses._tag === "Success" ? harnesses.value : null;
+  const load = harnessCatalogLoad(overview, harnesses._tag === "Failure");
+
+  if (load.status === "loading") {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner />
+        Loading Harness catalogs…
+      </div>
+    );
+  }
+
+  if (load.status === "failed") {
+    return (
+      <Alert variant="destructive">
+        <RiAlertLine />
+        <AlertTitle>Could not load Harness catalogs</AlertTitle>
+        <AlertDescription>Workspace operation settings are unchanged.</AlertDescription>
+        <Button size="sm" variant="outline" onClick={refreshHarnesses}>
+          Try again
+        </Button>
+      </Alert>
+    );
+  }
+
+  return (
+    <LoadedOperationSettings
+      controlStore={controlStore}
+      workspace={workspace}
+      catalogs={load.catalogs}
+      disabled={disabled || harnesses.waiting}
+    />
+  );
+}
+
+function LoadedOperationSettings({
+  controlStore,
+  workspace,
+  catalogs,
+  disabled,
+}: {
+  readonly controlStore: ControlStore | null;
+  readonly workspace: WorkspaceId;
+  readonly catalogs: ReadonlyArray<HarnessCatalog>;
+  readonly disabled: boolean;
+}) {
   const key = (setting: OperationSettingName) =>
     setOperationSettingAtom(operationSettingAtomKey(workspace, setting));
   const enabled = useAtom(key("enabled"));
@@ -226,7 +278,7 @@ function LiveOperationSettings({
   return (
     <OperationSettings.Provider
       value={{
-        state: { controlStore, workspace },
+        state: { catalogs, controlStore, workspace },
         actions: {
           write: (setting, operation, value) => {
             const writer = writers[setting as (typeof writableSettings)[number]];

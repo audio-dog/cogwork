@@ -79,7 +79,6 @@ describe("workspace record draft", () => {
       record: {
         name: "cogwork",
         checkoutPath: "/repos/cogwork",
-        gitRemote: "git@github.com:acme/cogwork.git",
         issueTracker: {
           type: "linear",
           connectionId: "linear/acme",
@@ -183,7 +182,6 @@ describe("workspace record draft", () => {
       ...emptyDraft,
       displayName: "  cogwork  ",
       issueTrackerConnectionId: "github/acme",
-      gitRemote: "  origin  ",
       issueTrackerRepo: "  acme/cogwork  ",
       teams: " ENG, APP ",
       assigneeAllowlist: " taylor, cogwork ",
@@ -200,7 +198,6 @@ describe("workspace record draft", () => {
     expect(draftAfterSubmission(draft, "/repos/cogwork", update)).toMatchObject({
       displayName: "cogwork",
       checkoutPath: "/repos/cogwork",
-      gitRemote: "origin",
       issueTrackerRepo: "acme/cogwork",
       teams: "ENG, APP",
       assigneeAllowlist: "taylor, cogwork",

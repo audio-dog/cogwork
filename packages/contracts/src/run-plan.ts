@@ -5,11 +5,8 @@ import { Claim } from "./coordination";
 import { PrSummary } from "./daemon";
 import { ProvenanceStamp } from "./provenance";
 import { RunId, SessionKind } from "./run";
-import { ResolutionOperator } from "./settings";
+import { ResolutionOperator, RunPlanPolicyProfile } from "./settings";
 import { LifecycleStage, Priority, TriageRole } from "./triage";
-
-export const RunPlanPolicyProfile = Schema.Literals(["read-only", "full"]);
-export type RunPlanPolicyProfile = typeof RunPlanPolicyProfile.Type;
 
 export class RunPlanHarness extends Schema.Class<RunPlanHarness>("RunPlanHarness")({
   name: HarnessName,
