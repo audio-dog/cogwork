@@ -121,6 +121,7 @@ export const runs = sqliteTable(
     totalTokens: integer("total_tokens"),
     estimated: integer("estimated", { mode: "boolean" }),
     status: text("status").notNull(),
+    claimDisposition: text("claim_disposition", { enum: ["hold", "release"] }),
     startedAt: integer("started_at").notNull(),
     endedAt: integer("ended_at"),
     eventCount: integer("event_count").notNull().default(0),
