@@ -183,6 +183,7 @@ export interface CredentialSources {
   readonly githubCli?: {
     readonly discover: Effect.Effect<Redacted.Redacted<string>, CredentialError>;
     readonly acquire: (account: string) => Effect.Effect<Redacted.Redacted<string>, CredentialError>;
+    readonly forget: (account: string) => Effect.Effect<void>;
   };
   readonly refresh?: TokenRefresh;
 }
@@ -418,6 +419,11 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
 
   const loadProviderKeys = sources.stored.loadProviderKeys ?? Effect.succeed([]);
 
+  const forgetGitHubCliToken = (connectionId: ConnectionId, source: ConnectionSource) => {
+    if (source._tag !== "GitHubCli") return Effect.void;
+    return sources.githubCli?.forget(connectionAccountOf(connectionId)) ?? Effect.void;
+  };
+
   const configureConnection = Effect.fn("CredentialStore.configureConnection")(function* (
     connectionId: ConnectionId,
     source: ConnectionSource,
@@ -440,6 +446,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       });
     }
     yield* save({ ...source, connectionId });
+    yield* forgetGitHubCliToken(connectionId, source);
   });
 
   const firstEnvKey = (envVars: ReadonlyArray<string>) =>

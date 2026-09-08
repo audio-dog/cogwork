@@ -95,12 +95,13 @@ describe("CredentialStore (env)", () => {
 });
 
 describe("CredentialStore (Connections)", () => {
-  it.effect("stores only the GitHub CLI marker and acquires the fixed account at run time", () =>
+  it.effect("stores only the GitHub CLI marker, forgets its cache, and acquires the fixed account", () =>
     Effect.gen(function* () {
       const entries = yield* Ref.make<ReadonlyArray<import("./credential-store").StoredConnectionCredential>>(
         [],
       );
       const accounts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const forgotten = yield* Ref.make<ReadonlyArray<string>>([]);
       const store = make({
         stored: {
           load: Effect.succeed([]),
@@ -114,6 +115,7 @@ describe("CredentialStore (Connections)", () => {
             Ref.update(accounts, (current) => [...current, selected]).pipe(
               Effect.map(() => Redacted.make("run-token")),
             ),
+          forget: (selected) => Ref.update(forgotten, (current) => [...current, selected]),
         },
       });
       const id = connectionId("github/octocat");
@@ -128,6 +130,7 @@ describe("CredentialStore (Connections)", () => {
 
       assert.deepStrictEqual(yield* Ref.get(entries), [{ _tag: "GitHubCli", connectionId: id }]);
       assert.deepStrictEqual(yield* Ref.get(accounts), ["octocat"]);
+      assert.deepStrictEqual(yield* Ref.get(forgotten), ["octocat"]);
       assert.strictEqual(credential.source, "github-cli");
       assert.strictEqual(Redacted.value(credential.token), "run-token");
     }),
@@ -140,6 +143,7 @@ describe("CredentialStore (Connections)", () => {
         githubCli: {
           discover: Effect.succeed(Redacted.make("secret")),
           acquire: () => Effect.succeed(Redacted.make("secret")),
+          forget: () => Effect.void,
         },
       });
       const failure = yield* Effect.flip(store.resolveSource(account, { _tag: "GitHubCli" }));
