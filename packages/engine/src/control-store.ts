@@ -53,70 +53,46 @@ export const controlStoreWriteGateWaitDuration = Metric.timer(
   { description: "Time spent waiting to enter the Control store write gate." },
 );
 
-export type ControlStoreService =
-  | {
+type ControlStoreMutators<Picture> = {
+  readonly setDaemonLimit: (
+    update: DaemonLimitUpdate,
+  ) => Effect.Effect<Picture, ControlStoreFailure | StaleControlStoreWrite>;
+  readonly establishConnection: (connection: Connection) => Effect.Effect<Picture, ControlStoreFailure>;
+  readonly revokeConnection: (connectionId: ConnectionId) => Effect.Effect<Picture, ControlStoreFailure>;
+  readonly removeConnection: (connectionId: ConnectionId) => Effect.Effect<Picture, ControlStoreFailure>;
+  readonly setHarnessEnabled: (
+    harness: HarnessName,
+    enabled: boolean,
+  ) => Effect.Effect<Picture, ControlStoreFailure>;
+  readonly updateOperationSetting: (
+    update: OperationSettingUpdate,
+  ) => Effect.Effect<Picture, ControlStoreFailure>;
+  readonly installPlugin: (
+    record: PluginInstall,
+    contributionIds: ReadonlyArray<string>,
+    mcpServerIds: ReadonlyArray<string>,
+  ) => Effect.Effect<Picture, ControlStoreFailure>;
+  readonly uninstallPlugin: (pluginId: string) => Effect.Effect<Picture, ControlStoreFailure>;
+  readonly updateContributionSetting: (
+    update: ContributionSettingUpdate,
+  ) => Effect.Effect<Picture, ControlStoreFailure>;
+};
+
+export type ControlStoreService = {
+  readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
+} & (
+  | (ControlStoreMutators<ControlStorePicture> & {
       readonly health: "available";
       readonly seed: ControlStorePicture;
       readonly picture: Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly setDaemonLimit: (
-        update: DaemonLimitUpdate,
-      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure | StaleControlStoreWrite>;
-      readonly establishConnection: (
-        connection: Connection,
-      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly revokeConnection: (
-        connectionId: ConnectionId,
-      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly removeConnection: (
-        connectionId: ConnectionId,
-      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly setHarnessEnabled: (
-        harness: HarnessName,
-        enabled: boolean,
-      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly updateOperationSetting: (
-        update: OperationSettingUpdate,
-      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly installPlugin: (
-        record: PluginInstall,
-        contributionIds: ReadonlyArray<string>,
-        mcpServerIds: ReadonlyArray<string>,
-      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly uninstallPlugin: (pluginId: string) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly updateContributionSetting: (
-        update: ContributionSettingUpdate,
-      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
-      readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
-    }
-  | {
+    })
+  | (ControlStoreMutators<never> & {
       readonly health: "unavailable";
       readonly message: string;
       readonly seed: null;
       readonly picture: Effect.Effect<never, ControlStoreFailure>;
-      readonly setDaemonLimit: (
-        update: DaemonLimitUpdate,
-      ) => Effect.Effect<never, ControlStoreFailure | StaleControlStoreWrite>;
-      readonly establishConnection: (connection: Connection) => Effect.Effect<never, ControlStoreFailure>;
-      readonly revokeConnection: (connectionId: ConnectionId) => Effect.Effect<never, ControlStoreFailure>;
-      readonly removeConnection: (connectionId: ConnectionId) => Effect.Effect<never, ControlStoreFailure>;
-      readonly setHarnessEnabled: (
-        harness: HarnessName,
-        enabled: boolean,
-      ) => Effect.Effect<never, ControlStoreFailure>;
-      readonly updateOperationSetting: (
-        update: OperationSettingUpdate,
-      ) => Effect.Effect<never, ControlStoreFailure>;
-      readonly installPlugin: (
-        record: PluginInstall,
-        contributionIds: ReadonlyArray<string>,
-        mcpServerIds: ReadonlyArray<string>,
-      ) => Effect.Effect<never, ControlStoreFailure>;
-      readonly uninstallPlugin: (pluginId: string) => Effect.Effect<never, ControlStoreFailure>;
-      readonly updateContributionSetting: (
-        update: ContributionSettingUpdate,
-      ) => Effect.Effect<never, ControlStoreFailure>;
-      readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
-    };
+    })
+);
 export class ControlStoreBootError extends Data.TaggedError("ControlStoreBootError")<{
   readonly message: string;
 }> {}

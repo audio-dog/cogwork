@@ -100,6 +100,8 @@ export const removeConnectionAtom = DaemonAtomRpc.mutation("RemoveConnection");
 
 export const registerWorkspaceAtom = DaemonAtomRpc.mutation("RegisterWorkspace");
 
+export const updateWorkspaceAtom = DaemonAtomRpc.mutation("UpdateWorkspace");
+
 export const deregisterWorkspaceAtom = DaemonAtomRpc.mutation("DeregisterWorkspace");
 
 export const rebindWorkspaceAtom = DaemonAtomRpc.mutation("RebindWorkspace");

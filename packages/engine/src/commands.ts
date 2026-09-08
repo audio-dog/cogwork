@@ -33,6 +33,7 @@ import {
   WorkspaceManagementError,
   type WorkspaceRegistration,
   WorkspaceRegistrationError,
+  type WorkspaceUpdate,
   workspaceFailureState,
   workspaceStateFromInfo,
 } from "@cogwork/contracts";
@@ -441,6 +442,30 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
   );
   yield* publisher.publishControlStore(controlStore);
   return workspace;
+});
+
+export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (payload: {
+  readonly workspace: WorkspaceId;
+  readonly update: WorkspaceUpdate;
+}) {
+  const { issueTracker, sourceControl } = payload.update;
+  yield* requireConfiguredBinding(
+    issueTracker.connectionId,
+    yield* connectionSystemFor(issueTracker.type),
+    "issueTracker",
+  );
+  if (sourceControl) {
+    yield* requireConfiguredBinding(sourceControl.connectionId, "github", "sourceControl");
+  }
+  const management = yield* WorkspaceManagement;
+  const publisher = yield* DaemonEventPublisher;
+  const worker = yield* ReconcileWorker;
+  const change = yield* management.update(payload.workspace, payload.update);
+  const state = workspaceStateFromChange(change);
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  const published = yield* publisher.publishWorkspaces();
+  yield* publisher.publishScheduler();
+  return published.find((workspace) => workspace.name === payload.workspace) ?? state;
 });
 
 export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {

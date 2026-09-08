@@ -1,6 +1,11 @@
-import { type ConnectionItem, connectionIdOf } from "@cogwork/contracts";
+import { Connection, type ConnectionItem, connectionIdOf } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
-import { connectionAction, connectionStatus, pluginRequiring, readyConnections } from "./connections-view";
+import {
+  connectionAction,
+  connectionStatus,
+  pluginRequiring,
+  workspaceConnectionChoices,
+} from "./connections-view";
 
 const item = (over: Partial<ConnectionItem>): ConnectionItem => ({
   system: "linear",
@@ -71,18 +76,38 @@ describe("Connections view", () => {
     expect(pluginRequiring({ plugins: [] }, "linear")).toBeNull();
   });
 
-  it("selects ready workspace bindings from the Connection overview", () => {
-    const linear = item({
-      connection: {
-        id: connectionIdOf("linear", "acme"),
-        system: "linear",
-        account: "acme",
-        status: "established",
-      },
+  it("keeps only the selected unavailable workspace binding visible", () => {
+    const selectedConnection = Connection.make({
+      id: connectionIdOf("linear", "selected"),
+      system: "linear",
+      account: "selected",
+      status: "revoked",
+    });
+    const hiddenConnection = Connection.make({
+      id: connectionIdOf("linear", "hidden"),
+      system: "linear",
+      account: "hidden",
+      status: "revoked",
+    });
+    const readyConnection = Connection.make({
+      id: connectionIdOf("linear", "ready"),
+      system: "linear",
+      account: "ready",
+      status: "established",
+    });
+    const selected = item({
+      connection: selectedConnection,
+    });
+    const hidden = item({
+      connection: hiddenConnection,
+    });
+    const ready = item({
+      connection: readyConnection,
       readiness: { _tag: "Ready" },
     });
-    const github = item({ system: "github" });
 
-    expect(readyConnections({ connections: [linear, github] })).toEqual([linear.connection]);
+    expect(
+      workspaceConnectionChoices({ connections: [selected, hidden, ready] }, [selectedConnection.id]),
+    ).toEqual([selectedConnection, readyConnection]);
   });
 });

@@ -15,6 +15,7 @@ import {
 } from "./daemon";
 import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
+import { WorkspaceRegistration } from "./workspace";
 
 export const ClassifiedItem = Schema.TaggedUnion({
   Eligible: ActionableItem.fields,
@@ -31,6 +32,7 @@ export const WorkspaceState = Schema.TaggedUnion({
     displayName: Schema.optional(TrimmedNonEmptyString),
     checkoutPath: TrimmedNonEmptyString,
     issueTracker: IssueTrackerType,
+    record: WorkspaceRegistration,
     poll: PollState,
     contributions: Schema.Array(LocalContribution),
     availability: OperationAvailabilityList,
