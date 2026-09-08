@@ -16,8 +16,7 @@
       "passThroughEnv": ["NODE_PATH", "ELECTRON_*", "REMOTE_DEBUGGING_PORT"]
     },
     "test": {
-      "dependsOn": ["transit"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/configs/vitest/base.ts"]
+      "dependsOn": ["transit"]
     },
     "transit": {
       "dependsOn": ["^transit"]
