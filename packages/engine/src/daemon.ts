@@ -47,6 +47,7 @@ import {
   setOperationSetting,
   setScheduling,
   uninstallPlugin,
+  updateWorkspace,
 } from "./commands";
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
@@ -307,6 +308,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   SetHarnessEnabled: setHarnessEnabled,
   SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
+  UpdateWorkspace: updateWorkspace,
   InstallPlugin: installPlugin,
   UninstallPlugin: uninstallPlugin,
   EstablishConnection: establishConnection,

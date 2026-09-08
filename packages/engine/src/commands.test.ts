@@ -24,6 +24,7 @@ import {
   WorkspaceId,
   WorkspaceRegistration,
   WorkspaceState,
+  WorkspaceUpdate,
 } from "@cogwork/contracts";
 
 import { assert, describe, it } from "@effect/vitest";
@@ -109,6 +110,13 @@ const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/repo" },
   linearHistory: false,
   concurrency: 2,
+});
+const acmeUpdate = Schema.decodeSync(WorkspaceUpdate)({
+  name: "renamed acme",
+  gitRemote: "git@github.com:acme/renamed.git",
+  issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/renamed" },
+  linearHistory: true,
+  concurrency: 4,
 });
 const unboundRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "unbound",
@@ -452,6 +460,7 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
       const workspace: Registry.RegisteredWorkspace = {
         source: "control-store:minted",
         contributions,
+        record: registration,
         config: {
           name: wsid("0198f16a-21d7-7000-8000-000000000001"),
           displayName: registration.name,
@@ -475,6 +484,32 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
       return workspace;
     },
   );
+  const update: Registry.WorkspaceManagementService["update"] = Effect.fn("test.update")(
+    function* (workspace, update) {
+      const current = (yield* Ref.get(cell)).workspaces.find((entry) => entry.config.name === workspace);
+      if (!current) return yield* Effect.die("workspace not found");
+      const changed: Registry.RegisteredWorkspace = {
+        ...current,
+        record: { ...update, checkoutPath: current.config.checkoutPath },
+        config: {
+          name: current.config.name,
+          displayName: update.name,
+          checkoutPath: current.config.checkoutPath,
+          issueTracker: update.issueTracker,
+          sourceControl: update.sourceControl,
+          mcpSkills: update.mcpSkills,
+          worktrees: update.worktrees,
+          linearHistory: update.linearHistory,
+        },
+        workspaceLimit: update.concurrency,
+      };
+      yield* Ref.update(cell, (state) => ({
+        ...state,
+        workspaces: state.workspaces.map((entry) => (entry.config.name === workspace ? changed : entry)),
+      }));
+      return { _tag: "Registered" as const, workspace: changed };
+    },
+  );
   const rebind: Registry.WorkspaceManagementService["rebind"] = Effect.fn("test.rebind")(
     function* (workspace, checkoutPath) {
       const current = (yield* Ref.get(cell)).workspaces.find((entry) => entry.config.name === workspace);
@@ -489,7 +524,7 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
   );
   return Layer.mergeAll(
     Layer.succeed(Registry.WorkspaceRegistry, registry),
-    Layer.succeed(Registry.WorkspaceManagement, { register, deregister, rebind }),
+    Layer.succeed(Registry.WorkspaceManagement, { register, update, deregister, rebind }),
   );
 };
 
@@ -502,6 +537,7 @@ const failedRegistrationServices = () => {
     ),
     Layer.succeed(Registry.WorkspaceManagement, {
       register: () => Effect.succeed({ _tag: "Failed" as const, failure }),
+      update: () => Effect.die("unexpected update"),
       deregister: () => Effect.die("unexpected deregister"),
       rebind: () => Effect.die("unexpected re-bind"),
     }),
@@ -1537,6 +1573,78 @@ describe("Connection mutations", () => {
 });
 
 describe("workspace lifecycle commands", () => {
+  it.effect("refuses an invalid Connection reference before editing the workspace", () => {
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const registry = yield* Registry.WorkspaceRegistry;
+      const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      if (!WorkspaceState.guards.Registered(registered)) return assert.fail("expected registration");
+
+      const error = yield* Effect.flip(
+        client.UpdateWorkspace({
+          workspace: registered.name,
+          update: { ...acmeUpdate, issueTracker: { ...acmeUpdate.issueTracker, connectionId: "unbound" } },
+        }),
+      );
+      const stored = Registry.findWorkspace(yield* registry.state, registered.name);
+
+      assert.strictEqual(error._tag, "WorkspaceRegistrationError");
+      assert.strictEqual(stored?.config.displayName, acmeRegistration.name);
+    }).pipe(
+      Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("returns and publishes an updated workspace record", () => {
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      if (!WorkspaceState.guards.Registered(registered)) return assert.fail("expected registration");
+
+      const updated = yield* client.UpdateWorkspace({ workspace: registered.name, update: acmeUpdate });
+      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(5), Stream.runCollect);
+
+      assert.strictEqual(
+        WorkspaceState.guards.Registered(updated) ? updated.record?.name : null,
+        "renamed acme",
+      );
+      assert.strictEqual(
+        WorkspaceState.guards.Registered(updated) ? updated.checkoutPath : null,
+        "/repos/acme",
+      );
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        [
+          "WorkspaceChanged",
+          "ControlStoreChanged",
+          "WorkspaceChanged",
+          "ControlStoreChanged",
+          "SchedulerChanged",
+        ],
+      );
+      const schedulerChanged = events.at(-1);
+      if (!schedulerChanged || !DaemonEvent.guards.SchedulerChanged(schedulerChanged)) {
+        return assert.fail("expected SchedulerChanged");
+      }
+      assert.strictEqual(
+        schedulerChanged.scheduler.perWorkspace.find(({ name }) => name === registered.name)?.limit,
+        acmeUpdate.concurrency,
+      );
+      const published = [...events].flatMap((event) =>
+        DaemonEvent.guards.WorkspaceChanged(event) ? [event.workspace] : [],
+      );
+      assert.deepStrictEqual(published.at(-1), updated);
+    }).pipe(
+      Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.scoped,
+    );
+  });
+
   it.effect("returns the WorkspaceId and publishes the refreshed Control store picture", () => {
     const registries = registrationServices();
     const workspace = wsid("0198f16a-21d7-7000-8000-000000000001");
