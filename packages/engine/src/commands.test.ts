@@ -27,20 +27,14 @@ import {
 } from "@cogwork/contracts";
 
 import { assert, describe, it } from "@effect/vitest";
-import * as Cause from "effect/Cause";
-import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
-import * as MutableRef from "effect/MutableRef";
-import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
@@ -49,6 +43,7 @@ import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
+import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
 import type { HandBackOutcome, HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import { PluginManager } from "./plugin";
@@ -65,6 +60,47 @@ const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const wsid = Schema.decodeSync(WorkspaceId);
 const harness = Schema.decodeSync(HarnessName);
+const commandHarnessRunner: HarnessRunner = {
+  name: harness("cursor"),
+  sessionKind: "opaque-handle",
+  projectedMembers: [],
+  planMiddleware: [],
+  execution: fullHarnessExecution,
+  capabilities: {
+    authenticationModes: ["host"],
+    session: { affinity: "runtime-host", fork: false, humanAttach: false },
+    structuredOutput: "none",
+    policyFidelity: "exact",
+    fileEventFidelity: "absent",
+    usageQuality: "none",
+    readinessDiagnostics: false,
+    journal: false,
+    takeover: false,
+  },
+  authentication: { mode: "host", reference: "test" },
+  catalogSources: {
+    fallback: staticCatalogSource(
+      { models: [{ value: "test", label: "Test" }] },
+      { source: "cogwork-fallback", fallbackVersion: "test" },
+    ),
+  },
+  readiness: () =>
+    Effect.succeed({
+      operational: { status: "ready", retryable: false, diagnostic: "ready" },
+      installation: { status: "installed", version: "test" },
+      compatibility: { status: "compatible", requirement: null },
+      authentication: { mode: "host", status: "available", diagnostic: "available" },
+      diagnostics: [],
+    }),
+  preflight: () => Effect.void,
+  run: () => Stream.die("unused"),
+};
+const reconcileStubLayer = Layer.succeed(Reconcile.ReconcileWorker, {
+  submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+  submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+  snapshot: Effect.succeed({ generation: 0, observedAtMillis: 0, workspaces: [] }),
+  invalidateAvailability: () => Effect.void,
+});
 const interruptionGate = Latch.makeUnsafe();
 const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
@@ -297,6 +333,7 @@ const picture: ControlStorePicture = {
   connections: [],
   pluginInstalls: [],
   contributionSettings: [],
+  harnessSettings: [],
 };
 
 interface ControlStoreStubOptions {
@@ -305,6 +342,7 @@ interface ControlStoreStubOptions {
   readonly setDaemonLimit?: ControlStoreService["setDaemonLimit"];
   readonly updateContributionSetting?: ControlStoreService["updateContributionSetting"];
   readonly updateOperationSetting?: ControlStoreService["updateOperationSetting"];
+  readonly setHarnessEnabled?: ControlStoreService["setHarnessEnabled"];
 }
 
 const controlStoreStub = ({
@@ -326,6 +364,7 @@ const controlStoreStub = ({
       connections: picture.connections,
       pluginInstalls: picture.pluginInstalls,
       contributionSettings: picture.contributionSettings,
+      harnessSettings: picture.harnessSettings,
     }),
   updateOperationSetting = (update) =>
     Effect.succeed({
@@ -343,6 +382,8 @@ const controlStoreStub = ({
         Clear: () => [],
       }),
     }),
+  setHarnessEnabled = (harness, enabled) =>
+    Effect.succeed({ ...picture, harnessSettings: [{ harness, enabled }] }),
 }: ControlStoreStubOptions = {}) =>
   Layer.succeed(ControlStore, {
     health: "available",
@@ -352,6 +393,7 @@ const controlStoreStub = ({
     establishConnection: () => Effect.succeed(picture),
     revokeConnection: () => Effect.succeed(picture),
     removeConnection: () => Effect.succeed(picture),
+    setHarnessEnabled,
     updateOperationSetting,
     installPlugin: () => Effect.succeed(picture),
     uninstallPlugin: () => Effect.succeed(picture),
@@ -367,13 +409,15 @@ const daemonLayer = (
   plugins: Layer.Layer<PluginManager> = pluginManagerLayer,
   connections = connectionStoreLayer,
   runControl: Layer.Layer<RunControl.RunControl> = RunControl.layer,
+  harnessRunners: ReadonlyArray<HarnessRunner> = [],
+  reconcile = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source))),
 ) =>
   Daemon.handlersLayer.pipe(
-    Layer.provideMerge(harnessProbeTestLayer()),
+    Layer.provideMerge(harnessProbeTestLayer(harnessRunners)),
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
     Layer.provideMerge(Daemon.daemonInfoLayer),
     Layer.provideMerge(eventPublisherLayer),
-    Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source)))),
+    Layer.provideMerge(reconcile),
     Layer.provideMerge(registries),
     Layer.provideMerge(scheduler),
     Layer.provideMerge(engineServices),
@@ -382,6 +426,19 @@ const daemonLayer = (
     Layer.provideMerge(connections),
     Layer.provideMerge(plugins),
     Layer.provideMerge(source),
+  );
+
+const daemonLayerWithHarness = (source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>) =>
+  daemonLayer(
+    source,
+    schedulerStub(),
+    controlStoreStub(),
+    registryServices,
+    pluginManagerLayer,
+    connectionStoreLayer,
+    RunControl.layer,
+    [commandHarnessRunner],
+    reconcileStubLayer,
   );
 
 const registrationServices = (contributions: readonly LocalContribution[] = []) => {
@@ -917,143 +974,6 @@ describe("HandBack", () => {
   );
 });
 
-describe("RunControl", () => {
-  it.effect("forgets a registered fiber when it completes", () =>
-    Effect.gen(function* () {
-      const control = yield* RunControl.RunControl;
-      yield* control.run(rid("run-1"), registered, Effect.void);
-
-      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
-    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
-  );
-
-  it.effect("interrupts registered fibers when its layer closes", () =>
-    Effect.gen(function* () {
-      const scope = yield* Scope.make();
-      const context = yield* Layer.buildWithScope(RunControl.layer, scope);
-      const control = Context.get(context, RunControl.RunControl);
-      const fiber = yield* Effect.forkChild(control.run(rid("run-1"), undefined, interruptionGate.await));
-      yield* Effect.yieldNow;
-
-      yield* Scope.close(scope, Exit.void);
-
-      const exit = yield* Fiber.await(fiber);
-      assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
-    }),
-  );
-
-  it.effect("interrupts a registered fiber on cancel and reports unknown runs", () =>
-    Effect.gen(function* () {
-      const control = yield* RunControl.RunControl;
-      const started = yield* Deferred.make<void>();
-      const onCancel = yield* Deferred.make<void>();
-      const fiber = yield* Effect.forkChild(
-        control.run(
-          rid("run-1"),
-          registered,
-          Deferred.succeed(started, undefined).pipe(Effect.andThen(interruptionGate.await)),
-          Deferred.succeed(onCancel, undefined),
-        ),
-      );
-      yield* Deferred.await(started);
-
-      const cancelled = yield* control.cancel(rid("run-1"));
-      assert.strictEqual(cancelled._tag, "Interrupting");
-      if (cancelled._tag === "Interrupting") {
-        assert.deepStrictEqual(cancelled.workspace, Option.some(registered));
-      }
-      if (cancelled._tag === "Interrupting") yield* cancelled.awaitTermination;
-      yield* Deferred.await(onCancel);
-      const exit = yield* Fiber.await(fiber);
-      assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
-
-      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
-      assert.strictEqual((yield* control.cancel(rid("ghost")))._tag, "NotFound");
-    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
-  );
-
-  it.effect("propagates caller interruption to the registered fiber", () =>
-    Effect.gen(function* () {
-      const control = yield* RunControl.RunControl;
-      const started = yield* Deferred.make<void>();
-      const interrupted = yield* Deferred.make<void>();
-      const finishTeardown = yield* Deferred.make<void>();
-      const onCancel = MutableRef.make(false);
-      const caller = yield* Effect.forkChild(
-        control.run(
-          rid("run-1"),
-          registered,
-          Deferred.succeed(started, undefined).pipe(
-            Effect.andThen(interruptionGate.await),
-            Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
-            Effect.ensuring(Deferred.await(finishTeardown)),
-          ),
-          Effect.sync(() => MutableRef.set(onCancel, true)),
-        ),
-      );
-      yield* Deferred.await(started);
-
-      caller.interruptUnsafe(Fiber.getCurrent()?.id);
-      yield* Deferred.await(interrupted);
-      yield* Effect.yieldNow;
-
-      const callerBeforeTeardown = caller.pollUnsafe();
-      yield* Deferred.succeed(finishTeardown, undefined);
-      yield* Fiber.await(caller);
-      assert.isUndefined(callerBeforeTeardown);
-      assert.isFalse(MutableRef.get(onCancel));
-      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
-    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
-  );
-
-  it.effect("does not interrupt a replacement registered after cancellation starts", () =>
-    Effect.gen(function* () {
-      const control = yield* RunControl.RunControl;
-      const replacementWorkspace = {
-        ...registered,
-        config: { ...registered.config, name: wsid("replacement") },
-      };
-      const firstStarted = yield* Deferred.make<void>();
-      const finishFirstTeardown = yield* Deferred.make<void>();
-      const first = yield* Effect.forkChild(
-        control.run(
-          rid("run-1"),
-          registered,
-          Deferred.succeed(firstStarted, undefined).pipe(
-            Effect.andThen(interruptionGate.await),
-            Effect.ensuring(Deferred.await(finishFirstTeardown)),
-          ),
-        ),
-      );
-      yield* Deferred.await(firstStarted);
-
-      const cancelled = yield* control.cancel(rid("run-1"));
-      assert.strictEqual(cancelled._tag, "Interrupting");
-
-      const replacementStarted = yield* Deferred.make<void>();
-      const replacement = yield* Effect.forkChild(
-        control.run(
-          rid("run-1"),
-          replacementWorkspace,
-          Deferred.succeed(replacementStarted, undefined).pipe(Effect.andThen(interruptionGate.await)),
-        ),
-      );
-      yield* Deferred.await(replacementStarted);
-      yield* Deferred.succeed(finishFirstTeardown, undefined);
-      if (cancelled._tag === "Interrupting") yield* cancelled.awaitTermination;
-
-      assert.isUndefined(replacement.pollUnsafe());
-      const replacementCancellation = yield* control.cancel(rid("run-1"));
-      assert.strictEqual(replacementCancellation._tag, "Interrupting");
-      if (replacementCancellation._tag === "Interrupting") {
-        assert.deepStrictEqual(replacementCancellation.workspace, Option.some(replacementWorkspace));
-        yield* replacementCancellation.awaitTermination;
-      }
-      yield* Fiber.await(first);
-    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
-  );
-});
-
 describe("SetScheduling", () => {
   it.effect("publishes one SchedulerChanged, and the next tick adds no duplicate", () =>
     Effect.gen(function* () {
@@ -1212,6 +1132,40 @@ describe("SetOperationSetting", () => {
         return assert.fail("expected Operation setting refusal");
       assert.strictEqual(failure.source, "triage Operation Definition");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+});
+
+describe("Harness management", () => {
+  it.effect("reports the registered Harness through RPC", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const overview = yield* client.GetHarnesses();
+      const item = overview.harnesses[0];
+
+      assert.strictEqual(item?.harness, "cursor");
+      assert.isTrue(item?.enabled);
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("returns disabled Harness state", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetHarnessEnabled({ harness: harness("cursor"), enabled: false });
+      assert.deepStrictEqual(returned.harnessSettings, [{ harness: harness("cursor"), enabled: false }]);
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("refuses a Harness that is not registered", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const failure = yield* Effect.flip(
+        client.SetHarnessEnabled({ harness: harness("unknown"), enabled: false }),
+      );
+
+      assert.strictEqual(failure._tag, "HarnessNotRegistered");
+      if (failure._tag !== "HarnessNotRegistered") return assert.fail("expected Harness refusal");
+      assert.strictEqual(failure.harness, "unknown");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}))), Effect.scoped),
   );
 });
 

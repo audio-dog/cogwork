@@ -15,15 +15,10 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import { availabilityCauseSummary } from "./availability";
-import {
-  consecutiveFailures,
-  type EligibleWork,
-  eligibleWork,
-  maxAttemptsPerStage,
-  observedStage,
-} from "./classify";
+import { type EligibleWork, eligibleWork, observedStage } from "./classify";
 import { type HandoffCause, handoffNote, handoffSession, recoveryReason } from "./comments";
 import { Executor } from "./executor";
+import { consecutiveFailures, isExhausted } from "./exhaustion";
 import { isStalledFollowUp } from "./follow-up";
 import { Harness } from "./harness";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
@@ -109,7 +104,7 @@ export const make = Effect.gen(function* () {
     session: SessionId | null,
   ) {
     const attempts = consecutiveFailures(item, stage) + 1;
-    const exhausted = attempts >= maxAttemptsPerStage;
+    const exhausted = isExhausted(attempts);
     yield* Effect.logWarning("recovered stale claim", {
       reason: recoveryReason,
       attempts,
