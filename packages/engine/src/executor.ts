@@ -864,6 +864,23 @@ export const make = Effect.gen(function* () {
     return yield* foldTriageResume(record, request, expected);
   });
 
+  const handOffAllowed = Effect.fn("Executor.handOffAllowed")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    if (item.stage !== "implement") return true;
+    const headBranch = branchName(item);
+    const openPullRequest = yield* sourceControl.findOpenPullRequest(workspace, headBranch).pipe(
+      Effect.catchTag("IssueTrackerError", (error) =>
+        Effect.logWarning("open pull request lookup failed before handoff", {
+          headBranch,
+          message: error.message,
+        }).pipe(Effect.map(() => null)),
+      ),
+    );
+    return openPullRequest === null;
+  });
+
   const reportDecidedFailure = Effect.fn("Executor.reportDecidedFailure")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -886,7 +903,7 @@ export const make = Effect.gen(function* () {
       atMillis: endedAtMillis,
       reason,
     });
-    if (exhausted) {
+    if (exhausted && (yield* handOffAllowed(workspace, item))) {
       yield* issueTracker.handOff(workspace, item.id, {
         stage: item.stage,
         note: handoffNote({
