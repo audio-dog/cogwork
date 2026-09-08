@@ -1,0 +1,19 @@
+apps/cli/src/rpc.ts
+  s_8558828ce285d0::t_93c29e10a7acd3 314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "2a70c80cec57deb43f858867f27ce62601ed1cb9",
+  "prompts": {},
+  "sessions": {
+    "s_8558828ce285d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0826e-10d4-7982-ab56-b4c2aab465fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
