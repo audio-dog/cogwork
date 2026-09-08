@@ -1,0 +1,62 @@
+AGENTS.md
+  s_a0aa29f091da68::t_ccb79cb112ef3d 26-27
+docs/agent-patterns/effect-time-bounds.md
+  s_a0aa29f091da68::t_b9153b6db87ba4 29
+  s_a0aa29f091da68::t_519ade9127eb1f 122-123
+docs/agent-patterns/effect-control-flow.md
+  s_a0aa29f091da68::t_644904ce429cfa 32-40,42,44-65
+  s_a0aa29f091da68::t_660dd0bccf4d84 159-160
+docs/agent-patterns/effect-schema-unions.md
+  s_a0aa29f091da68::t_c9ed1b1ea89489 155
+  s_a0aa29f091da68::t_6bbef086512dc3 99,101-102
+  s_a0aa29f091da68::t_e085a018dc2e9b 93-95
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_a0aa29f091da68::t_badda208d6c160 137
+docs/agent-patterns/effect-process-edges.md
+  s_a0aa29f091da68::t_a6481b76329e93 129
+  s_a0aa29f091da68::t_f6f082e22b2d29 163-165
+  s_a0aa29f091da68::t_12b17bbac14e72 133,139,141
+  s_a0aa29f091da68::t_855c8c76c7f3a6 77
+  s_a0aa29f091da68::t_f04e59e5be8e93 43
+  s_a0aa29f091da68::t_861f484a83f2a0 107,109
+  s_a0aa29f091da68::t_a04b98f6facdd7 115
+  s_a0aa29f091da68::t_a52a085cf197f8 14
+docs/agent-patterns/effect-observability.md
+  s_a0aa29f091da68::t_1dd2d976997832 135-140
+  s_a0aa29f091da68::t_f08e8139ede7cc 42
+  s_a0aa29f091da68::t_557a6a57a43ff4 107-111
+  s_a0aa29f091da68::t_b9e3ef137c0bab 125
+docs/agent-patterns/effect-error-design.md
+  s_a0aa29f091da68::t_a6676c346e3f5d 148-151
+  s_a0aa29f091da68::t_dec7fd60663f7d 1-130,133-147,152-174
+  s_a0aa29f091da68::t_df9fa8b986e19c 131-132
+docs/agent-patterns/effect-service-layers.md
+  s_a0aa29f091da68::t_6a5c3c049c938e 157-158
+  s_a0aa29f091da68::t_e0bd88f307e312 1-10,16-55,57,60-73,75-110,114-143,148-156,159-170,174-183,186-192,195-202
+  s_a0aa29f091da68::t_2dc360503d813a 56,58-59
+  s_a0aa29f091da68::t_e0e382c231c24d 111-113
+  s_a0aa29f091da68::t_d1988794961f94 144-147
+  s_a0aa29f091da68::t_83ee877ba964e6 171-173
+  s_a0aa29f091da68::t_211607519a911f 11-15
+  s_a0aa29f091da68::t_658a632c4c1ca4 184-185
+  s_a0aa29f091da68::t_b163d61ca13a7c 74
+  s_a0aa29f091da68::t_6b4e2bb3c951fb 193-194
+docs/agent-patterns/effect-test-layers.md
+  s_a0aa29f091da68::t_230e798130ec86 126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "1c0a662573dd2c53795814123c1fcbc79e9acb54",
+  "prompts": {},
+  "sessions": {
+    "s_a0aa29f091da68": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5519010a-44ad-417e-be8f-6f5c1bc29766",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
