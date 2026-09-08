@@ -1,0 +1,19 @@
+packages/cursor-acp/src/harness.test.ts
+  s_51ee95bf8bd751::t_d194772563ac9e 19,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "adc08c2b08990f576555587dd06e792c417a2969",
+  "prompts": {},
+  "sessions": {
+    "s_51ee95bf8bd751": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08285-ded3-7c81-a6c7-1e5ccdd1b5a0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
