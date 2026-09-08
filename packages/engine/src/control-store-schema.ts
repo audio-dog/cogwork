@@ -156,6 +156,7 @@ export const workspaces = sqliteTable("workspaces", {
   name: text("name").notNull(),
   checkoutPath: text("checkout_path").notNull().unique(),
   gitRemote: text("git_remote"),
+  lastRepository: text("last_repository"),
   issueTracker: text("issue_tracker").notNull(),
   sourceControl: text("source_control"),
   mcpSkills: text("mcp_skills"),
