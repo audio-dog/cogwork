@@ -1,0 +1,23 @@
+scripts/test-compare.mjs
+  s_66a0e441ad731e::t_7d9092909b846e 200-220,251
+  s_66a0e441ad731e::t_4bb7788946b201 260
+scripts/test-compare.test.mjs
+  s_66a0e441ad731e::t_85265d1cd4ea7b 3,14-31
+  s_66a0e441ad731e::t_36644201e6f7f1 32-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "e361d27558b8e7dab9893a329f8411fe10284982",
+  "prompts": {},
+  "sessions": {
+    "s_66a0e441ad731e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebc-6bc4-7961-840d-44c04273a080",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
