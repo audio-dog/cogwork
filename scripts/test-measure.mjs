@@ -24,7 +24,7 @@ export default class TestCountReporter {
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
-const run = async (file, args) => {
+export const run = async (file, args) => {
   try {
     const result = await exec(file, args, {
       cwd: workspaceRoot,
@@ -69,6 +69,7 @@ const measure = async () => {
     "--test",
     "--test-reporter=tap",
     "configs/lint/tests/rules.test.mjs",
+    "scripts/test-measure.test.mjs",
   ]);
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
