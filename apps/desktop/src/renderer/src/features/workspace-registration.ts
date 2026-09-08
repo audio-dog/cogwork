@@ -7,7 +7,6 @@ export type WorkspaceTracker = "github" | "linear";
 export interface WorkspaceRegistrationDraft {
   readonly name: string;
   readonly checkoutPath: string;
-  readonly gitRemote: string;
   readonly tracker: WorkspaceTracker;
   readonly issueTrackerConnectionId: string;
   readonly repository: string;
@@ -67,7 +66,6 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
   const checkoutPath = absoluteCheckoutPathFrom(draft.checkoutPath);
   if (!checkoutPath) return null;
 
-  const gitRemote = optional(draft.gitRemote);
   const repository = trimmed(draft.repository);
   const issueTrackerConnectionId = trimmed(draft.issueTrackerConnectionId);
   if (!issueTrackerConnectionId) return null;
@@ -75,7 +73,6 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
   const registration = {
     name,
     checkoutPath,
-    ...(gitRemote ? { gitRemote } : {}),
     linearHistory: false,
   };
   if (draft.tracker === "github") {
