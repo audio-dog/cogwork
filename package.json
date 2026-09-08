@@ -13,8 +13,9 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
-    "test": "turbo test",
+    "test": "turbo test && tsx scripts/count-worktree-git-invocations.ts",
     "test:measure": "node scripts/test-measure.mjs",
+    "worktree:git-invocations": "tsx scripts/count-worktree-git-invocations.ts",
     "test:lint-rules": "node --test configs/lint/tests/rules.test.mjs",
     "vendor": "node scripts/vendor.mjs",
     "setup-worktree": "node scripts/setup-worktree.mjs",
@@ -22,8 +23,12 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.11",
+    "@cogwork/contracts": "workspace:*",
+    "@effect/platform-node": "catalog:effect",
     "@effect/tsgo": "catalog:",
     "@types/node": "catalog:",
+    "effect": "catalog:effect",
+    "tsx": "^4.23.13",
     "turbo": "^2.10.12",
     "typescript": "catalog:"
   },
