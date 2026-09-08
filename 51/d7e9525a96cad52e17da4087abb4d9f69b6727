@@ -1,0 +1,157 @@
+packages/engine/src/projector.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 7,17
+configs/test/base.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-8
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_2d4a93510e0bcb::t_87ca68f631ceac 2,32,36,45-47,62,65,76-86,94-96,103,105-106,113-117,120-122,124-130,139,142,153-155,157,159-162,164-165,168-175,177-182,185,187-188,452,461-485
+  s_2d4a93510e0bcb::t_43a4c038eb5495 486
+packages/engine/src/testing/git-invocation-counting.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-80
+packages/claude-code/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 25
+configs/test/tsconfig.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-15
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_2d4a93510e0bcb::t_87ca68f631ceac 2,8,13-18,28,33,47-49,85,88,101-104,123,134-136
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-67
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-3,5-15,22-24,45-49,51-54,56-62,64-72,76-84,90-153,155-158,160-529,536-541
+packages/process-diagnostics/vitest.config.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1
+apps/cli/src/commands.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 162-164,180,245
+packages/contracts/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 17
+packages/contracts/src/board.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 30-35,391-396
+packages/engine/src/commands.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 27,114-120,463,487-512,527,540,1576-1647
+scripts/count-worktree-git-invocations.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-115
+packages/engine/src/retry-policy.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 70
+apps/cli/src/workspace-commands.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 3,5-10,43-48,57-91
+  s_2d4a93510e0bcb::t_87fc8394e499b2 92-94
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-94
+packages/cursor-acp/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 31
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_2d4a93510e0bcb::t_87ca68f631ceac 148-161
+docs/research/preventing-test-suite-performance-drift.md
+  s_2d4a93510e0bcb::t_87ca68f631ceac 330,590
+packages/codex-cli/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 25
+packages/engine/CONTEXT.md
+  s_2d4a93510e0bcb::t_87ca68f631ceac 227
+apps/desktop/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 53
+packages/engine/src/registry.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 10,12,76-79,103-109,156,249-250,252,258-268,280,354-394,646-663,704
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-7,10-18,34-39,70-214
+  s_2d4a93510e0bcb::t_9921b84933ced8 215
+packages/claude-code/vitest.config.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1
+pnpm-workspace.yaml
+  s_2d4a93510e0bcb::t_87ca68f631ceac 4
+packages/engine/src/read-model.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 29-40,54
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-10,15-45,48-87,94-134,137-142,145-251,282,284,290,296,303
+packages/engine/src/engine.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1025
+packages/contracts/src/workspace.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 90,99-107
+packages/contracts/src/daemon.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 11,178
+packages/engine/src/daemon.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 50,311
+apps/cli/src/status.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 16-21
+apps/desktop/vitest.config.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1
+packages/engine/src/control-store.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 56-84,88-89,94-95
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-72
+packages/engine/src/workspace-registry.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1,19,463-504,509-510,543-544
+  s_2d4a93510e0bcb::t_3870e00c5b4341 545
+packages/engine/vitest.config.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1
+packages/engine/src/commands.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 36,447-468
+  s_2d4a93510e0bcb::t_34b87c0241a18d 469-470
+packages/contracts/src/daemon-event.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 18,35
+apps/desktop/src/renderer/src/features/connections-view.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 3-13
+package.json
+  s_2d4a93510e0bcb::t_e16326410f9a5d 16
+  s_2d4a93510e0bcb::t_87ca68f631ceac 18,26-27,30-31
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 2,17-21,76,80,95-99,111-115,119
+packages/contracts/src/board.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 68
+turbo.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 19
+packages/cursor-acp/vitest.config.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 8-13,20,141,209,265
+packages/contracts/CONTEXT.md
+  s_2d4a93510e0bcb::t_87ca68f631ceac 129
+packages/contracts/src/rpc.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 40,192-197,251
+packages/engine/src/event-publisher.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 212
+packages/engine/src/executor.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 47,56,59-60,74-80,97,100,543,546,548,555,557,564-573,576,578-581,596-617,623,638,854,857,864-865,883,896-911,916-926,931-939,998,1040,1044,1161,1164,1550,1765
+apps/desktop/src/renderer/src/features/connections-view.test.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1,3-8,79-105,109-111
+apps/cli/src/workspace-commands.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1,24,32-36,90-96,120-133,149-156,165-170,178
+apps/cli/vitest.config.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1
+apps/cli/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 38
+packages/codex-cli/vitest.config.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1
+configs/test/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-18
+packages/process-diagnostics/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 18
+packages/engine/package.json
+  s_2d4a93510e0bcb::t_87ca68f631ceac 32
+apps/cli/CONTEXT.md
+  s_2d4a93510e0bcb::t_87ca68f631ceac 55
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 28,75-80,83,97,111
+docs/spec/per-workspace-operating-instructions.md
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1-124
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 103-104
+packages/contracts/vitest.config.ts
+  s_2d4a93510e0bcb::t_87ca68f631ceac 1
+pnpm-lock.yaml
+  s_2d4a93510e0bcb::t_4285681493112c 87-92,99-101,105-107,181-183,269-271,345-354,379-381,422-424,450-452,490-492,557-559,585-587
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "51d7e9525a96cad52e17da4087abb4d9f69b6727",
+  "prompts": {},
+  "sessions": {
+    "s_2d4a93510e0bcb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebb-5da8-7041-b038-274987a2b9a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
