@@ -1,0 +1,183 @@
+packages/engine/src/retry-policy.test.ts
+  s_13cd74ff5da436::t_52000d1b706d58 1,123-133
+  s_13cd74ff5da436::t_2027b449c3cd12 134
+apps/desktop/src/renderer/src/features/connections-view.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1,3-8,79-105,109-111
+docs/research/preventing-test-suite-performance-drift.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 330,590
+apps/cli/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 38
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-94
+pnpm-workspace.yaml
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 4
+package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 16,18,26-27,30-31
+docs/agent-patterns/effect-schema-unions.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 93-95,99,101-102,155
+packages/contracts/src/board.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 30-35,391-396
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 2,32,36,45-47,62,65,76-86,94-96,103,105-106,113-117,120-122,124-130,139,142,153-155,157,159-162,164-165,168-175,177-182,185,187-188,452,461-485
+  s_13cd74ff5da436::t_f466240f3efed5 486
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 137
+apps/cli/src/commands.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 162-164,180,245
+packages/contracts/vitest.config.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-72
+packages/process-diagnostics/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 18
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 103-104
+apps/desktop/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 53
+configs/test/base.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-8
+packages/engine/src/control-store.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 56-84,88-89,94-95
+packages/engine/src/testing/git-invocation-counting.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-80
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 8-13,20,141,209,265
+packages/engine/src/engine.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1030
+configs/test/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-18
+packages/engine/CONTEXT.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 179,227
+packages/engine/src/commands.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 36,447-468
+  s_13cd74ff5da436::t_a91ad2692991e8 469-470
+packages/claude-code/vitest.config.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-10,15-45,48-87,94-134,137-142,145-251,282,284,290,296,303
+apps/cli/src/status.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 16-21
+packages/contracts/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 17
+packages/engine/src/registry.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 10,12,76-79,103-109,156,249-250,252,258-268,280,354-394,646-663,704
+packages/cursor-acp/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 31
+packages/contracts/src/daemon-event.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 18,35
+apps/cli/src/workspace-commands.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1,24,32-36,90-96,120-133,149-156,165-170,178
+packages/engine/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 32
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-3,5-15,22-24,45-49,51-54,56-62,64-72,76-84,90-153,155-158,160-529,536-541
+packages/engine/src/retry-policy.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 75
+  s_13cd74ff5da436::t_a0422d0f9662ef 1-5,29,49,64
+packages/engine/src/workspace-registry.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1,19,463-504,509-510,543-544
+  s_13cd74ff5da436::t_a00482144a2f5f 545
+docs/agent-patterns/effect-time-bounds.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 29,122-123
+docs/spec/per-workspace-operating-instructions.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-124
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-7,10-18,34-39,70-214
+  s_13cd74ff5da436::t_436058bf582220 215
+docs/agent-patterns/effect-test-layers.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 126
+configs/test/tsconfig.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-15
+docs/agent-patterns/effect-error-design.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-174
+turbo.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 19
+AGENTS.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 26-27
+apps/desktop/vitest.config.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1
+packages/claude-code/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 25
+packages/engine/src/projector.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 7,17
+packages/codex-cli/vitest.config.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1
+packages/process-diagnostics/vitest.config.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-67
+docs/agent-patterns/effect-observability.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 42,107-111,125,135-140
+docs/agent-patterns/effect-service-layers.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-202
+packages/engine/src/read-model.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 29-40,54
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 2,17-21,76,80,95-99,111-115,119
+packages/contracts/src/rpc.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 40,192-197,251
+packages/cursor-acp/vitest.config.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1
+apps/cli/CONTEXT.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 55
+apps/cli/vitest.config.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1
+packages/engine/src/commands.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 27,114-120,464,488-513,528,541,1577-1648
+packages/engine/src/event-publisher.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 212
+docs/agent-patterns/effect-process-edges.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 14,43,77,107,109,115,129,133,139,141,163-165
+scripts/count-worktree-git-invocations.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1-115
+apps/cli/src/workspace-commands.test.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 3,5-10,43-48,57-91
+  s_13cd74ff5da436::t_abf9c3fbcb3216 92-94
+docs/agent-patterns/effect-control-flow.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 32-40,42,44-65,159-160
+packages/codex-cli/package.json
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 25
+packages/contracts/src/board.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 68
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 148-161
+packages/engine/src/executor.ts
+  s_13cd74ff5da436::t_a0422d0f9662ef 103,933,936-937,946-957,1088,1148
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 48,57,60-61,76-82,99,556,559,561,568,570,577-586,589,591-594,609-630,636,651,867,870,877-878,896,909-924,929,934-935,958,1018,1143,1267,1270,1656,1880
+packages/engine/vitest.config.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 1
+packages/engine/src/executor.test.ts
+  s_13cd74ff5da436::t_b3cb70acc9bcb8 2601-2604
+packages/contracts/src/daemon.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 11,178
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 28,75-80,83,97,111
+apps/desktop/src/renderer/src/features/connections-view.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 3-13
+packages/engine/src/daemon.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 50,311
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 2,8,13-18,28,33,47-49,85,88,101-104,123,134-136
+packages/contracts/src/workspace.ts
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 90,99-107
+packages/contracts/CONTEXT.md
+  s_13cd74ff5da436::t_b4ba14d3b6ee26 129
+pnpm-lock.yaml
+  s_13cd74ff5da436::t_2b307a4c244231 87-92,99-101,105-107,181-183,269-271,345-354,379-381,422-424,450-452,490-492,557-559,585-587
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "abbf6ec2192eefb0bd90e95a318d8c0e2d0acefc",
+  "prompts": {},
+  "sessions": {
+    "s_13cd74ff5da436": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a081b1-0fc1-79f1-9029-27582a53217f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
