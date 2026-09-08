@@ -1,0 +1,24 @@
+packages/contracts/src/triage.ts
+  s_a80a290ab889dc::t_ea00987c64e5b4 133-137,139
+  s_a80a290ab889dc::t_2fb0ea1c87957d 71,73
+  s_a80a290ab889dc::t_d1b11ebae5f5bf 29-37,45-53,61-69,138
+  s_a80a290ab889dc::t_8e9ac152a9d426 1,123-132
+  s_a80a290ab889dc::t_2951d10448c30d 72
+  s_a80a290ab889dc::t_0f54c350f970d6 140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "3e5933605d6f56a54ff87cd3b72d41b79d3a7457",
+  "prompts": {},
+  "sessions": {
+    "s_a80a290ab889dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082dd-3c5f-73b3-af09-4e70847ef44e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
