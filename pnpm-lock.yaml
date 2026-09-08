@@ -166,6 +166,9 @@ importers:
         specifier: catalog:effect
         version: 4.0.0-rc.112
     devDependencies:
+      '@cogwork/test-config':
+        specifier: workspace:*
+        version: link:../../configs/test
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
@@ -251,6 +254,9 @@ importers:
       '@babel/core':
         specifier: ^8.0.1
         version: 8.0.1
+      '@cogwork/test-config':
+        specifier: workspace:*
+        version: link:../../configs/test
       '@electron/fuses':
         specifier: ^1.8.0
         version: 1.8.0
@@ -324,6 +330,16 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
 
+  configs/test:
+    dependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/claude-code:
     dependencies:
       '@cogwork/contracts':
@@ -348,6 +364,9 @@ importers:
         specifier: catalog:effect
         version: 4.0.0-rc.112
     devDependencies:
+      '@cogwork/test-config':
+        specifier: workspace:*
+        version: link:../../configs/test
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -388,6 +407,9 @@ importers:
         specifier: catalog:effect
         version: 4.0.0-rc.112
     devDependencies:
+      '@cogwork/test-config':
+        specifier: workspace:*
+        version: link:../../configs/test
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -413,6 +435,9 @@ importers:
       '@catenarycloud/linteffect':
         specifier: ^0.0.7
         version: 0.0.7
+      '@cogwork/test-config':
+        specifier: workspace:*
+        version: link:../../configs/test
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
@@ -450,6 +475,9 @@ importers:
         specifier: catalog:effect
         version: 4.0.0-rc.112
     devDependencies:
+      '@cogwork/test-config':
+        specifier: workspace:*
+        version: link:../../configs/test
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
@@ -514,6 +542,9 @@ importers:
       '@catenarycloud/linteffect':
         specifier: ^0.0.7
         version: 0.0.7
+      '@cogwork/test-config':
+        specifier: workspace:*
+        version: link:../../configs/test
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -539,6 +570,9 @@ importers:
         specifier: catalog:effect
         version: 4.0.0-rc.112
     devDependencies:
+      '@cogwork/test-config':
+        specifier: workspace:*
+        version: link:../../configs/test
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
