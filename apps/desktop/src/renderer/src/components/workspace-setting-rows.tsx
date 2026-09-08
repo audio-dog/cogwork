@@ -104,14 +104,21 @@ function DraftTextarea({
 export const connectionItems = (connections: readonly Connection[], system: "github" | "linear") =>
   connections
     .filter((connection) => connection.system === system)
-    .map((connection) => ({ value: connection.id, label: connection.account }));
+    .map((connection) => ({
+      value: connection.id,
+      label: connection.account,
+      disabled: connection.status !== "established",
+    }));
+
+const establishedConnectionId = (connections: readonly Connection[], system: "github" | "linear") =>
+  connectionItems(connections, system).find((item) => !item.disabled)?.value ?? "unbound";
 
 export const trackerSelectionPatch = (
   connections: readonly Connection[],
   issueTrackerType: "github" | "linear",
 ) => ({
   issueTrackerType,
-  issueTrackerConnectionId: connectionItems(connections, issueTrackerType)[0]?.value ?? "unbound",
+  issueTrackerConnectionId: establishedConnectionId(connections, issueTrackerType),
 });
 
 export const sourceControlSelectionPatch = (
@@ -123,7 +130,7 @@ export const sourceControlSelectionPatch = (
   }
   return {
     sourceControlType,
-    sourceControlConnectionId: connectionItems(connections, sourceControlType)[0]?.value ?? "unbound",
+    sourceControlConnectionId: establishedConnectionId(connections, sourceControlType),
   };
 };
 
@@ -142,7 +149,8 @@ function ConnectionSelect({
     meta: { disabled },
   } = useWorkspaceRecord();
   const items = connectionItems(connections, system);
-  const placeholder = items.length === 0 ? "None established yet" : "Choose Connection";
+  const hasEstablishedConnection = items.some((item) => !item.disabled);
+  const placeholder = hasEstablishedConnection ? "Choose Connection" : "None established yet";
   return (
     <FieldGroup className="w-auto gap-2">
       <Select
@@ -159,18 +167,18 @@ function ConnectionSelect({
         <SelectContent>
           <SelectGroup>
             {items.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
+              <SelectItem key={item.value} value={item.value} disabled={item.disabled}>
                 {item.label}
               </SelectItem>
             ))}
           </SelectGroup>
         </SelectContent>
       </Select>
-      {items.length === 0 ? (
+      {hasEstablishedConnection ? null : (
         <Button nativeButton={false} variant="link" size="sm" render={<Link to="/connections" />}>
           Establish Connection
         </Button>
-      ) : null}
+      )}
     </FieldGroup>
   );
 }

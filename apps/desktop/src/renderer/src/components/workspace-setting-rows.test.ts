@@ -20,8 +20,17 @@ describe("workspace Connection choices", () => {
       account: "acme",
       status: "established",
     });
+    const revoked = Connection.make({
+      id: connectionIdOf("github", "revoked"),
+      system: "github",
+      account: "revoked",
+      status: "revoked",
+    });
 
-    expect(connectionItems([github, linear], "github")).toEqual([{ value: github.id, label: "acme" }]);
+    expect(connectionItems([github, revoked, linear], "github")).toEqual([
+      { value: github.id, label: "acme", disabled: false },
+      { value: revoked.id, label: "revoked", disabled: true },
+    ]);
     expect(connectionItems([], "github")).toEqual([]);
   });
 
@@ -38,12 +47,18 @@ describe("workspace Connection choices", () => {
       account: "acme",
       status: "established",
     });
+    const revokedLinear = Connection.make({
+      id: connectionIdOf("linear", "revoked"),
+      system: "linear",
+      account: "revoked",
+      status: "revoked",
+    });
 
-    expect(trackerSelectionPatch([github, linear], "linear")).toEqual({
+    expect(trackerSelectionPatch([github, revokedLinear, linear], "linear")).toEqual({
       issueTrackerType: "linear",
       issueTrackerConnectionId: linear.id,
     });
-    expect(trackerSelectionPatch([github], "linear")).toEqual({
+    expect(trackerSelectionPatch([github, revokedLinear], "linear")).toEqual({
       issueTrackerType: "linear",
       issueTrackerConnectionId: "unbound",
     });
@@ -56,12 +71,18 @@ describe("workspace Connection choices", () => {
       account: "acme",
       status: "established",
     });
+    const revokedGithub = Connection.make({
+      id: connectionIdOf("github", "revoked"),
+      system: "github",
+      account: "revoked",
+      status: "revoked",
+    });
 
-    expect(sourceControlSelectionPatch([github], "github")).toEqual({
+    expect(sourceControlSelectionPatch([revokedGithub, github], "github")).toEqual({
       sourceControlType: "github",
       sourceControlConnectionId: github.id,
     });
-    expect(sourceControlSelectionPatch([], "github")).toEqual({
+    expect(sourceControlSelectionPatch([revokedGithub], "github")).toEqual({
       sourceControlType: "github",
       sourceControlConnectionId: "unbound",
     });
