@@ -1,0 +1,21 @@
+packages/engine/src/github/cli-credential.test.ts
+  s_e4aced227df686::t_044d15f3c8caf3 137-159
+packages/engine/src/github/cli-credential.ts
+  s_e4aced227df686::t_3452d371264c54 98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "7af87f010eb3755659739e84ce3588672d20f48a",
+  "prompts": {},
+  "sessions": {
+    "s_e4aced227df686": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08199-e7bd-7192-a391-0f2b515261a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
