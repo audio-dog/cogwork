@@ -17,6 +17,7 @@ permissions:
 jobs:
   install:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -29,6 +30,7 @@ jobs:
   test:
     needs: install
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -43,11 +45,21 @@ jobs:
         uses: rharkor/caching-for-turbo@v2.5.0
 
       - name: Run tests
-        run: pnpm test
+        run: pnpm test:measure > test-suite-measurement.json
+
+      - name: Write test suite summary
+        run: node scripts/test-measure-summary.mjs test-suite-measurement.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test suite measurement
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: test-suite-measurement
+          path: test-suite-measurement.json
 
   format-and-lint:
     needs: install
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -64,6 +76,7 @@ jobs:
   typecheck:
     needs: install
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -83,6 +96,7 @@ jobs:
   build:
     needs: install
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
