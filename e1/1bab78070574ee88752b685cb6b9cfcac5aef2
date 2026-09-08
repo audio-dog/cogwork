@@ -1,0 +1,36 @@
+packages/engine/src/github/cli-credential.test.ts
+  s_e4aced227df686::t_8a895de4286f83 97-115
+  s_e4aced227df686::t_8eae2bf7e7816e 64-66,70,74-80,85-87,91,94,118-119,134,139-140,147-153
+  s_e4aced227df686::t_52bb3d27c2c7f3 67,69
+  s_e4aced227df686::t_0d3e13dd0e279d 191-193,196-198,200
+  s_e4aced227df686::t_29f5caea8e8e2b 158-159,163-179,184-185,189,194-195,199
+  s_e4aced227df686::t_1667f0f36e897a 52-57
+  s_e4aced227df686::t_ba4c8b1c6813f9 1,3,5-36,50,60-63,68,71-73,81-84,88-90,92-93,95-96,116-117,120-132,135-138,141-146,154-157,160-162,180-183,186-188,190,201
+  s_e4aced227df686::t_bea52655fdcfab 2,4,37-49,51,58-59
+  s_e4aced227df686::t_e023080123c517 133
+packages/engine/src/github/index.ts
+  s_e4aced227df686::t_0d3e13dd0e279d 2
+packages/engine/src/github/cli-credential.ts
+  s_e4aced227df686::t_1667f0f36e897a 98-109,111
+  s_e4aced227df686::t_0d3e13dd0e279d 14-15,20-22,28-39,52,112
+  s_e4aced227df686::t_8a895de4286f83 110
+  s_e4aced227df686::t_c895fc190c786d 1-13,16-19,23-27,40-51,54-62,64-97,113
+  s_e4aced227df686::t_5b94554a7e19cd 53
+  s_e4aced227df686::t_52bb3d27c2c7f3 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "e11bab78070574ee88752b685cb6b9cfcac5aef2",
+  "prompts": {},
+  "sessions": {
+    "s_e4aced227df686": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08199-e7bd-7192-a391-0f2b515261a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
