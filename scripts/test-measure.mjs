@@ -26,15 +26,17 @@ const describe = (error) => (error instanceof Error ? error.message : String(err
 
 const run = async (file, args) => {
   try {
-    return await exec(file, args, {
+    const result = await exec(file, args, {
       cwd: workspaceRoot,
       encoding: "utf8",
       maxBuffer: 10 * 1024 * 1024,
     });
+    return { failed: false, ...result };
   } catch (error) {
-    process.stderr.write(error?.stdout ?? "");
+    const stdout = error?.stdout ?? "";
+    process.stderr.write(stdout);
     process.stderr.write(error?.stderr ?? "");
-    throw error;
+    return { failed: true, stdout };
   }
 };
 
@@ -71,6 +73,8 @@ const measure = async () => {
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
   console.log(JSON.stringify({ durationMs, testCount }));
+
+  if (vitest.failed || nodeTests.failed) process.exitCode = 1;
 };
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

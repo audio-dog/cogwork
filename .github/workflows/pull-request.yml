@@ -45,12 +45,14 @@ jobs:
         uses: rharkor/caching-for-turbo@v2.5.0
 
       - name: Run tests
-        run: pnpm test:measure > test-suite-measurement.json
+        run: pnpm --silent test:measure > test-suite-measurement.json
 
       - name: Write test suite summary
+        if: ${{ !cancelled() }}
         run: node scripts/test-measure-summary.mjs test-suite-measurement.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test suite measurement
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: test-suite-measurement
