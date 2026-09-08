@@ -28,6 +28,7 @@
     "effect": "catalog:effect"
   },
   "devDependencies": {
+    "@cogwork/test-config": "workspace:*",
     "@effect/vitest": "catalog:effect",
     "@tanstack/ai-persistence": "catalog:",
     "gpt-tokenizer": "^4.0.0",
