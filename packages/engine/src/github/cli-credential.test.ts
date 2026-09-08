@@ -134,6 +134,29 @@ describe("GitHub CLI credential source", () => {
     }).pipe(Effect.provide(spawnerLayer((_command, attempt) => handle(0, `token-${attempt}\n`)))),
   );
 
+  it.effect("forgets a held token after a verified re-connect", () =>
+    Effect.gen(function* () {
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const source = yield* makeCliCredentialSource(spawner);
+      const held = yield* source.acquire("octocat");
+      const verified = yield* source.discover;
+      yield* source.forget("octocat");
+      const refreshed = yield* source.acquire("octocat");
+
+      assert.deepStrictEqual([held, verified, refreshed].map(Redacted.value), [
+        "token-1",
+        "token-3",
+        "token-4",
+      ]);
+    }).pipe(
+      Effect.provide(
+        spawnerLayer((command, attempt) =>
+          command.includes("auth status") ? handle(0, "octocat\n") : handle(0, `token-${attempt}\n`),
+        ),
+      ),
+    ),
+  );
+
   it.effect("does not hold a failed acquisition", () =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;

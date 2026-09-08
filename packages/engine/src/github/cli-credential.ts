@@ -95,6 +95,7 @@ export const makeCliCredentialSource = Effect.fn("github.cliCredential.make")(fu
   const acquire = (account: string) => Cache.get(cache, account);
   return {
     acquire,
+    forget: (account: string) => Cache.invalidate(cache, account),
     discover: capture(spawner, "github.com", [
       "auth",
       "status",
