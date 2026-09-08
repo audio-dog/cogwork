@@ -1607,7 +1607,7 @@ describe("workspace lifecycle commands", () => {
       if (!WorkspaceState.guards.Registered(registered)) return assert.fail("expected registration");
 
       const updated = yield* client.UpdateWorkspace({ workspace: registered.name, update: acmeUpdate });
-      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(4), Stream.runCollect);
+      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(5), Stream.runCollect);
 
       assert.strictEqual(
         WorkspaceState.guards.Registered(updated) ? updated.record?.name : null,
@@ -1619,7 +1619,21 @@ describe("workspace lifecycle commands", () => {
       );
       assert.deepStrictEqual(
         [...events].map((event) => event._tag),
-        ["WorkspaceChanged", "ControlStoreChanged", "WorkspaceChanged", "ControlStoreChanged"],
+        [
+          "WorkspaceChanged",
+          "ControlStoreChanged",
+          "WorkspaceChanged",
+          "ControlStoreChanged",
+          "SchedulerChanged",
+        ],
+      );
+      const schedulerChanged = events.at(-1);
+      if (!schedulerChanged || !DaemonEvent.guards.SchedulerChanged(schedulerChanged)) {
+        return assert.fail("expected SchedulerChanged");
+      }
+      assert.strictEqual(
+        schedulerChanged.scheduler.perWorkspace.find(({ name }) => name === registered.name)?.limit,
+        acmeUpdate.concurrency,
       );
       const published = [...events].flatMap((event) =>
         DaemonEvent.guards.WorkspaceChanged(event) ? [event.workspace] : [],

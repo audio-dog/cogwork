@@ -464,6 +464,7 @@ export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (pa
   const state = workspaceStateFromChange(change);
   yield* worker.submitAfterCurrent().pipe(Effect.ignore);
   const published = yield* publisher.publishWorkspaces();
+  yield* publisher.publishScheduler();
   return published.find((workspace) => workspace.name === payload.workspace) ?? state;
 });
 
