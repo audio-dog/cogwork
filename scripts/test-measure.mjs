@@ -52,11 +52,11 @@ const nodeTestCount = (output) => {
   return Number(match[1]);
 };
 
-const measure = async () => {
+export const measure = async (runTestCommand = run) => {
   const startedAt = performance.now();
   const reporterPath = pathToFileURL(scriptPath).href;
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
-  const vitest = await run(process.execPath, [
+  const vitest = await runTestCommand(process.execPath, [
     turboPath,
     "test",
     "--force",
@@ -65,7 +65,7 @@ const measure = async () => {
     "--reporter=default",
     `--reporter=${reporterPath}`,
   ]);
-  const nodeTests = await run(process.execPath, [
+  const nodeTests = await runTestCommand(process.execPath, [
     "--test",
     "--test-reporter=tap",
     "configs/lint/tests/rules.test.mjs",

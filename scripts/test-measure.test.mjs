@@ -16,6 +16,24 @@ test("a failed test command preserves its measurement output", async () => {
   assert.equal(result.stdout, "measurement");
 });
 
+test("a failed suite publishes measurement JSON and exits nonzero", () => {
+  const script = `
+    import { measure } from "./scripts/test-measure.mjs";
+    const results = [
+      { failed: true, stdout: "cogwork-test-count:2" },
+      { failed: false, stdout: "# tests 3" },
+    ];
+    await measure(async () => results.shift());
+  `;
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 1);
+  assert.equal(JSON.parse(result.stdout).testCount, 5);
+});
+
 test("the summary puts duration beside test count", (context) => {
   const directory = mkdtempSync(path.join(tmpdir(), "test-measure-summary-"));
   const measurementPath = path.join(directory, "measurement.json");
