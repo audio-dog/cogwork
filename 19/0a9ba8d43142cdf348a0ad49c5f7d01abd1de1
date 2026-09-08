@@ -1,0 +1,25 @@
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_7e3527ced6a016::t_ab67d19ee00420 65-66,96,106
+  s_7e3527ced6a016::t_0a5186e3a0c7d8 70,439,497,710
+  s_7e3527ced6a016::t_79b4d78dc7c309 1,56
+  s_7e3527ced6a016::t_74974c7d2d5656 67-68
+  s_7e3527ced6a016::t_20fb5f3613b646 69
+  s_7e3527ced6a016::t_6ef4240817b7c3 124,131,191,196,198,202,414,424,426,478,483,485,532,537,539,570,601,628,659,662,666,668,670,695,704,741,745,812,846,856,885
+  s_7e3527ced6a016::t_4092b4de635091 57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "190a9ba8d43142cdf348a0ad49c5f7d01abd1de1",
+  "prompts": {},
+  "sessions": {
+    "s_7e3527ced6a016": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0821f-452b-71f0-9c2b-63fd24cbb690",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
