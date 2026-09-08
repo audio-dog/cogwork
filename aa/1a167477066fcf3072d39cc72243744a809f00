@@ -1,0 +1,145 @@
+apps/cli/CONTEXT.md
+  s_e248a1bf86a035::t_6670d5e12c7ee3 55
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_e248a1bf86a035::t_6670d5e12c7ee3 2,8,13-18,28,33,47-49,85,88,101-104,123,134-136
+packages/cursor-acp/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 31
+packages/engine/src/commands.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 27,114-120,463,487-512,527,540,1576-1647
+packages/engine/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 32
+packages/engine/src/projector.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 7,17
+apps/desktop/vitest.config.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-94
+packages/engine/src/daemon.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 50,311
+packages/engine/src/read-model.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 29-40,54
+packages/claude-code/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 25
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 103-104
+packages/codex-cli/vitest.config.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1
+configs/test/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-18
+apps/cli/src/status.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 16-21
+packages/contracts/src/board.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 30-35,391-396
+packages/contracts/src/rpc.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 40,192-197,251
+apps/cli/vitest.config.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_e248a1bf86a035::t_6670d5e12c7ee3 148-161
+apps/cli/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 38
+configs/test/tsconfig.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-15
+packages/engine/src/workspace-registry.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1,19,463-504,509-510,543-544
+  s_e248a1bf86a035::t_9e439babaa9719 545
+apps/desktop/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 53
+apps/desktop/src/renderer/src/features/connections-view.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1,3-8,79-105,109-111
+turbo.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 19
+packages/contracts/src/daemon-event.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 18,35
+apps/cli/src/workspace-commands.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 3,5-10,43-48,57-91
+  s_e248a1bf86a035::t_ea36406bd40ff6 92-94
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-7,10-18,34-39,70-214
+  s_e248a1bf86a035::t_4303bec0fa2e26 215
+packages/engine/vitest.config.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1
+packages/engine/src/event-publisher.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 212
+pnpm-workspace.yaml
+  s_e248a1bf86a035::t_6670d5e12c7ee3 4
+packages/contracts/CONTEXT.md
+  s_e248a1bf86a035::t_6670d5e12c7ee3 129
+packages/claude-code/vitest.config.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1
+packages/process-diagnostics/vitest.config.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1
+packages/contracts/vitest.config.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1
+configs/test/base.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-8
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-67
+packages/contracts/src/workspace.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 90,99-107
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-10,15-45,48-87,94-134,137-142,145-251,282,284,290,296,303
+packages/contracts/src/daemon.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 11,178
+packages/engine/CONTEXT.md
+  s_e248a1bf86a035::t_6670d5e12c7ee3 227
+apps/desktop/src/renderer/src/features/connections-view.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 3-13
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_e248a1bf86a035::t_a58c056f916d49 32
+  s_e248a1bf86a035::t_6670d5e12c7ee3 2,40,49-51,66,69,80-90,98-100,107,109-110,117-121,124-126,128-134,143,146,157-159,161,163-166,168-169,172-179,181-186,189,191-192,504,513-537
+  s_e1d1e708418f8d::t_94e269f2132cdb 538
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-3,5-15,22-24,45-49,51-54,56-62,64-72,76-84,90-153,155-158,160-529,536-541
+packages/process-diagnostics/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 18
+docs/spec/per-workspace-operating-instructions.md
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1-124
+packages/codex-cli/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 25
+packages/contracts/package.json
+  s_e248a1bf86a035::t_6670d5e12c7ee3 17
+apps/cli/src/workspace-commands.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1,24,32-36,90-96,120-133,149-156,165-170,178
+docs/research/preventing-test-suite-performance-drift.md
+  s_e248a1bf86a035::t_6670d5e12c7ee3 330,590
+packages/engine/src/commands.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 36,447-468
+  s_e248a1bf86a035::t_fa1863b6f85ad4 469-470
+packages/contracts/src/board.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 68
+packages/engine/src/registry.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 10,12,76-79,103-109,156,249-250,252,258-268,280,354-394,646-663,704
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 8-13,20,141,209,265
+packages/cursor-acp/vitest.config.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1
+packages/engine/src/engine.test.ts
+  s_e248a1bf86a035::t_6670d5e12c7ee3 1025
+pnpm-lock.yaml
+  s_e248a1bf86a035::t_c6a2b6e1061930 169-171,257-259,333-342,367-369,410-412,438-440,478-480,545-547,573-575
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "aa1a167477066fcf3072d39cc72243744a809f00",
+  "prompts": {},
+  "sessions": {
+    "s_e1d1e708418f8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91af07a5-9241-4a2c-a4e5-e691bdac6c6a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "a <a@b>"
+    },
+    "s_e248a1bf86a035": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08202-ec1e-7b91-b417-d95a185fc6a1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
