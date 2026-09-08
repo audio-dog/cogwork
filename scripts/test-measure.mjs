@@ -23,6 +23,7 @@ export default class TestCountReporter {
 }
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
+const publishCommandOutput = ({ stdout = "", stderr = "" }) => process.stderr.write(stdout + stderr);
 
 export const run = async (file, args) => {
   try {
@@ -34,9 +35,8 @@ export const run = async (file, args) => {
     return { failed: false, ...result };
   } catch (error) {
     const stdout = error?.stdout ?? "";
-    process.stderr.write(stdout);
-    process.stderr.write(error?.stderr ?? "");
-    return { failed: true, stdout };
+    const stderr = error?.stderr ?? "";
+    return { failed: true, stdout, stderr };
   }
 };
 
@@ -75,7 +75,7 @@ export const measure = async (runTestCommand = run) => {
     tsxPath,
     "scripts/count-worktree-git-invocations.ts",
   ]);
-  process.stderr.write(gitMeasurement.stdout);
+  [vitest, nodeTests, gitMeasurement].forEach(publishCommandOutput);
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
   console.log(JSON.stringify({ durationMs, testCount }));

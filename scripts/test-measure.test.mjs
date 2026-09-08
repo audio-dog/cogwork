@@ -33,7 +33,30 @@ test("a failed suite publishes both measurements and exits nonzero", () => {
 
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).testCount, 5);
-  assert.equal(result.stderr, "git measurement");
+  assert.equal(result.stderr, "cogwork-test-count:2# tests 3git measurement");
+});
+
+test("a passing suite publishes its logs outside the measurement output", () => {
+  const script = `
+    import { measure } from "./scripts/test-measure.mjs";
+    const results = [
+      { failed: false, stdout: "vitest logs\\ncogwork-test-count:2\\n", stderr: "vitest warning\\n" },
+      { failed: false, stdout: "node logs\\n# tests 3\\n", stderr: "" },
+      { failed: false, stdout: "git measurement\\n", stderr: "" },
+    ];
+    await measure(async () => results.shift());
+  `;
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 0);
+  assert.equal(JSON.parse(result.stdout).testCount, 5);
+  assert.equal(
+    result.stderr,
+    "vitest logs\ncogwork-test-count:2\nvitest warning\nnode logs\n# tests 3\ngit measurement\n",
+  );
 });
 
 test("measurement matches the root test gate", async () => {
