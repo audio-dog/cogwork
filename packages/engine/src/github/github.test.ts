@@ -80,6 +80,7 @@ interface Seed {
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
   readonly priorities?: ReadonlyArray<{ readonly issue: number; readonly priority: Priority }>;
   readonly priorityError?: boolean;
+  readonly pullRequestError?: boolean;
 }
 
 class ProviderCalls extends Context.Service<
@@ -162,6 +163,10 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
     listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
     createIssue: () => Effect.void,
+    createPull: () =>
+      seed.pullRequestError
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull request rejected" }))
+        : Effect.succeed({ number: 480, url: "https://github.com/owner/repo/pull/480" }),
     addLabel: (_repo, number, label) =>
       patch(number, (issue) => ({ ...issue, labels: [...issue.labels, label] })),
     removeLabel: (_repo, number, label) =>
@@ -332,7 +337,7 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
   mergeable: [{ pull: 200, state: "dirty" }],
 });
 
-describe("github work source adapter", () => {
+describe("GitHub adapters", () => {
   it.effect("derives the actionable set from labels and bot-PR state", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
@@ -395,6 +400,38 @@ describe("github work source adapter", () => {
         }),
       ),
     ),
+  );
+
+  it.effect("opens a pull request through the configured source control target", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const opened = yield* provider.openPullRequest(workspace, {
+        headBranch: "472-open-pull-request",
+        baseBranch: "main",
+        title: "Open pull requests from the engine",
+        body: "Closes #472",
+      });
+      assert.deepStrictEqual(opened, {
+        number: 480,
+        url: "https://github.com/owner/repo/pull/480",
+      });
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("preserves a pull request provider failure in the typed error channel", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const error = yield* Effect.flip(
+        provider.openPullRequest(workspace, {
+          headBranch: "472-open-pull-request",
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #472",
+        }),
+      );
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(error.message, "pull request rejected");
+    }).pipe(Effect.provide(withClient({ issues: [], pullRequestError: true }))),
   );
 
   it.effect("posts nothing when the item has no linked pull request", () =>

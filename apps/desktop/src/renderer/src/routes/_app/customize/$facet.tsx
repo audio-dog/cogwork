@@ -3,7 +3,6 @@ import {
   ContributionFacetView,
   HooksFacetView,
   McpServersFacetView,
-  OperationSettingsFacetView,
   PluginsFacetView,
 } from "../../../components/customize-facet-view";
 import { defaultFacet, type Facet, facetFromSlug, facetSlug } from "../../../features/customize-facets";
@@ -18,7 +17,6 @@ export const Route = createFileRoute("/_app/customize/$facet")({
 
 function facetView(facet: Facet) {
   if (facet === "plugins") return <PluginsFacetView />;
-  if (facet === "operations") return <OperationSettingsFacetView />;
   if (facet === "mcp-server") return <McpServersFacetView />;
   if (facet === "hook") return <HooksFacetView />;
   return <ContributionFacetView kind={facet} />;

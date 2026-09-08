@@ -249,7 +249,7 @@ const operationSettingContext = Effect.fn("commands.operationSettingContext")(fu
   readonly workspace: Option.Option<string>;
 }) {
   const workspace = Option.isSome(options.workspace)
-    ? yield* Schema.decodeUnknownEffect(WorkspaceId)(options.workspace.value)
+    ? yield* Schema.decodeEffect(WorkspaceId)(options.workspace.value)
     : null;
   return { workflow: options.workflow, operation: options.operation, workspace };
 });
@@ -363,7 +363,7 @@ const runMetrics = Effect.fn("commands.runMetrics")(
 const runEvents = Effect.fn("commands.runEvents")(
   function* (options: { readonly socketPath: string; readonly id: string }) {
     const client = yield* makeDaemonClient();
-    const id = yield* Schema.decodeUnknownEffect(RunId)(options.id);
+    const id = yield* Schema.decodeEffect(RunId)(options.id);
     const events = yield* client.GetRunEvents({ id });
     yield* Console.log(formatEvents(events));
   },
@@ -429,10 +429,10 @@ export const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R
   workItem: Option.Option<string>,
 ) {
   if (Option.isSome(id)) {
-    return Option.some<WatchPayload>({ id: yield* Schema.decodeUnknownEffect(RunId)(id.value) });
+    return Option.some<WatchPayload>({ id: yield* Schema.decodeEffect(RunId)(id.value) });
   }
   if (Option.isNone(workItem)) return Option.none<WatchPayload>();
-  const item = yield* Schema.decodeUnknownEffect(WorkItemId)(workItem.value);
+  const item = yield* Schema.decodeEffect(WorkItemId)(workItem.value);
   const runId = yield* resolve(item);
   return runId === null ? Option.none<WatchPayload>() : Option.some<WatchPayload>({ id: runId });
 });

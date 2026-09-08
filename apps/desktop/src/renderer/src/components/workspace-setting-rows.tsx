@@ -42,14 +42,6 @@ function WorkspaceRecordProvider({
   return <WorkspaceRecordContext value={value}>{children}</WorkspaceRecordContext>;
 }
 
-const WorkspaceField = {
-  Root: Field,
-  Content: FieldContent,
-  Description: FieldDescription,
-  Group: FieldGroup,
-  Title: FieldTitle,
-};
-
 function DraftInput({
   field,
   label,
@@ -152,7 +144,7 @@ function ConnectionSelect({
   const items = connectionItems(connections, system);
   const placeholder = items.length === 0 ? "None established yet" : "Choose Connection";
   return (
-    <WorkspaceField.Group className="w-auto gap-2">
+    <FieldGroup className="w-auto gap-2">
       <Select
         items={items}
         value={draft[field]}
@@ -179,44 +171,40 @@ function ConnectionSelect({
           Establish Connection
         </Button>
       ) : null}
-    </WorkspaceField.Group>
+    </FieldGroup>
   );
 }
 
 function CheckoutRows() {
   return (
-    <WorkspaceField.Root orientation="responsive">
-      <WorkspaceField.Content>
-        <WorkspaceField.Title>Checkout path</WorkspaceField.Title>
-        <WorkspaceField.Description>
-          Change it to re-bind. Every setting and Run survives the move.
-        </WorkspaceField.Description>
-      </WorkspaceField.Content>
+    <Field orientation="responsive">
+      <FieldContent>
+        <FieldTitle>Checkout path</FieldTitle>
+        <FieldDescription>Change it to re-bind. Every setting and Run survives the move.</FieldDescription>
+      </FieldContent>
       <DraftInput field="checkoutPath" label="Checkout path" placeholder="/Users/you/sites/cogwork" />
-    </WorkspaceField.Root>
+    </Field>
   );
 }
 
 function IdentityRows() {
   return (
-    <WorkspaceField.Group>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Name</WorkspaceField.Title>
-          <WorkspaceField.Description>The name shown across Cogwork.</WorkspaceField.Description>
-        </WorkspaceField.Content>
+    <FieldGroup>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Name</FieldTitle>
+          <FieldDescription>The name shown across Cogwork.</FieldDescription>
+        </FieldContent>
         <DraftInput field="displayName" label="Workspace name" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Git remote</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Clone hint used when Cogwork creates another checkout.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Git remote</FieldTitle>
+          <FieldDescription>Clone hint used when Cogwork creates another checkout.</FieldDescription>
+        </FieldContent>
         <DraftInput field="gitRemote" label="Git remote" placeholder="git@github.com:org/repo.git" />
-      </WorkspaceField.Root>
-    </WorkspaceField.Group>
+      </Field>
+    </FieldGroup>
   );
 }
 
@@ -231,14 +219,12 @@ function IssueTrackerRows() {
     { value: "linear", label: "Linear" },
   ];
   return (
-    <WorkspaceField.Group>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Tracker</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            The system that owns this workspace's work items.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+    <FieldGroup>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Tracker</FieldTitle>
+          <FieldDescription>The system that owns this workspace's work items.</FieldDescription>
+        </FieldContent>
         <Select
           items={trackerItems}
           value={draft.issueTrackerType}
@@ -260,104 +246,96 @@ function IssueTrackerRows() {
             </SelectGroup>
           </SelectContent>
         </Select>
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Connection</WorkspaceField.Title>
-          <WorkspaceField.Description>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Connection</FieldTitle>
+          <FieldDescription>
             Credentials stay in Connections; this record keeps only the reference.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+          </FieldDescription>
+        </FieldContent>
         <ConnectionSelect
           system={draft.issueTrackerType}
           field="issueTrackerConnectionId"
           label="Issue tracker Connection"
         />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Repository</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Tracker-native repository target, when the tracker needs one.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Repository</FieldTitle>
+          <FieldDescription>Tracker-native repository target, when the tracker needs one.</FieldDescription>
+        </FieldContent>
         <DraftInput field="issueTrackerRepo" label="Issue tracker repository" placeholder="org/repo" />
-      </WorkspaceField.Root>
+      </Field>
       {draft.issueTrackerType === "linear" ? (
-        <WorkspaceField.Group>
-          <WorkspaceField.Root orientation="responsive">
-            <WorkspaceField.Content>
-              <WorkspaceField.Title>Teams</WorkspaceField.Title>
-              <WorkspaceField.Description>Comma-separated Linear team keys.</WorkspaceField.Description>
-            </WorkspaceField.Content>
+        <FieldGroup>
+          <Field orientation="responsive">
+            <FieldContent>
+              <FieldTitle>Teams</FieldTitle>
+              <FieldDescription>Comma-separated Linear team keys.</FieldDescription>
+            </FieldContent>
             <DraftInput field="teams" label="Linear teams" placeholder="ENG, APP" />
-          </WorkspaceField.Root>
-          <WorkspaceField.Root orientation="responsive">
-            <WorkspaceField.Content>
-              <WorkspaceField.Title>Organization</WorkspaceField.Title>
-              <WorkspaceField.Description>Optional Linear organization key.</WorkspaceField.Description>
-            </WorkspaceField.Content>
+          </Field>
+          <Field orientation="responsive">
+            <FieldContent>
+              <FieldTitle>Organization</FieldTitle>
+              <FieldDescription>Optional Linear organization key.</FieldDescription>
+            </FieldContent>
             <DraftInput field="organization" label="Linear organization" />
-          </WorkspaceField.Root>
-        </WorkspaceField.Group>
+          </Field>
+        </FieldGroup>
       ) : null}
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Actor login</WorkspaceField.Title>
-          <WorkspaceField.Description>GitHub identity Cogwork acts as.</WorkspaceField.Description>
-        </WorkspaceField.Content>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Actor login</FieldTitle>
+          <FieldDescription>GitHub identity Cogwork acts as.</FieldDescription>
+        </FieldContent>
         <DraftInput field="trackerActorLogin" label="Tracker actor login" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Actor user id</WorkspaceField.Title>
-          <WorkspaceField.Description>Linear identity Cogwork acts as.</WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Actor user id</FieldTitle>
+          <FieldDescription>Linear identity Cogwork acts as.</FieldDescription>
+        </FieldContent>
         <DraftInput field="trackerActorUserId" label="Tracker actor user id" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Priority project</WorkspaceField.Title>
-          <WorkspaceField.Description>Optional GitHub project number and field.</WorkspaceField.Description>
-        </WorkspaceField.Content>
-        <WorkspaceField.Group className="w-auto">
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Priority project</FieldTitle>
+          <FieldDescription>Optional GitHub project number and field.</FieldDescription>
+        </FieldContent>
+        <FieldGroup className="w-auto">
           <DraftInput field="priorityProject" label="Priority project number" type="number" />
           <DraftInput field="priorityField" label="Priority field" />
-        </WorkspaceField.Group>
-      </WorkspaceField.Root>
-    </WorkspaceField.Group>
+        </FieldGroup>
+      </Field>
+    </FieldGroup>
   );
 }
 
 function TriageRows() {
   return (
-    <WorkspaceField.Group>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Assignee allowlist</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Comma-separated identities whose work Cogwork may take.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+    <FieldGroup>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Assignee allowlist</FieldTitle>
+          <FieldDescription>Comma-separated identities whose work Cogwork may take.</FieldDescription>
+        </FieldContent>
         <DraftInput field="assigneeAllowlist" label="Assignee allowlist" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Bot allowlist</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Comma-separated bot logins whose comments may wake follow-up.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Bot allowlist</FieldTitle>
+          <FieldDescription>Comma-separated bot logins whose comments may wake follow-up.</FieldDescription>
+        </FieldContent>
         <DraftInput field="trackerBotAllowlist" label="Tracker bot allowlist" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Role labels</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            The five labels that move work through triage.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
-        <WorkspaceField.Group className="w-auto">
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Role labels</FieldTitle>
+          <FieldDescription>The five labels that move work through triage.</FieldDescription>
+        </FieldContent>
+        <FieldGroup className="w-auto">
           <DraftInput field="needsTriageLabel" label="Needs triage label" placeholder="needs-triage" />
           <DraftInput
             field="readyForAgentLabel"
@@ -371,9 +349,9 @@ function TriageRows() {
             placeholder="ready-for-human"
           />
           <DraftInput field="wontfixLabel" label="Won't fix label" placeholder="wontfix" />
-        </WorkspaceField.Group>
-      </WorkspaceField.Root>
-    </WorkspaceField.Group>
+        </FieldGroup>
+      </Field>
+    </FieldGroup>
   );
 }
 
@@ -388,14 +366,12 @@ function SourceControlRows() {
     { value: "github", label: "GitHub" },
   ];
   return (
-    <WorkspaceField.Group>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Provider</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            The read-only provider that reports pull request state.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+    <FieldGroup>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Provider</FieldTitle>
+          <FieldDescription>The read-only provider that reports pull request state.</FieldDescription>
+        </FieldContent>
         <Select
           items={items}
           value={draft.sourceControlType}
@@ -419,150 +395,130 @@ function SourceControlRows() {
             </SelectGroup>
           </SelectContent>
         </Select>
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Linear history</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Rebase follow-up branches when the base diverges.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Linear history</FieldTitle>
+          <FieldDescription>Rebase follow-up branches when the base diverges.</FieldDescription>
+        </FieldContent>
         <Switch
           aria-label="Require linear history"
           checked={draft.linearHistory}
           disabled={disabled}
           onCheckedChange={(linearHistory) => patch({ linearHistory })}
         />
-      </WorkspaceField.Root>
+      </Field>
       {draft.sourceControlType === "github" ? (
-        <WorkspaceField.Group>
-          <WorkspaceField.Root orientation="responsive">
-            <WorkspaceField.Content>
-              <WorkspaceField.Title>Connection</WorkspaceField.Title>
-              <WorkspaceField.Description>
-                GitHub credentials used to read pull requests.
-              </WorkspaceField.Description>
-            </WorkspaceField.Content>
+        <FieldGroup>
+          <Field orientation="responsive">
+            <FieldContent>
+              <FieldTitle>Connection</FieldTitle>
+              <FieldDescription>GitHub credentials used to read pull requests.</FieldDescription>
+            </FieldContent>
             <ConnectionSelect
               system="github"
               field="sourceControlConnectionId"
               label="Source control Connection"
             />
-          </WorkspaceField.Root>
-          <WorkspaceField.Root orientation="responsive">
-            <WorkspaceField.Content>
-              <WorkspaceField.Title>Repository</WorkspaceField.Title>
-              <WorkspaceField.Description>
-                Repository whose pull requests belong to this workspace.
-              </WorkspaceField.Description>
-            </WorkspaceField.Content>
+          </Field>
+          <Field orientation="responsive">
+            <FieldContent>
+              <FieldTitle>Repository</FieldTitle>
+              <FieldDescription>Repository whose pull requests belong to this workspace.</FieldDescription>
+            </FieldContent>
             <DraftInput field="sourceControlRepo" label="Source control repository" placeholder="org/repo" />
-          </WorkspaceField.Root>
-          <WorkspaceField.Root orientation="responsive">
-            <WorkspaceField.Content>
-              <WorkspaceField.Title>Actor login</WorkspaceField.Title>
-              <WorkspaceField.Description>
-                Login used to identify Cogwork's own pull request comments.
-              </WorkspaceField.Description>
-            </WorkspaceField.Content>
+          </Field>
+          <Field orientation="responsive">
+            <FieldContent>
+              <FieldTitle>Actor login</FieldTitle>
+              <FieldDescription>Login used to identify Cogwork's own pull request comments.</FieldDescription>
+            </FieldContent>
             <DraftInput field="sourceControlActorLogin" label="Source control actor login" />
-          </WorkspaceField.Root>
-          <WorkspaceField.Root orientation="responsive">
-            <WorkspaceField.Content>
-              <WorkspaceField.Title>Bot allowlist</WorkspaceField.Title>
-              <WorkspaceField.Description>
-                Comma-separated bots allowed to wake follow-up.
-              </WorkspaceField.Description>
-            </WorkspaceField.Content>
+          </Field>
+          <Field orientation="responsive">
+            <FieldContent>
+              <FieldTitle>Bot allowlist</FieldTitle>
+              <FieldDescription>Comma-separated bots allowed to wake follow-up.</FieldDescription>
+            </FieldContent>
             <DraftInput field="sourceControlBotAllowlist" label="Source control bot allowlist" />
-          </WorkspaceField.Root>
-        </WorkspaceField.Group>
+          </Field>
+        </FieldGroup>
       ) : null}
-    </WorkspaceField.Group>
+    </FieldGroup>
   );
 }
 
 function WorktreeRows() {
   return (
-    <WorkspaceField.Group>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Root</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Directory where managed worktrees are created.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+    <FieldGroup>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Root</FieldTitle>
+          <FieldDescription>Directory where managed worktrees are created.</FieldDescription>
+        </FieldContent>
         <DraftInput field="worktreeRoot" label="Worktree root" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Remote</WorkspaceField.Title>
-          <WorkspaceField.Description>Git remote used for managed branches.</WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Remote</FieldTitle>
+          <FieldDescription>Git remote used for managed branches.</FieldDescription>
+        </FieldContent>
         <DraftInput field="worktreeRemote" label="Worktree remote" placeholder="origin" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Base branch</WorkspaceField.Title>
-          <WorkspaceField.Description>Branch new work starts from.</WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Base branch</FieldTitle>
+          <FieldDescription>Branch new work starts from.</FieldDescription>
+        </FieldContent>
         <DraftInput field="worktreeBaseBranch" label="Worktree base branch" placeholder="main" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Linked paths</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            One path per line, linked into each worktree.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Linked paths</FieldTitle>
+          <FieldDescription>One path per line, linked into each worktree.</FieldDescription>
+        </FieldContent>
         <DraftTextarea field="worktreeLinkPaths" label="Worktree linked paths" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Setup commands</WorkspaceField.Title>
-          <WorkspaceField.Description>One command per line, run in order.</WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Setup commands</FieldTitle>
+          <FieldDescription>One command per line, run in order.</FieldDescription>
+        </FieldContent>
         <DraftTextarea field="worktreeSetup" label="Worktree setup commands" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Delete after</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Idle milliseconds before a managed worktree is reaped.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Delete after</FieldTitle>
+          <FieldDescription>Idle milliseconds before a managed worktree is reaped.</FieldDescription>
+        </FieldContent>
         <DraftInput
           field="worktreeReapAfterMillis"
           label="Delete worktree after milliseconds"
           type="number"
         />
-      </WorkspaceField.Root>
-    </WorkspaceField.Group>
+      </Field>
+    </FieldGroup>
   );
 }
 
 function RunRows() {
   return (
-    <WorkspaceField.Group>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>Concurrency</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Maximum Runs this workspace may have in flight.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+    <FieldGroup>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>Concurrency</FieldTitle>
+          <FieldDescription>Maximum Runs this workspace may have in flight.</FieldDescription>
+        </FieldContent>
         <DraftInput field="concurrency" label="Workspace concurrency" type="number" />
-      </WorkspaceField.Root>
-      <WorkspaceField.Root orientation="responsive">
-        <WorkspaceField.Content>
-          <WorkspaceField.Title>MCP skills</WorkspaceField.Title>
-          <WorkspaceField.Description>
-            Schema-decoded JSON array of MCP capabilities supplied to Runs.
-          </WorkspaceField.Description>
-        </WorkspaceField.Content>
+      </Field>
+      <Field orientation="responsive">
+        <FieldContent>
+          <FieldTitle>MCP skills</FieldTitle>
+          <FieldDescription>Schema-decoded JSON array of MCP capabilities supplied to Runs.</FieldDescription>
+        </FieldContent>
         <DraftTextarea field="mcpSkills" label="MCP skills" placeholder="[]" />
-      </WorkspaceField.Root>
-    </WorkspaceField.Group>
+      </Field>
+    </FieldGroup>
   );
 }
 
