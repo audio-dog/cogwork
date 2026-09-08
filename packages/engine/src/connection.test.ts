@@ -9,7 +9,9 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
@@ -43,6 +45,19 @@ class EstablishedConnections extends Context.Service<
   Ref.Ref<ReadonlyArray<ConnectionId>>
 >()("@cogwork/engine/connection.test/EstablishedConnections") {
   static readonly layer = Layer.effect(EstablishedConnections, Ref.make<ReadonlyArray<ConnectionId>>([]));
+}
+
+class CredentialConfigurationGate extends Context.Service<
+  CredentialConfigurationGate,
+  {
+    readonly started: Deferred.Deferred<void>;
+    readonly release: Deferred.Deferred<void>;
+  }
+>()("@cogwork/engine/connection.test/CredentialConfigurationGate") {
+  static readonly layer = Layer.effect(
+    CredentialConfigurationGate,
+    Effect.all({ started: Deferred.make<void>(), release: Deferred.make<void>() }),
+  );
 }
 
 const controlStoreService = {
@@ -332,6 +347,83 @@ describe("Connection verification", () => {
                   Ref.update(configured, (current) => [...current, connectionId]),
               })),
             ).pipe(Layer.provideMerge(ConfiguredCredentials.layer)),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("finishes credential configuration when interrupted after the Control write", () =>
+    Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const gate = yield* CredentialConfigurationGate;
+      const id = connectionIdOf("github", "octocat");
+      const establishing = yield* connections
+        .establish({ system: "github", source: { _tag: "GitHubCli" } })
+        .pipe(Effect.forkChild({ startImmediately: true }));
+
+      yield* Deferred.await(gate.started);
+      const interrupting = yield* Fiber.interrupt(establishing).pipe(
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Deferred.succeed(gate.release, undefined);
+      yield* Fiber.join(interrupting);
+
+      assert.deepStrictEqual(yield* Ref.get(yield* EstablishedConnections), [id]);
+      assert.deepStrictEqual(yield* Ref.get(yield* ConfiguredCredentials), [id]);
+      assert.deepStrictEqual(yield* Ref.get(yield* RemovedConnections), []);
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(Layer.succeed(ConnectionVerifier, { verify: () => Effect.succeed("octocat") })),
+          Layer.provideMerge(
+            Layer.effect(
+              CredentialStore,
+              Effect.gen(function* () {
+                const configured = yield* ConfiguredCredentials;
+                const gate = yield* CredentialConfigurationGate;
+                return {
+                  ...unusedCredentialStore,
+                  resolveSource: () =>
+                    Effect.succeed({
+                      source: "github-cli" as const,
+                      token: Redacted.make("secret"),
+                      identity: null,
+                    }),
+                  configureConnection: (connectionId) =>
+                    Deferred.succeed(gate.started, undefined).pipe(
+                      Effect.andThen(Deferred.await(gate.release)),
+                      Effect.andThen(Ref.update(configured, (current) => [...current, connectionId])),
+                    ),
+                } satisfies CredentialStoreService;
+              }),
+            ).pipe(
+              Layer.provideMerge(ConfiguredCredentials.layer),
+              Layer.provideMerge(CredentialConfigurationGate.layer),
+            ),
+          ),
+          Layer.provideMerge(
+            Layer.effect(
+              ControlStore,
+              Effect.gen(function* () {
+                const established = yield* EstablishedConnections;
+                const removed = yield* RemovedConnections;
+                return {
+                  ...controlStoreService,
+                  establishConnection: (connection) =>
+                    Ref.update(established, (current) => [...current, connection.id]).pipe(
+                      Effect.map(() => defaultControlStore),
+                    ),
+                  removeConnection: (connectionId) =>
+                    Ref.update(removed, (current) => [...current, connectionId]).pipe(
+                      Effect.map(() => defaultControlStore),
+                    ),
+                } satisfies ControlStoreService;
+              }),
+            ).pipe(
+              Layer.provideMerge(EstablishedConnections.layer),
+              Layer.provideMerge(RemovedConnections.layer),
+            ),
           ),
         ),
       ),

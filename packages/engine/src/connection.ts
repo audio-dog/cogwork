@@ -242,15 +242,19 @@ export const layer = Layer.effect(
       }
       const id = connectionIdOf(input.system, account);
       const connection = Connection.make({ id, system: input.system, account, status: "established" });
-      yield* controlStore
-        .establishConnection(connection)
-        .pipe(Effect.mapError((error) => unavailable("establish Connection", id, error.message)));
       const rollback = previous
         ? controlStore.establishConnection(previous)
         : controlStore.removeConnection(connection.id);
-      yield* credentials
-        .configureConnection(id, input.source)
-        .pipe(Effect.tapError(() => rollback.pipe(Effect.ignore)));
+      yield* Effect.uninterruptibleMask((restore) =>
+        restore(
+          controlStore
+            .establishConnection(connection)
+            .pipe(Effect.mapError((error) => unavailable("establish Connection", id, error.message))),
+        ).pipe(
+          Effect.andThen(credentials.configureConnection(id, input.source)),
+          Effect.onError(() => rollback.pipe(Effect.ignore)),
+        ),
+      );
       return connection;
     });
 
