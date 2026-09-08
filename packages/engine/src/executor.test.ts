@@ -23,6 +23,7 @@ import {
 } from "@cogwork/contracts";
 
 import { assert, describe, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -2852,6 +2853,31 @@ describe("Executor.execute", () => {
       assert.isFalse(log.some((c) => c.method === "release"));
       assert.lengthOf(yield* Ref.get(cleanups), 1);
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
+  });
+
+  it.effect("releases the claim when a crash is combined with an interrupt", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* Effect.exit(execute(executor, implementWorkspace, implementItem));
+
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "claim"));
+      assert.lengthOf(
+        log.filter((call) => call.method === "release"),
+        1,
+      );
+    }).pipe(
+      Effect.provide(
+        provide([
+          capturingRunner(
+            [],
+            Stream.failCause(Cause.combine(Cause.die(new Error("harness crashed")), Cause.interrupt())),
+          ),
+        ]),
+      ),
+    );
   });
 
   it.effect("releases the claim after a manual cancellation finishes cleanup", () => {

@@ -31,6 +31,7 @@ import {
   type TriageStageResult,
   TriageStageResultCompletion,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -257,7 +258,12 @@ const withFailureTerminal = <R>(stream: Stream.Stream<AgUiEvent, HarnessError, R
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
 
+const decodeTriageStageResultCompletion = Schema.decodeUnknownEffect(TriageStageResultCompletion);
+const decodeImplementStageResultCompletion = Schema.decodeUnknownEffect(ImplementStageResultCompletion);
+const decodeFollowUpStageResultCompletion = Schema.decodeUnknownEffect(FollowUpStageResultCompletion);
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
+const hasInterruptsOnly = (exit: Exit.Exit<unknown, unknown>) =>
+  Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
 const noPlugins = { plugins: [] } satisfies PluginOverview;
 const enabledContribution = (
   resolved: ResolvedOperation,
@@ -382,6 +388,14 @@ export const make = Effect.gen(function* () {
     ),
   );
   const releaseClaim = makeReleaseClaim(issueTracker);
+  const releaseClaimUnlessInterrupted = <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) =>
+    effect.pipe(
+      Effect.onExit((exit) => (hasInterruptsOnly(exit) ? Effect.void : releaseClaim(workspace, item.id))),
+    );
   const claimCooldowns = yield* Cooldown.make;
 
   const cleanupRunContext = (runId: RunId) =>
@@ -978,7 +992,7 @@ export const make = Effect.gen(function* () {
 
   const decodeTriageResult = (acc: TriageAccumulator) =>
     expectSingleStructuredResult("triage", acc).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(TriageStageResultCompletion)),
+      Effect.flatMap(decodeTriageStageResultCompletion),
       Effect.mapError((error) => structuredResultError(`invalid structured triage result: ${error.message}`)),
       Effect.map((completion) => completion.object),
     );
@@ -1021,7 +1035,7 @@ export const make = Effect.gen(function* () {
 
   const decodeImplementResult = (acc: RunAccumulator) =>
     expectSingleStructuredResult("implement", acc).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(ImplementStageResultCompletion)),
+      Effect.flatMap(decodeImplementStageResultCompletion),
       Effect.mapError((error) =>
         structuredResultError(`invalid structured implement result: ${error.message}`),
       ),
@@ -1141,7 +1155,7 @@ export const make = Effect.gen(function* () {
 
   const decodeFollowUpResult = (acc: RunAccumulator) =>
     expectSingleStructuredResult("follow-up", acc).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(FollowUpStageResultCompletion)),
+      Effect.flatMap(decodeFollowUpStageResultCompletion),
       Effect.mapError((error) =>
         structuredResultError(`invalid structured follow-up result: ${error.message}`),
       ),
@@ -1677,9 +1691,7 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    yield* handoffStalled(workspace, item).pipe(
-      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
-    );
+    yield* releaseClaimUnlessInterrupted(handoffStalled(workspace, item), workspace, item);
     return true;
   });
 
@@ -1700,8 +1712,10 @@ export const make = Effect.gen(function* () {
     const stageOps = opsFor(workspace, item, checked.resolved);
     const admission = yield* claimEnabledItem(workspace, item);
     if (!admission.claimed) return false;
-    yield* runClaimed(workspace, item, stageOps, admission.startedAtMillis, observation).pipe(
-      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
+    yield* releaseClaimUnlessInterrupted(
+      runClaimed(workspace, item, stageOps, admission.startedAtMillis, observation),
+      workspace,
+      item,
     );
     return true;
   });
