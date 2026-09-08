@@ -296,6 +296,45 @@ describe("CredentialStore (Connections)", () => {
       assert.deepStrictEqual(yield* Ref.get(grants), []);
     }),
   );
+
+  it.layer(CredentialLogProbe.captureLayer)("logging", (it) => {
+    it.effect("annotates logs from direct source resolution", () =>
+      Effect.gen(function* () {
+        const store = make({
+          stored: {
+            load: Effect.succeed([stored("acme", storedToken(far)), stored("beta", storedToken(far))]),
+            save: () => Effect.void,
+          },
+        });
+        const logs = yield* capturingLogs(Effect.flip(store.resolveSource(account, { _tag: "Stored" })));
+        const log = logs.find((candidate) =>
+          logMessageIncludes(candidate, "multiple stored credentials match"),
+        );
+
+        assert.deepStrictEqual(log?.annotations, { account: "AUD" });
+      }),
+    );
+
+    it.effect("annotates logs from Connection validation", () =>
+      Effect.gen(function* () {
+        const id = connectionId("linear/acme");
+        const store = make({
+          stored: {
+            load: Effect.succeed([stored("acme", storedToken(0))]),
+            save: () => Effect.void,
+          },
+        });
+        const logs = yield* capturingLogs(Effect.flip(store.configureConnection(id, { _tag: "Stored" })));
+        const log = logs.find(
+          (candidate) =>
+            candidate.annotations.account === id &&
+            logMessageIncludes(candidate, "stored credential expired and cannot be refreshed"),
+        );
+
+        assert.deepStrictEqual(log?.annotations, { account: "linear/acme" });
+      }),
+    );
+  });
 });
 
 const storedToken = (expiresAtMillis: number, accessToken = "oauth-token"): StoredToken => ({

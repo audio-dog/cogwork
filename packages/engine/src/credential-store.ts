@@ -206,6 +206,11 @@ export class CredentialStore extends Context.Service<CredentialStore, Credential
 export const accountOf = (credential: StoredCredential) =>
   `${credential.issueTracker}/${credential.organization}`;
 
+const annotateAccount =
+  (account: string) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(Effect.annotateLogs({ account }), Effect.annotateSpans({ account }));
+
 const redactedEnv = (name: string) =>
   Config.redacted(name).pipe(Effect.orElseSucceed(() => Redacted.make("")));
 
@@ -444,12 +449,8 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
   });
 
   return {
-    bearerToken: (account) =>
-      bearerToken(account).pipe(
-        Effect.annotateLogs({ account: account.key }),
-        Effect.annotateSpans({ account: account.key }),
-      ),
-    resolveSource,
+    bearerToken: (account) => bearerToken(account).pipe(annotateAccount(account.key)),
+    resolveSource: (account, source) => resolveSource(account, source).pipe(annotateAccount(account.key)),
     persist: sources.stored.save,
     invalidate: (account) => sources.clientCredentials?.forget(account) ?? Effect.void,
     providerKey,
@@ -461,7 +462,8 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
           message: "this credential store cannot persist provider keys",
         }),
       ),
-    configureConnection,
+    configureConnection: (connectionId, source) =>
+      configureConnection(connectionId, source).pipe(annotateAccount(connectionId)),
     removeConnection: (connectionId) => {
       const system = connectionSystemOf(connectionId);
       const account = connectionAccountOf(connectionId);
