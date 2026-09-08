@@ -1,0 +1,21 @@
+packages/contracts/src/triage.test.ts
+  s_13cd74ff5da436::t_e85cd68f82c3bb 166-184
+packages/contracts/src/triage.ts
+  s_13cd74ff5da436::t_2be92ea66e7e6f 87-94,96-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "7efcec43afe2abe7c51d1cd6ea22138c74b0a613",
+  "prompts": {},
+  "sessions": {
+    "s_13cd74ff5da436": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a081b1-0fc1-79f1-9029-27582a53217f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
