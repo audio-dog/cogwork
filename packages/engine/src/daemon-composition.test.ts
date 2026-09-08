@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { connectionIdOf, DaemonRpcs, HarnessName, HarnessState, WorkspaceConfig } from "@cogwork/contracts";
+import { connectionIdOf, DaemonRpcs, HarnessName, WorkspaceConfig } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -13,6 +13,7 @@ import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
@@ -32,7 +33,6 @@ import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
 
 const pushSchemaMock = vi.hoisted(() => vi.fn());
-
 vi.mock("drizzle-kit/payload/sqlite", () =>
   vi
     .importActual<typeof import("drizzle-kit/payload/sqlite")>("drizzle-kit/payload/sqlite")
@@ -123,7 +123,7 @@ const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(func
   const rpc = yield* RpcClient.make(DaemonRpcs);
   const runs = yield* rpc.ListRuns();
   const status = yield* rpc.GetStatus();
-  const harnesses = yield* rpc.GetHarnesses();
+  const harnesses = yield* Effect.result(rpc.GetHarnesses());
   return { runs, status, reconciled, heartbeatsExit, harnesses };
 });
 
@@ -287,16 +287,10 @@ describe("daemon server composition", () => {
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 
-  it.effect("reports the registered harness, its version and its models over RPC", () =>
+  it.effect("does not report Harnesses as enabled when the Control store is unavailable", () =>
     Effect.gen(function* () {
       const result = yield* inspectUnavailableDaemon();
-      const item = result.harnesses.harnesses[0];
-
-      assert.strictEqual(result.harnesses.harnesses.length, 1);
-      assert.strictEqual(item?.harness, "cursor");
-      assert.strictEqual(item?.version, "1");
-      assert.isTrue(HarnessState.guards.Ready(item?.state ?? HarnessState.cases.Ready.make({})));
-      assert.deepStrictEqual(item?.models, ["test"]);
+      assert.isTrue(Result.isFailure(result.harnesses));
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 });

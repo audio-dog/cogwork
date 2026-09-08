@@ -1,4 +1,4 @@
-import { WorkspaceRegistration } from "@cogwork/contracts";
+import { WorkspaceRegistration, WorkspaceUpdate } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -16,6 +16,7 @@ import { controlStoreClientLayer } from "./control-store";
 import * as Registry from "./registry";
 
 const registration = Schema.decodeSync(WorkspaceRegistration);
+const workspaceUpdate = Schema.decodeSync(WorkspaceUpdate);
 
 const githubRegistration = (name: string, checkoutPath: string) =>
   registration({
@@ -289,7 +290,7 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("mints identities, keeps clone hints non-identifying, and reloads from the Control store", () =>
+  it.effect("mints distinct identities for duplicate display names and reloads from the Control store", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -306,7 +307,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "first clone",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           sourceControl: { type: "github", repo: "acme/repo" },
           linearHistory: false,
@@ -324,7 +324,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "first clone",
           checkoutPath: secondCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           linearHistory: false,
         }),
@@ -427,7 +426,6 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "moving workspace",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
           sourceControl: { type: "github", repo: "acme/repo" },
           linearHistory: true,
@@ -459,12 +457,52 @@ layer(NodeServices.layer)((it) => {
         ]),
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
 
+      const renamedUpdate = workspaceUpdate({
+        name: "renamed workspace",
+        issueTracker: { type: "linear", teams: ["ENG"] },
+        sourceControl: { type: "github", repo: "acme/renamed" },
+        mcpSkills: [],
+        linearHistory: false,
+        worktrees: { baseBranch: "trunk", setup: ["pnpm install"] },
+        concurrency: 4,
+      });
+      const updated = yield* management.update(workspace, renamedUpdate);
+      if (updated._tag === "Failed") return assert.fail("expected update to succeed");
+      assert.strictEqual(updated.workspace.config.name, workspace);
+      assert.strictEqual(updated.workspace.config.checkoutPath, firstCheckout);
+      assert.strictEqual(updated.workspace.config.displayName, "renamed workspace");
+      assert.strictEqual(updated.workspace.config.issueTracker.type, "linear");
+      assert.strictEqual(updated.workspace.workspaceLimit, 4);
+      assert.deepStrictEqual(
+        updated.workspace.record,
+        registration({
+          name: "renamed workspace",
+          checkoutPath: firstCheckout,
+          issueTracker: { type: "linear", connectionId: "unbound", teams: ["ENG"] },
+          sourceControl: {
+            type: "github",
+            connectionId: "unbound",
+            repo: "acme/renamed",
+          },
+          mcpSkills: [],
+          linearHistory: false,
+          worktrees: { baseBranch: "trunk", setup: ["pnpm install"] },
+          concurrency: 4,
+        }),
+      );
+      const overlaysAfterUpdate = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{ readonly workspace: string }>`SELECT workspace FROM operation_settings ORDER BY workspace`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.deepStrictEqual(overlaysAfterUpdate, [{ workspace }, { workspace: "other-workspace" }]);
+
       const rebound = yield* management.rebind(workspace, secondCheckout);
       if (rebound._tag === "Failed") return assert.fail("expected re-bind to succeed");
       assert.strictEqual(rebound.workspace.config.name, workspace);
       assert.strictEqual(rebound.workspace.config.checkoutPath, secondCheckout);
-      assert.strictEqual(rebound.workspace.config.sourceControl?.repo, "acme/repo");
-      assert.strictEqual(rebound.workspace.workspaceLimit, 2);
+      assert.strictEqual(rebound.workspace.config.sourceControl?.repo, "acme/renamed");
+      assert.strictEqual(rebound.workspace.workspaceLimit, 4);
       assert.isTrue(yield* fs.exists(privateTree));
       const overlaysAfterRebind = yield* Effect.flatMap(
         SqlClient.SqlClient,
@@ -496,6 +534,9 @@ layer(NodeServices.layer)((it) => {
           sql<{ readonly workspace: string }>`SELECT workspace FROM contribution_settings ORDER BY workspace`,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
       assert.deepStrictEqual(contributionOverlaysAfterDeregister, [{ workspace: "other-workspace" }]);
+
+      const missingUpdate = yield* management.update(workspace, renamedUpdate).pipe(Effect.flip);
+      assert.strictEqual(missingUpdate._tag, "WorkspaceNotFound");
 
       const registeredAgain = yield* management.register(
         githubRegistration("moving workspace", secondCheckout),

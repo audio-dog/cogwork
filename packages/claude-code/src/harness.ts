@@ -13,6 +13,7 @@ import { createSecrets, type SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 export interface ClaudeCodeRunnerOptions {
   readonly name: HarnessName;
@@ -33,7 +34,10 @@ const minimumClaudeVersion: ReadonlyArray<number> = [2, 1, 83];
 const versionRequirement = `>=${minimumClaudeVersion.join(".")} <${supportedClaudeMajor + 1}.0.0`;
 const commandDeadline = "5 seconds";
 const anthropicEnvironment = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
+const sourceControlEnvironment = ["GH_TOKEN", "GITHUB_TOKEN"] as const;
+const claudeEnvironment = [...anthropicEnvironment, ...sourceControlEnvironment];
 type ClaudeAuthenticationMode = ClaudeCodeRunnerOptions["authentication"]["mode"];
+const claudeAuthenticationModes = ["host", "byok"] as const satisfies ReadonlyArray<ClaudeAuthenticationMode>;
 const requiredEnvironmentName = (names: ReadonlyArray<string> | undefined) => {
   const name = names?.[0];
   if (name) return name;
@@ -58,7 +62,7 @@ const authenticationProfiles = {
     installNextStep: "Install Claude Code, then run `claude auth login`.",
     credentialGuidance: "Claude Code host login is unavailable. Run `claude auth login`, then retry.",
     failurePattern: missingLoginPattern,
-    scrubEnv: anthropicEnvironment,
+    scrubEnv: claudeEnvironment,
   },
   byok: {
     binding: { mode: "byok", reference: "Anthropic provider key in the Credential store" },
@@ -68,9 +72,9 @@ const authenticationProfiles = {
     credentialGuidance:
       "Claude Code API-key authentication is unavailable. Store an Anthropic key with `cogwork login key --provider anthropic`, then retry.",
     failurePattern: rejectedApiKeyPattern,
-    scrubEnv: ["ANTHROPIC_AUTH_TOKEN"],
+    scrubEnv: ["ANTHROPIC_AUTH_TOKEN", ...sourceControlEnvironment],
   },
-} as const;
+} as const satisfies Record<ClaudeAuthenticationMode, unknown>;
 const modelPattern = /['"]((?:claude-[a-z0-9-]+)|opus|sonnet|haiku|fable)['"]/gi;
 
 const isMissingExecutableCause = (cause: unknown, seen: ReadonlySet<object> = new Set()): boolean => {
@@ -86,6 +90,16 @@ const isMissingExecutableCause = (cause: unknown, seen: ReadonlySet<object> = ne
 
 const harnessError = (reason: Harness.HarnessError["reason"], retryable: boolean, message: string) =>
   new Harness.HarnessError({ reason, retryable, message });
+const isHarnessError = Schema.is(Harness.HarnessError);
+
+export const inlineSettingsArgument = (value: string) => {
+  if (!value.includes(" ")) return value;
+  throw harnessError(
+    "launch",
+    false,
+    `Claude Code inline settings contain a space and cannot be passed safely: ${value}`,
+  );
+};
 
 const missingHarnessError = (message = "Claude Code is not installed or executable") =>
   harnessError("missing-harness", false, message);
@@ -100,7 +114,7 @@ const commandTimeoutError = (subject: string) =>
 
 const createProbeSandbox = Effect.fn("ClaudeCode.createProbeSandbox")(() =>
   Effect.tryPromise({
-    try: () => localProcessSandbox({ dir: ".", scrubEnv: [...anthropicEnvironment] }).create({}),
+    try: () => localProcessSandbox({ dir: ".", scrubEnv: [...claudeEnvironment] }).create({}),
     catch: commandCauseError,
   }).pipe(
     Effect.timeout(commandDeadline),
@@ -306,7 +320,7 @@ const nativeCatalog = Effect.fn("ClaudeCode.nativeCatalog")((executable: string)
           runtimeHost: "local-process",
           harnessVersion: version,
         },
-      } satisfies Harness.HarnessOptionCatalog;
+      } satisfies Harness.HarnessCatalogSourceResult;
     }),
   ).pipe(Effect.orElseSucceed(() => null)),
 );
@@ -327,6 +341,7 @@ export const claudeCodeCatalogSources = (
 });
 
 const turnDiagnostics = (mode: ClaudeAuthenticationMode, cause: unknown) => {
+  if (isHarnessError(cause)) return cause;
   const message = HarnessBridge.messageFromUnknown(cause);
   if (isMissingExecutableCause(cause)) return setupGuidance(mode, missingHarnessError(message));
   if (authenticationProfiles[mode].failurePattern.test(message)) {
@@ -373,7 +388,7 @@ const claudeExecutableFor = (
   return [
     executable,
     "--settings",
-    nativeSandboxSettings(request.policy),
+    inlineSettingsArgument(nativeSandboxSettings(request.policy)),
     ...(mcpConfig ? ["--mcp-config", mcpConfig] : []),
   ].join(" ");
 };
@@ -421,7 +436,7 @@ const descriptor = (
     capabilities: {
       execution: Harness.fullHarnessExecution,
       profile: {
-        authenticationModes: ["host", "byok"],
+        authenticationModes: claudeAuthenticationModes,
         session: { affinity: "sandbox-lineage", fork: true, humanAttach: false },
         structuredOutput: "native",
         policyFidelity: "profile-only",

@@ -1,4 +1,13 @@
-import { type McpSkill, WorkspaceConfig } from "@cogwork/contracts";
+import {
+  type FollowUpResultOutcome,
+  FollowUpStageResult,
+  type ImplementResultOutcome,
+  ImplementStageResult,
+  type McpSkill,
+  type TriageResultRole,
+  TriageStageResult,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
@@ -6,6 +15,7 @@ import {
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
+  type OperationOutcome,
   resolveFollowUp,
   resolveImplement,
   resolveStage,
@@ -49,6 +59,131 @@ describe("resolveStage", () => {
     assert.strictEqual(resolveStage(cfg, "triage").skill, "triage-agent");
     assert.strictEqual(resolveStage(cfg, "implement").skill, "implement-agent");
     assert.strictEqual(resolveStage(cfg, "follow-up").skill, "follow-up-agent");
+  });
+});
+
+describe("operation outcome tables", () => {
+  const triageResult = (role: TriageResultRole) =>
+    Schema.decodeSync(TriageStageResult)({ _tag: "triage", role, proposal: `Move to ${role}.` });
+
+  const implementResult = (outcome: ImplementResultOutcome) =>
+    Schema.decodeSync(ImplementStageResult)({ _tag: "implement", outcome, summary: `Result: ${outcome}.` });
+
+  const followUpResult = (outcome: FollowUpResultOutcome) =>
+    Schema.decodeSync(FollowUpStageResult)({ _tag: "follow-up", outcome, summary: `Result: ${outcome}.` });
+
+  const triageCases = [
+    {
+      name: "ready-for-agent",
+      result: triageResult("ready-for-agent"),
+      expected: { coordination: "triaged", attempt: "succeeded" },
+    },
+    {
+      name: "needs-info",
+      result: triageResult("needs-info"),
+      expected: { coordination: "triaged", attempt: "succeeded" },
+    },
+    {
+      name: "ready-for-human",
+      result: triageResult("ready-for-human"),
+      expected: { coordination: "triaged", attempt: "succeeded" },
+    },
+    {
+      name: "wontfix",
+      result: triageResult("wontfix"),
+      expected: { coordination: "triaged", attempt: "succeeded" },
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: TriageResultRole;
+    readonly result: TriageStageResult;
+    readonly expected: OperationOutcome;
+  }>;
+
+  const implementCases = [
+    {
+      name: "opened-pr",
+      result: implementResult("opened-pr"),
+      expected: { coordination: "implemented", attempt: "succeeded" },
+    },
+    {
+      name: "stuck",
+      result: implementResult("stuck"),
+      expected: { coordination: "attemptFailed", attempt: "failed", retryable: false },
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: ImplementResultOutcome;
+    readonly result: ImplementStageResult;
+    readonly expected: OperationOutcome;
+  }>;
+
+  const followUpCases = [
+    {
+      name: "pushed",
+      result: followUpResult("pushed"),
+      expected: { coordination: "followedUp", attempt: "succeeded" },
+    },
+    {
+      name: "noop",
+      result: followUpResult("noop"),
+      expected: { coordination: "followedUp", attempt: "succeeded" },
+    },
+    {
+      name: "stuck",
+      result: followUpResult("stuck"),
+      expected: { coordination: "attemptFailed", attempt: "failed", retryable: false },
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: FollowUpResultOutcome;
+    readonly result: FollowUpStageResult;
+    readonly expected: OperationOutcome;
+  }>;
+
+  describe("triage", () => {
+    const table = resolveTriage(config()).outcomeTable;
+
+    it("declares every result", () => {
+      assert.deepStrictEqual(
+        Object.keys(table.outcomes),
+        triageCases.map(({ name }) => name),
+      );
+    });
+
+    it.each(triageCases)("maps $name to triaged success", ({ result, expected }) => {
+      assert.strictEqual(table.resultField, "role");
+      assert.deepStrictEqual(table.outcomes[result.role], expected);
+    });
+  });
+
+  describe("implementation", () => {
+    const table = resolveImplement(config()).outcomeTable;
+
+    it("declares every result", () => {
+      assert.deepStrictEqual(
+        Object.keys(table.outcomes),
+        implementCases.map(({ name }) => name),
+      );
+    });
+
+    it.each(implementCases)("maps $name to its current completion", ({ result, expected }) => {
+      assert.strictEqual(table.resultField, "outcome");
+      assert.deepStrictEqual(table.outcomes[result.outcome], expected);
+    });
+  });
+
+  describe("follow-up", () => {
+    const table = resolveFollowUp(config()).outcomeTable;
+
+    it("declares every result", () => {
+      assert.deepStrictEqual(
+        Object.keys(table.outcomes),
+        followUpCases.map(({ name }) => name),
+      );
+    });
+
+    it.each(followUpCases)("maps $name to its current completion", ({ result, expected }) => {
+      assert.strictEqual(table.resultField, "outcome");
+      assert.deepStrictEqual(table.outcomes[result.outcome], expected);
+    });
   });
 });
 

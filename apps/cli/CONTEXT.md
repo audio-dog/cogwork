@@ -40,7 +40,7 @@ The `login key --provider <id>` subcommand: the bring-your-own-key path. It read
 _Avoid_: A `--key` flag (that leaks the secret), a separate provider secret file
 
 **connection**:
-The daemon-backed management group for `establish`, `re-connect`, and `remove`. Establishment accepts an environment-variable name, an API key read from stdin, or an existing browser-login grant. Removal reports the Workspace ids left dangling.
+The daemon-backed management group for `establish`, `re-connect`, and `remove`. Establishment and re-connect read an API key from stdin by default. `--env` selects an environment-variable name, and Linear's `--stored` selects an existing browser-login grant. Cogwork does not load `~/.cogwork/.env`; environment references resolve only from the daemon process environment. Removal reports the Workspace ids left dangling.
 _Avoid_: Putting an API key in argv, editing the Control store directly
 
 **login linear**:
@@ -52,7 +52,7 @@ The `models` subcommand: lists the model catalog for the providers a key resolve
 _Avoid_: A picker UI (that's the desktop's job; this is the read-only list), listing every provider regardless of credentials
 
 **workspace**:
-The daemon-backed management group. `register` admits a checkout and mints its `WorkspaceId`; `re-bind` changes that identity's checkout path; `deregister` removes the registration and private tree without erasing Run history. All three require a running daemon.
+The daemon-backed management group. `register` admits a checkout and mints its `WorkspaceId`; `update` replaces its mutable non-path record from schema-decoded JSON; `re-bind` changes that identity's checkout path; `deregister` removes the registration and private tree without erasing Run history. All four require a running daemon.
 _Avoid_: The `worktree` command, which manages disposable checkouts under one registered Workspace
 
 **Watch**:
