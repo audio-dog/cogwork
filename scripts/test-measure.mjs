@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { dirname } from "node:path";
+import { globSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
@@ -10,7 +10,8 @@ const measuredTestStates = ["passed", "failed"];
 const scriptPath = fileURLToPath(import.meta.url);
 const vitestCountPattern = new RegExp(`${countMarker}(\\d+)`, "g");
 const nodeTestCountPattern = /^# tests (\d+)$/m;
-const workspaceRoot = dirname(dirname(scriptPath));
+const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+const nodeTestPatterns = ["configs/lint/tests/*.test.mjs", "scripts/*.test.mjs"];
 const isMeasuredTest = (testCase) => measuredTestStates.includes(testCase.result().state);
 
 export default class TestCountReporter {
@@ -24,7 +25,7 @@ export default class TestCountReporter {
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
-const run = async (file, args) => {
+const run = async (file, args, workspaceRoot) => {
   try {
     return await exec(file, args, {
       cwd: workspaceRoot,
@@ -50,33 +51,47 @@ const nodeTestCount = (output) => {
   return Number(match[1]);
 };
 
-const measure = async () => {
+const runNodeTests = (workspaceRoot) => {
+  const testFiles = nodeTestPatterns.flatMap((pattern) => globSync(pattern, { cwd: workspaceRoot }));
+  return run(process.execPath, ["--test", "--test-reporter=tap", ...testFiles], workspaceRoot);
+};
+
+const measure = async (workspaceRoot) => {
   const startedAt = performance.now();
   const reporterPath = pathToFileURL(scriptPath).href;
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
-  const vitest = await run(process.execPath, [
-    turboPath,
-    "test",
-    "--force",
-    "--output-logs=full",
-    "--",
-    "--reporter=default",
-    `--reporter=${reporterPath}`,
-  ]);
-  const nodeTests = await run(process.execPath, [
-    "--test",
-    "--test-reporter=tap",
-    "configs/lint/tests/rules.test.mjs",
-  ]);
+  const vitest = await run(
+    process.execPath,
+    [
+      turboPath,
+      "test",
+      "--force",
+      "--output-logs=full",
+      "--",
+      "--reporter=default",
+      `--reporter=${reporterPath}`,
+    ],
+    workspaceRoot,
+  );
+  const nodeTests = await runNodeTests(workspaceRoot);
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
   console.log(JSON.stringify({ durationMs, testCount }));
 };
 
-const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+const main = async () => {
+  const [mode] = process.argv.slice(2);
+  if (mode === "--node-only") {
+    const result = await runNodeTests(process.cwd());
+    process.stdout.write(result.stdout);
+    return;
+  }
+  if (!mode) return measure(process.cwd());
+  throw new Error("Usage: test-measure.mjs [--node-only]");
+};
 
 if (isMain) {
-  measure().catch((error) => {
+  main().catch((error) => {
     console.error(describe(error));
     process.exitCode = 1;
   });
