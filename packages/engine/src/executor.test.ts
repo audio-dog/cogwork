@@ -209,6 +209,16 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   }),
 };
 
+class ContextAssemblyRequests extends Context.Service<
+  ContextAssemblyRequests,
+  Ref.Ref<ReadonlyArray<ContextAssembler.AssembleRequest>>
+>()("@cogwork/engine/executor.test/ContextAssemblyRequests") {
+  static readonly layer = Layer.effect(
+    ContextAssemblyRequests,
+    Ref.make<ReadonlyArray<ContextAssembler.AssembleRequest>>([]),
+  );
+}
+
 class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<ReadonlyArray<string>>>()(
   "@cogwork/engine/executor.test/ContextCleanupCalls",
 ) {
@@ -217,18 +227,21 @@ class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<R
     ContextAssembler.ContextAssembler,
     Effect.gen(function* () {
       const cleanups = yield* ContextCleanupCalls;
+      const requests = yield* ContextAssemblyRequests;
       return {
-        assemble: () =>
-          Effect.succeed({
-            layers: [],
-            operatingInstructionsPath: "/",
-            operatingInstructionResources: [],
-            sources: [],
-          }),
+        assemble: (request) =>
+          Ref.update(requests, (calls) => [...calls, request]).pipe(
+            Effect.map(() => ({
+              layers: [],
+              operatingInstructionsPath: "/",
+              operatingInstructionResources: [],
+              sources: [],
+            })),
+          ),
         cleanup: (runId) => Ref.update(cleanups, (calls) => [...calls, runId]),
       };
     }),
-  ).pipe(Layer.provideMerge(ContextCleanupCalls.layer));
+  ).pipe(Layer.provideMerge(Layer.mergeAll(ContextCleanupCalls.layer, ContextAssemblyRequests.layer)));
 }
 
 const missingOperatingInstructionsContext = Layer.succeed(ContextAssembler.ContextAssembler, {
@@ -1421,6 +1434,7 @@ function provide(
         testHarness(runners),
         runnerServices,
         ContextCleanupCalls.layer,
+        ContextAssemblyRequests.layer,
         runControl,
         worktree,
         assemblerStub,
@@ -2048,9 +2062,11 @@ describe("Executor.execute", () => {
 
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
+      const assemblyRequests = yield* ContextAssemblyRequests;
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
 
+      assert.strictEqual((yield* Ref.get(assemblyRequests))[0]?.workspace, implementWorkspace.config.name);
       const [request] = yield* Ref.get(requests);
       assert.strictEqual(request?.plan.harness.model, "refreshed-model");
       const model = request?.plan.provenance.resolution.find(({ key }) => key === "model");

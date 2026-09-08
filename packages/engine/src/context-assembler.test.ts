@@ -1,4 +1,10 @@
-import { type FileContribution, RunId, RunPlanInstruction, RunPlanResource } from "@cogwork/contracts";
+import {
+  type FileContribution,
+  RunId,
+  RunPlanInstruction,
+  RunPlanResource,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
@@ -11,6 +17,11 @@ interface CopyCall {
   readonly dest: string;
 }
 
+interface StubFsOptions {
+  readonly directories?: ReadonlyArray<string>;
+  readonly removals?: Ref.Ref<ReadonlyArray<string>>;
+}
+
 const config = {
   homeDir: "/home/.cogwork",
   userAgentsDir: "/home/.agents",
@@ -19,17 +30,27 @@ const config = {
 
 const request: AssembleRequest = {
   runId: Schema.decodeSync(RunId)("run-context-test"),
+  workspace: Schema.decodeSync(WorkspaceId)("gh"),
   cwd: "/repos/app/packages/web",
   projectRoot: "/repos/app",
   operatingInstructions: "implement-agent",
   contributions: [],
 };
 
+const workspaceOverrideDir = "/home/.cogwork/workspaces/gh/operating-instructions/implement-agent";
+const engineInstructions = {
+  "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "engine instructions",
+};
+
 const stubFs = (
   files: Record<string, string>,
   copies: Ref.Ref<ReadonlyArray<CopyCall>>,
-  removals?: Ref.Ref<ReadonlyArray<string>>,
+  { directories = [], removals }: StubFsOptions = {},
 ): ContextFsService => ({
+  directoryExists: (target) =>
+    Effect.succeed(
+      directories.includes(target) || Object.keys(files).some((file) => file.startsWith(`${target}/`)),
+    ),
   readFile: (target) =>
     Ref.get(copies).pipe(
       Effect.map((calls) => {
@@ -53,6 +74,22 @@ const stubFs = (
   removeDirectory: (target) =>
     removals ? Ref.update(removals, (targets) => [...targets, target]) : Effect.void,
 });
+
+const assertInvalidWorkspaceOverride = (files: Record<string, string>, options?: StubFsOptions) =>
+  Effect.gen(function* () {
+    const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+    const assembler = make(config, stubFs(files, copies, options));
+
+    const error = yield* Effect.flip(assembler.assemble(request));
+
+    assert.strictEqual(error._tag, "ContextAssemblerError");
+    assert.strictEqual(
+      error._tag === "ContextAssemblerError" ? error.source : null,
+      `${workspaceOverrideDir}/INSTRUCTIONS.md`,
+    );
+    assert.include(error.message, `${workspaceOverrideDir}/INSTRUCTIONS.md`);
+    assert.deepStrictEqual(yield* Ref.get(copies), []);
+  });
 
 describe("repoDirsFrom", () => {
   it("walks project-root-first down to the worktree cwd", () => {
@@ -326,6 +363,48 @@ describe("ContextAssembler.assemble", () => {
     }),
   );
 
+  it.effect("replaces Operating Instructions with the Workspace override", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const assembler = make(
+        config,
+        stubFs(
+          {
+            ...engineInstructions,
+            [`${workspaceOverrideDir}/INSTRUCTIONS.md`]: "workspace instructions",
+            [`${workspaceOverrideDir}/GUIDE.md`]: "workspace guide",
+          },
+          copies,
+        ),
+      );
+
+      const assembled = yield* assembler.assemble(request);
+
+      assert.deepStrictEqual(assembled.layers.at(-1), {
+        kind: "operating-instructions",
+        source: `${workspaceOverrideDir}/INSTRUCTIONS.md`,
+        content: "workspace instructions",
+      });
+      assert.deepStrictEqual(assembled.operatingInstructionResources, [
+        { source: `${workspaceOverrideDir}/GUIDE.md`, content: "workspace guide" },
+      ]);
+      assert.deepStrictEqual(yield* Ref.get(copies), [
+        { source: workspaceOverrideDir, dest: assembled.operatingInstructionsPath },
+      ]);
+    }),
+  );
+
+  it.effect("fails when a Workspace override has no INSTRUCTIONS.md", () =>
+    assertInvalidWorkspaceOverride(engineInstructions, { directories: [workspaceOverrideDir] }),
+  );
+
+  it.effect("fails when a Workspace override has a whitespace-only INSTRUCTIONS.md", () =>
+    assertInvalidWorkspaceOverride({
+      ...engineInstructions,
+      [`${workspaceOverrideDir}/INSTRUCTIONS.md`]: " \n\t ",
+    }),
+  );
+
   it.effect("trims file content so every layer and resource satisfies the Run Plan contract", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
@@ -367,7 +446,7 @@ describe("ContextAssembler.assemble", () => {
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
       const removals = yield* Ref.make<ReadonlyArray<string>>([]);
-      const assembler = make(config, stubFs({}, copies, removals));
+      const assembler = make(config, stubFs({}, copies, { removals }));
 
       yield* assembler.cleanup(request.runId);
 
