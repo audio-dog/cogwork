@@ -1,0 +1,57 @@
+apps/cli/src/workspace-commands.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 47,59
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 3-7,12,16,35-88,117,124,131-132,140,149,154-158,160-162,170,174-178
+packages/contracts/src/run-plan.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 8
+packages/engine/src/workspace-registry.test.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 575
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 30
+packages/contracts/CONTEXT.md
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 28
+packages/engine/src/control-store-create.gen.ts
+  s_343dd710cf5e3c::t_9656f38913878d 14
+docs/spec/settings-and-plugins.md
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 209-210
+packages/claude-code/src/harness.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 323
+packages/engine/src/registry.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 522
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 57
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 1-7,45-46,54-56,58,60,65,106,113,133,139,141,160,164,172-173,176-177,179-182,188,190-191,212,226,237,257-258,354,357-360,373-382,388-391,418,449,453,469,472,485-487
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 1-10,14-24,28-139,165,170,180,188,198-199,245,265-266,282,285-320
+packages/engine/src/harness.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 3-5,62,69,71,75-76,78,333,436-441
+packages/engine/src/harness-overview.test.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 1,9,30-35,127,168,175-179,185,188-203,208,210-216,218-232,234-266
+packages/contracts/src/settings.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 68-70
+packages/contracts/src/harness.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 4,36-64,75-78
+packages/engine/src/harness-overview.ts
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 4,52,61-63,69-70
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 26,30,33-37,217-264,281
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_343dd710cf5e3c::t_89ff2dfd0f2b2e 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "68637ff998321de19c390dd3bf0b0732082ba887",
+  "prompts": {},
+  "sessions": {
+    "s_343dd710cf5e3c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08277-030f-7d41-bbb3-6c128efc79fd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
