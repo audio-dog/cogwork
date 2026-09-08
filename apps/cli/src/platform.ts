@@ -197,7 +197,7 @@ export const gitLayer = Layer.effect(
           Effect.asVoid,
         ),
       remoteUrl: (repoPath, remote) =>
-        runGit(repoPath, ["config", "--get", `remote.${remote}.url`]).pipe(
+        runGit(repoPath, ["config", "--local", "--get", `remote.${remote}.url`]).pipe(
           Effect.map((value) => value.trim()),
         ),
     } satisfies Git.GitService;

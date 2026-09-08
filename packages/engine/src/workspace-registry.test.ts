@@ -390,6 +390,52 @@ layer(NodeServices.layer)((it) => {
     }).pipe(Effect.provide(RemoteUrls.layer)),
   );
 
+  it.effect("persists a repository derived by a failed re-bind", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-failed-rebind-" });
+      const storePath = path.join(root, "control.db");
+      const firstCheckout = yield* makeCheckout(root, "first");
+      const secondCheckout = yield* makeCheckout(root, "second");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(
+        remotes,
+        new Map([
+          [`${firstCheckout}:origin`, "git@github.com:acme/old.git"],
+          [`${secondCheckout}:origin`, "git@github.com:acme/new.git"],
+        ]),
+      );
+      const initialContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const management = Context.get(initialContext, Registry.WorkspaceManagement);
+      const registered = yield* management.register(githubRegistration("failed re-bind", firstCheckout));
+      if (registered._tag === "Failed") return assert.fail("expected registration to succeed");
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces
+          SET mcp_skills = '{ not json'
+          WHERE id = ${registered.workspace.config.name}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+
+      const rebound = yield* management.rebind(registered.workspace.config.name, secondCheckout);
+      if (rebound._tag !== "Failed") return assert.fail("expected re-bind to fail");
+      assert.strictEqual(rebound.failure.repository, "acme/new");
+
+      yield* Ref.set(remotes, new Map([[`${secondCheckout}:origin`, "git@gitlab.com:acme/new.git"]]));
+      const restartedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const state = yield* Context.get(restartedContext, Registry.WorkspaceRegistry).state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(state, registered.workspace.config.name)?.repository,
+        "acme/new",
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
   it.effect("seeds the repository fallback from a legacy workspace row", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

@@ -590,8 +590,9 @@ const persistRegistrationRepository = Effect.fn("WorkspaceRegistry.persistRegist
   sql: SqlClient.SqlClient,
   change: WorkspaceRegistrationChange,
 ) {
-  if (change._tag === "Failed") return change;
-  yield* persistWorkspaceRepository(sql, change.workspace);
+  yield* change._tag === "Failed"
+    ? persistFailureRepository(sql, change.failure)
+    : persistWorkspaceRepository(sql, change.workspace);
   return change;
 });
 

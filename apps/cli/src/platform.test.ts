@@ -329,6 +329,31 @@ describe("subprocess deadlines", () => {
   );
 });
 
+describe("git configuration scope", () => {
+  it.effect("reads remote URLs only from the checkout configuration", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+
+      assert.strictEqual(yield* git.remoteUrl("/repo", "origin"), "git@github.com:acme/repo.git");
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git config --local --get remote.origin.url",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer(() => exitedProcess(0, "git@github.com:acme/repo.git\n")),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+});
+
 describe("worktree setup commands", () => {
   it.layer(setupEnvironmentLayer)((it) => {
     it.effect("marks the command as CI while retaining the host environment", () =>
