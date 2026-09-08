@@ -1095,6 +1095,7 @@ export const make = Effect.gen(function* () {
       status: "failed",
       usage: acc.usage,
       endedAtMillis,
+      claimDisposition: "hold",
     });
     return ClaimDisposition.Hold({});
   });
