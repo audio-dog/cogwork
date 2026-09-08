@@ -144,3 +144,15 @@ attribution, because updating the app is the act.
 An app update lands at **load**: Cogwork re-reads disk at Run assembly, so the next Run gets what is
 there and a Run in flight keeps what it was given. That is a rule, not a command, and the act list
 stays closed.
+
+## Amendment (2026-09-04) — Harness enablement is a management act
+
+A Harness has one machine-local **enable** or **disable** act keyed by its registered name. Absence
+means enabled. The act changes admission only: a disabled Harness is not offered for a new Operation
+selection and new or resumed Runs are refused before claim. Existing selections remain stored, no
+fallback Harness is selected, and a Run already accepted continues. Readiness, Sessions,
+credentials, and Connections are unchanged.
+
+The daemon returns and publishes the whole Control store picture, then refreshes Workspace
+availability. The CLI and desktop Providers surface expose the same act. An unknown Harness is
+refused because the registered names are enumerable in memory.

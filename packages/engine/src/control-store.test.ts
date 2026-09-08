@@ -2,6 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import {
   ConnectionId,
   type ContributionSettingCell,
+  HarnessEnablement,
+  HarnessName,
   resolveOperationSetting,
   WorkspaceId,
 } from "@cogwork/contracts";
@@ -112,6 +114,7 @@ const temporaryStore = Effect.fn("test.temporaryStore")(function* (name = "contr
 });
 
 const connectionId = Schema.decodeSync(ConnectionId);
+const harnessName = Schema.decodeSync(HarnessName);
 
 const persistConnectionState = Effect.fn("test.persistConnectionState")((storePath: string) =>
   withStore(storePath, (store) =>
@@ -749,6 +752,23 @@ layer(NodeServices.layer)((it) => {
       );
 
       assert.deepStrictEqual(cleared.contributionSettings, []);
+    }),
+  );
+
+  it.effect("sets and reloads Harness enablement", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      const codex = harnessName("codex");
+
+      yield* withStore(storePath, (store) => store.setHarnessEnabled(codex, false));
+
+      const reloaded = yield* withStore(storePath, (store) => Effect.succeed(store.seed));
+      assert.deepStrictEqual(reloaded.harnessSettings, [
+        HarnessEnablement.make({ harness: codex, enabled: false }),
+      ]);
+
+      const enabled = yield* withStore(storePath, (store) => store.setHarnessEnabled(codex, true));
+      assert.deepStrictEqual(enabled.harnessSettings, []);
     }),
   );
 

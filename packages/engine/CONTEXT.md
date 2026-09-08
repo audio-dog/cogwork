@@ -78,7 +78,7 @@ The projection the executor hands the harness for one accepted Run Plan, plus se
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
-The engine's registry and dispatcher for Harness runners. It exposes each runner's Session kind, operational profile, controlled option catalog, and readiness; performs static preflight before claim and full Plan preflight before launch; and dispatches only to the selected runner, with no Harness or authentication fallback.
+The engine's registry and dispatcher for Harness runners. It exposes each runner's Session kind, operational profile, controlled option catalog, and readiness; performs static preflight before claim and full Plan preflight before launch; and dispatches only to the selected runner, with no Harness or authentication fallback. Machine-local enablement is a separate Control-store fact: absent means enabled, and disabled refuses new or resumed Runs before claim without changing observational readiness or an accepted Run.
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:

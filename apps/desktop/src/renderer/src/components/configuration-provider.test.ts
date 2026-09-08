@@ -22,6 +22,7 @@ const picture = (enabled: boolean): ControlStore => ({
     revision: 0,
   },
   connections: [],
+  harnessSettings: [],
   contributionSettings: [
     {
       contribution,
