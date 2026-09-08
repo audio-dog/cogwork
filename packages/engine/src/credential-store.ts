@@ -239,7 +239,6 @@ const matchStored = Effect.fn("CredentialStore.matchStored")(function* (
   const candidates = (yield* stored.load).filter(matching(account));
   if (candidates.length > 1) {
     yield* Effect.logWarning("multiple stored credentials match; set issueTracker.organization", {
-      account: account.key,
       matches: candidates.length,
     });
     return null;
@@ -295,7 +294,6 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     } satisfies StoredCredential;
     yield* sources.stored.save(rotated);
     yield* Effect.logInfo("refreshed the stored credential", {
-      account: account.key,
       organization: rotated.organization,
     });
     return rotated;
@@ -309,7 +307,6 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     const refreshToken = match.credential.token.refreshToken;
     if (!clientId || !refreshToken) {
       yield* Effect.logInfo("stored credential expired and cannot be refreshed; falling through", {
-        account: account.key,
         organization: match.credential.organization,
       });
       return null;
@@ -440,15 +437,18 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     });
   });
 
+  const bearerToken = Effect.fn("CredentialStore.bearerToken")(function* (account: CredentialAccount) {
+    const credential = yield* resolve(account);
+    yield* Effect.logDebug("credential resolved", { source: credential.source });
+    return credential;
+  });
+
   return {
-    bearerToken: Effect.fn("CredentialStore.bearerToken")(function* (account: CredentialAccount) {
-      const credential = yield* resolve(account);
-      yield* Effect.logDebug("credential resolved", {
-        account: account.key,
-        source: credential.source,
-      });
-      return credential;
-    }),
+    bearerToken: (account) =>
+      bearerToken(account).pipe(
+        Effect.annotateLogs({ account: account.key }),
+        Effect.annotateSpans({ account: account.key }),
+      ),
     resolveSource,
     persist: sources.stored.save,
     invalidate: (account) => sources.clientCredentials?.forget(account) ?? Effect.void,

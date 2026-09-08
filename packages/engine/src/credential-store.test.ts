@@ -6,6 +6,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as MutableRef from "effect/MutableRef";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
@@ -38,17 +39,41 @@ const connectionId = Schema.decodeSync(ConnectionId);
 const withEnv = (env: Record<string, string>) =>
   Effect.provide(Layer.mergeAll(layerEnv, ConfigProvider.layer(ConfigProvider.fromEnv({ env }))));
 
-const capturingLogs = <A, E, R>(effect: Effect.Effect<A, E, R>) => {
-  const lines: Array<string> = [];
-  const logger = Logger.make<unknown, void>(({ message }) => {
-    lines.push(JSON.stringify(message));
-  });
-  return effect.pipe(
-    Effect.provide(Logger.layer([logger])),
-    Effect.provideService(References.MinimumLogLevel, "Debug"),
-    Effect.map(() => lines as ReadonlyArray<string>),
+interface CapturedLog {
+  readonly annotations: Record<string, unknown>;
+  readonly message: unknown;
+}
+
+class CredentialLogProbe extends Context.Service<
+  CredentialLogProbe,
+  MutableRef.MutableRef<ReadonlyArray<CapturedLog>>
+>()("@cogwork/engine/credential-store.test/CredentialLogProbe") {
+  static readonly layer = Layer.sync(CredentialLogProbe, () =>
+    MutableRef.make<ReadonlyArray<CapturedLog>>([]),
   );
-};
+  static readonly captureLayer = Logger.layer([
+    Effect.map(CredentialLogProbe, (logs) =>
+      Logger.make<unknown, void>(({ fiber, message }) =>
+        MutableRef.update(logs, (current) => [
+          ...current,
+          { message, annotations: { ...fiber.getRef(References.CurrentLogAnnotations) } },
+        ]),
+      ),
+    ),
+  ]).pipe(
+    Layer.provideMerge(CredentialLogProbe.layer),
+    Layer.provideMerge(Layer.succeed(References.MinimumLogLevel)("Debug")),
+  );
+}
+
+const logMessageIncludes = ({ message }: CapturedLog, text: string) => JSON.stringify(message).includes(text);
+
+const capturingLogs = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.gen(function* () {
+    const logs = yield* CredentialLogProbe;
+    yield* effect;
+    return MutableRef.get(logs);
+  });
 
 describe("CredentialStore (env)", () => {
   it.effect("returns the token held by the account's env var", () =>
@@ -85,13 +110,17 @@ describe("CredentialStore (env)", () => {
     }).pipe(withEnv({ LINEAR_API_KEY: "  " })),
   );
 
-  it.effect("logs the credential source it resolved from", () =>
-    Effect.gen(function* () {
-      const store = yield* CredentialStore;
-      const lines = yield* capturingLogs(store.bearerToken(account));
-      assert.isTrue(lines.some((line) => line.includes("env") && line.includes("AUD")));
-    }).pipe(withEnv({ LINEAR_API_KEY: "test-key" })),
-  );
+  it.layer(CredentialLogProbe.captureLayer)("logging", (it) => {
+    it.effect("logs the credential source it resolved from", () =>
+      Effect.gen(function* () {
+        const store = yield* CredentialStore;
+        const logs = yield* capturingLogs(store.bearerToken(account));
+        const log = logs.find((candidate) => logMessageIncludes(candidate, "credential resolved"));
+        assert.deepStrictEqual(log?.annotations, { account: "AUD" });
+        assert.deepStrictEqual(log?.message, ["credential resolved", { source: "env" }]);
+      }).pipe(withEnv({ LINEAR_API_KEY: "test-key" })),
+    );
+  });
 });
 
 describe("CredentialStore (Connections)", () => {
@@ -385,13 +414,15 @@ describe("CredentialStore (stored)", () => {
     }).pipe(withStored([stored("acme", storedToken(0))], {})),
   );
 
-  it.effect("logs that it resolved from the stored credential", () =>
-    Effect.gen(function* () {
-      const store = yield* CredentialStore;
-      const lines = yield* capturingLogs(store.bearerToken(account));
-      assert.isTrue(lines.some((line) => line.includes("stored-oauth")));
-    }).pipe(withStored([stored("acme", storedToken(far))])),
-  );
+  it.layer(CredentialLogProbe.captureLayer)("logging", (it) => {
+    it.effect("logs that it resolved from the stored credential", () =>
+      Effect.gen(function* () {
+        const store = yield* CredentialStore;
+        const logs = yield* capturingLogs(store.bearerToken(account));
+        assert.isTrue(logs.some((log) => logMessageIncludes(log, "stored-oauth")));
+      }).pipe(withStored([stored("acme", storedToken(far))])),
+    );
+  });
 });
 
 const oauthAccount = { ...account, oauthClientId: "client-1" };
@@ -448,6 +479,23 @@ const withRefreshEnv = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   );
 
 describe("CredentialStore (refresh)", () => {
+  it.layer(CredentialLogProbe.captureLayer)("logging", (it) => {
+    it.effect("annotates nested refresh logs with the requesting account", () =>
+      Effect.gen(function* () {
+        const { store } = yield* harness({
+          initial: [stored("acme", expiredWithRefresh())],
+          onRefresh: () => Effect.succeed(rotatedToken()),
+        });
+        const logs = yield* capturingLogs(store.bearerToken(oauthAccount));
+        const log = logs.find((candidate) =>
+          logMessageIncludes(candidate, "refreshed the stored credential"),
+        );
+        assert.deepStrictEqual(log?.annotations, { account: "AUD" });
+        assert.deepStrictEqual(log?.message, ["refreshed the stored credential", { organization: "acme" }]);
+      }).pipe(withRefreshEnv),
+    );
+  });
+
   it.effect("refreshes an expired token and hands back the rotated one", () =>
     Effect.gen(function* () {
       const { store, refreshes } = yield* harness({
@@ -673,13 +721,15 @@ describe("CredentialStore (client credentials)", () => {
     }).pipe(withGrant(null)),
   );
 
-  it.effect("logs that it resolved from client credentials", () =>
-    Effect.gen(function* () {
-      const store = yield* CredentialStore;
-      const lines = yield* capturingLogs(store.bearerToken(requesting));
-      assert.isTrue(lines.some((line) => line.includes("client-credentials")));
-    }).pipe(withGrant("app-token")),
-  );
+  it.layer(CredentialLogProbe.captureLayer)("logging", (it) => {
+    it.effect("logs that it resolved from client credentials", () =>
+      Effect.gen(function* () {
+        const store = yield* CredentialStore;
+        const logs = yield* capturingLogs(store.bearerToken(requesting));
+        assert.isTrue(logs.some((log) => logMessageIncludes(log, "client-credentials")));
+      }).pipe(withGrant("app-token")),
+    );
+  });
 
   it.effect("asks the grant to forget a rejected token", () =>
     Effect.gen(function* () {
@@ -772,13 +822,17 @@ describe("CredentialStore (provider keys)", () => {
     }).pipe(withProviderKeys([])),
   );
 
-  it.effect("logs the source a provider key resolved from", () =>
-    Effect.gen(function* () {
-      const store = yield* CredentialStore;
-      const lines = yield* capturingLogs(store.providerKey(providerAccount));
-      assert.isTrue(lines.some((line) => line.includes("stored-key") && line.includes("anthropic")));
-    }).pipe(withProviderKeys([providerKey("anthropic", "sk-stored")])),
-  );
+  it.layer(CredentialLogProbe.captureLayer)("logging", (it) => {
+    it.effect("logs the source a provider key resolved from", () =>
+      Effect.gen(function* () {
+        const store = yield* CredentialStore;
+        const logs = yield* capturingLogs(store.providerKey(providerAccount));
+        assert.isTrue(
+          logs.some((log) => logMessageIncludes(log, "stored-key") && logMessageIncludes(log, "anthropic")),
+        );
+      }).pipe(withProviderKeys([providerKey("anthropic", "sk-stored")])),
+    );
+  });
 
   it.effect("persists a provider key through the wired store", () =>
     Effect.gen(function* () {
