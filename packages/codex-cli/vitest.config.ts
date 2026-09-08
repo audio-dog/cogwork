@@ -1,1 +1,1 @@
-export { default } from "../../configs/vitest/base";
+export { default } from "@cogwork/test-config";

@@ -15,6 +15,7 @@
     "effect": "catalog:effect"
   },
   "devDependencies": {
+    "@cogwork/test-config": "workspace:*",
     "@effect/vitest": "catalog:effect",
     "@types/node": "catalog:",
     "typescript": "catalog:",

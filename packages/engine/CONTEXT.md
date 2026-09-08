@@ -224,7 +224,7 @@ A pull request's branch and its base branch (`main`) have each gained commits th
 _Avoid_: Branch divergence (that's the branch versus its own remote, not the base), merge conflict (one reason integrating the base fails), stale branch (that's merely behind)
 
 **Workspace registry**:
-The Control-store-backed set of registered workspaces and Workspace-input failures, held in a cell folded from workspace management acts. Register mints each `WorkspaceId`. Re-bind changes only its checkout path. Deregister removes it from the cell before the next scheduler pick, while a Run already holding its workspace value finishes normally. Each act publishes the matching workspace change or removal. The engine's view of which repos it is driving.
+The Control-store-backed set of registered workspaces and Workspace-input failures, held in a cell folded from workspace management acts. Register mints each `WorkspaceId`. Update replaces the mutable non-path record and leaves Private workspace overlays intact. Re-bind changes only its checkout path. Deregister removes it from the cell before the next scheduler pick, while a Run already holding its workspace value finishes normally. Each act publishes the matching workspace change or removal. The engine's view of which repos it is driving.
 _Avoid_: Config store. Distinct from the harness runner map, which is also a "registry" of sorts.
 
 **Telemetry store**:
