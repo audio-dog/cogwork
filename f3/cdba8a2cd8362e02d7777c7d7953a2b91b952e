@@ -1,0 +1,35 @@
+package.json
+  s_95eae77f1663e4::t_e344e8b1bd4e3c 16,18,26-27,30-31
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_95eae77f1663e4::t_e344e8b1bd4e3c 2,17-21,76,80,95-99,111-115,119
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_95eae77f1663e4::t_e344e8b1bd4e3c 1-72
+scripts/count-worktree-git-invocations.ts
+  s_95eae77f1663e4::t_e344e8b1bd4e3c 1-115
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_95eae77f1663e4::t_e344e8b1bd4e3c 27,73-77,80,94,108
+apps/cli/src/commands.ts
+  s_95eae77f1663e4::t_e344e8b1bd4e3c 162-164,180,245
+packages/engine/src/control-store.ts
+  s_95eae77f1663e4::t_e344e8b1bd4e3c 56-84,88-89,94-95
+packages/engine/src/testing/git-invocation-counting.ts
+  s_95eae77f1663e4::t_e344e8b1bd4e3c 1-80
+pnpm-lock.yaml
+  s_95eae77f1663e4::t_bed07203fd2c0d 87-92,99-101,105-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "f3cdba8a2cd8362e02d7777c7d7953a2b91b952e",
+  "prompts": {},
+  "sessions": {
+    "s_95eae77f1663e4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08284-a147-7ec0-b062-6b5d4d1acb0b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
