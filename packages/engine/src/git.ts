@@ -54,7 +54,8 @@ export interface GitService {
   readonly divergence: (
     worktreePath: string,
     remote: string,
-    branch: string,
+    baseBranch: string,
+    headBranch?: string,
   ) => Effect.Effect<BranchDivergence, GitError>;
   readonly operationInProgress: (
     worktreePath: string,

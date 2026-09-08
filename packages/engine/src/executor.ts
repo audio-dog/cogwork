@@ -22,6 +22,7 @@ import {
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
   harnessEnabled,
+  ImplementStageResult,
   ImplementStageResultCompletion,
   issueTrackerErrorIsPermanent,
   LifecycleStage,
@@ -59,6 +60,7 @@ import * as Cooldown from "./cooldown";
 import { CredentialStore } from "./credential-store";
 import { isExhausted } from "./exhaustion";
 import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
+import type { GitError } from "./git";
 import { Harness, HarnessError, type HarnessRequest, type HarnessRunnerEnv } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
@@ -96,8 +98,9 @@ import {
 import { RunRecorder } from "./run-recorder";
 import { decideSessionChoice, SessionChoice } from "./session-choice";
 import { SessionStore } from "./session-store";
+import type { OpenedPullRequest } from "./source-control";
 import { SourceControlProvider } from "./source-control";
-import { branchName, WorktreeManager } from "./worktree";
+import { branchName, PullRequestReadiness, WorktreeManager } from "./worktree";
 
 export const harnessEventFoldDuration = Metric.timer("cogwork_harness_event_fold_duration", {
   description: "Time to fold one harness event into Run state.",
@@ -177,12 +180,22 @@ interface CommonStageOps {
   readonly resumePolicy: boolean;
 }
 
+declare const emptyClaimDisposition: unique symbol;
+type EmptyClaimDisposition = { readonly [emptyClaimDisposition]?: never };
+
+type ClaimDisposition = Data.TaggedEnum<{
+  Release: EmptyClaimDisposition;
+  Hold: EmptyClaimDisposition;
+}>;
+
+const ClaimDisposition = Data.taggedEnum<ClaimDisposition>();
+
 interface TriageStageOps extends CommonStageOps {
   readonly kind: "triage";
   readonly complete: (
     record: RunRecord,
     acc: TriageAccumulator,
-  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
+  ) => Effect.Effect<ClaimDisposition, IssueTrackerError | RunLedgerError>;
 }
 
 interface TextStageOps extends CommonStageOps {
@@ -190,7 +203,7 @@ interface TextStageOps extends CommonStageOps {
   readonly complete: (
     runId: RunId,
     acc: RunAccumulator,
-  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
+  ) => Effect.Effect<ClaimDisposition, IssueTrackerError | RunLedgerError>;
 }
 
 type StageOps = TriageStageOps | TextStageOps;
@@ -917,8 +930,19 @@ export const make = Effect.gen(function* () {
     harnessName: HarnessName,
     handle: string | null,
   ) {
-    yield* settleRun(runId, yield* reportFailure(workspace, item, failure, harnessName, handle));
+    return yield* settleReportedFailure(runId, reportFailure(workspace, item, failure, harnessName, handle));
   });
+
+  const settleReportedFailure = (runId: RunId, reported: Effect.Effect<RunUpdate, IssueTrackerError>) =>
+    reported.pipe(
+      Effect.tapError(() =>
+        Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
+          settleRun(runId, { status: "failed", usage: null, endedAtMillis }),
+        ),
+      ),
+      Effect.flatMap((update) => settleRun(runId, update)),
+      Effect.map(() => ClaimDisposition.Release({})),
+    );
 
   const applyStuck = Effect.fn("Executor.applyStuck")(function* (
     workspace: RegisteredWorkspace,
@@ -928,15 +952,10 @@ export const make = Effect.gen(function* () {
     harnessName: HarnessName,
     handle: string | null,
   ) {
-    const update = yield* reportDecidedFailure(
-      workspace,
-      item,
-      nonRetryableDecision,
-      reason,
-      harnessName,
-      handle,
+    return yield* settleReportedFailure(
+      runId,
+      reportDecidedFailure(workspace, item, nonRetryableDecision, reason, harnessName, handle),
     );
-    yield* settleRun(runId, update);
   });
 
   const applyTriageSuccess = Effect.fn("Executor.applyTriageSuccess")(function* (
@@ -957,6 +976,7 @@ export const make = Effect.gen(function* () {
       usage: acc.usage,
       endedAtMillis,
     });
+    return ClaimDisposition.Release({});
   });
 
   const structuredResultError = (message: string) =>
@@ -1017,6 +1037,89 @@ export const make = Effect.gen(function* () {
       usage: acc.usage,
       endedAtMillis,
     });
+    return ClaimDisposition.Release({});
+  });
+
+  const existingPullRequestReadiness = (headBranch: string, pull: OpenedPullRequest | null) =>
+    pull
+      ? PullRequestReadiness.Declined({
+          reason: `open pull request #${pull.number} already exists for ${headBranch}`,
+        })
+      : null;
+
+  const pullRequestReadiness = Effect.fn("Executor.pullRequestReadiness")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const readiness = yield* worktrees.pullRequestReadiness(workspace, item);
+    return yield* PullRequestReadiness.$match(readiness, {
+      Declined: (declined) => Effect.succeed(declined),
+      Ready: (ready) =>
+        sourceControl
+          .findOpenPullRequest(workspace, ready.headBranch)
+          .pipe(Effect.map((existing) => existingPullRequestReadiness(ready.headBranch, existing) ?? ready)),
+    });
+  });
+
+  const declinePullRequest = Effect.fn("Executor.declinePullRequest")(function* (
+    runId: RunId,
+    acc: RunAccumulator,
+    reason: string,
+  ) {
+    const endedAtMillis = yield* Clock.currentTimeMillis;
+    yield* Effect.logWarning("pull request gate declined", { reason });
+    yield* settleRun(runId, {
+      status: "failed",
+      usage: acc.usage,
+      endedAtMillis,
+      claimDisposition: "hold",
+    });
+    return ClaimDisposition.Hold({});
+  });
+
+  const applyPullRequestFailure = Effect.fn("Executor.applyPullRequestFailure")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    runId: RunId,
+    acc: RunAccumulator,
+    harnessName: HarnessName,
+    error: GitError | IssueTrackerError,
+  ) {
+    return yield* applyFailure(workspace, item, runId, error, harnessName, acc.handle);
+  });
+
+  const openPullRequest = Effect.fn("Executor.openPullRequest")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    runId: RunId,
+    acc: RunAccumulator,
+    result: Extract<ImplementStageResult, { readonly outcome: "ready-for-pr" }>,
+    harnessName: HarnessName,
+  ) {
+    return yield* pullRequestReadiness(workspace, item).pipe(
+      Effect.matchEffect({
+        onFailure: (error) => applyPullRequestFailure(workspace, item, runId, acc, harnessName, error),
+        onSuccess: (readiness) =>
+          PullRequestReadiness.$match(readiness, {
+            Declined: ({ reason }) => declinePullRequest(runId, acc, reason),
+            Ready: ({ headBranch, baseBranch }) =>
+              sourceControl
+                .openPullRequest(workspace, {
+                  headBranch,
+                  baseBranch,
+                  title: result.title,
+                  body: result.body,
+                })
+                .pipe(
+                  Effect.matchEffect({
+                    onFailure: (error) =>
+                      applyPullRequestFailure(workspace, item, runId, acc, harnessName, error),
+                    onSuccess: () => applyImplementSuccess(workspace, item, runId, acc),
+                  }),
+                ),
+          }),
+      }),
+    );
   });
 
   const decodeImplementResult = (acc: RunAccumulator) =>
@@ -1039,9 +1142,11 @@ export const make = Effect.gen(function* () {
       Effect.matchEffect({
         onFailure: (error) => applyFailure(workspace, item, runId, error, harnessName, acc.handle),
         onSuccess: (result) =>
-          result.outcome === "opened-pr"
-            ? applyImplementSuccess(workspace, item, runId, acc)
-            : applyStuck(workspace, item, runId, result.summary, harnessName, acc.handle),
+          ImplementStageResult.match(result, {
+            "opened-pr": () => applyImplementSuccess(workspace, item, runId, acc),
+            "ready-for-pr": (ready) => openPullRequest(workspace, item, runId, acc, ready, harnessName),
+            stuck: (stuck) => applyStuck(workspace, item, runId, stuck.summary, harnessName, acc.handle),
+          }),
       }),
     );
   });
@@ -1137,6 +1242,7 @@ export const make = Effect.gen(function* () {
       usage: acc.usage,
       endedAtMillis,
     });
+    return ClaimDisposition.Release({});
   });
 
   const decodeFollowUpResult = (acc: RunAccumulator) =>
@@ -1557,7 +1663,7 @@ export const make = Effect.gen(function* () {
 
     const settle = <A, R>(
       attempt: Effect.Effect<A, PrepareError | HarnessError, R>,
-      complete: (acc: A) => Effect.Effect<void, IssueTrackerError | RunLedgerError>,
+      complete: (acc: A) => Effect.Effect<ClaimDisposition, IssueTrackerError | RunLedgerError>,
     ) =>
       attempt.pipe(
         Effect.matchEffect({
@@ -1580,7 +1686,8 @@ export const make = Effect.gen(function* () {
       );
 
     if (isReplayHarness(record.harness)) {
-      return yield* settleRecorded(foldOutcome(record, request));
+      yield* settleRecorded(foldOutcome(record, request));
+      return ClaimDisposition.Release({});
     }
 
     if (ops.kind === "triage") {
@@ -1701,7 +1808,15 @@ export const make = Effect.gen(function* () {
     const admission = yield* claimEnabledItem(workspace, item);
     if (!admission.claimed) return false;
     yield* runClaimed(workspace, item, stageOps, admission.startedAtMillis, observation).pipe(
-      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
+      Effect.tap(
+        ClaimDisposition.$match({
+          Hold: () => Effect.void,
+          Release: () => releaseClaim(workspace, item.id),
+        }),
+      ),
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit) || Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id),
+      ),
     );
     return true;
   });
@@ -1767,10 +1882,11 @@ export const make = Effect.gen(function* () {
                       sessionHandle(session),
                     ),
                   ),
+                  Effect.map(() => ClaimDisposition.Release({})),
                 );
               },
               onSuccess: (accepted) => {
-                if (!accepted) return Effect.void;
+                if (!accepted) return Effect.succeed(ClaimDisposition.Release({}));
                 const { request, selectedOps: acceptedOps, record } = accepted;
                 return settleOutcome(workspace, item, acceptedOps, record, runId, request);
               },
