@@ -14,6 +14,8 @@ const successLifetime = Duration.minutes(10);
 const capacity = 1;
 const outputLimit = 65_536;
 const statusQuery = '.hosts["github.com"][] | select(.active == true and .state == "success") | .login';
+const accountStatusQuery = (account: string) =>
+  `.hosts["github.com"][] | select((.login | ascii_downcase) == ${JSON.stringify(account.toLowerCase())} and .state == "success") | .login`;
 
 const failure = (account: string, message: string) => new CredentialError({ account, message });
 
@@ -79,7 +81,7 @@ const acquisitionLifetime = (exit: Exit.Exit<Redacted.Redacted<string>, Credenti
 export const makeCliCredentialSource = Effect.fn("github.cliCredential.make")(function* (
   spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],
 ) {
-  const load = Effect.fn("github.cliCredential.acquire")(function* (account: string) {
+  const loadToken = Effect.fn("github.cliCredential.loadToken")(function* (account: string) {
     const result = yield* capture(spawner, account, [
       "auth",
       "token",
@@ -90,6 +92,20 @@ export const makeCliCredentialSource = Effect.fn("github.cliCredential.make")(fu
     ]);
     const token = yield* requireOutput(account, result);
     return Redacted.make(token);
+  });
+  const load = Effect.fn("github.cliCredential.acquire")(function* (account: string) {
+    const result = yield* capture(spawner, account, [
+      "auth",
+      "status",
+      "--hostname",
+      "github.com",
+      "--json",
+      "hosts",
+      "--jq",
+      accountStatusQuery(account),
+    ]);
+    const authenticatedAccount = yield* requireOutput(account, result);
+    return yield* loadToken(authenticatedAccount);
   });
   const cache = yield* Cache.makeWith(load, { capacity, timeToLive: acquisitionLifetime });
   const acquire = (account: string) => Cache.get(cache, account);
@@ -108,7 +124,7 @@ export const makeCliCredentialSource = Effect.fn("github.cliCredential.make")(fu
       statusQuery,
     ]).pipe(
       Effect.flatMap((result) => requireOutput("github.com", result)),
-      Effect.flatMap(load),
+      Effect.flatMap(loadToken),
     ),
   };
 });

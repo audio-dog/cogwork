@@ -80,18 +80,25 @@ describe("GitHub CLI credential source", () => {
     ),
   );
 
-  it.effect("acquires the fixed account without consulting the active account", () =>
+  it.effect("resolves stored casing before acquiring the fixed account token", () =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const commands = yield* SpawnedCommands;
       const source = yield* makeCliCredentialSource(spawner);
-      const token = yield* source.acquire("fixed-account");
+      const token = yield* source.acquire("OctoCat");
 
       assert.strictEqual(Redacted.value(token), "fixed-token");
       assert.deepStrictEqual(yield* Ref.get(commands), [
-        "gh auth token --hostname github.com --user fixed-account",
+        'gh auth status --hostname github.com --json hosts --jq .hosts["github.com"][] | select((.login | ascii_downcase) == "octocat" and .state == "success") | .login',
+        "gh auth token --hostname github.com --user octocat",
       ]);
-    }).pipe(Effect.provide(spawnerLayer(() => handle(0, "fixed-token\n")))),
+    }).pipe(
+      Effect.provide(
+        spawnerLayer((command) =>
+          command.includes("auth status") ? handle(0, "octocat\n") : handle(0, "fixed-token\n"),
+        ),
+      ),
+    ),
   );
 
   it.effect("does not cache a discovered token before GitHub verifies it", () =>
@@ -126,10 +133,10 @@ describe("GitHub CLI credential source", () => {
       const refreshed = yield* source.acquire("octocat");
 
       assert.deepStrictEqual([...first, held, refreshed].map(Redacted.value), [
-        "token-1",
-        "token-1",
-        "token-1",
         "token-2",
+        "token-2",
+        "token-2",
+        "token-4",
       ]);
     }).pipe(Effect.provide(spawnerLayer((_command, attempt) => handle(0, `token-${attempt}\n`)))),
   );
@@ -144,9 +151,9 @@ describe("GitHub CLI credential source", () => {
       const refreshed = yield* source.acquire("octocat");
 
       assert.deepStrictEqual([held, verified, refreshed].map(Redacted.value), [
-        "token-1",
-        "token-3",
+        "token-2",
         "token-4",
+        "token-6",
       ]);
     }).pipe(
       Effect.provide(
