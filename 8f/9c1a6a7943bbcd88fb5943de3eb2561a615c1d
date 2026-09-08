@@ -1,0 +1,24 @@
+configs/test/tsconfig.json
+  s_d556dc6b317e23::t_c192593afd0520 1-15
+configs/test/base.ts
+  s_d556dc6b317e23::t_8df81d2f20866d 5
+configs/test/package.json
+  s_d556dc6b317e23::t_8df81d2f20866d 1-2,4-5,13,17-18
+  s_d556dc6b317e23::t_c192593afd0520 3,6-12,14-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "8f9c1a6a7943bbcd88fb5943de3eb2561a615c1d",
+  "prompts": {},
+  "sessions": {
+    "s_d556dc6b317e23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08232-574d-7e71-b260-9e0f5257936f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
