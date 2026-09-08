@@ -331,17 +331,17 @@ const readBatchDiffHeader = (
 ): Effect.Effect<BatchDiffHeader, ToolError> =>
   nextChunk(chunks).pipe(
     Effect.flatMap((next) => {
-      const output = next.done ? buffered : `${buffered}${next.value}`;
-      if (output === "") return Effect.succeed({ paths: [], patch: "" });
+      if (next.done && buffered === "") return Effect.succeed({ paths: [], patch: "" });
+      if (next.done) {
+        return Effect.fail(toolError("exec-failed", "git diff returned an incomplete raw header"));
+      }
+      const output = `${buffered}${next.value}`;
       const separator = output.indexOf(rawPatchSeparator);
       if (separator !== -1) {
         return Effect.succeed({
           paths: batchDiffPaths(output.slice(0, separator)),
           patch: output.slice(separator + rawPatchSeparator.length),
         });
-      }
-      if (next.done) {
-        return Effect.fail(toolError("exec-failed", "git diff returned an incomplete raw header"));
       }
       return readBatchDiffHeader(chunks, output);
     }),
@@ -384,14 +384,29 @@ const couldStartPatchBoundary = (value: string) => {
   return partialAnsiPrefix.test(withoutAnsi) || diffHeader.startsWith(withoutAnsi);
 };
 
+const findPatchBoundary = (value: string) => {
+  const match = patchBoundary.exec(value);
+  if (match === null) return null;
+  return {
+    start: match.index + (match[0].startsWith("\n") ? 1 : 0),
+    end: match.index + match[0].length,
+  };
+};
+
+const nextPatchStart = (state: BatchPatchState, output: string) => {
+  const first = findPatchBoundary(output);
+  if (first === null) return null;
+  if (first.start > 0 || state.current.byteLength > 0) return first.start;
+  const following = findPatchBoundary(output.slice(first.end));
+  return following === null ? null : first.end + following.start;
+};
+
 const consumeBatchPatch = (state: BatchPatchState, value: string): BatchPatchState => {
   const output = `${state.tail}${value}`;
-  const boundary = patchBoundary.exec(output);
-  const startsNextPatch = boundary !== null && (boundary.index > 0 || state.current.byteLength > 0);
-  if (startsNextPatch) {
-    const nextPatchStart = boundary.index + (boundary[0].startsWith("\n") ? 1 : 0);
-    const completed = completeBatchPatch(state, output.slice(0, nextPatchStart));
-    return consumeBatchPatch(completed, output.slice(nextPatchStart));
+  const boundary = nextPatchStart(state, output);
+  if (boundary !== null) {
+    const completed = completeBatchPatch(state, output.slice(0, boundary));
+    return consumeBatchPatch(completed, output.slice(boundary));
   }
   const lastLineStart = output.lastIndexOf("\n") + 1;
   const consumedLength = couldStartPatchBoundary(output.slice(lastLineStart)) ? lastLineStart : output.length;
