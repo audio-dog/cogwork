@@ -29,28 +29,40 @@ When a successful value determines the next effect, use `flatMap`. This is seque
 Keep the stages small: select a candidate, load it, then make the domain decision. Use guard clauses inside the stage that owns each decision.
 
 ```ts
-const loadSession = (id: SessionId | null) => {
-  if (!id) return Effect.succeed(null)
-  return ledger.getSession(id)
-}
+const candidateSession = (workspace: RegisteredWorkspace, item: EligibleWork, branch: string | null) => {
+  const resumedSession = item.resume?.session;
+  if (resumedSession) return Effect.succeed(resumedSession);
+  if (!branch) return Effect.succeed(null);
+  return latestResumableBranchRun(workspace, branch).pipe(Effect.map((run) => run?.session ?? null));
+};
 
-const compatibleSession = Effect.fn("Executor.compatibleSession")(function*(
-  selected: HarnessName,
+const compatibleSession = Effect.fn("Executor.compatibleSession")(function* (
+  ops: StageOps,
   session: Session | null,
+  worktreeRecreated: boolean,
 ) {
-  if (!session) return null
-  if (session.harness === selected) return session.id
-  yield* Effect.logInfo("started fresh after harness switch", {
-    oldHarness: session.harness,
-    newHarness: selected,
-  })
-  return null
-})
+  if (!session) return null;
+  if (session.harness !== ops.resolved.harness) {
+    yield* Effect.logInfo("started fresh after harness switch", {
+      ...(ops.branch ? { branch: ops.branch } : {}),
+      oldHarness: session.harness,
+      newHarness: ops.resolved.harness,
+    });
+    return null;
+  }
+  // ...
+});
 
-return candidateSession.pipe(
-  Effect.flatMap(loadSession),
-  Effect.flatMap((session) => compatibleSession(selectedHarness, session)),
-)
+candidateSession(workspace, item, ops.branch).pipe(
+  Effect.flatMap((previous) => {
+    const selectedOps: StageOps =
+      previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
+    return selectedOps.prepare.pipe(
+      Effect.flatMap((prepared) => prepareAcceptedRun(previous, prepared)),
+      // ...
+    );
+  }),
+);
 ```
 
 Use `matchEffect` only when the branch is on an expected failure or success. A nullable or tagged success value belongs in the next `flatMap` continuation, not in the error channel.
@@ -144,5 +156,6 @@ Do not flatten a cause into an ordinary error merely to make control flow conven
 - `.repos/effect/packages/effect/src/internal/effect.ts`: `flatMap` installs an `OnSuccess` continuation.
 - `.agents/skills/effect-ts/references/guide-effect.md`.
 - `.agents/skills/effect-ts/references/guide-error-handling.md`.
-- `packages/engine/src/executor.ts`: run settlement and structured-result handling.
+- `packages/engine/src/executor.ts`: session candidate selection, run settlement, and
+  structured-result handling.
 - `packages/engine/src/github/client.ts`: typed `HttpClientError` recovery.

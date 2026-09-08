@@ -23,6 +23,8 @@ Before changing Effect code, read the applicable patterns in `docs/agent-pattern
 - `effect-fiber-lifecycle.md` — work on another fiber: forking, supervision, fiber registries, runtime re-entry.
 - `effect-test-layers.md` — writing or restructuring `@effect/vitest` tests: doubles, layers, probes, TestClock.
 - `effect-schema-unions.md` — a domain type with variants, a branded id, or decoding at a boundary.
+- `effect-service-layers.md` — defining a service or its layer, adding a dependency, composing the layer graph, or placing an `Effect.provide`.
+- `effect-error-design.md` — defining a new error type or adding a failure kind: `Schema.TaggedError` vs `Data.TaggedError`, `reason` and `retryable` fields.
 - `effect-observability.md` — logs, span attributes, metrics, telemetry wiring.
 - `effect-process-edges.md` — a process starts, a non-Effect host calls in, or a socket, subprocess, or emitter enters Effect.
 

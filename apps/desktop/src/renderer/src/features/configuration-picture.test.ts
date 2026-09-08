@@ -45,6 +45,7 @@ const controlStore = {
     revision: 0,
   },
   connections: [],
+  harnessSettings: [],
   contributionSettings: [
     {
       contribution: { id: "local:repo/mcp/tools", kind: "mcp-server" },

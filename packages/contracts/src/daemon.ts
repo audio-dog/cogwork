@@ -4,6 +4,7 @@ import { IssueTrackerType, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from
 import { Connection } from "./connection";
 import { LocalContribution } from "./contribution";
 import { Claim } from "./coordination";
+import { HarnessEnablement } from "./harness";
 import { PluginInstall } from "./plugin";
 import { ContributionSettingRow, OperationSettingRow } from "./settings";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
@@ -247,6 +248,10 @@ export type DaemonLimits = typeof DaemonLimits.Type;
 export const ControlStore = Schema.Struct({
   daemonLimits: DaemonLimits,
   connections: Schema.Array(Connection),
+  harnessSettings: Schema.Array(HarnessEnablement).pipe(
+    Schema.withConstructorDefault(Effect.succeed([])),
+    Schema.withDecodingDefaultKey(Effect.succeed([])),
+  ),
   operationSettings: Schema.Array(OperationSettingRow),
   pluginInstalls: Schema.Array(PluginInstall),
   contributionSettings: Schema.Array(ContributionSettingRow),

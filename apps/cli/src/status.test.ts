@@ -59,6 +59,7 @@ const controlStore: ControlStore = {
   operationSettings: [],
   connections: [],
   pluginInstalls: [],
+  harnessSettings: [],
   contributionSettings: [],
 };
 
