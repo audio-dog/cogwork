@@ -178,6 +178,7 @@ const GraphQlResponse = Schema.Struct({
 });
 export type GraphQlPayload = typeof GraphQlResponse.Type;
 const decodeGraphQl = Schema.decodeUnknownEffect(GraphQlResponse);
+const decodeGitHubError = Schema.decodeUnknownOption(Schema.Struct({ message: Schema.String }));
 
 const ClosingReferencesPayload = Schema.Struct({
   repository: Schema.NullOr(
@@ -327,6 +328,29 @@ const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
 
 const isTransientStatus = (status: number) => status === 408 || status === 425 || status >= 500;
 
+const classifyGitHubError = (body: unknown) => {
+  const error = Option.getOrNull(decodeGitHubError(body));
+  if (!error) return "unknown";
+  const message = error.message.toLowerCase();
+  if (message.includes("secondary rate limit")) return "rate-limited";
+  if (message.includes("resource not accessible")) return "permission";
+  return "unknown";
+};
+
+const transientAttemptDeadline = "30 seconds";
+
+const classifyForbiddenResponse = Effect.fn("github.classifyForbiddenResponse")(function* (
+  response: HttpClientResponse.HttpClientResponse,
+  remaining: string | undefined,
+) {
+  if (remaining === "0" || response.headers["retry-after"] !== undefined) return "rate-limited";
+  const body = yield* response.json.pipe(
+    Effect.timeoutOption(transientAttemptDeadline),
+    Effect.catchTag("HttpClientError", () => Effect.succeed(Option.none())),
+  );
+  return Option.match(body, { onNone: () => "unknown", onSome: classifyGitHubError });
+});
+
 class GitHubAttemptError extends Data.TaggedError("GitHubAttemptError")<{
   readonly error: IssueTrackerError;
   readonly transient: boolean;
@@ -339,9 +363,17 @@ const permanentAttemptError = (error: IssueTrackerError) =>
   new GitHubAttemptError({ error, transient: false });
 
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
-const transientAttemptDeadline = "30 seconds";
 const paginationDeadline = "5 minutes";
 const pageSize = 100;
+
+const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, HttpClientError.HttpClientError, R>) =>
+  attempt.pipe(
+    Effect.catchTag("HttpClientError", (error) => Effect.fail(transientAttemptError(error.message))),
+    Effect.timeout(transientAttemptDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(transientAttemptError(`GitHub request timed out after ${transientAttemptDeadline}`)),
+    ),
+  );
 
 const withTransientRetry = <A, R>(attempt: Effect.Effect<A, GitHubAttemptError, R>) =>
   attempt.pipe(
@@ -403,45 +435,48 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     if (cooldownUntil !== null && now < cooldownUntil) {
       return yield* permanentAttemptError(rateLimited(cooldownUntil));
     }
-    return yield* Effect.gen(function* () {
-      const response = yield* client.execute(
+    const response = yield* withTransientAttemptDeadline(
+      client.execute(
         request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
-      );
-      const remaining = response.headers["x-ratelimit-remaining"];
-      const resumeAt = rateLimitResumeAt(response.headers, now);
-      if (remaining === "0" && resumeAt !== null) {
-        yield* Ref.set(resumeAtRef, resumeAt);
-      }
-      if (response.status === 401) {
-        return yield* permanentAttemptError(
-          new IssueTrackerError({
-            reason: "auth",
-            message: "GitHub authentication failed (401)",
-          }),
-        );
-      }
-      const throttled =
-        response.status === 429 ||
-        (response.status === 403 && (remaining === "0" || response.headers["retry-after"] !== undefined));
-      if (throttled) {
-        const until = resumeAt ?? now + Duration.toMillis(defaultTrackerCooldown);
-        yield* Ref.set(resumeAtRef, until);
-        return yield* permanentAttemptError(rateLimited(until));
-      }
-      if (isTransientStatus(response.status)) {
-        return yield* transientAttemptError(`GitHub request failed (${response.status})`);
-      }
-      if (response.status >= 400) {
-        return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`));
-      }
-      return yield* consume(response);
-    }).pipe(
-      Effect.catchTag("HttpClientError", (error) => Effect.fail(transientAttemptError(error.message))),
-      Effect.timeout(transientAttemptDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        Effect.fail(transientAttemptError(`GitHub request timed out after ${transientAttemptDeadline}`)),
       ),
     );
+    const remaining = response.headers["x-ratelimit-remaining"];
+    const resumeAt = rateLimitResumeAt(response.headers, now);
+    if (remaining === "0" && resumeAt !== null) {
+      yield* Ref.set(resumeAtRef, resumeAt);
+    }
+    if (response.status === 401) {
+      return yield* permanentAttemptError(
+        new IssueTrackerError({
+          reason: "auth",
+          message: "GitHub authentication failed (401)",
+        }),
+      );
+    }
+    const forbidden =
+      response.status === 403 ? yield* classifyForbiddenResponse(response, remaining) : "unknown";
+    const throttled = response.status === 429 || forbidden === "rate-limited";
+    if (throttled) {
+      const until = resumeAt ?? now + Duration.toMillis(defaultTrackerCooldown);
+      yield* Ref.set(resumeAtRef, until);
+      return yield* permanentAttemptError(rateLimited(until));
+    }
+    if (isTransientStatus(response.status)) {
+      return yield* transientAttemptError(`GitHub request failed (${response.status})`);
+    }
+    if (forbidden === "permission") {
+      return yield* permanentAttemptError(
+        new IssueTrackerError({
+          reason: "unavailable",
+          message: `GitHub request failed (${response.status})`,
+          retryable: false,
+        }),
+      );
+    }
+    if (response.status >= 400) {
+      return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`));
+    }
+    return yield* withTransientAttemptDeadline(consume(response));
   });
 
   const send = Effect.fn("github.send")(function* <A>(
