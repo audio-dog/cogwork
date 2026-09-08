@@ -181,7 +181,7 @@ const present = <A>(value: A | null) => (value === null ? undefined : value);
 
 const repositoryFromRemoteUrl = (remoteUrl: string) => {
   const match =
-    /^(?:https:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com(?::\d+)?\/|git@github\.com:)([^/?#\s]+)\/([^/?#\s]+)\/?$/i.exec(
+    /^(?:https:\/\/(?:[^/?#@\s]+@)?github\.com\/|ssh:\/\/(?:git@)?(?:github\.com(?::\d+)?|ssh\.github\.com:443)\/|git@github\.com:)([^/?#\s]+)\/([^/?#\s]+)\/?$/i.exec(
       remoteUrl.trim(),
     );
   if (!match) return null;

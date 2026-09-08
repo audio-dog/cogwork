@@ -293,6 +293,35 @@ layer(NodeServices.layer)((it) => {
     }).pipe(Effect.provide(RemoteUrls.layer)),
   );
 
+  it.effect.each([
+    {
+      name: "https-user",
+      remoteUrl: "https://x-access-token@github.com/colonylabs/https-user.git",
+      repository: "colonylabs/https-user",
+    },
+    {
+      name: "ssh-port",
+      remoteUrl: "ssh://git@ssh.github.com:443/colonylabs/ssh-port.git",
+      repository: "colonylabs/ssh-port",
+    },
+  ])("accepts the official GitHub $name remote form", ({ name, remoteUrl, repository }) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: `cogwork-workspace-registry-${name}-` });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, name);
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, remoteUrl]]));
+      const context = yield* Layer.build(Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+      const change = yield* management.register(githubRegistration(name, checkoutPath));
+
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+      assert.strictEqual(change.workspace.repository, repository);
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
   it.effect("reports a required remote that is not GitHub", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
