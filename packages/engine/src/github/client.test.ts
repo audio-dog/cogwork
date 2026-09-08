@@ -455,6 +455,35 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("uses the default cooldown for a secondary limit without retry-after", () => {
+    const response = vi
+      .fn<() => Response>()
+      .mockReturnValueOnce(
+        new Response(
+          JSON.stringify({
+            message: "You have exceeded a secondary rate limit. Please wait before retrying.",
+          }),
+          {
+            status: 403,
+            headers: {
+              "content-type": "application/json",
+              "x-ratelimit-reset": "4102444800",
+            },
+          },
+        ),
+      )
+      .mockReturnValue(jsonResponse());
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response()));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      yield* Effect.flip(client.createComment(repo, 287, "claim"));
+      yield* TestClock.adjust("1 minute");
+      yield* client.createComment(repo, 287, "claim");
+      assert.strictEqual(fetch.mock.calls.length, 2);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("waits for a slow secondary-limit response body", () => {
     const { body, response } = controlledJsonResponse(403);
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response));

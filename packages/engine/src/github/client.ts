@@ -322,6 +322,7 @@ const headerSeconds = (value: string | undefined) => {
 const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
   const retryAfter = headerSeconds(headers["retry-after"]);
   if (retryAfter !== null) return nowMillis + retryAfter * 1000;
+  if (headers["x-ratelimit-remaining"] !== "0") return null;
   const reset = headerSeconds(headers["x-ratelimit-reset"]);
   return reset === null ? null : reset * 1000;
 };
