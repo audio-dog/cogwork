@@ -1,0 +1,143 @@
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 1-7,45-46,54-56,58,60,65,106,113,133,139,141,160,164,172-173,176-177,179-182,188,190-191,212,226,237,257-258,354,357-360,373-382,388-391,418,449,453,469,472,485-487
+packages/contracts/src/triage.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 39,42-43,55-59,64,70-72,82-88,128-142
+  s_a80a290ab889dc::t_e4027761581f79 60-63,65-69,73-81
+  s_a80a290ab889dc::t_7f030134f41b25 106
+  s_a80a290ab889dc::t_90a70699b6252d 89
+apps/cli/src/login.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 1-2,4,20,28-32,132-135,154-157,171-174,188-191
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 20
+packages/engine/src/engine.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 118,223,237,251,994
+apps/cli/src/workspace-commands.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 47,59
+packages/engine/src/harness-overview.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 1,9,30-35,127,168,175-179,185,188-203,208,210-216,218-232,234-266
+packages/contracts/src/triage.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 64,68-75,80-98,151-184
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 30
+packages/engine/src/github/client.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 123-157
+packages/claude-code/src/harness.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 323
+packages/engine/src/retry-policy.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 1,123-133
+  s_a80a290ab889dc::t_5de60396fdee0c 134
+packages/contracts/src/run-plan.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 8
+packages/engine/src/event-publisher.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 246
+packages/engine/src/github/client.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 346-351,692-694,715-717
+packages/engine/src/recovery.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 80-86,423-434,499,503-508,993-1002,1004
+  s_a80a290ab889dc::t_5fc709f1a06cc2 1003,1005
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 54
+apps/cli/src/ledger.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 257-274
+apps/cli/src/platform.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 780-791
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 57
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 10,18-21,40,56,76,89,91,93,124
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 3-7,12,16,35-88,117,124,131-132,140,149,154-158,160-162,170,174-178
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 26,30,33-37,217-264,281
+packages/engine/src/worktree.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 2,105-118,282-315,380
+packages/engine/src/worktree.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 3,49-56,64-73,82,85,91-94,106-109,134-150,492-621
+  s_a80a290ab889dc::t_48288ab97621eb 622-623
+packages/engine/src/harness-overview.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 4,52,61-63,69-70
+packages/engine/src/github/github.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 233-243,432-465
+  s_a80a290ab889dc::t_bfb07fc668b11b 466
+packages/engine/src/source-control.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 40-44,59,62-66
+packages/contracts/src/harness.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 4,36-64,75-78
+packages/engine/CONTEXT.md
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 45,215
+docs/spec/settings-and-plugins.md
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 209-210
+apps/cli/src/platform.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 178-179
+packages/engine/src/playbook.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 69-81,119-121,286,291-294,307-309
+  s_a80a290ab889dc::t_603f40dbc0eb5a 122
+  s_a80a290ab889dc::t_9d9e93ccf22488 123
+packages/engine/src/run-ledger.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 31,58
+packages/engine/src/control-store-create.gen.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 12,14
+packages/engine/src/recovery.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 6,43-45,224-226,277
+packages/engine/src/executor.ts
+  s_a80a290ab889dc::t_8dbad9ccd7243c 1122,1600,1623-1624,1743-1751,1817,1821
+  s_a80a290ab889dc::t_b82597f1682cbe 16,25,60,100-101,172-181,872-881,1015-1021
+  s_a80a290ab889dc::t_452afb22013a77 869,1075-1121,1123-1167,1189-1198,1209,1219,1245,1247
+  s_a80a290ab889dc::t_1bfd480371e79a 882
+packages/engine/src/control-store-schema.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 124
+packages/engine/src/git.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 57-58
+packages/engine/src/observe.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 69
+packages/engine/src/harness.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 199-200,206-218,225-226
+packages/contracts/CONTEXT.md
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 28,302,392
+packages/engine/src/source-control.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 1-35
+packages/engine/src/registry.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 428
+packages/engine/src/github/provider.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 57-68,197-199,291-296,299
+packages/engine/src/commands.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 209
+packages/engine/src/daemon-composition.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 49
+packages/engine/src/executor.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 72-76,80,331-347,539-543,565-566,571-573,815-816,854-865,871,1021,1025-1077,1090,1102,1489,1492-1496,2521-2650,2806-2896
+  s_a80a290ab889dc::t_1d45e875e6b54d 2897
+packages/engine/src/harness.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 3-5,62,69,71,75-76,78,333,436-441
+packages/engine/src/playbook.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 62,203-204,216-217
+  s_a80a290ab889dc::t_f6cad5abac782e 17,35,97
+packages/contracts/src/run.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 64-66,86
+packages/engine/src/retry-policy.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 1-5,29,49,64
+apps/cli/src/ledger.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 63,68-70,126,149,162,332-338
+packages/contracts/src/settings.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 68-70
+packages/engine/src/workspace-registry.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 293
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_a80a290ab889dc::t_a20ccfd1f5c3e4 1-10,14-24,28-139,165,170,180,188,198-199,245,265-266,282,285-320
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "06001d5151aa508cdf84fd642b151ec6fa4aaeb1",
+  "prompts": {},
+  "sessions": {
+    "s_a80a290ab889dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082dd-3c5f-73b3-af09-4e70847ef44e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
