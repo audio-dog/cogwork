@@ -53,6 +53,7 @@ const nodeTestCount = (output) => {
 
 const runNodeTests = (workspaceRoot) => {
   const testFiles = nodeTestPatterns.flatMap((pattern) => globSync(pattern, { cwd: workspaceRoot }));
+  if (testFiles.length === 0) throw new Error(`No root Node test files found in ${workspaceRoot}`);
   return run(process.execPath, ["--test", "--test-reporter=tap", ...testFiles], workspaceRoot);
 };
 
