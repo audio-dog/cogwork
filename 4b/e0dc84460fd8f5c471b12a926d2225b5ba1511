@@ -1,0 +1,37 @@
+packages/cursor-acp/src/harness.test.ts
+  s_478f64a5a802f9::t_efbe25bc80f380 17,19,24,235-236,238,244-246,248-254,259-261,263,265-268
+  s_478f64a5a802f9::t_932117e707fccf 239-243,247
+  s_478f64a5a802f9::t_7de28eeaadc5d6 332,364
+  s_478f64a5a802f9::t_5595efdb9759fc 328-330,360-362
+  s_478f64a5a802f9::t_8b0ed75c3c2da1 270-271,273-296,301-303,305,307-310
+  s_478f64a5a802f9::t_f48367769c04eb 18,26,234,255-258,262,264,269,297-300,304,306
+  s_478f64a5a802f9::t_ee1a033281fe16 237,272
+packages/cursor-acp/src/harness.ts
+  s_478f64a5a802f9::t_5d8981a1c1db8a 251-252,254,265
+  s_478f64a5a802f9::t_5595efdb9759fc 279
+  s_478f64a5a802f9::t_8b0ed75c3c2da1 276-278
+  s_478f64a5a802f9::t_ee1a033281fe16 358,389-391
+  s_478f64a5a802f9::t_882cbb3c1c503e 439-440,442-446,448-449
+  s_478f64a5a802f9::t_b70ad88e38369f 441,447
+  s_478f64a5a802f9::t_dcff621dfbb45c 16,234,253,294-295,313-315
+  s_478f64a5a802f9::t_2555ff1c7d98d3 296-312,359-374,376-388,393-438
+  s_478f64a5a802f9::t_be739b7cd4c54b 392
+packages/engine/src/external-harness-runtime.ts
+  s_478f64a5a802f9::t_9256506f355640 692,738-740
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "4be0dc84460fd8f5c471b12a926d2225b5ba1511",
+  "prompts": {},
+  "sessions": {
+    "s_478f64a5a802f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082b0-3f74-73b2-8adb-86a0b57608c1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
