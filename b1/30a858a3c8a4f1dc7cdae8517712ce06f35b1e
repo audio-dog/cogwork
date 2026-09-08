@@ -1,0 +1,270 @@
+packages/claude-code/src/harness.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 16,37-38,40,65,75,77,93-102,117,344,391,439
+packages/contracts/src/daemon.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 7,250-253
+packages/engine/src/control-store-create.gen.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 7
+packages/engine/src/retry-policy.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-129
+docs/agent-patterns/effect-process-edges.md
+  s_e248a1bf86a035::t_d4b1cf310344af 14,43,77,107,109,115,129,133,139,141,163-165
+apps/desktop/src/renderer/src/components/customize-facet-view.tsx
+  s_e248a1bf86a035::t_d4b1cf310344af 7
+apps/desktop/src/renderer/src/features/customize-facets.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 6-7,20
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  s_e248a1bf86a035::t_d4b1cf310344af 1-146
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 15
+packages/engine/src/session-choice.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-214
+configs/vitest/base.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-13
+packages/engine/src/github/provider.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 6,276-285
+  s_e248a1bf86a035::t_576105af1de918 286
+packages/engine/src/exhaustion.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-255
+apps/cli/src/main.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 10
+packages/engine/src/executor.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 5,25,1345-1359,1362-1364,1383-1390,1649-1741,1778
+packages/engine/src/playbook.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-9,13-39,46,72,78,81-114,120,126,130,136,140,146,149-151,157-158
+apps/cli/src/commands.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 252,366,432,435
+packages/engine/src/session-choice.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-72
+apps/cli/src/platform.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 612-616
+packages/engine/src/event-publisher.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 68,246,368
+packages/contracts/vitest.config.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1
+packages/engine/src/control-store-schema.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 64-68
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 41
+packages/engine/src/commands.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 46,63-103,203,336,345,367,385-386,396,412-413,416,420,431-443,1138-1170
+  s_e248a1bf86a035::t_2081fd5c9f0dd2 1171
+apps/cli/CONTEXT.md
+  s_e248a1bf86a035::t_d4b1cf310344af 43
+docs/agent-patterns/effect-observability.md
+  s_e248a1bf86a035::t_d4b1cf310344af 42,107-111,125,135-140
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_e248a1bf86a035::t_d4b1cf310344af 26-29,31,88-89
+apps/cli/src/cli.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 16,43
+packages/engine/src/control-store.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 17-18,73-76,102-105,235-256,384-399,402-418,636-646,719-720,990
+apps/desktop/src/renderer/src/features/harnesses-view.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-28,37,41-45,78
+packages/engine/src/executor.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 5-6,10,498-517,526,978,993,1004,1192,1209-1210,1212,1217,1222,1231-1266,1299,1347-1389,1541-1710,2121-2167,2795-2834,3914-3968
+  s_e248a1bf86a035::t_3fd721364aad9e 3969
+apps/cli/src/connection-commands.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 3-5,7-8,11-86
+packages/contracts/src/run-plan.ts
+  s_e248a1bf86a035::t_ba2c6d8b8945d5 8
+packages/claude-code/vitest.config.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_e248a1bf86a035::t_3f988da68c9153 3,19,21,23,111-139
+  s_e248a1bf86a035::t_ac1ab79be35e43 28
+  s_e248a1bf86a035::t_7390dbf212ba41 140
+docs/agent-patterns/effect-time-bounds.md
+  s_e248a1bf86a035::t_d4b1cf310344af 29,122-123
+apps/desktop/src/renderer/src/components/configuration-provider.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 25
+package.json
+  s_e248a1bf86a035::t_d4b1cf310344af 16-17
+packages/engine/src/github/client.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 153-243
+packages/engine/src/daemon.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 46,278-281,307
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_e248a1bf86a035::t_d4b1cf310344af 14,18,22-23,27-28,30-38,51,56,59,70-81,83,87-89,92-95,101-111,113,120,127-129,146-147,149,155,158,161-192,246,305,356,363,416,421-432
+docs/research/performance-feedback-loop-into-tracker.md
+  s_e248a1bf86a035::t_d4b1cf310344af 5-15
+packages/engine/src/harness-overview.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1,8,45,48,58,66,74-76,80-82,85-87,89-90
+packages/engine/src/resume-policy.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 2,6-10,41-45,47-50
+apps/cli/src/harness-commands.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-43
+packages/engine/src/recovery.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 18,21,107
+apps/desktop/src/renderer/src/routes/settings/scheduling.tsx
+  s_e248a1bf86a035::t_d4b1cf310344af 1-9,11-137
+AGENTS.md
+  s_e248a1bf86a035::t_d4b1cf310344af 26-27
+packages/engine/src/resume-policy.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 2,6-20,23-25,29,33,37,41,45,49-51,55,59,63-66,72,76,80,84,88,93
+docs/agent-patterns/effect-test-layers.md
+  s_e248a1bf86a035::t_d4b1cf310344af 126
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 89-90
+apps/cli/src/status.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 56
+docs/agent-patterns/effect-service-layers.md
+  s_e248a1bf86a035::t_d4b1cf310344af 1-202
+packages/engine/vitest.config.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1
+packages/cursor-acp/vitest.config.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1
+packages/engine/src/run-control.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-166
+packages/engine/src/classify.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 21,150,171,214
+packages/engine/src/github/client.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 28,114-118,267-268,299-301,573-609,756
+packages/engine/src/source-control.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 6,13-24,39-43,54-57
+packages/process-diagnostics/vitest.config.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1
+docs/agent-patterns/effect-schema-unions.md
+  s_e248a1bf86a035::t_d4b1cf310344af 93-95,99,101-102,155
+packages/engine/src/cooldown.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-66
+apps/desktop/CONTEXT.md
+  s_e248a1bf86a035::t_d4b1cf310344af 189-191
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_e248a1bf86a035::t_d4b1cf310344af 5,7,20
+  s_e248a1bf86a035::t_99690a5f3c9bb1 21
+apps/cli/vitest.config.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1
+apps/desktop/src/renderer/src/routes/settings/appearance.tsx
+  s_e248a1bf86a035::t_d4b1cf310344af 1-3,5-85
+packages/engine/src/control-store.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 5-6,117,758-771
+  s_e248a1bf86a035::t_518443536fbd84 772-774
+packages/contracts/src/rpc.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 4,23,63,173-178,241
+turbo.json
+  s_e248a1bf86a035::t_d4b1cf310344af 19-20
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_e248a1bf86a035::t_d4b1cf310344af 147-158
+packages/codex-cli/vitest.config.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1
+apps/cli/src/harness-commands.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-83
+packages/contracts/src/harness.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1,6-16,67-70
+  s_e248a1bf86a035::t_ba2c6d8b8945d5 4
+  s_e248a1bf86a035::t_ac1ab79be35e43 75-78
+  s_e248a1bf86a035::t_585b1fb1ce2aa2 5
+apps/desktop/vitest.config.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_e248a1bf86a035::t_be6b2db2a4c549 51-68
+  s_e4aced227df686::t_75dfa8835f1696 7,69
+CONTEXT-MAP.md
+  s_e248a1bf86a035::t_d4b1cf310344af 49
+packages/engine/src/engine.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 118,222,235,248,911
+packages/engine/src/github/github.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 83,166-169,340,405-435
+  s_e248a1bf86a035::t_8c459a03172302 436
+packages/contracts/src/harness.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-30
+packages/engine/src/connection.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 55
+docs/agent-patterns/effect-error-design.md
+  s_e248a1bf86a035::t_d4b1cf310344af 1-174
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_e248a1bf86a035::t_d4b1cf310344af 40
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_e248a1bf86a035::t_d4b1cf310344af 49,56,58,151,156,169-171,178,183,192,429
+  s_e248a1bf86a035::t_2531cc23160537 160,164,172-173,176-177,179-182,190-191,360,388
+packages/contracts/src/scheduler-defaults.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 17
+docs/research/preventing-test-suite-performance-drift.md
+  s_e248a1bf86a035::t_d4b1cf310344af 1-647
+biome.json
+  s_e248a1bf86a035::t_d4b1cf310344af 21-26
+packages/engine/src/observe.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 69
+apps/desktop/src/renderer/src/routes/settings/general.tsx
+  s_e248a1bf86a035::t_d4b1cf310344af 1-2,4-93
+packages/engine/src/scheduler.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 116
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_e248a1bf86a035::t_d4b1cf310344af 137
+packages/engine/CONTEXT.md
+  s_e248a1bf86a035::t_d4b1cf310344af 81,159,179
+apps/desktop/src/renderer/src/features/customize-facets.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 3,15
+packages/contracts/src/triage.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 21,37,64,80,93,108
+apps/cli/src/connection-commands.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 14,38-51,63-64,66,68,72,75-78,85-103,105,108-114
+  s_e248a1bf86a035::t_46e5aa64708afd 115
+packages/engine/src/provider-runner.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 13,283-305
+  s_e248a1bf86a035::t_cbcb0d82197df3 306-307
+packages/engine/src/run-plan.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 57,686-696,698,716-724,741-748,766-790,799-800,851,924-931,934-936
+  s_e248a1bf86a035::t_84899da29dceea 937
+packages/claude-code/src/harness.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 26-31,37-43,89-93,335-336,400,407-408,413-415,512,556,681-703,772-792,813
+packages/engine/src/run-plan.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 8,16,25-26,356-499
+packages/contracts/CONTEXT.md
+  s_e248a1bf86a035::t_d4b1cf310344af 16,121,129
+scripts/test-measure.mjs
+  s_e248a1bf86a035::t_d4b1cf310344af 1-83
+packages/contracts/src/settings.ts
+  s_e248a1bf86a035::t_ba2c6d8b8945d5 68-70
+apps/cli/src/main.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-38
+packages/engine/src/playbook.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-10,18,65-187
+  s_e248a1bf86a035::t_f826c18cf5d173 188-189
+apps/cli/src/commands.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 153,189
+packages/engine/src/daemon-composition.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 7,16,126,288,291
+docs/agent-patterns/effect-control-flow.md
+  s_e248a1bf86a035::t_d4b1cf310344af 32-40,42,44-65,159-160
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-7,10-16,18-23,26,49,55-56,58-60,65-68,75-151
+packages/engine/src/harness-overview.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 18-19,129,159-167
+  s_e248a1bf86a035::t_c6d2e6b79bd5e7 180
+packages/engine/src/commands.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 13-14,16-17,45,48,282-285,288,295-314
+  s_e248a1bf86a035::t_bd020b5f95a686 315
+packages/engine/src/exhaustion.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-31
+apps/desktop/src/renderer/src/features/connection-form.test.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 26-30
+packages/engine/src/provider-runner.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 232-235,255
+packages/engine/src/retry-policy.ts
+  s_e248a1bf86a035::t_d4b1cf310344af 1-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "b130a858a3c8a4f1dc7cdae8517712ce06f35b1e",
+  "prompts": {},
+  "sessions": {
+    "s_e248a1bf86a035": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08202-ec1e-7b91-b417-d95a185fc6a1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e4aced227df686": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08199-e7bd-7192-a391-0f2b515261a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
