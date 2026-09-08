@@ -459,18 +459,19 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
     );
   yield* Effect.forEach(
     reconcilable,
-    ({ workspace, state }) =>
-      manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
-        Effect.tap((outcome) =>
-          Effect.logInfo("worktree maintenance", { workspace: workspace.config.name, ...outcome }),
-        ),
+    ({ workspace, state }) => {
+      const correlation = { workspace: workspace.config.name };
+      return manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
+        Effect.tap((outcome) => Effect.logInfo("worktree maintenance", outcome)),
         Effect.catchTag("GitError", (error) =>
           Effect.logWarning("worktree maintenance failed", {
-            workspace: workspace.config.name,
             message: error.message,
           }),
         ),
-      ),
+        Effect.annotateLogs(correlation),
+        Effect.annotateSpans(correlation),
+      );
+    },
     { discard: true },
   );
 });
