@@ -299,6 +299,7 @@ _Avoid_: Run manifest, resolved stage, harness request, operation settings
 
 **Run**:
 One execution of one run plan by one harness, captured with its events, outcome, usage, and timings. The run records what was projected and observed without changing its plan.
+A terminal run records `claimDisposition: hold` when a factual gate decline intentionally keeps the current claim. Recovery ignores that hold once a newer claim supersedes the run.
 _Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
