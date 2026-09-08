@@ -1,0 +1,27 @@
+packages/cursor-acp/src/harness.ts
+  s_478f64a5a802f9::t_ee1a033281fe16 358,389-391
+  s_478f64a5a802f9::t_882cbb3c1c503e 439-440,442-446,448-449
+  s_478f64a5a802f9::t_b70ad88e38369f 441,447
+  s_478f64a5a802f9::t_dcff621dfbb45c 16,234,253,294-295,313-315
+  s_478f64a5a802f9::t_2555ff1c7d98d3 296-312,359-374,376-388,393-438
+  s_478f64a5a802f9::t_be739b7cd4c54b 392
+packages/cursor-acp/src/harness.test.ts
+  s_478f64a5a802f9::t_f48367769c04eb 18,26,234,255-258,262,264,269,297-300,304,306
+  s_478f64a5a802f9::t_ee1a033281fe16 237,272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "4235e99f3009f5a38591fe25b89499cc0e49ff1a",
+  "prompts": {},
+  "sessions": {
+    "s_478f64a5a802f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082b0-3f74-73b2-8adb-86a0b57608c1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
