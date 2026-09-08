@@ -1,0 +1,185 @@
+packages/engine/src/session-choice.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-214
+packages/contracts/CONTEXT.md
+  s_2d4a93510e0bcb::t_934194034e0335 121,129
+apps/cli/src/cli.ts
+  s_2d4a93510e0bcb::t_934194034e0335 16,43
+apps/desktop/src/renderer/src/features/harness-catalog.ts
+  s_2d4a93510e0bcb::t_934194034e0335 2-3,12,21,25,32,47,57-71
+  s_2d4a93510e0bcb::t_33a8661cfdacfd 72
+packages/engine/src/connection.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 55
+packages/engine/src/retry-policy.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-129
+package.json
+  s_2d4a93510e0bcb::t_6ecacaeb95380a 16
+packages/engine/src/daemon.ts
+  s_2d4a93510e0bcb::t_934194034e0335 46,278-281,307
+apps/cli/src/main.ts
+  s_2d4a93510e0bcb::t_934194034e0335 10
+apps/desktop/src/renderer/src/features/harness-catalog.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-36
+packages/engine/src/harness-overview.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 17-18,122,152-160
+AGENTS.md
+  s_2d4a93510e0bcb::t_934194034e0335 26-27
+apps/cli/src/connection-commands.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 3-5,7-8,11-86
+packages/contracts/src/harness.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-30
+packages/engine/src/executor.ts
+  s_2d4a93510e0bcb::t_934194034e0335 5,25,1345-1359,1362-1364,1383-1390,1649-1741,1778
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_2d4a93510e0bcb::t_934194034e0335 43,45-46,146,151,155,165-180,184-186,215,352,371,417
+packages/contracts/src/daemon.ts
+  s_2d4a93510e0bcb::t_934194034e0335 7,250-253
+packages/contracts/src/rpc.ts
+  s_2d4a93510e0bcb::t_934194034e0335 4,23,63,173-178,241
+packages/engine/src/cooldown.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-66
+packages/engine/src/run-plan.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 8,16,25-26,356-499
+packages/engine/src/playbook.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-10,18,65-187
+  s_2d4a93510e0bcb::t_4f9e8bd80a7ff0 188-189
+packages/engine/src/engine.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 911
+apps/desktop/src/renderer/src/components/configuration-provider.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 25
+apps/cli/src/connection-commands.ts
+  s_2d4a93510e0bcb::t_934194034e0335 14,38-51,63-64,66,68,72,75-78,85-103,105,108-114
+  s_2d4a93510e0bcb::t_8e9278c0c528c5 115
+packages/engine/src/control-store-schema.ts
+  s_2d4a93510e0bcb::t_934194034e0335 64-68
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 41
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_2d4a93510e0bcb::t_934194034e0335 26-29,31,88-89
+apps/cli/src/commands.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 153,189
+packages/engine/src/session-choice.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-72
+packages/contracts/src/harness.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1,5-16,37-40
+apps/cli/src/status.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 56
+packages/engine/CONTEXT.md
+  s_2d4a93510e0bcb::t_934194034e0335 81,179
+packages/engine/src/classify.ts
+  s_2d4a93510e0bcb::t_934194034e0335 21,150,171,214
+docs/agent-patterns/effect-process-edges.md
+  s_2d4a93510e0bcb::t_934194034e0335 14,43,77,107,109,115,129,133,139,141,163-165
+docs/agent-patterns/effect-control-flow.md
+  s_2d4a93510e0bcb::t_934194034e0335 32-40,42,44-65,159-160
+packages/engine/src/commands.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 46,63-103,336,345,367,385-386,396,412-413,416,420,431-443,1138-1170
+  s_2d4a93510e0bcb::t_23bc9798785a4a 1171
+apps/desktop/CONTEXT.md
+  s_2d4a93510e0bcb::t_934194034e0335 189-191
+packages/contracts/src/scheduler-defaults.ts
+  s_2d4a93510e0bcb::t_934194034e0335 17
+apps/desktop/src/renderer/src/features/harnesses-view.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-28,37,41-45,78
+apps/cli/src/harness-commands.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-83
+apps/cli/src/harness-commands.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-43
+packages/engine/src/playbook.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-9,13-39,46,72,78,81-114,120,126,130,136,140,146,149-151,157-158
+packages/engine/src/recovery.ts
+  s_2d4a93510e0bcb::t_934194034e0335 18,21,107
+packages/engine/src/daemon-composition.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 7,16,127,289,292
+apps/desktop/src/renderer/src/features/customize-facets.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 6-7,20
+apps/cli/src/main.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-38
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_2d4a93510e0bcb::t_934194034e0335 40
+apps/desktop/src/renderer/src/features/connection-form.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 26-30
+docs/agent-patterns/effect-service-layers.md
+  s_2d4a93510e0bcb::t_934194034e0335 1-202
+packages/engine/src/control-store.ts
+  s_2d4a93510e0bcb::t_934194034e0335 17-18,73-76,102-105,235-256,384-399,402-418,636-646,719-720,990
+packages/engine/src/run-control.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-166
+packages/engine/src/run-plan.ts
+  s_2d4a93510e0bcb::t_934194034e0335 57,686-696,698,716-724,741-748,766-790,799-800,851,924-931,934-936
+  s_2d4a93510e0bcb::t_f6c6150117b475 937
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_2d4a93510e0bcb::t_934194034e0335 137
+docs/agent-patterns/effect-observability.md
+  s_2d4a93510e0bcb::t_934194034e0335 42,107-111,125,135-140
+packages/engine/src/exhaustion.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-255
+packages/engine/src/event-publisher.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 68,368
+packages/engine/src/resume-policy.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 2,6-20,23-25,29,33,37,41,45,49-51,55,59,63-66,72,76,80,84,88,93
+packages/claude-code/src/harness.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 26-31,37-43,89-93,335-336,400,407-408,413-415,512,556,681-703,772-792,813
+packages/engine/src/scheduler.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 116
+packages/engine/src/exhaustion.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-31
+docs/agent-patterns/effect-schema-unions.md
+  s_2d4a93510e0bcb::t_934194034e0335 93-95,99,101-102,155
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 15
+docs/agent-patterns/effect-test-layers.md
+  s_2d4a93510e0bcb::t_934194034e0335 126
+packages/claude-code/src/harness.ts
+  s_2d4a93510e0bcb::t_934194034e0335 16,37-38,40,65,75,77,93-102,117,344,391,439
+packages/engine/src/control-store-create.gen.ts
+  s_2d4a93510e0bcb::t_934194034e0335 7
+docs/agent-patterns/effect-time-bounds.md
+  s_2d4a93510e0bcb::t_934194034e0335 29,122-123
+packages/engine/src/control-store.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 5-6,117,758-771
+  s_2d4a93510e0bcb::t_b8b4045cf15980 772-774
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_2d4a93510e0bcb::t_934194034e0335 147-158
+apps/cli/CONTEXT.md
+  s_2d4a93510e0bcb::t_934194034e0335 43
+docs/agent-patterns/effect-error-design.md
+  s_2d4a93510e0bcb::t_934194034e0335 1-174
+packages/engine/src/resume-policy.ts
+  s_2d4a93510e0bcb::t_934194034e0335 2,6-10,41-45,47-50
+packages/engine/src/retry-policy.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-76
+apps/desktop/src/renderer/src/features/customize-facets.ts
+  s_2d4a93510e0bcb::t_934194034e0335 3,15
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_2d4a93510e0bcb::t_934194034e0335 89-90
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-7,10-16,18-23,26,48,54-55,57-59,64-67,74-150
+packages/engine/src/executor.test.ts
+  s_2d4a93510e0bcb::t_934194034e0335 5-6,10,498-517,526,1192,1209-1210,1212,1217,1222,1231-1266,1299,1347-1389,1541-1710,2121-2167,2795-2834,3914-3968
+  s_2d4a93510e0bcb::t_9a72396c0ba04e 3969
+packages/engine/src/commands.ts
+  s_2d4a93510e0bcb::t_934194034e0335 13-14,16-17,45,48,282-285,288,295-314
+  s_2d4a93510e0bcb::t_9eafae7377d496 315
+packages/engine/src/harness-overview.ts
+  s_2d4a93510e0bcb::t_934194034e0335 1-8,44,47,56,66,73-75,79-81,84-86,88-89
+apps/desktop/src/renderer/src/components/customize-facet-view.tsx
+  s_2d4a93510e0bcb::t_934194034e0335 7
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_2d4a93510e0bcb::t_934194034e0335 14,18,22-23,27-28,30-38,51,56,59,70-81,83,87-89,92-95,101-111,113,120,127-129,146-147,149,155,158,161-192,246,305,356,363,416,421-432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "c27bac3c2c2988bd2da7cd366a61b9dee2e5c4e3",
+  "prompts": {},
+  "sessions": {
+    "s_2d4a93510e0bcb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebb-5da8-7041-b038-274987a2b9a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
