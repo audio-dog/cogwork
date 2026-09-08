@@ -1,0 +1,23 @@
+apps/cli/src/platform.test.ts
+  s_8558828ce285d0::t_1a879489a40db8 817-818
+packages/engine/src/context-fs.ts
+  s_8558828ce285d0::t_9dcece6f75151a 11
+apps/cli/src/platform.ts
+  s_8558828ce285d0::t_9dcece6f75151a 284-288
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "4d775772a7df48e0e7c0f0950c7013b454c7a955",
+  "prompts": {},
+  "sessions": {
+    "s_8558828ce285d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0826e-10d4-7982-ab56-b4c2aab465fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
