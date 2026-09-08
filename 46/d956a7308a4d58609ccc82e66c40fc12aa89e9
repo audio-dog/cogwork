@@ -1,0 +1,134 @@
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_66a0e441ad731e::t_080d99be950cb9 137
+packages/engine/src/daemon-composition.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 7,16,127,289,292
+packages/engine/src/commands.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 46,63-103,336,345,367,385-386,396,412-413,416,420,431-443,1138-1170
+  s_66a0e441ad731e::t_a7daa8598dba12 1171
+packages/engine/src/session-choice.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-214
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 41
+packages/engine/src/daemon.ts
+  s_66a0e441ad731e::t_080d99be950cb9 46,278-281,307
+docs/agent-patterns/effect-schema-unions.md
+  s_66a0e441ad731e::t_080d99be950cb9 93-95,99,101-102,155
+AGENTS.md
+  s_66a0e441ad731e::t_080d99be950cb9 26-27
+packages/engine/src/resume-policy.ts
+  s_66a0e441ad731e::t_080d99be950cb9 2,6-10,41-45,47-50
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-7,10-16,18-23,26,48,54-55,57-59,64-67,74-150
+apps/desktop/src/renderer/src/features/harness-catalog.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-36
+packages/claude-code/src/harness.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 26-31,37-43,89-93,335-336,400,407-408,413-415,512,556,681-703,772-792,813
+docs/agent-patterns/effect-test-layers.md
+  s_66a0e441ad731e::t_080d99be950cb9 126
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_66a0e441ad731e::t_080d99be950cb9 147-158
+docs/agent-patterns/effect-service-layers.md
+  s_66a0e441ad731e::t_080d99be950cb9 1-202
+packages/engine/CONTEXT.md
+  s_66a0e441ad731e::t_080d99be950cb9 81,179
+packages/engine/src/executor.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 5-6,10,498-517,526,1192,1209-1210,1212,1217,1222,1231-1266,1299,1347-1389,1541-1710,2121-2167,2795-2834,3914-3968
+  s_66a0e441ad731e::t_14cf43e1333c4c 3969
+packages/engine/src/control-store-create.gen.ts
+  s_66a0e441ad731e::t_080d99be950cb9 7
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_66a0e441ad731e::t_080d99be950cb9 43,45-46,146,151,155,165-180,184-186,215,352,371,417
+packages/engine/src/executor.ts
+  s_66a0e441ad731e::t_080d99be950cb9 5,25,1345-1359,1362-1364,1383-1390,1649-1741,1778
+apps/desktop/src/renderer/src/features/harnesses-view.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-28,37,41-45,78
+docs/agent-patterns/effect-observability.md
+  s_66a0e441ad731e::t_080d99be950cb9 42,107-111,125,135-140
+packages/engine/src/control-store.ts
+  s_66a0e441ad731e::t_080d99be950cb9 17-18,73-76,102-105,235-256,384-399,402-418,636-646,719-720,990
+apps/cli/src/harness-commands.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-43
+apps/cli/src/cli.ts
+  s_66a0e441ad731e::t_080d99be950cb9 16,43
+packages/contracts/src/harness.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1,5-16,37-40
+docs/agent-patterns/effect-process-edges.md
+  s_66a0e441ad731e::t_080d99be950cb9 14,43,77,107,109,115,129,133,139,141,163-165
+packages/engine/src/commands.ts
+  s_66a0e441ad731e::t_080d99be950cb9 13-14,16-17,45,48,282-285,288,295-314
+  s_66a0e441ad731e::t_ff9da164c1edc5 315
+packages/engine/src/harness-overview.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 17-18,122,152-160
+packages/engine/src/scheduler.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 116
+apps/cli/src/commands.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 153,189
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_66a0e441ad731e::t_080d99be950cb9 26-29,31,88-89
+packages/engine/src/control-store.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 5-6,117,758-771
+  s_66a0e441ad731e::t_19efb370eff306 772-774
+apps/desktop/src/renderer/src/components/configuration-provider.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 25
+packages/contracts/src/harness.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-30
+packages/engine/src/harness-overview.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-8,44,47,56,66,73-75,79-81,84-86,88-89
+docs/agent-patterns/effect-error-design.md
+  s_66a0e441ad731e::t_080d99be950cb9 1-174
+packages/engine/src/resume-policy.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 2,6-20,23-25,29,33,37,41,45,49-51,55,59,63-66,72,76,80,84,88,93
+docs/agent-patterns/effect-time-bounds.md
+  s_66a0e441ad731e::t_080d99be950cb9 29,122-123
+packages/engine/src/engine.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 911
+apps/desktop/CONTEXT.md
+  s_66a0e441ad731e::t_080d99be950cb9 189-191
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 15
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_66a0e441ad731e::t_080d99be950cb9 14,18,22-23,27-28,30-38,51,56,59,70-81,83,87-89,92-95,101-111,113,120,127-129,146-147,149,155,158,161-192,246,305,356,363,416,421-432
+packages/engine/src/connection.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 55
+docs/agent-patterns/effect-control-flow.md
+  s_66a0e441ad731e::t_080d99be950cb9 32-40,42,44-65,159-160
+apps/cli/src/status.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 56
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_66a0e441ad731e::t_080d99be950cb9 89-90
+packages/engine/src/event-publisher.test.ts
+  s_66a0e441ad731e::t_080d99be950cb9 68,368
+apps/desktop/src/renderer/src/features/harness-catalog.ts
+  s_66a0e441ad731e::t_080d99be950cb9 2-3,12,21,25,32,47,57-71
+  s_66a0e441ad731e::t_617163a0d940f1 72
+packages/engine/src/control-store-schema.ts
+  s_66a0e441ad731e::t_080d99be950cb9 64-68
+packages/contracts/src/daemon.ts
+  s_66a0e441ad731e::t_080d99be950cb9 7,250-253
+packages/contracts/src/rpc.ts
+  s_66a0e441ad731e::t_080d99be950cb9 4,23,63,173-178,241
+packages/contracts/src/scheduler-defaults.ts
+  s_66a0e441ad731e::t_080d99be950cb9 17
+packages/engine/src/session-choice.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-72
+packages/claude-code/src/harness.ts
+  s_66a0e441ad731e::t_080d99be950cb9 16,37-38,40,65,75,77,93-102,117,344,391,439
+apps/cli/src/harness-commands.ts
+  s_66a0e441ad731e::t_080d99be950cb9 1-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "46d956a7308a4d58609ccc82e66c40fc12aa89e9",
+  "prompts": {},
+  "sessions": {
+    "s_66a0e441ad731e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebc-6bc4-7961-840d-44c04273a080",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
