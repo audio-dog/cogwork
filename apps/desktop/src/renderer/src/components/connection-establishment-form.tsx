@@ -35,11 +35,9 @@ import {
 } from "../features/connection-form";
 import { connectionSystemLabel } from "../features/connections-view";
 
-// Each source explains itself where it is chosen, which is why the credential field below carries no
-// second description: by the time you reach it you have already read what happens to what you type.
 const sourceHint: Record<CredentialSourceTag, string> = {
   ApiKey: "Kept in the Credential store, never the Control store.",
-  Env: "Cogwork stores the variable's name, never its value. The daemon reads its environment once at start, so editing ~/.cogwork/.env takes effect on the next restart.",
+  Env: "Cogwork stores the variable's name, never its value. The daemon reads it from its process environment.",
   Stored: "Uses the browser grant saved by `cogwork login linear`.",
 };
 
@@ -84,18 +82,14 @@ export function ConnectionEstablishmentDialog({
   onEstablish,
 }: {
   readonly system: ConnectionSystem;
-  /** Set for a re-connect: the account is fixed and only the credential is replaced. */
   readonly account?: string;
   readonly triggerLabel: string;
   readonly title: string;
   readonly description: string;
   readonly submitLabel: string;
-  /** Answers null when the system accepted the credential, or the reason it refused. */
   readonly onEstablish: (establishment: ConnectionEstablishment) => Promise<string | null>;
 }) {
   const [open, setOpen] = useState(false);
-  // The schema decides whether the form is well-formed; only the system itself can say whether the
-  // credential works, so its refusal arrives after submit and cannot be a validator.
   const [refusal, setRefusal] = useState<string | null>(null);
   const fieldId = useId();
   const form = useForm({
@@ -172,7 +166,6 @@ export function ConnectionEstablishmentDialog({
 
             <form.Subscribe selector={(state) => state.values.source}>
               {(source) => {
-                // A saved login carries no credential to type, so the chosen card is the whole answer.
                 if (source === "Stored") return null;
                 const secret = source === "ApiKey";
                 return (
