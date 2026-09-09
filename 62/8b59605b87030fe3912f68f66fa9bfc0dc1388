@@ -1,0 +1,33 @@
+packages/engine/src/tools/file-diff-feed.ts
+  s_5bcda3d0545c1b::t_e4a5b4c2351a99 942-943,957
+  s_5bcda3d0545c1b::t_6040a06245110e 43,914-916,944-948,950,952-953,958-964,971,974,976-977,1001,1004,1007-1008,1040,1054,1069
+  s_5bcda3d0545c1b::t_651b7aa139989a 919-931,1050
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_5bcda3d0545c1b::t_8f8d5648596106 409,1176-1177,1181,1189-1192,1209-1211,1218
+  s_5bcda3d0545c1b::t_59a8bb6888fcc2 1213
+  s_5bcda3d0545c1b::t_a7b218248a139a 1175
+  s_5bcda3d0545c1b::t_9a3f02d7881194 1180,1182-1185
+  s_5bcda3d0545c1b::t_8f10604977b5bb 1174,1178-1179,1186-1188,1195-1202,1204-1205,1212,1214-1217,1221
+  s_5bcda3d0545c1b::t_f3d1e43cd91df1 1208
+  s_5bcda3d0545c1b::t_7700565850901f 1219
+  s_5bcda3d0545c1b::t_c56f834e25f6cd 1220
+  s_5bcda3d0545c1b::t_74264196eb95fb 1193-1194
+  s_5bcda3d0545c1b::t_6a88c1d0a014b0 1203
+  s_5bcda3d0545c1b::t_191999b3b59212 1206-1207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "628b59605b87030fe3912f68f66fa9bfc0dc1388",
+  "prompts": {},
+  "sessions": {
+    "s_5bcda3d0545c1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08772-ca43-70c3-a712-f8b4fcafe310",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
