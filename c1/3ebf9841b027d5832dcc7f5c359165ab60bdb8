@@ -1,0 +1,24 @@
+packages/contracts/src/workspace.test.ts
+  s_65e0eb71ac85d0::t_08f33890ee33dd 64-83
+packages/contracts/CONTEXT.md
+  s_65e0eb71ac85d0::t_72a3e71425f7b7 255
+packages/contracts/src/workspace.ts
+  s_65e0eb71ac85d0::t_f96ca65393e579 26-30,32-34
+  s_65e0eb71ac85d0::t_5ebc1b888aa8b7 23-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c13ebf9841b027d5832dcc7f5c359165ab60bdb8",
+  "prompts": {},
+  "sessions": {
+    "s_65e0eb71ac85d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0884c-f013-7401-ba03-3ab2daaad25a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
