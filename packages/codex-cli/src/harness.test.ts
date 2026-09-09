@@ -164,6 +164,18 @@ const gitFixtureEnvironment = {
 const fakeCodexExecutable = (arguments_ = "") =>
   `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${arguments_}`;
 
+const codexWithRepositoryHooks = new URL("./codex-with-repository-hooks", import.meta.url).pathname;
+
+const fakeCodexWithRepositoryHooks = Effect.fn("test.fakeCodexWithRepositoryHooks")(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-fake-codex-bin-" });
+  const executable = path.join(directory, "codex");
+  yield* fs.writeFileString(executable, `#!/bin/sh\nexec ${fakeCodexExecutable()} "$@"\n`);
+  yield* fs.chmod(executable, 0o700);
+  return `PATH='${directory}':"$PATH" '${codexWithRepositoryHooks}'`;
+});
+
 const makeTestAdapter: MakeCodexAdapter = (model, config) =>
   codexText(model, { ...config, env: { ...config.env, ...gitFixtureEnvironment } });
 
@@ -337,6 +349,22 @@ describe("repository fixtures", () => {
 
 describe("codexRunner", () => {
   it.layer(services)((it) => {
+    it.effect("suppresses the trust-bypass notice without failing the Run", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const executable = yield* fakeCodexWithRepositoryHooks();
+          const harness = Harness.make([runner({ codexExecutable: executable })]);
+          const handle = yield* createSandbox();
+          const events = yield* runInRepository(harness, handle);
+          const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(events);
+
+          assert.isFalse(events.some((event) => event.type === EventType.RUN_ERROR));
+          assert.isTrue(events.some((event) => event.type === EventType.RUN_FINISHED));
+          assert.notInclude(serializedEvents, "Repository hooks will run");
+        }),
+      ),
+    );
+
     it.effect("offers the host model catalog and honest native capabilities", () =>
       Effect.gen(function* () {
         const codex = runner();
@@ -508,12 +536,14 @@ describe("codexRunner", () => {
     it.effect("keeps every Operation on a networked Codex Sandbox", () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const harness = Harness.make([runner()]);
+          const executable = yield* fakeCodexWithRepositoryHooks();
+          const harness = Harness.make([runner({ codexExecutable: executable })]);
           const captures = yield* Effect.forEach(LifecycleStage.literals, (stage) =>
             runOperation(harness, stage),
           );
 
           for (const [, capture] of captures) {
+            assert.include(capture.args, "--dangerously-bypass-hook-trust");
             assert.include(capture.args, "workspace-write");
             assert.notInclude(capture.args.join("\n"), "read-only");
             assert.include(capture.args, "sandbox_workspace_write.network_access=true");
@@ -817,16 +847,37 @@ describe("codexRunner", () => {
             if (enabled !== "1") return;
             const handle = yield* createSandbox();
             const { checkoutPath } = yield* linkedWorktree(handle);
-            const harness = Harness.make([
-              codexRunner({ name, environment: process.env, codexExecutable: "codex" }),
-            ]);
+            const fs = yield* FileSystem.FileSystem;
+            yield* fs.makeDirectory(`${checkoutPath}/.codex`);
+            yield* fs.writeFileString(
+              `${checkoutPath}/.codex/hooks.json`,
+              `{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "apply_patch",
+      "hooks": [{
+        "type": "command",
+        "command": "printf 'formatted by Hook\\n' > codex-hook-probe.txt"
+      }]
+    }]
+  }
+}
+`,
+            );
+            const hookBaseline = yield* Effect.promise(() =>
+              handle.process.exec(
+                `git -C ${checkoutPath} add .codex/hooks.json && git -C ${checkoutPath} commit -m 'add hook probe'`,
+              ),
+            );
+            assert.strictEqual(hookBaseline.exitCode, 0);
+            const harness = Harness.make([codexRunner({ name, environment: process.env })]);
             const events = yield* collectEvents(
               harness.run(
                 makeRequest({
                   checkoutPath,
                   session: freshSession,
                   prompt:
-                    "Create codex-probe.txt, add it to Git, and commit it with message codex linked worktree probe. Return the required implement result. Do not open a pull request.",
+                    "Use apply_patch to create codex-hook-probe.txt with the text unformatted. Add the resulting file to Git and commit it with message codex linked worktree probe. Return the required implement result. Do not open a pull request.",
                 }),
               ),
             );
@@ -838,6 +889,11 @@ describe("codexRunner", () => {
             );
             assert.strictEqual(commit.exitCode, 0);
             assert.strictEqual(commit.stdout.trim(), "codex linked worktree probe");
+            const formatted = yield* Effect.promise(() =>
+              handle.process.exec(`git -C ${checkoutPath} show HEAD:codex-hook-probe.txt`),
+            );
+            assert.strictEqual(formatted.exitCode, 0);
+            assert.strictEqual(formatted.stdout, "formatted by Hook\n");
           }),
         ),
       // A real Codex implement turn plus a commit; the 5-second vitest default can never fit it.

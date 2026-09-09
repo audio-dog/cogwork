@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import type { HarnessName } from "@cogwork/contracts";
 import { ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
 import {
@@ -38,6 +39,9 @@ const codexAdapterVersion = "0.5.3";
 const codexVersionRequirement = ">=0.149.0";
 const minimumCodexVersion = [0, 149, 0] as const;
 const codexReadinessDeadline = "5 seconds";
+const codexExecutableWithRepositoryHooks = `'${fileURLToPath(
+  new URL("./codex-with-repository-hooks", import.meta.url),
+).replaceAll("'", `'\\''`)}'`;
 const missingExecutablePattern = /ENOENT|EACCES|command not found/i;
 const missingLoginPattern = /codex login|not (?:logged|signed) in/i;
 const incompatibleVersionPattern = /incompatible|unsupported Codex|update Codex/i;
@@ -309,7 +313,7 @@ const codexDescriptor = (
   options: CodexRunnerOptions,
 ): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>, CodexAuthMode> => {
   const makeAdapter = options.makeAdapter ?? codexText;
-  const executable = options.codexExecutable ?? "codex";
+  const executable = options.codexExecutable ?? codexExecutableWithRepositoryHooks;
   const scrubEnv = scrubbedEnvironment(options.environment);
   return {
     name: options.name,
