@@ -1,0 +1,19 @@
+packages/engine/src/operation-resolution.ts
+  s_82f7907de40940::t_fef33bde7cb83d 602
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "592465018646658546a112e330ec8f93020c1bff",
+  "prompts": {},
+  "sessions": {
+    "s_82f7907de40940": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087e0-4dac-7861-885f-400c3fd853e9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
