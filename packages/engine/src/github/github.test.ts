@@ -207,7 +207,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       seed.priorityError
         ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "missing read:project scope" }))
         : Effect.succeed(prioritiesByNumber),
-    verifyCredential: () => Effect.void,
+    verifyCredential: () => Effect.succeed(bot.login),
   } satisfies GitHubClientService;
 });
 

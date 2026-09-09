@@ -1,10 +1,11 @@
-import { CredentialStore, Linear } from "@cogwork/engine";
+import { CredentialStore, GitHub, Linear } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
+import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 
 const fileMode = 0o600;
 const directoryMode = 0o700;
@@ -151,10 +152,13 @@ export const layer = (filePath: string) =>
     Effect.gen(function* () {
       const stored = yield* makeFileStore(filePath);
       const client = yield* HttpClient.HttpClient;
+      const spawner = yield* ChildProcessSpawner;
       const clientCredentials = yield* Linear.ClientCredentials.make();
+      const githubCli = yield* GitHub.makeCliCredentialSource(spawner);
       return CredentialStore.make({
         stored,
         clientCredentials,
+        githubCli,
         refresh: Linear.OAuth.makeTokenRefresh(client),
       });
     }),

@@ -2,7 +2,7 @@ import {
   CancelRunResult,
   type ClassifiedItem,
   type Connection,
-  type ConnectionEstablishment,
+  ConnectionEstablishment,
   ConnectionFailure,
   type ConnectionId,
   type ConnectionMutationResult,
@@ -611,15 +611,19 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
       "Connection does not exist; establish it first",
     );
   }
-  if (existing.account !== payload.establishment.account) {
+  const requestedAccount = ConnectionEstablishment.match(payload.establishment, {
+    github: () => null,
+    linear: ({ account }) => account,
+  });
+  if (requestedAccount !== null && existing.account !== requestedAccount) {
     return yield* connectionFailure(
       "re-connect Connection",
       existing.id,
-      `Connection is established for "${existing.account}". Remove it before connecting to "${payload.establishment.account}".`,
+      `Connection is established for "${existing.account}". Remove it before connecting to "${requestedAccount}".`,
     );
   }
   const connection = yield* connections
-    .establish(payload.establishment)
+    .establish(payload.establishment, existing.account)
     .pipe(mapConnectionFailure("re-connect Connection", existing.id));
   yield* publishControlStore();
   yield* Effect.logInfo("Connection re-connected", {

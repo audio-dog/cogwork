@@ -95,6 +95,63 @@ describe("CredentialStore (env)", () => {
 });
 
 describe("CredentialStore (Connections)", () => {
+  it.effect("stores only the GitHub CLI marker, forgets its cache, and acquires the fixed account", () =>
+    Effect.gen(function* () {
+      const entries = yield* Ref.make<ReadonlyArray<import("./credential-store").StoredConnectionCredential>>(
+        [],
+      );
+      const accounts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const forgotten = yield* Ref.make<ReadonlyArray<string>>([]);
+      const store = make({
+        stored: {
+          load: Effect.succeed([]),
+          save: () => Effect.void,
+          loadConnectionCredentials: Ref.get(entries),
+          saveConnectionCredential: (entry) => Ref.update(entries, (current) => [...current, entry]),
+        },
+        githubCli: {
+          discover: Effect.succeed(Redacted.make("connect-token")),
+          acquire: (selected) =>
+            Ref.update(accounts, (current) => [...current, selected]).pipe(
+              Effect.map(() => Redacted.make("run-token")),
+            ),
+          forget: (selected) => Ref.update(forgotten, (current) => [...current, selected]),
+        },
+      });
+      const id = connectionId("github/octocat");
+      yield* store.configureConnection(id, { _tag: "GitHubCli" });
+      const credential = yield* store.bearerToken({
+        ...account,
+        key: id,
+        issueTracker: "github",
+        organization: "octocat",
+        connectionId: id,
+      });
+
+      assert.deepStrictEqual(yield* Ref.get(entries), [{ _tag: "GitHubCli", connectionId: id }]);
+      assert.deepStrictEqual(yield* Ref.get(accounts), ["octocat"]);
+      assert.deepStrictEqual(yield* Ref.get(forgotten), ["octocat"]);
+      assert.strictEqual(credential.source, "github-cli");
+      assert.strictEqual(Redacted.value(credential.token), "run-token");
+    }),
+  );
+
+  it.effect("refuses the GitHub CLI source for Linear", () =>
+    Effect.gen(function* () {
+      const store = make({
+        stored: { load: Effect.succeed([]), save: () => Effect.void },
+        githubCli: {
+          discover: Effect.succeed(Redacted.make("secret")),
+          acquire: () => Effect.succeed(Redacted.make("secret")),
+          forget: () => Effect.void,
+        },
+      });
+      const failure = yield* Effect.flip(store.resolveSource(account, { _tag: "GitHubCli" }));
+
+      assert.strictEqual(failure.message, "GitHub CLI credentials are available only for GitHub Connections");
+    }),
+  );
+
   it.effect("stores and resolves a Connection API key", () =>
     Effect.gen(function* () {
       const entries = yield* Ref.make<ReadonlyArray<import("./credential-store").StoredConnectionCredential>>(

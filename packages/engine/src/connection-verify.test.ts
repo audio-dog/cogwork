@@ -48,10 +48,11 @@ describe("ConnectionVerifier", () => {
   it.effect("asks GitHub whether the token authenticates at all", () =>
     Effect.gen(function* () {
       const verifier = yield* ConnectionVerifier;
-      yield* verifier.verify("github", apiKey("ghp_real"));
+      const account = yield* verifier.verify("github", apiKey("ghp_real"));
 
+      assert.strictEqual(account, "octocat");
       assert.deepStrictEqual(yield* Ref.get(yield* FetchedUrls), ["https://api.github.com/user"]);
-    }).pipe(Effect.provide(respondingWith(200))),
+    }).pipe(Effect.provide(respondingWith(200, '{"login":"octocat"}'))),
   );
 
   // The bug this covers: GITHUB_TOKEN=Hello resolves to a non-empty string, so every local check

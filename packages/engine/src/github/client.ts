@@ -3,6 +3,7 @@ import {
   connectionAccountOf,
   type GitHubPrioritySource,
   type Priority,
+  TrimmedNonEmptyString,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
@@ -122,7 +123,7 @@ const CreatedPullSchema = Schema.Struct({
   html_url: Schema.String,
 });
 
-const AuthenticatedUserSchema = Schema.Struct({ login: Schema.String });
+const AuthenticatedUserSchema = Schema.Struct({ login: TrimmedNonEmptyString });
 
 const PullSchema = Schema.Struct({
   number: Schema.Finite,
@@ -792,8 +793,10 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
     verifyCredential: (token: Redacted.Redacted<string>) =>
-      execute(HttpClientRequest.get("https://api.github.com/user"), token, acceptResponse).pipe(
+      execute(HttpClientRequest.get("https://api.github.com/user"), token, (response) => response.json).pipe(
         Effect.mapError((error) => error.error),
+        Effect.flatMap((body) => Effect.mapError(decodeAuthenticatedUser(body), toUnavailable)),
+        Effect.map((user) => user.login),
       ),
   };
 });

@@ -25,15 +25,19 @@ export class Connection extends Schema.Class<Connection>("Connection")({
 export const ConnectionSource = Schema.TaggedUnion({
   Env: { name: TrimmedNonEmptyString },
   ApiKey: { key: Schema.RedactedFromValue(TrimmedNonEmptyString) },
+  GitHubCli: {},
   Stored: {},
 });
 export type ConnectionSource = typeof ConnectionSource.Type;
 
-export const ConnectionEstablishment = Schema.Struct({
-  system: ConnectionSystem,
-  account: TrimmedNonEmptyString,
-  source: ConnectionSource,
-});
+export const ConnectionEstablishment = Schema.Union([
+  Schema.Struct({ system: Schema.Literal("github"), source: ConnectionSource }),
+  Schema.Struct({
+    system: Schema.Literal("linear"),
+    account: TrimmedNonEmptyString,
+    source: ConnectionSource,
+  }),
+]).pipe(Schema.toTaggedUnion("system"));
 export type ConnectionEstablishment = typeof ConnectionEstablishment.Type;
 
 export const ConnectionReadiness = Schema.TaggedUnion({
