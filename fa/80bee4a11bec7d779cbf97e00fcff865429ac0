@@ -1,0 +1,20 @@
+packages/codex-cli/src/harness-fixtures.ts
+  s_9aa9f21686394c::t_6dc1fa86edac37 1-5,7-12,20-21,24-314
+  s_9aa9f21686394c::t_14c84287489e99 6,13-19,22-23,315-337
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fa80bee4a11bec7d779cbf97e00fcff865429ac0",
+  "prompts": {},
+  "sessions": {
+    "s_9aa9f21686394c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0884d-e625-79d1-9098-ef0797a0e808",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
