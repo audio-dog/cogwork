@@ -57,7 +57,7 @@ const wsA: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",
-    issueTracker: { type: "github", repo: "owner/a", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", repo: "owner/a" },
   }),
 };
 

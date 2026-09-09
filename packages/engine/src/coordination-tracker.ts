@@ -42,7 +42,7 @@ export interface ListedItem<CommentId> {
   readonly assignees: ReadonlyArray<string>;
   readonly claimLabeled: boolean;
   readonly openBlockers: number;
-  readonly claimIdentity: string;
+  readonly acceptedClaimants: ReadonlyArray<string>;
   readonly priority: Priority;
   readonly comments: ReadonlyArray<CoordinationComment<CommentId>>;
 }
@@ -82,7 +82,7 @@ const buildItem = <CommentId>(codec: WireCodec, item: ListedItem<CommentId>): Tr
     assignees: item.assignees,
     claimLabeled: item.claimLabeled,
     claim,
-    claimedByUs: claim?.by === item.claimIdentity,
+    claimedByUs: claim ? item.acceptedClaimants.includes(claim.by) : false,
     attempts: Coordination.parseAttempts(codec, body),
     handback: Coordination.parseHandback(codec, body),
     followUp: Coordination.parseFollowUp(codec, body),

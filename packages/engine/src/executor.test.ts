@@ -134,7 +134,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", repo: "owner/repo" },
   }),
 };
 
@@ -179,7 +179,7 @@ const implementWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", repo: "owner/repo" },
   }),
 };
 
@@ -196,7 +196,7 @@ const mcpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", repo: "owner/repo" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
   }),
 };
@@ -207,7 +207,7 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", repo: "owner/repo" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
     ],
@@ -393,7 +393,7 @@ const followUpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github", repo: "owner/repo" },
   }),
 };
 
