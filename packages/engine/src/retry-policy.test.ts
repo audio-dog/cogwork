@@ -26,23 +26,32 @@ const nonRetryableDecision = {
 const fixedRetryableFailures = [
   {
     name: "control store failure",
-    failure: new ControlStoreFailure({ operation: "read", message: "unavailable" }),
+    failure: new ControlStoreFailure({ operation: "read", message: "unavailable", retryable: true }),
   },
   {
-    name: "git failure",
-    failure: new GitError({ command: "git fetch", message: "unavailable" }),
+    name: "timed out git failure",
+    failure: new GitError({
+      command: "git fetch",
+      message: "unavailable",
+      reason: "timeout",
+      retryable: true,
+    }),
   },
   {
     name: "worktree filesystem failure",
-    failure: new WorktreeFsError({ operation: "link", message: "unavailable" }),
+    failure: new WorktreeFsError({ operation: "link", message: "unavailable", retryable: true }),
   },
   {
     name: "context filesystem failure",
-    failure: new ContextFsError({ operation: "read", message: "unavailable" }),
+    failure: new ContextFsError({ operation: "read", message: "unavailable", retryable: true }),
   },
   {
     name: "run plan assembly failure",
-    failure: new RunPlanAssemblyError({ message: "invalid plan", cause: new Error("invalid plan") }),
+    failure: new RunPlanAssemblyError({
+      message: "invalid plan",
+      cause: new Error("invalid plan"),
+      retryable: true,
+    }),
   },
 ] satisfies ReadonlyArray<{ readonly name: string; readonly failure: RetryFailure }>;
 
@@ -53,6 +62,7 @@ const fixedNonRetryableFailures = [
       remote: "origin",
       branch: "484-retry-policy",
       message: "cannot rebase",
+      retryable: false,
     }),
   },
   {
@@ -62,15 +72,20 @@ const fixedNonRetryableFailures = [
       operation: "merge",
       unmergedPaths: ["packages/engine/src/executor.ts"],
       message: "merge in progress",
+      retryable: false,
     }),
   },
   {
     name: "credential failure",
-    failure: new CredentialError({ account: "github", message: "missing credential" }),
+    failure: new CredentialError({ account: "github", message: "missing credential", retryable: false }),
   },
   {
     name: "context assembly failure",
-    failure: new ContextAssemblerError({ source: "AGENTS.md", message: "invalid context" }),
+    failure: new ContextAssemblerError({
+      source: "AGENTS.md",
+      message: "invalid context",
+      retryable: false,
+    }),
   },
 ] satisfies ReadonlyArray<{ readonly name: string; readonly failure: RetryFailure }>;
 
