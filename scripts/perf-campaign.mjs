@@ -162,8 +162,10 @@ const preflight = async (profiling) => {
   say("then run:  node scripts/perf-campaign.mjs run");
 };
 
+class CampaignInterrupted extends Error {}
+
 const throwIfInterrupted = (signal) => {
-  if (signal.aborted) throw new Error("campaign interrupted");
+  if (signal.aborted) throw new CampaignInterrupted("campaign interrupted");
 };
 
 const holdWindow = async (manifest, agents, minutes, signal) => {
@@ -222,6 +224,11 @@ const run = async (minutes) => {
       await holdWindow(manifest, agents, minutes, interrupt.signal);
     }
     throwIfInterrupted(interrupt.signal);
+  } catch (error) {
+    if (!(error instanceof CampaignInterrupted)) throw error;
+    say(error.message);
+    process.exitCode = 130;
+    return;
   } finally {
     restoreRestingLimit();
     process.off("SIGINT", handleInterrupt);
