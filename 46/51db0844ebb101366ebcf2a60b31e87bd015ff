@@ -1,0 +1,41 @@
+packages/codex-cli/CONTEXT.md
+  s_53ed8a7e3642de::t_eeaf3bfe4e1ef4 54-55
+  s_53ed8a7e3642de::t_125fb07c55eea1 52-53
+packages/claude-code/src/harness.ts
+  s_53ed8a7e3642de::t_c8859d738cb44e 419-420
+  s_53ed8a7e3642de::t_b4c27ffa7be257 421
+packages/codex-cli/src/harness.ts
+  s_53ed8a7e3642de::t_c8859d738cb44e 364-365
+packages/engine/CONTEXT.md
+  s_53ed8a7e3642de::t_6aaeb73dc08087 93
+packages/claude-code/CONTEXT.md
+  s_53ed8a7e3642de::t_dc50a7bc50a85b 28
+packages/codex-cli/src/harness.test.ts
+  s_53ed8a7e3642de::t_c4735cacad2feb 615
+  s_53ed8a7e3642de::t_6d161cb03db349 242-250,598,602,614,616-623
+packages/engine/src/external-harness-runtime.ts
+  s_53ed8a7e3642de::t_c8859d738cb44e 101,441-445,447
+  s_53ed8a7e3642de::t_9d142e94ae34ce 446
+  s_53ed8a7e3642de::t_86101132bc581a 448-450,457-459,465,470-471,475,479-480,490,500
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "4651db0844ebb101366ebcf2a60b31e87bd015ff",
+  "prompts": {},
+  "humans": {
+    "h_615a1c56092cd9": {
+      "author": "a <a@b>"
+    }
+  },
+  "sessions": {
+    "s_53ed8a7e3642de": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c41e1f0d-2d35-4686-860b-de71c93fe9e2",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
