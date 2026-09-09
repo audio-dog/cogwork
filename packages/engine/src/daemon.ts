@@ -11,6 +11,7 @@ import {
   PrincipalMiddleware,
   type RunActivity,
   type RunId,
+  type WorkspaceId,
 } from "@cogwork/contracts";
 
 import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
@@ -344,6 +345,7 @@ export interface HostAdapters<E = never, R = never> {
   readonly appVersion: string;
   readonly performanceEvidenceRoot: string;
   readonly performanceHealth: Layer.Layer<PerformanceHealthSource, E, R>;
+  readonly performanceIssueWorkspace?: WorkspaceId;
 }
 
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
@@ -373,7 +375,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
   );
-  const performanceIssueFiler = GitHub.performanceIssueFilerLayer.pipe(
+  const performanceIssueFiler = GitHub.performanceIssueFilerLayer(adapters.performanceIssueWorkspace).pipe(
     Layer.provide(githubClient),
     Layer.provide(issueTracker),
     Layer.provide(registry),

@@ -4,7 +4,7 @@ import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { claudeCodeRunner } from "@cogwork/claude-code";
 import { codexRunner } from "@cogwork/codex-cli";
-import { DaemonRpcs, HarnessName } from "@cogwork/contracts";
+import { DaemonRpcs, HarnessName, type WorkspaceId } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
 import { ContextAssembler, Daemon, PerformanceRegressionSensor, Provider, Replay } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
@@ -40,6 +40,7 @@ export interface DaemonOptions {
   readonly pollIntervalMillis: number;
   readonly drainGraceMillis: number;
   readonly telemetryEnabled: boolean;
+  readonly performanceWorkspace?: WorkspaceId;
 }
 
 const prepareSocketDir = (socketPath: string) =>
@@ -359,6 +360,7 @@ export const serverLayer = (options: DaemonOptions) =>
               storePath: defaultTelemetryStorePath,
             }),
           ),
+          performanceIssueWorkspace: options.performanceWorkspace,
         }),
       ),
     ),
