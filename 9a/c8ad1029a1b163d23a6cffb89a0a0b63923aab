@@ -1,0 +1,21 @@
+scripts/test-performance-filer.mjs
+  s_0c92afffe40c34::t_7e2680af57266a 6-8,77,80-83
+scripts/test-performance-filer.test.mjs
+  s_0c92afffe40c34::t_7e2680af57266a 12,59-66,91,95,112,116,129,136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9ac8ad1029a1b163d23a6cffb89a0a0b63923aab",
+  "prompts": {},
+  "sessions": {
+    "s_0c92afffe40c34": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087da-92f1-7281-9d67-ae372795a6a6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
