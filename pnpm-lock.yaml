@@ -269,6 +269,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@effect/vitest':
+        specifier: catalog:effect
+        version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
       '@electron/fuses':
         specifier: ^1.8.0
         version: 1.8.0
