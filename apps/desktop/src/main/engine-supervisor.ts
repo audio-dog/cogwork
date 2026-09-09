@@ -141,6 +141,26 @@ const setStatus = (status: SubscriptionRef.SubscriptionRef<EngineStatus>, next: 
 
 const logExpectedClose = (closed: EngineClose) => Effect.logInfo("Engine closed", { code: closed.code });
 
+const attemptChildClose = (
+  owned: OwnedChild,
+  terminateTimeout: Duration.Input,
+  forceKillTimeout: Duration.Input,
+) => {
+  const closeTimeout = Duration.sum(
+    Duration.fromInputUnsafe(terminateTimeout),
+    Duration.fromInputUnsafe(forceKillTimeout),
+  );
+  return owned.child.kill({ killSignal: "SIGTERM", forceKillAfter: terminateTimeout }).pipe(
+    Effect.andThen(Deferred.await(owned.closed)),
+    Effect.timeoutOption(closeTimeout),
+    Effect.catchCause((cause) =>
+      Effect.logWarning("Engine shutdown failed", { cause }).pipe(
+        Effect.map(() => Option.none<EngineClose>()),
+      ),
+    ),
+  );
+};
+
 const releaseChild = (
   owned: OwnedChild,
   terminateTimeout: Duration.Input,
@@ -149,19 +169,13 @@ const releaseChild = (
   Effect.gen(function* () {
     if (yield* Deferred.isDone(owned.closed)) return;
     yield* Effect.logInfo("Stopping the supervised engine");
-    const closeTimeout = Duration.sum(
-      Duration.fromInputUnsafe(terminateTimeout),
-      Duration.fromInputUnsafe(forceKillTimeout),
-    );
-    const killed = yield* owned.child
-      .kill({ killSignal: "SIGTERM", forceKillAfter: terminateTimeout })
-      .pipe(Effect.andThen(Deferred.await(owned.closed)), Effect.timeoutOption(closeTimeout));
+    const killed = yield* attemptChildClose(owned, terminateTimeout, forceKillTimeout);
     if (Option.isSome(killed)) return yield* logExpectedClose(killed.value);
     yield* owned.child.unref;
-    yield* Effect.logWarning("Engine did not close after SIGKILL", { code: null });
+    yield* Effect.logWarning("Engine did not close during shutdown", { code: null });
   }).pipe(
     Effect.annotateLogs({ pid: owned.child.pid }),
-    Effect.andThen(drainOutput(owned.outputFibers)),
+    Effect.ensuring(drainOutput(owned.outputFibers)),
     Effect.ignore,
   );
 

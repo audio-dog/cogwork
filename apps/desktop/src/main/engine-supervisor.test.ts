@@ -58,11 +58,7 @@ class FakeChild {
           return;
         }
         if (options?.forceKillAfter !== undefined) this.signals.push("SIGKILL");
-      }).pipe(
-        Effect.andThen(
-          this.exitOnSignal === null ? Effect.never : Deferred.await(this.exited).pipe(Effect.asVoid),
-        ),
-      ),
+      }).pipe(Effect.andThen(this.awaitExitAfterKill())),
     getInputFd: (fd) =>
       fd === 3
         ? Sink.forEachArray((chunks: ReadonlyArray<Uint8Array>) =>
@@ -82,9 +78,18 @@ class FakeChild {
     }),
   });
 
-  constructor(private readonly exitOnSignal: NodeJS.Signals | null = "SIGTERM") {}
+  constructor(
+    private readonly exitOnSignal: NodeJS.Signals | null = "SIGTERM",
+    private readonly killFailure?: PlatformError.PlatformError,
+  ) {}
 
   protected beforeKill() {}
+
+  private awaitExitAfterKill() {
+    if (this.killFailure) return Effect.fail(this.killFailure);
+    if (this.exitOnSignal === null) return Effect.never;
+    return Deferred.await(this.exited).pipe(Effect.asVoid);
+  }
 
   close(code: number) {
     this.profileResponses.end();
@@ -560,6 +565,30 @@ describe("EngineSupervisor", () => {
         await runtime.runPromise(supervisor.stop);
 
         expect(entries).toContainEqual(["Engine output", { line: "shutdown diagnostic", stream: "stderr" }]);
+      },
+      Logger.layer([capture], { mergeWithExisting: false }),
+    );
+  });
+
+  it("finishes cleanup when stopping the child fails", async () => {
+    const failure = PlatformError.systemError({
+      module: "ChildProcess",
+      method: "kill",
+      _tag: "Unknown",
+    });
+    const child = new ShutdownOutputChild(null, failure);
+    const entries: unknown[] = [];
+    const capture = Logger.make(({ message }) => entries.push(message));
+
+    await withSupervisor(
+      options({ spawn: () => child }),
+      async (runtime, supervisor) => {
+        await runtime.runPromise(supervisor.start);
+        await runtime.runPromise(supervisor.stop.pipe(Effect.timeout("1 second")));
+
+        expect(child.unrefCount).toBe(1);
+        expect(entries).toContainEqual(["Engine output", { line: "shutdown diagnostic", stream: "stderr" }]);
+        expect(await currentStatus(runtime, supervisor)).toBe("stopped");
       },
       Logger.layer([capture], { mergeWithExisting: false }),
     );
