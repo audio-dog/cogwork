@@ -1,0 +1,214 @@
+packages/contracts/src/connection.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 28,33-40
+packages/engine/src/github/client.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1,25,30,33-41,479-571
+  s_5bcda3d0545c1b::t_37f2b5534b1e86 572
+packages/engine/src/linear/client.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 485-486
+scripts/test-compare.mjs
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-281
+packages/engine/src/github/cli-credential.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-130
+packages/engine/src/workspace-registry.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 925-926,969-970
+packages/engine/src/harness.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 20,169,262
+packages/engine/src/playbook.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 11,13-14,93,98,103,108,120,125,130,142,147,152,165,171-174,183,189-192,201,207-210,301-322
+  s_5bcda3d0545c1b::t_dd998bba51da40 323-324
+packages/engine/src/github/index.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 2
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_5bcda3d0545c1b::t_9fb6b91b739c9d 1437-1466
+  s_5bcda3d0545c1b::t_14e7410e29e0d3 1526
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-2,22,27,51-57,84,86-102,167,174,177,195-196,199-200,206-275,360,404-422,425-453,455-458,460-545,547-550,554-712,737,744,768,776,786,789-796,799,801,807,823,826,830,832,834,852-856,859,864-865,887-924,927-928,932-941,957,991,1001,1030,1056-1076,1079-1097,1100-1125
+  s_5bcda3d0545c1b::t_07e5c5984271c9 1291,1371,1410,1532
+packages/contracts/src/triage.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1,29-37,45-53,60-68,73-81,96-104,170-186
+  s_5bcda3d0545c1b::t_7e209927920617 187
+packages/engine/src/github/cli-credential.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-231
+packages/engine/src/external-harness-runtime.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 14,282
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 7
+packages/engine/src/github/client.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 6,126,190,335,342-364,380-388,455-456,460-496,832,834-835
+packages/cursor-acp/package.json
+  s_5bcda3d0545c1b::t_65fa95263165f7 25
+packages/engine/src/connection.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 3,50-82,86,92-96,120,145,216-247,251,254-269
+apps/desktop/src/main/engine-supervisor.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 11,17,23,26-27,39,44,48,51,54-57,67-70,76-77,80-133,143,145-154,156-161,163,173-176,178-179,216-217,229-290,293-306,317-326,328-336,345,349-360,362-386,389-399,401-411,413,415,421,427,431-433,439,509-519,524
+packages/engine/src/github/github.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 210
+scripts/test-measure.mjs
+  s_5bcda3d0545c1b::t_65fa95263165f7 2-3,12-15,29-32,34,36-64,67-69,82-116,119-127,130-171,174
+packages/cursor-acp/src/harness.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 16,234,251-254,265,276-279,294-315,358-363,365-449
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 81-83
+docs/research/six-to-eight-agent-measurement-campaign.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-152
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 63,87
+pnpm-workspace.yaml
+  s_5bcda3d0545c1b::t_65fa95263165f7 22-31
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_5bcda3d0545c1b::t_65fa95263165f7 28-29,31,38-109,125-126,186,226
+packages/engine/src/connection.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 5,12,14,50-80,237-496
+apps/desktop/src/main/index.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 4-6,13,45,91-94
+scripts/test-measure-summary.mjs
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-14
+apps/desktop/src/renderer/src/features/connection-form.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 29-31,53,60-66
+  s_5bcda3d0545c1b::t_22530fb9a2bdcc 67-68
+packages/engine/src/harness.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 7,55
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 3-16,18-19,27,30,35,37-101,103-104,107-110,113-114,116,121,129-132,134-158,161,168-170,221,225-228,278,280-292,294,297,301,303-313,343,348,354-407,409-453,540-541,578-601,667
+packages/engine/src/context-assembler.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-7,20-24,33,40-44,48,50-53,78-93,366-407,449
+apps/cli/src/replay-commands.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 5,28-31,37-39,45-47,49,86,116-119
+apps/cli/src/connection-commands.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 8-13,19,31,43,56,70,78-117
+apps/cli/src/profile-fd-streams.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-7
+packages/codex-cli/src/harness.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 37,41-47,319
+packages/engine/CONTEXT.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 234,236-244,250-252,255
+scripts/test-measure.test.mjs
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-190
+packages/engine/src/commands.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 2,22,66-71,626,630-631,635,641,671
+packages/engine/src/testing/engine-test-layer.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 2,27
+docs/research/file-diff-feed-batching-measurement.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-51
+packages/engine/src/external-harness-runtime.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 474
+packages/codex-cli/CONTEXT.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 45-46
+apps/cli/src/rpc.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 4,6,11,16,58-71,196-266
+  s_5bcda3d0545c1b::t_dad7dfdaa5c1e3 267
+.github/workflows/pull-request.yml
+  s_5bcda3d0545c1b::t_65fa95263165f7 20,33,48-59,64,81,101
+packages/engine/package.json
+  s_5bcda3d0545c1b::t_65fa95263165f7 19-21
+apps/cli/src/platform.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 872-873
+packages/claude-code/src/harness.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 30
+packages/engine/src/context-assembler.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1,28,164,166-167,170-171,175-196,212-216,225-231,236-238,241,243-253
+packages/engine/src/credential-store.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 9,42-65,67-76,113-123,127-183,356-394,513-521,578-594,820-828,921-931
+packages/engine/src/daemon.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 24,382,463-466,472-475
+apps/cli/src/credentials.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1,8,155,157,161
+packages/contracts/src/rpc.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 38,103-104,106,123,191,227,233
+packages/engine/src/executor.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 26,222-231,240,242-250,254,1074,1078,1546,2174,2178,3204-3228,3613-3643,3645-3646,3648,3653-3655,3661-3670
+packages/engine/src/provider-runner.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 161
+package.json
+  s_5bcda3d0545c1b::t_65fa95263165f7 17,19
+apps/cli/src/login.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 7,158-160
+packages/engine/src/commands.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 2,6,28,35,140-144,151,153,186,189,445-451,625-629,633,637
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-103
+scripts/test-compare.test.mjs
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-126
+docs/spec/performance-observability.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 5,112,121-147,150-151
+packages/engine/src/context-fs.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 11
+apps/cli/src/worktree-commands.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 3,11-13,35-37
+apps/cli/src/process-profile-ipc.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 8-11,15,17-18,22,25-64,100,125-191,196,205-211
+packages/codex-cli/src/harness.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 32-38,173-184,357-360,362-377,394,549-550,556,860-883,890,902-906
+apps/cli/src/connection-commands.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 32-34,36,44,72-73,77,82-89,129-150,154,156,163,196,204
+packages/engine/src/connection-verify.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 51,53,55
+packages/engine/src/registry.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 10,82,86,90,101-110,113,115,117-119,121,179,181-184,430,433-437,479,663-669,759,761-765,770,775,783,786,791,795-812,816-822
+packages/contracts/CONTEXT.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 126,140-141,290
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 115-120
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 240-258
+packages/claude-code/src/harness.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 12,124,464
+packages/engine/src/credential-store.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 75-77,120,183-187,217-221,352-371,379-382,424-428,451,481-486,488-489,501-502
+packages/engine/src/executor.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 16,23,32,42,71-72,102,115,164,241-242,362,368-375,624,748,750-751,754,804,807,810-814,817-819,821-831,856,914-919,921-926,929,932,934-935,938-954,956-990,993-1032,1035-1054,1057,1060-1062,1064-1068,1071,1074-1095,1097,1100-1101,1149,1153,1159,1161,1163-1172,1175,1178,1189-1193,1201-1202,1204-1209,1212,1215-1218,1220-1230,1233,1236,1238-1240,1242-1254,1258,1261-1262,1265-1270,1272-1279,1654,1657-1659,1750,1779
+packages/engine/src/playbook.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 10,14-30,33-36,83-84,86,88-111,128,138,148
+scripts/process-pressure-sampler.mjs
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-177
+apps/cli/src/credentials.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1,11,13,66,122-138
+  s_5bcda3d0545c1b::t_5893d79eb0e40c 139-142
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_5bcda3d0545c1b::t_65fa95263165f7 97-108,116
+packages/contracts/src/workspace.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 111-118
+scripts/perf-campaign.mjs
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-590
+apps/cli/CONTEXT.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 43
+apps/cli/src/platform.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 286-290
+docs/adr/0023-codex-runs-trust-ambient-hooks.md
+  s_5bcda3d0545c1b::t_65fa95263165f7 1-24
+packages/contracts/src/connection.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 37-53
+  s_5bcda3d0545c1b::t_d966b329ce16b4 54
+apps/cli/src/rpc.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 12,16,23-24,129-135,144-145,147-148,150-154,156-168,170-172,176,180-181,183,214-215,222,224-241,243-248,251,261-287,301-305,312-314,321,345
+packages/cursor-acp/src/harness.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 17-19,22,25,27,86,236-312,330-332,334,362-364,366
+packages/engine/src/provider-runner.test.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 3,212
+packages/engine/src/connection-verify.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 18,31-33,40
+packages/engine/src/tools/file-diff-feed.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 6,22-31,38-39,45-46,51-54,74-80,95,108,135,173-201,205-211,213-214,222,231,241-246,249-255,265,267,271,273,287,290-293,296-302,304,306-307,312,317-320,322-330,343-513,552,554,558-564,574-646,653-668,681,683-722
+  s_5bcda3d0545c1b::t_c8ad29367f3582 4,801-803,963,983,986,988,990-993,1050-1051,1059-1060
+  s_5bcda3d0545c1b::t_cf666545813da7 8,1021-1024
+  s_5bcda3d0545c1b::t_a1d080a17a7c8c 1052-1058
+apps/desktop/src/renderer/src/features/connection-form.ts
+  s_5bcda3d0545c1b::t_65fa95263165f7 1,6,16,24-25,49,59-63
+pnpm-lock.yaml
+  s_5bcda3d0545c1b::t_f64aa6e1a1f6ca 16-23,25-26,30-38,40-41,43-44,374,377,380,383,399,417,420,423,426,442,485,487-488,491,494,507,531,533-534,536-537,539-540,543,546,549,2229-2230,2232-2233,2235-2236,2239,2244-2245,2247-2248,2250-2251,2253-2254,2259-2260,2262,2264-2265,2267,2269-2270,2272,2278-2279,2281,2283-2284,2287-2288,2298-2299,2302,2312-2313,2418-2419,2421,6957,6960-6961,6965,6968,6973,6975-6976,6978,6980-6981,6987,6990,6999,7001,7003,7012,7014,7019,7021,7023,7026-7027,7029,7036,7038,7045,7172,7174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b0282fc1b4b07442f74fc4bd6df3ae4a67d704e6",
+  "prompts": {},
+  "sessions": {
+    "s_5bcda3d0545c1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08772-ca43-70c3-a712-f8b4fcafe310",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
