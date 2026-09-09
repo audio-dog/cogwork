@@ -58,6 +58,12 @@ const normalizeIdentityPart = (value) => {
   return encodeURIComponent(value.trim().toLowerCase());
 };
 
+const normalizeRunUrl = (value) => {
+  const url = new URL(value);
+  if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+  throw new Error("workflow run link must be an HTTP URL");
+};
+
 export const fingerprintFor = ({ signal, subsystem, direction }) =>
   [signal, subsystem, direction].map(normalizeIdentityPart).join(":");
 
@@ -115,7 +121,7 @@ const filedToday = (issues, now) => {
 
 export const fileTestPerformanceRegression = async ({ report: input, runUrl, now = new Date() }, tracker) => {
   const report = requireReport(input);
-  new URL(runUrl);
+  const normalizedRunUrl = normalizeRunUrl(runUrl);
   if (report.verdict !== "slower") return { action: "skipped", reason: report.verdict };
 
   const fingerprint = performanceFingerprint(report);
@@ -123,7 +129,7 @@ export const fileTestPerformanceRegression = async ({ report: input, runUrl, now
   const matches = matchingIssues(issues, fingerprint);
   const open = latestIssue(matches.filter((issue) => issue.state === "open"));
   if (open) {
-    await tracker.commentOnIssue(open.number, recurrenceComment(report, runUrl));
+    await tracker.commentOnIssue(open.number, recurrenceComment(report, normalizedRunUrl));
     return { action: "commented", number: open.number };
   }
 
@@ -132,7 +138,7 @@ export const fileTestPerformanceRegression = async ({ report: input, runUrl, now
   const previous = latestIssue(matches.filter((issue) => issue.state === "closed"));
   const created = await tracker.createIssue({
     title: previous ? "Test suite performance regressed again" : "Test suite performance regressed",
-    body: issueBody(report, runUrl, fingerprint, previous),
+    body: issueBody(report, normalizedRunUrl, fingerprint, previous),
     labels: ["needs-triage", originLabel],
   });
   return { action: "created", number: created.number };

@@ -82,7 +82,7 @@ describe("test-performance filer", () => {
     const existing = {
       number: 42,
       state: "open",
-      body: fingerprintMarker(performanceFingerprint(current)),
+      body: "<!-- cogwork:selfperf fingerprint=test-suite-duration%3Arepository%3Aslower -->",
       createdAt: "2026-09-01T12:00:00Z",
       url: "https://github.com/colonylabs/cogwork/issues/42",
     };
@@ -105,7 +105,7 @@ describe("test-performance filer", () => {
     const closed = {
       number: 41,
       state: "closed",
-      body: fingerprintMarker(performanceFingerprint(current)),
+      body: "<!-- cogwork:selfperf fingerprint=test-suite-duration%3Arepository%3Aslower -->",
       createdAt: "2026-08-01T12:00:00Z",
       url: "https://github.com/colonylabs/cogwork/issues/41",
     };
@@ -157,6 +157,20 @@ describe("test-performance filer", () => {
     ]);
     assert.equal(faster.created.length + faster.comments.length, 0);
     assert.equal(inconclusive.created.length + inconclusive.comments.length, 0);
+  });
+
+  it("publishes only normalized HTTP run links", async () => {
+    const injectedRunUrl = `${runUrl}\n\n@colonylabs/security ping`;
+    const { tracker, created } = makeTracker();
+
+    await fileTestPerformanceRegression({ report: report(), runUrl: injectedRunUrl, now }, tracker);
+
+    assert.doesNotMatch(created[0].body, /\n@colonylabs\/security/);
+    assert.match(created[0].body, /actions\/runs\/123@colonylabs\/security%20ping/);
+    await assert.rejects(
+      fileTestPerformanceRegression({ report: report(), runUrl: "javascript:alert(1)", now }, tracker),
+      /HTTP URL/,
+    );
   });
 
   it("keeps measurements out of stable regression identity", () => {
