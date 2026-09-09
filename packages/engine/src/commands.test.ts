@@ -30,6 +30,7 @@ import {
 } from "@cogwork/contracts";
 
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -262,12 +263,20 @@ const pluginManagerLayer = Layer.succeed(PluginManager, {
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
   contributions: () => Effect.succeed([]),
 });
-const connectionStoreLayerWithStatus = (
-  status: "established" | "revoked",
-  existing: Connection | null = null,
-  remove: ConnectionStoreService["remove"] = () => Effect.die("unexpected Connection remove"),
-) =>
-  Layer.succeed(ConnectionStore, {
+interface ConnectionStoreStubOptions {
+  readonly status: "established" | "revoked";
+  readonly existing?: Connection | null;
+  readonly remove?: ConnectionStoreService["remove"];
+  readonly establish?: ConnectionStoreService["establish"];
+}
+
+const connectionStoreStub = ({
+  status,
+  existing = null,
+  remove = () => Effect.die("unexpected Connection remove"),
+  establish = () => Effect.die("unexpected Connection establish"),
+}: ConnectionStoreStubOptions) =>
+  ({
     overview: Effect.succeed({ connections: [] }),
     find: (connectionId) =>
       Effect.succeed(
@@ -283,11 +292,33 @@ const connectionStoreLayerWithStatus = (
     readiness: () => Effect.succeed({ _tag: "Ready" }),
     requireReady: () => Effect.void,
     requireSystemReady: () => Effect.void,
-    establish: () => Effect.die("unexpected Connection establish"),
+    establish,
     revoke: () => Effect.die("unexpected Connection revoke"),
     remove,
-  });
-const connectionStoreLayer = connectionStoreLayerWithStatus("established");
+  }) satisfies ConnectionStoreService;
+
+const connectionStoreStubLayer = (options: ConnectionStoreStubOptions) =>
+  Layer.succeed(ConnectionStore, connectionStoreStub(options));
+
+const connectionStoreLayer = connectionStoreStubLayer({ status: "established" });
+
+interface ConnectionPluginInstallProbeService {
+  readonly installStarted: Deferred.Deferred<void>;
+  readonly removed: Ref.Ref<ReadonlyArray<Connection["id"]>>;
+}
+
+class ConnectionPluginInstallProbe extends Context.Service<
+  ConnectionPluginInstallProbe,
+  ConnectionPluginInstallProbeService
+>()("@cogwork/engine/commands.test/ConnectionPluginInstallProbe") {
+  static readonly layer = Layer.effect(
+    ConnectionPluginInstallProbe,
+    Effect.all({
+      installStarted: Deferred.make<void>(),
+      removed: Ref.make<ReadonlyArray<Connection["id"]>>([]),
+    }),
+  );
+}
 
 const installedPlugin = (pluginId: string) =>
   ({
@@ -1330,7 +1361,7 @@ describe("RegisterWorkspace", () => {
           controlStoreStub(),
           registryServices,
           pluginManagerLayer,
-          connectionStoreLayerWithStatus("revoked"),
+          connectionStoreStubLayer({ status: "revoked" }),
         ),
       ),
       Effect.scoped,
@@ -1454,7 +1485,7 @@ describe("Connection mutations", () => {
     controlStoreStub(),
     registryServices,
     pluginManagerLayer,
-    connectionStoreLayerWithStatus("established", existing),
+    connectionStoreStubLayer({ status: "established", existing }),
   );
   const establishment: ConnectionEstablishment = {
     system: "linear",
@@ -1478,6 +1509,60 @@ describe("Connection mutations", () => {
       );
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
+
+  it.effect("removes a new Connection when required Plugin installation is interrupted", () => {
+    const connection = Connection.make({
+      id: connectionIdOf("linear", "other"),
+      system: "linear",
+      account: "other",
+      status: "established",
+    });
+    const requiredPlugin = {
+      ...installedPlugin("linear"),
+      record: null,
+      resolvedIdentity: null,
+      requiredConnections: ["linear"],
+    } satisfies PluginItem;
+    return Effect.gen(function* () {
+      const probe = yield* ConnectionPluginInstallProbe;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const establishing = yield* Effect.forkChild(client.EstablishConnection({ establishment }));
+
+      yield* Deferred.await(probe.installStarted);
+      yield* Fiber.interrupt(establishing);
+
+      assert.deepStrictEqual(yield* Ref.get(probe.removed), [connection.id]);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          Layer.effect(
+            PluginManager,
+            Effect.map(ConnectionPluginInstallProbe, ({ installStarted }) => ({
+              overview: Effect.succeed({ plugins: [requiredPlugin] }),
+              install: () => Deferred.succeed(installStarted, undefined).pipe(Effect.andThen(Effect.never)),
+              uninstall: () => Effect.die("unexpected Plugin uninstall"),
+              contributions: () => Effect.succeed([]),
+            })),
+          ).pipe(Layer.provideMerge(ConnectionPluginInstallProbe.layer)),
+          Layer.effect(
+            ConnectionStore,
+            Effect.map(ConnectionPluginInstallProbe, ({ removed }) =>
+              connectionStoreStub({
+                status: "established",
+                remove: (connectionId) => Ref.update(removed, (ids) => [...ids, connectionId]),
+                establish: () => Effect.succeed(connection),
+              }),
+            ),
+          ).pipe(Layer.provideMerge(ConnectionPluginInstallProbe.layer)),
+        ).pipe(Layer.provideMerge(ConnectionPluginInstallProbe.layer)),
+      ),
+      Effect.scoped,
+    );
+  });
 
   it.effect("warns when a failed workspace uses the removed source-control Connection", () => {
     const github = connectionIdOf("github", "acme");
@@ -1526,7 +1611,7 @@ describe("Connection mutations", () => {
           controlStoreStub(),
           registries,
           pluginManagerLayer,
-          connectionStoreLayerWithStatus("established", null, () => Effect.void),
+          connectionStoreStubLayer({ status: "established", remove: () => Effect.void }),
         ),
       ),
       Effect.scoped,
@@ -1569,7 +1654,7 @@ describe("Connection mutations", () => {
           controlStoreStub(),
           registries,
           plugins,
-          connectionStoreLayerWithStatus("established", null, () => Effect.void),
+          connectionStoreStubLayer({ status: "established", remove: () => Effect.void }),
         ),
       ),
       Effect.scoped,
