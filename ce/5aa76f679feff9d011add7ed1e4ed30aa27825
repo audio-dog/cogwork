@@ -1,0 +1,38 @@
+scripts/refuse-pull-request-creation.mjs
+  s_f73f8f78f28b3f::t_0249371a5c81b3 4,6-7,28-33,51
+  s_f73f8f78f28b3f::t_41c8310fed59a8 5,41,43-46,67
+  s_f73f8f78f28b3f::t_aff6878866fc16 9-14,16-26
+  s_f73f8f78f28b3f::t_d827ca7a90f661 34-40,42
+  s_f73f8f78f28b3f::t_171334f6bf8b47 1-2,8,15,27,47-50,52-66,68-71
+  s_f73f8f78f28b3f::t_f963c07881232c 3
+scripts/refuse-pull-request-creation.test.mjs
+  s_f73f8f78f28b3f::t_cdb63eaeb37067 97,109-121
+  s_f73f8f78f28b3f::t_4a1e2e499fa52c 1-7,9-24,40-45,47-55,64-75,85-88,90-94,98-101,103-104,122-139,148-165,169-170
+  s_f73f8f78f28b3f::t_7374a2af94e30e 31-39
+  s_f73f8f78f28b3f::t_4ac75f430ee461 166-168
+  s_f73f8f78f28b3f::t_3b04877836c943 28-30
+  s_f73f8f78f28b3f::t_e058cc679ca298 77-84
+  s_f73f8f78f28b3f::t_2434030536af6d 140-147
+  s_f73f8f78f28b3f::t_dfd4da3875d7fd 8
+  s_f73f8f78f28b3f::t_9c9a7a966bb1a3 25-27,46,56-63
+  s_f73f8f78f28b3f::t_54d55ba6ff5dbd 76,89
+  s_f73f8f78f28b3f::t_e105976c415e94 95-96,102,105-108
+.codex/hooks.json
+  s_f73f8f78f28b3f::t_47ef1b3a3e524f 3-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ce5aa76f679feff9d011add7ed1e4ed30aa27825",
+  "prompts": {},
+  "sessions": {
+    "s_f73f8f78f28b3f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52f5854d-a102-4ec2-9efa-96301bae2bf7",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
