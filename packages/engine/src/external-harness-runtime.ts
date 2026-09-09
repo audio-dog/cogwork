@@ -454,8 +454,9 @@ const resolveGitWritablePaths = Effect.fn("ExternalHarnessRuntime.resolveGitWrit
       const path = yield* Path.Path;
       const worktreeGitPath = path.resolve(checkoutPath, ".git");
       const info = yield* fs.stat(worktreeGitPath);
-      // A checkout that owns its Git directory shares it with nobody, and its index sits in that
-      // directory's root, so it is granted whole.
+      // A checkout whose `.git` is a real directory cannot be narrowed: Git writes the index by
+      // creating `index.lock` beside it, so committing needs the directory itself — which is also
+      // the common directory every linked Worktree shares.
       if (info.type === "Directory") return [yield* fs.realPath(worktreeGitPath)];
 
       const pointer = yield* fs.readFileString(worktreeGitPath);
@@ -472,12 +473,20 @@ const resolveGitWritablePaths = Effect.fn("ExternalHarnessRuntime.resolveGitWrit
     }).pipe(Effect.provide(Path.layer)),
 );
 
+// A read-only Operation commits nothing, so it is granted nothing: Codex protects `<checkout>/.git`
+// on its own, and an `--add-dir` over that path overrides the protection. Withholding the paths
+// rather than skipping resolution keeps the preflight, so a checkout whose Git metadata is
+// unreachable still fails before the Run starts.
 const gitWritablePaths = (
   descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
+  profile: OperationPolicyProfile,
   checkoutPath: string,
 ) => {
   if (descriptor.sharedGit === "none") return Effect.succeed<ReadonlyArray<string>>([]);
-  return resolveGitWritablePaths(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
+  return resolveGitWritablePaths(checkoutPath).pipe(
+    Effect.map((paths): ReadonlyArray<string> => (profile === "read-only" ? [] : paths)),
+    Effect.mapError(() => sharedGitError(checkoutPath)),
+  );
 };
 
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
@@ -487,7 +496,11 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
   authentication: ExternalHarnessAuthentication,
 ) {
   const resumeHandle = yield* resolveResumeHandle(session);
-  const writablePaths = yield* gitWritablePaths(descriptor, request.plan.sandbox.workspace);
+  const writablePaths = yield* gitWritablePaths(
+    descriptor,
+    request.plan.harness.profile,
+    request.plan.sandbox.workspace,
+  );
   return {
     identity: { run: request.plan.id, session, resumeHandle },
     selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },

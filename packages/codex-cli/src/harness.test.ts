@@ -625,6 +625,31 @@ describe("codexRunner", () => {
       ),
     );
 
+    it.effect("grants a read-only Operation no writable Git path at all", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const calls: Array<CodexTextConfig> = [];
+          const harness = Harness.make([
+            runner({
+              makeAdapter: (model, config) => {
+                calls.push(config);
+                return codexText(model, config);
+              },
+            }),
+          ]);
+          yield* harness
+            .run(makeRequest({ checkoutPath, session: freshSession, stage: "triage" }))
+            .pipe(Stream.runDrain);
+
+          const call = calls[0];
+          if (!call) return assert.fail("Codex adapter was not created");
+          assert.isUndefined(call.additionalDirectories);
+        }),
+      ),
+    );
+
     it.effect("classifies emitted Codex authentication errors after preserving the event", () =>
       Effect.scoped(
         Effect.gen(function* () {
