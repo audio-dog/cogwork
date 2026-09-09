@@ -275,7 +275,7 @@ export const schedulingActions = {
 } as const satisfies Record<"pause" | "resume", SchedulingState>;
 
 const runDaemon = Effect.fn("commands.runDaemon")(
-  function* (options: DaemonOptions & { readonly telemetryEnabled: boolean }) {
+  function* (options: DaemonOptions) {
     const registry = yield* (yield* Registry.WorkspaceRegistry).state;
     yield* Effect.logInfo("cogwork daemon started", {
       socket: options.socketPath,
