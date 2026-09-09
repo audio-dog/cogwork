@@ -1,0 +1,19 @@
+AGENTS.md
+  s_d8d73824e17678::t_098b4fd8c2f655 41-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "13f9ea375de9f40209f081d0aefea06481b6dbe8",
+  "prompts": {},
+  "sessions": {
+    "s_d8d73824e17678": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0884a-d4ca-7f73-9415-152677bcef9a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
