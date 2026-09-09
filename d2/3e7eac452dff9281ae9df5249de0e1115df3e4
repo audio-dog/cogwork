@@ -1,0 +1,19 @@
+packages/engine/src/retry-policy.test.ts
+  s_8150b5ee69adb9::t_f1f366859b1d6e 1,26-27,29,32-37,39,42-43,46-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d23e7eac452dff9281ae9df5249de0e1115df3e4",
+  "prompts": {},
+  "sessions": {
+    "s_8150b5ee69adb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08786-acea-7ce0-923e-39cb3f333bec",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
