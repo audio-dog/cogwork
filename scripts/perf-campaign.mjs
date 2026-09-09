@@ -25,7 +25,8 @@ const preferencesPath = join(
 const desktopLogPath = join(homedir(), "Library", "Logs", "@cogwork", "desktop", "main.log");
 
 const windowPlan = [6, 8];
-const restingLimit = 3;
+const restingGlobalLimit = 3;
+const restingPerWorkspaceLimit = 4;
 const socketPollMillis = 5_000;
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
@@ -100,15 +101,22 @@ const stopSampler = (manifest) => {
   waitForSamplerExit(pid);
 };
 
-// `limits set` goes over the daemon socket, so the daemon must already be listening. Calling the CLI
-// entry directly skips the several seconds `pnpm --filter` costs on every invocation.
-const setGlobalLimit = (value) => {
+// These controls go over the daemon socket, so the daemon must already be listening. Calling the
+// CLI entry directly skips the several seconds `pnpm --filter` costs on every invocation.
+const runCli = (...args) => {
   const tsx = join(repoRoot, "apps", "cli", "node_modules", "tsx", "dist", "cli.mjs");
   const entry = join(repoRoot, "apps", "cli", "src", "main.ts");
-  return execFileSync(process.execPath, [tsx, entry, "limits", "set", "global-concurrency", String(value)], {
+  return execFileSync(process.execPath, [tsx, entry, ...args], {
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
   }).trim();
+};
+
+const setLimit = (limit, value) => runCli("limits", "set", limit, String(value));
+
+const setCampaignLimits = (agents) => {
+  setLimit("per-workspace-concurrency", agents);
+  setLimit("global-concurrency", agents);
 };
 
 const preflight = async (profiling) => {
@@ -170,8 +178,9 @@ const throwIfInterrupted = (signal) => {
 
 const holdWindow = async (manifest, agents, minutes, signal) => {
   throwIfInterrupted(signal);
-  say(`${agents} agents: setting the limit`);
-  setGlobalLimit(agents);
+  say(`${agents} agents: setting global and per-workspace limits`);
+  setCampaignLimits(agents);
+  runCli("scheduling", "resume");
   const record = { agents, startedAt: stamp(), endedAt: null, daemonLostAt: null };
   manifest.windows.push(record);
   writeManifest(manifest);
@@ -195,13 +204,23 @@ const holdWindow = async (manifest, agents, minutes, signal) => {
   say(`${agents} agents: window closed`);
 };
 
-const restoreRestingLimit = () => {
+const attemptCleanup = (description, cleanup) => {
   try {
-    setGlobalLimit(restingLimit);
+    cleanup();
   } catch (error) {
-    say(`could not restore the global limit to ${restingLimit}: ${describe(error)}`);
-    process.exitCode = 1;
+    say(`could not ${description}: ${describe(error)}`);
+    process.exitCode ||= 1;
   }
+};
+
+const restoreRestingState = () => {
+  attemptCleanup("pause scheduling", () => runCli("scheduling", "pause"));
+  attemptCleanup(`restore the global limit to ${restingGlobalLimit}`, () =>
+    setLimit("global-concurrency", restingGlobalLimit),
+  );
+  attemptCleanup(`restore the per-workspace limit to ${restingPerWorkspaceLimit}`, () =>
+    setLimit("per-workspace-concurrency", restingPerWorkspaceLimit),
+  );
 };
 
 const run = async (minutes) => {
@@ -230,7 +249,7 @@ const run = async (minutes) => {
     process.exitCode = 130;
     return;
   } finally {
-    restoreRestingLimit();
+    restoreRestingState();
     process.off("SIGINT", handleInterrupt);
   }
   manifest.finishedAt = stamp();
