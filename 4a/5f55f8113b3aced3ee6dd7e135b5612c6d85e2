@@ -1,0 +1,21 @@
+packages/claude-code/CONTEXT.md
+  s_53ed8a7e3642de::t_6b2c871cae2fa3 28
+packages/codex-cli/CONTEXT.md
+  s_53ed8a7e3642de::t_cc047787ad53ea 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "4a5f55f8113b3aced3ee6dd7e135b5612c6d85e2",
+  "prompts": {},
+  "sessions": {
+    "s_53ed8a7e3642de": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c41e1f0d-2d35-4686-860b-de71c93fe9e2",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
