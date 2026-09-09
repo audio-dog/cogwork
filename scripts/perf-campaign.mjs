@@ -13,6 +13,7 @@ const telemetryPath = join(daemonHome, "telemetry.db");
 const campaignDirectory = join(homedir(), "campaign");
 const manifestPath = join(campaignDirectory, "manifest.json");
 const csvPath = join(campaignDirectory, "process-pressure.csv");
+const samplerPath = join(repoRoot, "scripts", "process-pressure-sampler.mjs");
 const preferencesPath = join(
   homedir(),
   "Library",
@@ -78,12 +79,36 @@ const rollAside = (path) => {
   return moved;
 };
 
+const samplerCommand = (pid) => capture("ps", ["-p", String(pid), "-o", "command="]);
+
+const isCampaignSampler = (pid) => {
+  const command = samplerCommand(pid);
+  return command.includes("process-pressure-sampler.mjs") && command.includes(csvPath);
+};
+
+const waitForSamplerExit = (pid, attempts = 50) => {
+  if (!isCampaignSampler(pid)) return;
+  if (attempts === 0) throw new Error(`sampler ${pid} did not stop`);
+  spawnSync("sleep", ["0.1"]);
+  return waitForSamplerExit(pid, attempts - 1);
+};
+
+const stopSampler = (manifest) => {
+  const pid = manifest?.samplerPid;
+  if (!Number.isSafeInteger(pid) || pid <= 0 || !isCampaignSampler(pid)) return;
+  process.kill(pid, "SIGINT");
+  waitForSamplerExit(pid);
+};
+
 // `limits set` goes over the daemon socket, so the daemon must already be listening. Calling the CLI
 // entry directly skips the several seconds `pnpm --filter` costs on every invocation.
 const setGlobalLimit = (value) => {
   const tsx = join(repoRoot, "apps", "cli", "node_modules", "tsx", "dist", "cli.mjs");
   const entry = join(repoRoot, "apps", "cli", "src", "main.ts");
-  return capture(process.execPath, [tsx, entry, "limits", "set", "global-concurrency", String(value)]);
+  return execFileSync(process.execPath, [tsx, entry, "limits", "set", "global-concurrency", String(value)], {
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  }).trim();
 };
 
 const preflight = async (profiling) => {
@@ -93,6 +118,7 @@ const preflight = async (profiling) => {
     return;
   }
   mkdirSync(campaignDirectory, { recursive: true });
+  stopSampler(readManifest());
   const supersededTelemetry = rollAside(telemetryPath);
   for (const suffix of ["-wal", "-shm"]) rollAside(`${telemetryPath}${suffix}`);
   const supersededCsv = rollAside(csvPath);
@@ -107,11 +133,10 @@ const preflight = async (profiling) => {
   // a measurement run leaves it off and only a diagnostic run asks for it.
   writeFileSync(preferencesPath, JSON.stringify({ ...preferences, profiling }));
 
-  const sampler = spawn(
-    process.execPath,
-    [join(repoRoot, "scripts", "process-pressure-sampler.mjs"), csvPath],
-    { detached: true, stdio: ["ignore", "ignore", "ignore"] },
-  );
+  const sampler = spawn(process.execPath, [samplerPath, csvPath], {
+    detached: true,
+    stdio: ["ignore", "ignore", "ignore"],
+  });
   sampler.unref();
 
   writeManifest({
