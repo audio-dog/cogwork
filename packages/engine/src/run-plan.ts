@@ -752,6 +752,7 @@ export interface CompleteRunPlanInput {
 export class RunPlanAssemblyError extends Schema.TaggedError<RunPlanAssemblyError>()("RunPlanAssemblyError", {
   message: Schema.String,
   cause: Schema.Defect(),
+  retryable: Schema.Boolean,
 }) {}
 
 const schemaConstructorNameFromStack = (cause: Error) =>
@@ -954,6 +955,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => assemble(input, 
 export const tryAssembleRunPlan = Effect.fn("RunPlan.tryAssemble")((input: AssembleRunPlanInput) =>
   Effect.try({
     try: () => assembleRunPlan(input),
-    catch: (cause) => new RunPlanAssemblyError({ message: formatAssemblyError(cause), cause }),
+    catch: (cause) =>
+      new RunPlanAssemblyError({ message: formatAssemblyError(cause), cause, retryable: true }),
   }),
 );

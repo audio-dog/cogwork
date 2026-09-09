@@ -260,6 +260,7 @@ const missingOperatingInstructionsContext = Layer.succeed(ContextAssembler.Conte
       new ContextAssembler.ContextAssemblerError({
         source: request.operatingInstructions,
         message: `Operating Instructions "${request.operatingInstructions}" have no readable INSTRUCTIONS.md`,
+        retryable: false,
       }),
     ),
   cleanup: () => Effect.void,
@@ -278,6 +279,7 @@ const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
       new ContextFsError({
         operation: "remove run context",
         message: "cleanup failed",
+        retryable: true,
       }),
     ),
 });
@@ -901,6 +903,7 @@ const divergedWorktree = worktreeDouble(() => ({
         remote: "origin",
         branch: branchName(item),
         message: "branch has diverged from origin and replaying the local commits failed",
+        retryable: false,
       }),
     ),
 }));
@@ -914,6 +917,7 @@ const operationInProgressWorktree = worktreeDouble(() => ({
         operation: "merge",
         unmergedPaths: ["src/index.ts"],
         message: `branch ${branchName(item)} has a merge in progress: src/index.ts`,
+        retryable: false,
       }),
     ),
 }));
@@ -921,7 +925,13 @@ const operationInProgressWorktree = worktreeDouble(() => ({
 const unreachableRemoteWorktree = worktreeDouble(() => ({
   ...worktreeStub,
   ensure: () =>
-    Effect.fail(new GitError({ command: "fetch origin", message: "could not resolve host github.com" })),
+    Effect.fail(
+      new GitError({
+        command: "fetch origin",
+        message: "could not resolve host github.com",
+        retryable: true,
+      }),
+    ),
 }));
 
 const existingWorktree = worktreeDouble(() => worktreeStubCreated(false));
@@ -1071,11 +1081,11 @@ const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
         PullRequestCalls,
         (probe): SourceControlProviderService => ({
           observe: () => Effect.succeed(new Map()),
-          findOpenPullRequest: () =>
+          findOpenPullRequest: (_workspace, headBranch) =>
             Ref.update(probe.observations, (count) => count + 1).pipe(
               Effect.flatMap(() => {
                 if (options.findError) return Effect.fail(options.findError);
-                if (!options.existingHead) return Effect.succeed(null);
+                if (options.existingHead !== headBranch) return Effect.succeed(null);
                 return Effect.succeed({ number: 22, url: "https://example.test/pull/22" });
               }),
             ),
@@ -1667,6 +1677,7 @@ describe("Executor.execute", () => {
     const failure = ControlStoreFailure.make({
       operation: "read Control store",
       message: "store read failed",
+      retryable: true,
     });
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -1727,7 +1738,11 @@ describe("Executor.execute", () => {
             [],
             [],
             Effect.fail(
-              ControlStoreFailure.make({ operation: "read Control store", message: "store read failed" }),
+              ControlStoreFailure.make({
+                operation: "read Control store",
+                message: "store read failed",
+                retryable: true,
+              }),
             ),
           ),
         ),
@@ -2612,6 +2627,7 @@ describe("Executor.execute", () => {
       command: "fetch origin",
       message: "git fetch origin timed out",
       reason: "timeout",
+      retryable: true,
     });
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -3610,26 +3626,64 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([sequenceRunner([first, restarted])])));
   });
 
-  it.effect("exhausts a failed implement job and hands the issue back to a human", () => {
-    const error = new HarnessError({ reason: "launch", retryable: false, message: "no cli" });
+  const exhaustedImplementFailure = new HarnessError({
+    reason: "launch",
+    retryable: false,
+    message: "no cli",
+  });
+  const pullRequestLookupFailure = new IssueTrackerError({
+    reason: "unavailable",
+    retryable: true,
+    message: "pull request lookup unavailable",
+  });
+  const exhaustedImplementCases = [
+    {
+      name: "exhausts a failed implement job and hands the issue back to a human",
+      options: {},
+      expectedHandOffStage: "implement",
+    },
+    {
+      name: "does not hand off an exhausted implement job with an open pull request",
+      options: { existingHead: implementBranch },
+      expectedHandOffStage: undefined,
+    },
+    {
+      name: "hands off an exhausted implement job when pull request lookup fails",
+      options: { findError: pullRequestLookupFailure },
+      expectedHandOffStage: "implement",
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: string;
+    readonly options: PullRequestProviderOptions;
+    readonly expectedHandOffStage: "implement" | undefined;
+  }>;
 
-    return Effect.gen(function* () {
+  it.effect.each(exhaustedImplementCases)("$name", ({ options, expectedHandOffStage }) =>
+    Effect.gen(function* () {
       const calls = yield* TrackerCalls;
+      const pullRequests = yield* PullRequestCalls;
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
 
       const log = yield* Ref.get(calls);
-      assert.strictEqual(log.find((c) => c.method === "attemptFailed")?.stage, "implement");
-      const handOff = log.find((c) => c.method === "handOff");
-      assert.strictEqual(handOff?.stage, "implement");
-      assert.include(handOff?.note ?? "", "no cli");
+      assert.strictEqual(log.find((call) => call.method === "attemptFailed")?.stage, "implement");
+      assert.strictEqual(log.find((call) => call.method === "handOff")?.stage, expectedHandOffStage);
+      assert.strictEqual(yield* Ref.get(pullRequests.observations), 1);
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.stage, "implement");
       assert.strictEqual(run?.status, "exhausted");
-    }).pipe(Effect.provide(provide([failingRunner(error)])));
-  });
+    }).pipe(
+      Effect.provide(
+        provide(
+          [failingRunner(exhaustedImplementFailure)],
+          worktreeStubLayer,
+          pullRequestProvider(options),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    ),
+  );
 
   it.effect("does not publish a human attach command for a programmatic-only session", () => {
     const error = new HarnessError({ reason: "turn", retryable: false, message: "resume failed" });
@@ -3811,7 +3865,11 @@ describe("Executor.execute", () => {
 
   it.effect("keeps an owned transcript through a failed prepare and retry", () => {
     const worktree = failSecondPrepareWorktree(
-      new GitError({ command: "fetch origin", message: "could not resolve host github.com" }),
+      new GitError({
+        command: "fetch origin",
+        message: "could not resolve host github.com",
+        retryable: true,
+      }),
     );
 
     return Effect.gen(function* () {
@@ -3839,6 +3897,7 @@ describe("Executor.execute", () => {
         remote: "origin",
         branch: implementBranch,
         message: "branch has diverged from origin and replaying the local commits failed",
+        retryable: false,
       }),
     );
 

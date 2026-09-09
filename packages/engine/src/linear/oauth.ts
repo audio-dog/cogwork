@@ -214,7 +214,7 @@ const refreshRequest = (request: TokenRefreshRequest) =>
 // Transport errors and schema issues both quote the payload that failed, and here that payload is
 // the token pair itself, so no cause may reach the reported message.
 const refreshFailed = (account: string, detail: string) =>
-  new CredentialError({ account, message: `Linear token refresh failed: ${detail}` });
+  new CredentialError({ account, message: `Linear token refresh failed: ${detail}`, retryable: false });
 
 export const makeTokenRefresh = (client: HttpClient.HttpClient): TokenRefresh =>
   Effect.fn("linear.oauth.tokenRefresh")(function* (request: TokenRefreshRequest) {

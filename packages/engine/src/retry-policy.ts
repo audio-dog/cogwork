@@ -46,24 +46,9 @@ export type RetryDecision =
       readonly handoffCause: NonRetryableHandoffCause;
     };
 
-type IntrinsicRetryFailure = Exclude<RetryFailure, HarnessError | IssueTrackerError | RunLedgerError>;
-
-const intrinsicRetryability = {
-  ControlStoreFailure: true,
-  GitError: true,
-  WorktreeFsError: true,
-  WorktreeDivergedError: false,
-  WorktreeOperationInProgressError: false,
-  CredentialError: false,
-  ContextFsError: true,
-  ContextAssemblerError: false,
-  RunPlanAssemblyError: true,
-} satisfies Record<IntrinsicRetryFailure["_tag"], boolean>;
-
 const retryableOf = (failure: RetryFailure) => {
   if (failure._tag === "IssueTrackerError") return !issueTrackerErrorIsPermanent(failure);
-  if ("retryable" in failure) return failure.retryable;
-  return intrinsicRetryability[failure._tag];
+  return failure.retryable;
 };
 
 const maxAttemptsDecision = (attempts: number) =>

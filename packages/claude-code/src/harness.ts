@@ -27,7 +27,7 @@ interface ClaudeCommandResult {
   readonly stderr: string;
 }
 
-const adapterPackageVersion = "0.6.3";
+const adapterPackageVersion = "0.6.4";
 const fallbackVersion = "claude-code-1";
 const supportedClaudeMajor = 2;
 const minimumClaudeVersion: ReadonlyArray<number> = [2, 1, 83];

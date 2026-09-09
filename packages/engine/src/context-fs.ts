@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 export class ContextFsError extends Schema.TaggedError<ContextFsError>()("ContextFsError", {
   operation: Schema.String,
   message: Schema.String,
+  retryable: Schema.Boolean,
 }) {}
 
 export interface ContextFsService {

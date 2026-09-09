@@ -101,7 +101,7 @@ const keyProvider: CredentialStoreService["providerKey"] = () =>
   Effect.succeed({ source: "env", key: Redacted.make(SECRET) });
 
 const missingKeyProvider: CredentialStoreService["providerKey"] = () =>
-  Effect.fail(new CredentialError({ account: "openai", message: "no api key for openai" }));
+  Effect.fail(new CredentialError({ account: "openai", message: "no api key for openai", retryable: false }));
 
 const stubPersistence = (thread: ReadonlyArray<ModelMessage>): ChatWithInterruptsPersistence =>
   defineAIPersistence({

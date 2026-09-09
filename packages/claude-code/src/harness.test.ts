@@ -139,6 +139,7 @@ const missingByokHarnessLayer = harnessLayerWith(() =>
     new CredentialStore.CredentialError({
       account: "anthropic",
       message: "no api key for anthropic: ANTHROPIC_API_KEY is unset or empty",
+      retryable: false,
     }),
   ),
 );
@@ -461,7 +462,7 @@ describe("Claude Code Harness", () => {
         );
         assert.deepStrictEqual(catalog.provenance, {
           source: "tanstack-runtime",
-          packageVersion: "0.6.3",
+          packageVersion: "0.6.4",
         });
         assert.isUndefined(catalog.efforts);
       }),

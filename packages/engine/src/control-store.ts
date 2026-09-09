@@ -168,7 +168,7 @@ const disablesForeignKeys = (statement: string) =>
   /^PRAGMA\s+foreign_keys\s*=\s*OFF\s*;?$/i.test(statement.trim());
 
 const storeFailure = (operation: string) => (error: unknown) =>
-  ControlStoreFailure.make({ operation, message: messageOf(error) });
+  ControlStoreFailure.make({ operation, message: messageOf(error), retryable: true });
 
 const decodeDaemonLimits = Schema.decodeUnknownEffect(DaemonLimitsSchema);
 const decodeConnection = Schema.decodeUnknownEffect(ConnectionSchema);
@@ -953,7 +953,7 @@ const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
 );
 
 const unavailable = (message: string): ControlStoreService => {
-  const failure = ControlStoreFailure.make({ operation: "open Control store", message });
+  const failure = ControlStoreFailure.make({ operation: "open Control store", message, retryable: true });
   return {
     health: "unavailable",
     message,

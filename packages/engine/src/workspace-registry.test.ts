@@ -558,6 +558,7 @@ layer(NodeServices.layer)((it) => {
           new GitError({
             command: `git remote get-url ${remote}`,
             message: `No such remote '${remote}'`,
+            retryable: true,
           }),
         ),
       );

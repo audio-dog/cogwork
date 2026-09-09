@@ -37,9 +37,13 @@ const storeStub = (calls: Ref.Ref<ReadonlyArray<string>>): CredentialStoreServic
   persist: () => Effect.void,
   invalidate: () => Effect.void,
   providerKey: (account) =>
-    Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
+    Effect.fail(
+      new CredentialError({ account: account.provider, message: "unused in this test", retryable: false }),
+    ),
   persistProviderKey: (key) =>
-    Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
+    Effect.fail(
+      new CredentialError({ account: key.provider, message: "unused in this test", retryable: false }),
+    ),
   configureConnection: () => Effect.void,
   removeConnection: () => Effect.void,
 });
