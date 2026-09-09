@@ -26,6 +26,7 @@ _Avoid_: PR reference, branch name (the full branch also carries a title slug th
 
 **Workspace**:
 A repo registered with the daemon under a minted `WorkspaceId`: a checkout path bound to an issue tracker and, optionally, a source control provider, plus workflow and operation settings. Checkout path is a re-binding hint, never identity. The unit of isolation and per-repo configuration.
+When either Engine port uses GitHub, its `owner/repository` is runtime data derived from the checkout's selected worktree remote (`origin` by default). It is not a second configurable repository.
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:

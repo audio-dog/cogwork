@@ -12,7 +12,13 @@ import * as Coordination from "../coordination";
 import type { CoordinationHost, ListedItem } from "../coordination-tracker";
 import { IssueTrackerError } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
-import type { GitHubClientService, GitHubRepoRef, RawComment, RawIssue } from "./client";
+import {
+  type GitHubClientService,
+  type GitHubRepoRef,
+  type RawComment,
+  type RawIssue,
+  repoRefFromRepository,
+} from "./client";
 import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
@@ -41,14 +47,12 @@ const toCoordinationComment =
 
 const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
   const source = workspace.config.issueTracker;
-  if (source.type !== "github" || !source.repo) return null;
-  const [owner, name] = source.repo.split("/");
-  if (!owner || !name) return null;
+  if (source.type !== "github" || !workspace.repository) return null;
+  const repo = repoRefFromRepository(workspace.repository);
+  if (!repo) return null;
   const connectionId = source.connectionId === "unbound" ? undefined : source.connectionId;
   return {
-    owner,
-    name,
-    tokenEnv: "GITHUB_TOKEN",
+    ...repo,
     ...(connectionId ? { connectionId } : {}),
     priority: source.priority ?? null,
   } satisfies GitHubTarget;

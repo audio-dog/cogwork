@@ -9,10 +9,8 @@ export interface WorkspaceRegistrationDraft {
   readonly checkoutPath: string;
   readonly tracker: WorkspaceTracker;
   readonly issueTrackerConnectionId: string;
-  readonly repository: string;
   readonly linearTeams: string;
   readonly linearOrganization: string;
-  readonly sourceControlRepository: string;
   readonly sourceControlConnectionId: string;
 }
 
@@ -28,11 +26,8 @@ const decodeWorkspaceRegistration = Schema.decodeUnknownOption(WorkspaceRegistra
 const trimmed = (value: string) => value.trim();
 const optional = (value: string) => trimmed(value) || undefined;
 const teamsFrom = (value: string) => [...new Set(value.split(",").map(trimmed).filter(Boolean))];
-const githubSourceControlFrom = (repository: string | undefined, connectionId: string | undefined) => {
-  if (!repository) return undefined;
-  if (!connectionId) return null;
-  return { type: "github", connectionId, repo: repository };
-};
+const githubSourceControlFrom = (connectionId: string | undefined) =>
+  connectionId ? { type: "github" as const, connectionId } : undefined;
 
 export const absoluteCheckoutPathFrom = (value: string) => {
   const path = trimmed(value);
@@ -66,10 +61,8 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
   const checkoutPath = absoluteCheckoutPathFrom(draft.checkoutPath);
   if (!checkoutPath) return null;
 
-  const repository = trimmed(draft.repository);
   const issueTrackerConnectionId = trimmed(draft.issueTrackerConnectionId);
   if (!issueTrackerConnectionId) return null;
-  if (draft.tracker === "github" && !repository) return null;
   const registration = {
     name,
     checkoutPath,
@@ -78,18 +71,14 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
   if (draft.tracker === "github") {
     return {
       ...registration,
-      issueTracker: { type: "github", connectionId: issueTrackerConnectionId, repo: repository },
+      issueTracker: { type: "github", connectionId: issueTrackerConnectionId },
     };
   }
 
   const teams = teamsFrom(draft.linearTeams);
   if (teams.length === 0) return null;
   const organization = optional(draft.linearOrganization);
-  const sourceControl = githubSourceControlFrom(
-    optional(draft.sourceControlRepository),
-    optional(draft.sourceControlConnectionId),
-  );
-  if (sourceControl === null) return null;
+  const sourceControl = githubSourceControlFrom(optional(draft.sourceControlConnectionId));
   return {
     ...registration,
     issueTracker: {
