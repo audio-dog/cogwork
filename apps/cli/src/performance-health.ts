@@ -11,12 +11,13 @@ interface PerformanceHealthOptions {
   readonly storePath: string;
 }
 
-const healthMetricNames = [
-  "cogwork_process_health_sample_timestamp_milliseconds",
-  "cogwork_process_heap_used_bytes",
-  "cogwork_process_heap_limit_bytes",
-  "cogwork_process_event_loop_delay_p99_milliseconds",
-];
+const healthMetricNames = {
+  sampledAtMillis: "cogwork_process_health_sample_timestamp_milliseconds",
+  heapUsedBytes: "cogwork_process_heap_used_bytes",
+  heapLimitBytes: "cogwork_process_heap_limit_bytes",
+  eventLoopDelayP99Millis: "cogwork_process_event_loop_delay_p99_milliseconds",
+} as const;
+const healthMetricNameList = Object.values(healthMetricNames);
 
 const PersistedHealthMetric = Schema.Struct({
   timestamp: Schema.Finite,
@@ -41,9 +42,9 @@ const readLatestRows = (storePath: string) =>
                     json_extract(state, '$.value') AS value
              FROM metrics
              WHERE timestamp = (SELECT MAX(timestamp) FROM metrics)
-               AND name IN (${healthMetricNames.map(() => "?").join(", ")})`,
+               AND name IN (${healthMetricNameList.map(() => "?").join(", ")})`,
           )
-          .all(...healthMetricNames)
+          .all(...healthMetricNameList)
           .flatMap((row) => Option.toArray(decodePersistedHealthMetric(row))),
       ),
     (database) => Effect.sync(() => database.close()),
@@ -55,20 +56,21 @@ const metricValue = (
   name: string,
 ) => rows.find((row) => row.process === process && row.name === name)?.value;
 
-const processReading = (
-  rows: ReadonlyArray<PersistedHealthMetric>,
-  process: "daemon" | "renderer",
-): PerformanceRegressionSensor.PerformanceHealthSnapshot["daemon"] => {
-  const sampledAtMillis = metricValue(rows, process, healthMetricNames[0] ?? "");
-  const heapUsedBytes = metricValue(rows, process, healthMetricNames[1] ?? "");
-  const heapLimitBytes = metricValue(rows, process, healthMetricNames[2] ?? "");
+const processReading = (rows: ReadonlyArray<PersistedHealthMetric>, process: "daemon" | "renderer") => {
+  const sampledAtMillis = metricValue(rows, process, healthMetricNames.sampledAtMillis);
+  const heapUsedBytes = metricValue(rows, process, healthMetricNames.heapUsedBytes);
+  const heapLimitBytes = metricValue(rows, process, healthMetricNames.heapLimitBytes);
   if (sampledAtMillis === undefined || heapUsedBytes === undefined || heapLimitBytes === undefined) {
     return undefined;
   }
-  const reading = { sampledAtMillis, heapUsedBytes, heapLimitBytes };
-  if (process === "renderer") return reading;
-  const eventLoopDelayP99Millis = metricValue(rows, process, healthMetricNames[3] ?? "");
-  return { ...reading, ...(eventLoopDelayP99Millis === undefined ? {} : { eventLoopDelayP99Millis }) };
+  const eventLoopDelayP99Millis = metricValue(rows, process, healthMetricNames.eventLoopDelayP99Millis);
+  const reading: NonNullable<PerformanceRegressionSensor.PerformanceHealthSnapshot["daemon"]> = {
+    sampledAtMillis,
+    heapUsedBytes,
+    heapLimitBytes,
+    ...(process === "daemon" && eventLoopDelayP99Millis !== undefined ? { eventLoopDelayP99Millis } : {}),
+  };
+  return reading;
 };
 
 const snapshotFromRows = (rows: ReadonlyArray<PersistedHealthMetric>, fallbackTimestamp: number) => {
@@ -89,9 +91,11 @@ export const readPerformanceHealthSnapshot = Effect.fn("PerformanceHealth.readSn
   return yield* readLatestRows(options.storePath).pipe(
     Effect.map((rows) => snapshotFromRows(rows, now)),
     Effect.catchCause((cause) =>
-      Effect.logWarning("performance health snapshot read failed", { cause: Cause.pretty(cause) }).pipe(
-        Effect.map(() => snapshotFromRows([], now)),
-      ),
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : Effect.logWarning("performance health snapshot read failed", { cause: Cause.pretty(cause) }).pipe(
+            Effect.map(() => snapshotFromRows([], now)),
+          ),
     ),
   );
 });
