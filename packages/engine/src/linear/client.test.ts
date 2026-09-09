@@ -127,15 +127,24 @@ const stubCredentials = (
               new CredentialError({
                 account: account.key,
                 message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
+                retryable: false,
               }),
             )
           : Effect.succeed({ ...credential, token: Redacted.make(credential.token) }),
       persist: () => Effect.void,
       invalidate: (account) => Ref.update(invalidated, (accounts) => [...accounts, account.key]),
       providerKey: (account) =>
-        Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
+        Effect.fail(
+          new CredentialError({
+            account: account.provider,
+            message: "unused in this test",
+            retryable: false,
+          }),
+        ),
       persistProviderKey: (key) =>
-        Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
+        Effect.fail(
+          new CredentialError({ account: key.provider, message: "unused in this test", retryable: false }),
+        ),
       configureConnection: () => Effect.void,
       removeConnection: () => Effect.void,
     })),
