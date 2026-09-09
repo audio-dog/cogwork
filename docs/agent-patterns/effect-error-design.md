@@ -96,12 +96,13 @@ Effect.Effect<Session, HarnessLaunchError | HarnessTurnError | HarnessPolicyErro
 Effect.Effect<Session, HarnessError>
 ```
 
-Consumers narrow with `_tag` across ports, then with `reason` inside one:
+Consumers preserve a port's producer-owned retry decision. The Issue tracker refines its optional
+field into the permanent-refusal decision:
 
 ```ts
-const retryableOf = (error: PrepareError | HarnessError) => {
-  if (error._tag === "HarnessError" || error._tag === "RunLedgerError") return error.retryable;
-  return !nonRetryablePrepare.has(error._tag);
+const retryableOf = (error: PrepareError | HarnessError | IssueTrackerError) => {
+  if (error._tag === "IssueTrackerError") return !issueTrackerErrorIsPermanent(error);
+  return error.retryable;
 };
 ```
 
@@ -127,10 +128,10 @@ export const issueTrackerErrorIsPermanent = (error: IssueTrackerError) =>
   error.retryable === false && error.reason === "unavailable";
 ```
 
-Not every error carries the field. `WorktreeDivergedError` has no `retryable`; the executor
-classifies it as a non-retryable prepare failure at the consumer (engine ADR 0002, diverged
-worktree branches). Put the field on the
-error only when the producer knows the answer better than the consumer.
+Every executor `PrepareError` member carries `retryable`. Its producer must choose the value, so a
+new member cannot silently inherit a consumer-side default. A timed-out Git operation is retryable;
+a diverged worktree is not (engine ADR 0002). Outside that union, add the field only when a caller
+makes a retry decision and the producer knows the answer better than the consumer.
 
 ## No speculative channels
 
