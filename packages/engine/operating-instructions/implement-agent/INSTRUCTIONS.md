@@ -60,7 +60,7 @@ Before returning `ready-for-pr`, run all four from a clean run:
 3. Full test suite.
 4. Full lint and formatting suite.
 
-All green is the bar. **The one failure you may open a PR over is a baseline failure: one you have proved already fails on the base commit, with your diff absent.** You prove it, you never judge it. Saying "this looks unrelated to my change" is the exact reasoning this gate exists to refuse, and it is wrong often enough to be worthless. Untested, every failure is yours.
+All green is the bar. **The one failure compatible with `ready-for-pr` is a baseline failure: one you have proved already fails on the base commit, with your diff absent.** You prove it, you never judge it. Saying "this looks unrelated to my change" is the exact reasoning this gate exists to refuse, and it is wrong often enough to be worthless. Untested, every failure is yours.
 
 ### Prove a baseline failure
 
@@ -84,7 +84,7 @@ Once done, run the code-simplifier agent in a subagent to refine the implementat
 - /review-bugbot skill
 - /code-review skill
  
-Implment any findings. **The composition review is part of the gate: if the diff touches a React component or a `.tsx` / `.jsx` file and any composition rule is violated, treat it as a red gate and fix it before you open the PR — do not open a PR on a composition violation.**
+Implement any findings. **The composition review is part of the gate: if the diff touches a React component or a `.tsx` / `.jsx` file and any composition rule is violated, treat it as a red gate and fix it before returning `ready-for-pr`.**
 
 ## 4. Commit, push, and prepare the PR
 
