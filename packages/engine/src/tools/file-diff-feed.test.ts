@@ -440,6 +440,45 @@ describe("file diff feed", { timeout: 30_000 }, () => {
     }).pipe(Effect.provide(ExecCalls.layer)),
   );
 
+  it.effect("matches Git output to watcher paths with dot segments", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      yield* writeFile(original, { path: "other.txt", content: "other\n" });
+      const commit = yield* Effect.promise((signal) =>
+        original.handle.process.exec("git add -A && git commit -q -m dot-segment-fixture", {
+          env: gitFixtureEnvironment,
+          signal: testProcessSignal(signal),
+        }),
+      );
+      assert.strictEqual(commit.exitCode, 0, commit.stderr);
+      const baseSha = yield* resolveBaseSha(original);
+      yield* writeFile(original, { path: "seed.txt", content: "seed changed\n" });
+      yield* writeFile(original, { path: "other.txt", content: "other changed\n" });
+      const expected = yield* Effect.promise((signal) =>
+        original.handle.process.exec(`${gitDiffCommand} '${baseSha}' -- 'seed.txt'`, {
+          signal: testProcessSignal(signal),
+        }),
+      );
+      assert.strictEqual(expected.exitCode, 0, expected.stderr);
+      const calls = yield* ExecCalls;
+      const sandbox = yield* withExecProbe(original);
+      const events = [
+        { _tag: "Update", path: "./seed.txt" },
+        { _tag: "Update", path: "other.txt" },
+      ] satisfies ReadonlyArray<FileSystem.WatchEvent>;
+      const shipped = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+        Stream.runCollect,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromIterable(events) })),
+      );
+      const actual = yield* Effect.forEach(shipped, (event) => decodeDiffValue(event.value));
+      const seed = actual.find(({ path }) => path === "seed.txt");
+      assert.strictEqual(seed?.diff, boundedDiff(expected.stdout));
+      const diffCommands = (yield* takeAllCalls(calls)).filter(isGitDiffCommand);
+      assert.lengthOf(diffCommands, 1);
+      assert.include(diffCommands[0], "--raw -z --patch");
+    }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
   it.effect("preserves external diff output by falling back to per-path commands", () =>
     Effect.gen(function* () {
       const original = yield* openSandbox();

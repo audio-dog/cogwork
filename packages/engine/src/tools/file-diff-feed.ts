@@ -33,7 +33,10 @@ const gitDiffCommand = `${gitCommand} diff`;
 const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 
 const relTo = (path: string) =>
-  path.startsWith(`${DEFAULT_WORKSPACE_ROOT}/`) ? path.slice(DEFAULT_WORKSPACE_ROOT.length + 1) : path;
+  (path.startsWith(`${DEFAULT_WORKSPACE_ROOT}/`)
+    ? path.slice(DEFAULT_WORKSPACE_ROOT.length + 1)
+    : path
+  ).replace(/^(?:\.\/)+/, "");
 
 const execFailure = (command: string, rel: string, result: ExecResult) =>
   toolError(
