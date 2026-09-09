@@ -1,0 +1,19 @@
+scripts/perf-campaign.mjs
+  s_81140f181cae89::t_27f909a211a580 165-166,168,227-231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1f5a18c9f1d76ae9d7bb5c796484b7f84abdc9ae",
+  "prompts": {},
+  "sessions": {
+    "s_81140f181cae89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08776-ff91-72e1-8c5a-a0797279c83d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
