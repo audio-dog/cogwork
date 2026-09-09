@@ -1,0 +1,27 @@
+packages/engine/src/run-plan.ts
+  s_8150b5ee69adb9::t_f3e16beb7aaebd 942-943
+  s_8150b5ee69adb9::t_2419e5afee009d 752
+packages/engine/src/retry-policy.ts
+  s_8150b5ee69adb9::t_2419e5afee009d 51
+packages/engine/src/executor.test.ts
+  s_8150b5ee69adb9::t_0cf763106e2ffc 263,282,906,920,928-934,1680,1741-1745,2630,3830-3834,3862
+packages/engine/src/retry-policy.test.ts
+  s_8150b5ee69adb9::t_3413209ccef714 32
+  s_8150b5ee69adb9::t_2add8acdefdf02 29,33-38,42,46,50-54,65,75,80,84-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "345e46ae9750cae6801e2be5160036faddef56cf",
+  "prompts": {},
+  "sessions": {
+    "s_8150b5ee69adb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08786-acea-7ce0-923e-39cb3f333bec",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
