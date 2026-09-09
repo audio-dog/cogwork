@@ -503,7 +503,7 @@ export function WorkspaceSettingsPage({ workspaceId }: { readonly workspaceId: s
           value={{
             state: { draft: settings.draft, connections: settings.connections },
             actions: { patch: settings.patch },
-            meta: { disabled: settings.saving || !settings.writable },
+            meta: { disabled: settings.saving || !settings.writable, workspace: settings.workspaceId },
           }}
         >
           <SubSectionCard label="Checkout">
@@ -514,7 +514,10 @@ export function WorkspaceSettingsPage({ workspaceId }: { readonly workspaceId: s
           value={{
             state: { draft: settings.draft, connections: settings.connections },
             actions: { patch: settings.patch },
-            meta: { disabled: settings.saving || !settings.recordWritable },
+            meta: {
+              disabled: settings.saving || !settings.recordWritable,
+              workspace: settings.workspaceId,
+            },
           }}
         >
           <SubSectionCard label="Workspace">
