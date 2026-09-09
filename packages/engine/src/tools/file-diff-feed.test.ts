@@ -406,6 +406,7 @@ describe("file diff feed", { timeout: 30_000 }, () => {
       const { fiber, terminated, killed } = yield* startBlockedBatch("SIGKILL");
       yield* advanceUntil(terminated, "5 minutes");
       yield* advanceUntil(killed, "5 seconds");
+      yield* TestClock.adjust("100 millis");
       const error = yield* Fiber.join(fiber).pipe(Effect.flip);
       assert.strictEqual(error.reason, "timeout");
     }),
@@ -1168,6 +1169,54 @@ describe("file diff feed", { timeout: 30_000 }, () => {
       assert.strictEqual(value.path, "seed.txt");
       assert.include(value.diff, "+changed before watcher failure");
     }).pipe(Effect.provide(queuedWatcherLayer())),
+  );
+
+  it.effect(
+    "keeps polling when native diff work fails just before watcher fallback",
+    () =>
+      Effect.gen(function* () {
+        const original = yield* openSandbox();
+        const baseSha = yield* resolveBaseSha(original);
+        const watcher = yield* WatcherSignals;
+        const diffFailed = yield* Deferred.make<void>();
+        const failNextDiff = MutableRef.make(true);
+        const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = (command, options) =>
+          original.handle.process.spawn(command, options).then((process) => {
+            if (!isGitDiffCommand(command) || !MutableRef.getAndSet(failNextDiff, false)) return process;
+            return {
+              ...process,
+              wait: () =>
+                process.wait().then(() => {
+                  Deferred.doneUnsafe(diffFailed, Effect.void);
+                  return Promise.reject(new Error("concurrent native diff failure"));
+                }),
+            };
+          });
+        const sandbox: WorktreeSandbox = {
+          ...original,
+          handle: {
+            ...original.handle,
+            process: { ...original.handle.process, spawn },
+          },
+        };
+        yield* writeFile(sandbox, { path: "seed.txt", content: "changed before concurrent failure\n" });
+        const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+          Stream.take(1),
+          Stream.runHead,
+          Effect.forkChild,
+        );
+        yield* Queue.offer(watcher, { _tag: "Update", path: "seed.txt" });
+        yield* settleWhileAdvancingClock(Deferred.await(diffFailed));
+        yield* yieldToHost();
+        yield* Queue.offer(watcher, { _tag: "Fail" });
+
+        const head = yield* settleWhileAdvancingClock(Fiber.join(fiber));
+        if (Option.isNone(head)) return assert.fail("fallback produced no diff event");
+        const value = yield* decodeDiffValue(head.value.value);
+        assert.strictEqual(value.path, "seed.txt");
+        assert.include(value.diff, "+changed before concurrent failure");
+      }).pipe(Effect.provide(queuedWatcherLayer())),
+    2_000,
   );
 
   it.effect("emits both sides of a rename through fallback polling", () =>

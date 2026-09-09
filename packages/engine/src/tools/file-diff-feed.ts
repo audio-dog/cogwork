@@ -40,6 +40,7 @@ const diffBatchWindow = "250 millis";
 const configuredIgnoreBatchSize = 256;
 const configuredIgnoreWindow = "50 millis";
 const fallbackCadence = "1 second";
+const concurrentWatcherFailureWindow = "50 millis";
 const stderrMaxBytes = 4 * 1024;
 const processReleaseDeadline = "5 seconds";
 const gitCommand = "git --literal-pathspecs";
@@ -788,7 +789,6 @@ type SourcedWatchEvent = FileSystem.WatchEvent & SourceIdentity;
 type SourcedSandboxEvent = SandboxFileEvent & SourceIdentity;
 type SourcedFileDiff = FileDiff & SourceIdentity;
 type FingerprintState = {
-  readonly pollingActive: boolean;
   readonly generation: number;
   readonly fingerprints: ReadonlyMap<string, string>;
   readonly pathGenerations: ReadonlyMap<string, number>;
@@ -911,15 +911,23 @@ const continueWithPolling = (
   stop?: Effect.Effect<void>,
 ) =>
   Stream.fromEffect(
-    Ref.update(state, (previous) => ({ ...previous, pollingActive: true })).pipe(
-      Effect.andThen(
-        Effect.logWarning("native file watcher failed; continuing with polling", {
-          cause: Cause.pretty(cause),
-        }),
-      ),
-      (effect) => pollingContext(sandbox, "polling", effect),
-    ),
+    Effect.logWarning("native file watcher failed; continuing with polling", {
+      cause: Cause.pretty(cause),
+    }).pipe((effect) => pollingContext(sandbox, "polling", effect)),
   ).pipe(Stream.drain, Stream.concat(pollingWorktreeEvents(sandbox, baseSha, state, stop)));
+
+const continueAfterNativeFailure = (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  cause: Cause.Cause<unknown>,
+  state: Ref.Ref<FingerprintState>,
+  fallbackStarted: Deferred.Deferred<void>,
+  stop?: Effect.Effect<void>,
+) => {
+  if (Cause.hasInterruptsOnly(cause)) return Stream.fromEffect(Effect.interrupt);
+  Deferred.doneUnsafe(fallbackStarted, Effect.void);
+  return continueWithPolling(sandbox, baseSha, cause, state, stop);
+};
 
 const retainConfiguredEvents = Effect.fn("Tools.retainConfiguredFileDiffEvents")(function* (
   sandbox: WorktreeSandbox,
@@ -931,36 +939,42 @@ const retainConfiguredEvents = Effect.fn("Tools.retainConfiguredFileDiffEvents")
   return events.filter(({ path }) => paths.has(path));
 });
 
-const logPollingStepFailure = Effect.fn("Tools.logPollingFileDiffStepFailure")(
-  (sandbox: WorktreeSandbox, error: ToolError) =>
-    Effect.logWarning("file-diff polling step failed; continuing", {
-      cause: error.message,
-    }).pipe((effect) => pollingContext(sandbox, "polling", effect)),
-);
+const awaitFallback = (fallbackStarted: Deferred.Deferred<void>, error: ToolError) =>
+  Deferred.await(fallbackStarted).pipe(
+    Effect.timeoutOrElse({
+      duration: concurrentWatcherFailureWindow,
+      orElse: () => Effect.fail(error),
+    }),
+  );
 
-const recoverPollingStep = <A>(
-  state: Ref.Ref<FingerprintState>,
+const recoverFeedStep = <A>(
   sandbox: WorktreeSandbox,
+  source: FeedSource,
+  fallbackStarted: Deferred.Deferred<void>,
   error: ToolError,
   fallback: A,
 ) =>
-  Ref.get(state).pipe(
-    Effect.flatMap(({ pollingActive }) => {
-      if (!pollingActive) return Effect.fail(error);
-      return logPollingStepFailure(sandbox, error).pipe(Effect.map(() => fallback));
-    }),
+  awaitFallback(fallbackStarted, error).pipe(
+    Effect.andThen(
+      Effect.logWarning("file-diff processing step failed; continuing", {
+        cause: error.message,
+      }),
+    ),
+    (effect) => pollingContext(sandbox, source, effect),
+    Effect.map(() => fallback),
   );
 
 const filterConfiguredEvents = Effect.fn("Tools.filterConfiguredFileDiffEvents")(
   (
     sandbox: WorktreeSandbox,
     baseSha: string,
-    state: Ref.Ref<FingerprintState>,
+    fallbackStarted: Deferred.Deferred<void>,
     events: ReadonlyArray<SourcedWatchEvent>,
   ) => {
+    const source = feedSource(events);
     return retainConfiguredEvents(sandbox, baseSha, events).pipe(
-      Effect.catch((error) => recoverPollingStep(state, sandbox, error, [])),
-      (effect) => pollingContext(sandbox, feedSource(events), effect),
+      Effect.catch((error) => recoverFeedStep(sandbox, source, fallbackStarted, error, [])),
+      (effect) => pollingContext(sandbox, source, effect),
     );
   },
 );
@@ -984,13 +998,14 @@ const computeSourcedFileDiffBatch = Effect.fn("Tools.computeSourcedFileDiffBatch
   sandbox: WorktreeSandbox,
   baseSha: string,
   externalDiff: Effect.Effect<ExternalDiffScope, ToolError>,
-  state: Ref.Ref<FingerprintState>,
+  fallbackStarted: Deferred.Deferred<void>,
   events: ReadonlyArray<SourcedSandboxEvent>,
 ) {
+  const source = feedSource(events);
   return yield* computeFileDiffBatch(sandbox, baseSha, externalDiff, events).pipe(
     Effect.map((diffs) => Arr.zipWith(events, diffs, (event, diff) => attachSource(event)(diff))),
-    Effect.catch((error) => recoverPollingStep(state, sandbox, error, [])),
-    (effect) => pollingContext(sandbox, feedSource(events), effect),
+    Effect.catch((error) => recoverFeedStep(sandbox, source, fallbackStarted, error, [])),
+    (effect) => pollingContext(sandbox, source, effect),
   );
 });
 
@@ -1022,8 +1037,8 @@ export const watchWorktreeDiffs = (
         externalDiffScope(sandbox),
         Duration.infinity,
       );
+      const fallbackStarted = yield* Deferred.make<void>();
       const state = yield* Ref.make<FingerprintState>({
-        pollingActive: false,
         generation: 0,
         fingerprints: new Map(),
         pathGenerations: new Map(),
@@ -1032,13 +1047,11 @@ export const watchWorktreeDiffs = (
         Stream.map((event) => ({ ...event, source: "native", generation: 0 }) satisfies SourcedWatchEvent),
         (source) => stopSource(source, stop),
         Stream.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Stream.fromEffect(Effect.interrupt)
-            : continueWithPolling(sandbox, baseSha, cause, state, stop),
+          continueAfterNativeFailure(sandbox, baseSha, cause, state, fallbackStarted, stop),
         ),
         Stream.filter((event) => !ignored(event.path)),
         Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
-        Stream.mapEffect((events) => filterConfiguredEvents(sandbox, baseSha, state, events)),
+        Stream.mapEffect((events) => filterConfiguredEvents(sandbox, baseSha, fallbackStarted, events)),
         Stream.flatMap(Stream.fromIterable),
         debounceByPath,
         Stream.mapEffect((event) =>
@@ -1053,7 +1066,7 @@ export const watchWorktreeDiffs = (
             sandbox,
             baseSha,
             cachedExternalDiff.pipe(Effect.tapError(() => invalidateExternalDiff)),
-            state,
+            fallbackStarted,
             events,
           ),
         ),
