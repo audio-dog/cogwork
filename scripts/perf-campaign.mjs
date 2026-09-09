@@ -162,7 +162,12 @@ const preflight = async (profiling) => {
   say("then run:  node scripts/perf-campaign.mjs run");
 };
 
-const holdWindow = async (manifest, agents, minutes) => {
+const throwIfInterrupted = (signal) => {
+  if (signal.aborted) throw new Error("campaign interrupted");
+};
+
+const holdWindow = async (manifest, agents, minutes, signal) => {
+  throwIfInterrupted(signal);
   say(`${agents} agents: setting the limit`);
   setGlobalLimit(agents);
   const record = { agents, startedAt: stamp(), endedAt: null, daemonLostAt: null };
@@ -173,6 +178,7 @@ const holdWindow = async (manifest, agents, minutes) => {
   const deadline = Date.now() + minutes * 60_000;
   while (Date.now() < deadline) {
     await wait(socketPollMillis);
+    throwIfInterrupted(signal);
     if (record.daemonLostAt) continue;
     if (await daemonListening()) continue;
     record.daemonLostAt = stamp();
@@ -205,10 +211,18 @@ const run = async (minutes) => {
   say("daemon is up");
 
   manifest.windows = [];
-  for (const agents of windowPlan) {
-    await holdWindow(manifest, agents, minutes);
+  const interrupt = new AbortController();
+  const handleInterrupt = () => interrupt.abort();
+  process.once("SIGINT", handleInterrupt);
+  try {
+    for (const agents of windowPlan) {
+      await holdWindow(manifest, agents, minutes, interrupt.signal);
+    }
+    throwIfInterrupted(interrupt.signal);
+  } finally {
+    restoreRestingLimit();
+    process.off("SIGINT", handleInterrupt);
   }
-  restoreRestingLimit();
   manifest.finishedAt = stamp();
   writeManifest(manifest);
   say("campaign complete — stop the app, then run: node scripts/perf-campaign.mjs readout");
