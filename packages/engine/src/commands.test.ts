@@ -1104,7 +1104,13 @@ describe("SetDaemonLimit", () => {
           schedulerStub(),
           controlStoreStub({
             setDaemonLimit: () =>
-              Effect.fail(ControlStoreFailure.make({ operation: "set daemon limit", message: "disk full" })),
+              Effect.fail(
+                ControlStoreFailure.make({
+                  operation: "set daemon limit",
+                  message: "disk full",
+                  retryable: true,
+                }),
+              ),
           }),
         ),
       ),

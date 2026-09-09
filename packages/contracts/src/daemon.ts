@@ -261,6 +261,7 @@ export type ControlStore = typeof ControlStore.Type;
 export class ControlStoreFailure extends Schema.TaggedError<ControlStoreFailure>()("ControlStoreFailure", {
   operation: Schema.String,
   message: Schema.String,
+  retryable: Schema.Boolean,
 }) {}
 
 export class StaleControlStoreWrite extends Schema.TaggedError<StaleControlStoreWrite>()(
