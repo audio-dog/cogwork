@@ -19,12 +19,12 @@ catalog:
   # below calls `Schema.TaggedError` and loads. Move to the release that carries that fix.
   drizzle-orm: '1.0.0-rc.5-169397b'
   drizzle-kit: '1.0.0-rc.4'
-  '@tanstack/ai': '0.52.0'
-  '@tanstack/ai-claude-code': '0.6.3'
-  '@tanstack/ai-codex': '0.5.3'
-  '@tanstack/ai-sandbox': '0.5.4'
-  '@tanstack/ai-sandbox-local-process': '0.2.4'
-  '@tanstack/ai-persistence': '0.5.4'
+  '@tanstack/ai': '0.53.0'
+  '@tanstack/ai-claude-code': '0.6.4'
+  '@tanstack/ai-codex': '0.5.4'
+  '@tanstack/ai-sandbox': '0.5.6'
+  '@tanstack/ai-sandbox-local-process': '0.2.5'
+  '@tanstack/ai-persistence': '0.5.6'
   '@tailwindcss/vite': '^4.3.3'
   '@types/node': '^24.13.3'
   '@types/react': '^19.2.7'
@@ -42,6 +42,3 @@ catalogs:
     '@effect/platform-node': '4.0.0-rc.112'
     '@effect/sql-sqlite-node': '4.0.0-rc.112'
     '@effect/vitest': '4.0.0-rc.112'
-
-patchedDependencies:
-  '@tanstack/ai-sandbox-local-process@0.2.4': patches/@tanstack__ai-sandbox-local-process@0.2.4.patch

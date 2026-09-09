@@ -22,7 +22,7 @@
     "@cogwork/contracts": "workspace:*",
     "@cogwork/engine": "workspace:*",
     "@tanstack/ai": "catalog:",
-    "@tanstack/ai-acp": "0.3.8",
+    "@tanstack/ai-acp": "0.3.9",
     "@tanstack/ai-sandbox": "catalog:",
     "@tanstack/ai-sandbox-local-process": "catalog:",
     "effect": "catalog:effect"
