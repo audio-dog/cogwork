@@ -1,15 +1,19 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Scheduler from "effect/Scheduler";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
@@ -49,6 +53,20 @@ class ResponseGate extends Context.Service<ResponseGate, Latch.Latch>()(
   "@cogwork/cli/rpc.test/ResponseGate",
 ) {
   static readonly layer = Layer.effect(ResponseGate, Latch.make());
+}
+
+class DeadlineDefectLog extends Context.Service<DeadlineDefectLog, Deferred.Deferred<void>>()(
+  "@cogwork/cli/rpc.test/DeadlineDefectLog",
+) {
+  static readonly layer = Layer.effect(DeadlineDefectLog, Deferred.make<void>());
+  static readonly captureLayer = Logger.layer([
+    Effect.map(DeadlineDefectLog, (logged) =>
+      Logger.make(({ message }) => {
+        if (!String(message).includes("RPC deadline fiber failed")) return;
+        Deferred.doneUnsafe(logged, Effect.void);
+      }),
+    ),
+  ]).pipe(Layer.provideMerge(DeadlineDefectLog.layer));
 }
 
 class SentMessages extends Context.Service<SentMessages, Ref.Ref<ReadonlyArray<FromClientEncoded>>>()(
@@ -174,6 +192,78 @@ describe("daemon socket", () => {
       }).pipe(Effect.scoped),
     );
   });
+
+  it.effect("cancels only the disconnected client's deadlines", () =>
+    Effect.gen(function* () {
+      const ownerScope = yield* Effect.scope;
+      const firstClientScope = yield* Scope.fork(ownerScope);
+      const secondClientScope = yield* Scope.fork(ownerScope);
+      const firstClient = yield* makeDaemonClient().pipe(
+        Effect.provideService(Scope.Scope, firstClientScope),
+      );
+      const secondClient = yield* makeDaemonClient().pipe(
+        Effect.provideService(Scope.Scope, secondClientScope),
+      );
+      const messages = yield* SentMessages;
+      const first = yield* Effect.forkChild(firstClient.ListRuns(), { startImmediately: true });
+      const second = yield* Effect.forkChild(secondClient.GetStatus(), { startImmediately: true });
+
+      yield* Effect.yieldNow;
+      const requestIds = (yield* Ref.get(messages)).flatMap((message) =>
+        message._tag === "Request" ? [message.id] : [],
+      );
+      assert.lengthOf(requestIds, 2);
+
+      yield* Scope.close(firstClientScope, Exit.void);
+      const messagesAfterDisconnect = yield* Ref.get(messages);
+      yield* TestClock.adjust(daemonRpcDeadline);
+      const deadlineMessages = (yield* Ref.get(messages)).slice(messagesAfterDisconnect.length);
+
+      assert.deepStrictEqual(
+        deadlineMessages.map((message) => message._tag),
+        ["Interrupt"],
+      );
+      assert.strictEqual(deadlineMessages[0]?._tag, "Interrupt");
+      if (deadlineMessages[0]?._tag !== "Interrupt") return;
+      assert.strictEqual(deadlineMessages[0].requestId, requestIds[1]);
+
+      yield* Scope.close(secondClientScope, Exit.void);
+      yield* Fiber.interruptAll([first, second]);
+    }).pipe(Effect.provide(SentMessages.clientLayer), Effect.scoped),
+  );
+
+  it.effect("logs a deadline fiber defect", () =>
+    Effect.gen(function* () {
+      const logged = yield* DeadlineDefectLog;
+      const messages = yield* SentMessages;
+      const protocol = yield* RpcClient.Protocol;
+      const runFiber = yield* protocol
+        .run(100, () => Effect.die("deadline handler defect"))
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      const sendFiber = yield* protocol
+        .send(100, {
+          _tag: "Request",
+          id: "defect-request",
+          tag: "ListRuns",
+          payload: {},
+          headers: [],
+        })
+        .pipe(Effect.forkChild({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust(daemonRpcDeadline);
+      yield* Deferred.await(logged);
+
+      assert.deepStrictEqual(
+        (yield* Ref.get(messages)).map((message) => message._tag),
+        ["Request", "Interrupt"],
+      );
+      yield* Fiber.interruptAll([runFiber, sendFiber]);
+    }).pipe(
+      Effect.provide(Layer.merge(SentMessages.clientLayer, DeadlineDefectLog.captureLayer)),
+      Effect.scoped,
+    ),
+  );
 
   layer(SentMessages.respondingClientLayer)((it) => {
     it.effect("does not time out after a response wins the deadline race", () =>
