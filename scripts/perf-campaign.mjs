@@ -176,17 +176,20 @@ const holdWindow = async (manifest, agents, minutes, signal) => {
   say(`${agents} agents: window open, holding ${minutes} minutes`);
 
   const deadline = Date.now() + minutes * 60_000;
-  while (Date.now() < deadline) {
-    await wait(socketPollMillis);
-    throwIfInterrupted(signal);
-    if (record.daemonLostAt) continue;
-    if (await daemonListening()) continue;
-    record.daemonLostAt = stamp();
+  try {
+    while (Date.now() < deadline) {
+      await wait(socketPollMillis);
+      throwIfInterrupted(signal);
+      if (record.daemonLostAt) continue;
+      if (await daemonListening()) continue;
+      record.daemonLostAt = stamp();
+      writeManifest(manifest);
+      say(`${agents} agents: the daemon stopped answering at ${record.daemonLostAt}`);
+    }
+  } finally {
+    record.endedAt = signal.reason ?? stamp();
     writeManifest(manifest);
-    say(`${agents} agents: the daemon stopped answering at ${record.daemonLostAt}`);
   }
-  record.endedAt = stamp();
-  writeManifest(manifest);
   say(`${agents} agents: window closed`);
 };
 
@@ -212,7 +215,7 @@ const run = async (minutes) => {
 
   manifest.windows = [];
   const interrupt = new AbortController();
-  const handleInterrupt = () => interrupt.abort();
+  const handleInterrupt = () => interrupt.abort(stamp());
   process.once("SIGINT", handleInterrupt);
   try {
     for (const agents of windowPlan) {
