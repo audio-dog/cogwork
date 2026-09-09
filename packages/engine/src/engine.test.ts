@@ -39,6 +39,7 @@ import * as EventPublisher from "./event-publisher";
 import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import { observeWorkspace } from "./observe";
+import { PerformanceHealthSource, PerformanceRegressionSensor } from "./performance-regression-sensor";
 import { PluginManager } from "./plugin";
 import * as Reconcile from "./reconcile";
 import * as Recovery from "./recovery";
@@ -989,6 +990,12 @@ class BootstrapRecoveryCalls extends Context.Service<BootstrapRecoveryCalls, Ref
 }
 
 describe("daemon heartbeats", () => {
+  const performanceRegressionSensorLayer = Layer.succeed(PerformanceRegressionSensor, {
+    observe: () => Effect.void,
+  });
+  const performanceHealthSourceLayer = Layer.succeed(PerformanceHealthSource, {
+    snapshot: Effect.succeed({ sampledAtMillis: 0 }),
+  });
   const worktreeStub = Layer.succeed(WorktreeManager, {
     ensure: () => Effect.die("unused"),
     pullRequestReadiness: () => Effect.die("unused"),
@@ -1016,6 +1023,8 @@ describe("daemon heartbeats", () => {
           availableControlStore,
           worktreeStub,
           DaemonEventBus.layer,
+          performanceRegressionSensorLayer,
+          performanceHealthSourceLayer,
           Layer.succeed(Recovery.Recovery, {
             recover: () => Effect.void,
             recoverWhenLive: () => Effect.void,
@@ -1053,6 +1062,8 @@ describe("daemon heartbeats", () => {
         availableControlStore,
         worktreeStub,
         DaemonEventBus.layer,
+        performanceRegressionSensorLayer,
+        performanceHealthSourceLayer,
         Layer.succeed(Recovery.Recovery, {
           recover: () => Effect.void,
           recoverWhenLive: () => Effect.void,

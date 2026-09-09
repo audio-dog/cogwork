@@ -23,6 +23,7 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
+import * as References from "effect/References";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -68,6 +69,11 @@ import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
 import { recordProcessHealth, reportDaemonProcessHealth } from "./performance-metrics";
+import {
+  PerformanceHealthSource,
+  PerformanceRegressionSensor,
+  layer as performanceRegressionSensorLayer,
+} from "./performance-regression-sensor";
 import { PluginManager, pluginManagerLayer } from "./plugin";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import {
@@ -335,6 +341,9 @@ export interface HostAdapters<E = never, R = never> {
   readonly pluginProvisionRoot?: string;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
   readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
+  readonly appVersion: string;
+  readonly performanceEvidenceRoot: string;
+  readonly performanceHealth: Layer.Layer<PerformanceHealthSource, E, R>;
 }
 
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
@@ -364,6 +373,11 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
   );
+  const performanceIssueFiler = GitHub.performanceIssueFilerLayer.pipe(
+    Layer.provide(githubClient),
+    Layer.provide(issueTracker),
+    Layer.provide(registry),
+  );
   const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
     runLedgerPublishingLayer.pipe(
       Layer.provide(
@@ -390,6 +404,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     credentials,
     daemonInfoLayer,
     issueTracker,
+    adapters.performanceHealth,
+    performanceIssueFiler,
     runLedger,
     runRecorder,
     runnerRequirements,
@@ -410,15 +426,22 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   ).pipe(Layer.provide(availability), Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)));
   return eventPublisherLayer.pipe(
     Layer.provideMerge(
-      recoveryLayer.pipe(
+      performanceRegressionSensorLayer({
+        appVersion: adapters.appVersion,
+        evidenceRoot: adapters.performanceEvidenceRoot,
+      }).pipe(
         Layer.provideMerge(
-          Layer.unwrap(
-            Effect.map(ControlStore, (store) =>
-              schedulerLayer(
-                configFromControlStore(store.health === "available" ? store.seed : defaultControlStore),
-              ),
+          recoveryLayer.pipe(
+            Layer.provideMerge(
+              Layer.unwrap(
+                Effect.map(ControlStore, (store) =>
+                  schedulerLayer(
+                    configFromControlStore(store.health === "available" ? store.seed : defaultControlStore),
+                  ),
+                ),
+              ).pipe(Layer.provideMerge(services)),
             ),
-          ).pipe(Layer.provideMerge(services)),
+          ),
         ),
       ),
     ),
@@ -477,7 +500,7 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   );
 });
 
-const continueAfterReconcileFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message: string) =>
+const continueAfterHeartbeatFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message: string) =>
   Effect.catchCauseIf(
     effect,
     (cause) => !Cause.hasInterruptsOnly(cause),
@@ -487,7 +510,7 @@ const continueAfterReconcileFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, 
 const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
   const worker = yield* ReconcileWorker;
   const publisher = yield* DaemonEventPublisher;
-  yield* continueAfterReconcileFailure(
+  yield* continueAfterHeartbeatFailure(
     worker.submit().pipe(Effect.tap((receipt) => Effect.logInfo("reconcile tick", receipt))),
     "reconcile heartbeat failed",
   );
@@ -497,7 +520,7 @@ const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
 });
 
 const reconcileHeartbeat = (pollIntervalMillis: number) =>
-  continueAfterReconcileFailure(reconcileTick(), "reconcile heartbeat failed").pipe(
+  continueAfterHeartbeatFailure(reconcileTick(), "reconcile heartbeat failed").pipe(
     Effect.repeat(Schedule.spaced(pollIntervalMillis)),
   );
 
@@ -506,7 +529,7 @@ export const bootstrap = Effect.gen(function* () {
   if (controlStore.health === "unavailable") return;
   const worker = yield* ReconcileWorker;
   const recovery = yield* Recovery;
-  yield* continueAfterReconcileFailure(worker.submit(), "reconcile bootstrap failed");
+  yield* continueAfterHeartbeatFailure(worker.submit(), "reconcile bootstrap failed");
   yield* recovery.recoverWhenLive();
 });
 
@@ -520,6 +543,18 @@ const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
 });
 
 const executeHeartbeat = () => executeTick().pipe(Effect.repeat(Schedule.spaced("5 seconds")));
+
+const performanceRegressionTick = Effect.fn("Daemon.performanceRegressionHeartbeat")(function* () {
+  const source = yield* PerformanceHealthSource;
+  const sensor = yield* PerformanceRegressionSensor;
+  yield* sensor.observe(yield* source.snapshot);
+});
+
+const performanceRegressionHeartbeat = () =>
+  continueAfterHeartbeatFailure(performanceRegressionTick(), "performance regression heartbeat failed").pipe(
+    Effect.repeat(Schedule.spaced("10 seconds")),
+    Effect.provideService(References.TracerEnabled, false),
+  );
 
 export interface HeartbeatOptions {
   readonly pollIntervalMillis: number;
@@ -540,6 +575,6 @@ const operationalHeartbeats = (options: HeartbeatOptions) =>
   });
 
 export const heartbeats = (options: HeartbeatOptions) =>
-  Effect.all([operationalHeartbeats(options), reportDaemonProcessHealth], {
+  Effect.all([operationalHeartbeats(options), reportDaemonProcessHealth, performanceRegressionHeartbeat()], {
     concurrency: "unbounded",
   });
