@@ -99,6 +99,7 @@ describe("CredentialStore (env)", () => {
       const error = yield* Effect.flip(store.bearerToken(account));
       assert.strictEqual(error.account, "AUD");
       assert.include(error.message, "LINEAR_API_KEY");
+      assert.isFalse(error.retryable);
     }).pipe(withEnv({})),
   );
 
@@ -686,7 +687,13 @@ describe("CredentialStore (refresh)", () => {
       const { store } = yield* harness({
         initial: [stored("acme", expiredWithRefresh())],
         onRefresh: () =>
-          Effect.fail(new CredentialError({ account: "AUD", message: "refresh grant rejected" })),
+          Effect.fail(
+            new CredentialError({
+              account: "AUD",
+              message: "refresh grant rejected",
+              retryable: false,
+            }),
+          ),
       });
       const error = yield* Effect.flip(store.bearerToken(oauthAccount));
       assert.strictEqual(error.account, "AUD");
@@ -750,6 +757,7 @@ const recordingGrant = (secret: string | null, calls: GrantCalls): ClientCredent
         new CredentialError({
           account: account.key,
           message: `client credentials for ${account.key} need ${account.clientCredentials.secretEnv}, which is unset or empty`,
+          retryable: false,
         }),
       );
     }

@@ -260,6 +260,7 @@ const missingOperatingInstructionsContext = Layer.succeed(ContextAssembler.Conte
       new ContextAssembler.ContextAssemblerError({
         source: request.operatingInstructions,
         message: `Operating Instructions "${request.operatingInstructions}" have no readable INSTRUCTIONS.md`,
+        retryable: false,
       }),
     ),
   cleanup: () => Effect.void,
@@ -278,6 +279,7 @@ const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
       new ContextFsError({
         operation: "remove run context",
         message: "cleanup failed",
+        retryable: true,
       }),
     ),
 });
@@ -901,6 +903,7 @@ const divergedWorktree = worktreeDouble(() => ({
         remote: "origin",
         branch: branchName(item),
         message: "branch has diverged from origin and replaying the local commits failed",
+        retryable: false,
       }),
     ),
 }));
@@ -914,6 +917,7 @@ const operationInProgressWorktree = worktreeDouble(() => ({
         operation: "merge",
         unmergedPaths: ["src/index.ts"],
         message: `branch ${branchName(item)} has a merge in progress: src/index.ts`,
+        retryable: false,
       }),
     ),
 }));
@@ -921,7 +925,13 @@ const operationInProgressWorktree = worktreeDouble(() => ({
 const unreachableRemoteWorktree = worktreeDouble(() => ({
   ...worktreeStub,
   ensure: () =>
-    Effect.fail(new GitError({ command: "fetch origin", message: "could not resolve host github.com" })),
+    Effect.fail(
+      new GitError({
+        command: "fetch origin",
+        message: "could not resolve host github.com",
+        retryable: true,
+      }),
+    ),
 }));
 
 const existingWorktree = worktreeDouble(() => worktreeStubCreated(false));
@@ -1667,6 +1677,7 @@ describe("Executor.execute", () => {
     const failure = ControlStoreFailure.make({
       operation: "read Control store",
       message: "store read failed",
+      retryable: true,
     });
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -1727,7 +1738,11 @@ describe("Executor.execute", () => {
             [],
             [],
             Effect.fail(
-              ControlStoreFailure.make({ operation: "read Control store", message: "store read failed" }),
+              ControlStoreFailure.make({
+                operation: "read Control store",
+                message: "store read failed",
+                retryable: true,
+              }),
             ),
           ),
         ),
@@ -2612,6 +2627,7 @@ describe("Executor.execute", () => {
       command: "fetch origin",
       message: "git fetch origin timed out",
       reason: "timeout",
+      retryable: true,
     });
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -3849,7 +3865,11 @@ describe("Executor.execute", () => {
 
   it.effect("keeps an owned transcript through a failed prepare and retry", () => {
     const worktree = failSecondPrepareWorktree(
-      new GitError({ command: "fetch origin", message: "could not resolve host github.com" }),
+      new GitError({
+        command: "fetch origin",
+        message: "could not resolve host github.com",
+        retryable: true,
+      }),
     );
 
     return Effect.gen(function* () {
@@ -3877,6 +3897,7 @@ describe("Executor.execute", () => {
         remote: "origin",
         branch: implementBranch,
         message: "branch has diverged from origin and replaying the local commits failed",
+        retryable: false,
       }),
     );
 

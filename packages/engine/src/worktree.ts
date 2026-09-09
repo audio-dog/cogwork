@@ -19,6 +19,7 @@ export class WorktreeDivergedError extends Schema.TaggedError<WorktreeDivergedEr
     remote: Schema.String,
     branch: Schema.String,
     message: Schema.String,
+    retryable: Schema.Boolean,
   },
 ) {}
 
@@ -29,6 +30,7 @@ export class WorktreeOperationInProgressError extends Schema.TaggedError<Worktre
     operation: Schema.Literals(["merge", "rebase", "cherry-pick"]),
     unmergedPaths: Schema.Array(Schema.String),
     message: Schema.String,
+    retryable: Schema.Boolean,
   },
 ) {}
 
@@ -208,6 +210,7 @@ export const make = Effect.gen(function* () {
             remote,
             branch,
             message: unresolvableMessage(remote, branch, divergence, error.message),
+            retryable: false,
           }),
       ),
     );
@@ -235,6 +238,7 @@ export const make = Effect.gen(function* () {
       branch,
       ...operation,
       message: operationMessage(branch, operation),
+      retryable: false,
     });
   });
 
@@ -324,6 +328,7 @@ export const make = Effect.gen(function* () {
       return yield* new GitError({
         command: `worktree remove ${branch}`,
         message: `refusing unsafe worktree branch "${branch}"`,
+        retryable: true,
       });
     }
     return yield* git.removeWorktree(repoPath, pathFor(repoPath, config, branch), true);

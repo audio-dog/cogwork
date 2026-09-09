@@ -47,6 +47,7 @@ export const make = (
       return yield* new CredentialError({
         account: config.name,
         message: `MCP skill "${skill.name}" needs a credential-store bearer, but workspace ${config.name} has no credential account to source it from`,
+        retryable: false,
       });
     }
     const credential = yield* store.bearerToken(account);

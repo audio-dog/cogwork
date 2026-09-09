@@ -546,6 +546,7 @@ describe("DaemonEventPublisher", () => {
   const storeFailure = new ControlStoreFailure({
     operation: "read Control store",
     message: "store read failed",
+    retryable: true,
   });
   const pluginFailure = new PluginFailure({
     operation: "read Plugin catalog",

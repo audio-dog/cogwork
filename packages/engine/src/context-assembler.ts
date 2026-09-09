@@ -43,6 +43,7 @@ export class ContextAssemblerError extends Schema.TaggedError<ContextAssemblerEr
   {
     source: Schema.String,
     message: Schema.String,
+    retryable: Schema.Boolean,
   },
 ) {}
 
@@ -136,6 +137,7 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
         return yield* new ContextAssemblerError({
           source: rule.file,
           message: `Contribution ${rule.id} has no readable source at ${rule.file}`,
+          retryable: false,
         });
       }),
     );
@@ -153,6 +155,7 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
           return yield* new ContextAssemblerError({
             source: contribution.file,
             message: `Contribution ${contribution.id} has no readable source at ${contribution.file}`,
+            retryable: false,
           });
         }),
     );
@@ -169,6 +172,7 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
     return yield* new ContextAssemblerError({
       source: errorSource,
       message: `Operating Instructions "${name}" have no readable INSTRUCTIONS.md at ${instructionPath}`,
+      retryable: false,
     });
   });
 
@@ -220,12 +224,14 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
         return yield* new ContextAssemblerError({
           source: request.operatingInstructions,
           message: `Operating Instructions name "${request.operatingInstructions}" is not a single path segment`,
+          retryable: false,
         });
       }
       if (!isSafePathSegment(request.workspace)) {
         return yield* new ContextAssemblerError({
           source: request.workspace,
           message: `Workspace identity "${request.workspace}" is not a single path segment`,
+          retryable: false,
         });
       }
       const source = yield* operatingInstructionsSource(request);
