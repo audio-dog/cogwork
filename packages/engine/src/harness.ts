@@ -1,5 +1,8 @@
 import {
   type AgUiEvent,
+  type HarnessCatalogChoice as ContractHarnessCatalogChoice,
+  type HarnessCatalogProvenance as ContractHarnessCatalogProvenance,
+  type HarnessOptionCatalog as ContractHarnessOptionCatalog,
   type HarnessName,
   type RunPlan,
   type RunPlanMember,
@@ -57,31 +60,23 @@ export interface HarnessExecution {
   readonly profiles: ReadonlyArray<OperationPolicyProfile>;
 }
 
-export interface HarnessCatalogChoice {
-  readonly value: string;
-  readonly label: string;
-}
+export type HarnessCatalogChoice = ContractHarnessCatalogChoice;
 
 export interface HarnessCatalogOptions {
   readonly models: ReadonlyArray<HarnessCatalogChoice>;
   readonly efforts?: ReadonlyArray<HarnessCatalogChoice>;
 }
 
-export type HarnessCatalogProvenance =
-  | { readonly source: "tanstack-runtime"; readonly packageVersion: string }
-  | {
-      readonly source: "native-discovery";
-      readonly runtimeHost: string;
-      readonly harnessVersion: string;
-    }
-  | { readonly source: "cogwork-fallback"; readonly fallbackVersion: string };
+export type HarnessCatalogProvenance = ContractHarnessCatalogProvenance;
 
-export interface HarnessOptionCatalog extends HarnessCatalogOptions {
+export interface HarnessCatalogSourceResult extends HarnessCatalogOptions {
   readonly provenance: HarnessCatalogProvenance;
 }
 
+export type HarnessOptionCatalog = ContractHarnessOptionCatalog;
+
 export interface HarnessCatalogSource {
-  readonly catalog: Effect.Effect<HarnessOptionCatalog | null, HarnessError, HarnessRunnerEnv>;
+  readonly catalog: Effect.Effect<HarnessCatalogSourceResult | null, HarnessError, HarnessRunnerEnv>;
 }
 
 export interface HarnessCatalogSources {
@@ -337,7 +332,7 @@ const validateSelectionValue = (
 
 const validateSelection = (
   runner: HarnessRunner,
-  catalog: HarnessOptionCatalog,
+  catalog: HarnessCatalogSourceResult,
   selection: HarnessSelection,
 ) =>
   validateSelectionValue(runner, "model", catalog.models, selection.model).pipe(
@@ -440,7 +435,12 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
     );
   });
   const catalog = Effect.fn("Harness.catalog")(function* (harness: HarnessName) {
-    return yield* resolveCatalog(yield* runnerFor(registry, harness));
+    const runner = yield* runnerFor(registry, harness);
+    const resolved = yield* resolveCatalog(runner);
+    return {
+      ...resolved,
+      policyProfiles: runner.execution.profiles,
+    };
   });
   const readiness = Effect.fn("Harness.readiness")(function* (harness: HarnessName) {
     return yield* (yield* runnerFor(registry, harness)).readiness();

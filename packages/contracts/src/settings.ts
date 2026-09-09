@@ -65,6 +65,9 @@ export const OperationSettingName = Schema.Literals([
 export type OperationSettingName = typeof OperationSettingName.Type;
 export const operationSettingNames = OperationSettingName.literals;
 
+export const RunPlanPolicyProfile = Schema.Literals(["read-only", "full"]);
+export type RunPlanPolicyProfile = typeof RunPlanPolicyProfile.Type;
+
 export const OperationBinding = Schema.Struct({
   need: TrimmedNonEmptyString,
   contribution: TrimmedNonEmptyString,

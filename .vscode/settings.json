@@ -2,7 +2,8 @@
   "files.exclude": {
     "**/node_modules": true,
     "**/.turbo": true,
-    "pnpm-lock.yaml": true
+    "pnpm-lock.yaml": true,
+    ".gitattributes": true
   },
   "git.branchProtection": ["main"],
   "editor.defaultFormatter": "biomejs.biome",

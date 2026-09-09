@@ -25,7 +25,7 @@ The Run's MCP servers travel through Claude's inline `--mcp-config` argument. Th
 _Avoid_: `.mcp.json` (that name belongs to the repository), credential file, adapter patch
 
 **Native Sandbox policy**:
-Every Run starts Claude with the native Sandbox enabled and required. Native startup fails if isolation is unavailable, and commands cannot retry outside it. User, project, and local settings are excluded so merged settings cannot widen the boundary. The full profile allows sandboxed Bash; the read-only profile removes Bash and every native file-edit tool. Required instructions still arrive through the Harness Workspace.
+Every Run starts Claude with the native Sandbox enabled and required. Native startup fails if isolation is unavailable, and commands cannot retry outside it. User, project, and local settings are excluded so merged settings cannot widen the boundary. The full profile allows sandboxed Bash; the read-only profile removes Bash and every native file-edit tool. A linked Worktree widens the boundary only to the Git paths its own commits need — its Worktree entry plus the common directory's `objects`, `refs`, `logs`, and its packed-ref files — and neither a read-only Run nor a checkout that owns its Git directory widens it at all, so a Run cannot write the shared `config`, install a hook, or disturb a sibling Worktree. Required instructions still arrive through the Harness Workspace.
 _Avoid_: Ambient permission, optional Sandbox, unsandboxed retry
 
 **Setup handoff**:

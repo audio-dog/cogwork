@@ -12,14 +12,11 @@ import * as Schema from "effect/Schema";
 export interface WorkspaceRecordDraft {
   readonly displayName: string;
   readonly checkoutPath: string;
-  readonly gitRemote: string;
   readonly issueTrackerType: "github" | "linear";
   readonly issueTrackerConnectionId: string;
   readonly issueTrackerRepo: string;
   readonly teams: string;
   readonly organization: string;
-  readonly trackerActorLogin: string;
-  readonly trackerActorUserId: string;
   readonly assigneeAllowlist: string;
   readonly trackerBotAllowlist: string;
   readonly needsTriageLabel: string;
@@ -33,7 +30,6 @@ export interface WorkspaceRecordDraft {
   readonly sourceControlType: "none" | "github";
   readonly sourceControlConnectionId: string;
   readonly sourceControlRepo: string;
-  readonly sourceControlActorLogin: string;
   readonly sourceControlBotAllowlist: string;
   readonly worktreeRoot: string;
   readonly worktreeRemote: string;
@@ -48,14 +44,11 @@ export interface WorkspaceRecordDraft {
 export const emptyDraft: WorkspaceRecordDraft = {
   displayName: "",
   checkoutPath: "",
-  gitRemote: "",
   issueTrackerType: "github",
   issueTrackerConnectionId: "unbound",
   issueTrackerRepo: "",
   teams: "",
   organization: "",
-  trackerActorLogin: "",
-  trackerActorUserId: "",
   assigneeAllowlist: "",
   trackerBotAllowlist: "",
   needsTriageLabel: "",
@@ -69,7 +62,6 @@ export const emptyDraft: WorkspaceRecordDraft = {
   sourceControlType: "none",
   sourceControlConnectionId: "unbound",
   sourceControlRepo: "",
-  sourceControlActorLogin: "",
   sourceControlBotAllowlist: "",
   worktreeRoot: "",
   worktreeRemote: "",
@@ -98,14 +90,11 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
   return {
     displayName: record.name,
     checkoutPath: record.checkoutPath,
-    gitRemote: record.gitRemote ?? "",
     issueTrackerType: tracker.type === "linear" ? "linear" : "github",
     issueTrackerConnectionId: tracker.connectionId,
     issueTrackerRepo: tracker.repo ?? "",
     teams: joined(tracker.teams),
     organization: tracker.organization ?? "",
-    trackerActorLogin: tracker.actorLogin ?? "",
-    trackerActorUserId: tracker.actorUserId ?? "",
     assigneeAllowlist: joined(tracker.assigneeAllowlist),
     trackerBotAllowlist: joined(tracker.botAllowlist),
     needsTriageLabel: tracker.roleLabels?.["needs-triage"] ?? "",
@@ -119,7 +108,6 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
     sourceControlType: sourceControl?.type === "github" ? "github" : "none",
     sourceControlConnectionId: sourceControl?.connectionId ?? "unbound",
     sourceControlRepo: sourceControl?.repo ?? "",
-    sourceControlActorLogin: sourceControl?.actorLogin ?? "",
     sourceControlBotAllowlist: joined(sourceControl?.botAllowlist),
     worktreeRoot: worktrees?.root ?? "",
     worktreeRemote: worktrees?.remote ?? "",
@@ -205,15 +193,12 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
   return Option.getOrNull(
     decodeWorkspaceUpdate({
       name: draft.displayName,
-      gitRemote: optional(draft.gitRemote),
       issueTracker: {
         type: draft.issueTrackerType,
         connectionId: draft.issueTrackerConnectionId,
         repo: optional(draft.issueTrackerRepo),
         teams: list(draft.teams),
         organization: optional(draft.organization),
-        actorLogin: optional(draft.trackerActorLogin),
-        actorUserId: optional(draft.trackerActorUserId),
         assigneeAllowlist: list(draft.assigneeAllowlist),
         botAllowlist: list(draft.trackerBotAllowlist),
         roleLabels: Object.values(roleLabels).some(Boolean) ? roleLabels : undefined,
@@ -225,7 +210,6 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
               type: "github",
               connectionId: draft.sourceControlConnectionId,
               repo: optional(draft.sourceControlRepo),
-              actorLogin: optional(draft.sourceControlActorLogin),
               botAllowlist: list(draft.sourceControlBotAllowlist),
             }
           : undefined,

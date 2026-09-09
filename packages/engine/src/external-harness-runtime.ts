@@ -98,7 +98,7 @@ export interface ExternalHarnessSelection {
 
 export interface ExternalHarnessCheckout {
   readonly path: string;
-  readonly sharedGitDirectory: string | null;
+  readonly gitWritablePaths: ReadonlyArray<string>;
 }
 
 export interface ExternalHarnessSecrets {
@@ -438,34 +438,53 @@ const sharedGitError = (checkoutPath: string) =>
     message: `shared Git metadata is unavailable for prepared checkout ${checkoutPath}`,
   });
 
-const resolveSharedGitDirectory = Effect.fn("ExternalHarnessRuntime.resolveSharedGitDirectory")(
+// A linked Worktree reaches these through the common directory, and the common directory itself is
+// deliberately absent: granting it would also hand the Run `config`, `hooks`, and every sibling
+// Worktree's state, so one stray `git config` becomes repository-wide damage that every Worktree and
+// the human inherit. A Worktree's own index and HEAD live under its entry, which it may write.
+// `packed-refs.lock` does not exist yet and is still granted: Git creates it in the common
+// directory's root, which stays ungranted, and without it every ref update against packed refs
+// reports a lock failure into the Run's own transcript.
+const commonGitWritableEntries = ["objects", "refs", "logs", "packed-refs", "packed-refs.lock"];
+
+const resolveGitWritablePaths = Effect.fn("ExternalHarnessRuntime.resolveGitWritablePaths")(
   (checkoutPath: string) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const worktreeGitPath = path.resolve(checkoutPath, ".git");
       const info = yield* fs.stat(worktreeGitPath);
-      if (info.type === "Directory") return yield* fs.realPath(worktreeGitPath);
+      // A checkout whose `.git` is a real directory gets nothing. It cannot be narrowed — Git writes
+      // the index by creating `index.lock` in that directory's root, so a commit needs the directory
+      // itself — and that directory is the common one every linked Worktree shares, which is exactly
+      // what this derivation exists to withhold. Granting it back would undo the whole narrowing.
+      if (info.type === "Directory") return [];
 
       const pointer = yield* fs.readFileString(worktreeGitPath);
       const gitDirectoryMatch = /^gitdir:\s*(.+)$/m.exec(pointer.trim());
       if (!gitDirectoryMatch?.[1]) return yield* sharedGitError(checkoutPath);
 
-      const gitDirectory = path.resolve(checkoutPath, gitDirectoryMatch[1]);
+      const gitDirectory = yield* fs.realPath(path.resolve(checkoutPath, gitDirectoryMatch[1]));
       const commonDirectoryPath = path.resolve(gitDirectory, "commondir");
       const commonDirectory = yield* fs
         .readFileString(commonDirectoryPath)
         .pipe(Effect.orElseSucceed(() => "."));
-      return yield* fs.realPath(path.resolve(gitDirectory, commonDirectory.trim()));
+      const common = yield* fs.realPath(path.resolve(gitDirectory, commonDirectory.trim()));
+      return [gitDirectory, ...commonGitWritableEntries.map((entry) => path.join(common, entry))];
     }),
 );
 
-const sharedGitDirectory = (
+// A read-only Operation commits nothing, so it is granted nothing: Codex protects `<checkout>/.git`
+// on its own, and an `--add-dir` over that path overrides the protection.
+const gitWritablePaths = (
   descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
+  profile: OperationPolicyProfile,
   checkoutPath: string,
 ) => {
-  if (descriptor.sharedGit === "none") return Effect.succeed(null);
-  return resolveSharedGitDirectory(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
+  if (descriptor.sharedGit === "none" || profile === "read-only") {
+    return Effect.succeed<ReadonlyArray<string>>([]);
+  }
+  return resolveGitWritablePaths(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
 };
 
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
@@ -475,7 +494,11 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
   authentication: ExternalHarnessAuthentication,
 ) {
   const resumeHandle = yield* resolveResumeHandle(session);
-  const gitDirectory = yield* sharedGitDirectory(descriptor, request.plan.sandbox.workspace);
+  const writablePaths = yield* gitWritablePaths(
+    descriptor,
+    request.plan.harness.profile,
+    request.plan.sandbox.workspace,
+  );
   return {
     identity: { run: request.plan.id, session, resumeHandle },
     selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
@@ -485,7 +508,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     operatingInstructions: request.plan.operatingInstructions,
     mcp: resolvedMcpSkills(request),
     secrets: { mcp: request.mcpCredentials },
-    checkout: { path: request.plan.sandbox.workspace, sharedGitDirectory: gitDirectory },
+    checkout: { path: request.plan.sandbox.workspace, gitWritablePaths: writablePaths },
     prompt: request.plan.messages,
     outputSchema: request.plan.structuredOutput,
   } satisfies ExternalHarnessResolvedRequest;

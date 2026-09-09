@@ -198,10 +198,25 @@ describe("stageResultSchema", () => {
             _tag: "implement",
             outcome: "opened-pr",
             summary: "Opened PR #110.",
+            title: null,
+            body: null,
           }),
         ),
       );
       assert.isUndefined(result.issues);
+
+      const ready = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "implement",
+            outcome: "ready-for-pr",
+            summary: "Implementation complete.",
+            title: "Open pull requests from the engine",
+            body: "Closes #474",
+          }),
+        ),
+      );
+      assert.isUndefined(ready.issues);
 
       const invalid = yield* Effect.promise(() =>
         Promise.resolve(
@@ -209,6 +224,8 @@ describe("stageResultSchema", () => {
             _tag: "implement",
             outcome: "opened-pr",
             summary: " ",
+            title: null,
+            body: null,
           }),
         ),
       );
