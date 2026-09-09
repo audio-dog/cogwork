@@ -7,9 +7,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "drizzle:schema": "node scripts/generate-control-store-create.mjs",
-    "drizzle:check": "node scripts/generate-control-store-create.mjs --check"
+    "test": "vitest run"
   },
   "dependencies": {
     "@cogwork/contracts": "workspace:*",
