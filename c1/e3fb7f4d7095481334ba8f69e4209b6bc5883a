@@ -1,0 +1,175 @@
+packages/engine/src/git.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 57-58
+packages/contracts/CONTEXT.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 28,32,302,392
+packages/engine/src/executor.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 72-76,80,137,182,199,210,331-347,396,539-543,565-566,571-573,815-816,854-865,871,1021,1025-1077,1090,1102,1489,1492-1496,2521-2650,2806-2896
+  s_2d4a93510e0bcb::t_b906817249bbaa 2897
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 1-10,14-24,28-139,165,170,180,188,198-199,245,265-266,282,285-320
+apps/cli/src/ledger.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 257-274
+packages/contracts/src/harness.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 4,36-64,75-78
+packages/engine/src/linear/linear.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 163
+packages/engine/src/event-publisher.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 246
+packages/engine/src/harness-overview.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 1,9,30-35,127,168,175-179,185,188-203,208,210-216,218-232,234-266
+packages/engine/src/playbook.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 69-81,119-123,280,285-288,301-303
+packages/engine/src/source-control.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 1-35
+apps/cli/src/workspace-commands.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 47,59
+packages/engine/src/linear/host.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 34-37,39,44,48,52-56,89-99,107,118,146-147,165
+packages/engine/src/external-harness-runtime.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 101,441-450,457-461,467,472-473,477-479,481,484-487,497-501,511
+packages/engine/src/observe.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 69
+apps/cli/src/platform.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 780-791
+packages/claude-code/CONTEXT.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 28
+packages/engine/src/coordination-tracker.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 132
+docs/spec/settings-and-plugins.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 209-210
+packages/engine/src/github/host.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 22-25,27,31,34,78-83,91,93-94,104,106,131-133,147-149
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 54
+packages/codex-cli/src/harness.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 242-250,376-415,596,600,612-646
+packages/engine/src/harness.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 3-5,62,69,71,75-76,78,333,436-441
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 72-77
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_2d4a93510e0bcb::t_215f8409735aa0 1-7,45-46,54-56,58,60,65,106,113,133,139,141,160,164,172-173,176-177,179-182,188,190-191,212,226,237,257-258,354,357-360,373-382,388-391,418,449,453,469,472,485-487
+packages/contracts/src/triage.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 64,68-75,80-98,151-184
+packages/engine/src/linear/client.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 493-494,498-503,524-531,634-638
+packages/contracts/src/run-plan.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 8
+apps/cli/src/login.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 1-2,4,20,28-32,132-135,154-157,171-174,188-191
+packages/engine/src/retry-policy.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 1,123-133
+  s_2d4a93510e0bcb::t_19692fd15c569c 134
+packages/engine/src/worktree.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 3,49-56,64-73,82,85,91-94,106-109,134-150,492-621
+  s_2d4a93510e0bcb::t_2c714123875ff6 622-623
+packages/engine/src/github/github.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 158,220,224-225,228-231,241,256,265-278,436-470,655-682,685-688,694-706
+  s_2d4a93510e0bcb::t_b54fd8ff7f4967 707
+packages/engine/CONTEXT.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 33,45,93,155,215
+packages/contracts/src/workspace.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 3,40-62
+  s_2d4a93510e0bcb::t_c61209b722a452 63
+packages/engine/src/scheduler.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 56
+packages/engine/src/coordination-tracker.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 45,85
+packages/codex-cli/src/harness.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 364-365
+packages/engine/src/source-control.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 40-44,59,62-66
+.vscode/settings.json
+  s_2d4a93510e0bcb::t_215f8409735aa0 5-6
+packages/engine/src/daemon-composition.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 49,164-168,172-173
+packages/engine/src/control-store-create.gen.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 12,14
+packages/contracts/src/triage.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 30,33-39,41-42,45-56,87-101
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 57
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 9
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 10,18-21,40,56,76,89,91,93,124
+packages/engine/src/playbook.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 60,102,202-203,215-216
+apps/cli/src/ledger.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 63,68-70,126,149,162,332-338
+packages/codex-cli/CONTEXT.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 52-56
+packages/contracts/src/settings.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 68-70
+packages/engine/src/linear/client.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 12-17,113-119,125,132,145-149,181-212
+  s_2d4a93510e0bcb::t_f80aedb8355ba4 213
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_2d4a93510e0bcb::t_215f8409735aa0 20
+packages/engine/src/github/client.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 119-120,268,349-354,695-697,715-721,725-727
+packages/engine/src/github/client.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 100-114,138-171
+  s_2d4a93510e0bcb::t_beabc86b4ed97f 172
+packages/engine/src/harness.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 199-200,206-218,225-226
+packages/contracts/src/run.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 64-66,86
+packages/engine/src/engine.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 118,223,237,251,994
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_2d4a93510e0bcb::t_215f8409735aa0 26,30,33-37,217-264,281
+packages/engine/src/commands.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 209
+package.json
+  s_2d4a93510e0bcb::t_215f8409735aa0 16
+packages/engine/src/read-model.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 147
+packages/engine/src/retry-policy.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 1-5,29,49,64
+packages/engine/src/run-ledger.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 31,58
+packages/engine/src/workspace-registry.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 293
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 3-7,12,16,35-88,117,124,131-132,140,149,154-158,160-162,170,174-178
+packages/claude-code/src/harness.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 323,419-421
+packages/engine/src/executor.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 25,63,101,103,183-192,198,206,933,936-946,955-957,979,1040-1122,1145-1149,1245,1666,1689-1690,1811-1819,1885,1889
+packages/engine/src/recovery.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 60,80-86,423-434,499,503-508,993-1002,1004
+  s_2d4a93510e0bcb::t_7c3b6e3c30435b 1003,1005
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 30
+packages/engine/src/harness-overview.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 4,52,61-63,69-70
+packages/engine/src/registry.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 428
+packages/engine/src/worktree.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 2,105-118,282-315,380
+packages/engine/src/recovery.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 6,43-45,224-226,277
+apps/cli/src/platform.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 178-179
+packages/engine/src/control-store-schema.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 124
+packages/engine/src/github/provider.ts
+  s_2d4a93510e0bcb::t_215f8409735aa0 22,26-29,34,47,51,55-67,131,146-152,167,195,198-200,282-284,289-291,294-299,302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c1e3fb7f4d7095481334ba8f69e4209b6bc5883a",
+  "prompts": {},
+  "sessions": {
+    "s_2d4a93510e0bcb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebb-5da8-7041-b038-274987a2b9a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
