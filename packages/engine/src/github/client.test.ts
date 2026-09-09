@@ -97,6 +97,21 @@ const transientWrite = (
 };
 
 describe("GitHub client", () => {
+  it.effect("reads the authenticated account login", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(jsonResponse({ login: "connected-account" })),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      assert.strictEqual(yield* client.authenticatedLogin(repo), "connected-account");
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.url, "https://api.github.com/user");
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("lists every open issue across GitHub pages", () => {
     const issue = (number: number) => ({ number, title: `issue ${number}`, labels: [] });
     const firstPage = Array.from({ length: 100 }, (_, index) => issue(index + 1));

@@ -116,6 +116,8 @@ const CreatedPullSchema = Schema.Struct({
   html_url: Schema.String,
 });
 
+const AuthenticatedUserSchema = Schema.Struct({ login: Schema.String });
+
 const PullSchema = Schema.Struct({
   number: Schema.Finite,
   html_url: Schema.optional(Schema.NullOr(Schema.String)),
@@ -263,6 +265,7 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
+const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
 const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
 const decodeCreatedPulls = Schema.decodeUnknownEffect(Schema.Array(CreatedPullSchema));
@@ -709,6 +712,13 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   );
 
   return {
+    authenticatedLogin: Effect.fn("github.authenticatedLogin")(function* (repo: GitHubRepoRef) {
+      const json = yield* withTransientRetry(
+        send(repo, HttpClientRequest.get("https://api.github.com/user"), (response) => response.json),
+      );
+      const user = yield* Effect.mapError(decodeAuthenticatedUser(json), toUnavailable);
+      return user.login;
+    }),
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       return yield* withPaginationDeadline(collectIssuePages(repo));
     }),

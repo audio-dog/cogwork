@@ -182,7 +182,6 @@ describe("humanCommentSignal", () => {
   it("counts a write-access human comment and reads its /fresh directive", () => {
     const signal = humanCommentSignal(
       [comment({ authorAssociation: "COLLABORATOR", body: "please /fresh", createdAtMillis: 200 })],
-      bot,
       noBots,
     );
     assert.strictEqual(signal.latestAtMillis, 200);
@@ -192,7 +191,6 @@ describe("humanCommentSignal", () => {
   it("ignores comments from users without write access", () => {
     const signal = humanCommentSignal(
       [comment({ authorLogin: "drive-by", authorAssociation: "NONE", body: "/fresh", createdAtMillis: 200 })],
-      bot,
       noBots,
     );
     assert.isNull(signal.latestAtMillis);
@@ -209,7 +207,6 @@ describe("humanCommentSignal", () => {
           createdAtMillis: 200,
         }),
       ],
-      bot,
       noBots,
     );
     assert.strictEqual(signal.latestAtMillis, 200);
@@ -225,7 +222,6 @@ describe("humanCommentSignal", () => {
           createdAtMillis: 200,
         }),
       ],
-      bot,
       noBots,
     );
     assert.isNull(signal.latestAtMillis);
@@ -241,7 +237,6 @@ describe("humanCommentSignal", () => {
           createdAtMillis: 5,
         }),
       ],
-      bot,
       noBots,
     );
     assert.strictEqual(signal.latestAtMillis, 5);
@@ -254,16 +249,10 @@ describe("humanCommentSignal", () => {
         comment({ authorLogin: "maintainer", body: "newer /fresh", createdAtMillis: 30 }),
         comment({ authorLogin: "drive-by", authorAssociation: "NONE", body: "ignored", createdAtMillis: 99 }),
       ],
-      bot,
       noBots,
     );
     assert.strictEqual(signal.latestAtMillis, 30);
     assert.isTrue(signal.fresh);
-  });
-
-  it("cannot identify humans without a configured bot login", () => {
-    const signal = humanCommentSignal([comment({ createdAtMillis: 200 })], null, noBots);
-    assert.isNull(signal.latestAtMillis);
   });
 
   it("treats an allowlisted login as a bot, not a human, even with write access", () => {
@@ -276,7 +265,6 @@ describe("humanCommentSignal", () => {
           createdAtMillis: 200,
         }),
       ],
-      bot,
       new Set(["cursor[bot]"]),
     );
     assert.isNull(signal.latestAtMillis);
