@@ -361,8 +361,8 @@ const codexDescriptor = (
         // Codex's `read-only` sandbox mode blocks network too, cutting a read-only
         // Operation off from the Issue tracker it reads with `gh`.
         ...(request.policy === "read-only" ? { sandboxMode: "workspace-write" as const } : {}),
-        ...(request.checkout.sharedGitDirectory
-          ? { additionalDirectories: [request.checkout.sharedGitDirectory] }
+        ...(request.checkout.gitWritablePaths.length > 0
+          ? { additionalDirectories: [...request.checkout.gitWritablePaths] }
           : {}),
         ...(Object.keys(mcp.config).length > 0 ? { config: mcp.config } : {}),
         ...(Object.keys(mcp.env).length > 0 ? { env: mcp.env } : {}),

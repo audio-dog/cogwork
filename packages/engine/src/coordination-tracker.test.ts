@@ -129,7 +129,7 @@ const makeFakeHost = Effect.fn("fakeHost")(function* (seed: ReadonlyArray<SeedIt
     assignees: item.assignees,
     claimLabeled: item.labels.includes(claimLabel),
     openBlockers: item.openBlockers,
-    claimIdentity: claimant,
+    acceptedClaimants: [claimant],
     priority: "medium",
     comments: item.comments,
   });

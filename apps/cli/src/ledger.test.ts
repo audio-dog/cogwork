@@ -254,6 +254,24 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("persists a held claim disposition", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const id = runId("held-claim");
+        yield* ledger.insertRun(record(id, 1000));
+        yield* ledger.updateRun(id, {
+          status: "failed",
+          usage: null,
+          endedAtMillis: 2000,
+          claimDisposition: "hold",
+        });
+
+        const stored = yield* ledger.getRun(id);
+
+        assert.strictEqual(stored?.claimDisposition, "hold");
+      }),
+    );
+
     it.effect("warns with the operation and row id before ignoring corrupt stored values", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;

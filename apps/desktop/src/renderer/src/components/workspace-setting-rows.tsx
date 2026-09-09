@@ -281,20 +281,6 @@ function IssueTrackerRows() {
       ) : null}
       <Field orientation="responsive">
         <FieldContent>
-          <FieldTitle>Actor login</FieldTitle>
-          <FieldDescription>GitHub identity Cogwork acts as.</FieldDescription>
-        </FieldContent>
-        <DraftInput field="trackerActorLogin" label="Tracker actor login" />
-      </Field>
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Actor user id</FieldTitle>
-          <FieldDescription>Linear identity Cogwork acts as.</FieldDescription>
-        </FieldContent>
-        <DraftInput field="trackerActorUserId" label="Tracker actor user id" />
-      </Field>
-      <Field orientation="responsive">
-        <FieldContent>
           <FieldTitle>Priority project</FieldTitle>
           <FieldDescription>Optional GitHub project number and field.</FieldDescription>
         </FieldContent>
@@ -414,13 +400,6 @@ function SourceControlRows() {
               field="sourceControlConnectionId"
               label="Source control Connection"
             />
-          </Field>
-          <Field orientation="responsive">
-            <FieldContent>
-              <FieldTitle>Actor login</FieldTitle>
-              <FieldDescription>Login used to identify Cogwork's own pull request comments.</FieldDescription>
-            </FieldContent>
-            <DraftInput field="sourceControlActorLogin" label="Source control actor login" />
           </Field>
           <Field orientation="responsive">
             <FieldContent>

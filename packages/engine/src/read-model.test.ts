@@ -140,11 +140,12 @@ const state: WorkspaceReconcileState = {
 
 const workspace: RegisteredWorkspace = {
   source: "example.workspace.ts",
+  repository: "owner/example",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "example",
     checkoutPath: "/repos/example",
-    issueTracker: { type: "github", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
 };
 

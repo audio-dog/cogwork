@@ -820,6 +820,18 @@ describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, (
     }).pipe(Effect.scoped, Effect.provide(testLayer)),
   );
 
+  it.effect("measures a prepared head against a different base branch", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const { worktree, branch } = yield* fixture("474-ready-for-pr");
+
+      assert.deepStrictEqual(yield* git.divergence(worktree, "origin", "main", branch), {
+        ahead: 1,
+        behind: 0,
+      });
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+
   it.effect("leaves the branch where it was when a rebase conflicts", () =>
     Effect.gen(function* () {
       const git = yield* Git.Git;
