@@ -1,19 +1,10 @@
-import { ConnectionEstablishment, type ConnectionSystem, TrimmedNonEmptyString } from "@cogwork/contracts";
+import { ConnectionEstablishment, type ConnectionSystem } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 
 // The form holds the source's tag, not a parallel "method" vocabulary, so the value the Select
 // carries is the tag the Establishment is built from and no second mapping can drift from it.
-export const CredentialSourceTag = Schema.Literals(["ApiKey", "Env", "Stored"]);
+export const CredentialSourceTag = Schema.Literals(["ApiKey", "Env", "GitHubCli", "Stored"]);
 export type CredentialSourceTag = typeof CredentialSourceTag.Type;
-
-// A stored browser grant only exists where the system offers a browser login, so Linear alone
-// offers the third source. Order is the order the options are shown in.
-export const credentialSourcesFor = (system: ConnectionSystem) =>
-  [
-    { value: "ApiKey", label: "API key" },
-    { value: "Env", label: "Environment variable" },
-    ...(system === "linear" ? [{ value: "Stored", label: "Saved login" } as const] : []),
-  ] as const satisfies ReadonlyArray<{ readonly value: CredentialSourceTag; readonly label: string }>;
 
 export const environmentVariableFor = (system: ConnectionSystem) =>
   system === "github" ? "GITHUB_TOKEN" : "LINEAR_API_KEY";
@@ -22,9 +13,7 @@ export const environmentVariableFor = (system: ConnectionSystem) =>
 // source keeps what was already typed. Which credential field is *required* is the filter's job.
 export const EstablishmentFields = Schema.Struct({
   system: Schema.Literals(["github", "linear"]),
-  account: TrimmedNonEmptyString.annotate({
-    message: "Name the account this Connection signs in as.",
-  }),
+  account: Schema.String,
   source: CredentialSourceTag,
   apiKey: Schema.String,
   environment: Schema.String,
@@ -32,6 +21,8 @@ export const EstablishmentFields = Schema.Struct({
   // A struct-level filter is what lets the conditional requirement report at the field the person
   // is looking at: `path` puts the issue on `apiKey`/`environment`, not on the form as a whole.
   Schema.makeFilter((fields) => {
+    if (fields.system === "linear" && fields.account.trim() === "")
+      return { path: ["account"], issue: "Name the account this Connection signs in as." };
     if (fields.source === "ApiKey" && fields.apiKey.trim() === "")
       return { path: ["apiKey"], issue: "Paste the API key." };
     if (fields.source === "Env" && fields.environment.trim() === "")
@@ -55,6 +46,7 @@ export const emptyEstablishmentFields = (system: ConnectionSystem, account = "")
 
 const sourceOf = (fields: EstablishmentFields) => {
   if (fields.source === "Stored") return { _tag: "Stored" as const };
+  if (fields.source === "GitHubCli") return { _tag: "GitHubCli" as const };
   if (fields.source === "Env") return { _tag: "Env" as const, name: fields.environment };
   return { _tag: "ApiKey" as const, key: fields.apiKey };
 };
@@ -64,4 +56,8 @@ const sourceOf = (fields: EstablishmentFields) => {
 const decodeEstablishment = Schema.decodeUnknownSync(ConnectionEstablishment);
 
 export const establishmentFrom = (fields: EstablishmentFields) =>
-  decodeEstablishment({ system: fields.system, account: fields.account, source: sourceOf(fields) });
+  decodeEstablishment(
+    fields.system === "github"
+      ? { system: fields.system, source: sourceOf(fields) }
+      : { system: fields.system, account: fields.account.trim(), source: sourceOf(fields) },
+  );

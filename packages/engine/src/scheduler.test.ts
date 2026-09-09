@@ -49,11 +49,12 @@ const jobOutcomes = Metric.counter("cogwork_scheduler_job_outcomes_total", {
 
 const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace => ({
   source: `${name}.workspace.ts`,
+  repository: `owner/${name}`,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name,
     checkoutPath: `/repos/${name}`,
-    issueTracker: { type: "github", repo: `owner/${name}`, actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
   ...(concurrency === undefined ? {} : { workspaceLimit: concurrency }),
 });

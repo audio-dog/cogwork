@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { RunId } from "@cogwork/contracts";
 import { Replay } from "@cogwork/engine";
 import * as Console from "effect/Console";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -24,28 +25,28 @@ const fixtureFileMode = 0o600;
 const replayFileDeadline = "5 seconds";
 const decodeRunId = Schema.decodeEffect(RunId);
 
-class ReplayReportTooLarge extends Schema.TaggedError<ReplayReportTooLarge>()("ReplayReportTooLarge", {
-  file: Schema.String,
-  maxBytes: Schema.Finite,
-}) {
+class ReplayReportTooLarge extends Data.TaggedError("ReplayReportTooLarge")<{
+  readonly file: string;
+  readonly maxBytes: number;
+}> {
   override get message() {
     return `Replay report ${this.file} exceeds ${this.maxBytes} bytes`;
   }
 }
 
-class EmptyReplayFixture extends Schema.TaggedError<EmptyReplayFixture>()("EmptyReplayFixture", {
-  runId: RunId,
-}) {
+class EmptyReplayFixture extends Data.TaggedError("EmptyReplayFixture")<{
+  readonly runId: RunId;
+}> {
   override get message() {
     return `Run ${this.runId} has no events to export`;
   }
 }
 
-class ReplayFileError extends Schema.TaggedError<ReplayFileError>()("ReplayFileError", {
-  message: Schema.String,
-}) {}
+class ReplayFileError extends Data.TaggedError("ReplayFileError")<{
+  readonly message: string;
+}> {}
 
-const replayFileFailure = (message: string) => ReplayFileError.make({ message });
+const replayFileFailure = (message: string) => new ReplayFileError({ message });
 
 const withReplayFileDeadline = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
@@ -82,7 +83,7 @@ const writeFixture = Effect.fn("replay.writeFixture")(function* (options: {
   const client = yield* makeDaemonClient();
   const id = yield* decodeRunId(options.id);
   const events = yield* client.GetRunEvents({ id });
-  if (events.length === 0) return yield* EmptyReplayFixture.make({ runId: id });
+  if (events.length === 0) return yield* new EmptyReplayFixture({ runId: id });
   const encoded = yield* Replay.encodeReplayFixture(
     Replay.ReplayFixture.make({ version: 1, sourceRunId: id, events }),
   );
@@ -112,8 +113,10 @@ export const exportReplayFixture = Effect.fn("replay.exportFixture")(function* (
 });
 
 const readReport = Effect.fn("replay.readReport")(function* (file: string) {
-  return yield* readBoundedFile(file, reportMaxBytes, (path, maxBytes) =>
-    ReplayReportTooLarge.make({ file: path, maxBytes }),
+  return yield* readBoundedFile(
+    file,
+    reportMaxBytes,
+    (path, maxBytes) => new ReplayReportTooLarge({ file: path, maxBytes }),
   ).pipe(Effect.flatMap(Replay.decodeReplayReport));
 });
 

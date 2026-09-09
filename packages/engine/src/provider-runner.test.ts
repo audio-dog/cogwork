@@ -1,5 +1,6 @@
 import { agUiTextDelta, HarnessName, RunPlan, SessionId, stageResultJsonSchema } from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
@@ -208,6 +209,7 @@ const providerRunnerLayer = (
     credentials,
     sessionLayer([]),
     NodeFileSystem.layer,
+    NodePath.layer,
     httpClient,
   );
 

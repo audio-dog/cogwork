@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 
 const countMarker = "cogwork-test-count:";
-const exec = promisify(execFile);
 const measuredTestStates = ["passed", "failed"];
 const scriptPath = fileURLToPath(import.meta.url);
 const vitestCountPattern = new RegExp(`${countMarker}(\\d+)`, "g");
@@ -24,19 +22,22 @@ export default class TestCountReporter {
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
-const run = async (file, args) => {
-  try {
-    return await exec(file, args, {
+export const run = (file, args) =>
+  new Promise((resolve, reject) => {
+    const stdout = [];
+    const child = spawn(file, args, {
       cwd: workspaceRoot,
-      encoding: "utf8",
-      maxBuffer: 10 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
     });
-  } catch (error) {
-    process.stderr.write(error?.stdout ?? "");
-    process.stderr.write(error?.stderr ?? "");
-    throw error;
-  }
-};
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (output) => {
+      stdout.push(output);
+      process.stderr.write(output);
+    });
+    child.stderr.pipe(process.stderr);
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ failed: code !== 0, stdout: stdout.join("") }));
+  });
 
 const vitestCount = (output) => {
   const counts = [...output.matchAll(vitestCountPattern)];
@@ -50,11 +51,12 @@ const nodeTestCount = (output) => {
   return Number(match[1]);
 };
 
-const measure = async () => {
+export const measure = async (runTestCommand = run) => {
   const startedAt = performance.now();
   const reporterPath = pathToFileURL(scriptPath).href;
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
-  const vitest = await run(process.execPath, [
+  const tsxPath = fileURLToPath(import.meta.resolve("tsx/cli"));
+  const vitest = await runTestCommand(process.execPath, [
     turboPath,
     "test",
     "--force",
@@ -63,14 +65,20 @@ const measure = async () => {
     "--reporter=default",
     `--reporter=${reporterPath}`,
   ]);
-  const nodeTests = await run(process.execPath, [
+  const nodeTests = await runTestCommand(process.execPath, [
     "--test",
     "--test-reporter=tap",
-    "configs/lint/tests/rules.test.mjs",
+    "scripts/test-measure.test.mjs",
+  ]);
+  const gitMeasurement = await runTestCommand(process.execPath, [
+    tsxPath,
+    "scripts/count-worktree-git-invocations.ts",
   ]);
   const durationMs = Math.round(performance.now() - startedAt);
   const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
   console.log(JSON.stringify({ durationMs, testCount }));
+
+  if ([vitest, nodeTests, gitMeasurement].some(({ failed }) => failed)) process.exitCode = 1;
 };
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

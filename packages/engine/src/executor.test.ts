@@ -23,6 +23,7 @@ import {
 } from "@cogwork/contracts";
 
 import { assert, describe, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -130,11 +131,12 @@ const seedResumeSession = (handle: string | null = "sess-prev") =>
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -175,11 +177,12 @@ const finished: AgUiEvent = {
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [privateSkill],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -192,27 +195,39 @@ const _codexImplementWorkspace: RegisteredWorkspace = {
 
 const mcpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
   }),
 };
 
 const mcpAuthWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
     ],
   }),
 };
+
+class ContextAssemblyRequests extends Context.Service<
+  ContextAssemblyRequests,
+  Ref.Ref<ReadonlyArray<ContextAssembler.AssembleRequest>>
+>()("@cogwork/engine/executor.test/ContextAssemblyRequests") {
+  static readonly layer = Layer.effect(
+    ContextAssemblyRequests,
+    Ref.make<ReadonlyArray<ContextAssembler.AssembleRequest>>([]),
+  );
+}
 
 class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<ReadonlyArray<string>>>()(
   "@cogwork/engine/executor.test/ContextCleanupCalls",
@@ -222,18 +237,21 @@ class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<R
     ContextAssembler.ContextAssembler,
     Effect.gen(function* () {
       const cleanups = yield* ContextCleanupCalls;
+      const requests = yield* ContextAssemblyRequests;
       return {
-        assemble: () =>
-          Effect.succeed({
-            layers: [],
-            operatingInstructionsPath: "/",
-            operatingInstructionResources: [],
-            sources: [],
-          }),
+        assemble: (request) =>
+          Ref.update(requests, (calls) => [...calls, request]).pipe(
+            Effect.map(() => ({
+              layers: [],
+              operatingInstructionsPath: "/",
+              operatingInstructionResources: [],
+              sources: [],
+            })),
+          ),
         cleanup: (runId) => Ref.update(cleanups, (calls) => [...calls, runId]),
       };
     }),
-  ).pipe(Layer.provideMerge(ContextCleanupCalls.layer));
+  ).pipe(Layer.provideMerge(Layer.mergeAll(ContextCleanupCalls.layer, ContextAssemblyRequests.layer)));
 }
 
 const missingOperatingInstructionsContext = Layer.succeed(ContextAssembler.ContextAssembler, {
@@ -389,11 +407,12 @@ const malformedImplementResultEvents: ReadonlyArray<AgUiEvent> = [
 
 const followUpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -491,7 +510,7 @@ const disabledWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -1524,6 +1543,7 @@ function provide<SourceControlRequirements = never>(
         testHarness(runners),
         runnerServices,
         ContextCleanupCalls.layer,
+        ContextAssemblyRequests.layer,
         runControl,
         worktree,
         assemblerStub,
@@ -2151,9 +2171,11 @@ describe("Executor.execute", () => {
 
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
+      const assemblyRequests = yield* ContextAssemblyRequests;
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
 
+      assert.strictEqual((yield* Ref.get(assemblyRequests))[0]?.workspace, implementWorkspace.config.name);
       const [request] = yield* Ref.get(requests);
       assert.strictEqual(request?.plan.harness.model, "refreshed-model");
       const model = request?.plan.provenance.resolution.find(({ key }) => key === "model");
@@ -3177,6 +3199,31 @@ describe("Executor.execute", () => {
       assert.isFalse(log.some((c) => c.method === "release"));
       assert.lengthOf(yield* Ref.get(cleanups), 1);
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
+  });
+
+  it.effect("releases the claim when a crash is combined with an interrupt", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* Effect.exit(execute(executor, implementWorkspace, implementItem));
+
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "claim"));
+      assert.lengthOf(
+        log.filter((call) => call.method === "release"),
+        1,
+      );
+    }).pipe(
+      Effect.provide(
+        provide([
+          capturingRunner(
+            [],
+            Stream.failCause(Cause.combine(Cause.die(new Error("harness crashed")), Cause.interrupt())),
+          ),
+        ]),
+      ),
+    );
   });
 
   it.effect("releases the claim after a manual cancellation finishes cleanup", () => {

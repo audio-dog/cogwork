@@ -1,3 +1,4 @@
+import { connectionIdOf } from "@cogwork/contracts";
 import { CredentialStore } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -7,7 +8,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { layer, makeFileStore } from "./credentials";
 
 const stored = (accessToken: string, expiresAtMillis = Number.MAX_SAFE_INTEGER) =>
@@ -60,7 +63,7 @@ const onDisk = <A, E>(
   use: (paths: {
     readonly filePath: string;
     readonly fs: FileSystem.FileSystem;
-  }) => Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  }) => Effect.Effect<A, E, FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner>,
 ) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -112,6 +115,27 @@ describe("file-backed credential store", () => {
         yield* file.save(stored("oauth-token"));
         const info = yield* fs.stat(filePath);
         assert.strictEqual(info.mode & 0o777, 0o600);
+      }),
+    ),
+  );
+
+  it.effect("persists a GitHub CLI source marker without a token", () =>
+    onDisk(({ filePath, fs }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        const connectionId = connectionIdOf("github", "octocat");
+        yield* file.saveConnectionCredential?.({ _tag: "GitHubCli", connectionId });
+
+        assert.deepStrictEqual(yield* file.loadConnectionCredentials, [{ _tag: "GitHubCli", connectionId }]);
+        const decoded = yield* Schema.decodeEffect(Schema.fromJsonString(CredentialStore.CredentialFile))(
+          yield* fs.readFileString(filePath),
+        );
+        assert.deepStrictEqual(decoded, {
+          version: 3,
+          credentials: [],
+          providerKeys: [],
+          connectionCredentials: [{ _tag: "GitHubCli", connectionId }],
+        });
       }),
     ),
   );

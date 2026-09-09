@@ -26,10 +26,11 @@ _Avoid_: PR reference, branch name (the full branch also carries a title slug th
 
 **Workspace**:
 A repo registered with the daemon under a minted `WorkspaceId`: a checkout path bound to an issue tracker and, optionally, a source control provider, plus workflow and operation settings. Checkout path is a re-binding hint, never identity. The unit of isolation and per-repo configuration.
+When either Engine port uses GitHub, its `owner/repository` is runtime data derived from the checkout's selected worktree remote (`origin` by default). It is not a second configurable repository.
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:
-Who the daemon acts *as* on a tracker — `issueTracker.actorUserId` (Linear user UUID) and `actorLogin` (GitHub login, on the tracker or the `sourceControl` block). It stamps claims and coordination comments and marks which comments/PRs are the daemon's own. One identity per workspace. (Renamed from `botUserId`/`botLogin`, since it can be any human or service account, not only a bot.)
+Who the daemon acts *as* on a tracker — the authenticated account discovered from the bound **Connection**. It stamps claims and coordination comments and marks which comments and pull requests are the daemon's own. A workspace stores only the Connection binding; it has no separate actor selector.
 _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
@@ -122,7 +123,7 @@ The surface that owns **contribution settings** — an MCP server's on / off —
 _Avoid_: Plugins, Settings, preferences
 
 **Connections**:
-The surface that owns Connection **establishment** — connect, re-connect, remove — with one card per system and no container noun over it. It may write Plugin membership, but only this way: **establishing a Connection installs the Plugin that requires it.** At most one first-party Plugin requires a given Connection, which is what makes that Plugin derivable. No noun is minted for the act.
+The surface where a person **connects**, **re-connects**, or removes a system, with one card per system and no container noun over it. It may write Plugin membership, but only this way: **connecting installs the Plugin that requires the Connection.** At most one first-party Plugin requires a given Connection, which is what makes that Plugin derivable. No noun is minted for the act.
 _Avoid_: Integration, connector, Customize, Plugins, setup wizard, *paired install* (retired — it never said what was paired with what, and named an act nobody refers to twice)
 
 **Workspaces**:
@@ -136,8 +137,8 @@ Only the kinds that **execute or connect** carry a setting. **MCP server** has o
 _Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind but resolves into Instructions; Tools is a member but is never contributed), per-Operation enablement (say binding)
 
 **Connection**:
-The established, authenticated binding to one external system, keyed by **system and account** (`linear/acme`) — engine-owned, and not a contribution kind. It is never the credential itself: its record lives in the Control store (id, system, account, status) and its secret in the Credential store, reaching a Run over a channel that is never persisted to the run ledger or event log. Both a Plugin's contributions and the Engine's own ports — the issue tracker, the source control provider — authenticate through one and reference it **by id**. A Plugin may *require* a Connection; it may never define one.
-**A Connection has no Scope**, and reference is not scoping: it is machine-level, a workspace references one, and a repository can never establish or override one. One grant serves every port on one account. Establishment accepts any source the Credential store accepts — a browser login where the system offers one, an API key where it does not — and **the system itself has to accept the credential before anything is written**: resolving a token locally only proves a non-empty string exists, so establishment asks the system once and refuses on a rejection, leaving any credential it would have replaced untouched. Removal cascades to each Plugin that requires it and leaves a bound workspace *dangling*; a grant revoked outside cogwork is a readiness state, not a removal. See ADR 0017.
+The established, authenticated binding to one external system, keyed by **system and account** (`linear/acme`, `github/octocat`) — engine-owned, and not a contribution kind. It is never the credential itself: its record lives in the Control store (id, system, account, status) and its secret or source marker in the Credential store, reaching a Run over a channel that is never persisted to the run ledger or event log. Both a Plugin's contributions and the Engine's own ports — the issue tracker, the source control provider — authenticate through one and reference it **by id**. A Plugin may *require* a Connection; it may never define one.
+**A Connection has no Scope**, and reference is not scoping: it is machine-level, a workspace references one, and a repository can never connect or override one. One grant serves every port on one account. At connect time, the system itself has to accept the credential before anything is written. GitHub reports the account from the accepted credential; a person never types it. Linear keeps its typed account. At run time, the Credential store acquires the current credential from the selected source. A refused connect or re-connect leaves the credential it would have replaced untouched. Removal cascades to each Plugin that requires it and leaves a bound workspace *dangling*; a grant revoked outside Cogwork is a readiness state, not a removal. See ADR 0017.
 _Avoid_: Plugin (a Plugin requires a Connection, never contains one), credential (that is the secret it holds), MCP server, contribution kind, provider key (that one buys inference, not access to the work), Integration, connector
 
 **Connection readiness**:
@@ -286,7 +287,7 @@ _Avoid_: Retry (the control plane's own automatic re-attempt of a *retryable* fa
 ### Credentials
 
 **Credential store**:
-The daemon's durable secret store for Connection credentials: stored API keys, environment-variable references, and OAuth token pairs keyed by system and account. A seam: the backing layer is a `0600` file today, an OS keychain on desktop, a per-user database row on a hosted server. Unlike the run ledger it is **not** disposable — losing it logs the daemon out — and it is never committed to the repo. Both Linear and GitHub resolve through it. It holds the secret half of a **Connection**, whose non-secret record lives in the Control store.
+The daemon's credential source for Connections: stored API keys, environment-variable references, OAuth token pairs, and GitHub CLI source markers keyed by system and account. At run time it **acquires** the current GitHub CLI token for the Connection's fixed account and holds successful acquisitions in memory for ten minutes; the token is never persisted. A seam: the backing layer is a `0600` file today, an OS keychain on desktop, a per-user database row on a hosted server. Unlike the run ledger it is **not** disposable — losing it logs the daemon out — and it is never committed to the repo. Both Linear and GitHub acquire credentials through it. It holds the secret half of a **Connection**, whose non-secret record lives in the Control store.
 _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id` lives in config, not here), keychain (only one possible backing layer).
 
 ### Runs

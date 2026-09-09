@@ -69,6 +69,12 @@ describe("workspaceLabelById", () => {
 });
 
 describe("workspace record draft", () => {
+  it("does not expose retired actor selectors", () => {
+    expect(emptyDraft).not.toHaveProperty("trackerActorLogin");
+    expect(emptyDraft).not.toHaveProperty("trackerActorUserId");
+    expect(emptyDraft).not.toHaveProperty("sourceControlActorLogin");
+  });
+
   it("round-trips every editable registration field", () => {
     const state = Schema.decodeSync(WorkspaceState)({
       _tag: "Registered",
@@ -89,7 +95,6 @@ describe("workspace record draft", () => {
         sourceControl: {
           type: "github",
           connectionId: "github/acme",
-          repo: "acme/cogwork",
           botAllowlist: ["dependabot"],
         },
         linearHistory: true,
@@ -182,7 +187,6 @@ describe("workspace record draft", () => {
       ...emptyDraft,
       displayName: "  cogwork  ",
       issueTrackerConnectionId: "github/acme",
-      issueTrackerRepo: "  acme/cogwork  ",
       teams: " ENG, APP ",
       assigneeAllowlist: " taylor, cogwork ",
       priorityProject: " 12 ",
@@ -198,7 +202,6 @@ describe("workspace record draft", () => {
     expect(draftAfterSubmission(draft, "/repos/cogwork", update)).toMatchObject({
       displayName: "cogwork",
       checkoutPath: "/repos/cogwork",
-      issueTrackerRepo: "acme/cogwork",
       teams: "ENG, APP",
       assigneeAllowlist: "taylor, cogwork",
       priorityProject: "12",

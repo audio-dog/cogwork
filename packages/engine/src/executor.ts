@@ -29,6 +29,7 @@ import {
   RunId,
   sessionHandle,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -38,6 +39,7 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -236,6 +238,8 @@ const withFailureTerminal = <R>(stream: Stream.Stream<AgUiEvent, HarnessError, R
   );
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
+const hasInterruptsOnly = (exit: Exit.Exit<unknown, unknown>) =>
+  Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
 const noPlugins = { plugins: [] } satisfies PluginOverview;
 const enabledContribution = (
   resolved: ResolvedOperation,
@@ -355,11 +359,20 @@ export const make = Effect.gen(function* () {
         ContextAssembler,
         CredentialStore,
         FileSystem.FileSystem,
+        Path.Path,
         HttpClient.HttpClient,
       ),
     ),
   );
   const releaseClaim = makeReleaseClaim(issueTracker);
+  const releaseClaimUnlessInterrupted = <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) =>
+    effect.pipe(
+      Effect.onExit((exit) => (hasInterruptsOnly(exit) ? Effect.void : releaseClaim(workspace, item.id))),
+    );
   const claimCooldowns = yield* Cooldown.make;
 
   const cleanupRunContext = (runId: RunId) =>
@@ -608,6 +621,7 @@ export const make = Effect.gen(function* () {
     const mcpServers = admittedMcpServers(preparedRequest.mcpServers, contributions);
     const context = yield* contextAssembler.assemble({
       runId,
+      workspace: workspace.config.name,
       cwd: preparedRequest.checkoutPath,
       projectRoot: preparedRequest.checkoutPath,
       operatingInstructions: preparedRequest.operatingInstructions,
@@ -1716,9 +1730,7 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    yield* handoffStalled(workspace, item).pipe(
-      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
-    );
+    yield* releaseClaimUnlessInterrupted(handoffStalled(workspace, item), workspace, item);
     return true;
   });
 
@@ -1747,7 +1759,7 @@ export const make = Effect.gen(function* () {
         }),
       ),
       Effect.onExit((exit) =>
-        Exit.isSuccess(exit) || Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id),
+        Exit.isSuccess(exit) || hasInterruptsOnly(exit) ? Effect.void : releaseClaim(workspace, item.id),
       ),
     );
     return true;

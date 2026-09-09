@@ -53,11 +53,12 @@ const crashLoopsCapped = Metric.counter("cogwork_recovery_crash_loops_capped_tot
 
 const wsA: RegisteredWorkspace = {
   source: "a.workspace.ts",
+  repository: "owner/a",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",
-    issueTracker: { type: "github", repo: "owner/a", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
 };
 

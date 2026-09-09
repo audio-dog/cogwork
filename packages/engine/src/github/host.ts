@@ -12,23 +12,32 @@ import * as Coordination from "../coordination";
 import type { CoordinationHost, ListedItem } from "../coordination-tracker";
 import { IssueTrackerError } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
-import type { GitHubClientService, GitHubRepoRef, RawComment, RawIssue } from "./client";
+import {
+  type GitHubClientService,
+  type GitHubRepoRef,
+  type RawComment,
+  type RawIssue,
+  repoRefFromRepository,
+} from "./client";
 import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
-  readonly actorLogin: string | null;
   readonly priority: GitHubPrioritySource | null;
 }
 
+interface AuthenticatedGitHubTarget extends GitHubTarget {
+  readonly actorLogin: string;
+}
+
 interface GitHubRef {
-  readonly target: GitHubTarget;
+  readonly target: AuthenticatedGitHubTarget;
   readonly number: number;
 }
 
-const claimIdentity = (target: GitHubTarget) => target.actorLogin ?? Coordination.defaultClaimant;
+const claimIdentity = (target: AuthenticatedGitHubTarget) => target.actorLogin;
 
 const toCoordinationComment =
-  (actorLogin: string | null) =>
+  (actorLogin: string) =>
   (comment: RawComment): CoordinationComment<number> => ({
     id: comment.id,
     body: comment.body,
@@ -38,16 +47,13 @@ const toCoordinationComment =
 
 const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
   const source = workspace.config.issueTracker;
-  if (source.type !== "github" || !source.repo) return null;
-  const [owner, name] = source.repo.split("/");
-  if (!owner || !name) return null;
+  if (source.type !== "github" || !workspace.repository) return null;
+  const repo = repoRefFromRepository(workspace.repository);
+  if (!repo) return null;
   const connectionId = source.connectionId === "unbound" ? undefined : source.connectionId;
   return {
-    owner,
-    name,
-    tokenEnv: "GITHUB_TOKEN",
+    ...repo,
     ...(connectionId ? { connectionId } : {}),
-    actorLogin: source.actorLogin ?? null,
     priority: source.priority ?? null,
   } satisfies GitHubTarget;
 };
@@ -73,7 +79,12 @@ const notGitHub = (workspace: WorkspaceIssueTrackerBinding) =>
   });
 
 export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRef, number> => {
-  const commentsFor = (target: GitHubTarget, number: number): CommentHost<number> => ({
+  const authenticatedTarget = Effect.fn("github.authenticatedTarget")(function* (target: GitHubTarget) {
+    const actorLogin = yield* client.authenticatedLogin(target);
+    return { ...target, actorLogin } satisfies AuthenticatedGitHubTarget;
+  });
+
+  const commentsFor = (target: AuthenticatedGitHubTarget, number: number): CommentHost<number> => ({
     comments: client
       .listComments(target, number)
       .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.actorLogin)))),
@@ -81,11 +92,10 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
     create: (body) => client.createComment(target, number, body),
   });
 
-  const listItem = (target: GitHubTarget, priorityFor: (issueNumber: number) => Priority) =>
+  const listItem = (target: AuthenticatedGitHubTarget, priorityFor: (issueNumber: number) => Priority) =>
     Effect.fn("github.listItem")(function* (issue: RawIssue) {
-      // With no configured bot login the daemon cannot tell its own comments apart, so it reads no
-      // coordination state at all rather than trusting an unattributable comment.
-      const rawComments = target.actorLogin ? yield* client.listComments(target, issue.number) : [];
+      const rawComments = yield* client.listComments(target, issue.number);
+      const comments = rawComments.map(toCoordinationComment(target.actorLogin));
       const id = yield* itemId(issue.number);
       return {
         id,
@@ -95,9 +105,9 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
         assignees: issue.assignees,
         claimLabeled: hasClaimLabel(issue.labels),
         openBlockers: issue.openBlockers,
-        claimIdentity: claimIdentity(target),
+        acceptedClaimants: [target.actorLogin, Coordination.defaultClaimant],
         priority: priorityFor(issue.number),
-        comments: rawComments.map(toCoordinationComment(target.actorLogin)),
+        comments,
       } satisfies ListedItem<number>;
     });
 
@@ -122,10 +132,9 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
     codec: wireCodec,
     rateLimitScope: () => null,
     list: Effect.fn("github.list")(function* (workspace: WorkspaceIssueTrackerBinding) {
-      const target = targetFor(workspace);
-      if (!target) {
-        return [];
-      }
+      const configuredTarget = targetFor(workspace);
+      if (!configuredTarget) return [];
+      const target = yield* authenticatedTarget(configuredTarget);
       const [issues, priorityFor] = yield* Effect.all([client.listIssues(target), priorityLookup(target)]);
       return yield* Effect.forEach(
         issues.filter((issue) => !issue.isPullRequest),
@@ -139,10 +148,9 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
       yield* client.createIssue(target, input);
     }),
     resolve: Effect.fn("github.resolve")(function* (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) {
-      const target = targetFor(workspace);
-      if (!target) {
-        return yield* notGitHub(workspace);
-      }
+      const configuredTarget = targetFor(workspace);
+      if (!configuredTarget) return yield* notGitHub(workspace);
+      const target = yield* authenticatedTarget(configuredTarget);
       const number = yield* issueNumberOf(id);
       return { target, number } satisfies GitHubRef;
     }),

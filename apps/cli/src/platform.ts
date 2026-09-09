@@ -197,7 +197,9 @@ export const gitLayer = Layer.effect(
           Effect.asVoid,
         ),
       remoteUrl: (repoPath, remote) =>
-        runGit(repoPath, ["remote", "get-url", remote]).pipe(Effect.map((value) => value.trim())),
+        runGit(repoPath, ["config", "--local", "--get", `remote.${remote}.url`]).pipe(
+          Effect.map((value) => value.trim()),
+        ),
     } satisfies Git.GitService;
   }),
 );
@@ -281,6 +283,11 @@ export const contextFsLayer = Layer.effect(
         .pipe(Effect.catch(recoverNotFound(noFiles, fail(`read directory ${target}`))));
 
     return {
+      directoryExists: (target) =>
+        fs.stat(target).pipe(
+          Effect.map((info) => info.type === "Directory"),
+          Effect.catch(recoverNotFound(false, fail(`stat directory ${target}`))),
+        ),
       readFile: (target) =>
         fs.readFileString(target).pipe(Effect.catch(recoverNotFound(null, fail(`read ${target}`)))),
       readDirectory,

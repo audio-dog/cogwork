@@ -15,7 +15,7 @@ export interface ConnectionVerifierService {
   readonly verify: (
     system: ConnectionSystem,
     credential: Credential,
-  ) => Effect.Effect<void, IssueTrackerError>;
+  ) => Effect.Effect<string | null, IssueTrackerError>;
 }
 
 export class ConnectionVerifier extends Context.Service<ConnectionVerifier, ConnectionVerifierService>()(
@@ -28,11 +28,13 @@ export const layer = Layer.effect(
     const github = yield* GitHubClient;
     return {
       verify: (system, credential) =>
-        system === "github" ? github.verifyCredential(credential.token) : verifyLinear(credential),
+        system === "github"
+          ? github.verifyCredential(credential.token)
+          : verifyLinear(credential).pipe(Effect.map(() => null)),
     } satisfies ConnectionVerifierService;
   }),
 );
 
 // A verifier that accepts every credential. For tests and for hosts with no network egress; wiring
 // it into the daemon would silently restore the hole this service exists to close.
-export const acceptingLayer = Layer.succeed(ConnectionVerifier, { verify: () => Effect.void });
+export const acceptingLayer = Layer.succeed(ConnectionVerifier, { verify: () => Effect.succeed(null) });

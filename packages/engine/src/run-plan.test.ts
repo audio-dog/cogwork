@@ -197,14 +197,14 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "workspace",
     checkoutPath: "/repo",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
 const otherWorkspace = Schema.decodeSync(WorkspaceConfig)({
   name: "other-workspace",
   checkoutPath: "/other",
-  issueTracker: { type: "github", repo: "owner/other" },
+  issueTracker: { type: "github" },
 }).name;
 
 const item: EligibleWork = {
@@ -261,7 +261,7 @@ const context: AssembledContext = {
 const bareConfig = Schema.decodeSync(WorkspaceConfig)({
   name: "bare-workspace",
   checkoutPath: "/bare",
-  issueTracker: { type: "github", repo: "owner/bare" },
+  issueTracker: { type: "github" },
 });
 
 const profileDefault = { level: { _tag: "Default" }, scope: { _tag: "SettingsProfile" } } as const;

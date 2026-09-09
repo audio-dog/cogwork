@@ -91,16 +91,14 @@ describe("workspaceRegistrationFrom", () => {
         checkoutPath: "  /Users/taylor/sites/cogwork  ",
         tracker: "github",
         issueTrackerConnectionId: "github/acme",
-        repository: "  colonylabs/cogwork  ",
         linearTeams: "",
         linearOrganization: "",
-        sourceControlRepository: "",
         sourceControlConnectionId: "",
       }),
     ).toEqual({
       name: "Cogwork",
       checkoutPath: "/Users/taylor/sites/cogwork",
-      issueTracker: { type: "github", connectionId: "github/acme", repo: "colonylabs/cogwork" },
+      issueTracker: { type: "github", connectionId: "github/acme" },
       linearHistory: false,
     });
   });
@@ -112,10 +110,8 @@ describe("workspaceRegistrationFrom", () => {
         checkoutPath: "/Users/taylor/sites/cogwork",
         tracker: "linear",
         issueTrackerConnectionId: "linear/acme",
-        repository: "",
         linearTeams: "ENG, Platform, ENG",
         linearOrganization: "  colony  ",
-        sourceControlRepository: " colonylabs/cogwork ",
         sourceControlConnectionId: "github/acme",
       }),
     ).toEqual({
@@ -127,7 +123,7 @@ describe("workspaceRegistrationFrom", () => {
         teams: ["ENG", "Platform"],
         organization: "colony",
       },
-      sourceControl: { type: "github", connectionId: "github/acme", repo: "colonylabs/cogwork" },
+      sourceControl: { type: "github", connectionId: "github/acme" },
       linearHistory: false,
     });
   });
@@ -139,10 +135,8 @@ describe("workspaceRegistrationFrom", () => {
         checkoutPath: "relative/path",
         tracker: "github",
         issueTrackerConnectionId: "",
-        repository: "",
         linearTeams: "",
         linearOrganization: "",
-        sourceControlRepository: "",
         sourceControlConnectionId: "",
       }),
     ).toBeNull();

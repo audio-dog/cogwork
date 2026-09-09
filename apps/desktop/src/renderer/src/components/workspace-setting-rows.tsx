@@ -261,13 +261,6 @@ function IssueTrackerRows() {
           label="Issue tracker Connection"
         />
       </Field>
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Repository</FieldTitle>
-          <FieldDescription>Tracker-native repository target, when the tracker needs one.</FieldDescription>
-        </FieldContent>
-        <DraftInput field="issueTrackerRepo" label="Issue tracker repository" placeholder="org/repo" />
-      </Field>
       {draft.issueTrackerType === "linear" ? (
         <FieldGroup>
           <Field orientation="responsive">
@@ -286,20 +279,6 @@ function IssueTrackerRows() {
           </Field>
         </FieldGroup>
       ) : null}
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Actor login</FieldTitle>
-          <FieldDescription>GitHub identity Cogwork acts as.</FieldDescription>
-        </FieldContent>
-        <DraftInput field="trackerActorLogin" label="Tracker actor login" />
-      </Field>
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Actor user id</FieldTitle>
-          <FieldDescription>Linear identity Cogwork acts as.</FieldDescription>
-        </FieldContent>
-        <DraftInput field="trackerActorUserId" label="Tracker actor user id" />
-      </Field>
       <Field orientation="responsive">
         <FieldContent>
           <FieldTitle>Priority project</FieldTitle>
@@ -421,20 +400,6 @@ function SourceControlRows() {
               field="sourceControlConnectionId"
               label="Source control Connection"
             />
-          </Field>
-          <Field orientation="responsive">
-            <FieldContent>
-              <FieldTitle>Repository</FieldTitle>
-              <FieldDescription>Repository whose pull requests belong to this workspace.</FieldDescription>
-            </FieldContent>
-            <DraftInput field="sourceControlRepo" label="Source control repository" placeholder="org/repo" />
-          </Field>
-          <Field orientation="responsive">
-            <FieldContent>
-              <FieldTitle>Actor login</FieldTitle>
-              <FieldDescription>Login used to identify Cogwork's own pull request comments.</FieldDescription>
-            </FieldContent>
-            <DraftInput field="sourceControlActorLogin" label="Source control actor login" />
           </Field>
           <Field orientation="responsive">
             <FieldContent>

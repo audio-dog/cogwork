@@ -72,6 +72,9 @@ export const StoredConnectionCredential = Schema.TaggedUnion({
     connectionId: ConnectionId,
     key: Schema.RedactedFromValue(TrimmedNonEmptyString),
   },
+  GitHubCli: {
+    connectionId: ConnectionId,
+  },
 });
 export type StoredConnectionCredential = typeof StoredConnectionCredential.Type;
 
@@ -114,7 +117,7 @@ export interface CredentialIdentity {
   readonly actorUserId: string;
 }
 
-export type CredentialSource = "env" | "stored-key" | "stored-oauth" | "client-credentials";
+export type CredentialSource = "env" | "stored-key" | "stored-oauth" | "client-credentials" | "github-cli";
 
 export interface Credential {
   readonly source: CredentialSource;
@@ -177,6 +180,11 @@ export interface ClientCredentialsGrant {
 export interface CredentialSources {
   readonly stored: StoredCredentials;
   readonly clientCredentials?: ClientCredentialsGrant;
+  readonly githubCli?: {
+    readonly discover: Effect.Effect<Redacted.Redacted<string>, CredentialError>;
+    readonly acquire: (account: string) => Effect.Effect<Redacted.Redacted<string>, CredentialError>;
+    readonly forget: (account: string) => Effect.Effect<void>;
+  };
   readonly refresh?: TokenRefresh;
 }
 
@@ -205,6 +213,11 @@ export class CredentialStore extends Context.Service<CredentialStore, Credential
 
 export const accountOf = (credential: StoredCredential) =>
   `${credential.issueTracker}/${credential.organization}`;
+
+const annotateAccount =
+  (account: string) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(Effect.annotateLogs({ account }), Effect.annotateSpans({ account }));
 
 const redactedEnv = (name: string) =>
   Config.redacted(name).pipe(Effect.orElseSucceed(() => Redacted.make("")));
@@ -239,7 +252,6 @@ const matchStored = Effect.fn("CredentialStore.matchStored")(function* (
   const candidates = (yield* stored.load).filter(matching(account));
   if (candidates.length > 1) {
     yield* Effect.logWarning("multiple stored credentials match; set issueTracker.organization", {
-      account: account.key,
       matches: candidates.length,
     });
     return null;
@@ -295,7 +307,6 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     } satisfies StoredCredential;
     yield* sources.stored.save(rotated);
     yield* Effect.logInfo("refreshed the stored credential", {
-      account: account.key,
       organization: rotated.organization,
     });
     return rotated;
@@ -309,7 +320,6 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     const refreshToken = match.credential.token.refreshToken;
     if (!clientId || !refreshToken) {
       yield* Effect.logInfo("stored credential expired and cannot be refreshed; falling through", {
-        account: account.key,
         organization: match.credential.organization,
       });
       return null;
@@ -339,6 +349,26 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     });
   });
 
+  const resolveGitHubCli = Effect.fn("CredentialStore.resolveGitHubCli")(function* (
+    account: CredentialAccount,
+  ) {
+    if (account.issueTracker !== "github") {
+      return yield* new CredentialError({
+        account: account.key,
+        message: "GitHub CLI credentials are available only for GitHub Connections",
+      });
+    }
+    const source = sources.githubCli;
+    if (!source) {
+      return yield* new CredentialError({
+        account: account.key,
+        message: "GitHub CLI (`gh`) not found",
+      });
+    }
+    const token = account.organization ? yield* source.acquire(account.organization) : yield* source.discover;
+    return { source: "github-cli", token, identity: null } satisfies Credential;
+  });
+
   const resolveSource = (
     account: CredentialAccount,
     source: ConnectionSource,
@@ -346,8 +376,10 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     ConnectionSource.match(source, {
       ApiKey: ({ key }): Effect.Effect<Credential, CredentialError> =>
         Effect.succeed({ source: "stored-key", token: key, identity: null }),
-      Env: ({ name }) => envCredential({ ...account, tokenEnv: name }),
-      Stored: () => resolveStoredGrant(account),
+      Env: ({ name }): Effect.Effect<Credential, CredentialError> =>
+        envCredential({ ...account, tokenEnv: name }),
+      GitHubCli: (): Effect.Effect<Credential, CredentialError> => resolveGitHubCli(account),
+      Stored: (): Effect.Effect<Credential, CredentialError> => resolveStoredGrant(account),
     });
 
   const resolve = Effect.fn("CredentialStore.resolve")(function* (account: CredentialAccount) {
@@ -389,6 +421,11 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
 
   const loadProviderKeys = sources.stored.loadProviderKeys ?? Effect.succeed([]);
 
+  const forgetGitHubCliToken = (connectionId: ConnectionId, source: ConnectionSource) => {
+    if (source._tag !== "GitHubCli") return Effect.void;
+    return sources.githubCli?.forget(connectionAccountOf(connectionId)) ?? Effect.void;
+  };
+
   const configureConnection = Effect.fn("CredentialStore.configureConnection")(function* (
     connectionId: ConnectionId,
     source: ConnectionSource,
@@ -411,6 +448,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       });
     }
     yield* save({ ...source, connectionId });
+    yield* forgetGitHubCliToken(connectionId, source);
   });
 
   const firstEnvKey = (envVars: ReadonlyArray<string>) =>
@@ -440,16 +478,15 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     });
   });
 
+  const bearerToken = Effect.fn("CredentialStore.bearerToken")(function* (account: CredentialAccount) {
+    const credential = yield* resolve(account);
+    yield* Effect.logDebug("credential resolved", { source: credential.source });
+    return credential;
+  });
+
   return {
-    bearerToken: Effect.fn("CredentialStore.bearerToken")(function* (account: CredentialAccount) {
-      const credential = yield* resolve(account);
-      yield* Effect.logDebug("credential resolved", {
-        account: account.key,
-        source: credential.source,
-      });
-      return credential;
-    }),
-    resolveSource,
+    bearerToken: (account) => bearerToken(account).pipe(annotateAccount(account.key)),
+    resolveSource: (account, source) => resolveSource(account, source).pipe(annotateAccount(account.key)),
     persist: sources.stored.save,
     invalidate: (account) => sources.clientCredentials?.forget(account) ?? Effect.void,
     providerKey,
@@ -461,7 +498,8 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
           message: "this credential store cannot persist provider keys",
         }),
       ),
-    configureConnection,
+    configureConnection: (connectionId, source) =>
+      configureConnection(connectionId, source).pipe(annotateAccount(connectionId)),
     removeConnection: (connectionId) => {
       const system = connectionSystemOf(connectionId);
       const account = connectionAccountOf(connectionId);

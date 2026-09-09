@@ -16,6 +16,7 @@ import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -77,6 +78,7 @@ const harnessRunnerLayer = Layer.mergeAll(
   Layer.succeed(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
   Layer.succeed(CredentialStore.CredentialStore, harnessServices.credentialStore),
   Layer.succeed(FileSystem.FileSystem, harnessServices.fileSystem),
+  Path.layer,
   FetchHttpClient.layer,
 );
 

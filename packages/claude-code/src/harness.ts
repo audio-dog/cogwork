@@ -416,7 +416,9 @@ const adapterConfig = (
     cwd: ".",
     claudeExecutable: claudeExecutableFor(executable, request),
     disallowedTools: disallowedToolsFor(request.policy),
-    ...(request.checkout.sharedGitDirectory ? { addDirs: [request.checkout.sharedGitDirectory] } : {}),
+    ...(request.checkout.gitWritablePaths.length > 0
+      ? { addDirs: [...request.checkout.gitWritablePaths] }
+      : {}),
   } satisfies ClaudeCodeTextConfig;
 };
 
