@@ -95,7 +95,6 @@ describe("workspace record draft", () => {
         sourceControl: {
           type: "github",
           connectionId: "github/acme",
-          repo: "acme/cogwork",
           botAllowlist: ["dependabot"],
         },
         linearHistory: true,
@@ -188,7 +187,6 @@ describe("workspace record draft", () => {
       ...emptyDraft,
       displayName: "  cogwork  ",
       issueTrackerConnectionId: "github/acme",
-      issueTrackerRepo: "  acme/cogwork  ",
       teams: " ENG, APP ",
       assigneeAllowlist: " taylor, cogwork ",
       priorityProject: " 12 ",
@@ -204,7 +202,6 @@ describe("workspace record draft", () => {
     expect(draftAfterSubmission(draft, "/repos/cogwork", update)).toMatchObject({
       displayName: "cogwork",
       checkoutPath: "/repos/cogwork",
-      issueTrackerRepo: "acme/cogwork",
       teams: "ENG, APP",
       assigneeAllowlist: "taylor, cogwork",
       priorityProject: "12",

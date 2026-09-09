@@ -261,13 +261,6 @@ function IssueTrackerRows() {
           label="Issue tracker Connection"
         />
       </Field>
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Repository</FieldTitle>
-          <FieldDescription>Tracker-native repository target, when the tracker needs one.</FieldDescription>
-        </FieldContent>
-        <DraftInput field="issueTrackerRepo" label="Issue tracker repository" placeholder="org/repo" />
-      </Field>
       {draft.issueTrackerType === "linear" ? (
         <FieldGroup>
           <Field orientation="responsive">
@@ -407,13 +400,6 @@ function SourceControlRows() {
               field="sourceControlConnectionId"
               label="Source control Connection"
             />
-          </Field>
-          <Field orientation="responsive">
-            <FieldContent>
-              <FieldTitle>Repository</FieldTitle>
-              <FieldDescription>Repository whose pull requests belong to this workspace.</FieldDescription>
-            </FieldContent>
-            <DraftInput field="sourceControlRepo" label="Source control repository" placeholder="org/repo" />
           </Field>
           <Field orientation="responsive">
             <FieldContent>

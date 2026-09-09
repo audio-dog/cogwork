@@ -15,6 +15,7 @@ import {
   type RawPull,
   type RawReview,
   type ReviewDecision,
+  repoRefFromRepository,
   reviewDecisionOf,
 } from "./client";
 import { agentNoteMarker, hasCogworkMarker } from "./markers";
@@ -32,13 +33,11 @@ const targetFromRepo = (
   connectionId: ConnectionBindingId,
   botAllowlist: ReadonlyArray<string> | undefined,
 ): GitHubTargetConfig | null => {
-  const [owner, name] = repo.split("/");
-  if (!owner || !name) return null;
+  const repository = repoRefFromRepository(repo);
+  if (!repository) return null;
   const boundConnectionId: ConnectionId | undefined = connectionId === "unbound" ? undefined : connectionId;
   return {
-    owner,
-    name,
-    tokenEnv: "GITHUB_TOKEN",
+    ...repository,
     ...(boundConnectionId ? { connectionId: boundConnectionId } : {}),
     botAllowlist: new Set(botAllowlist ?? []),
   };
@@ -47,12 +46,12 @@ const targetFromRepo = (
 export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTargetConfig | null => {
   const explicit = workspace.config.sourceControl;
   if (explicit) {
-    if (explicit.type !== "github" || !explicit.repo) return null;
-    return targetFromRepo(explicit.repo, explicit.connectionId, explicit.botAllowlist);
+    if (explicit.type !== "github" || !workspace.repository) return null;
+    return targetFromRepo(workspace.repository, explicit.connectionId, explicit.botAllowlist);
   }
   const source = workspace.config.issueTracker;
-  if (source.type !== "github" || !source.repo) return null;
-  return targetFromRepo(source.repo, source.connectionId, source.botAllowlist);
+  if (source.type !== "github" || !workspace.repository) return null;
+  return targetFromRepo(workspace.repository, source.connectionId, source.botAllowlist);
 };
 
 const missingSourceControlTarget = () =>

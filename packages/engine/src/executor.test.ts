@@ -130,11 +130,12 @@ const seedResumeSession = (handle: string | null = "sess-prev") =>
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -175,11 +176,12 @@ const finished: AgUiEvent = {
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [privateSkill],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -192,22 +194,24 @@ const _codexImplementWorkspace: RegisteredWorkspace = {
 
 const mcpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
   }),
 };
 
 const mcpAuthWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
     ],
@@ -389,11 +393,12 @@ const malformedImplementResultEvents: ReadonlyArray<AgUiEvent> = [
 
 const followUpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -491,7 +496,7 @@ const disabledWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 

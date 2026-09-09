@@ -42,6 +42,12 @@ export interface GitHubRepoRef {
   readonly connectionId?: ConnectionId;
 }
 
+export const repoRefFromRepository = (repository: string) => {
+  const [owner, name, extra] = repository.split("/");
+  if (!owner || !name || extra) return null;
+  return { owner, name, tokenEnv: "GITHUB_TOKEN" };
+};
+
 export type ReviewDecision = "changes-requested" | "approved" | "none";
 
 export interface RawIssue {
