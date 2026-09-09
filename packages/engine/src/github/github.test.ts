@@ -155,6 +155,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       issues.map((issue) => (issue.number === number ? update(issue) : issue)),
     );
   return {
+    authenticatedLogin: () => Effect.succeed(bot.login),
     listIssues: () => Ref.get(issuesRef),
     listPulls: () => Effect.succeed([...pulls]),
     pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
@@ -216,17 +217,18 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
+    issueTracker: { type: "github", repo: "owner/repo" },
   }),
 };
 
-const noBotWorkspace: RegisteredWorkspace = {
-  source: "gh.workspace.ts",
+const missingTargetWorkspace: RegisteredWorkspace = {
+  source: "linear.workspace.ts",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "gh-nobot",
-    checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    name: "missing-target",
+    checkoutPath: "/repos/missing-target",
+    issueTracker: { type: "linear" },
+    sourceControl: { type: "github" },
   }),
 };
 
@@ -236,11 +238,10 @@ const trustsCursorBot: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-bots",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
+    issueTracker: { type: "github", repo: "owner/repo" },
     sourceControl: {
       type: "github",
       repo: "owner/repo",
-      actorLogin: bot.login,
       botAllowlist: ["cursor[bot]"],
     },
   }),
@@ -252,13 +253,27 @@ const prioritizedWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-priority",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login, priority: { project: 1 } },
+    issueTracker: { type: "github", repo: "owner/repo", priority: { project: 1 } },
   }),
 };
 
 const withClient = (seed: Seed) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
     Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))),
+  );
+
+const withIdentityFailure = (seed: Seed) =>
+  Layer.mergeAll(adapterLayer, providerLayer).pipe(
+    Layer.provideMerge(
+      Layer.effect(
+        GitHubClient,
+        Effect.map(fakeClient(seed), (client) => ({
+          ...client,
+          authenticatedLogin: () =>
+            Effect.fail(new IssueTrackerError({ reason: "auth", message: "GitHub identity unavailable" })),
+        })),
+      ),
+    ),
   );
 
 const countingProviderLayer = (seed: Seed) =>
@@ -416,6 +431,41 @@ describe("GitHub adapters", () => {
         url: "https://github.com/owner/repo/pull/480",
       });
     }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("refuses pull request creation permanently without a GitHub target", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const error = yield* Effect.flip(
+        provider.openPullRequest(missingTargetWorkspace, {
+          headBranch: "474-ready",
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #474",
+        }),
+      );
+
+      assert.strictEqual(error.reason, "unavailable");
+      assert.isFalse(error.retryable);
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("finds an open pull request for the exact same-repository head", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const found = yield* provider.findOpenPullRequest(workspace, "474-ready");
+      assert.deepStrictEqual(found, {
+        number: 474,
+        url: "https://github.com/owner/repo/pull/474",
+      });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          pulls: [pull({ number: 474, headRef: "474-ready", authorAssociation: "NONE" })],
+        }),
+      ),
+    ),
   );
 
   it.effect("preserves a pull request provider failure in the typed error channel", () =>
@@ -602,15 +652,56 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("writes the cogwork fallback identity when no bot login is configured", () =>
+  it.effect("recognizes the legacy fallback claimant on its authenticated ledger", () =>
+    Effect.gen(function* () {
+      const [observed] = yield* observeItems(workspace);
+      assert.strictEqual(observed?.claim?.by, Coordination.defaultClaimant);
+      assert.isTrue(observed?.claimedByUs);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 34, title: "legacy claim", labels: ["ready-for-agent", "cogwork:claimed"] }],
+          comments: [
+            {
+              issue: 34,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeClaim({
+                  by: Coordination.defaultClaimant,
+                  claimedAtMillis: 1,
+                  stage: "implement",
+                }),
+              ]),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("uses the authenticated account for claims and coordination ownership", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
-      const client = yield* GitHubClient;
-      yield* source.claim(noBotWorkspace, id("#7"), { claimedAtMillis: 1, stage: "implement" });
-      const bodies = (yield* client.listComments(repo, 7)).map((comment) => comment.body);
-      assert.isTrue(bodies.some((body) => body.includes("by=cogwork at=")));
+      yield* source.claim(workspace, id("#7"), { claimedAtMillis: 1, stage: "implement" });
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#7");
+      assert.strictEqual(observed?.claim?.by, bot.login);
+      assert.isTrue(observed?.claimedByUs);
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
+    ),
+  );
+
+  it.effect("fails observation when authenticated identity cannot be established", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(observeItems(workspace));
+      assert.strictEqual(error.reason, "auth");
+      assert.include(error.message, "identity unavailable");
+    }).pipe(
+      Effect.provide(
+        withIdentityFailure({
+          issues: [{ number: 8, title: "must not dispatch", labels: ["ready-for-agent"] }],
+        }),
+      ),
     ),
   );
 

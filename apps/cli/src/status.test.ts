@@ -13,6 +13,12 @@ const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   name: workspaceId("cogwork"),
   checkoutPath: "/tmp/cogwork",
   issueTracker: issueTrackerType("github"),
+  record: {
+    name: "cogwork",
+    checkoutPath: "/tmp/cogwork",
+    issueTracker: { type: issueTrackerType("github"), connectionId: "unbound" },
+    linearHistory: false,
+  },
   poll: { status: "ok" },
   eligible: [],
   claimed: [],

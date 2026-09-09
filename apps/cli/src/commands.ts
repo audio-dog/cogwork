@@ -159,6 +159,9 @@ class ContributionSettingInputError extends Data.TaggedError("ContributionSettin
   readonly message: string;
 }> {}
 
+const decodeContributionSettingUpdateInput = Schema.decodeUnknownEffect(ContributionSettingUpdate);
+const decodeOperationSettingUpdateInput = Schema.decodeUnknownEffect(OperationSettingUpdate);
+
 interface ContributionSettingOptions {
   readonly contribution: string;
   readonly scope: "profile" | "overlay";
@@ -174,7 +177,7 @@ const contributionSettingScope = (options: ContributionSettingOptions) =>
       };
 
 const decodeContributionSettingUpdate = (input: unknown) =>
-  Schema.decodeUnknownEffect(ContributionSettingUpdate)(input).pipe(
+  decodeContributionSettingUpdateInput(input).pipe(
     Effect.mapError((error) => new ContributionSettingInputError({ message: error.message })),
   );
 
@@ -239,7 +242,7 @@ const operationSettingValue = (setting: OperationSettingName, value: string) => 
 };
 
 const decodeOperationSettingUpdate = (input: unknown) =>
-  Schema.decodeUnknownEffect(OperationSettingUpdate)(input).pipe(
+  decodeOperationSettingUpdateInput(input).pipe(
     Effect.mapError((error) => new OperationSettingInputError({ message: error.message })),
   );
 

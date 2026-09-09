@@ -28,6 +28,7 @@ export interface RunUpdate {
   readonly status: RunSummary["status"];
   readonly usage: TokenUsage | null;
   readonly endedAtMillis: number;
+  readonly claimDisposition?: RunRecord["claimDisposition"];
 }
 
 export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLedgerError", {
@@ -54,9 +55,7 @@ const snapshotRunPlan = (plan: RunPlan) =>
 
 const applyUpdate = (record: RunRecord, update: RunUpdate): RunRecord => ({
   ...record,
-  status: update.status,
-  usage: update.usage,
-  endedAtMillis: update.endedAtMillis,
+  ...update,
 });
 
 const patchRun = (runs: ReadonlyArray<RunRecord>, runId: RunId, patch: (run: RunRecord) => RunRecord) =>

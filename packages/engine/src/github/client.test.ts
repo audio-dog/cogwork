@@ -97,6 +97,21 @@ const transientWrite = (
 };
 
 describe("GitHub client", () => {
+  it.effect("reads the authenticated account login", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(jsonResponse({ login: "connected-account" })),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      assert.strictEqual(yield* client.authenticatedLogin(repo), "connected-account");
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.url, "https://api.github.com/user");
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("lists every open issue across GitHub pages", () => {
     const issue = (number: number) => ({ number, title: `issue ${number}`, labels: [] });
     const firstPage = Array.from({ length: 100 }, (_, index) => issue(index + 1));
@@ -119,6 +134,41 @@ describe("GitHub client", () => {
       );
     }).pipe(withFetchClient(fetch));
   });
+
+  it.effect(
+    "filters open pull requests by the exact repository head without loading closing references",
+    () => {
+      const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.endsWith("/graphql")) {
+          return Promise.resolve(
+            jsonResponse({
+              data: {
+                repository: {
+                  pullRequests: {
+                    pageInfo: { hasNextPage: false, endCursor: null },
+                    nodes: [],
+                  },
+                },
+              },
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse([]));
+      });
+
+      return Effect.gen(function* () {
+        const client = yield* GitHubClient;
+        yield* client.listPulls(repo, "474-ready");
+        const request = fetch.mock.calls
+          .map(([input]) => new URL(input instanceof Request ? input.url : String(input)))
+          .find((url) => url.pathname.endsWith("/pulls"));
+        assert.strictEqual(fetch.mock.calls.length, 1);
+        assert.strictEqual(request?.searchParams.get("head"), "colonylabs:474-ready");
+        assert.strictEqual(request?.searchParams.get("state"), "open");
+      }).pipe(withFetchClient(fetch));
+    },
+  );
 
   it.effect("creates an issue with its body and labels", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>

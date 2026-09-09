@@ -1,14 +1,11 @@
-import { WorkspaceId, WorkspaceRegistration, WorkspaceState } from "@cogwork/contracts";
-import { Git } from "@cogwork/engine";
+import { WorkspaceId, WorkspaceRegistration, WorkspaceState, WorkspaceUpdate } from "@cogwork/contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import { defaultSocketPath } from "./paths";
-import { gitLayer } from "./platform";
 import { clientLayer, makeDaemonClient } from "./rpc";
 
 const socketFlag = Flag.string("socket").pipe(
@@ -21,6 +18,7 @@ export const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription(
 const checkoutFlag = Flag.string("checkout").pipe(Flag.withDescription("New absolute checkout path"));
 
 const decodeRegistration = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceRegistration));
+export const decodeWorkspaceUpdateJson = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceUpdate));
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId);
 
 const readRegistration = Effect.fn("workspace.readRegistration")(function* (inputPath: string) {
@@ -28,15 +26,10 @@ const readRegistration = Effect.fn("workspace.readRegistration")(function* (inpu
   return yield* fs.readFileString(inputPath).pipe(Effect.flatMap(decodeRegistration));
 });
 
-const captureRemote = Effect.fn("workspace.captureRemote")(function* (registration: WorkspaceRegistration) {
-  if (registration.gitRemote) return registration;
-  const git = yield* Git.Git;
-  const gitRemote = yield* git
-    .remoteUrl(registration.checkoutPath, registration.worktrees?.remote ?? "origin")
-    .pipe(Effect.orElseSucceed(() => undefined));
-  return { ...registration, ...(gitRemote ? { gitRemote } : {}) };
+const readUpdate = Effect.fn("workspace.readUpdate")(function* (inputPath: string) {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* fs.readFileString(inputPath).pipe(Effect.flatMap(decodeWorkspaceUpdateJson));
 });
-
 export const formatRegistrationResult = (requestedName: string, workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
     Registered: (registered) =>
@@ -51,7 +44,7 @@ const runRegister = Effect.fn("workspace.register")(function* (options: {
   readonly socket: string;
   readonly input: string;
 }) {
-  const registration = yield* readRegistration(options.input).pipe(Effect.flatMap(captureRemote));
+  const registration = yield* readRegistration(options.input);
   const client = yield* makeDaemonClient();
   const workspace = yield* client.RegisterWorkspace({ registration });
   const message = formatRegistrationResult(registration.name, workspace);
@@ -63,10 +56,7 @@ export const registerWorkspace = Effect.fn("workspace.registerWithLayers")(funct
   readonly socket: string;
   readonly input: string;
 }) {
-  return yield* runRegister(options).pipe(
-    Effect.scoped,
-    Effect.provide(Layer.mergeAll(clientLayer(options.socket), gitLayer)),
-  );
+  return yield* runRegister(options).pipe(Effect.scoped, Effect.provide(clientLayer(options.socket)));
 });
 
 export const formatRebindResult = (workspace: WorkspaceState) =>
@@ -79,6 +69,13 @@ export const formatRebindResult = (workspace: WorkspaceState) =>
         : registered.name;
       return `Re-bound ${identity} to ${registered.checkoutPath}.`;
     },
+  });
+
+export const formatUpdateResult = (workspace: WorkspaceState) =>
+  WorkspaceState.match(workspace, {
+    Failed: (failed) =>
+      `Updated ${failed.displayName ?? failed.name ?? failed.source}, but Workspace input failed: ${failed.message}`,
+    Registered: (registered) => `Updated ${registered.displayName ?? registered.name}.`,
   });
 
 const runDeregister = Effect.fn("workspace.deregister")(function* (options: {
@@ -104,6 +101,20 @@ const runRebind = Effect.fn("workspace.rebind")(function* (options: {
   yield* Console.log(message);
 });
 
+const runUpdate = Effect.fn("workspace.update")(function* (options: {
+  readonly socket: string;
+  readonly workspace: string;
+  readonly input: string;
+}) {
+  const workspace = yield* decodeWorkspaceId(options.workspace);
+  const update = yield* readUpdate(options.input);
+  const client = yield* makeDaemonClient();
+  const updated = yield* client.UpdateWorkspace({ workspace, update });
+  const message = formatUpdateResult(updated);
+  if (WorkspaceState.guards.Failed(updated)) return yield* Console.error(message);
+  yield* Console.log(message);
+});
+
 export const deregisterWorkspace = Effect.fn("workspace.deregisterWithLayers")(function* (options: {
   readonly socket: string;
   readonly workspace: string;
@@ -119,6 +130,14 @@ export const rebindWorkspace = Effect.fn("workspace.rebindWithLayers")(function*
   return yield* runRebind(options).pipe(Effect.scoped, Effect.provide(clientLayer(options.socket)));
 });
 
+export const updateWorkspace = Effect.fn("workspace.updateWithLayers")(function* (options: {
+  readonly socket: string;
+  readonly workspace: string;
+  readonly input: string;
+}) {
+  return yield* runUpdate(options).pipe(Effect.scoped, Effect.provide(clientLayer(options.socket)));
+});
+
 const registerCommand = Command.make("register", { socket: socketFlag, input: inputFlag }).pipe(
   Command.withHandler(registerWorkspace),
 );
@@ -127,6 +146,12 @@ const deregisterCommand = Command.make("deregister", { socket: socketFlag, works
   Command.withHandler(deregisterWorkspace),
 );
 
+const updateCommand = Command.make("update", {
+  socket: socketFlag,
+  workspace: workspaceFlag,
+  input: inputFlag,
+}).pipe(Command.withHandler(updateWorkspace));
+
 const rebindCommand = Command.make("re-bind", {
   socket: socketFlag,
   workspace: workspaceFlag,
@@ -134,5 +159,5 @@ const rebindCommand = Command.make("re-bind", {
 }).pipe(Command.withHandler(rebindWorkspace));
 
 export const workspaceCommand = Command.make("workspace").pipe(
-  Command.withSubcommands([registerCommand, deregisterCommand, rebindCommand]),
+  Command.withSubcommands([registerCommand, updateCommand, deregisterCommand, rebindCommand]),
 );

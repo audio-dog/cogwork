@@ -266,9 +266,9 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
+const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
 const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
-const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedPulls = Schema.decodeUnknownEffect(Schema.Array(CreatedPullSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
@@ -346,6 +346,12 @@ const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jit
 const transientAttemptDeadline = "30 seconds";
 const paginationDeadline = "5 minutes";
 const pageSize = 100;
+
+const openPullsPath = (repo: GitHubRepoRef, headBranch?: string) => {
+  if (!headBranch) return "/pulls?state=open&per_page=100&sort=updated&direction=desc";
+  const head = encodeURIComponent(`${repo.owner}:${headBranch}`);
+  return `/pulls?state=open&head=${head}&per_page=100`;
+};
 
 const withTransientRetry = <A, R>(attempt: Effect.Effect<A, GitHubAttemptError, R>) =>
   attempt.pipe(
@@ -687,6 +693,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return yield* withPaginationDeadline(collectClosingReferencePages(repo));
   });
 
+  const pullReferences = (repo: GitHubRepoRef, headBranch?: string) =>
+    headBranch ? Effect.succeed(new Map<number, ReadonlyArray<number>>()) : pullClosingReferences(repo);
+
   const collectIssuePages: (
     repo: GitHubRepoRef,
     page?: number,
@@ -704,15 +713,19 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   );
 
   return {
+    authenticatedLogin: Effect.fn("github.authenticatedLogin")(function* (repo: GitHubRepoRef) {
+      const json = yield* withTransientRetry(
+        send(repo, HttpClientRequest.get("https://api.github.com/user"), (response) => response.json),
+      );
+      const user = yield* Effect.mapError(decodeAuthenticatedUser(json), toUnavailable);
+      return user.login;
+    }),
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       return yield* withPaginationDeadline(collectIssuePages(repo));
     }),
-    listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef) {
-      const json = yield* fetchJson(
-        repo,
-        repoPath(repo, "/pulls?state=open&per_page=100&sort=updated&direction=desc"),
-      );
-      const references = yield* pullClosingReferences(repo);
+    listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
+      const json = yield* fetchJson(repo, repoPath(repo, openPullsPath(repo, headBranch)));
+      const references = yield* pullReferences(repo, headBranch);
       const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
       return pulls.map(
         (pull): RawPull => ({
