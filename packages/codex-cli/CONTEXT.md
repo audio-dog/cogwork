@@ -50,7 +50,7 @@ and loses its native write ban, which is why this Harness reports `policyFidelit
 Operation's own instructions carry the ban instead. Claude Code denies the write tools by name, so
 the inequality is Codex's alone.
 The descriptor also grants linked Worktrees the Git paths their own commits need — their Worktree
-entry plus the common directory's `objects`, `refs`, and `logs` — with Codex `--add-dir`. The common
+entry plus the common directory's `objects`, `refs`, `logs`, and its packed-ref files — with Codex `--add-dir`. The common
 directory itself stays ungranted, so a Run cannot reach `config`, `hooks`, or a sibling Worktree.
 Codex CLI owns authentication through its host login; Cogwork's credential store is not consulted.
 The local-process provider only starts Codex on the trusted Runtime Host; Codex's native Sandbox is
