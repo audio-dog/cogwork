@@ -145,6 +145,46 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("lists open and closed issues carrying one label", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([
+          {
+            number: 416,
+            title: "Performance regression",
+            body: "<!-- cogwork:selfperf fingerprint=daemon.heap-headroom.below -->",
+            state: "closed",
+            created_at: "2026-09-09T12:00:00Z",
+            labels: ["origin:selfperf"],
+          },
+        ]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const issues = yield* client.listIssues(repo, { state: "all", label: "origin:selfperf" });
+      const request = new URL(String(fetch.mock.calls[0]?.[0]));
+
+      assert.strictEqual(request.searchParams.get("state"), "all");
+      assert.strictEqual(request.searchParams.get("labels"), "origin:selfperf");
+      assert.deepStrictEqual(issues, [
+        {
+          number: 416,
+          title: "Performance regression",
+          url: "https://github.com/colonylabs/cogwork/issues/416",
+          labels: ["origin:selfperf"],
+          assignees: [],
+          isPullRequest: false,
+          openBlockers: 0,
+          body: "<!-- cogwork:selfperf fingerprint=daemon.heap-headroom.below -->",
+          state: "closed",
+          createdAtMillis: Date.UTC(2026, 8, 9, 12),
+        },
+      ]);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect(
     "filters open pull requests by the exact repository head without loading closing references",
     () => {

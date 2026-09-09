@@ -58,6 +58,9 @@ export interface RawIssue {
   readonly assignees: ReadonlyArray<string>;
   readonly isPullRequest: boolean;
   readonly openBlockers: number;
+  readonly body?: string;
+  readonly state?: "open" | "closed";
+  readonly createdAtMillis?: number;
 }
 
 export interface RawPull {
@@ -111,6 +114,9 @@ const IssueSchema = Schema.Struct({
   assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
   issue_dependencies_summary: Schema.optional(Schema.NullOr(DependenciesSummarySchema)),
+  body: Schema.optional(Schema.NullOr(Schema.String)),
+  state: Schema.optional(Schema.Union([Schema.Literal("open"), Schema.Literal("closed")])),
+  created_at: Schema.optional(Schema.String),
 });
 
 const CreatedIssueSchema = Schema.Struct({
@@ -305,6 +311,9 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
+  body: issue.body ?? "",
+  state: issue.state ?? "open",
+  createdAtMillis: millisFromIso(issue.created_at ?? null),
 });
 
 const openedPull = (created: typeof CreatedPullSchema.Type) =>
@@ -738,18 +747,31 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   const pullReferences = (repo: GitHubRepoRef, headBranch?: string) =>
     headBranch ? Effect.succeed(new Map<number, ReadonlyArray<number>>()) : pullClosingReferences(repo);
 
+  interface IssueQuery {
+    readonly state: "open" | "all";
+    readonly label?: string;
+  }
+
+  const issuePagePath = (query: IssueQuery, page: number) => {
+    const parameters = new URLSearchParams({
+      state: query.state,
+      per_page: String(pageSize),
+      page: String(page),
+    });
+    if (query.label) parameters.set("labels", query.label);
+    return `/issues?${parameters}`;
+  };
+
   const collectIssuePages: (
     repo: GitHubRepoRef,
+    query: IssueQuery,
     page?: number,
   ) => Effect.Effect<ReadonlyArray<RawIssue>, IssueTrackerError> = Effect.fn("github.collectIssuePages")(
-    function* (repo, page = 1) {
-      const json = yield* fetchJson(
-        repo,
-        repoPath(repo, `/issues?state=open&per_page=${pageSize}&page=${page}`),
-      );
+    function* (repo, query, page = 1) {
+      const json = yield* fetchJson(repo, repoPath(repo, issuePagePath(query, page)));
       const current = yield* parseIssues(repo, json);
       if (current.length < pageSize) return current;
-      const remaining = yield* collectIssuePages(repo, page + 1);
+      const remaining = yield* collectIssuePages(repo, query, page + 1);
       return [...current, ...remaining];
     },
   );
@@ -762,8 +784,11 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       const user = yield* Effect.mapError(decodeAuthenticatedUser(json), toUnavailable);
       return user.login;
     }),
-    listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
-      return yield* withPaginationDeadline(collectIssuePages(repo));
+    listIssues: Effect.fn("github.listIssues")(function* (
+      repo: GitHubRepoRef,
+      query: IssueQuery = { state: "open" },
+    ) {
+      return yield* withPaginationDeadline(collectIssuePages(repo, query));
     }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
       const json = yield* fetchJson(repo, repoPath(repo, openPullsPath(repo, headBranch)));
