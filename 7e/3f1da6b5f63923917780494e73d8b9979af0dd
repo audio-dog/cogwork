@@ -1,0 +1,21 @@
+apps/desktop/package.json
+  s_ad5832f98eb5fd::t_89e401dd919cd0 54
+pnpm-lock.yaml
+  s_ad5832f98eb5fd::t_152daf1d0a636e 281-283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7e3f1da6b5f63923917780494e73d8b9979af0dd",
+  "prompts": {},
+  "sessions": {
+    "s_ad5832f98eb5fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0886f-33c8-7990-905b-b866c42404b3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
