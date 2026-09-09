@@ -51,7 +51,7 @@ Supporting decisions:
 - **On and off are the only values.** Absence is not a third value; a key that is not in the file is not `false`. `override-scalar` down the direction below, and a Scope that says nothing shadows nothing.
 - **Direction, low to high:** Settings profile → Runtime host → Workspace input → Private workspace overlay. No kind inverts it.
 - **Composing the set of contributions across Scopes is a `union-values`, never a merge.** Identity carries Authority, so two contributions sharing a local name are two different things. Only a single identity with settings at more than one Scope resolves, and it resolves whole.
-- **Cogwork mints every Scope identity** — `Principal`, `HostId`, `WorkspaceId`, `(Principal, WorkspaceId)` — and never derives one from the environment. Folder path and git remote are re-binding hints only.
+- **Cogwork mints every Scope identity** — `Principal`, `HostId`, `WorkspaceId`, `(Principal, WorkspaceId)` — and never derives one from the environment. Checkout path is a re-binding hint only.
 - **One Engine ceiling.** Engine policy constrains rather than overrides and names its source. An Operation Definition's lock on a setting *is* Engine policy, not a second mechanism.
 - **The resolution trace is embedded in the Run Plan**, always, not recomputed on demand.
 

@@ -49,9 +49,11 @@ adapter always sends. A read-only Run therefore keeps the Issue tracker its tria
 and loses its native write ban, which is why this Harness reports `policyFidelity: "none"`. The
 Operation's own instructions carry the ban instead. Claude Code denies the write tools by name, so
 the inequality is Codex's alone.
-The descriptor also grants linked Worktrees their resolved shared Git metadata directory with
-Codex `--add-dir`. Codex CLI owns
-authentication through its host login; Cogwork's credential store is not consulted.
+The descriptor also grants linked Worktrees the Git paths their own commits need — their Worktree
+entry plus the common directory's `objects`, `refs`, `logs`, and its packed-ref files — with Codex `--add-dir`. The common
+directory itself stays ungranted, and neither a read-only Run nor a checkout that owns its Git
+directory is granted anything, so a Run cannot reach `config`, `hooks`, or a sibling Worktree.
+Codex CLI owns authentication through its host login; Cogwork's credential store is not consulted.
 The local-process provider only starts Codex on the trusted Runtime Host; Codex's native Sandbox is
 the worktree-confinement boundary.
 _Avoid_: Local-process isolation, danger-full-access
