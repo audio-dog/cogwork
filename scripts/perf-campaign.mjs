@@ -184,6 +184,15 @@ const holdWindow = async (manifest, agents, minutes) => {
   say(`${agents} agents: window closed`);
 };
 
+const restoreRestingLimit = () => {
+  try {
+    setGlobalLimit(restingLimit);
+  } catch (error) {
+    say(`could not restore the global limit to ${restingLimit}: ${describe(error)}`);
+    process.exitCode = 1;
+  }
+};
+
 const run = async (minutes) => {
   const manifest = readManifest();
   if (!manifest) {
@@ -199,7 +208,7 @@ const run = async (minutes) => {
   for (const agents of windowPlan) {
     await holdWindow(manifest, agents, minutes);
   }
-  setGlobalLimit(restingLimit);
+  restoreRestingLimit();
   manifest.finishedAt = stamp();
   writeManifest(manifest);
   say("campaign complete — stop the app, then run: node scripts/perf-campaign.mjs readout");
@@ -257,9 +266,14 @@ const gaugeSeries = (store, metric, attribute, from, to) => {
   };
 };
 
-// Effect histograms accumulate from process start, so a single snapshot is a running total. The
-// window's own work is the difference between its first and last snapshot; `max` stays a running
-// maximum and cannot be differenced, so it is reported as such.
+const histogramStep = (previous, current) => {
+  const restarted = current.count < previous.count || current.sum < previous.sum;
+  if (restarted) return { count: current.count, sum: current.sum };
+  return { count: current.count - previous.count, sum: current.sum - previous.sum };
+};
+
+// Effect histograms accumulate until process restart. Adjacent deltas preserve each process segment;
+// `max` cannot be differenced, so the largest running maximum is reported across every segment.
 const histogramDelta = (store, metric, from, to) => {
   const snapshots = rows(
     store,
@@ -268,11 +282,23 @@ const histogramDelta = (store, metric, from, to) => {
      and timestamp between ${from} and ${to} order by timestamp;`,
   );
   if (snapshots.length < 2) return undefined;
-  const first = snapshots[0];
-  const last = snapshots[snapshots.length - 1];
-  const count = last.count - first.count;
-  if (count <= 0) return undefined;
-  return { count, mean: (last.sum - first.sum) / count, runningMax: last.max };
+  const summary = snapshots.slice(1).reduce(
+    (current, snapshot) => {
+      const step = histogramStep(current.previous, snapshot);
+      return {
+        count: current.count + step.count,
+        sum: current.sum + step.sum,
+        runningMax: Math.max(current.runningMax ?? 0, snapshot.max ?? 0),
+        previous: snapshot,
+      };
+    },
+    { count: 0, sum: 0, runningMax: snapshots[0].max, previous: snapshots[0] },
+  );
+  return {
+    count: summary.count,
+    mean: summary.count === 0 ? undefined : summary.sum / summary.count,
+    runningMax: summary.runningMax,
+  };
 };
 
 const bytes = (value) => (typeof value === "number" ? `${(value / (1024 * 1024)).toFixed(0)} MB` : "n/a");
