@@ -94,6 +94,18 @@ const stageResponse = () => {
 const response = stageResponse();
 const turnError = process.argv.find((argument) => argument.startsWith("--fake-turn-error="));
 const turnErrorMessage = turnError?.slice("--fake-turn-error=".length).replaceAll("-", " ");
+const hookTrustNotice = process.argv.includes("--dangerously-bypass-hook-trust")
+  ? [
+      {
+        type: "item.completed",
+        item: {
+          id: "hook-trust-notice",
+          type: "error",
+          message: "`--dangerously-bypass-hook-trust` is enabled. Repository hooks will run.",
+        },
+      },
+    ]
+  : [];
 const events = turnErrorMessage
   ? [
       { type: "thread.started", thread_id: "fake-thread-1" },
@@ -101,6 +113,7 @@ const events = turnErrorMessage
     ]
   : [
       { type: "thread.started", thread_id: "fake-thread-1" },
+      ...hookTrustNotice,
       {
         type: "item.completed",
         item: { id: "message-1", type: "agent_message", text: response },

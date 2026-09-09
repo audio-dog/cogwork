@@ -32,7 +32,13 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { type CodexRunnerOptions, codexRunner, defaultCodexModel, type MakeCodexAdapter } from "./harness";
+import {
+  type CodexRunnerOptions,
+  codexExecutableWithRepositoryHooks,
+  codexRunner,
+  defaultCodexModel,
+  type MakeCodexAdapter,
+} from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const freshSession = Schema.decodeSync(SessionId)("session-codex-fresh");
@@ -88,7 +94,7 @@ interface RequestOverrides {
 const projectedMcpName = (name: string, index: number) =>
   `test__${name.toLowerCase().replace(/[^a-z0-9_]+/g, "_")}__${index}`;
 
-const makeRequest = (overrides: RequestOverrides) => {
+const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   const stage = overrides.stage ?? "implement";
   const profile = OperationPolicy.operationPolicyProfile(stage);
   const mcpSkills = overrides.mcpSkills ?? [];
@@ -167,6 +173,18 @@ const gitFixtureEnvironment = {
 const fakeCodexExecutable = (arguments_ = "") =>
   `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${arguments_}`;
 
+const sourceWrapperPath = new URL("./codex-with-repository-hooks", import.meta.url).pathname;
+
+const fakeCodexWithRepositoryHooks = Effect.fn("test.fakeCodexWithRepositoryHooks")(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-fake-codex-bin-" });
+  const executable = path.join(directory, "codex");
+  yield* fs.writeFileString(executable, `#!/bin/sh\nexec ${fakeCodexExecutable()} "$@"\n`);
+  yield* fs.chmod(executable, 0o700);
+  return `PATH='${directory}':"$PATH" ${codexExecutableWithRepositoryHooks}`;
+});
+
 const makeTestAdapter: MakeCodexAdapter = (model, config) =>
   codexText(model, { ...config, env: { ...config.env, ...gitFixtureEnvironment } });
 
@@ -242,7 +260,15 @@ const linkedWorktree = (handle: SandboxHandle) =>
       handle.process.exec(`git -C ${checkoutPath} rev-parse --path-format=absolute --git-common-dir`),
     );
     assert.strictEqual(common.exitCode, 0);
-    return { checkoutPath, commonDirectory: common.stdout.trim() };
+    const gitDirectory = yield* Effect.promise(() =>
+      handle.process.exec(`git -C ${checkoutPath} rev-parse --path-format=absolute --git-dir`),
+    );
+    assert.strictEqual(gitDirectory.exitCode, 0);
+    return {
+      checkoutPath,
+      commonDirectory: common.stdout.trim(),
+      gitDirectory: gitDirectory.stdout.trim(),
+    };
   });
 
 const Capture = Schema.fromJsonString(
@@ -304,7 +330,7 @@ const runOperation = (harness: Harness.HarnessService, stage: LifecycleStage) =>
     Effect.map((capture) => [stage, capture] satisfies [LifecycleStage, typeof Capture.Type]),
   );
 
-const authenticatedMcp = (secret: string) => [
+const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
   {
     name: "linear.api",
     endpoint: "https://mcp.linear.app/mcp/readonly",
@@ -312,19 +338,28 @@ const authenticatedMcp = (secret: string) => [
   },
 ];
 
+export type { RequestOverrides };
 export {
+  assertInsideFixture,
   authenticatedMcp,
+  Capture,
   collectEvents,
   createSandbox,
   defaultModel,
+  ensureSuccess,
   fakeCodexExecutable,
+  fakeCodexWithRepositoryHooks,
   freshSession,
   gitFixtureEnvironment,
   harnessLayer,
   initializeRepository,
+  instructions,
   linkedWorktree,
   makeRequest,
+  makeTestAdapter,
   name,
+  operationCapture,
+  projectedMcpName,
   resumedSession,
   runId,
   runInRepository,
@@ -332,6 +367,9 @@ export {
   runOperation,
   sessionHandles,
   sessionStore,
+  sourceWrapperPath,
   structuredCapture,
   structuredCompletions,
+  unexpected,
+  workItemId,
 };

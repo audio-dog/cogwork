@@ -1,74 +1,173 @@
-import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { ProcessProfileRequest } from "@cogwork/process-diagnostics";
-import { Cause, Effect, Exit, Layer, Logger, ManagedRuntime, Stream, SubscriptionRef } from "effect";
+import { NodeStream } from "@effect/platform-node";
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Layer,
+  Logger,
+  ManagedRuntime,
+  PlatformError,
+  Sink,
+  Stream,
+  SubscriptionRef,
+} from "effect";
 import * as Schema from "effect/Schema";
+import * as ChildProcess from "effect/unstable/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { describe, expect, it, vi } from "vitest";
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
 import {
-  type EngineChild,
   EngineSupervisor,
   type EngineSupervisorOptions,
   type EngineSupervisorService,
+  layer as engineSupervisorLayer,
 } from "./engine-supervisor";
 
-class FakeChild extends EventEmitter implements EngineChild {
+class FakeChild {
   readonly pid = 1234;
   readonly stdout = new PassThrough();
   readonly stderr = new PassThrough();
   readonly signals: NodeJS.Signals[] = [];
+  readonly killOptions: ChildProcess.KillOptions[] = [];
   readonly messages: unknown[] = [];
-  onSend: (message: unknown, callback?: (error: Error | null) => void) => unknown = () => undefined;
+  unrefCount = 0;
+  onSend: (message: unknown) => Effect.Effect<void, PlatformError.PlatformError> = () => Effect.void;
+  private readonly exited = Deferred.makeUnsafe<ChildProcessSpawner.ExitCode>();
+  private readonly profileResponses = new PassThrough();
+  private referenced = true;
+  readonly handle = ChildProcessSpawner.makeHandle({
+    pid: ChildProcessSpawner.ProcessId(this.pid),
+    stdin: Sink.drain,
+    stdout: NodeStream.fromReadable({ evaluate: () => this.stdout }),
+    stderr: NodeStream.fromReadable({ evaluate: () => this.stderr }),
+    all: Stream.empty,
+    exitCode: Deferred.await(this.exited),
+    isRunning: Deferred.isDone(this.exited).pipe(Effect.map((done) => !done)),
+    kill: (options) =>
+      Effect.sync(() => {
+        const signal = options?.killSignal ?? "SIGTERM";
+        this.killOptions.push(options ?? {});
+        this.beforeKill();
+        this.signals.push(signal);
+        if (signal === this.exitOnSignal) {
+          this.close(0);
+          return;
+        }
+        if (options?.forceKillAfter !== undefined) this.signals.push("SIGKILL");
+      }).pipe(Effect.andThen(this.awaitExitAfterKill())),
+    getInputFd: (fd) =>
+      fd === 3
+        ? Sink.forEachArray((chunks: ReadonlyArray<Uint8Array>) =>
+            Effect.forEach(chunks, (bytes) => this.send(new TextDecoder().decode(bytes)), {
+              discard: true,
+            }),
+          )
+        : Sink.drain,
+    getOutputFd: (fd) =>
+      fd === 4 ? NodeStream.fromReadable({ evaluate: () => this.profileResponses }) : Stream.empty,
+    unref: Effect.sync(() => {
+      this.unrefCount += 1;
+      this.referenced = false;
+      return Effect.sync(() => {
+        this.referenced = true;
+      });
+    }),
+  });
 
-  constructor(private readonly exitOnSignal: NodeJS.Signals | null = "SIGTERM") {
-    super();
+  constructor(
+    private readonly exitOnSignal: NodeJS.Signals | null = "SIGTERM",
+    private readonly killFailure?: PlatformError.PlatformError,
+  ) {}
+
+  protected beforeKill() {}
+
+  private awaitExitAfterKill() {
+    if (this.killFailure) return Effect.fail(this.killFailure);
+    if (this.exitOnSignal === null) return Effect.never;
+    return Deferred.await(this.exited).pipe(Effect.asVoid);
   }
 
-  kill(signal: NodeJS.Signals = "SIGTERM") {
-    this.signals.push(signal);
-    if (signal === this.exitOnSignal) queueMicrotask(() => this.emit("close", 0, signal));
-    return true;
+  close(code: number) {
+    this.profileResponses.end();
+    Deferred.doneUnsafe(this.exited, Effect.succeed(ChildProcessSpawner.ExitCode(code)));
   }
 
-  send(message: unknown, callback?: (error: Error | null) => void) {
+  respond(message: unknown) {
+    this.profileResponses.write(`${JSON.stringify(message)}\n`);
+  }
+
+  closeProfileResponses() {
+    this.profileResponses.end();
+  }
+
+  finalize() {
+    return Deferred.isDone(this.exited).pipe(
+      Effect.flatMap((exited) => (exited || !this.referenced ? Effect.void : Effect.never)),
+    );
+  }
+
+  private send(text: string) {
+    const message = Schema.decodeUnknownSync(ProcessProfileRequest)(JSON.parse(text));
     this.messages.push(message);
-    this.onSend(message, callback);
-    return true;
+    return this.onSend(message);
   }
 }
 
 class ShutdownOutputChild extends FakeChild {
-  override kill(signal: NodeJS.Signals = "SIGTERM") {
+  protected override beforeKill() {
     this.stdout.end();
     this.stderr.end("shutdown diagnostic\n");
-    return super.kill(signal);
   }
 }
 
 const command: EngineCommand = { command: "tsx", args: ["daemon"], cwd: "/repo" };
 
+interface TestSupervisorOptions extends EngineSupervisorOptions {
+  readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"];
+}
+
 const options = (
-  overrides: Partial<EngineSupervisorOptions> & Pick<EngineSupervisorOptions, "spawn">,
-): EngineSupervisorOptions => ({
-  command: () => command,
-  socketPath: "/tmp/test.sock",
-  probe: () => Effect.succeed(false),
-  awaitReachable: () => Effect.void,
-  terminateTimeout: 0,
-  forceKillTimeout: 0,
-  ...overrides,
-});
+  overrides: Partial<EngineSupervisorOptions> & {
+    readonly spawn: (command: ChildProcess.Command) => FakeChild;
+  },
+): TestSupervisorOptions => {
+  const { spawn, ...supervisor } = overrides;
+  return {
+    command: () => command,
+    socketPath: "/tmp/test.sock",
+    probe: () => Effect.succeed(false),
+    awaitReachable: () => Effect.void,
+    terminateTimeout: 0,
+    forceKillTimeout: 0,
+    ...supervisor,
+    spawner: ChildProcessSpawner.make((childCommand) =>
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          expect(ChildProcess.isStandardCommand(childCommand)).toBe(true);
+          const child = spawn(childCommand);
+          return { child, handle: child.handle };
+        }),
+        ({ child }) => child.finalize(),
+      ).pipe(Effect.map(({ handle }) => handle)),
+    ),
+  };
+};
 
 const withSupervisor = async (
-  supervisorOptions: EngineSupervisorOptions,
+  supervisorOptions: TestSupervisorOptions,
   run: (
     runtime: ManagedRuntime.ManagedRuntime<EngineSupervisor, never>,
     supervisor: EngineSupervisorService,
   ) => Promise<void>,
   loggerLayer: Layer.Layer<never> = Layer.empty,
 ) => {
-  const runtime = ManagedRuntime.make(Layer.merge(EngineSupervisor.layer(supervisorOptions), loggerLayer));
+  const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, supervisorOptions.spawner);
+  const supervisorLayer = engineSupervisorLayer(supervisorOptions).pipe(Layer.provide(spawnerLayer));
+  const runtime = ManagedRuntime.make(Layer.merge(supervisorLayer, loggerLayer));
   const supervisor = runtime.runSync(EngineSupervisor);
   try {
     await run(runtime, supervisor);
@@ -119,10 +218,14 @@ const awaitStatus = (
 const crashChild = (child: FakeChild) => {
   child.stdout.end();
   child.stderr.end();
-  child.emit("close", 1, null);
+  child.close(1);
 };
 
 describe("EngineSupervisor", () => {
+  it("uses the full desktop main module path in its service tag", () => {
+    expect(EngineSupervisor.key).toBe("@cogwork/desktop/main/engine-supervisor");
+  });
+
   it("settles startup interruption when the runtime drains", async () => {
     const probing = Promise.withResolvers<void>();
 
@@ -172,29 +275,42 @@ describe("EngineSupervisor", () => {
     });
   });
 
-  it("observes child completion from close after output has drained", async () => {
+  it("spawns the resolved command through ChildProcessSpawner", async () => {
     const child = new FakeChild();
+    const spawn = vi.fn((spawned: ChildProcess.Command) => {
+      expect(ChildProcess.isStandardCommand(spawned)).toBe(true);
+      if (!ChildProcess.isStandardCommand(spawned)) return child;
+      expect(spawned.command).toBe(command.command);
+      expect(spawned.args).toEqual(command.args);
+      expect(spawned.options).toMatchObject({
+        cwd: command.cwd,
+        extendEnv: true,
+        forceKillAfter: 0,
+        stdin: "ignore",
+      });
+      return child;
+    });
 
-    await withSupervisor(options({ spawn: () => child }), async (runtime, supervisor) => {
+    await withSupervisor(options({ spawn }), async (runtime, supervisor) => {
       await runtime.runPromise(supervisor.start);
 
-      expect(child.listenerCount("close")).toBe(1);
-      expect(child.listenerCount("exit")).toBe(0);
+      expect(spawn).toHaveBeenCalledOnce();
     });
   });
 
-  it("captures a live daemon profile through its process channel", async () => {
+  it("captures a live daemon profile through file descriptors", async () => {
     const child = new FakeChild();
-    child.onSend = (message) => {
-      const request = Schema.decodeUnknownSync(ProcessProfileRequest)(message);
-      queueMicrotask(() =>
-        child.emit("message", {
-          _tag: "ProcessProfileCompleted",
-          requestId: request.requestId,
-          path: "/diagnostics/CPU.1234.cpuprofile",
-        }),
-      );
-    };
+    child.onSend = (message) =>
+      Effect.sync(() => {
+        const request = Schema.decodeUnknownSync(ProcessProfileRequest)(message);
+        queueMicrotask(() =>
+          child.respond({
+            _tag: "ProcessProfileCompleted",
+            requestId: request.requestId,
+            path: "/diagnostics/CPU.1234.cpuprofile",
+          }),
+        );
+      });
 
     await withSupervisor(options({ spawn: () => child }), async (runtime, supervisor) => {
       await runtime.runPromise(supervisor.start);
@@ -208,7 +324,6 @@ describe("EngineSupervisor", () => {
 
       expect(path).toBe("/diagnostics/CPU.1234.cpuprofile");
       expect(child.messages).toHaveLength(1);
-      expect(child.listenerCount("message")).toBe(0);
     });
   });
 
@@ -225,20 +340,117 @@ describe("EngineSupervisor", () => {
       );
       const failed = expect(capture).rejects.toMatchObject({
         operation: "capture daemon profile",
-        cause: "Engine closed during profile capture (code 137, signal SIGKILL)",
+        cause: "Engine closed during profile capture (code 137)",
       });
       await yieldUntil(runtime, () => child.messages.length === 1);
       child.stdout.end();
       child.stderr.end();
-      child.emit("close", 137, "SIGKILL");
+      child.close(137);
 
       await failed;
     });
   });
 
-  it("removes the profile listener when sending fails", async () => {
+  it("fails profile capture when the response descriptor closes", async () => {
     const child = new FakeChild();
-    child.onSend = (_message, callback) => queueMicrotask(() => callback?.(new Error("send failed")));
+
+    await withSupervisor(options({ spawn: () => child }), async (runtime, supervisor) => {
+      await runtime.runPromise(supervisor.start);
+      child.closeProfileResponses();
+      await yieldToSupervisor(runtime);
+
+      await expect(
+        runtime.runPromise(
+          supervisor.captureProfile({
+            _tag: "HeapSnapshot",
+            directory: "/diagnostics",
+          }),
+        ),
+      ).rejects.toMatchObject({
+        operation: "capture daemon profile",
+        cause: "Profile response stream closed",
+      });
+    });
+  });
+
+  it("rejects oversized profile responses", async () => {
+    const child = new FakeChild();
+    child.onSend = (message) =>
+      Effect.sync(() => {
+        const request = Schema.decodeUnknownSync(ProcessProfileRequest)(message);
+        queueMicrotask(() =>
+          child.respond({
+            _tag: "ProcessProfileFailed",
+            requestId: request.requestId,
+            message: "x".repeat(16_385),
+          }),
+        );
+      });
+
+    await withSupervisor(options({ spawn: () => child }), async (runtime, supervisor) => {
+      await runtime.runPromise(supervisor.start);
+
+      await expect(
+        runtime.runPromise(
+          supervisor.captureProfile({
+            _tag: "HeapSnapshot",
+            directory: "/diagnostics",
+          }),
+        ),
+      ).rejects.toMatchObject({
+        operation: "capture daemon profile",
+        cause: "Profile response stream closed",
+      });
+    });
+  });
+
+  it("gives each serialized profile capture its full timeout", async () => {
+    const child = new FakeChild();
+    child.onSend = (message) =>
+      Effect.sleep("600 millis").pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            const request = Schema.decodeUnknownSync(ProcessProfileRequest)(message);
+            child.respond({
+              _tag: "ProcessProfileCompleted",
+              requestId: request.requestId,
+              path: `/diagnostics/${request.requestId}.cpuprofile`,
+            });
+          }),
+        ),
+      );
+
+    await withSupervisor(
+      options({ profileCaptureTimeout: "1 second", spawn: () => child }),
+      async (runtime, supervisor) => {
+        await runtime.runPromise(supervisor.start);
+        const input = {
+          _tag: "CpuProfile" as const,
+          directory: "/diagnostics",
+          durationMillis: 0,
+        };
+
+        const paths = await Promise.all([
+          runtime.runPromise(supervisor.captureProfile(input)),
+          runtime.runPromise(supervisor.captureProfile(input)),
+        ]);
+
+        expect(paths).toEqual(["/diagnostics/1234:0.cpuprofile", "/diagnostics/1234:1.cpuprofile"]);
+      },
+    );
+  });
+
+  it("fails profile capture when the request write fails", async () => {
+    const child = new FakeChild();
+    child.onSend = () =>
+      Effect.fail(
+        PlatformError.systemError({
+          _tag: "Unknown",
+          module: "ChildProcess",
+          method: "send",
+          description: "send failed",
+        }),
+      );
 
     await withSupervisor(options({ spawn: () => child }), async (runtime, supervisor) => {
       await runtime.runPromise(supervisor.start);
@@ -250,7 +462,6 @@ describe("EngineSupervisor", () => {
       );
 
       expect(Exit.isFailure(exit)).toBe(true);
-      expect(child.listenerCount("message")).toBe(0);
     });
   });
 
@@ -326,6 +537,8 @@ describe("EngineSupervisor", () => {
       await runtime.runPromise(supervisor.stop);
 
       expect(child.signals).toEqual(["SIGTERM", "SIGKILL"]);
+      expect(child.killOptions).toEqual([{ killSignal: "SIGTERM", forceKillAfter: 0 }]);
+      expect(child.unrefCount).toBe(1);
       expect(await currentStatus(runtime, supervisor)).toBe("stopped");
     });
   });
@@ -357,6 +570,30 @@ describe("EngineSupervisor", () => {
         await runtime.runPromise(supervisor.stop);
 
         expect(entries).toContainEqual(["Engine output", { line: "shutdown diagnostic", stream: "stderr" }]);
+      },
+      Logger.layer([capture], { mergeWithExisting: false }),
+    );
+  });
+
+  it("finishes cleanup when stopping the child fails", async () => {
+    const failure = PlatformError.systemError({
+      module: "ChildProcess",
+      method: "kill",
+      _tag: "Unknown",
+    });
+    const child = new ShutdownOutputChild(null, failure);
+    const entries: unknown[] = [];
+    const capture = Logger.make(({ message }) => entries.push(message));
+
+    await withSupervisor(
+      options({ spawn: () => child }),
+      async (runtime, supervisor) => {
+        await runtime.runPromise(supervisor.start);
+        await runtime.runPromise(supervisor.stop.pipe(Effect.timeout("1 second")));
+
+        expect(child.unrefCount).toBe(1);
+        expect(entries).toContainEqual(["Engine output", { line: "shutdown diagnostic", stream: "stderr" }]);
+        expect(await currentStatus(runtime, supervisor)).toBe("stopped");
       },
       Logger.layer([capture], { mergeWithExisting: false }),
     );
@@ -427,7 +664,7 @@ describe("EngineSupervisor", () => {
         queueMicrotask(() => {
           child.stdout.end();
           child.stderr.end("last diagnostic\n");
-          child.emit("close", 1, null);
+          child.close(1);
         });
 
         await statuses;

@@ -226,3 +226,33 @@ not. A Connection may also authenticate an Engine port with no Plugin over it, s
 bundle must never stop the daemon reconciling. Uninstall shows a notice naming the Connection as still
 established, and does **not** offer to remove it: **Connections** stays the only surface that writes
 Connection state.
+
+## Amendment (2026-09-04) — GitHub repository identity comes from the checkout
+
+[#452](https://github.com/colonylabs/cogwork/issues/452) removes `issueTracker.repo` and
+`sourceControl.repo`. No supported workspace observes work or pull requests in a different repository
+from its checkout. A Linear tracker with GitHub source control is cross-system, not cross-repository.
+
+The selected worktree remote, `origin` by default, is now the repository authority. Registration,
+reload, and re-bind derive its GitHub `owner/repository` from that remote. Provider type, Connection,
+actor identity, and bot settings remain explicit. A GitHub tracker or source control provider fails
+closed when the selected remote is missing or is not a supported GitHub SSH or HTTPS URL.
+
+## Amendment (2026-09-08) — GitHub accounts are discovered at connect time
+
+A GitHub Connection no longer asks a person to type an account. Cogwork discovers the account from
+the credential that GitHub accepts at connect time. This applies to pasted API keys, environment
+references, and the explicit **GitHub CLI (`gh`)** source. Linear keeps its typed account because its
+identity model is unchanged.
+
+The GitHub CLI source stores only a marker in the Credential store. At connect time, Cogwork finds
+the active `github.com` login with `gh auth status`, acquires that login's token with `gh auth token
+--user`, and asks GitHub to accept it before writing either store. At run time, it acquires the token
+for the Connection's fixed account. A successful acquisition is held in memory for ten minutes and
+shared by concurrent callers. A failed acquisition is not held. Switching the active `gh` account
+therefore cannot change which account an existing Connection acts as.
+
+The token stays out of the credential file, Control store, run ledger, event log, process arguments,
+and error text. Cogwork finds `gh` through the daemon's plain `PATH`; it does not install the program
+or run `gh auth login`. GitHub Enterprise hosts remain out of scope because the GitHub adapter uses
+`api.github.com` only.

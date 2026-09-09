@@ -4,6 +4,7 @@ import { memoryPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -51,6 +52,7 @@ const harnessRunnerLayer = Layer.mergeAll(
   Layer.succeed(ContextAssembler, harnessServices.contextAssembler),
   Layer.succeed(CredentialStore, harnessServices.credentialStore),
   Layer.succeed(FileSystem.FileSystem, harnessServices.fileSystem),
+  Path.layer,
   FetchHttpClient.layer,
 );
 
@@ -196,10 +198,25 @@ describe("stageResultSchema", () => {
             _tag: "implement",
             outcome: "opened-pr",
             summary: "Opened PR #110.",
+            title: null,
+            body: null,
           }),
         ),
       );
       assert.isUndefined(result.issues);
+
+      const ready = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "implement",
+            outcome: "ready-for-pr",
+            summary: "Implementation complete.",
+            title: "Open pull requests from the engine",
+            body: "Closes #474",
+          }),
+        ),
+      );
+      assert.isUndefined(ready.issues);
 
       const invalid = yield* Effect.promise(() =>
         Promise.resolve(
@@ -207,6 +224,8 @@ describe("stageResultSchema", () => {
             _tag: "implement",
             outcome: "opened-pr",
             summary: " ",
+            title: null,
+            body: null,
           }),
         ),
       );

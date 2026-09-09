@@ -158,7 +158,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
         },
         {
           source: "tanstack-runtime",
-          packageVersion: "ai-anthropic@0.18.3+ai-gemini@0.26.4+ai-openai@0.22.3",
+          packageVersion: "ai-anthropic@0.18.5+ai-gemini@0.29.1+ai-openai@0.22.5",
         },
       ),
       fallback: staticCatalogSource(
@@ -229,7 +229,10 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             providerMiddleware(name, persistence, instructions),
           );
 
-          const abortController = new AbortController();
+          const abortController = yield* Effect.acquireRelease(
+            Effect.sync(() => new AbortController()),
+            (controller) => Effect.sync(() => controller.abort()),
+          );
           const chatStream = runChat({
             adapter,
             messages,
@@ -249,7 +252,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             bridgeChat(chatStream),
             watchWorktreeDiffs(sandbox, baseSha).pipe(tolerateFeedDeath("worktree diff feed stopped")),
             { haltStrategy: "left" },
-          ).pipe(Stream.ensuring(Effect.sync(() => abortController.abort())));
+          );
         }),
       ),
   };

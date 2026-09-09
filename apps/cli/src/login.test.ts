@@ -1,4 +1,7 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off
+import * as Http from "node:http";
 import { CredentialStore } from "@cogwork/engine";
+import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -14,15 +17,19 @@ import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import type * as HttpServer from "effect/unstable/http/HttpServer";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { afterEach, vi } from "vitest";
 import { makeFileStore } from "./credentials";
 import { BrowserOpener, browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear } from "./login";
 
-const redirectPort = 39_642;
 const interruptionGate = Latch.makeUnsafe();
 
-const config: LinearLoginConfig = { clientId: "client-1", redirectPort };
+const loginConfigFromServer = (server: HttpServer.HttpServer["Service"]): LinearLoginConfig => {
+  const { address } = server;
+  if (address._tag === "UnixAddress") assert.fail("Expected an ephemeral TCP address");
+  return { clientId: "client-1", redirectPort: address.port };
+};
 
 const tokenBody = {
   access_token: "linear-access-token",
@@ -122,6 +129,10 @@ describe("login linear", () => {
   it.live("catches the loopback redirect, exchanges the code, and stores the discovered identity", () =>
     Effect.gen(function* () {
       vi.stubGlobal("fetch", vi.fn(routedFetch));
+      const config: LinearLoginConfig = yield* NodeHttpServer.make(Http.createServer, { port: 0 }).pipe(
+        Effect.map(loginConfigFromServer),
+        Effect.scoped,
+      );
       const filePath = yield* LoginCredentialFile;
       const result = yield* loginLinear(config);
 
@@ -140,6 +151,10 @@ describe("login linear", () => {
   it.live("does not store a login for a different established organization", () =>
     Effect.gen(function* () {
       vi.stubGlobal("fetch", vi.fn(routedFetch));
+      const config: LinearLoginConfig = yield* NodeHttpServer.make(Http.createServer, { port: 0 }).pipe(
+        Effect.map(loginConfigFromServer),
+        Effect.scoped,
+      );
       const filePath = yield* LoginCredentialFile;
       const switchedConfig = { ...config, expectedOrganization: "other" };
 
@@ -153,6 +168,10 @@ describe("login linear", () => {
   it.live("completes when the callback arrives before the browser opener returns", () =>
     Effect.gen(function* () {
       vi.stubGlobal("fetch", vi.fn(routedFetch));
+      const config: LinearLoginConfig = yield* NodeHttpServer.make(Http.createServer, { port: 0 }).pipe(
+        Effect.map(loginConfigFromServer),
+        Effect.scoped,
+      );
       const hangingBrowser = Layer.succeed(BrowserOpener, {
         open: (url: string) => completeCallback(url).pipe(Effect.andThen(interruptionGate.await)),
       });
@@ -166,6 +185,10 @@ describe("login linear", () => {
   it.effect("times out waiting for the callback and releases the loopback port", () =>
     Effect.gen(function* () {
       vi.stubGlobal("fetch", vi.fn(routedFetch));
+      const config: LinearLoginConfig = yield* NodeHttpServer.make(Http.createServer, { port: 0 }).pipe(
+        Effect.map(loginConfigFromServer),
+        Effect.scoped,
+      );
       const opened = yield* Deferred.make<void>();
       const silentBrowser = Layer.succeed(BrowserOpener, { open: () => Deferred.succeed(opened, undefined) });
       const first = yield* Effect.forkChild(

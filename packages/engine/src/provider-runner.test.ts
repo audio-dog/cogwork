@@ -1,5 +1,6 @@
 import { agUiTextDelta, HarnessName, RunPlan, SessionId, stageResultJsonSchema } from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
@@ -10,6 +11,7 @@ import {
 } from "@tanstack/ai-persistence";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -99,7 +101,7 @@ const keyProvider: CredentialStoreService["providerKey"] = () =>
   Effect.succeed({ source: "env", key: Redacted.make(SECRET) });
 
 const missingKeyProvider: CredentialStoreService["providerKey"] = () =>
-  Effect.fail(new CredentialError({ account: "openai", message: "no api key for openai" }));
+  Effect.fail(new CredentialError({ account: "openai", message: "no api key for openai", retryable: false }));
 
 const stubPersistence = (thread: ReadonlyArray<ModelMessage>): ChatWithInterruptsPersistence =>
   defineAIPersistence({
@@ -207,6 +209,7 @@ const providerRunnerLayer = (
     credentials,
     sessionLayer([]),
     NodeFileSystem.layer,
+    NodePath.layer,
     httpClient,
   );
 
@@ -277,6 +280,31 @@ describe("providerRunner", () => {
         assert.strictEqual(options.threadId, sessionId);
       }),
     30000,
+  );
+
+  it.live("aborts the chat request when the provider stream is interrupted", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const captured = Promise.withResolvers<RunChatOptions>();
+      const runChat: RunChat = (options) => {
+        captured.resolve(options);
+        return {
+          [Symbol.asyncIterator]: () => ({
+            next: () => Promise.withResolvers<IteratorResult<StreamChunk>>().promise,
+          }),
+        };
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+      const fiber = yield* Stream.runDrain(runner.run(request({ checkoutPath }))).pipe(
+        Effect.provide(providerRunnerLayer()),
+        Effect.forkChild,
+      );
+      const chatOptions = yield* Effect.promise(() => captured.promise);
+
+      yield* Fiber.interrupt(fiber);
+
+      assert.isTrue(chatOptions.abortController.signal.aborted);
+    }),
   );
 
   it.live("runs owned tools with the caller's HTTP client", () =>

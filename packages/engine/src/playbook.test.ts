@@ -1,11 +1,24 @@
-import { type McpSkill, WorkspaceConfig } from "@cogwork/contracts";
+import {
+  type FollowUpResultOutcome,
+  FollowUpStageResult,
+  type ImplementResultOutcome,
+  ImplementStageResult,
+  type McpSkill,
+  type TriageResultRole,
+  TriageStageResult,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import {
   buildContinuationNudge,
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
+  type OperationOutcome,
   resolveFollowUp,
   resolveImplement,
   resolveStage,
@@ -16,7 +29,7 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
   Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
     ...over,
   });
 
@@ -49,6 +62,153 @@ describe("resolveStage", () => {
     assert.strictEqual(resolveStage(cfg, "triage").skill, "triage-agent");
     assert.strictEqual(resolveStage(cfg, "implement").skill, "implement-agent");
     assert.strictEqual(resolveStage(cfg, "follow-up").skill, "follow-up-agent");
+  });
+});
+
+describe("operation outcome tables", () => {
+  const triageResult = (role: TriageResultRole) =>
+    Schema.decodeSync(TriageStageResult)({ _tag: "triage", role, proposal: `Move to ${role}.` });
+
+  const implementResult = (outcome: ImplementResultOutcome) => {
+    const summary = `Result: ${outcome}.`;
+    if (outcome !== "ready-for-pr") {
+      return Schema.decodeSync(ImplementStageResult)({ _tag: "implement", outcome, summary });
+    }
+    return Schema.decodeSync(ImplementStageResult)({
+      _tag: "implement",
+      outcome,
+      summary,
+      title: "Ready pull request",
+      body: "Ready.",
+    });
+  };
+
+  const followUpResult = (outcome: FollowUpResultOutcome) =>
+    Schema.decodeSync(FollowUpStageResult)({ _tag: "follow-up", outcome, summary: `Result: ${outcome}.` });
+
+  const triageCases = [
+    {
+      name: "ready-for-agent",
+      result: triageResult("ready-for-agent"),
+      expected: { _tag: "Triaged", result: "ready-for-agent" },
+    },
+    {
+      name: "needs-info",
+      result: triageResult("needs-info"),
+      expected: { _tag: "Triaged", result: "needs-info" },
+    },
+    {
+      name: "ready-for-human",
+      result: triageResult("ready-for-human"),
+      expected: { _tag: "Triaged", result: "ready-for-human" },
+    },
+    {
+      name: "wontfix",
+      result: triageResult("wontfix"),
+      expected: { _tag: "Triaged", result: "wontfix" },
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: TriageResultRole;
+    readonly result: TriageStageResult;
+    readonly expected: OperationOutcome;
+  }>;
+
+  const implementCases = [
+    {
+      name: "opened-pr",
+      result: implementResult("opened-pr"),
+      expected: { _tag: "Implemented", result: "opened-pr" },
+    },
+    {
+      name: "ready-for-pr",
+      result: implementResult("ready-for-pr"),
+      expected: { _tag: "PullRequestReady", result: "ready-for-pr" },
+    },
+    {
+      name: "stuck",
+      result: implementResult("stuck"),
+      expected: { _tag: "Failed", result: "stuck", retryable: false },
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: ImplementResultOutcome;
+    readonly result: ImplementStageResult;
+    readonly expected: OperationOutcome;
+  }>;
+
+  const followUpCases = [
+    {
+      name: "pushed",
+      result: followUpResult("pushed"),
+      expected: { _tag: "FollowedUp", result: "pushed" },
+    },
+    {
+      name: "noop",
+      result: followUpResult("noop"),
+      expected: { _tag: "FollowedUp", result: "noop" },
+    },
+    {
+      name: "stuck",
+      result: followUpResult("stuck"),
+      expected: { _tag: "Failed", result: "stuck", retryable: false },
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: FollowUpResultOutcome;
+    readonly result: FollowUpStageResult;
+    readonly expected: OperationOutcome;
+  }>;
+
+  describe("triage", () => {
+    const table = resolveTriage(config()).outcomeTable;
+
+    it("declares every result", () => {
+      assert.deepStrictEqual(
+        table.outcomes.map(({ result }) => result),
+        triageCases.map(({ name }) => name),
+      );
+    });
+
+    it.each(triageCases)("maps $name to triaged success", ({ result, expected }) => {
+      assert.deepStrictEqual(
+        table.outcomes.find((outcome) => outcome.result === result.role),
+        expected,
+      );
+    });
+  });
+
+  describe("implementation", () => {
+    const table = resolveImplement(config()).outcomeTable;
+
+    it("declares every result", () => {
+      assert.deepStrictEqual(
+        table.outcomes.map(({ result }) => result),
+        implementCases.map(({ name }) => name),
+      );
+    });
+
+    it.each(implementCases)("maps $name to its current completion", ({ result, expected }) => {
+      assert.deepStrictEqual(
+        table.outcomes.find((outcome) => outcome.result === result.outcome),
+        expected,
+      );
+    });
+  });
+
+  describe("follow-up", () => {
+    const table = resolveFollowUp(config()).outcomeTable;
+
+    it("declares every result", () => {
+      assert.deepStrictEqual(
+        table.outcomes.map(({ result }) => result),
+        followUpCases.map(({ name }) => name),
+      );
+    });
+
+    it.each(followUpCases)("maps $name to its current completion", ({ result, expected }) => {
+      assert.deepStrictEqual(
+        table.outcomes.find((outcome) => outcome.result === result.outcome),
+        expected,
+      );
+    });
   });
 });
 
@@ -126,14 +286,40 @@ describe("buildImplementPrompt", () => {
     assert.notInclude(prompt, "IMPLEMENT-RESULT");
   });
 
-  it("tells the agent to reuse an existing pull request for the branch instead of opening a second", () => {
+  it("tells the agent to prepare pull request content for the engine", () => {
     const prompt = buildImplementPrompt(resolveImplement(config()), {
       id: "#15",
       title: "Implement playbook",
     });
-    assert.include(prompt, "Only one pull request should ever exist for this branch");
-    assert.include(prompt, "push your work to that one instead of opening another");
+    assert.include(prompt, "The engine opens the pull request");
+    assert.include(prompt, "Push the prepared branch");
+    assert.include(prompt, "Return a ready-for-pr result");
+    assert.notInclude(prompt, "open a pull request that references");
   });
+});
+
+describe("implement Operating Instructions", () => {
+  it.effect("keeps pull-request opening engine-owned", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const instructions = yield* fs.readFileString(
+        decodeURIComponent(
+          new URL("../operating-instructions/implement-agent/INSTRUCTIONS.md", import.meta.url).pathname,
+        ),
+      );
+      const pullRequestOpeningLines = instructions
+        .split("\n")
+        .filter(
+          (line) =>
+            /\b(?:open(?:s|ing)?|creat(?:e|es|ing))\b/i.test(line) && /\b(?:PR|pull request)\b/i.test(line),
+        );
+
+      assert.lengthOf(pullRequestOpeningLines, 4);
+      assert.include(instructions, "Never open or merge a pull request");
+      assert.include(instructions, "Commit and push the engine-owned branch");
+      assert.include(instructions, "Return `ready-for-pr` with that title and body");
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
 });
 
 describe("buildContinuationNudge", () => {
@@ -145,7 +331,9 @@ describe("buildContinuationNudge", () => {
     assert.include(nudge, "prepared Worktree as ground truth");
     assert.include(nudge, "Do not trust the ragged tail");
     assert.include(nudge, "say COMPLETE and stop");
-    assert.include(nudge, "keep using it and never open a second one");
+    assert.include(nudge, "prepare the pull request title and body for the engine");
+    assert.include(nudge, "push the prepared branch");
+    assert.notInclude(nudge, "open a second one");
     assert.notInclude(nudge, "implement-agent");
   });
 });

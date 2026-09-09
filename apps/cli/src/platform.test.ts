@@ -283,6 +283,7 @@ describe("subprocess deadlines", () => {
         assert.strictEqual(error.command, "git fetch --prune origin");
         assert.strictEqual(error.message, "git fetch --prune origin timed out after 5 minutes");
         assert.strictEqual(error.reason, "timeout");
+        assert.isTrue(error.retryable);
       }),
     );
 
@@ -326,6 +327,31 @@ describe("subprocess deadlines", () => {
 
       assert.deepStrictEqual(yield* Ref.get(commands), ["git rebase origin/main main", "git rebase --abort"]);
     }).pipe(Effect.provide(interruptedGitLayer())),
+  );
+});
+
+describe("git configuration scope", () => {
+  it.effect("reads remote URLs only from the checkout configuration", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+
+      assert.strictEqual(yield* git.remoteUrl("/repo", "origin"), "git@github.com:acme/repo.git");
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git config --local --get remote.origin.url",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer(() => exitedProcess(0, "git@github.com:acme/repo.git\n")),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 });
 
@@ -609,8 +635,30 @@ const operationFixtures: ReadonlyArray<{
   },
 ];
 
-describe("gitLayer against a real repository", () => {
+// Each test builds its own throwaway repository, so the only thing they share is wall clock
+// time spent waiting on real git subprocesses. Overlap that wait. Overlapping it is also why
+// these tests need their own ceiling: five fixtures competing for the same git stretch each one
+// past the 5s default, and a test here is slow because it queued, not because it hung.
+describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, () => {
   layer(testLayer)((it) => {
+    it.effect("returns the configured remote before insteadOf rewriting", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { root, checkout } = yield* fixture("452-configured-remote");
+
+        yield* shell(
+          root,
+          checkout,
+          "git remote set-url origin https://github.com/colonylabs/cogwork.git && git config url.git@github.com-work:.insteadOf https://github.com/",
+        );
+
+        assert.strictEqual(
+          yield* git.remoteUrl(checkout, "origin"),
+          "https://github.com/colonylabs/cogwork.git",
+        );
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("keeps identity out of the fixture repository config", () =>
       Effect.gen(function* () {
         const { root, checkout } = yield* fixture("437-environment-identity");
@@ -773,6 +821,18 @@ describe("gitLayer against a real repository", () => {
     }).pipe(Effect.scoped, Effect.provide(testLayer)),
   );
 
+  it.effect("measures a prepared head against a different base branch", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const { worktree, branch } = yield* fixture("474-ready-for-pr");
+
+      assert.deepStrictEqual(yield* git.divergence(worktree, "origin", "main", branch), {
+        ahead: 1,
+        behind: 0,
+      });
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+
   it.effect("leaves the branch where it was when a rebase conflicts", () =>
     Effect.gen(function* () {
       const git = yield* Git.Git;
@@ -810,6 +870,8 @@ describe("contextFsLayer against a real filesystem", () => {
       yield* fs.makeDirectory(rules, { recursive: true });
       yield* fs.writeFileString(path.join(rules, "global.md"), "global rules");
 
+      assert.isTrue(yield* context.directoryExists(rules));
+      assert.isFalse(yield* context.directoryExists(path.join(root, "missing")));
       assert.deepStrictEqual(yield* context.readDirectory(rules), ["global.md"]);
       assert.deepStrictEqual(yield* context.readDirectory(path.join(root, "missing")), []);
 

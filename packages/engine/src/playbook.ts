@@ -1,14 +1,51 @@
-import type { LifecycleStage, McpSkill, OperationNeed, WorkspaceConfig } from "@cogwork/contracts";
+import type {
+  FollowUpResultOutcome,
+  ImplementResultOutcome,
+  LifecycleStage,
+  McpSkill,
+  OperationNeed,
+  TriageResultRole,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
+import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import { day } from "./time";
 
-export interface OperationDefinition {
+export type OperationOutcome = Data.TaggedEnum<{
+  Triaged: { readonly result: TriageResultRole };
+  Implemented: { readonly result: "opened-pr" };
+  PullRequestReady: { readonly result: "ready-for-pr" };
+  FollowedUp: { readonly result: Exclude<FollowUpResultOutcome, "stuck"> };
+  Failed: { readonly result: "stuck"; readonly retryable: boolean };
+}>;
+export const OperationOutcome = Data.taggedEnum<OperationOutcome>();
+
+type SuccessfulOperationOutcomeTag = Exclude<OperationOutcome["_tag"], "Failed">;
+type OperationOutcomeFor<Tag extends SuccessfulOperationOutcomeTag> = Extract<
+  OperationOutcome,
+  { readonly _tag: Tag | "Failed" }
+>;
+
+type StageOutcomeTable<Outcome extends string, SuccessTag extends SuccessfulOperationOutcomeTag> = {
+  readonly outcomes: ReadonlyArray<OperationOutcomeFor<SuccessTag> & { readonly result: Outcome }>;
+};
+
+export interface OperationOutcomeTables {
+  readonly triage: StageOutcomeTable<TriageResultRole, "Triaged">;
+  readonly implement: StageOutcomeTable<ImplementResultOutcome, "Implemented" | "PullRequestReady">;
+  readonly "follow-up": StageOutcomeTable<FollowUpResultOutcome, "FollowedUp">;
+}
+
+export type OperationOutcomeTable = OperationOutcomeTables[LifecycleStage];
+
+export interface OperationDefinition<Stage extends LifecycleStage = LifecycleStage> {
   readonly skill: string;
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
   readonly mcpSkills: ReadonlyArray<McpSkill>;
   readonly needs: ReadonlyArray<OperationNeed>;
+  readonly outcomeTable: OperationOutcomeTables[Stage];
 }
 
 const defaultTriagePrompt = [
@@ -22,7 +59,7 @@ const defaultImplementPrompt = [
   'You are running the implement playbook for work item {id} ("{title}") in this repository checkout.',
   "You are on a fresh branch dedicated to {id}, with no human in the session.",
   "Follow the `{skill}` skill to implement {id}: read the issue and its comments as the brief, make the change,",
-  "pass the local gate, commit, and open a pull request that references {id}.",
+  "pass the local gate, commit, and prepare the pull request title and body for the engine.",
 ].join("\n");
 
 const defaultFollowUpPrompt = [
@@ -34,53 +71,93 @@ const defaultFollowUpPrompt = [
   "Linear history for this repository is {linearHistory}.",
 ].join("\n");
 
-interface StageDefaults {
+interface StageDefaults<Stage extends LifecycleStage> {
   readonly skill: string;
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
   readonly needs: ReadonlyArray<OperationNeed>;
+  readonly outcomeTable: OperationOutcomeTables[Stage];
 }
 
-const resolveStageConfig = (config: WorkspaceConfig, defaults: StageDefaults) => ({
+const nonRetryableFailure = OperationOutcome.Failed({
+  result: "stuck",
+  retryable: false,
+});
+
+const triageOutcomes = [
+  OperationOutcome.Triaged({ result: "ready-for-agent" }),
+  OperationOutcome.Triaged({ result: "needs-info" }),
+  OperationOutcome.Triaged({ result: "ready-for-human" }),
+  OperationOutcome.Triaged({ result: "wontfix" }),
+] satisfies OperationOutcomeTables["triage"]["outcomes"];
+
+const implementOutcomes = [
+  OperationOutcome.Implemented({ result: "opened-pr" }),
+  OperationOutcome.PullRequestReady({ result: "ready-for-pr" }),
+  nonRetryableFailure,
+] satisfies OperationOutcomeTables["implement"]["outcomes"];
+
+const followUpOutcomes = [
+  OperationOutcome.FollowedUp({ result: "pushed" }),
+  OperationOutcome.FollowedUp({ result: "noop" }),
+  nonRetryableFailure,
+] satisfies OperationOutcomeTables["follow-up"]["outcomes"];
+
+export const operationOutcomeTables = {
+  triage: { outcomes: triageOutcomes },
+  implement: { outcomes: implementOutcomes },
+  "follow-up": { outcomes: followUpOutcomes },
+} satisfies OperationOutcomeTables;
+
+const resolveStageConfig = <Stage extends LifecycleStage>(
+  config: WorkspaceConfig,
+  defaults: StageDefaults<Stage>,
+) => ({
   ...defaults,
   mcpSkills: config.mcpSkills ?? [],
 });
 
 export const resolveTriage = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, {
+  resolveStageConfig<"triage">(config, {
     skill: "triage-agent",
     promptTemplate: defaultTriagePrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
     needs: [],
+    outcomeTable: operationOutcomeTables.triage,
   });
 
 export const resolveImplement = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, {
+  resolveStageConfig<"implement">(config, {
     skill: "implement-agent",
     promptTemplate: defaultImplementPrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
     needs: [],
+    outcomeTable: operationOutcomeTables.implement,
   });
 
 export const resolveFollowUp = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, {
+  resolveStageConfig<"follow-up">(config, {
     skill: "follow-up-agent",
     promptTemplate: defaultFollowUpPrompt,
     resumeMaxAgeMillis: Duration.toMillis(day),
     resumeMaxTokens: null,
     needs: [],
+    outcomeTable: operationOutcomeTables["follow-up"],
   });
 
-const stageResolvers: Record<LifecycleStage, (config: WorkspaceConfig) => OperationDefinition> = {
+const stageResolvers: {
+  readonly [Stage in LifecycleStage]: (config: WorkspaceConfig) => OperationDefinition<Stage>;
+} = {
   triage: resolveTriage,
   implement: resolveImplement,
   "follow-up": resolveFollowUp,
 };
 
-export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) => stageResolvers[stage](config);
+export const resolveStage = <Stage extends LifecycleStage>(config: WorkspaceConfig, stage: Stage) =>
+  stageResolvers[stage](config);
 
 const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
@@ -123,8 +200,8 @@ export const buildTriagePrompt = (resolved: OperationDefinition, item: PromptIte
 
 const implementFooter = [
   "",
-  "Only one pull request should ever exist for this branch. Before opening one, check whether a pull request",
-  "for this branch is already open; if it is, push your work to that one instead of opening another.",
+  "Push the prepared branch. The engine opens the pull request after it verifies that branch. Do not open one yourself.",
+  "Return a ready-for-pr result with the title and body the engine should use.",
 ].join("\n");
 
 export const buildImplementPrompt = (resolved: OperationDefinition, item: PromptItem) =>
@@ -136,9 +213,8 @@ export const buildContinuationNudge = (worktreePath: string) =>
     `Nothing has changed except that time passed. Inspect ${worktreePath} to see how far you got, then`,
     "treat the prepared Worktree as ground truth, including files already written. Do not trust the ragged tail",
     "of the interrupted native transcript over that state. Then",
-    "continue from exactly where you stopped. Do not start over and do not redo completed work. If a pull",
-    "request for this branch already exists, keep using it and never open a second one. If the task is",
-    "already complete, say COMPLETE and stop.",
+    "continue from exactly where you stopped. Do not start over and do not redo completed work. When the task",
+    "is complete, push the prepared branch and prepare the pull request title and body for the engine. Then say COMPLETE and stop.",
   ].join("\n");
 
 export const buildFollowUpPrompt = (

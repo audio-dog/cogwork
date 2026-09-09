@@ -5,9 +5,11 @@ import * as Schema from "effect/Schema";
 export class ContextFsError extends Schema.TaggedError<ContextFsError>()("ContextFsError", {
   operation: Schema.String,
   message: Schema.String,
+  retryable: Schema.Boolean,
 }) {}
 
 export interface ContextFsService {
+  readonly directoryExists: (target: string) => Effect.Effect<boolean, ContextFsError>;
   readonly readFile: (target: string) => Effect.Effect<string | null, ContextFsError>;
   readonly readDirectory: (
     target: string,

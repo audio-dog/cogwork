@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 export class WorktreeFsError extends Schema.TaggedError<WorktreeFsError>()("WorktreeFsError", {
   operation: Schema.String,
   message: Schema.String,
+  retryable: Schema.Boolean,
 }) {}
 
 export interface FileStat {

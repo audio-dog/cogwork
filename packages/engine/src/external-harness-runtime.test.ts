@@ -11,6 +11,7 @@ import {
   WorkspaceId,
 } from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
 import {
   type DefaultMessageMetadataByModality,
@@ -278,6 +279,7 @@ const harnessRunnerLayer = Layer.mergeAll(
   Layer.succeed(ContextAssembler, harnessServices.contextAssembler),
   Layer.succeed(CredentialStore, harnessServices.credentialStore),
   NodeFileSystem.layer,
+  NodePath.layer,
   FetchHttpClient.layer,
 );
 

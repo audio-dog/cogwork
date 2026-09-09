@@ -5,6 +5,7 @@ import * as Stream from "effect/Stream";
 import { claudeCodeRunner } from "./harness";
 import {
   assertSingleOccurrence,
+  authenticationByMode,
   byokAuthentication,
   byokHarnessLayer,
   capturedDisallowedTools,
@@ -19,7 +20,7 @@ import {
   name,
   sessionHandles,
   structuredObjects,
-  withInheritedAnthropicEnvironment,
+  withInheritedCredentialEnvironment,
 } from "./harness-fixtures";
 
 describe("Claude Code inherited environment", () => {
@@ -41,7 +42,7 @@ describe("Claude Code inherited environment", () => {
           authentication: hostAuthentication,
           claudeExecutable: fakeClaudeExecutable(" --not-authenticated"),
         }).readiness();
-        const scrubbed = yield* withInheritedAnthropicEnvironment(
+        const scrubbed = yield* withInheritedCredentialEnvironment(
           claudeCodeRunner({
             name,
             authentication: hostAuthentication,
@@ -67,7 +68,7 @@ describe("Claude Code inherited environment", () => {
     it.effect("runs host auth with mandatory Workspace projection, native events, and usage", () =>
       Effect.gen(function* () {
         const { handle, harness } = yield* makeLiveHarness(" --emit-change --commit-mcp-config");
-        const events = yield* withInheritedAnthropicEnvironment(
+        const events = yield* withInheritedCredentialEnvironment(
           harness.run(makeRequest(handle.id, { mcp: true })).pipe(Stream.runCollect),
         );
         const capture = yield* captureFrom(events);
@@ -140,10 +141,31 @@ describe("Claude Code inherited environment", () => {
   });
 
   it.layer(byokHarnessLayer)((it) => {
+    it.effect("scrubs source-control credentials in every authentication mode", () =>
+      withInheritedCredentialEnvironment(
+        Effect.forEach(Object.values(authenticationByMode), (authentication) =>
+          Effect.gen(function* () {
+            const { handle, harness } = yield* makeLiveHarness("", authentication);
+            const events = yield* harness.run(makeRequest(handle.id)).pipe(Stream.runCollect);
+            return yield* captureFrom(events);
+          }),
+        ).pipe(
+          Effect.tap((captures) =>
+            Effect.sync(() => {
+              for (const capture of captures) {
+                assert.isNull(capture.githubToken);
+                assert.isNull(capture.ghToken);
+              }
+            }),
+          ),
+        ),
+      ),
+    );
+
     it.effect("injects and scrubs BYOK beside an MCP bearer", () =>
       Effect.gen(function* () {
         const { handle, harness } = yield* makeLiveHarness("", byokAuthentication);
-        const events = yield* withInheritedAnthropicEnvironment(
+        const events = yield* withInheritedCredentialEnvironment(
           harness.run(makeRequest(handle.id, { mcp: true })).pipe(Stream.runCollect),
         );
         const capture = yield* captureFrom(events);

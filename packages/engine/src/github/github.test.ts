@@ -80,6 +80,7 @@ interface Seed {
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
   readonly priorities?: ReadonlyArray<{ readonly issue: number; readonly priority: Priority }>;
   readonly priorityError?: boolean;
+  readonly pullRequestError?: boolean;
 }
 
 class ProviderCalls extends Context.Service<
@@ -154,6 +155,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       issues.map((issue) => (issue.number === number ? update(issue) : issue)),
     );
   return {
+    authenticatedLogin: () => Effect.succeed(bot.login),
     listIssues: () => Ref.get(issuesRef),
     listPulls: () => Effect.succeed([...pulls]),
     pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
@@ -162,6 +164,10 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
     listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
     createIssue: () => Effect.void,
+    createPull: () =>
+      seed.pullRequestError
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull request rejected" }))
+        : Effect.succeed({ number: 480, url: "https://github.com/owner/repo/pull/480" }),
     addLabel: (_repo, number, label) =>
       patch(number, (issue) => ({ ...issue, labels: [...issue.labels, label] })),
     removeLabel: (_repo, number, label) =>
@@ -201,41 +207,42 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       seed.priorityError
         ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "missing read:project scope" }))
         : Effect.succeed(prioritiesByNumber),
-    verifyCredential: () => Effect.void,
+    verifyCredential: () => Effect.succeed(bot.login),
   } satisfies GitHubClientService;
 });
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
+    issueTracker: { type: "github" },
   }),
 };
 
-const noBotWorkspace: RegisteredWorkspace = {
-  source: "gh.workspace.ts",
+const missingTargetWorkspace: RegisteredWorkspace = {
+  source: "linear.workspace.ts",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "gh-nobot",
-    checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    name: "missing-target",
+    checkoutPath: "/repos/missing-target",
+    issueTracker: { type: "linear" },
+    sourceControl: { type: "github" },
   }),
 };
 
 const trustsCursorBot: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-bots",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
+    issueTracker: { type: "github" },
     sourceControl: {
       type: "github",
-      repo: "owner/repo",
-      actorLogin: bot.login,
       botAllowlist: ["cursor[bot]"],
     },
   }),
@@ -243,17 +250,32 @@ const trustsCursorBot: RegisteredWorkspace = {
 
 const prioritizedWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-priority",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login, priority: { project: 1 } },
+    issueTracker: { type: "github", priority: { project: 1 } },
   }),
 };
 
 const withClient = (seed: Seed) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
     Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))),
+  );
+
+const withIdentityFailure = (seed: Seed) =>
+  Layer.mergeAll(adapterLayer, providerLayer).pipe(
+    Layer.provideMerge(
+      Layer.effect(
+        GitHubClient,
+        Effect.map(fakeClient(seed), (client) => ({
+          ...client,
+          authenticatedLogin: () =>
+            Effect.fail(new IssueTrackerError({ reason: "auth", message: "GitHub identity unavailable" })),
+        })),
+      ),
+    ),
   );
 
 const countingProviderLayer = (seed: Seed) =>
@@ -332,7 +354,7 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
   mergeable: [{ pull: 200, state: "dirty" }],
 });
 
-describe("github work source adapter", () => {
+describe("GitHub adapters", () => {
   it.effect("derives the actionable set from labels and bot-PR state", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
@@ -395,6 +417,73 @@ describe("github work source adapter", () => {
         }),
       ),
     ),
+  );
+
+  it.effect("opens a pull request through the configured source control target", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const opened = yield* provider.openPullRequest(workspace, {
+        headBranch: "472-open-pull-request",
+        baseBranch: "main",
+        title: "Open pull requests from the engine",
+        body: "Closes #472",
+      });
+      assert.deepStrictEqual(opened, {
+        number: 480,
+        url: "https://github.com/owner/repo/pull/480",
+      });
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("refuses pull request creation permanently without a GitHub target", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const error = yield* Effect.flip(
+        provider.openPullRequest(missingTargetWorkspace, {
+          headBranch: "474-ready",
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #474",
+        }),
+      );
+
+      assert.strictEqual(error.reason, "unavailable");
+      assert.isFalse(error.retryable);
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("finds an open pull request for the exact same-repository head", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const found = yield* provider.findOpenPullRequest(workspace, "474-ready");
+      assert.deepStrictEqual(found, {
+        number: 474,
+        url: "https://github.com/owner/repo/pull/474",
+      });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          pulls: [pull({ number: 474, headRef: "474-ready", authorAssociation: "NONE" })],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("preserves a pull request provider failure in the typed error channel", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const error = yield* Effect.flip(
+        provider.openPullRequest(workspace, {
+          headBranch: "472-open-pull-request",
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #472",
+        }),
+      );
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(error.message, "pull request rejected");
+    }).pipe(Effect.provide(withClient({ issues: [], pullRequestError: true }))),
   );
 
   it.effect("posts nothing when the item has no linked pull request", () =>
@@ -565,15 +654,56 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("writes the cogwork fallback identity when no bot login is configured", () =>
+  it.effect("recognizes the legacy fallback claimant on its authenticated ledger", () =>
+    Effect.gen(function* () {
+      const [observed] = yield* observeItems(workspace);
+      assert.strictEqual(observed?.claim?.by, Coordination.defaultClaimant);
+      assert.isTrue(observed?.claimedByUs);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 34, title: "legacy claim", labels: ["ready-for-agent", "cogwork:claimed"] }],
+          comments: [
+            {
+              issue: 34,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeClaim({
+                  by: Coordination.defaultClaimant,
+                  claimedAtMillis: 1,
+                  stage: "implement",
+                }),
+              ]),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("uses the authenticated account for claims and coordination ownership", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
-      const client = yield* GitHubClient;
-      yield* source.claim(noBotWorkspace, id("#7"), { claimedAtMillis: 1, stage: "implement" });
-      const bodies = (yield* client.listComments(repo, 7)).map((comment) => comment.body);
-      assert.isTrue(bodies.some((body) => body.includes("by=cogwork at=")));
+      yield* source.claim(workspace, id("#7"), { claimedAtMillis: 1, stage: "implement" });
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#7");
+      assert.strictEqual(observed?.claim?.by, bot.login);
+      assert.isTrue(observed?.claimedByUs);
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
+    ),
+  );
+
+  it.effect("fails observation when authenticated identity cannot be established", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(observeItems(workspace));
+      assert.strictEqual(error.reason, "auth");
+      assert.include(error.message, "identity unavailable");
+    }).pipe(
+      Effect.provide(
+        withIdentityFailure({
+          issues: [{ number: 8, title: "must not dispatch", labels: ["ready-for-agent"] }],
+        }),
+      ),
     ),
   );
 

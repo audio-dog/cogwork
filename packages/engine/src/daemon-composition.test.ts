@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { connectionIdOf, DaemonRpcs, HarnessName, HarnessState, WorkspaceConfig } from "@cogwork/contracts";
+import { connectionIdOf, DaemonRpcs, HarnessName, WorkspaceConfig } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -13,6 +13,7 @@ import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
@@ -24,6 +25,7 @@ import { afterEach, vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
+import { Git, type GitService } from "./git";
 import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -32,7 +34,6 @@ import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
 
 const pushSchemaMock = vi.hoisted(() => vi.fn());
-
 vi.mock("drizzle-kit/payload/sqlite", () =>
   vi
     .importActual<typeof import("drizzle-kit/payload/sqlite")>("drizzle-kit/payload/sqlite")
@@ -46,10 +47,24 @@ const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   ensure: () => Effect.die("unused"),
+  pullRequestReadiness: () => Effect.die("unused"),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
 });
+
+const gitLayer = Layer.succeed(Git, {
+  fetch: () => Effect.die("unused"),
+  remoteBranchExists: () => Effect.die("unused"),
+  addWorktree: () => Effect.die("unused"),
+  removeWorktree: () => Effect.die("unused"),
+  listWorktrees: () => Effect.die("unused"),
+  fastForward: () => Effect.die("unused"),
+  divergence: () => Effect.die("unused"),
+  operationInProgress: () => Effect.die("unused"),
+  rebase: () => Effect.die("unused"),
+  remoteUrl: () => Effect.succeed("git@github.com:owner/repo.git"),
+} satisfies GitService);
 
 const stubRunner: HarnessRunner = {
   name: Schema.decodeSync(HarnessName)("cursor"),
@@ -123,19 +138,19 @@ const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(func
   const rpc = yield* RpcClient.make(DaemonRpcs);
   const runs = yield* rpc.ListRuns();
   const status = yield* rpc.GetStatus();
-  const harnesses = yield* rpc.GetHarnesses();
+  const harnesses = yield* Effect.result(rpc.GetHarnesses());
   return { runs, status, reconciled, heartbeatsExit, harnesses };
 });
 
 const connectedWorkspace: RegisteredWorkspace = {
   source: "control-store:github",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "github",
     checkoutPath: "/repos/github",
     issueTracker: {
       type: "github",
-      repo: "owner/repo",
       connectionId: connectionIdOf("github", "acme"),
     },
   }),
@@ -160,14 +175,16 @@ function makeGitHubServerFixture() {
       (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
     );
     vi.stubEnv("GITHUB_TOKEN", "fallback-token");
-    const fetchStub = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
-      Promise.resolve(
-        new Response("[]", {
+    const fetchStub = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = url === "https://api.github.com/user" ? { login: "connected-account" } : [];
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
-      ),
-    );
+      );
+    });
     vi.stubGlobal("fetch", fetchStub);
     const toServer = new TransformStream<Uint8Array, Uint8Array>();
     const toClient = new TransformStream<Uint8Array, Uint8Array>();
@@ -184,7 +201,7 @@ function makeGitHubServerFixture() {
       userAgentsDir: join(root, ".agents"),
       worktrees: worktreeLayer,
       harnessRunners: [stubRunner],
-    });
+    }).pipe(Layer.provide(gitLayer));
     return { fetchStub, serverLayer };
   });
 }
@@ -232,7 +249,7 @@ function makeUnavailableServerFixture() {
       userAgentsDir: join(controlStore.dir, ".agents"),
       worktrees: worktreeLayer,
       harnessRunners: [stubRunner],
-    });
+    }).pipe(Layer.provide(gitLayer));
     const clientLayer = RpcClient.layerProtocolSocket().pipe(
       Layer.provide(Layer.succeed(Socket.Socket, client)),
       Layer.provide(Daemon.serializationLayer),
@@ -285,16 +302,10 @@ describe("daemon server composition", () => {
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 
-  it.effect("reports the registered harness, its version and its models over RPC", () =>
+  it.effect("does not report Harnesses as enabled when the Control store is unavailable", () =>
     Effect.gen(function* () {
       const result = yield* inspectUnavailableDaemon();
-      const item = result.harnesses.harnesses[0];
-
-      assert.strictEqual(result.harnesses.harnesses.length, 1);
-      assert.strictEqual(item?.harness, "cursor");
-      assert.strictEqual(item?.version, "1");
-      assert.isTrue(HarnessState.guards.Ready(item?.state ?? HarnessState.cases.Ready.make({})));
-      assert.deepStrictEqual(item?.models, ["test"]);
+      assert.isTrue(Result.isFailure(result.harnesses));
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 });

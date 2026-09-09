@@ -8,12 +8,14 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { codexExecutableWithRepositoryHooks } from "./harness";
 import {
   authenticatedMcp,
   collectEvents,
   createSandbox,
   defaultModel,
   fakeCodexExecutable,
+  fakeCodexWithRepositoryHooks,
   freshSession,
   gitFixtureEnvironment,
   harnessLayer,
@@ -23,6 +25,7 @@ import {
   runInRepository,
   runner,
   runOperation,
+  sourceWrapperPath,
   structuredCapture,
 } from "./harness-fixtures";
 
@@ -45,6 +48,10 @@ describe("repository fixtures", () => {
 });
 
 describe("codexRunner configuration", () => {
+  it("keeps the Hook wrapper independent of package files", () => {
+    assert.notInclude(codexExecutableWithRepositoryHooks, sourceWrapperPath);
+  });
+
   it.layer(harnessLayer)((it) => {
     it.effect("offers the host model catalog and honest native capabilities", () =>
       Effect.gen(function* () {
@@ -62,7 +69,7 @@ describe("codexRunner configuration", () => {
         );
         assert.deepStrictEqual(catalog.provenance, {
           source: "cogwork-fallback",
-          fallbackVersion: "codex-0.5.3",
+          fallbackVersion: "codex-0.5.4",
         });
         assert.strictEqual(codex.sessionKind, "opaque-handle");
         assert.deepStrictEqual(codex.authentication, {
@@ -82,48 +89,46 @@ describe("codexRunner configuration", () => {
       }),
     );
 
-    it.effect("projects host authentication, native options, and shared Git without local MCP config", () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const handle = yield* createSandbox();
-          const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
-          const harness = Harness.make([
-            runner({
-              environment: {
-                ...process.env,
-                GITHUB_TOKEN: "inherited-github-token",
-                GH_TOKEN: "inherited-gh-token",
-                LINEAR_API_KEY: "inherited-linear-key",
-                CODEX_API_KEY: "inherited-codex-key",
-                OPENAI_API_KEY: "inherited-openai-key",
-              },
-              makeAdapter: (model, config) => {
-                calls.push({ model, config });
-                return codexText(model, config);
-              },
-            }),
-          ]);
-          const events = yield* runInRepository(harness, handle);
-          const capture = yield* structuredCapture(events);
-          const call = calls[0];
-          if (!call) return assert.fail("Codex adapter was not created");
-          const realCheckout = yield* FileSystem.FileSystem.pipe(
-            Effect.flatMap((fs) => fs.realPath(handle.id)),
-          );
-
-          assert.strictEqual(call.model, defaultModel);
-          assert.strictEqual(call.config.authMode, "host");
-          assert.deepStrictEqual(call.config.additionalDirectories, [`${realCheckout}/.git`]);
-          assert.isUndefined(call.config.config);
-          assert.isUndefined(call.config.env);
-          assert.include(capture.args, 'model_reasoning_effort="high"');
-          assert.isFalse(capture.hasCodexApiKey);
-          assert.isFalse(capture.hasOpenAiApiKey);
-          assert.isFalse(capture.hasGithubToken);
-          assert.isFalse(capture.hasGhToken);
-          assert.isFalse(capture.hasLinearApiKey);
-        }),
-      ),
+    it.effect(
+      "projects host authentication and native options, granting no Git path to a checkout that owns its Git directory",
+      () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const handle = yield* createSandbox();
+            const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
+            const harness = Harness.make([
+              runner({
+                environment: {
+                  ...process.env,
+                  GITHUB_TOKEN: "inherited-github-token",
+                  GH_TOKEN: "inherited-gh-token",
+                  LINEAR_API_KEY: "inherited-linear-key",
+                  CODEX_API_KEY: "inherited-codex-key",
+                  OPENAI_API_KEY: "inherited-openai-key",
+                },
+                makeAdapter: (model, config) => {
+                  calls.push({ model, config });
+                  return codexText(model, config);
+                },
+              }),
+            ]);
+            const events = yield* runInRepository(harness, handle);
+            const capture = yield* structuredCapture(events);
+            const call = calls[0];
+            if (!call) return assert.fail("Codex adapter was not created");
+            assert.strictEqual(call.model, defaultModel);
+            assert.strictEqual(call.config.authMode, "host");
+            assert.isUndefined(call.config.additionalDirectories);
+            assert.isUndefined(call.config.config);
+            assert.isUndefined(call.config.env);
+            assert.include(capture.args, 'model_reasoning_effort="high"');
+            assert.isFalse(capture.hasCodexApiKey);
+            assert.isFalse(capture.hasOpenAiApiKey);
+            assert.isFalse(capture.hasGithubToken);
+            assert.isFalse(capture.hasGhToken);
+            assert.isFalse(capture.hasLinearApiKey);
+          }),
+        ),
     );
 
     it.effect(
@@ -219,12 +224,14 @@ describe("codexRunner configuration", () => {
     it.effect("keeps every Operation on a networked Codex Sandbox", () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const harness = Harness.make([runner()]);
+          const executable = yield* fakeCodexWithRepositoryHooks();
+          const harness = Harness.make([runner({ codexExecutable: executable })]);
           const captures = yield* Effect.forEach(LifecycleStage.literals, (stage) =>
             runOperation(harness, stage),
           );
 
           for (const [, capture] of captures) {
+            assert.include(capture.args, "--dangerously-bypass-hook-trust");
             assert.include(capture.args, "workspace-write");
             assert.notInclude(capture.args.join("\n"), "read-only");
             assert.include(capture.args, "sandbox_workspace_write.network_access=true");

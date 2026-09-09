@@ -65,6 +65,7 @@ const controlStoreService = {
   establishConnection: () => Effect.succeed(defaultControlStore),
   revokeConnection: () => Effect.succeed(defaultControlStore),
   removeConnection: () => Effect.succeed(defaultControlStore),
+  setHarnessEnabled: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
   installPlugin: () => Effect.succeed(defaultControlStore),
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
@@ -242,6 +243,8 @@ const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerServi
 const providerStub = Layer.succeed(SourceControlProvider, {
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
+  findOpenPullRequest: () => Effect.succeed(null),
+  openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 });
 
 const observing = Layer.mergeAll(
@@ -363,6 +366,7 @@ describe("DaemonEventPublisher", () => {
             establishConnection: () => Ref.get(probe.current),
             revokeConnection: () => Ref.get(probe.current),
             removeConnection: () => Ref.get(probe.current),
+            setHarnessEnabled: () => Ref.get(probe.current),
             updateOperationSetting: () => Ref.get(probe.current),
             installPlugin: () => Ref.get(probe.current),
             uninstallPlugin: () => Ref.get(probe.current),
@@ -542,6 +546,7 @@ describe("DaemonEventPublisher", () => {
   const storeFailure = new ControlStoreFailure({
     operation: "read Control store",
     message: "store read failed",
+    retryable: true,
   });
   const pluginFailure = new PluginFailure({
     operation: "read Plugin catalog",

@@ -3,6 +3,7 @@ import {
   connectionAccountOf,
   type GitHubPrioritySource,
   type Priority,
+  TrimmedNonEmptyString,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
@@ -25,6 +26,7 @@ import type * as HttpClientResponse from "effect/unstable/http/HttpClientRespons
 import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
 import { type CreateIssueInput, defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
+import type { OpenedPullRequest, OpenPullRequestInput } from "../source-control";
 import {
   boardMissing,
   decodeProjectPriorities,
@@ -39,6 +41,12 @@ export interface GitHubRepoRef {
   readonly tokenEnv: string;
   readonly connectionId?: ConnectionId;
 }
+
+export const repoRefFromRepository = (repository: string) => {
+  const [owner, name, extra] = repository.split("/");
+  if (!owner || !name || extra) return null;
+  return { owner, name, tokenEnv: "GITHUB_TOKEN" };
+};
 
 export type ReviewDecision = "changes-requested" | "approved" | "none";
 
@@ -110,6 +118,13 @@ const CreatedIssueSchema = Schema.Struct({
   labels: Schema.Array(LabelName),
 });
 
+const CreatedPullSchema = Schema.Struct({
+  number: Schema.Finite,
+  html_url: Schema.String,
+});
+
+const AuthenticatedUserSchema = Schema.Struct({ login: TrimmedNonEmptyString });
+
 const PullSchema = Schema.Struct({
   number: Schema.Finite,
   html_url: Schema.optional(Schema.NullOr(Schema.String)),
@@ -172,6 +187,7 @@ const GraphQlResponse = Schema.Struct({
 });
 export type GraphQlPayload = typeof GraphQlResponse.Type;
 const decodeGraphQl = Schema.decodeUnknownEffect(GraphQlResponse);
+const decodeGitHubError = Schema.decodeUnknownOption(Schema.Struct({ message: Schema.String }));
 
 const ClosingReferencesPayload = Schema.Struct({
   repository: Schema.NullOr(
@@ -257,7 +273,10 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
+const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
+const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
+const decodeCreatedPulls = Schema.decodeUnknownEffect(Schema.Array(CreatedPullSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
@@ -288,6 +307,9 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
 });
 
+const openedPull = (created: typeof CreatedPullSchema.Type) =>
+  ({ number: created.number, url: created.html_url }) satisfies OpenedPullRequest;
+
 export const parseIssues = Effect.fn("github.parseIssues")(function* (repo: GitHubRepoRef, json: unknown) {
   const issues = yield* Effect.mapError(decodeIssues(json), toUnavailable);
   return issues.map((issue) => toRawIssue(repo, issue));
@@ -310,11 +332,35 @@ const headerSeconds = (value: string | undefined) => {
 const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
   const retryAfter = headerSeconds(headers["retry-after"]);
   if (retryAfter !== null) return nowMillis + retryAfter * 1000;
+  if (headers["x-ratelimit-remaining"] !== "0") return null;
   const reset = headerSeconds(headers["x-ratelimit-reset"]);
   return reset === null ? null : reset * 1000;
 };
 
 const isTransientStatus = (status: number) => status === 408 || status === 425 || status >= 500;
+
+const classifyGitHubError = (body: unknown) => {
+  const error = Option.getOrNull(decodeGitHubError(body));
+  if (!error) return "unknown";
+  const message = error.message.toLowerCase();
+  if (message.includes("secondary rate limit")) return "rate-limited";
+  if (message.includes("resource not accessible")) return "permission";
+  return "unknown";
+};
+
+const transientAttemptDeadline = "30 seconds";
+
+const classifyForbiddenResponse = Effect.fn("github.classifyForbiddenResponse")(function* (
+  response: HttpClientResponse.HttpClientResponse,
+  remaining: string | undefined,
+) {
+  if (remaining === "0" || response.headers["retry-after"] !== undefined) return "rate-limited";
+  const body = yield* response.json.pipe(
+    Effect.timeoutOption(transientAttemptDeadline),
+    Effect.catchTag("HttpClientError", () => Effect.succeed(Option.none())),
+  );
+  return Option.match(body, { onNone: () => "unknown", onSome: classifyGitHubError });
+});
 
 class GitHubAttemptError extends Data.TaggedError("GitHubAttemptError")<{
   readonly error: IssueTrackerError;
@@ -328,9 +374,23 @@ const permanentAttemptError = (error: IssueTrackerError) =>
   new GitHubAttemptError({ error, transient: false });
 
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
-const transientAttemptDeadline = "30 seconds";
 const paginationDeadline = "5 minutes";
 const pageSize = 100;
+
+const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, HttpClientError.HttpClientError, R>) =>
+  attempt.pipe(
+    Effect.catchTag("HttpClientError", (error) => Effect.fail(transientAttemptError(error.message))),
+    Effect.timeout(transientAttemptDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(transientAttemptError(`GitHub request timed out after ${transientAttemptDeadline}`)),
+    ),
+  );
+
+const openPullsPath = (repo: GitHubRepoRef, headBranch?: string) => {
+  if (!headBranch) return "/pulls?state=open&per_page=100&sort=updated&direction=desc";
+  const head = encodeURIComponent(`${repo.owner}:${headBranch}`);
+  return `/pulls?state=open&head=${head}&per_page=100`;
+};
 
 const withTransientRetry = <A, R>(attempt: Effect.Effect<A, GitHubAttemptError, R>) =>
   attempt.pipe(
@@ -392,45 +452,48 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     if (cooldownUntil !== null && now < cooldownUntil) {
       return yield* permanentAttemptError(rateLimited(cooldownUntil));
     }
-    return yield* Effect.gen(function* () {
-      const response = yield* client.execute(
+    const response = yield* withTransientAttemptDeadline(
+      client.execute(
         request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
-      );
-      const remaining = response.headers["x-ratelimit-remaining"];
-      const resumeAt = rateLimitResumeAt(response.headers, now);
-      if (remaining === "0" && resumeAt !== null) {
-        yield* Ref.set(resumeAtRef, resumeAt);
-      }
-      if (response.status === 401) {
-        return yield* permanentAttemptError(
-          new IssueTrackerError({
-            reason: "auth",
-            message: "GitHub authentication failed (401)",
-          }),
-        );
-      }
-      const throttled =
-        response.status === 429 ||
-        (response.status === 403 && (remaining === "0" || response.headers["retry-after"] !== undefined));
-      if (throttled) {
-        const until = resumeAt ?? now + Duration.toMillis(defaultTrackerCooldown);
-        yield* Ref.set(resumeAtRef, until);
-        return yield* permanentAttemptError(rateLimited(until));
-      }
-      if (isTransientStatus(response.status)) {
-        return yield* transientAttemptError(`GitHub request failed (${response.status})`);
-      }
-      if (response.status >= 400) {
-        return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`));
-      }
-      return yield* consume(response);
-    }).pipe(
-      Effect.catchTag("HttpClientError", (error) => Effect.fail(transientAttemptError(error.message))),
-      Effect.timeout(transientAttemptDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        Effect.fail(transientAttemptError(`GitHub request timed out after ${transientAttemptDeadline}`)),
       ),
     );
+    const remaining = response.headers["x-ratelimit-remaining"];
+    const resumeAt = rateLimitResumeAt(response.headers, now);
+    if (remaining === "0" && resumeAt !== null) {
+      yield* Ref.set(resumeAtRef, resumeAt);
+    }
+    if (response.status === 401) {
+      return yield* permanentAttemptError(
+        new IssueTrackerError({
+          reason: "auth",
+          message: "GitHub authentication failed (401)",
+        }),
+      );
+    }
+    const forbidden =
+      response.status === 403 ? yield* classifyForbiddenResponse(response, remaining) : "unknown";
+    const throttled = response.status === 429 || forbidden === "rate-limited";
+    if (throttled) {
+      const until = resumeAt ?? now + Duration.toMillis(defaultTrackerCooldown);
+      yield* Ref.set(resumeAtRef, until);
+      return yield* permanentAttemptError(rateLimited(until));
+    }
+    if (isTransientStatus(response.status)) {
+      return yield* transientAttemptError(`GitHub request failed (${response.status})`);
+    }
+    if (forbidden === "permission") {
+      return yield* permanentAttemptError(
+        new IssueTrackerError({
+          reason: "unavailable",
+          message: `GitHub request failed (${response.status})`,
+          retryable: false,
+        }),
+      );
+    }
+    if (response.status >= 400) {
+      return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`));
+    }
+    return yield* withTransientAttemptDeadline(consume(response));
   });
 
   const send = Effect.fn("github.send")(function* <A>(
@@ -559,6 +622,43 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     );
   });
 
+  const recoverCreatedPull = Effect.fn("github.recoverCreatedPull")(function* (
+    repo: GitHubRepoRef,
+    input: OpenPullRequestInput,
+  ) {
+    const query = new URLSearchParams({
+      state: "open",
+      head: `${repo.owner}:${input.headBranch}`,
+      base: input.baseBranch,
+      per_page: "1",
+    });
+    const json = yield* fetchJson(repo, repoPath(repo, `/pulls?${query}`));
+    const [created] = yield* Effect.mapError(decodeCreatedPulls(json), toUnavailable);
+    if (!created) {
+      return yield* unavailable(
+        "GitHub accepted pull request creation but no matching pull request was found",
+      );
+    }
+    return openedPull(created);
+  });
+
+  const createPull = Effect.fn("github.createPull")(function* (
+    repo: GitHubRepoRef,
+    input: OpenPullRequestInput,
+  ) {
+    const acceptedBody = yield* sendAcceptedJsonOnce(repo, HttpClientRequest.post(repoPath(repo, "/pulls")), {
+      head: input.headBranch,
+      base: input.baseBranch,
+      title: input.title,
+      body: input.body,
+    });
+    if (Option.isNone(acceptedBody)) {
+      return yield* recoverCreatedPull(repo, input);
+    }
+    const created = yield* Effect.mapError(decodeCreatedPull(acceptedBody.value), toUnavailable);
+    return openedPull(created);
+  });
+
   // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
   const graphql = Effect.fn("github.graphql")(function* (
     repo: GitHubRepoRef,
@@ -635,6 +735,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return yield* withPaginationDeadline(collectClosingReferencePages(repo));
   });
 
+  const pullReferences = (repo: GitHubRepoRef, headBranch?: string) =>
+    headBranch ? Effect.succeed(new Map<number, ReadonlyArray<number>>()) : pullClosingReferences(repo);
+
   const collectIssuePages: (
     repo: GitHubRepoRef,
     page?: number,
@@ -652,15 +755,19 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   );
 
   return {
+    authenticatedLogin: Effect.fn("github.authenticatedLogin")(function* (repo: GitHubRepoRef) {
+      const json = yield* withTransientRetry(
+        send(repo, HttpClientRequest.get("https://api.github.com/user"), (response) => response.json),
+      );
+      const user = yield* Effect.mapError(decodeAuthenticatedUser(json), toUnavailable);
+      return user.login;
+    }),
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       return yield* withPaginationDeadline(collectIssuePages(repo));
     }),
-    listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef) {
-      const json = yield* fetchJson(
-        repo,
-        repoPath(repo, "/pulls?state=open&per_page=100&sort=updated&direction=desc"),
-      );
-      const references = yield* pullClosingReferences(repo);
+    listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
+      const json = yield* fetchJson(repo, repoPath(repo, openPullsPath(repo, headBranch)));
+      const references = yield* pullReferences(repo, headBranch);
       const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
       return pulls.map(
         (pull): RawPull => ({
@@ -705,6 +812,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         );
       }),
     createIssue,
+    createPull,
     addLabel,
     removeLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
       withTransientRetry(
@@ -721,8 +829,10 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
     verifyCredential: (token: Redacted.Redacted<string>) =>
-      execute(HttpClientRequest.get("https://api.github.com/user"), token, acceptResponse).pipe(
+      execute(HttpClientRequest.get("https://api.github.com/user"), token, (response) => response.json).pipe(
         Effect.mapError((error) => error.error),
+        Effect.flatMap((body) => Effect.mapError(decodeAuthenticatedUser(body), toUnavailable)),
+        Effect.map((user) => user.login),
       ),
   };
 });

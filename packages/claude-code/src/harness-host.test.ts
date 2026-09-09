@@ -6,7 +6,7 @@ import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { claudeCodeRunner } from "./harness";
+import { claudeCodeRunner, inlineSettingsArgument } from "./harness";
 import {
   adapterHasEffort,
   byokAuthentication,
@@ -76,7 +76,7 @@ describe("Claude Code host Harness", () => {
         );
         assert.deepStrictEqual(catalog.provenance, {
           source: "tanstack-runtime",
-          packageVersion: "0.6.3",
+          packageVersion: "0.6.4",
         });
         assert.isUndefined(catalog.efforts);
       }),
@@ -179,6 +179,29 @@ describe("Claude Code host Harness", () => {
           }
         }),
       10_000,
+    );
+
+    it.effect("accepts safe inline settings and rejects settings containing spaces", () =>
+      Effect.gen(function* () {
+        const safe = '{"sandbox":{"enabled":true}}';
+        const unsafe = '{"hooks":{"PreToolUse":[{"command":"/path with space/hook"}]}}';
+
+        assert.strictEqual(inlineSettingsArgument(safe), safe);
+        const cause = yield* Effect.try({
+          try: () => inlineSettingsArgument(unsafe),
+          catch: (cause) => {
+            if (Schema.is(Harness.HarnessError)(cause)) return cause;
+            return new Harness.HarnessError({
+              reason: "launch",
+              retryable: false,
+              message: "Inline settings threw an unexpected error",
+            });
+          },
+        }).pipe(Effect.flip);
+        assert.include(cause.message, unsafe);
+        assert.strictEqual(cause.reason, "launch");
+        assert.isFalse(cause.retryable);
+      }),
     );
 
     it.effect("cancels the Claude child when its Harness stream is interrupted", () =>

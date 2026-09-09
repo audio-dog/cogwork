@@ -17,7 +17,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "fake",
     checkoutPath: "/repos/fake",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -66,6 +66,8 @@ const tracker = (tracked: TrackerItem): IssueTrackerService => ({
 const provider = (signals: PrSignals): SourceControlProviderService => ({
   observe: () => Effect.succeed(new Map([[id("#7"), signals]])),
   comment: () => Effect.void,
+  findOpenPullRequest: () => Effect.succeed(null),
+  openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 });
 
 const pr: PrSignals = {

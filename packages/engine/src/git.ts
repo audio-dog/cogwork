@@ -6,6 +6,7 @@ export class GitError extends Schema.TaggedError<GitError>()("GitError", {
   command: Schema.String,
   message: Schema.String,
   reason: Schema.optional(Schema.Literal("timeout")),
+  retryable: Schema.Boolean,
 }) {}
 
 export interface WorktreeEntry {
@@ -54,7 +55,8 @@ export interface GitService {
   readonly divergence: (
     worktreePath: string,
     remote: string,
-    branch: string,
+    baseBranch: string,
+    headBranch?: string,
   ) => Effect.Effect<BranchDivergence, GitError>;
   readonly operationInProgress: (
     worktreePath: string,

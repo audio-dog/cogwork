@@ -22,12 +22,13 @@
     "@cogwork/contracts": "workspace:*",
     "@cogwork/engine": "workspace:*",
     "@tanstack/ai": "catalog:",
-    "@tanstack/ai-acp": "0.3.8",
+    "@tanstack/ai-acp": "catalog:",
     "@tanstack/ai-sandbox": "catalog:",
     "@tanstack/ai-sandbox-local-process": "catalog:",
     "effect": "catalog:effect"
   },
   "devDependencies": {
+    "@cogwork/test-config": "workspace:*",
     "@effect/vitest": "catalog:effect",
     "@tanstack/ai-persistence": "catalog:",
     "gpt-tokenizer": "^4.0.0",

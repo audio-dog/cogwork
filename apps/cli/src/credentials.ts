@@ -1,10 +1,11 @@
-import { CredentialStore, Linear } from "@cogwork/engine";
+import { CredentialStore, GitHub, Linear } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
+import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 
 const fileMode = 0o600;
 const directoryMode = 0o700;
@@ -51,7 +52,12 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
       connectionCredentials: contents.connectionCredentials,
     }).pipe(
       Effect.mapError(
-        () => new CredentialStore.CredentialError({ account, message: `could not serialize ${filePath}` }),
+        () =>
+          new CredentialStore.CredentialError({
+            account,
+            message: `could not serialize ${filePath}`,
+            retryable: false,
+          }),
       ),
     );
     yield* fs.makeDirectory(directory, { recursive: true, mode: directoryMode }).pipe(
@@ -63,6 +69,7 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
           new CredentialStore.CredentialError({
             account,
             message: `could not write ${filePath} (${cause.reason._tag})`,
+            retryable: false,
           }),
       ),
     );
@@ -74,6 +81,7 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
       return yield* new CredentialStore.CredentialError({
         account,
         message: `${filePath} could not be read; refusing to overwrite it`,
+        retryable: false,
       });
     }
     return contents;
@@ -151,10 +159,13 @@ export const layer = (filePath: string) =>
     Effect.gen(function* () {
       const stored = yield* makeFileStore(filePath);
       const client = yield* HttpClient.HttpClient;
+      const spawner = yield* ChildProcessSpawner;
       const clientCredentials = yield* Linear.ClientCredentials.make();
+      const githubCli = yield* GitHub.makeCliCredentialSource(spawner);
       return CredentialStore.make({
         stored,
         clientCredentials,
+        githubCli,
         refresh: Linear.OAuth.makeTokenRefresh(client),
       });
     }),

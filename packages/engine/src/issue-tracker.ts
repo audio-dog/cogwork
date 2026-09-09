@@ -109,7 +109,7 @@ const noAdapter = (workspace: WorkspaceIssueTrackerBinding) =>
 
 const hasRemoteSource = (workspace: WorkspaceIssueTrackerBinding) => {
   const source = workspace.config.issueTracker;
-  return source.type === "linear" ? linearTeams(source).length > 0 : Boolean(source.repo);
+  return source.type === "linear" ? linearTeams(source).length > 0 : true;
 };
 
 const failWhenRemote = Effect.fn("IssueTracker.guard")(function* (workspace: WorkspaceIssueTrackerBinding) {

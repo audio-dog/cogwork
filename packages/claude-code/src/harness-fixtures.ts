@@ -8,6 +8,7 @@ import {
 } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { assert } from "@effect/vitest";
 import type { ClaudeCodeTextProviderOptions } from "@tanstack/ai-claude-code";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -27,6 +28,13 @@ const name = Schema.decodeSync(HarnessName)("claude");
 const companionName = Schema.decodeSync(HarnessName)("companion");
 const hostAuthentication = { mode: "host" } as const;
 const byokAuthentication = { mode: "byok" } as const;
+const authenticationByMode = {
+  host: hostAuthentication,
+  byok: byokAuthentication,
+} satisfies Record<
+  ClaudeCodeRunnerOptions["authentication"]["mode"],
+  ClaudeCodeRunnerOptions["authentication"]
+>;
 
 const companionRunner = {
   name: companionName,
@@ -72,9 +80,11 @@ const environmentValue = (name: string) => {
   const value = Reflect.get(process.env, name);
   return typeof value === "string" ? value : undefined;
 };
-const inheritedAnthropicEnvironment = {
-  apiKey: environmentValue("ANTHROPIC_API_KEY"),
-  authToken: environmentValue("ANTHROPIC_AUTH_TOKEN"),
+const inheritedEnvironment = {
+  ANTHROPIC_API_KEY: environmentValue("ANTHROPIC_API_KEY"),
+  ANTHROPIC_AUTH_TOKEN: environmentValue("ANTHROPIC_AUTH_TOKEN"),
+  GITHUB_TOKEN: environmentValue("GITHUB_TOKEN"),
+  GH_TOKEN: environmentValue("GH_TOKEN"),
 };
 
 const persistence = memoryPersistence();
@@ -84,7 +94,9 @@ const sessionStore: SessionStore.SessionStoreService = {
   mint: () => Effect.die("unexpected Session mint"),
 };
 
-const credentialStore = (providerKey: CredentialStore.CredentialStoreService["providerKey"]) => ({
+const credentialStore = (
+  providerKey: CredentialStore.CredentialStoreService["providerKey"],
+): CredentialStore.CredentialStoreService => ({
   bearerToken: () => Effect.die("unexpected bearer lookup"),
   resolveSource: () => Effect.die("unexpected credential source resolution"),
   persist: () => Effect.die("unexpected credential persistence"),
@@ -102,6 +114,7 @@ const runtimeLayer = Layer.mergeAll(
     cleanup: () => Effect.die("unexpected context cleanup"),
   }),
   NodeFileSystem.layer,
+  NodePath.layer,
   FetchHttpClient.layer,
 );
 
@@ -119,6 +132,7 @@ const missingByokHarnessLayer = harnessLayerWith(() =>
     new CredentialStore.CredentialError({
       account: "anthropic",
       message: "no api key for anthropic: ANTHROPIC_API_KEY is unset or empty",
+      retryable: false,
     }),
   ),
 );
@@ -314,6 +328,8 @@ const Capture = Schema.Struct({
   apiKeyPresent: Schema.Boolean,
   apiKeyVersion: Schema.NullOr(Schema.String),
   authToken: Schema.NullOr(Schema.String),
+  githubToken: Schema.NullOr(Schema.String),
+  ghToken: Schema.NullOr(Schema.String),
 });
 
 const NativeSandboxSettings = Schema.fromJsonString(
@@ -377,27 +393,33 @@ const restoreEnvironment = (name: string, value: string | undefined) => {
   return Reflect.set(process.env, name, value);
 };
 
-const withInheritedAnthropicEnvironment = <Value, Error, Requirements>(
+const withInheritedCredentialEnvironment = <Value, Error, Requirements>(
   effect: Effect.Effect<Value, Error, Requirements>,
 ) =>
   Effect.acquireUseRelease(
     Effect.sync(() => {
       Reflect.set(process.env, "ANTHROPIC_API_KEY", "inherited-api-key");
       Reflect.set(process.env, "ANTHROPIC_AUTH_TOKEN", "inherited-auth-token");
+      Reflect.set(process.env, "GITHUB_TOKEN", "inherited-github-token");
+      Reflect.set(process.env, "GH_TOKEN", "inherited-gh-token");
     }),
     () => effect,
     () =>
       Effect.sync(() => {
-        restoreEnvironment("ANTHROPIC_API_KEY", inheritedAnthropicEnvironment.apiKey);
-        restoreEnvironment("ANTHROPIC_AUTH_TOKEN", inheritedAnthropicEnvironment.authToken);
+        for (const [name, value] of Object.entries(inheritedEnvironment)) {
+          restoreEnvironment(name, value);
+        }
       }),
   );
 
+export type { AdapterHasEffort, RequestOverrides };
 export {
   adapterHasEffort,
   assertSingleOccurrence,
+  authenticationByMode,
   byokAuthentication,
   byokHarnessLayer,
+  Capture,
   CredentialVersion,
   capturedDisallowedTools,
   captureFrom,
@@ -407,22 +429,32 @@ export {
   companionRunner,
   containsString,
   createTestSandbox,
+  credentialStore,
   destroyTestSandbox,
+  environmentValue,
   fakeClaudeExecutable,
   freshSession,
   harnessLayer,
+  harnessLayerWith,
   hostAuthentication,
+  inheritedEnvironment,
   makeLiveHarness,
   makeRequest,
+  mcpSelection,
   missingByokHarnessLayer,
   NativeSandboxSettings,
   name,
+  occurrences,
+  outputSchema,
+  persistence,
+  restoreEnvironment,
   resumedSession,
   rotatingByokHarnessLayer,
   runnerWithoutRuntimeCatalog,
+  runtimeLayer,
   sessionHandles,
   sessionStore,
   structuredObjects,
   testProcessDeadline,
-  withInheritedAnthropicEnvironment,
+  withInheritedCredentialEnvironment,
 };

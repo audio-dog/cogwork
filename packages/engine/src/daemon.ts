@@ -21,7 +21,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
-import type * as Path from "effect/Path";
+import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
@@ -43,9 +43,11 @@ import {
   removeConnection,
   setContributionSetting,
   setDaemonLimit,
+  setHarnessEnabled,
   setOperationSetting,
   setScheduling,
   uninstallPlugin,
+  updateWorkspace,
 } from "./commands";
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
@@ -274,7 +276,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
     return yield* (yield* ConnectionStore).overview;
   }),
   GetHarnesses: Effect.fn("Daemon.GetHarnesses")(function* () {
-    return yield* harnessOverview();
+    const store = yield* ControlStore;
+    if (store.health === "unavailable") return yield* store.picture;
+    const picture = yield* store.picture;
+    return yield* harnessOverview(picture.harnessSettings);
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
@@ -300,8 +305,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   SetDaemonLimit: setDaemonLimit,
   SetContributionSetting: setContributionSetting,
+  SetHarnessEnabled: setHarnessEnabled,
   SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
+  UpdateWorkspace: updateWorkspace,
   InstallPlugin: installPlugin,
   UninstallPlugin: uninstallPlugin,
   EstablishConnection: establishConnection,
@@ -372,6 +379,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerRequirements = Layer.mergeAll(
     Layer.effect(FileSystem.FileSystem, FileSystem.FileSystem),
+    Layer.effect(Path.Path, Path.Path),
     Layer.effect(HttpClient.HttpClient, HttpClient.HttpClient),
   );
   const base = Layer.mergeAll(
@@ -452,18 +460,19 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
     );
   yield* Effect.forEach(
     reconcilable,
-    ({ workspace, state }) =>
-      manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
-        Effect.tap((outcome) =>
-          Effect.logInfo("worktree maintenance", { workspace: workspace.config.name, ...outcome }),
-        ),
+    ({ workspace, state }) => {
+      const correlation = { workspace: workspace.config.name };
+      return manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
+        Effect.tap((outcome) => Effect.logInfo("worktree maintenance", outcome)),
         Effect.catchTag("GitError", (error) =>
           Effect.logWarning("worktree maintenance failed", {
-            workspace: workspace.config.name,
             message: error.message,
           }),
         ),
-      ),
+        Effect.annotateLogs(correlation),
+        Effect.annotateSpans(correlation),
+      );
+    },
     { discard: true },
   );
 });

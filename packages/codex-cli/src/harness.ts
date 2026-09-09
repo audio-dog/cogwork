@@ -34,10 +34,17 @@ const currentCodexModels = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as c
 const codexModels: ReadonlyArray<CodexModel> = [...currentCodexModels, ...CODEX_MODELS];
 export const defaultCodexModel = currentCodexModels[0];
 const defaultCodexEffort = "high" satisfies CodexEffort;
-const codexAdapterVersion = "0.5.3";
+const codexAdapterVersion = "0.5.4";
 const codexVersionRequirement = ">=0.149.0";
 const minimumCodexVersion = [0, 149, 0] as const;
 const codexReadinessDeadline = "5 seconds";
+const codexHookWrapper = `sub=$1
+shift
+if [ "$sub" = exec ]; then
+  exec codex "$sub" --dangerously-bypass-hook-trust "$@"
+fi
+exec codex "$sub" "$@"`;
+export const codexExecutableWithRepositoryHooks = `sh -c '${codexHookWrapper.replaceAll("'", `'\\''`)}' codex-with-repository-hooks`;
 const missingExecutablePattern = /ENOENT|EACCES|command not found/i;
 const missingLoginPattern = /codex login|not (?:logged|signed) in/i;
 const incompatibleVersionPattern = /incompatible|unsupported Codex|update Codex/i;
@@ -309,7 +316,7 @@ const codexDescriptor = (
   options: CodexRunnerOptions,
 ): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>, CodexAuthMode> => {
   const makeAdapter = options.makeAdapter ?? codexText;
-  const executable = options.codexExecutable ?? "codex";
+  const executable = options.codexExecutable ?? codexExecutableWithRepositoryHooks;
   const scrubEnv = scrubbedEnvironment(options.environment);
   return {
     name: options.name,
@@ -361,8 +368,8 @@ const codexDescriptor = (
         // Codex's `read-only` sandbox mode blocks network too, cutting a read-only
         // Operation off from the Issue tracker it reads with `gh`.
         ...(request.policy === "read-only" ? { sandboxMode: "workspace-write" as const } : {}),
-        ...(request.checkout.sharedGitDirectory
-          ? { additionalDirectories: [request.checkout.sharedGitDirectory] }
+        ...(request.checkout.gitWritablePaths.length > 0
+          ? { additionalDirectories: [...request.checkout.gitWritablePaths] }
           : {}),
         ...(Object.keys(mcp.config).length > 0 ? { config: mcp.config } : {}),
         ...(Object.keys(mcp.env).length > 0 ? { env: mcp.env } : {}),

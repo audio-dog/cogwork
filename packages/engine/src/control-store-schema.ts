@@ -61,6 +61,11 @@ export const contributionSettings = sqliteTable(
   ],
 );
 
+export const harnessSettings = sqliteTable("harness_settings", {
+  harness: text("harness").primaryKey(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+});
+
 export const operationSettings = sqliteTable(
   "operation_settings",
   {
@@ -116,6 +121,7 @@ export const runs = sqliteTable(
     totalTokens: integer("total_tokens"),
     estimated: integer("estimated", { mode: "boolean" }),
     status: text("status").notNull(),
+    claimDisposition: text("claim_disposition", { enum: ["hold", "release"] }),
     startedAt: integer("started_at").notNull(),
     endedAt: integer("ended_at"),
     eventCount: integer("event_count").notNull().default(0),
@@ -150,7 +156,7 @@ export const workspaces = sqliteTable("workspaces", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   checkoutPath: text("checkout_path").notNull().unique(),
-  gitRemote: text("git_remote"),
+  lastRepository: text("last_repository"),
   issueTracker: text("issue_tracker").notNull(),
   sourceControl: text("source_control"),
   mcpSkills: text("mcp_skills"),

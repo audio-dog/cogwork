@@ -1,4 +1,5 @@
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -18,6 +19,7 @@ export class WorktreeDivergedError extends Schema.TaggedError<WorktreeDivergedEr
     remote: Schema.String,
     branch: Schema.String,
     message: Schema.String,
+    retryable: Schema.Boolean,
   },
 ) {}
 
@@ -28,6 +30,7 @@ export class WorktreeOperationInProgressError extends Schema.TaggedError<Worktre
     operation: Schema.Literals(["merge", "rebase", "cherry-pick"]),
     unmergedPaths: Schema.Array(Schema.String),
     message: Schema.String,
+    retryable: Schema.Boolean,
   },
 ) {}
 
@@ -100,6 +103,20 @@ export interface ReconcileOutcome {
   readonly tornDown: ReadonlyArray<string>;
   readonly reaped: ReadonlyArray<string>;
 }
+
+export type PullRequestReadiness = Data.TaggedEnum<{
+  Ready: {
+    readonly headBranch: string;
+    readonly baseBranch: string;
+  };
+  Declined: {
+    readonly reason: string;
+  };
+}>;
+
+export const PullRequestReadiness = Data.taggedEnum<PullRequestReadiness>();
+
+const declinedPullRequestReadiness = (reason: string) => PullRequestReadiness.Declined({ reason });
 
 const labelOf = (entry: WorktreeEntry) => entry.branch ?? entry.path;
 
@@ -193,6 +210,7 @@ export const make = Effect.gen(function* () {
             remote,
             branch,
             message: unresolvableMessage(remote, branch, divergence, error.message),
+            retryable: false,
           }),
       ),
     );
@@ -220,6 +238,7 @@ export const make = Effect.gen(function* () {
       branch,
       ...operation,
       message: operationMessage(branch, operation),
+      retryable: false,
     });
   });
 
@@ -264,6 +283,40 @@ export const make = Effect.gen(function* () {
     return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
   }, Effect.trackDuration(worktreeEnsureDuration));
 
+  const pullRequestReadiness = Effect.fn("Worktree.pullRequestReadiness")(function* (
+    workspace: RegisteredWorkspace,
+    item: WorkItemRef,
+  ) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    const remote = remoteOf(config);
+    const baseBranch = baseBranchOf(config);
+    const headBranch = branchName(item);
+    const worktreePath = pathFor(repoPath, config, headBranch);
+    const entries = yield* git.listWorktrees(repoPath);
+    const actualBranch = entries.find((entry) => entry.path === worktreePath)?.branch ?? null;
+    if (actualBranch !== headBranch) {
+      return declinedPullRequestReadiness(
+        `worktree ${worktreePath} is on ${actualBranch ?? "no branch"}, expected ${headBranch}`,
+      );
+    }
+
+    yield* git.fetch(repoPath, remote);
+    const remoteHeadExists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
+    if (!remoteHeadExists) {
+      return declinedPullRequestReadiness(`head ${headBranch} has not been pushed to ${remote}`);
+    }
+    const headDivergence = yield* git.divergence(worktreePath, remote, headBranch);
+    if (headDivergence.ahead > 0 || headDivergence.behind > 0) {
+      return declinedPullRequestReadiness(`local head ${headBranch} does not match ${remote}/${headBranch}`);
+    }
+    const divergence = yield* git.divergence(worktreePath, remote, baseBranch, headBranch);
+    if (divergence.ahead === 0) {
+      return declinedPullRequestReadiness(`head ${headBranch} is not ahead of ${remote}/${baseBranch}`);
+    }
+    return PullRequestReadiness.Ready({ headBranch, baseBranch });
+  });
+
   const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {
     return yield* managed(workspace.config.checkoutPath, workspace.config.worktrees);
   });
@@ -275,6 +328,7 @@ export const make = Effect.gen(function* () {
       return yield* new GitError({
         command: `worktree remove ${branch}`,
         message: `refusing unsafe worktree branch "${branch}"`,
+        retryable: true,
       });
     }
     return yield* git.removeWorktree(repoPath, pathFor(repoPath, config, branch), true);
@@ -328,7 +382,7 @@ export const make = Effect.gen(function* () {
     } satisfies ReconcileOutcome;
   });
 
-  return { ensure, list, remove, reconcile } as const;
+  return { ensure, pullRequestReadiness, list, remove, reconcile } as const;
 });
 
 export type WorktreeManagerService = Effect.Success<typeof make>;

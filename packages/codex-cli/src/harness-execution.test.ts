@@ -14,6 +14,7 @@ import {
   collectEvents,
   createSandbox,
   fakeCodexExecutable,
+  fakeCodexWithRepositoryHooks,
   freshSession,
   harnessLayer,
   initializeRepository,
@@ -32,6 +33,22 @@ import {
 
 describe("codexRunner execution", () => {
   it.layer(harnessLayer)((it) => {
+    it.effect("suppresses the trust-bypass notice without failing the Run", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const executable = yield* fakeCodexWithRepositoryHooks();
+          const harness = Harness.make([runner({ codexExecutable: executable })]);
+          const handle = yield* createSandbox();
+          const events = yield* runInRepository(harness, handle);
+          const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(events);
+
+          assert.isFalse(events.some((event) => event.type === EventType.RUN_ERROR));
+          assert.isTrue(events.some((event) => event.type === EventType.RUN_FINISHED));
+          assert.notInclude(serializedEvents, "Repository hooks will run");
+        }),
+      ),
+    );
+
     it.effect(
       "preserves native events, metered usage, and one structured result",
       () =>
@@ -101,11 +118,11 @@ describe("codexRunner execution", () => {
       ),
     );
 
-    it.effect("grants linked Worktrees their shared Git metadata", () =>
+    it.effect("grants linked Worktrees only the shared Git paths their own commits need", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* createSandbox();
-          const { checkoutPath, commonDirectory } = yield* linkedWorktree(handle);
+          const { checkoutPath, commonDirectory, gitDirectory } = yield* linkedWorktree(handle);
           const calls: Array<CodexTextConfig> = [];
           const harness = Harness.make([
             runner({
@@ -117,7 +134,41 @@ describe("codexRunner execution", () => {
           ]);
           yield* harness.run(makeRequest({ checkoutPath, session: freshSession })).pipe(Stream.runDrain);
 
-          assert.deepStrictEqual(calls[0]?.additionalDirectories, [commonDirectory]);
+          const granted = calls[0]?.additionalDirectories ?? [];
+          assert.sameMembers(granted, [
+            gitDirectory,
+            `${commonDirectory}/objects`,
+            `${commonDirectory}/refs`,
+            `${commonDirectory}/logs`,
+            `${commonDirectory}/packed-refs`,
+            `${commonDirectory}/packed-refs.lock`,
+          ]);
+          assert.notInclude(granted, commonDirectory);
+        }),
+      ),
+    );
+
+    it.effect("grants a read-only Operation no writable Git path at all", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const calls: Array<CodexTextConfig> = [];
+          const harness = Harness.make([
+            runner({
+              makeAdapter: (model, config) => {
+                calls.push(config);
+                return codexText(model, config);
+              },
+            }),
+          ]);
+          yield* harness
+            .run(makeRequest({ checkoutPath, session: freshSession, stage: "triage" }))
+            .pipe(Stream.runDrain);
+
+          const call = calls[0];
+          if (!call) return assert.fail("Codex adapter was not created");
+          assert.isUndefined(call.additionalDirectories);
         }),
       ),
     );
@@ -163,16 +214,37 @@ describe("codexRunner execution", () => {
             if (enabled !== "1") return;
             const handle = yield* createSandbox();
             const { checkoutPath } = yield* linkedWorktree(handle);
-            const harness = Harness.make([
-              codexRunner({ name, environment: process.env, codexExecutable: "codex" }),
-            ]);
+            const fs = yield* FileSystem.FileSystem;
+            yield* fs.makeDirectory(`${checkoutPath}/.codex`);
+            yield* fs.writeFileString(
+              `${checkoutPath}/.codex/hooks.json`,
+              `{
+      "hooks": {
+        "PostToolUse": [{
+          "matcher": "apply_patch",
+          "hooks": [{
+            "type": "command",
+            "command": "printf 'formatted by Hook\\n' > codex-hook-probe.txt"
+          }]
+        }]
+      }
+    }
+    `,
+            );
+            const hookBaseline = yield* Effect.promise(() =>
+              handle.process.exec(
+                `git -C ${checkoutPath} add .codex/hooks.json && git -C ${checkoutPath} commit -m 'add hook probe'`,
+              ),
+            );
+            assert.strictEqual(hookBaseline.exitCode, 0);
+            const harness = Harness.make([codexRunner({ name, environment: process.env })]);
             const events = yield* collectEvents(
               harness.run(
                 makeRequest({
                   checkoutPath,
                   session: freshSession,
                   prompt:
-                    "Create codex-probe.txt, add it to Git, and commit it with message codex linked worktree probe. Return the required implement result. Do not open a pull request.",
+                    "Use apply_patch to create codex-hook-probe.txt with the text unformatted. Add the resulting file to Git and commit it with message codex linked worktree probe. Return the required implement result. Do not open a pull request.",
                 }),
               ),
             );
@@ -184,6 +256,11 @@ describe("codexRunner execution", () => {
             );
             assert.strictEqual(commit.exitCode, 0);
             assert.strictEqual(commit.stdout.trim(), "codex linked worktree probe");
+            const formatted = yield* Effect.promise(() =>
+              handle.process.exec(`git -C ${checkoutPath} show HEAD:codex-hook-probe.txt`),
+            );
+            assert.strictEqual(formatted.exitCode, 0);
+            assert.strictEqual(formatted.stdout, "formatted by Hook\n");
           }),
         ),
       // A real Codex implement turn plus a commit; the 5-second vitest default can never fit it.

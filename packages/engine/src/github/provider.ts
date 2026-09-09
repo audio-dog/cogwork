@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { checkState } from "../ci";
 import type { BaseDivergence, PrReview } from "../follow-up";
+import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace } from "../projector";
 import { type PrSignals, SourceControlProvider, type SourceControlProviderService } from "../source-control";
 import { branchName, ticketSlug } from "../worktree";
@@ -14,43 +15,55 @@ import {
   type RawPull,
   type RawReview,
   type ReviewDecision,
+  repoRefFromRepository,
   reviewDecisionOf,
 } from "./client";
 import { agentNoteMarker, hasCogworkMarker } from "./markers";
 
-interface GitHubTarget extends GitHubRepoRef {
-  readonly actorLogin: string | null;
+interface GitHubTargetConfig extends GitHubRepoRef {
   readonly botAllowlist: ReadonlySet<string>;
+}
+
+interface GitHubTarget extends GitHubTargetConfig {
+  readonly actorLogin: string;
 }
 
 const targetFromRepo = (
   repo: string,
   connectionId: ConnectionBindingId,
-  actorLogin: string | undefined,
   botAllowlist: ReadonlyArray<string> | undefined,
-): GitHubTarget | null => {
-  const [owner, name] = repo.split("/");
-  if (!owner || !name) return null;
+): GitHubTargetConfig | null => {
+  const repository = repoRefFromRepository(repo);
+  if (!repository) return null;
   const boundConnectionId: ConnectionId | undefined = connectionId === "unbound" ? undefined : connectionId;
   return {
-    owner,
-    name,
-    tokenEnv: "GITHUB_TOKEN",
+    ...repository,
     ...(boundConnectionId ? { connectionId: boundConnectionId } : {}),
-    actorLogin: actorLogin ?? null,
     botAllowlist: new Set(botAllowlist ?? []),
   };
 };
 
-export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTarget | null => {
+export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTargetConfig | null => {
   const explicit = workspace.config.sourceControl;
   if (explicit) {
-    if (explicit.type !== "github" || !explicit.repo) return null;
-    return targetFromRepo(explicit.repo, explicit.connectionId, explicit.actorLogin, explicit.botAllowlist);
+    if (explicit.type !== "github" || !workspace.repository) return null;
+    return targetFromRepo(workspace.repository, explicit.connectionId, explicit.botAllowlist);
   }
   const source = workspace.config.issueTracker;
-  if (source.type !== "github" || !source.repo) return null;
-  return targetFromRepo(source.repo, source.connectionId, source.actorLogin, source.botAllowlist);
+  if (source.type !== "github" || !workspace.repository) return null;
+  return targetFromRepo(workspace.repository, source.connectionId, source.botAllowlist);
+};
+
+const missingSourceControlTarget = () =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    retryable: false,
+    message: "GitHub source control target is not configured",
+  });
+
+const sourceControlTarget = (workspace: RegisteredWorkspace) => {
+  const target = sourceControlTargetFor(workspace);
+  return target ? Effect.succeed(target) : Effect.fail(missingSourceControlTarget());
 };
 
 // The engine cuts an item's branch as `branchName(item)`, whose stable prefix is `ticketSlug(item.id)`.
@@ -114,14 +127,7 @@ const newestOf = (feedback: ReadonlyArray<Feedback>) =>
     null,
   );
 
-export const humanCommentSignal = (
-  feedback: ReadonlyArray<Feedback>,
-  actorLogin: string | null,
-  botAllowlist: ReadonlySet<string>,
-) => {
-  if (!actorLogin) {
-    return { latestAtMillis: null, fresh: false };
-  }
+export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botAllowlist: ReadonlySet<string>) => {
   const newest = newestOf(feedback.filter((item) => isHumanFeedback(item, botAllowlist)));
   return {
     latestAtMillis: newest?.createdAtMillis ?? null,
@@ -136,6 +142,13 @@ export const botTriggerSignal = (feedback: ReadonlyArray<Feedback>, botAllowlist
 };
 
 const make = (client: GitHubClientService): SourceControlProviderService => {
+  const authenticatedTarget = Effect.fn("github.authenticatedSourceControlTarget")(function* (
+    target: GitHubTargetConfig,
+  ) {
+    const actorLogin = yield* client.authenticatedLogin(target);
+    return { ...target, actorLogin } satisfies GitHubTarget;
+  });
+
   const observePr = Effect.fn("github.observePr")(function* (target: GitHubTarget, pull: RawPull) {
     const [checks, comments, reviewComments, reviews, mergeableState] = yield* Effect.all([
       client.listCheckRuns(target, pull.headSha),
@@ -150,7 +163,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
         .map((review) => ({ login: review.authorLogin, state: review.state })),
     );
     const feedback = [...comments, ...reviewComments, ...reviewFeedback(reviews)];
-    const human = humanCommentSignal(feedback, target.actorLogin, target.botAllowlist);
+    const human = humanCommentSignal(feedback, target.botAllowlist);
     const bot = botTriggerSignal(feedback, target.botAllowlist);
     return {
       number: pull.number,
@@ -178,8 +191,11 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     return match ? pull.closingIssueNumbers.includes(Number(match[1])) : false;
   };
 
-  const sameRepositoryHead = (target: GitHubTarget, pull: RawPull) =>
+  const sameRepositoryHead = (target: GitHubRepoRef, pull: RawPull) =>
     pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase();
+
+  const exactHeadPull = (target: GitHubRepoRef, headBranch: string, pulls: ReadonlyArray<RawPull>) =>
+    pulls.find((pull) => pull.headRef === headBranch && sameRepositoryHead(target, pull)) ?? null;
 
   const rank = (target: GitHubTarget, item: WorkItem, branch: string, pull: RawPull) =>
     [
@@ -262,15 +278,28 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   return {
     observe: (workspace, workItems) =>
       Effect.gen(function* () {
-        const target = sourceControlTargetFor(workspace);
-        if (!target || workItems.length === 0) return empty;
+        const configuredTarget = sourceControlTargetFor(workspace);
+        if (!configuredTarget || workItems.length === 0) return empty;
+        const target = yield* authenticatedTarget(configuredTarget);
         return yield* observeItems(target, workItems);
       }),
     comment: (workspace, item, body) =>
       Effect.gen(function* () {
-        const target = sourceControlTargetFor(workspace);
-        if (!target) return;
+        const configuredTarget = sourceControlTargetFor(workspace);
+        if (!configuredTarget) return;
+        const target = yield* authenticatedTarget(configuredTarget);
         yield* commentOnPull(target, item, body);
+      }),
+    findOpenPullRequest: Effect.fn("github.findOpenPullRequest")(function* (workspace, headBranch) {
+      const target = yield* sourceControlTarget(workspace);
+      const pulls = yield* client.listPulls(target, headBranch);
+      const pull = exactHeadPull(target, headBranch, pulls);
+      return pull ? { number: pull.number, url: pull.url } : null;
+    }),
+    openPullRequest: (workspace, input) =>
+      Effect.gen(function* () {
+        const target = yield* sourceControlTarget(workspace);
+        return yield* client.createPull(target, input);
       }),
   };
 };

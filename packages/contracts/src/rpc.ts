@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
-import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
+import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import {
   ConnectionEstablishment,
   ConnectionFailure,
@@ -20,7 +20,7 @@ import {
   StaleControlStoreWrite,
 } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
-import { HarnessOverview } from "./harness";
+import { HarnessNotRegistered, HarnessOverview } from "./harness";
 import { IssueTrackerError } from "./issue-tracker";
 import { PluginFailure, PluginId, PluginMutationResult, PluginOverview } from "./plugin";
 import { PrincipalMiddleware } from "./principal";
@@ -33,10 +33,10 @@ import {
 } from "./settings";
 import { TriageRole } from "./triage";
 import {
-  WorkspaceManagementError,
-  WorkspaceNotFound,
   WorkspaceRegistration,
   WorkspaceRegistrationError,
+  WorkspaceRegistryError,
+  WorkspaceUpdate,
 } from "./workspace";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
@@ -60,6 +60,7 @@ export const GetConnections = Rpc.make("GetConnections", {
 
 export const GetHarnesses = Rpc.make("GetHarnesses", {
   success: HarnessOverview,
+  error: ControlStoreFailure,
 });
 
 export const ListRuns = Rpc.make("ListRuns", { success: Schema.Array(RunSummary) });
@@ -99,13 +100,10 @@ export const DaemonQueries = RpcGroup.make(
   WatchEvents,
 ).middleware(PrincipalMiddleware);
 
-export class RunNotFound extends Schema.TaggedError<RunNotFound>()("RunNotFound", {
+export class CancelRunError extends Schema.TaggedError<CancelRunError>()("CancelRunError", {
+  reason: Schema.Literals(["not-found", "already-finished"]),
   runId: RunId,
-}) {}
-
-export class RunAlreadyFinished extends Schema.TaggedError<RunAlreadyFinished>()("RunAlreadyFinished", {
-  runId: RunId,
-  status: RunStatus,
+  status: Schema.optional(RunStatus),
 }) {}
 
 export class WorkItemNotFound extends Schema.TaggedError<WorkItemNotFound>()("WorkItemNotFound", {
@@ -122,7 +120,7 @@ export type CancelRunResult = typeof CancelRunResult.Type;
 export const CancelRun = Rpc.make("CancelRun", {
   payload: { runId: RunId, note: Schema.optional(TrimmedNonEmptyString) },
   success: CancelRunResult,
-  error: Schema.Union([RunNotFound, RunAlreadyFinished]),
+  error: CancelRunError,
 });
 
 export const Reclassify = Rpc.make("Reclassify", {
@@ -169,6 +167,12 @@ export const SetOperationSetting = Rpc.make("SetOperationSetting", {
   error: Schema.Union([ControlStoreFailure, OperationSettingRefused]),
 });
 
+export const SetHarnessEnabled = Rpc.make("SetHarnessEnabled", {
+  payload: { harness: HarnessName, enabled: Schema.Boolean },
+  success: ControlStore,
+  error: Schema.Union([ControlStoreFailure, HarnessNotRegistered]),
+});
+
 export const SetContributionSetting = Rpc.make("SetContributionSetting", {
   payload: { update: ContributionSettingUpdate },
   success: ControlStore,
@@ -179,6 +183,12 @@ export const RegisterWorkspace = Rpc.make("RegisterWorkspace", {
   payload: { registration: WorkspaceRegistration },
   success: WorkspaceState,
   error: WorkspaceRegistrationError,
+});
+
+export const UpdateWorkspace = Rpc.make("UpdateWorkspace", {
+  payload: { workspace: WorkspaceId, update: WorkspaceUpdate },
+  success: WorkspaceState,
+  error: Schema.Union([WorkspaceRegistryError, WorkspaceRegistrationError]),
 });
 
 export const InstallPlugin = Rpc.make("InstallPlugin", {
@@ -214,13 +224,13 @@ export const RemoveConnection = Rpc.make("RemoveConnection", {
 export const DeregisterWorkspace = Rpc.make("DeregisterWorkspace", {
   payload: { workspace: WorkspaceId },
   success: WorkspaceId,
-  error: Schema.Union([WorkspaceNotFound, WorkspaceManagementError]),
+  error: WorkspaceRegistryError,
 });
 
 export const RebindWorkspace = Rpc.make("RebindWorkspace", {
   payload: { workspace: WorkspaceId, checkoutPath: TrimmedNonEmptyString },
   success: WorkspaceState,
-  error: Schema.Union([WorkspaceNotFound, WorkspaceManagementError]),
+  error: WorkspaceRegistryError,
 });
 
 export const DaemonCommands = RpcGroup.make(
@@ -231,8 +241,10 @@ export const DaemonCommands = RpcGroup.make(
   ReportProcessHealth,
   SetDaemonLimit,
   SetContributionSetting,
+  SetHarnessEnabled,
   SetOperationSetting,
   RegisterWorkspace,
+  UpdateWorkspace,
   InstallPlugin,
   UninstallPlugin,
   EstablishConnection,

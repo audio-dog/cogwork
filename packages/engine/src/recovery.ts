@@ -3,6 +3,7 @@ import {
   type LifecycleStage,
   PollState,
   type RunPlanObservation,
+  type RunRecord,
   type SessionId,
   sessionHandle,
   type WorkspaceId,
@@ -15,15 +16,10 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import { availabilityCauseSummary } from "./availability";
-import {
-  consecutiveFailures,
-  type EligibleWork,
-  eligibleWork,
-  maxAttemptsPerStage,
-  observedStage,
-} from "./classify";
+import { type EligibleWork, eligibleWork, observedStage } from "./classify";
 import { type HandoffCause, handoffNote, handoffSession, recoveryReason } from "./comments";
 import { Executor } from "./executor";
+import { consecutiveFailures, isExhausted } from "./exhaustion";
 import { isStalledFollowUp } from "./follow-up";
 import { Harness } from "./harness";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
@@ -43,6 +39,9 @@ const correlationOf = (item: ObservedItem) => {
   const stage = observedStage(item);
   return stage ? { ...correlation, stage } : correlation;
 };
+
+const accountedRunFor = (item: ObservedItem, run: RunRecord | null) =>
+  run && run.startedAtMillis >= (item.claim?.claimedAtMillis ?? 0) ? run : null;
 
 export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
@@ -109,7 +108,7 @@ export const make = Effect.gen(function* () {
     session: SessionId | null,
   ) {
     const attempts = consecutiveFailures(item, stage) + 1;
-    const exhausted = attempts >= maxAttemptsPerStage;
+    const exhausted = isExhausted(attempts);
     yield* Effect.logWarning("recovered stale claim", {
       reason: recoveryReason,
       attempts,
@@ -222,6 +221,9 @@ export const make = Effect.gen(function* () {
     item: ObservedItem,
     observation: RunPlanObservation,
   ) {
+    const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
+    const accountedRun = accountedRunFor(item, last);
+    if (accountedRun?.claimDisposition === "hold") return;
     const currentStage = observedStage(item);
     const work = currentStage ? eligibleWork(item, currentStage) : null;
     if (work && !isStalledFollowUp(work.stage, work.followUp)) {
@@ -230,8 +232,6 @@ export const make = Effect.gen(function* () {
         return yield* rejectRecovery(workspace, item, availability.causes);
       }
     }
-    const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
-    const accountedRun = last && last.startedAtMillis >= (item.claim?.claimedAtMillis ?? 0) ? last : null;
     if (currentStage && last?.status === "interrupted") {
       return yield* reschedule(workspace, item, currentStage, "interrupted", last.session, observation);
     }
@@ -274,6 +274,7 @@ export const make = Effect.gen(function* () {
   ) {
     if (yield* scheduler.isInFlight(workspace, item.id)) return;
     const latest = yield* ledger.latestRunForItem(workspace.config.name, item.id);
+    if (accountedRunFor(item, latest)?.claimDisposition === "hold") return;
     if (latest?.status === "running" || latest?.status === "interrupted") return;
     yield* releaseClaim(workspace, item.id);
   });

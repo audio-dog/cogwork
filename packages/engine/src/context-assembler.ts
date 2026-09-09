@@ -1,4 +1,4 @@
-import type { FileContribution, RunId } from "@cogwork/contracts";
+import type { FileContribution, RunId, WorkspaceId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -25,6 +25,7 @@ export interface AssembledContext {
 
 export interface AssembleRequest {
   readonly runId: RunId;
+  readonly workspace: WorkspaceId;
   readonly cwd: string;
   readonly projectRoot: string;
   readonly operatingInstructions: string;
@@ -42,6 +43,7 @@ export class ContextAssemblerError extends Schema.TaggedError<ContextAssemblerEr
   {
     source: Schema.String,
     message: Schema.String,
+    retryable: Schema.Boolean,
   },
 ) {}
 
@@ -135,6 +137,7 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
         return yield* new ContextAssemblerError({
           source: rule.file,
           message: `Contribution ${rule.id} has no readable source at ${rule.file}`,
+          retryable: false,
         });
       }),
     );
@@ -152,6 +155,7 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
           return yield* new ContextAssemblerError({
             source: contribution.file,
             message: `Contribution ${contribution.id} has no readable source at ${contribution.file}`,
+            retryable: false,
           });
         }),
     );
@@ -160,13 +164,38 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
   const operatingInstructionsLayer = Effect.fn("ContextAssembler.operatingInstructionsLayer")(function* (
     name: string,
     packageDir: string,
+    errorSource: string,
   ) {
-    const layer = yield* readLayer("operating-instructions", joinPath(packageDir, "INSTRUCTIONS.md"));
+    const instructionPath = joinPath(packageDir, "INSTRUCTIONS.md");
+    const layer = yield* readLayer("operating-instructions", instructionPath);
     if (layer !== null) return layer;
     return yield* new ContextAssemblerError({
-      source: name,
-      message: `Operating Instructions "${name}" have no readable INSTRUCTIONS.md at ${packageDir}`,
+      source: errorSource,
+      message: `Operating Instructions "${name}" have no readable INSTRUCTIONS.md at ${instructionPath}`,
+      retryable: false,
     });
+  });
+
+  const operatingInstructionsSource = Effect.fn("ContextAssembler.operatingInstructionsSource")(function* (
+    request: AssembleRequest,
+  ) {
+    const workspaceDir = joinPath(joinPath(config.homeDir, "workspaces"), request.workspace);
+    const overrideDir = joinPath(
+      joinPath(workspaceDir, "operating-instructions"),
+      request.operatingInstructions,
+    );
+    if (yield* fs.directoryExists(overrideDir)) {
+      return {
+        packageDir: overrideDir,
+        provenanceDir: overrideDir,
+        errorSource: joinPath(overrideDir, "INSTRUCTIONS.md"),
+      };
+    }
+    return {
+      packageDir: joinPath(config.operatingInstructionsDir, request.operatingInstructions),
+      provenanceDir: null,
+      errorSource: request.operatingInstructions,
+    };
   });
 
   const operatingInstructionResources = Effect.fn("ContextAssembler.operatingInstructionResources")(
@@ -184,26 +213,50 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
     },
   );
 
+  const provenancePath = (provenanceDir: string | null, provisionedDir: string, source: string) => {
+    if (provenanceDir === null) return source;
+    return joinPath(provenanceDir, source.slice(provisionedDir.length + 1));
+  };
+
   return {
     assemble: Effect.fn("ContextAssembler.assemble")(function* (request: AssembleRequest) {
       if (!isSafePathSegment(request.operatingInstructions)) {
         return yield* new ContextAssemblerError({
           source: request.operatingInstructions,
           message: `Operating Instructions name "${request.operatingInstructions}" is not a single path segment`,
+          retryable: false,
         });
       }
-      const packageDir = joinPath(config.operatingInstructionsDir, request.operatingInstructions);
+      if (!isSafePathSegment(request.workspace)) {
+        return yield* new ContextAssemblerError({
+          source: request.workspace,
+          message: `Workspace identity "${request.workspace}" is not a single path segment`,
+          retryable: false,
+        });
+      }
+      const source = yield* operatingInstructionsSource(request);
       const operatingInstructionsPath = joinPath(
         runPath(request.runId),
         `operating-instructions/${request.operatingInstructions}`,
       );
-      yield* operatingInstructionsLayer(request.operatingInstructions, packageDir);
-      yield* fs.copyDirectory(packageDir, operatingInstructionsPath);
-      const operatingInstructions = yield* operatingInstructionsLayer(
+      yield* operatingInstructionsLayer(request.operatingInstructions, source.packageDir, source.errorSource);
+      yield* fs.copyDirectory(source.packageDir, operatingInstructionsPath);
+      const provisionedInstructions = yield* operatingInstructionsLayer(
         request.operatingInstructions,
         operatingInstructionsPath,
+        request.operatingInstructions,
       );
-      const resources = yield* operatingInstructionResources(operatingInstructionsPath);
+      const provisionedResources = yield* operatingInstructionResources(operatingInstructionsPath);
+      const sourcePath = (provisionedPath: string) =>
+        provenancePath(source.provenanceDir, operatingInstructionsPath, provisionedPath);
+      const operatingInstructions = {
+        ...provisionedInstructions,
+        source: sourcePath(provisionedInstructions.source),
+      };
+      const resources = provisionedResources.map((resource) => ({
+        ...resource,
+        source: sourcePath(resource.source),
+      }));
       const rules = yield* userRules();
       const repo = yield* repoLayers(request);
       const repoRules = yield* contributionRules(request.contributions, "local:repo");

@@ -4,11 +4,11 @@ import { CredentialStore, Linear, Providers } from "@cogwork/engine";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
 import * as HttpServer from "effect/unstable/http/HttpServer";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
@@ -155,9 +155,9 @@ const awaitAuthorization = Effect.fn("cli.login.awaitAuthorization")(
     ),
 );
 
-export class ProviderKeyError extends Schema.TaggedError<ProviderKeyError>()("ProviderKeyError", {
-  message: Schema.String,
-}) {}
+export class ProviderKeyError extends Data.TaggedError("ProviderKeyError")<{
+  readonly message: string;
+}> {}
 
 export interface KeyLoginResult {
   readonly provider: string;

@@ -29,11 +29,8 @@ export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
   connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
-  repo: Schema.optional(TrimmedNonEmptyString),
   teams: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   organization: Schema.optional(TrimmedNonEmptyString),
-  actorLogin: Schema.optional(TrimmedNonEmptyString),
-  actorUserId: Schema.optional(TrimmedNonEmptyString),
   assigneeAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   roleLabels: Schema.optional(TriageRoleLabels),
@@ -49,8 +46,6 @@ export const linearTeams = (source: IssueTrackerConfig) => {
 export const SourceControlConfig = Schema.Struct({
   type: SourceControlType,
   connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
-  repo: Schema.optional(TrimmedNonEmptyString),
-  actorLogin: Schema.optional(TrimmedNonEmptyString),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
 });
 export type SourceControlConfig = typeof SourceControlConfig.Type;
@@ -87,16 +82,23 @@ export type WorkspaceConcurrency = typeof WorkspaceConcurrency.Type;
 export const WorkspaceBindingWorktreeConfig = WorktreeConfig;
 export type WorkspaceBindingWorktreeConfig = typeof WorkspaceBindingWorktreeConfig.Type;
 
-export const WorkspaceRegistration = Schema.Struct({
+const workspaceUpdateFields = {
   name: TrimmedNonEmptyString,
-  checkoutPath: TrimmedNonEmptyString,
-  gitRemote: Schema.optional(TrimmedNonEmptyString),
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
   linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
   worktrees: Schema.optional(WorkspaceBindingWorktreeConfig),
   concurrency: Schema.optional(WorkspaceConcurrency),
+} as const;
+
+export const WorkspaceUpdate = Schema.Struct(workspaceUpdateFields);
+export type WorkspaceUpdate = typeof WorkspaceUpdate.Type;
+export type WorkspaceUpdateInput = Schema.Codec.Encoded<typeof WorkspaceUpdate>;
+
+export const WorkspaceRegistration = Schema.Struct({
+  ...workspaceUpdateFields,
+  checkoutPath: TrimmedNonEmptyString,
 });
 export type WorkspaceRegistration = typeof WorkspaceRegistration.Type;
 export type WorkspaceRegistrationInput = Schema.Codec.Encoded<typeof WorkspaceRegistration>;
@@ -106,14 +108,15 @@ export class WorkspaceRegistrationError extends Schema.TaggedError<WorkspaceRegi
   { message: Schema.String },
 ) {}
 
-export class WorkspaceManagementError extends Schema.TaggedError<WorkspaceManagementError>()(
-  "WorkspaceManagementError",
-  { operation: Schema.String, message: Schema.String },
+export class WorkspaceRegistryError extends Schema.TaggedError<WorkspaceRegistryError>()(
+  "WorkspaceRegistryError",
+  {
+    reason: Schema.Literals(["not-found", "management-failed"]),
+    workspace: WorkspaceId,
+    operation: Schema.optional(Schema.String),
+    message: Schema.String,
+  },
 ) {}
-
-export class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()("WorkspaceNotFound", {
-  workspace: WorkspaceId,
-}) {}
 
 export const WorkspaceConfig = Schema.Struct({
   name: WorkspaceId,

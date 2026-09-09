@@ -115,6 +115,8 @@ const providerStub = (prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [])
   Layer.succeed(SourceControlProvider, {
     observe: () => Effect.succeed(new Map(prs)),
     comment: () => Effect.void,
+    findOpenPullRequest: () => Effect.succeed(null),
+    openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
   });
 
 const sources = <R = never>(
@@ -184,6 +186,7 @@ class PublishedItemCount extends Context.Service<PublishedItemCount, Ref.Ref<num
 describe("workspace observation", () => {
   const workspace: Registry.RegisteredWorkspace = {
     ...registeredWorkspace,
+    repository: "acme/example",
     config: Schema.decodeSync(WorkspaceConfig)({
       name: "example",
       checkoutPath: "/repos/example",
@@ -195,19 +198,18 @@ describe("workspace observation", () => {
       sourceControl: {
         type: "github",
         connectionId: "github/acme",
-        repo: "acme/example",
       },
     }),
   };
   const githubWorkspace: Registry.RegisteredWorkspace = {
     ...workspace,
+    repository: "acme/example",
     config: Schema.decodeSync(WorkspaceConfig)({
       name: "github-example",
       checkoutPath: "/repos/github-example",
       issueTracker: {
         type: "github",
         connectionId: "github/acme",
-        repo: "acme/example",
       },
     }),
   };
@@ -218,6 +220,8 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({ observe: () => Effect.fail(auth) }), {
         observe: () => Effect.succeed(new Map()),
         comment: () => Effect.void,
+        findOpenPullRequest: () => Effect.succeed(null),
+        openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(workspace));
 
@@ -230,6 +234,8 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({}), {
         observe: () => Effect.fail(auth),
         comment: () => Effect.void,
+        findOpenPullRequest: () => Effect.succeed(null),
+        openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(workspace));
 
@@ -242,6 +248,8 @@ describe("workspace observation", () => {
       const observe = observeWorkspace(stub({}), {
         observe: () => Effect.fail(auth),
         comment: () => Effect.void,
+        findOpenPullRequest: () => Effect.succeed(null),
+        openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
       });
       const error = yield* Effect.flip(observe(githubWorkspace));
 
@@ -592,13 +600,13 @@ describe("reconcile worker", () => {
   );
   const connectedGithubWorkspace: Registry.RegisteredWorkspace = {
     ...registeredWorkspace,
+    repository: "acme/example",
     config: Schema.decodeSync(WorkspaceConfig)({
       name: "example",
       checkoutPath: "/repos/example",
       issueTracker: {
         type: "github",
         connectionId: "github/acme",
-        repo: "acme/example",
       },
     }),
   };
@@ -904,6 +912,7 @@ const availableControlStore = Layer.succeed(ControlStore, {
   establishConnection: () => Effect.succeed(defaultControlStore),
   revokeConnection: () => Effect.succeed(defaultControlStore),
   removeConnection: () => Effect.succeed(defaultControlStore),
+  setHarnessEnabled: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
   installPlugin: () => Effect.succeed(defaultControlStore),
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
@@ -982,6 +991,7 @@ class BootstrapRecoveryCalls extends Context.Service<BootstrapRecoveryCalls, Ref
 describe("daemon heartbeats", () => {
   const worktreeStub = Layer.succeed(WorktreeManager, {
     ensure: () => Effect.die("unused"),
+    pullRequestReadiness: () => Effect.die("unused"),
     list: () => Effect.succeed([]),
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -1017,7 +1027,7 @@ describe("daemon heartbeats", () => {
     EventPublisher.DaemonEventPublisher,
     Effect.map(PublishedItemCount, (publishes) => ({
       publishItems: () => Ref.update(publishes, (count) => count + 1),
-      publishWorkspaces: () => Effect.void,
+      publishWorkspaces: () => Effect.succeed([]),
       publishWorkspaceRemoved: Effect.succeed,
       publishScheduler: () =>
         Effect.succeed({

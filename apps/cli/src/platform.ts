@@ -91,7 +91,7 @@ export const gitLayer = Layer.effect(
 
     const runGit = (cwd: string, args: ReadonlyArray<string>) => {
       const command = `git ${args.join(" ")}`;
-      const fail = (message: string) => new Git.GitError({ command, message });
+      const fail = (message: string) => new Git.GitError({ command, message, retryable: true });
       return capture(ChildProcess.make("git", [...args], { cwd })).pipe(
         Effect.mapError((cause) => fail(describe(cause))),
         Effect.timeout(gitCommandDeadline),
@@ -102,6 +102,7 @@ export const gitLayer = Layer.effect(
               command,
               message: timeoutMessage(command, gitCommandDeadline),
               reason: "timeout",
+              retryable: true,
             }),
         ),
         Effect.flatMap((result) =>
@@ -126,6 +127,7 @@ export const gitLayer = Layer.effect(
               new Git.GitError({
                 command: `git rev-parse --git-path ${statePath}`,
                 message: describe(cause),
+                retryable: true,
               }),
           ),
         ),
@@ -175,8 +177,8 @@ export const gitLayer = Layer.effect(
         ),
       fastForward: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["merge", "--ff-only", `${remote}/${branch}`]).pipe(Effect.asVoid),
-      divergence: (worktreePath, remote, branch) => {
-        const range = `${remote}/${branch}...refs/heads/${branch}`;
+      divergence: (worktreePath, remote, baseBranch, headBranch = baseBranch) => {
+        const range = `${remote}/${baseBranch}...refs/heads/${headBranch}`;
         return runGit(worktreePath, ["rev-list", "--left-right", "--count", range]).pipe(
           Effect.flatMap((stdout) => {
             const parsed = parseDivergence(stdout);
@@ -184,6 +186,7 @@ export const gitLayer = Layer.effect(
             return new Git.GitError({
               command: `rev-list --left-right --count ${range}`,
               message: `unreadable divergence output "${stdout.trim()}"`,
+              retryable: true,
             });
           }),
         );
@@ -197,7 +200,9 @@ export const gitLayer = Layer.effect(
           Effect.asVoid,
         ),
       remoteUrl: (repoPath, remote) =>
-        runGit(repoPath, ["remote", "get-url", remote]).pipe(Effect.map((value) => value.trim())),
+        runGit(repoPath, ["config", "--local", "--get", `remote.${remote}.url`]).pipe(
+          Effect.map((value) => value.trim()),
+        ),
     } satisfies Git.GitService;
   }),
 );
@@ -212,7 +217,7 @@ export const worktreeFsLayer = Layer.effect(
     const capture = captureWith(yield* ChildProcessSpawner);
 
     const fail = (operation: string) => (cause: unknown) =>
-      new WorktreeFs.WorktreeFsError({ operation, message: describe(cause) });
+      new WorktreeFs.WorktreeFsError({ operation, message: describe(cause), retryable: true });
 
     return {
       linkFile: (target, linkPath) =>
@@ -240,6 +245,7 @@ export const worktreeFsLayer = Layer.effect(
               new WorktreeFs.WorktreeFsError({
                 operation: command,
                 message: timeoutMessage(command, setupCommandDeadline),
+                retryable: true,
               }),
           ),
           Effect.flatMap((result) =>
@@ -249,6 +255,7 @@ export const worktreeFsLayer = Layer.effect(
                   operation: command,
                   message:
                     result.stderr.trim() || result.stdout.trim() || `exited with code ${result.exitCode}`,
+                  retryable: true,
                 }),
           ),
         ),
@@ -273,7 +280,7 @@ export const contextFsLayer = Layer.effect(
     const path = yield* Path.Path;
 
     const fail = (operation: string) => (cause: unknown) =>
-      new ContextFs.ContextFsError({ operation, message: describe(cause) });
+      new ContextFs.ContextFsError({ operation, message: describe(cause), retryable: true });
 
     const readDirectory = (target: string, options?: { readonly recursive?: boolean }) =>
       fs
@@ -281,6 +288,11 @@ export const contextFsLayer = Layer.effect(
         .pipe(Effect.catch(recoverNotFound(noFiles, fail(`read directory ${target}`))));
 
     return {
+      directoryExists: (target) =>
+        fs.stat(target).pipe(
+          Effect.map((info) => info.type === "Directory"),
+          Effect.catch(recoverNotFound(false, fail(`stat directory ${target}`))),
+        ),
       readFile: (target) =>
         fs.readFileString(target).pipe(Effect.catch(recoverNotFound(null, fail(`read ${target}`)))),
       readDirectory,
