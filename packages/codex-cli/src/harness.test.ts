@@ -239,7 +239,15 @@ const linkedWorktree = (handle: SandboxHandle) =>
       handle.process.exec(`git -C ${checkoutPath} rev-parse --path-format=absolute --git-common-dir`),
     );
     assert.strictEqual(common.exitCode, 0);
-    return { checkoutPath, commonDirectory: common.stdout.trim() };
+    const gitDirectory = yield* Effect.promise(() =>
+      handle.process.exec(`git -C ${checkoutPath} rev-parse --path-format=absolute --git-dir`),
+    );
+    assert.strictEqual(gitDirectory.exitCode, 0);
+    return {
+      checkoutPath,
+      commonDirectory: common.stdout.trim(),
+      gitDirectory: gitDirectory.stdout.trim(),
+    };
   });
 
 const Capture = Schema.fromJsonString(
@@ -587,11 +595,11 @@ describe("codexRunner", () => {
       ),
     );
 
-    it.effect("grants linked Worktrees their shared Git metadata", () =>
+    it.effect("grants linked Worktrees only the shared Git paths their own commits need", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* createSandbox();
-          const { checkoutPath, commonDirectory } = yield* linkedWorktree(handle);
+          const { checkoutPath, commonDirectory, gitDirectory } = yield* linkedWorktree(handle);
           const calls: Array<CodexTextConfig> = [];
           const harness = Harness.make([
             runner({
@@ -603,7 +611,16 @@ describe("codexRunner", () => {
           ]);
           yield* harness.run(makeRequest({ checkoutPath, session: freshSession })).pipe(Stream.runDrain);
 
-          assert.deepStrictEqual(calls[0]?.additionalDirectories, [commonDirectory]);
+          const granted = calls[0]?.additionalDirectories ?? [];
+          assert.sameMembers(granted, [
+            gitDirectory,
+            `${commonDirectory}/objects`,
+            `${commonDirectory}/refs`,
+            `${commonDirectory}/logs`,
+            `${commonDirectory}/packed-refs`,
+            `${commonDirectory}/packed-refs.lock`,
+          ]);
+          assert.notInclude(granted, commonDirectory);
         }),
       ),
     );
