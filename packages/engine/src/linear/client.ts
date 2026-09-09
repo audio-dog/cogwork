@@ -482,8 +482,8 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       ),
     );
 
-  // A client-credentials token carries no refresh token, so a rejection is the only signal the
-  // store ever gets that the token it holds has to be minted again.
+  // Client credentials have no refresh token, so local invalidation mints a replacement. Reconcile
+  // also revokes the connection so operators can see and repair the rejected credential.
   const noteFailure = (ref: LinearTeamRef, nowMillis: number, error: IssueTrackerError) => {
     if (error.reason === "rate-limited") return noteRateLimit(ref, nowMillis, error);
     if (error.reason === "auth") return credentials.invalidate(ref.account);

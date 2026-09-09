@@ -1,3 +1,4 @@
+import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -21,13 +22,22 @@ const repo: GitHubRepoRef = {
 const jsonResponse = (body: unknown = {}, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-const hangingResponse = (prefix: string, status = 200) =>
+const hangingResponse = (prefix: string, status = 200, headers?: HeadersInit) =>
   new Response(
     new ReadableStream<Uint8Array>({
       start: (controller) => controller.enqueue(new TextEncoder().encode(prefix)),
     }),
-    { status },
+    { status, headers },
   );
+
+const controlledJsonResponse = (status: number) => {
+  const body = Promise.withResolvers<ReadableStreamDefaultController<Uint8Array>>();
+  const response = new Response(
+    new ReadableStream<Uint8Array>({ start: (controller) => body.resolve(controller) }),
+    { status, headers: { "content-type": "application/json" } },
+  );
+  return { body: body.promise, response };
+};
 
 const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { GITHUB_TOKEN: "test-token" } }));
 
@@ -465,6 +475,100 @@ describe("GitHub client", () => {
   });
 
   it.effect("does not retry a rejected write", () => rejectedWrite(401, "auth"));
+
+  it.effect("marks a refused write permanent", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(jsonResponse({ message: "Resource not accessible by integration" }, 403)),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(client.createComment(repo, 287, "claim"));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(error.retryable, false);
+      assert.isTrue(issueTrackerErrorIsPermanent(error));
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("keeps a throttled write non-permanent", () => {
+    const response = jsonResponse(
+      { message: "You have exceeded a secondary rate limit. Please wait before retrying." },
+      403,
+    );
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(client.createComment(repo, 287, "claim"));
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("uses the default cooldown for a secondary limit without retry-after", () => {
+    const response = vi
+      .fn<() => Response>()
+      .mockReturnValueOnce(
+        new Response(
+          JSON.stringify({
+            message: "You have exceeded a secondary rate limit. Please wait before retrying.",
+          }),
+          {
+            status: 403,
+            headers: {
+              "content-type": "application/json",
+              "x-ratelimit-reset": "4102444800",
+            },
+          },
+        ),
+      )
+      .mockReturnValue(jsonResponse());
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response()));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      yield* Effect.flip(client.createComment(repo, 287, "claim"));
+      yield* TestClock.adjust("1 minute");
+      yield* client.createComment(repo, 287, "claim");
+      assert.strictEqual(fetch.mock.calls.length, 2);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("waits for a slow secondary-limit response body", () => {
+    const { body, response } = controlledJsonResponse(403);
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response));
+
+    return Effect.gen(function* () {
+      const controller = yield* Effect.promise(() => body);
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(client.createComment(repo, 287, "claim"));
+      yield* TestClock.adjust("2 seconds");
+      controller.enqueue(
+        new TextEncoder().encode(
+          '{"message":"You have exceeded a secondary rate limit. Please wait before retrying."}',
+        ),
+      );
+      controller.close();
+      const error = yield* Effect.flip(Fiber.join(operation));
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("keeps an unreadable forbidden response non-permanent", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(hangingResponse("{", 403, { "x-accepted-github-permissions": "issues=write" })),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(client.createComment(repo, 287, "claim"));
+      yield* TestClock.adjust("3 minutes");
+      const error = yield* Effect.flip(Fiber.join(operation));
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+      assert.strictEqual(fetch.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
 
   it.effect("does not retry a permanent write failure", () => rejectedWrite(422, "unavailable"));
 });
