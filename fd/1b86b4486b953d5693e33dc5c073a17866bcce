@@ -1,0 +1,23 @@
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_af76cdc119e732::t_da96b88a5140f3 81-83
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_af76cdc119e732::t_da96b88a5140f3 115-120
+packages/codex-cli/CONTEXT.md
+  s_af76cdc119e732::t_da96b88a5140f3 45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fd1b86b4486b953d5693e33dc5c073a17866bcce",
+  "prompts": {},
+  "sessions": {
+    "s_af76cdc119e732": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0871b-2535-7422-bc9b-7ce30f3e005b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
