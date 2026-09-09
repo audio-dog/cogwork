@@ -1,0 +1,83 @@
+packages/engine/src/control-store.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 171,956
+packages/engine/src/retry-policy.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 51
+packages/contracts/src/daemon.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 2-15
+apps/cli/src/platform.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 94,105,130,189,220,248,258,283
+docs/agent-patterns/effect-error-design.md
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 99-100,103-105,131-134
+packages/claude-code/src/harness.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 142
+packages/engine/src/worktree.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 236,331,383,389,410,503
+packages/engine/src/testing/harness-probe-layer.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 16
+packages/engine/src/event-publisher.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 549
+packages/engine/src/linear/client.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 130,137-143,145-147
+packages/engine/src/worktree.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 22,33,213,241,331
+packages/engine/src/github/cli-credential.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 20-21
+packages/engine/src/commands.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 1114-1120
+packages/engine/src/credential-store.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 102,690-696,760
+packages/engine/src/linear/client-credentials.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 40-41
+packages/engine/src/connection.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 388
+packages/engine/src/git.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 9
+packages/engine/src/executor.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 263,282,906,920,928-934,1680,1741-1745,2630,3868-3872,3900
+packages/contracts/src/daemon.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 264
+packages/engine/src/credential-store.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 38,170,234,352,363,371,409,426,447,457,488,510,534
+packages/engine/src/provider-runner.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 104
+packages/engine/src/worktree-fs.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 8
+packages/engine/src/linear/oauth.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 217
+packages/engine/src/context-assembler.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 46,140,158,175,227,234
+packages/engine/src/workspace-registry.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 561
+apps/cli/src/platform.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 286
+packages/engine/src/run-plan.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 752,942-943
+packages/engine/src/retry-policy.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 1,26-27,29,32-37,39,42-43,46-47
+packages/engine/src/mcp-skill.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 40-42,44-46
+packages/engine/src/mcp-skill.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 50
+packages/engine/src/context-fs.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 8
+apps/cli/src/credentials.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 55-60,72,84
+packages/engine/src/provider-resolve.test.ts
+  s_5bcda3d0545c1b::t_6ff73e6e4745c3 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8db4977b92ee27039ddb28b6dd85ef4bd03fb1ce",
+  "prompts": {},
+  "sessions": {
+    "s_5bcda3d0545c1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08772-ca43-70c3-a712-f8b4fcafe310",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
