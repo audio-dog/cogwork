@@ -158,7 +158,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
         },
         {
           source: "tanstack-runtime",
-          packageVersion: "ai-anthropic@0.18.3+ai-gemini@0.26.4+ai-openai@0.22.3",
+          packageVersion: "ai-anthropic@0.18.5+ai-gemini@0.29.1+ai-openai@0.22.5",
         },
       ),
       fallback: staticCatalogSource(

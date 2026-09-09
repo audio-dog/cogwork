@@ -391,7 +391,7 @@ describe("codexRunner", () => {
         );
         assert.deepStrictEqual(catalog.provenance, {
           source: "cogwork-fallback",
-          fallbackVersion: "codex-0.5.3",
+          fallbackVersion: "codex-0.5.4",
         });
         assert.strictEqual(codex.sessionKind, "opaque-handle");
         assert.deepStrictEqual(codex.authentication, {

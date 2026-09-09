@@ -34,7 +34,7 @@ const currentCodexModels = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as c
 const codexModels: ReadonlyArray<CodexModel> = [...currentCodexModels, ...CODEX_MODELS];
 export const defaultCodexModel = currentCodexModels[0];
 const defaultCodexEffort = "high" satisfies CodexEffort;
-const codexAdapterVersion = "0.5.3";
+const codexAdapterVersion = "0.5.4";
 const codexVersionRequirement = ">=0.149.0";
 const minimumCodexVersion = [0, 149, 0] as const;
 const codexReadinessDeadline = "5 seconds";

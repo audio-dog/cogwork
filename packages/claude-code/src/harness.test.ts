@@ -461,7 +461,7 @@ describe("Claude Code Harness", () => {
         );
         assert.deepStrictEqual(catalog.provenance, {
           source: "tanstack-runtime",
-          packageVersion: "0.6.3",
+          packageVersion: "0.6.4",
         });
         assert.isUndefined(catalog.efforts);
       }),
