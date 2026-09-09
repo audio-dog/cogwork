@@ -1,0 +1,21 @@
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_4238d8091b2c62::t_ccfd96a0a67cde 2,25,40-41,423,429,442,450-515
+packages/engine/src/tools/file-diff-feed.ts
+  s_4238d8091b2c62::t_1d1fde9545bb18 19-27,34,68-74,243-249,572-576,584,588,599-609,615,683,686-687,695-696,771-797
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4d13d986f0f6f48dccc42f21f9f66f7301d33e17",
+  "prompts": {},
+  "sessions": {
+    "s_4238d8091b2c62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "08c47ac6-6093-450d-8d7f-b4ee42f1a5eb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
