@@ -1,0 +1,30 @@
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_7e3527ced6a016::t_65595487b72c55 443-481
+packages/engine/src/tools/file-diff-feed.ts
+  s_7e3527ced6a016::t_ca6546219d5261 36-38
+  s_512550609cd5ea::t_b5320f54643e94 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "04d86773388d0e1455f3c4b864b726a1f05a9018",
+  "prompts": {},
+  "sessions": {
+    "s_512550609cd5ea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0836d-1f28-76f0-8670-f6bcfd7eabb1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    },
+    "s_7e3527ced6a016": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0821f-452b-71f0-9c2b-63fd24cbb690",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "a <a@b>"
+    }
+  }
+}
