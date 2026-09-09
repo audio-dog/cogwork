@@ -239,7 +239,15 @@ const linkedWorktree = (handle: SandboxHandle) =>
       handle.process.exec(`git -C ${checkoutPath} rev-parse --path-format=absolute --git-common-dir`),
     );
     assert.strictEqual(common.exitCode, 0);
-    return { checkoutPath, commonDirectory: common.stdout.trim() };
+    const gitDirectory = yield* Effect.promise(() =>
+      handle.process.exec(`git -C ${checkoutPath} rev-parse --path-format=absolute --git-dir`),
+    );
+    assert.strictEqual(gitDirectory.exitCode, 0);
+    return {
+      checkoutPath,
+      commonDirectory: common.stdout.trim(),
+      gitDirectory: gitDirectory.stdout.trim(),
+    };
   });
 
 const Capture = Schema.fromJsonString(
@@ -365,48 +373,46 @@ describe("codexRunner", () => {
       }),
     );
 
-    it.effect("projects host authentication, native options, and shared Git without local MCP config", () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const handle = yield* createSandbox();
-          const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
-          const harness = Harness.make([
-            runner({
-              environment: {
-                ...process.env,
-                GITHUB_TOKEN: "inherited-github-token",
-                GH_TOKEN: "inherited-gh-token",
-                LINEAR_API_KEY: "inherited-linear-key",
-                CODEX_API_KEY: "inherited-codex-key",
-                OPENAI_API_KEY: "inherited-openai-key",
-              },
-              makeAdapter: (model, config) => {
-                calls.push({ model, config });
-                return codexText(model, config);
-              },
-            }),
-          ]);
-          const events = yield* runInRepository(harness, handle);
-          const capture = yield* structuredCapture(events);
-          const call = calls[0];
-          if (!call) return assert.fail("Codex adapter was not created");
-          const realCheckout = yield* FileSystem.FileSystem.pipe(
-            Effect.flatMap((fs) => fs.realPath(handle.id)),
-          );
-
-          assert.strictEqual(call.model, defaultModel);
-          assert.strictEqual(call.config.authMode, "host");
-          assert.deepStrictEqual(call.config.additionalDirectories, [`${realCheckout}/.git`]);
-          assert.isUndefined(call.config.config);
-          assert.isUndefined(call.config.env);
-          assert.include(capture.args, 'model_reasoning_effort="high"');
-          assert.isFalse(capture.hasCodexApiKey);
-          assert.isFalse(capture.hasOpenAiApiKey);
-          assert.isFalse(capture.hasGithubToken);
-          assert.isFalse(capture.hasGhToken);
-          assert.isFalse(capture.hasLinearApiKey);
-        }),
-      ),
+    it.effect(
+      "projects host authentication and native options, granting no Git path to a checkout that owns its Git directory",
+      () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const handle = yield* createSandbox();
+            const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
+            const harness = Harness.make([
+              runner({
+                environment: {
+                  ...process.env,
+                  GITHUB_TOKEN: "inherited-github-token",
+                  GH_TOKEN: "inherited-gh-token",
+                  LINEAR_API_KEY: "inherited-linear-key",
+                  CODEX_API_KEY: "inherited-codex-key",
+                  OPENAI_API_KEY: "inherited-openai-key",
+                },
+                makeAdapter: (model, config) => {
+                  calls.push({ model, config });
+                  return codexText(model, config);
+                },
+              }),
+            ]);
+            const events = yield* runInRepository(harness, handle);
+            const capture = yield* structuredCapture(events);
+            const call = calls[0];
+            if (!call) return assert.fail("Codex adapter was not created");
+            assert.strictEqual(call.model, defaultModel);
+            assert.strictEqual(call.config.authMode, "host");
+            assert.isUndefined(call.config.additionalDirectories);
+            assert.isUndefined(call.config.config);
+            assert.isUndefined(call.config.env);
+            assert.include(capture.args, 'model_reasoning_effort="high"');
+            assert.isFalse(capture.hasCodexApiKey);
+            assert.isFalse(capture.hasOpenAiApiKey);
+            assert.isFalse(capture.hasGithubToken);
+            assert.isFalse(capture.hasGhToken);
+            assert.isFalse(capture.hasLinearApiKey);
+          }),
+        ),
     );
 
     it.effect(
@@ -587,11 +593,11 @@ describe("codexRunner", () => {
       ),
     );
 
-    it.effect("grants linked Worktrees their shared Git metadata", () =>
+    it.effect("grants linked Worktrees only the shared Git paths their own commits need", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* createSandbox();
-          const { checkoutPath, commonDirectory } = yield* linkedWorktree(handle);
+          const { checkoutPath, commonDirectory, gitDirectory } = yield* linkedWorktree(handle);
           const calls: Array<CodexTextConfig> = [];
           const harness = Harness.make([
             runner({
@@ -603,7 +609,41 @@ describe("codexRunner", () => {
           ]);
           yield* harness.run(makeRequest({ checkoutPath, session: freshSession })).pipe(Stream.runDrain);
 
-          assert.deepStrictEqual(calls[0]?.additionalDirectories, [commonDirectory]);
+          const granted = calls[0]?.additionalDirectories ?? [];
+          assert.sameMembers(granted, [
+            gitDirectory,
+            `${commonDirectory}/objects`,
+            `${commonDirectory}/refs`,
+            `${commonDirectory}/logs`,
+            `${commonDirectory}/packed-refs`,
+            `${commonDirectory}/packed-refs.lock`,
+          ]);
+          assert.notInclude(granted, commonDirectory);
+        }),
+      ),
+    );
+
+    it.effect("grants a read-only Operation no writable Git path at all", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const calls: Array<CodexTextConfig> = [];
+          const harness = Harness.make([
+            runner({
+              makeAdapter: (model, config) => {
+                calls.push(config);
+                return codexText(model, config);
+              },
+            }),
+          ]);
+          yield* harness
+            .run(makeRequest({ checkoutPath, session: freshSession, stage: "triage" }))
+            .pipe(Stream.runDrain);
+
+          const call = calls[0];
+          if (!call) return assert.fail("Codex adapter was not created");
+          assert.isUndefined(call.additionalDirectories);
         }),
       ),
     );

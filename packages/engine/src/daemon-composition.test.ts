@@ -33,7 +33,6 @@ import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
 
 const pushSchemaMock = vi.hoisted(() => vi.fn());
-
 vi.mock("drizzle-kit/payload/sqlite", () =>
   vi
     .importActual<typeof import("drizzle-kit/payload/sqlite")>("drizzle-kit/payload/sqlite")
@@ -47,6 +46,7 @@ const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   ensure: () => Effect.die("unused"),
+  pullRequestReadiness: () => Effect.die("unused"),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -161,14 +161,16 @@ function makeGitHubServerFixture() {
       (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
     );
     vi.stubEnv("GITHUB_TOKEN", "fallback-token");
-    const fetchStub = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
-      Promise.resolve(
-        new Response("[]", {
+    const fetchStub = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = url === "https://api.github.com/user" ? { login: "connected-account" } : [];
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
-      ),
-    );
+      );
+    });
     vi.stubGlobal("fetch", fetchStub);
     const toServer = new TransformStream<Uint8Array, Uint8Array>();
     const toClient = new TransformStream<Uint8Array, Uint8Array>();

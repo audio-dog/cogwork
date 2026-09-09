@@ -1,4 +1,8 @@
-import type { ControlStoreFailure } from "@cogwork/contracts";
+import {
+  type ControlStoreFailure,
+  type IssueTrackerError,
+  issueTrackerErrorIsPermanent,
+} from "@cogwork/contracts";
 import type { HandoffCause } from "./comments";
 import type { ContextAssemblerError } from "./context-assembler";
 import type { ContextFsError } from "./context-fs";
@@ -22,7 +26,7 @@ export type PrepareError =
   | RunPlanAssemblyError
   | RunLedgerError;
 
-export type RetryFailure = PrepareError | HarnessError;
+export type RetryFailure = PrepareError | HarnessError | IssueTrackerError;
 
 type NonRetryableHandoffCause = Extract<HandoffCause, { readonly kind: "non-retryable" }>;
 type MaxAttemptsHandoffCause = Extract<HandoffCause, { readonly kind: "max-attempts" }>;
@@ -42,7 +46,7 @@ export type RetryDecision =
       readonly handoffCause: NonRetryableHandoffCause;
     };
 
-type IntrinsicRetryFailure = Exclude<RetryFailure, HarnessError | RunLedgerError>;
+type IntrinsicRetryFailure = Exclude<RetryFailure, HarnessError | IssueTrackerError | RunLedgerError>;
 
 const intrinsicRetryability = {
   ControlStoreFailure: true,
@@ -57,6 +61,7 @@ const intrinsicRetryability = {
 } satisfies Record<IntrinsicRetryFailure["_tag"], boolean>;
 
 const retryableOf = (failure: RetryFailure) => {
+  if (failure._tag === "IssueTrackerError") return !issueTrackerErrorIsPermanent(failure);
   if ("retryable" in failure) return failure.retryable;
   return intrinsicRetryability[failure._tag];
 };
