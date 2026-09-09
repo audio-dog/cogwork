@@ -1,0 +1,19 @@
+docs/adr/0023-codex-runs-trust-ambient-hooks.md
+  s_af76cdc119e732::t_da96b88a5140f3 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "82cd19118b6aef89021e54afa605c78ecba1c9c7",
+  "prompts": {},
+  "sessions": {
+    "s_af76cdc119e732": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0871b-2535-7422-bc9b-7ce30f3e005b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
