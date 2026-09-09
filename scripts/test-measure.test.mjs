@@ -1,11 +1,83 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { measure, run } from "./test-measure.mjs";
+import { promisify } from "node:util";
+import { measure, measureComparison, run, runMeasuredNodeTests, vitestTestArgs } from "./test-measure.mjs";
+
+const exec = promisify(execFile);
+const execEnvironment = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key !== "NODE_TEST_CONTEXT"),
+);
+const scriptPath = path.join(import.meta.dirname, "test-measure.mjs");
+const completeFailedVitest = {
+  failed: true,
+  stdout: "cogwork-test-count:2\nTasks: 0 successful, 1 total\n",
+};
+
+test("node-only rejects a workspace with no configured root tests", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "cogwork-test-measure-"));
+  const discoveredTestDirectory = path.join(root, "test");
+
+  try {
+    await mkdir(discoveredTestDirectory);
+    await writeFile(
+      path.join(discoveredTestDirectory, "surprise.test.mjs"),
+      'throw new Error("unexpected discovery");\n',
+    );
+    await assert.rejects(
+      exec(process.execPath, [scriptPath, "--node-only"], { cwd: root, env: execEnvironment }),
+      /No root Node test files found/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("node-only excludes lint-rule tests", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "cogwork-test-measure-"));
+  const lintTestDirectory = path.join(root, "configs", "lint", "tests");
+  const scriptDirectory = path.join(root, "scripts");
+
+  try {
+    await mkdir(lintTestDirectory, { recursive: true });
+    await mkdir(scriptDirectory);
+    await writeFile(path.join(lintTestDirectory, "rules.test.mjs"), 'throw new Error("lint test ran");\n');
+    await writeFile(
+      path.join(scriptDirectory, "script.test.mjs"),
+      'import test from "node:test";\ntest("script", () => {});\n',
+    );
+    const result = await exec(process.execPath, [scriptPath, "--node-only"], {
+      cwd: root,
+      env: execEnvironment,
+    });
+
+    assert.match(result.stdout, /# tests 1/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("measurement treats missing root Node tests as zero", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "cogwork-test-measure-"));
+
+  try {
+    assert.deepEqual(await runMeasuredNodeTests(root), {
+      failed: false,
+      stdout: "# tests 0\n",
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("measured Turbo runs every task after a failure", () => {
+  assert.ok(vitestTestArgs("turbo", "reporter").includes("--continue=always"));
+});
 
 test("a failed test command preserves its measurement output", async () => {
   const result = await run(process.execPath, [
@@ -39,11 +111,11 @@ test("a test command streams output before it exits", async () => {
   assert.equal(JSON.parse(resultOutput.join("")).stdout, "live log");
 });
 
-test("a failed suite publishes both measurements and exits nonzero", () => {
+test("a completed failed suite publishes measurements and exits nonzero", () => {
   const script = `
     import { measure } from "./scripts/test-measure.mjs";
     const results = [
-      { failed: true, stdout: "cogwork-test-count:2" },
+      { failed: true, stdout: "cogwork-test-count:2\\nTasks: 0 successful, 1 total\\n" },
       { failed: false, stdout: "# tests 3" },
       { failed: false, stdout: "git measurement" },
     ];
@@ -59,13 +131,34 @@ test("a failed suite publishes both measurements and exits nonzero", () => {
   assert.equal(result.stderr, "");
 });
 
-test("measurement matches the root test gate", async () => {
+test("comparison measurement accepts a completed failed suite", async (context) => {
+  const results = [completeFailedVitest, { failed: false, stdout: "# tests 3" }];
+  const output = [];
+  context.mock.method(console, "log", (value) => output.push(value));
+
+  const measurement = await measureComparison(async () => results.shift());
+
+  assert.equal(measurement.testCount, 5);
+  assert.equal(JSON.parse(output[0]).testCount, 5);
+});
+
+test("comparison measurement rejects an incomplete failed suite", async () => {
+  const results = [
+    { failed: true, stdout: "cogwork-test-count:2\n" },
+    { failed: false, stdout: "# tests 3" },
+  ];
+
+  await assert.rejects(() => measureComparison(async () => results.shift()), /did not complete/);
+});
+
+test("measurement matches the root test gate", async (context) => {
   const commands = [];
   const results = [
     { failed: false, stdout: "cogwork-test-count:2" },
     { failed: false, stdout: "# tests 3" },
     { failed: false, stdout: "{}" },
   ];
+  context.mock.method(console, "log", () => undefined);
 
   await measure(async (_file, args) => {
     commands.push(args);
@@ -73,6 +166,7 @@ test("measurement matches the root test gate", async () => {
   });
 
   assert.equal(commands.length, 3);
+  assert.equal(commands[1].includes("scripts/test-compare.test.mjs"), true);
   assert.equal(commands[1].includes("configs/lint/tests/rules.test.mjs"), false);
   assert.equal(commands[2].at(-1), "scripts/count-worktree-git-invocations.ts");
 });
