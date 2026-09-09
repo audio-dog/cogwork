@@ -1,9 +1,10 @@
-import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
+import { GitHubIssueFieldId, issueTrackerErrorIsPermanent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -18,6 +19,7 @@ const repo: GitHubRepoRef = {
   name: "cogwork",
   tokenEnv: "GITHUB_TOKEN",
 };
+const priorityFieldId = Schema.decodeSync(GitHubIssueFieldId)(42);
 
 const jsonResponse = (body: unknown = {}, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -122,8 +124,24 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("lists every open issue across GitHub pages", () => {
-    const issue = (number: number) => ({ number, title: `issue ${number}`, labels: [] });
+  it.effect("lists every open issue across GitHub pages with organization issue fields", () => {
+    const issue = (number: number) => ({
+      number,
+      title: `issue ${number}`,
+      labels: [],
+      issue_field_values:
+        number === 101
+          ? [
+              {
+                issue_field_id: 42,
+                issue_field_name: "Priority",
+                data_type: "single_select",
+                value: 7,
+                single_select_option: { id: 7, name: "Urgent", color: "red" },
+              },
+            ]
+          : [],
+    });
     const firstPage = Array.from({ length: 100 }, (_, index) => issue(index + 1));
     const fetch = vi.fn<typeof globalThis.fetch>((input) => {
       const url = input instanceof Request ? input.url : String(input);
@@ -136,12 +154,47 @@ describe("GitHub client", () => {
       const issues = yield* client.listIssues(repo);
       assert.strictEqual(issues.length, 101);
       assert.strictEqual(issues.at(-1)?.number, 101);
+      assert.strictEqual(issues.at(-1)?.issueFieldValues.get(priorityFieldId), "Urgent");
       assert.deepStrictEqual(
         fetch.mock.calls.map(([input]) =>
           new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
         ),
         ["1", "2"],
       );
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists compatible organization issue fields by stable ID", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([
+          { id: 42, name: "Priority", data_type: "single_select" },
+          { id: 43, name: "Target date", data_type: "date" },
+        ]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      assert.deepStrictEqual(yield* client.listPriorityFields(repo), [{ id: 42, name: "Priority" }]);
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.url, "https://api.github.com/orgs/colonylabs/issue-fields");
+      assert.strictEqual(request.headers.get("x-github-api-version"), "2026-03-10");
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("names the permission needed when the issue field catalog is unavailable", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(jsonResponse({ message: "Resource not accessible by integration" }, 403)),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(client.listPriorityFields(repo));
+      assert.include(error.message, "read:org or Issue Fields read permission");
+      assert.isFalse(error.retryable ?? true);
     }).pipe(withFetchClient(fetch));
   });
 
@@ -423,32 +476,6 @@ describe("GitHub client", () => {
   it.effect("retries a write rejected with a transient HTTP status", () =>
     transientWrite(408, (client) => client.createComment(repo, 287, "claim")),
   );
-
-  it.effect("bounds project priority pagination as one operation", () => {
-    const page = {
-      data: {
-        repositoryOwner: {
-          projectV2: {
-            items: {
-              pageInfo: { hasNextPage: true, endCursor: "same-cursor" },
-              nodes: [],
-            },
-          },
-        },
-      },
-    };
-    const { client: httpClient, requests } = delayedJsonClient(() => page);
-
-    return Effect.gen(function* () {
-      const client = yield* GitHubClient;
-      const error = yield* afterPaginationDeadline(
-        Effect.flip(client.projectPriorities(repo, { project: 1 })),
-      );
-      assert.strictEqual(error.reason, "unavailable");
-      assert.include(error.message, "pagination timed out");
-      assert.isAbove(requests.mock.calls.length, 1);
-    }).pipe(withHttpClient(httpClient));
-  });
 
   it.effect("bounds pull closing-reference pagination as one operation", () => {
     const page = {

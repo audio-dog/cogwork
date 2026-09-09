@@ -1,8 +1,8 @@
 import {
   type ConnectionId,
   connectionAccountOf,
-  type GitHubPrioritySource,
-  type Priority,
+  GitHubIssueFieldId,
+  type GitHubPriorityField,
   TrimmedNonEmptyString,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
@@ -27,13 +27,6 @@ import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
 import { type CreateIssueInput, defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
 import type { OpenedPullRequest, OpenPullRequestInput } from "../source-control";
-import {
-  boardMissing,
-  decodeProjectPriorities,
-  defaultPriorityField,
-  pageOf,
-  priorityQuery,
-} from "./priority";
 
 export interface GitHubRepoRef {
   readonly owner: string;
@@ -58,6 +51,7 @@ export interface RawIssue {
   readonly assignees: ReadonlyArray<string>;
   readonly isPullRequest: boolean;
   readonly openBlockers: number;
+  readonly issueFieldValues: ReadonlyMap<GitHubIssueFieldId, string>;
 }
 
 export interface RawPull {
@@ -91,7 +85,7 @@ export interface RawReview {
 
 const baseHeaders = {
   Accept: "application/vnd.github+json",
-  "X-GitHub-Api-Version": "2022-11-28",
+  "X-GitHub-Api-Version": "2026-03-10",
   "User-Agent": "cogwork",
 };
 
@@ -103,6 +97,12 @@ const DependenciesSummarySchema = Schema.Struct({
   blocked_by: Schema.optional(Schema.NullOr(Schema.Natural)),
 });
 
+const IssueFieldValueSchema = Schema.Struct({
+  issue_field_id: GitHubIssueFieldId,
+  data_type: Schema.String,
+  single_select_option: Schema.optional(Schema.NullOr(Schema.Struct({ name: TrimmedNonEmptyString }))),
+});
+
 const IssueSchema = Schema.Struct({
   number: Schema.Finite,
   title: Schema.String,
@@ -111,6 +111,13 @@ const IssueSchema = Schema.Struct({
   assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
   issue_dependencies_summary: Schema.optional(Schema.NullOr(DependenciesSummarySchema)),
+  issue_field_values: Schema.optional(Schema.Array(IssueFieldValueSchema)),
+});
+
+const GitHubIssueFieldSchema = Schema.Struct({
+  id: GitHubIssueFieldId,
+  name: TrimmedNonEmptyString,
+  data_type: Schema.String,
 });
 
 const CreatedIssueSchema = Schema.Struct({
@@ -273,6 +280,7 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
+const decodeIssueFields = Schema.decodeUnknownEffect(Schema.Array(GitHubIssueFieldSchema));
 const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
 const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
@@ -297,6 +305,30 @@ const millisFromIso = (value: string | null) => {
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
+const priorityFieldReadError = (repo: GitHubRepoRef, error: IssueTrackerError) =>
+  new IssueTrackerError({
+    reason: error.reason,
+    message: `Could not load GitHub issue fields for ${repo.owner}. Grant read:org or Issue Fields read permission. ${error.message}`,
+    ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
+    ...(error.retryAfterMillis === undefined ? {} : { retryAfterMillis: error.retryAfterMillis }),
+    ...(error.connectionId === undefined ? {} : { connectionId: error.connectionId }),
+  });
+
+const issueFieldEntry = (
+  value: typeof IssueFieldValueSchema.Type,
+): readonly [GitHubIssueFieldId, string] | null => {
+  if (value.data_type !== "single_select" || !value.single_select_option) return null;
+  return [value.issue_field_id, value.single_select_option.name];
+};
+
+const issueFieldValues = (issue: typeof IssueSchema.Type) =>
+  new Map(
+    (issue.issue_field_values ?? []).flatMap((value) => {
+      const entry = issueFieldEntry(value);
+      return entry ? [entry] : [];
+    }),
+  );
+
 const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIssue => ({
   number: issue.number,
   title: issue.title,
@@ -305,6 +337,7 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
+  issueFieldValues: issueFieldValues(issue),
 });
 
 const openedPull = (created: typeof CreatedPullSchema.Type) =>
@@ -421,6 +454,8 @@ const acceptResponse = () => Effect.void;
 
 const repoPath = (repo: GitHubRepoRef, suffix: string) =>
   `https://api.github.com/repos/${repo.owner}/${repo.name}${suffix}`;
+
+const orgPath = (repo: GitHubRepoRef, suffix: string) => `https://api.github.com/orgs/${repo.owner}${suffix}`;
 
 const standingStates = new Set(["APPROVED", "CHANGES_REQUESTED", "DISMISSED"]);
 
@@ -659,7 +694,6 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return openedPull(created);
   });
 
-  // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
   const graphql = Effect.fn("github.graphql")(function* (
     repo: GitHubRepoRef,
     query: string,
@@ -675,41 +709,6 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     const result = graphQlData(decoded);
     if (!result.ok) return yield* unavailable(result.message);
     return result.data;
-  });
-
-  const collectPriorityPages: (
-    repo: GitHubRepoRef,
-    source: GitHubPrioritySource,
-    field: string,
-    cursor?: string | null,
-  ) => Effect.Effect<ReadonlyMap<number, Priority>, IssueTrackerError> = Effect.fn(
-    "github.projectPriorityPage",
-  )(function* (repo, source, field, cursor = null) {
-    const data = yield* graphql(repo, priorityQuery, {
-      owner: repo.owner,
-      number: source.project,
-      field,
-      cursor,
-    });
-    const payload = yield* Effect.mapError(decodeProjectPriorities(data), toUnavailable);
-    if (cursor === null && boardMissing(payload)) {
-      return yield* unavailable(`GitHub project ${source.project} not found for ${repo.owner}`);
-    }
-    const page = pageOf(payload, repo);
-    const current = new Map(page.entries);
-    if (page.nextCursor === null) return current;
-    const remaining = yield* collectPriorityPages(repo, source, field, page.nextCursor);
-    return new Map([...current, ...remaining]);
-  });
-
-  // One paged query so cost tracks board size, not backlog size.
-  const collectPriorities = Effect.fn("github.projectPriorities")(function* (
-    repo: GitHubRepoRef,
-    source: GitHubPrioritySource,
-  ) {
-    return yield* withPaginationDeadline(
-      collectPriorityPages(repo, source, source.field ?? defaultPriorityField),
-    );
   });
 
   const collectClosingReferencePages: (
@@ -765,6 +764,15 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       return yield* withPaginationDeadline(collectIssuePages(repo));
     }),
+    listPriorityFields: Effect.fn("github.listPriorityFields")(function* (repo: GitHubRepoRef) {
+      const json = yield* fetchJson(repo, orgPath(repo, "/issue-fields")).pipe(
+        Effect.mapError((error) => priorityFieldReadError(repo, error)),
+      );
+      const fields = yield* Effect.mapError(decodeIssueFields(json), toUnavailable);
+      return fields
+        .filter((field) => field.data_type === "single_select")
+        .map(({ id, name }) => ({ id, name }) satisfies GitHubPriorityField);
+    }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
       const json = yield* fetchJson(repo, repoPath(repo, openPullsPath(repo, headBranch)));
       const references = yield* pullReferences(repo, headBranch);
@@ -797,7 +805,6 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     }),
     listReviewComments,
     listReviews,
-    projectPriorities: collectPriorities,
     listCheckRuns: (repo: GitHubRepoRef, sha: string) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/commits/${sha}/check-runs?per_page=100`));
