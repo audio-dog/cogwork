@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import type { HarnessName } from "@cogwork/contracts";
 import { ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
 import {
@@ -39,9 +38,13 @@ const codexAdapterVersion = "0.5.3";
 const codexVersionRequirement = ">=0.149.0";
 const minimumCodexVersion = [0, 149, 0] as const;
 const codexReadinessDeadline = "5 seconds";
-const codexExecutableWithRepositoryHooks = `'${fileURLToPath(
-  new URL("./codex-with-repository-hooks", import.meta.url),
-).replaceAll("'", `'\\''`)}'`;
+const codexHookWrapper = `sub=$1
+shift
+if [ "$sub" = exec ]; then
+  exec codex "$sub" --dangerously-bypass-hook-trust "$@"
+fi
+exec codex "$sub" "$@"`;
+export const codexExecutableWithRepositoryHooks = `sh -c '${codexHookWrapper.replaceAll("'", `'\\''`)}' codex-with-repository-hooks`;
 const missingExecutablePattern = /ENOENT|EACCES|command not found/i;
 const missingLoginPattern = /codex login|not (?:logged|signed) in/i;
 const incompatibleVersionPattern = /incompatible|unsupported Codex|update Codex/i;

@@ -29,7 +29,13 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { type CodexRunnerOptions, codexRunner, defaultCodexModel, type MakeCodexAdapter } from "./harness";
+import {
+  type CodexRunnerOptions,
+  codexExecutableWithRepositoryHooks,
+  codexRunner,
+  defaultCodexModel,
+  type MakeCodexAdapter,
+} from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const freshSession = Schema.decodeSync(SessionId)("session-codex-fresh");
@@ -164,7 +170,7 @@ const gitFixtureEnvironment = {
 const fakeCodexExecutable = (arguments_ = "") =>
   `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${arguments_}`;
 
-const codexWithRepositoryHooks = new URL("./codex-with-repository-hooks", import.meta.url).pathname;
+const sourceWrapperPath = new URL("./codex-with-repository-hooks", import.meta.url).pathname;
 
 const fakeCodexWithRepositoryHooks = Effect.fn("test.fakeCodexWithRepositoryHooks")(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -173,7 +179,7 @@ const fakeCodexWithRepositoryHooks = Effect.fn("test.fakeCodexWithRepositoryHook
   const executable = path.join(directory, "codex");
   yield* fs.writeFileString(executable, `#!/bin/sh\nexec ${fakeCodexExecutable()} "$@"\n`);
   yield* fs.chmod(executable, 0o700);
-  return `PATH='${directory}':"$PATH" '${codexWithRepositoryHooks}'`;
+  return `PATH='${directory}':"$PATH" ${codexExecutableWithRepositoryHooks}`;
 });
 
 const makeTestAdapter: MakeCodexAdapter = (model, config) =>
@@ -348,6 +354,10 @@ describe("repository fixtures", () => {
 });
 
 describe("codexRunner", () => {
+  it("keeps the Hook wrapper independent of package files", () => {
+    assert.notInclude(codexExecutableWithRepositoryHooks, sourceWrapperPath);
+  });
+
   it.layer(services)((it) => {
     it.effect("suppresses the trust-bypass notice without failing the Run", () =>
       Effect.scoped(
