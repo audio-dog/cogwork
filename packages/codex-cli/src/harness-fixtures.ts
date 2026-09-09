@@ -56,7 +56,7 @@ const sessionStore: SessionStore.SessionStoreService = {
 
 const unexpected = () => Effect.die(new Error("unexpected service access"));
 
-const services = Layer.mergeAll(
+const harnessLayer = Layer.mergeAll(
   Layer.succeed(SessionStore.SessionStore, sessionStore),
   Layer.succeed(ContextAssembler.ContextAssembler, {
     assemble: unexpected,
@@ -320,6 +320,7 @@ export {
   fakeCodexExecutable,
   freshSession,
   gitFixtureEnvironment,
+  harnessLayer,
   initializeRepository,
   linkedWorktree,
   makeRequest,
@@ -329,7 +330,6 @@ export {
   runInRepository,
   runner,
   runOperation,
-  services,
   sessionHandles,
   sessionStore,
   structuredCapture,

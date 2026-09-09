@@ -15,6 +15,7 @@ import {
   createSandbox,
   fakeCodexExecutable,
   freshSession,
+  harnessLayer,
   initializeRepository,
   linkedWorktree,
   makeRequest,
@@ -23,7 +24,6 @@ import {
   runId,
   runInRepository,
   runner,
-  services,
   sessionHandles,
   sessionStore,
   structuredCapture,
@@ -31,7 +31,7 @@ import {
 } from "./harness-fixtures";
 
 describe("codexRunner execution", () => {
-  it.layer(services)((it) => {
+  it.layer(harnessLayer)((it) => {
     it.effect(
       "preserves native events, metered usage, and one structured result",
       () =>

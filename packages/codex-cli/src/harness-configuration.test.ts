@@ -16,13 +16,13 @@ import {
   fakeCodexExecutable,
   freshSession,
   gitFixtureEnvironment,
+  harnessLayer,
   initializeRepository,
   makeRequest,
   name,
   runInRepository,
   runner,
   runOperation,
-  services,
   structuredCapture,
 } from "./harness-fixtures";
 
@@ -45,7 +45,7 @@ describe("repository fixtures", () => {
 });
 
 describe("codexRunner configuration", () => {
-  it.layer(services)((it) => {
+  it.layer(harnessLayer)((it) => {
     it.effect("offers the host model catalog and honest native capabilities", () =>
       Effect.gen(function* () {
         const codex = runner();

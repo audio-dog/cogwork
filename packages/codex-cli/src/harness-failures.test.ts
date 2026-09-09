@@ -9,14 +9,14 @@ import {
   createSandbox,
   fakeCodexExecutable,
   freshSession,
+  harnessLayer,
   initializeRepository,
   makeRequest,
   runner,
-  services,
 } from "./harness-fixtures";
 
 describe("codexRunner failures", () => {
-  it.layer(services)((it) => {
+  it.layer(harnessLayer)((it) => {
     it.effect("classifies emitted Codex authentication errors after preserving the event", () =>
       Effect.scoped(
         Effect.gen(function* () {
