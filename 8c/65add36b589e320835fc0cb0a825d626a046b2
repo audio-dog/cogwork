@@ -1,0 +1,210 @@
+packages/engine/src/issue-tracker.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 17
+scripts/test-measure.mjs
+  s_a80a290ab889dc::t_d8ba449674d5af 2,25-28,30,32-40,54,58-59,68,71-75,80-81
+packages/engine/src/availability.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 15
+packages/engine/src/commands.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 109,115,122-123
+apps/cli/src/connection-commands.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 32-34,36,44,72-73,77,82-89,129-150,154,156,163,196,204
+apps/cli/src/login.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 7,158-160
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 72-77
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 29-30,74,81
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_a80a290ab889dc::t_d8ba449674d5af 229-258
+packages/engine/src/context-fs.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 11
+packages/engine/src/control-store-create.gen.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 14
+apps/cli/src/rpc.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 12,16,23-24,32,129-135,144-145,147-148,150-154,156-168,170-172,176,180-181,183,214-215,222,224-241,243-248,251,261-287,301-305,312-314,321,345,354
+packages/engine/src/github/index.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 2
+packages/claude-code/src/harness.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 419-421
+packages/engine/src/linear/host.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 34-37,39,44,48,52-56,89-99,107,118,146-147,165
+packages/engine/src/context-assembler.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 1-7,20-24,33,40-44,48,50-53,78-93,366-407,449
+packages/claude-code/src/harness.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 12,124
+packages/contracts/src/connection.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 28,33-40
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_a80a290ab889dc::t_d8ba449674d5af 28-29,31,38-109,125-126,186,226
+packages/engine/src/github/client.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 1,25,30,33-41,110-124,479-571
+  s_a80a290ab889dc::t_820a19e04d6bf7 572
+packages/engine/src/daemon.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 24,382,463-466,472-475
+packages/engine/src/commands.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 5,614-618,622,626
+packages/engine/src/harness.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 7,55
+packages/engine/src/read-model.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 143,148
+packages/engine/src/connection.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 5,12,14,50-80,237-496
+packages/engine/src/recovery.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 56,61
+packages/claude-code/CONTEXT.md
+  s_a80a290ab889dc::t_d8ba449674d5af 28
+packages/engine/src/registry.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 23,27,54,58-64,133,153-156,168-170,190-234,242,260,294,308-317,324-325,332,343,350,363,398,426-443,468,489-500,502-505,517,519-522,555,571-610,619-630,636-638,647,650,657,669,689-699,705,722,739-743,745,766-769,771-772,787-790,792,838-844,860,865
+apps/cli/src/credentials.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 1,11,13,66,122-138
+  s_a80a290ab889dc::t_e6a5976e31dc21 139-142
+packages/engine/src/connection.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 3,50-82,86,92-96,120,145,216-247,251,254-269
+packages/engine/src/engine.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 189,206,603
+apps/cli/CONTEXT.md
+  s_a80a290ab889dc::t_d8ba449674d5af 43
+apps/desktop/src/renderer/src/features/connection-form.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 29-31,53,60-66
+  s_a80a290ab889dc::t_1aa23f7c5b0dc5 67-68
+packages/contracts/src/connection.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 37-53
+  s_a80a290ab889dc::t_39176ac1401ea9 54
+apps/cli/src/rpc.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 4,6,11,16,58-71,196-266
+  s_a80a290ab889dc::t_5dacf158e0a574 267
+packages/engine/CONTEXT.md
+  s_a80a290ab889dc::t_d8ba449674d5af 33,93,155,159,227
+packages/engine/src/connection-verify.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 51,53,55
+packages/engine/src/external-harness-runtime.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 14,282
+packages/engine/src/github/cli-credential.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 1-231
+packages/engine/src/issue-tracker-router.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 16,27
+packages/contracts/src/workspace.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 3,40-62
+  s_a80a290ab889dc::t_08e8ad437d60dc 63
+packages/engine/src/scheduler.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 52,57
+packages/engine/src/coordination-tracker.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 132,179
+apps/cli/src/worktree-commands.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 3,9,11-13,35-37,53-58
+packages/engine/src/linear/client.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 485-486,493-494,498-503,524-531,634-638
+packages/engine/src/projector.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 12,26
+packages/engine/src/harness.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 20,169,262
+packages/engine/src/coordination-tracker.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 45,85
+.vscode/settings.json
+  s_a80a290ab889dc::t_d8ba449674d5af 5-6
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_a80a290ab889dc::t_d8ba449674d5af 14,18
+packages/engine/src/executor.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 26,134,139,180,185,198,203,210,215,222-231,240,242-250,254,410,415,513,1546,2174,2178,3204-3226
+  s_a80a290ab889dc::t_3387a5554112d3 3227-3228
+packages/engine/src/playbook.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 29
+packages/engine/src/external-harness-runtime.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 101,441-450,457-461,467,472-474,477-479,481,484-487,497-501,511
+packages/engine/src/github/provider.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 18,23,27-30,35-37,40,46,49-50,53-54,130,145-151,166,194,197,281-283,288-290
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_a80a290ab889dc::t_d8ba449674d5af 9
+packages/engine/src/comments.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 27
+packages/cursor-acp/src/harness.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 19,81
+packages/engine/src/testing/engine-test-layer.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 2,27
+packages/engine/src/linear/client.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 12-17,113-119,125,132,145-149,181-212
+  s_a80a290ab889dc::t_8abdb5b259bd25 213
+scripts/test-measure-summary.mjs
+  s_a80a290ab889dc::t_d8ba449674d5af 1-14
+apps/cli/src/credentials.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 1,8,155,157,161
+packages/engine/src/issue-tracker.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 112
+packages/engine/src/control-store-schema.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 159
+apps/cli/src/connection-commands.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 8-13,19,31,43,56,70,78-117
+packages/codex-cli/src/harness.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 364-365
+apps/cli/src/platform.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 332-356,643-660,872-873
+apps/desktop/src/renderer/src/features/workspace-registration.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 101,126
+packages/engine/src/github/github.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 158,210,216,221,238,243,253,258,267-280,657-684,687-690,696-707
+  s_a80a290ab889dc::t_6a636a3f31f5c5 708-709
+packages/engine/src/credential-store.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 75-77,120,183-187,217-221,352-371,379-382,424-428,451,481-486,488-489,501-502
+apps/cli/src/platform.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 200-202,286-290
+package.json
+  s_a80a290ab889dc::t_d8ba449674d5af 16
+packages/engine/src/observe.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 20
+packages/engine/src/mcp-skill.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 61
+packages/codex-cli/CONTEXT.md
+  s_a80a290ab889dc::t_d8ba449674d5af 52-56
+packages/engine/src/daemon-composition.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 28,56-68,147,178-182,186-187,204,252
+packages/engine/src/github/client.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 6,45-50,126-127,190,276,335,342-364,380-388,455-456,460-496,758-764,832,834-835
+packages/engine/src/github/host.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 15-21,28-31,33,37,40,50-52,55,82-87,95,97-98,108,110,135-137,151-153
+.github/workflows/pull-request.yml
+  s_a80a290ab889dc::t_d8ba449674d5af 20,33,48-59,64,81,101
+apps/cli/src/replay-commands.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 5,28-31,37-39,45-47,49,86,116-119
+packages/engine/src/github/cli-credential.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 1-130
+packages/engine/src/executor.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 32,42,241-242,362,368-375,624,1733,1762
+packages/engine/src/workspace-registry.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 16,26,30-76,120,123,144,165,174,189,208,225,229,231-316,318,320-341,343-571,607,648,683,690-691,707,715,737,758-761,768,778-781,792,809,816-817,850,890,954,995,1043
+packages/codex-cli/src/harness.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 242-250,376-415,596,600,612-646
+scripts/test-measure.test.mjs
+  s_a80a290ab889dc::t_d8ba449674d5af 1-96
+packages/engine/src/credential-store.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 9,42-65,67-76,113-123,127-183,356-394,513-521,578-594,820-828,921-931
+apps/desktop/src/renderer/src/features/connection-form.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 1,6,16,24-25,49,59-63
+packages/contracts/CONTEXT.md
+  s_a80a290ab889dc::t_d8ba449674d5af 29,33,126,140-141,290
+packages/engine/src/linear/linear.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 163
+packages/engine/src/provider-runner.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 3,212
+packages/engine/src/connection-verify.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 18,31-33,40
+packages/engine/src/run-plan.test.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 200,207,264
+packages/engine/src/context-assembler.ts
+  s_a80a290ab889dc::t_d8ba449674d5af 1,28,164,166-167,170-171,175-196,212-216,225-231,236-238,241,243-253
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8c65add36b589e320835fc0cb0a825d626a046b2",
+  "prompts": {},
+  "sessions": {
+    "s_a80a290ab889dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a082dd-3c5f-73b3-af09-4e70847ef44e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
