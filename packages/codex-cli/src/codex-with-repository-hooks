@@ -1,8 +1,0 @@
-#!/bin/sh
-sub=$1
-shift
-bypass=
-if [ "$sub" = exec ]; then
-  bypass=--dangerously-bypass-hook-trust
-fi
-exec codex "$sub" $bypass "$@"
