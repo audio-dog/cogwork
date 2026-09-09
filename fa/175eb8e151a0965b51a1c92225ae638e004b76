@@ -1,0 +1,175 @@
+packages/engine/src/commands.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 209
+packages/engine/src/retry-policy.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 1,123-133
+  s_66a0e441ad731e::t_586e4bf899487a 134
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 1-10,14-24,28-139,165,170,180,188,198-199,245,265-266,282,285-320
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 20
+packages/contracts/src/run-plan.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 8
+packages/codex-cli/CONTEXT.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 52-56
+packages/engine/src/external-harness-runtime.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 101,441-450,457-461,467,472-473,477-479,481,484-487,497-501,511
+packages/engine/src/linear/client.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 493-494,498-503,524-531,634-638
+packages/engine/src/github/client.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 119-120,268,349-354,695-697,715-721,725-727
+apps/cli/src/ledger.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 63,68-70,126,149,162,332-338
+packages/engine/src/git.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 57-58
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 54
+packages/engine/src/daemon-composition.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 49,164-168,172-173
+apps/cli/src/ledger.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 257-274
+packages/contracts/src/triage.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 64,68-75,80-98,151-184
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 3-7,12,16,35-88,117,124,131-132,140,149,154-158,160-162,170,174-178
+packages/engine/src/control-store-create.gen.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 12,14
+packages/engine/src/coordination-tracker.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 132
+packages/engine/src/playbook.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 69-81,119-123,280,285-288,301-303
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 72-77
+packages/engine/src/harness-overview.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 1,9,30-35,127,168,175-179,185,188-203,208,210-216,218-232,234-266
+packages/engine/src/linear/host.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 34-37,39,44,48,52-56,89-99,107,118,146-147,165
+packages/engine/src/recovery.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 60,80-86,423-434,499,503-508,993-1002,1004
+  s_66a0e441ad731e::t_02254a454adecf 1003,1005
+packages/engine/CONTEXT.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 33,45,93,155,215
+packages/engine/src/github/host.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 22-25,27,31,34,78-83,91,93-94,104,106,131-133,147-149
+packages/engine/src/github/github.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 158,220,224-225,228-231,241,256,265-278,436-470,655-682,685-688,694-706
+  s_66a0e441ad731e::t_056a41fa50112e 707
+packages/engine/src/read-model.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 147
+packages/engine/src/observe.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 69
+packages/engine/src/executor.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 25,63,101,103,183-192,198,206,933,936-946,955-957,979,1040-1122,1145-1149,1245,1666,1689-1690,1811-1819,1885,1889
+packages/contracts/src/workspace.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 3,40-62
+  s_66a0e441ad731e::t_25101c67b7bfbd 63
+packages/engine/src/source-control.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 40-44,59,62-66
+packages/codex-cli/src/harness.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 242-250,376-415,596,600,612-646
+package.json
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 16
+packages/codex-cli/src/harness.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 364-365
+packages/engine/src/retry-policy.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 1-5,29,49,64
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 26,30,33-37,217-264,281
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 9
+packages/contracts/CONTEXT.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 28,32,302,392
+packages/engine/src/harness.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 3-5,62,69,71,75-76,78,333,436-441
+packages/engine/src/worktree.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 3,49-56,64-73,82,85,91-94,106-109,134-150,492-621
+  s_66a0e441ad731e::t_ec9b472975ce05 622-623
+apps/cli/src/workspace-commands.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 47,59
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 10,18-21,40,56,76,89,91,93,124
+apps/cli/src/login.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 1-2,4,20,28-32,132-135,154-157,171-174,188-191
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 30
+docs/spec/settings-and-plugins.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 209-210
+packages/engine/src/coordination-tracker.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 45,85
+packages/engine/src/executor.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 72-76,80,137,182,199,210,331-347,396,539-543,565-566,571-573,815-816,854-865,871,1021,1025-1077,1090,1102,1489,1492-1496,2521-2650,2806-2896
+  s_66a0e441ad731e::t_ed37bcdb1c8820 2897
+packages/engine/src/playbook.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 60,102,202-203,215-216
+packages/engine/src/recovery.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 6,43-45,224-226,277
+packages/engine/src/event-publisher.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 246
+packages/claude-code/src/harness.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 323,419-421
+packages/engine/src/control-store-schema.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 124
+packages/engine/src/linear/linear.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 163
+packages/engine/src/github/client.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 100-114,138-171
+  s_66a0e441ad731e::t_1e86c2788cfec1 172
+packages/engine/src/registry.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 428
+packages/engine/src/run-ledger.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 31,58
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 57
+packages/engine/src/source-control.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 1-35
+packages/engine/src/worktree.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 2,105-118,282-315,380
+packages/contracts/src/run.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 64-66,86
+packages/contracts/src/triage.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 30,33-39,41-42,45-56,87-101
+.vscode/settings.json
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 5-6
+apps/cli/src/platform.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 780-791
+packages/contracts/src/harness.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 4,36-64,75-78
+packages/engine/src/linear/client.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 12-17,113-119,125,132,145-149,181-212
+  s_66a0e441ad731e::t_138cae38da98c9 213
+packages/engine/src/github/provider.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 22,26-29,34,47,51,55-67,131,146-152,167,195,198-200,282-284,289-291,294-299,302
+packages/engine/src/scheduler.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 56
+packages/engine/src/workspace-registry.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 293
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 1-7,45-46,54-56,58,60,65,106,113,133,139,141,160,164,172-173,176-177,179-182,188,190-191,212,226,237,257-258,354,357-360,373-382,388-391,418,449,453,469,472,485-487
+packages/engine/src/harness-overview.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 4,52,61-63,69-70
+packages/claude-code/CONTEXT.md
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 28
+apps/cli/src/platform.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 178-179
+packages/contracts/src/settings.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 68-70
+packages/engine/src/engine.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 118,223,237,251,994
+packages/engine/src/harness.test.ts
+  s_66a0e441ad731e::t_1c9e0f3b8d8855 199-200,206-218,225-226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fa175eb8e151a0965b51a1c92225ae638e004b76",
+  "prompts": {},
+  "sessions": {
+    "s_66a0e441ad731e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebc-6bc4-7961-840d-44c04273a080",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
