@@ -102,21 +102,20 @@ const makeRuntimeLayer = (environment: NodeJS.ProcessEnv) => {
   return Layer.mergeAll(supervisor, publisher, engineLoggerLayer);
 };
 
-const makeMainLayer = () =>
-  Layer.unwrap(
-    resolveDesktopEnvironment({ inherited: process.env, platform: process.platform }).pipe(
-      Effect.provide(childProcessSpawnerLayer),
-      Effect.provide(engineLoggerLayer),
-      Effect.map(makeRuntimeLayer),
-    ),
-  );
+const mainLayer = Layer.unwrap(
+  resolveDesktopEnvironment({ inherited: process.env, platform: process.platform }).pipe(
+    Effect.provide(childProcessSpawnerLayer),
+    Effect.provide(engineLoggerLayer),
+    Effect.map(makeRuntimeLayer),
+  ),
+);
 
 const bootstrap = () => {
   mkdirSync(diagnosticsDirectory, { recursive: true, mode: 0o700 });
   chmodSync(diagnosticsDirectory, 0o700);
   crashReporter.start({ uploadToServer: false });
   app.whenReady().then(async () => {
-    const runtime = ManagedRuntime.make(makeMainLayer());
+    const runtime = ManagedRuntime.make(mainLayer);
     app.on("before-quit", () => {
       control.quitting = true;
     });
