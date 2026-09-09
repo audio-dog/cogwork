@@ -36,6 +36,7 @@ export interface EngineSupervisorOptions {
   readonly awaitReachable: (socketPath: string) => Effect.Effect<void>;
   readonly terminateTimeout?: Duration.Input;
   readonly forceKillTimeout?: Duration.Input;
+  readonly profileCaptureTimeout?: Duration.Input;
 }
 
 interface EngineClose {
@@ -423,6 +424,7 @@ export function make(options: EngineSupervisorOptions) {
     const restartSchedule = Schedule.recurs(restartBudget);
     const terminateTimeout = options.terminateTimeout ?? defaultTerminateTimeout;
     const forceKillTimeout = options.forceKillTimeout ?? defaultForceKillTimeout;
+    const captureTimeout = options.profileCaptureTimeout ?? profileCaptureTimeout;
 
     const runChild = Effect.fn("EngineSupervisor.runChild")(function* (launched: Deferred.Deferred<void>) {
       yield* setStatus(status, "starting");
@@ -504,14 +506,17 @@ export function make(options: EngineSupervisorOptions) {
       start: lifecycle.withPermits(1)(startUnlocked()),
       stop: lifecycle.withPermits(1)(stopUnlocked()),
       captureProfile: (input: ProcessProfileInput) =>
-        profileCapture
-          .withPermits(1)(captureChildProfile(activeChild, profileRequestCounter)(input))
-          .pipe(
-            Effect.timeout(profileCaptureTimeout),
+        profileCapture.withPermits(1)(
+          captureChildProfile(
+            activeChild,
+            profileRequestCounter,
+          )(input).pipe(
+            Effect.timeout(captureTimeout),
             Effect.catchTag("TimeoutError", (cause) =>
               ProcessProfileError.make({ operation: "capture daemon profile", cause }),
             ),
           ),
+        ),
     };
   });
 }

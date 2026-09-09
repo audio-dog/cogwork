@@ -404,35 +404,40 @@ describe("EngineSupervisor", () => {
     });
   });
 
-  it("serializes concurrent profile captures", async () => {
+  it("gives each serialized profile capture its full timeout", async () => {
     const child = new FakeChild();
     child.onSend = (message) =>
-      Effect.sync(() => {
-        const request = Schema.decodeUnknownSync(ProcessProfileRequest)(message);
-        queueMicrotask(() =>
-          child.respond({
-            _tag: "ProcessProfileCompleted",
-            requestId: request.requestId,
-            path: `/diagnostics/${request.requestId}.cpuprofile`,
+      Effect.sleep("600 millis").pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            const request = Schema.decodeUnknownSync(ProcessProfileRequest)(message);
+            child.respond({
+              _tag: "ProcessProfileCompleted",
+              requestId: request.requestId,
+              path: `/diagnostics/${request.requestId}.cpuprofile`,
+            });
           }),
-        );
-      });
+        ),
+      );
 
-    await withSupervisor(options({ spawn: () => child }), async (runtime, supervisor) => {
-      await runtime.runPromise(supervisor.start);
-      const input = {
-        _tag: "CpuProfile" as const,
-        directory: "/diagnostics",
-        durationMillis: 0,
-      };
+    await withSupervisor(
+      options({ profileCaptureTimeout: "1 second", spawn: () => child }),
+      async (runtime, supervisor) => {
+        await runtime.runPromise(supervisor.start);
+        const input = {
+          _tag: "CpuProfile" as const,
+          directory: "/diagnostics",
+          durationMillis: 0,
+        };
 
-      const paths = await Promise.all([
-        runtime.runPromise(supervisor.captureProfile(input)),
-        runtime.runPromise(supervisor.captureProfile(input)),
-      ]);
+        const paths = await Promise.all([
+          runtime.runPromise(supervisor.captureProfile(input)),
+          runtime.runPromise(supervisor.captureProfile(input)),
+        ]);
 
-      expect(paths).toEqual(["/diagnostics/1234:0.cpuprofile", "/diagnostics/1234:1.cpuprofile"]);
-    });
+        expect(paths).toEqual(["/diagnostics/1234:0.cpuprofile", "/diagnostics/1234:1.cpuprofile"]);
+      },
+    );
   });
 
   it("fails profile capture when the request write fails", async () => {
