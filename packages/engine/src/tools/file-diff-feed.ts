@@ -462,6 +462,7 @@ type SourcedWatchEvent = FileSystem.WatchEvent & SourceIdentity;
 type SourcedSandboxEvent = SandboxFileEvent & SourceIdentity;
 type SourcedFileDiff = FileDiff & SourceIdentity;
 type FingerprintState = {
+  readonly pollingActive: boolean;
   readonly generation: number;
   readonly fingerprints: ReadonlyMap<string, string>;
   readonly pathGenerations: ReadonlyMap<string, number>;
@@ -525,7 +526,7 @@ const advanceFingerprintGeneration = Effect.fn("Tools.advanceFileDiffFingerprint
     );
     return [
       { paths, pathGenerations },
-      { generation, fingerprints, pathGenerations },
+      { ...previous, generation, fingerprints, pathGenerations },
     ];
   });
 });
@@ -581,9 +582,14 @@ const continueWithPolling = (
   stop?: Effect.Effect<void>,
 ) =>
   Stream.fromEffect(
-    Effect.logWarning("native file watcher failed; continuing with polling", {
-      cause: Cause.pretty(cause),
-    }).pipe((effect) => pollingContext(sandbox, "polling", effect)),
+    Ref.update(state, (previous) => ({ ...previous, pollingActive: true })).pipe(
+      Effect.andThen(
+        Effect.logWarning("native file watcher failed; continuing with polling", {
+          cause: Cause.pretty(cause),
+        }),
+      ),
+      (effect) => pollingContext(sandbox, "polling", effect),
+    ),
   ).pipe(Stream.drain, Stream.concat(pollingWorktreeEvents(sandbox, baseSha, state, stop)));
 
 const retainConfiguredEvents = Effect.fn("Tools.retainConfiguredFileDiffEvents")(function* (
@@ -603,14 +609,30 @@ const logPollingStepFailure = Effect.fn("Tools.logPollingFileDiffStepFailure")(
     }).pipe((effect) => pollingContext(sandbox, "polling", effect)),
 );
 
+const recoverPollingStep = <A>(
+  state: Ref.Ref<FingerprintState>,
+  sandbox: WorktreeSandbox,
+  error: ToolError,
+  fallback: A,
+) =>
+  Ref.get(state).pipe(
+    Effect.flatMap(({ pollingActive }) => {
+      if (!pollingActive) return Effect.fail(error);
+      return logPollingStepFailure(sandbox, error).pipe(Effect.map(() => fallback));
+    }),
+  );
+
 const filterConfiguredEvents = Effect.fn("Tools.filterConfiguredFileDiffEvents")(
-  (sandbox: WorktreeSandbox, baseSha: string, events: ReadonlyArray<SourcedWatchEvent>) => {
-    if (!events.some(({ source }) => source === "polling")) {
-      return retainConfiguredEvents(sandbox, baseSha, events);
-    }
+  (
+    sandbox: WorktreeSandbox,
+    baseSha: string,
+    state: Ref.Ref<FingerprintState>,
+    events: ReadonlyArray<SourcedWatchEvent>,
+  ) => {
+    const source = events.some((event) => event.source === "polling") ? "polling" : "native";
     return retainConfiguredEvents(sandbox, baseSha, events).pipe(
-      Effect.catch((error) => logPollingStepFailure(sandbox, error).pipe(Effect.map(() => []))),
-      (effect) => pollingContext(sandbox, "polling", effect),
+      Effect.catch((error) => recoverPollingStep(state, sandbox, error, [])),
+      (effect) => pollingContext(sandbox, source, effect),
     );
   },
 );
@@ -633,14 +655,12 @@ const attachSource =
 const computeSourcedFileDiff = Effect.fn("Tools.computeSourcedFileDiff")(function* (
   sandbox: WorktreeSandbox,
   baseSha: string,
+  state: Ref.Ref<FingerprintState>,
   sourced: SourcedSandboxEvent,
 ) {
-  if (sourced.source === "native") {
-    return yield* computeFileDiff(sandbox, baseSha, sourced).pipe(Effect.map(attachSource(sourced)));
-  }
   return yield* computeFileDiff(sandbox, baseSha, sourced).pipe(
     Effect.map(attachSource(sourced)),
-    Effect.catch((error) => logPollingStepFailure(sandbox, error).pipe(Effect.map(() => null))),
+    Effect.catch((error) => recoverPollingStep(state, sandbox, error, null)),
     (effect) => pollingContext(sandbox, sourced.source, effect),
   );
 });
@@ -670,6 +690,7 @@ export const watchWorktreeDiffs = (
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const state = yield* Ref.make<FingerprintState>({
+        pollingActive: false,
         generation: 0,
         fingerprints: new Map(),
         pathGenerations: new Map(),
@@ -684,7 +705,7 @@ export const watchWorktreeDiffs = (
         ),
         Stream.filter((event) => !ignored(event.path)),
         Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
-        Stream.mapEffect((events) => filterConfiguredEvents(sandbox, baseSha, events)),
+        Stream.mapEffect((events) => filterConfiguredEvents(sandbox, baseSha, state, events)),
         Stream.flatMap(Stream.fromIterable),
         debounceByPath,
         Stream.mapEffect((event) =>
@@ -693,7 +714,7 @@ export const watchWorktreeDiffs = (
           ),
         ),
         Stream.filter((event) => event !== null),
-        Stream.mapEffect((event) => computeSourcedFileDiff(sandbox, baseSha, event)),
+        Stream.mapEffect((event) => computeSourcedFileDiff(sandbox, baseSha, state, event)),
         Stream.filter((event) => event !== null),
         Stream.mapEffect((event) =>
           dedupeWithFingerprints(state, event).pipe((effect) =>
