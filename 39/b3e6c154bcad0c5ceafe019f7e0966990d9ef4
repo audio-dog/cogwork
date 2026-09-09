@@ -1,0 +1,28 @@
+apps/cli/src/performance-health.ts
+  s_e8b39c832cbe56::t_c487b6a3e4cc76 14-20,45,47,60-62,66-73,94-98
+  s_5bcda3d0545c1b::t_a34ac0a5176b25 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "39b3e6c154bcad0c5ceafe019f7e0966990d9ef4",
+  "prompts": {},
+  "sessions": {
+    "s_5bcda3d0545c1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08772-ca43-70c3-a712-f8b4fcafe310",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e8b39c832cbe56": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087db-c632-77b1-93bf-92101f0df387",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
