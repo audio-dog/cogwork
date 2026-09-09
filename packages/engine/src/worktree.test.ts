@@ -233,6 +233,7 @@ describe("Worktree.ensure", () => {
       const addFailure = new GitError({
         command: "worktree add 13-worktree-lifecycle",
         message: "branch is already checked out",
+        retryable: true,
       });
       const manager = yield* Effect.provide(
         Worktree.make,
@@ -327,6 +328,7 @@ describe("Worktree.ensure", () => {
       const failure = yield* Effect.flip(manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item));
 
       assert.strictEqual(failure._tag, "WorktreeOperationInProgressError");
+      assert.isFalse(failure.retryable);
       assert.include(failure.message, "branch 13-worktree-lifecycle");
       assert.include(failure.message, "merge");
       assert.include(failure.message, "src/a.ts, src/b.ts");
@@ -378,11 +380,13 @@ describe("Worktree.ensure", () => {
         rebaseFailure: new GitError({
           command: "rebase origin/13-worktree-lifecycle",
           message: "CONFLICT (content): Merge conflict in src/index.ts",
+          retryable: true,
         }),
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
       const failure = yield* Effect.flip(manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item));
       assert.strictEqual(failure?._tag, "WorktreeDivergedError");
+      assert.isFalse(failure?.retryable);
       assert.include(failure?.message ?? "", "2 local commits");
       assert.include(failure?.message ?? "", "5 remote commits");
       assert.include(failure?.message ?? "", "Merge conflict");
@@ -403,6 +407,7 @@ describe("Worktree.ensure", () => {
           command: "rebase origin/13-worktree-lifecycle",
           message: "timed out after 5 minutes",
           reason: "timeout",
+          retryable: true,
         }),
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
@@ -495,6 +500,7 @@ describe("Worktree.pullRequestReadiness", () => {
       command: "fetch origin",
       message: "git fetch origin timed out",
       reason: "timeout",
+      retryable: true,
     });
     return Effect.gen(function* () {
       const manager = yield* ReadinessWorktree;

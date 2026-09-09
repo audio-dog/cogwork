@@ -52,7 +52,12 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
       connectionCredentials: contents.connectionCredentials,
     }).pipe(
       Effect.mapError(
-        () => new CredentialStore.CredentialError({ account, message: `could not serialize ${filePath}` }),
+        () =>
+          new CredentialStore.CredentialError({
+            account,
+            message: `could not serialize ${filePath}`,
+            retryable: false,
+          }),
       ),
     );
     yield* fs.makeDirectory(directory, { recursive: true, mode: directoryMode }).pipe(
@@ -64,6 +69,7 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
           new CredentialStore.CredentialError({
             account,
             message: `could not write ${filePath} (${cause.reason._tag})`,
+            retryable: false,
           }),
       ),
     );
@@ -75,6 +81,7 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
       return yield* new CredentialStore.CredentialError({
         account,
         message: `${filePath} could not be read; refusing to overwrite it`,
+        retryable: false,
       });
     }
     return contents;

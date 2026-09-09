@@ -385,6 +385,7 @@ describe("Connection verification", () => {
                           ControlStoreFailure.make({
                             operation: "establish Connection",
                             message: "busy",
+                            retryable: true,
                           }),
                         );
                       }

@@ -17,7 +17,8 @@ const statusQuery = '.hosts["github.com"][] | select(.active == true and .state 
 const accountStatusQuery = (account: string) =>
   `.hosts["github.com"][] | select((.login | ascii_downcase) == ${JSON.stringify(account.toLowerCase())} and .state == "success") | .login`;
 
-const failure = (account: string, message: string) => new CredentialError({ account, message });
+const failure = (account: string, message: string) =>
+  new CredentialError({ account, message, retryable: false });
 
 const processFailure = (account: string, error: PlatformError.PlatformError | CredentialError) => {
   if (error._tag === "CredentialError") return error;

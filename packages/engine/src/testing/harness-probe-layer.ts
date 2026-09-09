@@ -13,6 +13,7 @@ const refusingContextAssembler = Layer.succeed(ContextAssembler, {
       new ContextAssemblerError({
         source: "harnessProbeTestLayer",
         message: "a harness probe does not assemble a run context",
+        retryable: false,
       }),
     ),
   cleanup: () => Effect.void,

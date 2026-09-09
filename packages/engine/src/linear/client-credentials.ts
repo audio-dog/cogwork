@@ -37,7 +37,8 @@ const capacity = 32;
 const keyOf = (account: CredentialAccount, ref: ClientCredentialsRef) =>
   new GrantKey({ account: account.key, clientId: ref.clientId, secretEnv: ref.secretEnv });
 
-const failure = (key: GrantKey, message: string) => new CredentialError({ account: key.account, message });
+const failure = (key: GrantKey, message: string) =>
+  new CredentialError({ account: key.account, message, retryable: false });
 
 const secretOf = Effect.fn("linear.clientCredentials.secret")(function* (key: GrantKey) {
   const configured = yield* Effect.orElseSucceed(Config.redacted(key.secretEnv), () => Redacted.make(""));
