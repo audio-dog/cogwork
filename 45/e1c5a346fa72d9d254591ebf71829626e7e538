@@ -1,0 +1,19 @@
+docs/research/file-diff-feed-batching-measurement.md
+  s_4238d8091b2c62::t_3f815c07b983ad 15-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "45e1c5a346fa72d9d254591ebf71829626e7e538",
+  "prompts": {},
+  "sessions": {
+    "s_4238d8091b2c62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "08c47ac6-6093-450d-8d7f-b4ee42f1a5eb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
