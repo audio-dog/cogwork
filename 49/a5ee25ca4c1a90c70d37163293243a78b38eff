@@ -1,0 +1,25 @@
+packages/engine/package.json
+  s_d8d73824e17678::t_098b4fd8c2f655 10
+packages/engine/src/control-store.test.ts
+  s_d8d73824e17678::t_803780f2fd6f11 267,269,271,274-276
+  s_d8d73824e17678::t_098b4fd8c2f655 83-84,88,200,202,205-206,208,230,268,270,321,346,374,424-426,431,560,861
+  s_d8d73824e17678::t_c8051bf3c4ac3a 80-82,86,228,266,319,344,372,423,558,859
+AGENTS.md
+  s_d8d73824e17678::t_098b4fd8c2f655 41-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "49a5ee25ca4c1a90c70d37163293243a78b38eff",
+  "prompts": {},
+  "sessions": {
+    "s_d8d73824e17678": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0884a-d4ca-7f73-9415-152677bcef9a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
