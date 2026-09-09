@@ -599,6 +599,7 @@ export const make = Effect.gen(function* () {
         new RunPlanAssemblyError({
           message: `RunPlan: ${cause instanceof Error ? cause.message : String(cause)}`,
           cause,
+          retryable: true,
         }),
     });
     return { ...assembly, session, resolved } satisfies AcceptedOperation;
