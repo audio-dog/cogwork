@@ -1,0 +1,28 @@
+apps/desktop/src/main/daemon-bridge.ts
+  s_99cf67931e2ba2::t_eac0b264593135 2,4,11
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_99cf67931e2ba2::t_eac0b264593135 6
+  s_99cf67931e2ba2::t_4d39577ddf1e64 5,52-56,58-60,62-67
+  s_99cf67931e2ba2::t_feb7c63f21869e 10,19,25
+  s_99cf67931e2ba2::t_25ef51c978e50c 7
+apps/desktop/src/main/wait-for-socket.ts
+  s_99cf67931e2ba2::t_3d770386c13292 5,22
+  s_99cf67931e2ba2::t_eac0b264593135 1,7-14,23-26
+  s_99cf67931e2ba2::t_62fa5a8f8b61ba 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "efcf7e09a47dc4b7db4979524a281b6c499779ea",
+  "prompts": {},
+  "sessions": {
+    "s_99cf67931e2ba2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087df-24b5-7862-8072-0c8f8592a965",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
