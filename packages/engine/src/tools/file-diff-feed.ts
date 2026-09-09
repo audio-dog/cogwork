@@ -16,13 +16,22 @@ export { FILE_DIFF_EVENT };
 export const fileDiffExecDuration = Metric.timer("cogwork_file_diff_git_diff_exec_duration", {
   description: "Time spent executing git diff for settled file events.",
 });
+export const fileDiffSettledEvents = Metric.counter("cogwork_file_diff_settled_events_total", {
+  description: "Settled file events entering diff computation.",
+});
+export const fileDiffBatches = Metric.counter("cogwork_file_diff_batches_total", {
+  description: "Batches of settled file events submitted for diff computation.",
+});
+export const fileDiffGitChildren = Metric.counter("cogwork_file_diff_git_children_total", {
+  description: "Git child processes started to compute file diffs.",
+});
 const fileDiffMaxBytes = 64 * 1024;
 const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
 const diffCommandDeadline = "5 minutes";
 const diffDebounce = "250 millis";
 const debouncedPathConcurrency = 32;
 const diffBatchSize = 32;
-const diffBatchWindow = "50 millis";
+const diffBatchWindow = "250 millis";
 const configuredIgnoreBatchSize = 256;
 const configuredIgnoreWindow = "50 millis";
 const stderrMaxBytes = 4 * 1024;
@@ -56,10 +65,13 @@ const synthesizeAddPatch = (rel: string, content: string) => {
 };
 
 const exec = (sandbox: WorktreeSandbox, command: string): Effect.Effect<ExecResult, ToolError> =>
-  Effect.tryPromise({
-    try: (signal) => sandbox.handle.process.exec(command, { signal }),
-    catch: (cause) => toolError("exec-failed", `diff command failed: ${String(cause)}`),
-  }).pipe(
+  Metric.update(fileDiffGitChildren, 1).pipe(
+    Effect.andThen(
+      Effect.tryPromise({
+        try: (signal) => sandbox.handle.process.exec(command, { signal }),
+        catch: (cause) => toolError("exec-failed", `diff command failed: ${String(cause)}`),
+      }),
+    ),
     Effect.timeoutOrElse({
       duration: diffCommandDeadline,
       orElse: () => Effect.fail(toolError("timeout", `diff command timed out after ${diffCommandDeadline}`)),
@@ -228,10 +240,13 @@ const processCommand = <A>(run: () => Promise<A>) =>
 
 const acquireProcess = (sandbox: WorktreeSandbox, command: string) =>
   Effect.acquireRelease(
-    Effect.tryPromise({
-      try: (signal) => sandbox.handle.process.spawn(command, { signal }),
-      catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
-    }).pipe(
+    Metric.update(fileDiffGitChildren, 1).pipe(
+      Effect.andThen(
+        Effect.tryPromise({
+          try: (signal) => sandbox.handle.process.spawn(command, { signal }),
+          catch: (cause) => toolError("exec-failed", `process command failed: ${String(cause)}`),
+        }),
+      ),
       Effect.flatMap((process) =>
         Deferred.make<void>().pipe(Effect.map((completed) => ({ process, completed, exit: process.wait() }))),
       ),
@@ -554,10 +569,11 @@ interface BaseEntry {
   readonly directory: boolean;
 }
 
-const externalDiffConfigured = Effect.fn("Tools.externalDiffConfigured")(function* (
-  sandbox: WorktreeSandbox,
-  paths: ReadonlyArray<string>,
-) {
+const allPathsExternalDiff = "all-paths-external-diff";
+
+type ExternalDiffScope = typeof allPathsExternalDiff | ReadonlySet<string>;
+
+const externalDiffScope = Effect.fn("Tools.externalDiffScope")(function* (sandbox: WorktreeSandbox) {
   const hasEnvironmentExternalDiff = yield* Config.string("GIT_EXTERNAL_DIFF").pipe(
     Config.option,
     Effect.match({
@@ -565,11 +581,11 @@ const externalDiffConfigured = Effect.fn("Tools.externalDiffConfigured")(functio
       onSuccess: (value) => Option.isSome(value) && value.value !== "",
     }),
   );
-  if (hasEnvironmentExternalDiff) return true;
+  if (hasEnvironmentExternalDiff) return allPathsExternalDiff;
   const configCommand = "git config -z --get-regexp '^diff\\.(external|.*\\.command)$'";
   const config = yield* exec(sandbox, configCommand);
   if (config.exitCode !== 0 && config.exitCode !== 1) {
-    return yield* execFailure(configCommand, paths[0] ?? "", config);
+    return yield* execFailure(configCommand, "", config);
   }
   const settings = new Map(
     config.stdout
@@ -580,17 +596,23 @@ const externalDiffConfigured = Effect.fn("Tools.externalDiffConfigured")(functio
         return [entry.slice(0, separator), entry.slice(separator + 1)] satisfies [string, string];
       }),
   );
-  if (settings.has("diff.external")) return true;
-  const drivers = new Set(
-    [...settings.keys()].flatMap((key) => /^diff\.(.+)\.command$/.exec(key)?.[1] ?? []),
-  );
-  if (drivers.size === 0) return false;
+  if (settings.has("diff.external")) return allPathsExternalDiff;
+  return new Set([...settings.keys()].flatMap((key) => /^diff\.(.+)\.command$/.exec(key)?.[1] ?? []));
+});
+
+const externalDiffConfigured = Effect.fn("Tools.externalDiffConfigured")(function* (
+  sandbox: WorktreeSandbox,
+  scope: ExternalDiffScope,
+  paths: ReadonlyArray<string>,
+) {
+  if (scope === allPathsExternalDiff) return true;
+  if (scope.size === 0) return false;
   const attributeCommand = `git check-attr -z diff -- ${paths.map((path) => quote(`./${path}`)).join(" ")}`;
   const attributes = yield* exec(sandbox, attributeCommand);
   if (attributes.exitCode !== 0) {
     return yield* execFailure(attributeCommand, paths[0] ?? "", attributes);
   }
-  return attributes.stdout.split("\0").some((value, index) => index % 3 === 2 && drivers.has(value));
+  return attributes.stdout.split("\0").some((value, index) => index % 3 === 2 && scope.has(value));
 });
 
 const baseEntries = Effect.fn("Tools.baseEntries")(function* (
@@ -658,8 +680,11 @@ const computeFileDiff = Effect.fn("Tools.computeFileDiff")(function* (
 const computeFileDiffBatch = Effect.fn("Tools.computeFileDiffBatch")(function* (
   sandbox: WorktreeSandbox,
   baseSha: string,
+  externalDiff: Effect.Effect<ExternalDiffScope, ToolError>,
   events: ReadonlyArray<SandboxFileEvent>,
 ) {
+  yield* Metric.update(fileDiffBatches, 1);
+  yield* Metric.update(fileDiffSettledEvents, events.length);
   const computeIndividually = () =>
     Effect.forEach(events, (event) => computeFileDiff(sandbox, baseSha, event));
   if (events.length === 1 || baseSha === "") {
@@ -667,7 +692,8 @@ const computeFileDiffBatch = Effect.fn("Tools.computeFileDiffBatch")(function* (
   }
   const files = events.map((event) => ({ event, path: relTo(event.path) }));
   const paths = files.map(({ path }) => path);
-  if (yield* externalDiffConfigured(sandbox, paths)) return yield* computeIndividually();
+  const scope = yield* externalDiff;
+  if (yield* externalDiffConfigured(sandbox, scope, paths)) return yield* computeIndividually();
   const entries = yield* baseEntries(sandbox, baseSha, paths);
   const diffablePaths = files.filter(({ path }) => !entries.get(path)?.directory).map(({ path }) => path);
   const trackedDiffs = yield* streamBatchDiff(sandbox, baseSha, diffablePaths);
@@ -742,31 +768,31 @@ export const watchWorktreeDiffs = (
   stop?: Effect.Effect<void>,
 ): Stream.Stream<AgUiEvent, ToolError, FileSystem.FileSystem> =>
   Stream.unwrap(
-    FileSystem.FileSystem.pipe(
-      Effect.map((fs) =>
-        fs.watch(sandbox.root, { recursive: true }).pipe(
-          Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
-          // Not `Stream.haltWhen`: it polls between pulls, and the watcher's pull
-          // blocks while the checkout is idle, so an idle feed would never stop.
-          (source) =>
-            stop
-              ? Stream.merge(source, Stream.fromEffect(stop).pipe(Stream.drain), {
-                  haltStrategy: "either",
-                })
-              : source,
-          Stream.filter((event) => !ignored(event.path)),
-          Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
-          Stream.mapEffect((events) => configuredIgnoredEvents(sandbox, baseSha, events)),
-          Stream.flatMap(Stream.fromIterable),
-          debounceByPath,
-          Stream.mapEffect((event) => classifyWorktreeEvent(sandbox, event.path)),
-          Stream.filter((event) => event !== null),
-          Stream.groupedWithin(diffBatchSize, diffBatchWindow),
-          Stream.mapEffect((events) => computeFileDiffBatch(sandbox, baseSha, events)),
-          Stream.flatMap(Stream.fromIterable),
-          Stream.mapAccum(() => new Map<string, string>(), dedupeFileDiff),
-          Stream.map(({ path, diff }) => fileDiffEvent(path, diff)),
-        ),
-      ),
-    ),
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const externalDiff = yield* Effect.cached(externalDiffScope(sandbox));
+      return fs.watch(sandbox.root, { recursive: true }).pipe(
+        Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
+        // Not `Stream.haltWhen`: it polls between pulls, and the watcher's pull
+        // blocks while the checkout is idle, so an idle feed would never stop.
+        (source) =>
+          stop
+            ? Stream.merge(source, Stream.fromEffect(stop).pipe(Stream.drain), {
+                haltStrategy: "either",
+              })
+            : source,
+        Stream.filter((event) => !ignored(event.path)),
+        Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
+        Stream.mapEffect((events) => configuredIgnoredEvents(sandbox, baseSha, events)),
+        Stream.flatMap(Stream.fromIterable),
+        debounceByPath,
+        Stream.mapEffect((event) => classifyWorktreeEvent(sandbox, event.path)),
+        Stream.filter((event) => event !== null),
+        Stream.groupedWithin(diffBatchSize, diffBatchWindow),
+        Stream.mapEffect((events) => computeFileDiffBatch(sandbox, baseSha, externalDiff, events)),
+        Stream.flatMap(Stream.fromIterable),
+        Stream.mapAccum(() => new Map<string, string>(), dedupeFileDiff),
+        Stream.map(({ path, diff }) => fileDiffEvent(path, diff)),
+      );
+    }),
   );
