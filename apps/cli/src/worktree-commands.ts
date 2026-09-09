@@ -6,7 +6,7 @@ import * as Schema from "effect/Schema";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import { defaultControlStorePath } from "./paths";
-import { worktreeManagerLayer } from "./platform";
+import { gitLayer, worktreeManagerLayer } from "./platform";
 
 class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()("WorkspaceNotFound", {
   detail: Schema.String,
@@ -48,7 +48,12 @@ const runWorktree = <E>(
     const manager = yield* Worktree.WorktreeManager;
     yield* use(workspace, manager);
   }).pipe(
-    Effect.provide(Layer.mergeAll(worktreeManagerLayer, Registry.readOnlyLayerAt(options.controlStore))),
+    Effect.provide(
+      Layer.mergeAll(
+        worktreeManagerLayer,
+        Registry.readOnlyLayerAt(options.controlStore).pipe(Layer.provide(gitLayer)),
+      ),
+    ),
     Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
   );
 

@@ -213,11 +213,12 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -234,14 +235,14 @@ const missingTargetWorkspace: RegisteredWorkspace = {
 
 const trustsCursorBot: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-bots",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
     sourceControl: {
       type: "github",
-      repo: "owner/repo",
       botAllowlist: ["cursor[bot]"],
     },
   }),
@@ -249,11 +250,12 @@ const trustsCursorBot: RegisteredWorkspace = {
 
 const prioritizedWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-priority",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", priority: { project: 1 } },
+    issueTracker: { type: "github", priority: { project: 1 } },
   }),
 };
 

@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { globSync } from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 
 const countMarker = "cogwork-test-count:";
-const exec = promisify(execFile);
 const measuredTestStates = ["passed", "failed"];
 const scriptPath = fileURLToPath(import.meta.url);
 const vitestCountPattern = new RegExp(`${countMarker}(\\d+)`, "g");
 const nodeTestCountPattern = /^# tests (\d+)$/m;
 const turboTaskCountPattern = /Tasks:\s+\d+ successful, (\d+) total/;
+const defaultWorkspaceRoot = dirname(dirname(scriptPath));
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 const nodeTestPatterns = ["scripts/*.test.mjs"];
 const isMeasuredTest = (testCase) => measuredTestStates.includes(testCase.result().state);
@@ -26,26 +26,22 @@ export default class TestCountReporter {
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
-const execute = (file, args, workspaceRoot) =>
-  exec(file, args, {
-    cwd: workspaceRoot,
-    encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024,
+export const run = (file, args, workspaceRoot = defaultWorkspaceRoot) =>
+  new Promise((resolve, reject) => {
+    const stdout = [];
+    const child = spawn(file, args, {
+      cwd: workspaceRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (output) => {
+      stdout.push(output);
+      process.stderr.write(output);
+    });
+    child.stderr.pipe(process.stderr);
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ failed: code !== 0, stdout: stdout.join("") }));
   });
-
-const writeCapturedOutput = (result) => {
-  process.stderr.write(result?.stdout ?? "");
-  process.stderr.write(result?.stderr ?? "");
-};
-
-const run = async (file, args, workspaceRoot) => {
-  try {
-    return await execute(file, args, workspaceRoot);
-  } catch (error) {
-    writeCapturedOutput(error);
-    throw error;
-  }
-};
 
 const completedVitestRun = (output) => {
   const taskCount = output.match(turboTaskCountPattern)?.[1];
@@ -58,21 +54,18 @@ const completedTestRuns = {
   vitest: completedVitestRun,
 };
 
-export const recoverCompletedTestRun = (error, suite) => {
-  const output = { stdout: error?.stdout ?? "", stderr: error?.stderr ?? "" };
-  const completed = Number.isInteger(error?.code) && completedTestRuns[suite]?.(output.stdout);
-  if (completed) return output;
-  writeCapturedOutput(output);
-  throw error;
+const requireCompletedTestRun = (result, suite) => {
+  if (!result.failed || completedTestRuns[suite]?.(result.stdout)) return result;
+  throw new Error(`${suite} test run did not complete`);
 };
 
-const runMeasuredTests = async (file, args, workspaceRoot, suite) => {
-  try {
-    return await execute(file, args, workspaceRoot);
-  } catch (error) {
-    return recoverCompletedTestRun(error, suite);
-  }
+const requireSuccess = (result, label) => {
+  if (!result.failed) return result;
+  throw new Error(`${label} failed`);
 };
+
+const runMeasuredTests = async (file, args, workspaceRoot, suite, runTestCommand = run) =>
+  requireCompletedTestRun(await runTestCommand(file, args, workspaceRoot), suite);
 
 const vitestCount = (output) => {
   const counts = [...output.matchAll(vitestCountPattern)];
@@ -97,13 +90,16 @@ const requiredNodeTestArgs = (workspaceRoot) => {
   return nodeTestArgs(testFiles);
 };
 
-const runNodeTests = (workspaceRoot) =>
-  run(process.execPath, requiredNodeTestArgs(workspaceRoot), workspaceRoot);
+const runNodeTests = async (workspaceRoot) =>
+  requireSuccess(
+    await run(process.execPath, requiredNodeTestArgs(workspaceRoot), workspaceRoot),
+    "Root Node tests",
+  );
 
-export const runMeasuredNodeTests = (workspaceRoot) => {
+export const runMeasuredNodeTests = (workspaceRoot, runTestCommand = run) => {
   const testFiles = nodeTestFiles(workspaceRoot);
-  if (testFiles.length === 0) return Promise.resolve({ stdout: "# tests 0\n", stderr: "" });
-  return runMeasuredTests(process.execPath, nodeTestArgs(testFiles), workspaceRoot, "node");
+  if (testFiles.length === 0) return Promise.resolve({ failed: false, stdout: "# tests 0\n" });
+  return runMeasuredTests(process.execPath, nodeTestArgs(testFiles), workspaceRoot, "node", runTestCommand);
 };
 
 export const vitestTestArgs = (turboPath, reporterPath) => [
@@ -117,8 +113,7 @@ export const vitestTestArgs = (turboPath, reporterPath) => [
   `--reporter=${reporterPath}`,
 ];
 
-const measure = async (workspaceRoot) => {
-  const startedAt = performance.now();
+const runTestSuites = async (runTestCommand, workspaceRoot) => {
   const reporterPath = pathToFileURL(scriptPath).href;
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
   const vitest = await runMeasuredTests(
@@ -126,11 +121,41 @@ const measure = async (workspaceRoot) => {
     vitestTestArgs(turboPath, reporterPath),
     workspaceRoot,
     "vitest",
+    runTestCommand,
   );
-  const nodeTests = await runMeasuredNodeTests(workspaceRoot);
-  const durationMs = Math.round(performance.now() - startedAt);
-  const testCount = vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout);
-  console.log(JSON.stringify({ durationMs, testCount }));
+  const nodeTests = await runMeasuredNodeTests(workspaceRoot, runTestCommand);
+  return { nodeTests, vitest };
+};
+
+const buildMeasurement = (startedAt, { nodeTests, vitest }) => ({
+  durationMs: Math.round(performance.now() - startedAt),
+  testCount: vitestCount(vitest.stdout) + nodeTestCount(nodeTests.stdout),
+});
+
+const publishMeasurement = (measurement) => console.log(JSON.stringify(measurement));
+
+export const measureComparison = async (runTestCommand = run, workspaceRoot = defaultWorkspaceRoot) => {
+  const startedAt = performance.now();
+  const testSuites = await runTestSuites(runTestCommand, workspaceRoot);
+  const measurement = buildMeasurement(startedAt, testSuites);
+  publishMeasurement(measurement);
+  return measurement;
+};
+
+export const measure = async (runTestCommand = run, workspaceRoot = defaultWorkspaceRoot) => {
+  const startedAt = performance.now();
+  const testSuites = await runTestSuites(runTestCommand, workspaceRoot);
+  const tsxPath = fileURLToPath(import.meta.resolve("tsx/cli"));
+  const gitMeasurement = await runTestCommand(
+    process.execPath,
+    [tsxPath, "scripts/count-worktree-git-invocations.ts"],
+    workspaceRoot,
+  );
+  requireSuccess(gitMeasurement, "Git measurement");
+  const measurement = buildMeasurement(startedAt, testSuites);
+  publishMeasurement(measurement);
+  if (Object.values(testSuites).some(({ failed }) => failed)) process.exitCode = 1;
+  return measurement;
 };
 
 const main = async () => {
@@ -140,8 +165,9 @@ const main = async () => {
     process.stdout.write(result.stdout);
     return;
   }
-  if (!mode) return measure(process.cwd());
-  throw new Error("Usage: test-measure.mjs [--node-only]");
+  if (mode === "--comparison") return measureComparison(run, process.cwd());
+  if (!mode) return measure(run, process.cwd());
+  throw new Error("Usage: test-measure.mjs [--comparison|--node-only]");
 };
 
 if (isMain) {

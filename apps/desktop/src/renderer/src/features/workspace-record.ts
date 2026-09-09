@@ -14,7 +14,6 @@ export interface WorkspaceRecordDraft {
   readonly checkoutPath: string;
   readonly issueTrackerType: "github" | "linear";
   readonly issueTrackerConnectionId: string;
-  readonly issueTrackerRepo: string;
   readonly teams: string;
   readonly organization: string;
   readonly assigneeAllowlist: string;
@@ -29,7 +28,6 @@ export interface WorkspaceRecordDraft {
   readonly linearHistory: boolean;
   readonly sourceControlType: "none" | "github";
   readonly sourceControlConnectionId: string;
-  readonly sourceControlRepo: string;
   readonly sourceControlBotAllowlist: string;
   readonly worktreeRoot: string;
   readonly worktreeRemote: string;
@@ -46,7 +44,6 @@ export const emptyDraft: WorkspaceRecordDraft = {
   checkoutPath: "",
   issueTrackerType: "github",
   issueTrackerConnectionId: "unbound",
-  issueTrackerRepo: "",
   teams: "",
   organization: "",
   assigneeAllowlist: "",
@@ -61,7 +58,6 @@ export const emptyDraft: WorkspaceRecordDraft = {
   linearHistory: false,
   sourceControlType: "none",
   sourceControlConnectionId: "unbound",
-  sourceControlRepo: "",
   sourceControlBotAllowlist: "",
   worktreeRoot: "",
   worktreeRemote: "",
@@ -92,7 +88,6 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
     checkoutPath: record.checkoutPath,
     issueTrackerType: tracker.type === "linear" ? "linear" : "github",
     issueTrackerConnectionId: tracker.connectionId,
-    issueTrackerRepo: tracker.repo ?? "",
     teams: joined(tracker.teams),
     organization: tracker.organization ?? "",
     assigneeAllowlist: joined(tracker.assigneeAllowlist),
@@ -107,7 +102,6 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
     linearHistory: record.linearHistory,
     sourceControlType: sourceControl?.type === "github" ? "github" : "none",
     sourceControlConnectionId: sourceControl?.connectionId ?? "unbound",
-    sourceControlRepo: sourceControl?.repo ?? "",
     sourceControlBotAllowlist: joined(sourceControl?.botAllowlist),
     worktreeRoot: worktrees?.root ?? "",
     worktreeRemote: worktrees?.remote ?? "",
@@ -196,7 +190,6 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
       issueTracker: {
         type: draft.issueTrackerType,
         connectionId: draft.issueTrackerConnectionId,
-        repo: optional(draft.issueTrackerRepo),
         teams: list(draft.teams),
         organization: optional(draft.organization),
         assigneeAllowlist: list(draft.assigneeAllowlist),
@@ -209,7 +202,6 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
           ? {
               type: "github",
               connectionId: draft.sourceControlConnectionId,
-              repo: optional(draft.sourceControlRepo),
               botAllowlist: list(draft.sourceControlBotAllowlist),
             }
           : undefined,

@@ -26,7 +26,7 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
   Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
     ...over,
   });
 

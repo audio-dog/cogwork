@@ -106,21 +106,21 @@ const interruptionGate = Latch.makeUnsafe();
 const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
   checkoutPath: "/repos/acme",
-  issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/repo" },
+  issueTracker: { type: "github", connectionId: "github/acme" },
   linearHistory: false,
   concurrency: 2,
 });
 const acmeUpdate = Schema.decodeSync(WorkspaceUpdate)({
   name: "renamed acme",
-  issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/renamed" },
+  issueTracker: { type: "github", connectionId: "github/acme" },
   linearHistory: true,
   concurrency: 4,
 });
 const unboundRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "unbound",
   checkoutPath: "/repos/unbound",
-  issueTracker: { type: "github", repo: "acme/repo" },
-  sourceControl: { type: "github", repo: "acme/repo" },
+  issueTracker: { type: "github" },
+  sourceControl: { type: "github" },
 });
 const mismatchedRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "mismatch",
@@ -1485,7 +1485,6 @@ describe("Connection mutations", () => {
       sourceControl: {
         type: "github",
         connectionId: github,
-        repo: "acme/repo",
       },
     });
     const registries = Layer.mergeAll(

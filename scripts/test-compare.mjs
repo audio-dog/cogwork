@@ -238,7 +238,7 @@ const collectMeasurements = async (worktrees) => {
   const order = measurementOrder(rounds);
   for (const [index, side] of order.entries()) {
     process.stderr.write(`Measuring ${side}, run ${index + 1}/${order.length}\n`);
-    const result = await run(process.execPath, [measurementScriptPath], worktrees[side]);
+    const result = await run(process.execPath, [measurementScriptPath, "--comparison"], worktrees[side]);
     measurements[side].push(parseMeasurement(result.stdout));
   }
   return measurements;

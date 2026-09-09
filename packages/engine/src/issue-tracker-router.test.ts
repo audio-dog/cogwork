@@ -13,7 +13,7 @@ const id = Schema.decodeSync(WorkItemId);
 
 const workspaceOf = (
   name: string,
-  issueTracker: { readonly type: string; readonly repo?: string; readonly teams?: ReadonlyArray<string> },
+  issueTracker: { readonly type: string; readonly teams?: ReadonlyArray<string> },
 ): RegisteredWorkspace => ({
   source: `${name}.workspace.ts`,
   contributions: [],
@@ -24,7 +24,7 @@ const workspaceOf = (
   }),
 });
 
-const githubWorkspace = workspaceOf("gh", { type: "github", repo: "acme/app" });
+const githubWorkspace = workspaceOf("gh", { type: "github" });
 const linearWorkspace = workspaceOf("lin", { type: "linear", teams: ["AUD"] });
 
 type Recorded =

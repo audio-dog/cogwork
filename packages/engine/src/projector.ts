@@ -9,6 +9,7 @@ import type {
 
 export interface WorkspaceIssueTrackerBinding {
   readonly config: Pick<WorkspaceConfig, "name" | "issueTracker">;
+  readonly repository?: string;
 }
 
 export interface RegisteredWorkspace extends WorkspaceIssueTrackerBinding {
@@ -22,6 +23,7 @@ export interface RegisteredWorkspace extends WorkspaceIssueTrackerBinding {
 export interface RegisteredWorkspaceFailure extends WorkspaceFailureInfo {
   readonly issueTracker?: IssueTrackerConfig;
   readonly sourceControl?: SourceControlConfig;
+  readonly repository?: string;
   readonly workspaceLimit?: number;
 }
 
