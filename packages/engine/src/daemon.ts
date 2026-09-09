@@ -21,7 +21,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
-import type * as Path from "effect/Path";
+import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
@@ -379,6 +379,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerRequirements = Layer.mergeAll(
     Layer.effect(FileSystem.FileSystem, FileSystem.FileSystem),
+    Layer.effect(Path.Path, Path.Path),
     Layer.effect(HttpClient.HttpClient, HttpClient.HttpClient),
   );
   const base = Layer.mergeAll(
@@ -459,18 +460,19 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
     );
   yield* Effect.forEach(
     reconcilable,
-    ({ workspace, state }) =>
-      manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
-        Effect.tap((outcome) =>
-          Effect.logInfo("worktree maintenance", { workspace: workspace.config.name, ...outcome }),
-        ),
+    ({ workspace, state }) => {
+      const correlation = { workspace: workspace.config.name };
+      return manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
+        Effect.tap((outcome) => Effect.logInfo("worktree maintenance", outcome)),
         Effect.catchTag("GitError", (error) =>
           Effect.logWarning("worktree maintenance failed", {
-            workspace: workspace.config.name,
             message: error.message,
           }),
         ),
-      ),
+        Effect.annotateLogs(correlation),
+        Effect.annotateSpans(correlation),
+      );
+    },
     { discard: true },
   );
 });

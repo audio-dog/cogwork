@@ -471,7 +471,7 @@ const resolveGitWritablePaths = Effect.fn("ExternalHarnessRuntime.resolveGitWrit
         .pipe(Effect.orElseSucceed(() => "."));
       const common = yield* fs.realPath(path.resolve(gitDirectory, commonDirectory.trim()));
       return [gitDirectory, ...commonGitWritableEntries.map((entry) => path.join(common, entry))];
-    }).pipe(Effect.provide(Path.layer)),
+    }),
 );
 
 // A read-only Operation commits nothing, so it is granted nothing: Codex protects `<checkout>/.git`

@@ -41,6 +41,7 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -390,6 +391,7 @@ export const make = Effect.gen(function* () {
         ContextAssembler,
         CredentialStore,
         FileSystem.FileSystem,
+        Path.Path,
         HttpClient.HttpClient,
       ),
     ),
