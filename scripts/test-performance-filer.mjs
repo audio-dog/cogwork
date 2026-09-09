@@ -10,6 +10,7 @@ const signal = "test-suite-duration";
 const subsystem = "repository";
 const usage = "Usage: node scripts/test-performance-filer.mjs <comparison-report.json> <workflow-run-url>";
 const markerPattern = /<!--\s*cogwork:([^>]*)-->/g;
+const filingQueues = new WeakMap();
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
@@ -119,7 +120,7 @@ const filedToday = (issues, now) => {
   return issues.filter((issue) => issue.createdAt.slice(0, 10) === utcDay).length;
 };
 
-export const fileTestPerformanceRegression = async ({ report: input, runUrl, now = new Date() }, tracker) => {
+const fileTestPerformanceRegressionNow = async ({ report: input, runUrl, now = new Date() }, tracker) => {
   const report = requireReport(input);
   const normalizedRunUrl = normalizeRunUrl(runUrl);
   if (report.verdict !== "slower") return { action: "skipped", reason: report.verdict };
@@ -142,6 +143,20 @@ export const fileTestPerformanceRegression = async ({ report: input, runUrl, now
     labels: ["needs-triage", originLabel],
   });
   return { action: "created", number: created.number };
+};
+
+const afterSettled = (promise) =>
+  promise.then(
+    () => undefined,
+    () => undefined,
+  );
+
+export const fileTestPerformanceRegression = (input, tracker) => {
+  const result = (filingQueues.get(tracker) ?? Promise.resolve()).then(() =>
+    fileTestPerformanceRegressionNow(input, tracker),
+  );
+  filingQueues.set(tracker, afterSettled(result));
+  return result;
 };
 
 const runGh = (args, input) =>

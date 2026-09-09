@@ -139,6 +139,38 @@ describe("test-performance filer", () => {
     assert.equal(comments.length, 0);
   });
 
+  it("serializes concurrent filings for the same tracker", async () => {
+    const issues = [];
+    const comments = [];
+    const tracker = {
+      listSelfPerformanceIssues: async () => [...issues],
+      createIssue: async (issue) => {
+        const created = {
+          ...issue,
+          number: 500,
+          state: "open",
+          createdAt: now.toISOString(),
+          url: "https://github.com/colonylabs/cogwork/issues/500",
+        };
+        issues.push(created);
+        return created;
+      },
+      commentOnIssue: async (number, body) => comments.push({ number, body }),
+    };
+
+    const results = await Promise.all([
+      fileTestPerformanceRegression({ report: report(), runUrl, now }, tracker),
+      fileTestPerformanceRegression({ report: report({ ratio: 1.3 }), runUrl, now }, tracker),
+    ]);
+
+    assert.deepEqual(results, [
+      { action: "created", number: 500 },
+      { action: "commented", number: 500 },
+    ]);
+    assert.equal(issues.length, 1);
+    assert.equal(comments.length, 1);
+  });
+
   it("does nothing for faster or inconclusive verdicts", async () => {
     const faster = makeTracker();
     const inconclusive = makeTracker();
