@@ -114,23 +114,21 @@ const interruptionGate = Latch.makeUnsafe();
 const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
   checkoutPath: "/repos/acme",
-  gitRemote: "git@github.com:acme/repo.git",
-  issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/repo" },
+  issueTracker: { type: "github", connectionId: "github/acme" },
   linearHistory: false,
   concurrency: 2,
 });
 const acmeUpdate = Schema.decodeSync(WorkspaceUpdate)({
   name: "renamed acme",
-  gitRemote: "git@github.com:acme/renamed.git",
-  issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/renamed" },
+  issueTracker: { type: "github", connectionId: "github/acme" },
   linearHistory: true,
   concurrency: 4,
 });
 const unboundRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "unbound",
   checkoutPath: "/repos/unbound",
-  issueTracker: { type: "github", repo: "acme/repo" },
-  sourceControl: { type: "github", repo: "acme/repo" },
+  issueTracker: { type: "github" },
+  sourceControl: { type: "github" },
 });
 const mismatchedRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "mismatch",
@@ -216,6 +214,7 @@ const emptyCalls: TrackerCalls = { handBack: [], reclassify: [], handOff: [], re
 const providerStub = Layer.succeed(SourceControlProvider, {
   observe: () => Effect.succeed(new Map<WorkItemId, PrSignals>()),
   comment: () => Effect.void,
+  findOpenPullRequest: () => Effect.succeed(null),
   openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 });
 
@@ -1493,7 +1492,6 @@ describe("Connection mutations", () => {
       sourceControl: {
         type: "github",
         connectionId: github,
-        repo: "acme/repo",
       },
     });
     const registries = Layer.mergeAll(

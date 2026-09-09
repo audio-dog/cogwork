@@ -27,29 +27,33 @@ import {
 } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
-  readonly actorUserId: string | null;
   readonly roleLabels: ReturnType<typeof roleLabelsFor>;
   readonly assigneeAllowlist: ReadonlyArray<string> | null;
 }
 
+interface AuthenticatedLinearTarget extends LinearTarget {
+  readonly actorUserId: string;
+}
+
 interface LinearRef {
-  readonly target: LinearTarget;
+  readonly target: AuthenticatedLinearTarget;
   readonly issueId: string;
 }
 
 const toCoordinationComment =
-  (actorUserId: string | null) =>
+  (actorUserId: string) =>
   (comment: RawComment): CoordinationComment<string> => ({
     id: comment.id,
     body: comment.body,
-    isBot: actorUserId !== null && comment.authorId === actorUserId,
+    isBot: comment.authorId === actorUserId,
     createdAtMillis: comment.createdAtMillis,
   });
 
-// With no configured bot user the daemon cannot tell its own comments apart, so the scope stays null
-// and observe reads no coordination state rather than trusting an unattributable comment.
-const coordinationScope = ({ actorUserId }: LinearTarget) =>
-  actorUserId === null ? null : { actorUserId, ledgerMarker, proposalMarker: triageProposalAttribution };
+const coordinationScope = ({ actorUserId }: AuthenticatedLinearTarget) => ({
+  actorUserId,
+  ledgerMarker,
+  proposalMarker: triageProposalAttribution,
+});
 
 // One target per configured team, all sharing one credential account so a single token covers the
 // whole workspace; only the team key differs, which is what routes a write to its owning team.
@@ -59,7 +63,6 @@ const targetsFor = (workspace: WorkspaceIssueTrackerBinding): ReadonlyArray<Line
   if (account === null) return [];
   const base = {
     account,
-    actorUserId: source.actorUserId ?? null,
     roleLabels: roleLabelsFor(source.roleLabels),
     assigneeAllowlist: source.assigneeAllowlist ?? null,
   };
@@ -83,7 +86,17 @@ const notLinear = (workspace: WorkspaceIssueTrackerBinding) =>
   });
 
 export const makeHost = (client: LinearClientService): CoordinationHost<LinearRef, string> => {
-  const commentsFor = (target: LinearTarget, issueId: string): CommentHost<string> => ({
+  const authenticatedTargetsFor = Effect.fn("linear.authenticatedTargetsFor")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+  ) {
+    const targets = targetsFor(workspace);
+    const first = targets.at(0);
+    if (!first) return [];
+    const actorUserId = yield* client.authenticatedUserId(first);
+    return targets.map((target) => ({ ...target, actorUserId }) satisfies AuthenticatedLinearTarget);
+  });
+
+  const commentsFor = (target: AuthenticatedLinearTarget, issueId: string): CommentHost<string> => ({
     comments: client
       .listComments(target, issueId)
       .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.actorUserId)))),
@@ -91,7 +104,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
     create: (body) => client.createComment(target, issueId, body),
   });
 
-  const listItem = (target: LinearTarget) =>
+  const listItem = (target: AuthenticatedLinearTarget) =>
     Effect.fn("linear.listItem")(function* (issue: ObservedRawIssue) {
       const id = yield* itemId(issue.identifier);
       return {
@@ -102,7 +115,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
         assignees: issue.assignees,
         claimLabeled: hasClaimLabel(issue.labels),
         openBlockers: issue.openBlockers,
-        claimIdentity: Coordination.defaultClaimant,
+        acceptedClaimants: [Coordination.defaultClaimant],
         priority: issue.priority,
         comments: issue.coordinationComments.map(toCoordinationComment(target.actorUserId)),
       } satisfies ListedItem<string>;
@@ -130,7 +143,8 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
       return target === undefined ? null : rateLimitScopeOf(target.account.tokenEnv);
     },
     list: Effect.fn("linear.list")(function* (workspace: WorkspaceIssueTrackerBinding) {
-      const perTeam = yield* Effect.forEach(targetsFor(workspace), (target) =>
+      const targets = yield* authenticatedTargetsFor(workspace);
+      const perTeam = yield* Effect.forEach(targets, (target) =>
         Effect.flatMap(
           client.observeIssues(target, coordinationScope(target), target.assigneeAllowlist),
           (issues) => Effect.forEach(issues, listItem(target)),
@@ -148,7 +162,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
       ),
     ),
     resolve: Effect.fn("linear.resolve")(function* (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) {
-      const targets = targetsFor(workspace);
+      const targets = yield* authenticatedTargetsFor(workspace);
       const [first, ...rest] = targets;
       if (first === undefined) {
         return yield* notLinear(workspace);

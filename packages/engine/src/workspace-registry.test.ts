@@ -13,6 +13,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { controlStoreClientLayer } from "./control-store";
+import { Git, GitError, type GitService } from "./git";
 import * as Registry from "./registry";
 
 const registration = Schema.decodeSync(WorkspaceRegistration);
@@ -22,9 +23,56 @@ const githubRegistration = (name: string, checkoutPath: string) =>
   registration({
     name,
     checkoutPath,
-    issueTracker: { type: "github", repo: "acme/repo" },
+    issueTracker: { type: "github" },
     linearHistory: false,
   });
+
+const gitService = (remoteUrl: GitService["remoteUrl"]) =>
+  ({
+    fetch: () => Effect.die("unused"),
+    remoteBranchExists: () => Effect.die("unused"),
+    addWorktree: () => Effect.die("unused"),
+    removeWorktree: () => Effect.die("unused"),
+    listWorktrees: () => Effect.die("unused"),
+    fastForward: () => Effect.die("unused"),
+    divergence: () => Effect.die("unused"),
+    operationInProgress: () => Effect.die("unused"),
+    rebase: () => Effect.die("unused"),
+    remoteUrl,
+  }) satisfies GitService;
+
+const gitLayerFor = (remoteUrl: GitService["remoteUrl"]) => Layer.succeed(Git, gitService(remoteUrl));
+
+const testGitLayer = gitLayerFor(() => Effect.succeed("git@github.com:acme/repo.git"));
+
+class RemoteUrls extends Context.Service<RemoteUrls, Ref.Ref<Map<string, string>>>()(
+  "@cogwork/engine/workspace-registry.test/RemoteUrls",
+) {
+  static readonly layer = Layer.effect(RemoteUrls, Ref.make(new Map<string, string>()));
+}
+
+const remoteUrlsGitLayer = Layer.effect(
+  Git,
+  Effect.gen(function* () {
+    const remotes = yield* RemoteUrls;
+    return gitService((checkoutPath, remote) =>
+      Ref.get(remotes).pipe(
+        Effect.flatMap((values) => {
+          const remoteUrl = values.get(`${checkoutPath}:${remote}`);
+          return remoteUrl
+            ? Effect.succeed(remoteUrl)
+            : Effect.die(`unexpected remote ${remote} at ${checkoutPath}`);
+        }),
+      ),
+    );
+  }),
+);
+
+const registryLayerAt = (storePath: string, userAgentsDir?: string) =>
+  Registry.layerAt(storePath, userAgentsDir).pipe(Layer.provide(testGitLayer));
+
+const readOnlyRegistryLayerAt = (storePath: string) =>
+  Registry.readOnlyLayerAt(storePath).pipe(Layer.provide(testGitLayer));
 
 const signalRead = (started: Deferred.Deferred<void>, release: Deferred.Deferred<void>) =>
   Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release)));
@@ -69,9 +117,10 @@ layer(NodeServices.layer)((it) => {
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-health-" });
       const storePath = path.join(root, "control.db");
       const checkoutPath = yield* makeCheckout(root, "unavailable");
-      yield* Layer.build(Registry.layerAt(storePath));
+      yield* Layer.build(registryLayerAt(storePath));
       const registryContext = yield* Layer.build(
         Registry.layer(storePath, `${storePath}.agents`).pipe(
+          Layer.provide(testGitLayer),
           Layer.provide(controlStoreClientLayer(storePath)),
         ),
       );
@@ -92,7 +141,7 @@ layer(NodeServices.layer)((it) => {
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-duplicate-" });
       const storePath = path.join(root, "control.db");
       const checkoutPath = yield* makeCheckout(root, "duplicate");
-      const registryContext = yield* Layer.build(Registry.layerAt(storePath));
+      const registryContext = yield* Layer.build(registryLayerAt(storePath));
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
       const first = yield* management.register(githubRegistration("first", checkoutPath));
@@ -113,7 +162,7 @@ layer(NodeServices.layer)((it) => {
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-read-" });
       const storePath = path.join(root, "control.db");
       const checkoutPath = yield* makeCheckout(root, "read-only");
-      const writableContext = yield* Layer.build(Registry.layerAt(storePath));
+      const writableContext = yield* Layer.build(registryLayerAt(storePath));
       const management = Context.get(writableContext, Registry.WorkspaceManagement);
       const change = yield* management.register(githubRegistration("read-only", checkoutPath));
       if (change._tag === "Failed") return assert.fail("expected registration to succeed");
@@ -122,7 +171,7 @@ layer(NodeServices.layer)((it) => {
         (sql) => sql`CREATE TABLE read_only_probe (id INTEGER PRIMARY KEY)`,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
 
-      const readOnlyContext = yield* Layer.build(Registry.readOnlyLayerAt(storePath));
+      const readOnlyContext = yield* Layer.build(readOnlyRegistryLayerAt(storePath));
       const reloaded = Context.get(readOnlyContext, Registry.WorkspaceRegistry);
 
       assert.isDefined(Registry.findWorkspace(yield* reloaded.state, change.workspace.config.name));
@@ -137,7 +186,7 @@ layer(NodeServices.layer)((it) => {
       const storePath = path.join(root, "control.db");
       const checkoutPath = path.join(root, "settings");
       yield* fs.makeDirectory(checkoutPath, { recursive: true });
-      const context = yield* Layer.build(Registry.layerAt(storePath));
+      const context = yield* Layer.build(registryLayerAt(storePath));
       const management = Context.get(context, Registry.WorkspaceManagement);
       const change = yield* management.register(
         registration({
@@ -156,7 +205,7 @@ layer(NodeServices.layer)((it) => {
       );
 
       if (change._tag === "Failed") return assert.fail("expected registration to succeed");
-      const reloadedContext = yield* Layer.build(Registry.layerAt(storePath));
+      const reloadedContext = yield* Layer.build(registryLayerAt(storePath));
       const [reloaded] = (yield* Context.get(reloadedContext, Registry.WorkspaceRegistry).state).workspaces;
 
       assert.deepStrictEqual(reloaded?.config.worktrees, {
@@ -173,22 +222,353 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("registers a workspace without repository settings", () =>
+  it.effect("derives GitHub repositories from the selected checkout remote", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-bare-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-repository-" });
       const storePath = path.join(root, "control.db");
-      const checkoutPath = path.join(root, "bare");
-      yield* fs.makeDirectory(checkoutPath, { recursive: true });
-      const context = yield* Layer.build(Registry.layerAt(storePath));
+      const githubCheckout = yield* makeCheckout(root, "github");
+      const linearCheckout = yield* makeCheckout(root, "linear");
+      const reboundCheckout = yield* makeCheckout(root, "rebound");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(
+        remotes,
+        new Map([
+          [`${githubCheckout}:upstream`, "git@github.com:colonylabs/cogwork.git"],
+          [`${linearCheckout}:origin`, "https://github.com/colonylabs/linear-work.git"],
+          [`${reboundCheckout}:upstream`, "ssh://git@github.com/colonylabs/rebound.git"],
+        ]),
+      );
+      const context = yield* Layer.build(Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+      const registry = Context.get(context, Registry.WorkspaceRegistry);
+
+      const github = yield* management.register(
+        registration({
+          name: "github",
+          checkoutPath: githubCheckout,
+          issueTracker: { type: "github" },
+          worktrees: { remote: "upstream" },
+        }),
+      );
+      const linear = yield* management.register(
+        registration({
+          name: "linear",
+          checkoutPath: linearCheckout,
+          issueTracker: { type: "linear", teams: ["ENG"] },
+          sourceControl: { type: "github" },
+        }),
+      );
+
+      if (github._tag === "Failed" || linear._tag === "Failed") {
+        return assert.fail("expected registrations to succeed");
+      }
+      assert.strictEqual(github.workspace.repository, "colonylabs/cogwork");
+      assert.strictEqual(linear.workspace.repository, "colonylabs/linear-work");
+
+      yield* Ref.update(remotes, (values) =>
+        new Map(values).set(`${githubCheckout}:upstream`, "https://github.com/colonylabs/refreshed.git"),
+      );
+      yield* registry.refresh;
+      assert.strictEqual(
+        Registry.findWorkspace(yield* registry.state, github.workspace.config.name)?.repository,
+        "colonylabs/refreshed",
+      );
+
+      const rebound = yield* management.rebind(github.workspace.config.name, reboundCheckout);
+      if (rebound._tag === "Failed") return assert.fail("expected re-bind to succeed");
+      assert.strictEqual(rebound.workspace.repository, "colonylabs/rebound");
+
+      const stored = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql<{ readonly issueTracker: string; readonly sourceControl: string | null }>`
+          SELECT issue_tracker AS issueTracker, source_control AS sourceControl
+          FROM workspaces
+          ORDER BY name
+        `,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.isFalse(stored.some((row) => row.issueTracker.includes('"repo"')));
+      assert.isFalse(stored.some((row) => row.sourceControl?.includes('"repo"') ?? false));
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
+  it.effect.each([
+    {
+      name: "https-user",
+      remoteUrl: "https://x-access-token@github.com/colonylabs/https-user.git",
+      repository: "colonylabs/https-user",
+    },
+    {
+      name: "ssh-port",
+      remoteUrl: "ssh://git@ssh.github.com:443/colonylabs/ssh-port.git",
+      repository: "colonylabs/ssh-port",
+    },
+  ])("accepts the official GitHub $name remote form", ({ name, remoteUrl, repository }) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: `cogwork-workspace-registry-${name}-` });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, name);
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, remoteUrl]]));
+      const context = yield* Layer.build(Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+      const change = yield* management.register(githubRegistration(name, checkoutPath));
+
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+      assert.strictEqual(change.workspace.repository, repository);
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
+  it.effect("keeps the last derived repository when refresh cannot derive the remote", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-refresh-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "refresh");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@github.com:acme/repo.git"]]));
+      const context = yield* Layer.build(Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+      const registry = Context.get(context, Registry.WorkspaceRegistry);
+      const change = yield* management.register(githubRegistration("refresh", checkoutPath));
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/repo.git"]]));
+      const state = yield* registry.refresh;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(state, change.workspace.config.name)?.repository,
+        "acme/repo",
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
+  it.effect("keeps the last derived repository after restart when the remote cannot be derived", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-restart-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "restart");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@github.com:acme/repo.git"]]));
+      const initialContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const management = Context.get(initialContext, Registry.WorkspaceManagement);
+      const change = yield* management.register(githubRegistration("restart", checkoutPath));
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/repo.git"]]));
+      const restartedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const restartedRegistry = Context.get(restartedContext, Registry.WorkspaceRegistry);
+      const state = yield* restartedRegistry.state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(state, change.workspace.config.name)?.repository,
+        "acme/repo",
+      );
+
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@github.com:acme/moved.git"]]));
+      yield* restartedRegistry.refresh;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/moved.git"]]));
+      const movedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const movedState = yield* Context.get(movedContext, Registry.WorkspaceRegistry).state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(movedState, change.workspace.config.name)?.repository,
+        "acme/moved",
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
+  it.effect("persists a repository derived by a failed re-bind", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-failed-rebind-" });
+      const storePath = path.join(root, "control.db");
+      const firstCheckout = yield* makeCheckout(root, "first");
+      const secondCheckout = yield* makeCheckout(root, "second");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(
+        remotes,
+        new Map([
+          [`${firstCheckout}:origin`, "git@github.com:acme/old.git"],
+          [`${secondCheckout}:origin`, "git@github.com:acme/new.git"],
+        ]),
+      );
+      const initialContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const management = Context.get(initialContext, Registry.WorkspaceManagement);
+      const registered = yield* management.register(githubRegistration("failed re-bind", firstCheckout));
+      if (registered._tag === "Failed") return assert.fail("expected registration to succeed");
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces
+          SET mcp_skills = '{ not json'
+          WHERE id = ${registered.workspace.config.name}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+
+      const rebound = yield* management.rebind(registered.workspace.config.name, secondCheckout);
+      if (rebound._tag !== "Failed") return assert.fail("expected re-bind to fail");
+      assert.strictEqual(rebound.failure.repository, "acme/new");
+
+      yield* Ref.set(remotes, new Map([[`${secondCheckout}:origin`, "git@gitlab.com:acme/new.git"]]));
+      const restartedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const state = yield* Context.get(restartedContext, Registry.WorkspaceRegistry).state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(state, registered.workspace.config.name)?.repository,
+        "acme/new",
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
+  it.effect("seeds the repository fallback from a legacy workspace row", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-upgrade-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "upgrade");
+      const remotes = yield* RemoteUrls;
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@github.com:acme/current.git"]]));
+      const initialContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const management = Context.get(initialContext, Registry.WorkspaceManagement);
+      const change = yield* management.register(githubRegistration("upgrade", checkoutPath));
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces
+          SET last_repository = NULL,
+              issue_tracker = ${JSON.stringify({ type: "github", connectionId: "unbound", repo: "acme/legacy" })}
+          WHERE id = ${change.workspace.config.name}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/current.git"]]));
+      const upgradedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const upgradedState = yield* Context.get(upgradedContext, Registry.WorkspaceRegistry).state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(upgradedState, change.workspace.config.name)?.repository,
+        "acme/legacy",
+      );
+
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces
+          SET issue_tracker = ${JSON.stringify({ type: "github", connectionId: "unbound" })}
+          WHERE id = ${change.workspace.config.name}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      const reloadedContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
+      );
+      const reloadedState = yield* Context.get(reloadedContext, Registry.WorkspaceRegistry).state;
+
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(reloadedState, change.workspace.config.name)?.repository,
+        "acme/legacy",
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
+  it.effect("reports a required remote that is not GitHub", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-remote-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "unsupported");
+      const unsupportedGit = gitLayerFor(() => Effect.succeed("git@gitlab.com:colonylabs/cogwork.git"));
+      const context = yield* Layer.build(Registry.layerAt(storePath).pipe(Layer.provide(unsupportedGit)));
       const management = Context.get(context, Registry.WorkspaceManagement);
 
-      const change = yield* management.register(githubRegistration("bare", checkoutPath));
+      const change = yield* management.register(githubRegistration("unsupported", checkoutPath));
 
-      if (change._tag === "Failed")
-        return assert.fail(`expected registration to succeed: ${change.failure.message}`);
-      assert.isUndefined(change.workspace.config.worktrees);
+      if (change._tag === "Registered") return assert.fail("expected registration to fail");
+      assert.include(change.failure.message, 'Remote "origin"');
+      assert.include(change.failure.message, "not a supported GitHub SSH or HTTPS remote");
+    }),
+  );
+
+  it.effect("rejects insecure or malformed GitHub remotes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({
+        prefix: "cogwork-workspace-registry-invalid-remote-",
+      });
+      const storePath = path.join(root, "control.db");
+      const cases = [
+        { name: "http", remoteUrl: "http://github.com/colonylabs/cogwork.git" },
+        { name: "query", remoteUrl: "https://github.com/colonylabs/cogwork.git?token=secret" },
+        { name: "fragment", remoteUrl: "https://github.com/colonylabs/cogwork.git#readme" },
+      ] as const;
+      const remotes = yield* RemoteUrls;
+      const checkouts = yield* Effect.forEach(cases, ({ name }) => makeCheckout(root, name));
+      yield* Ref.set(
+        remotes,
+        new Map(cases.map(({ remoteUrl }, index) => [`${checkouts[index]}:origin`, remoteUrl])),
+      );
+      const context = yield* Layer.build(Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+      const changes = yield* Effect.forEach(cases, ({ name }, index) =>
+        management.register(githubRegistration(name, checkouts[index] ?? "")),
+      );
+
+      assert.deepStrictEqual(
+        changes.map((change) => change._tag),
+        ["Failed", "Failed", "Failed"],
+      );
+      assert.isTrue(
+        changes.every(
+          (change) =>
+            change._tag === "Failed" &&
+            change.failure.message.includes("not a supported GitHub SSH or HTTPS remote"),
+        ),
+      );
+    }).pipe(Effect.provide(RemoteUrls.layer)),
+  );
+
+  it.effect("reports a missing required remote", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-missing-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "missing");
+      const missingGit = gitLayerFor((_checkoutPath, remote) =>
+        Effect.fail(
+          new GitError({
+            command: `git remote get-url ${remote}`,
+            message: `No such remote '${remote}'`,
+          }),
+        ),
+      );
+      const context = yield* Layer.build(Registry.layerAt(storePath).pipe(Layer.provide(missingGit)));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+
+      const change = yield* management.register(githubRegistration("missing", checkoutPath));
+
+      if (change._tag === "Registered") return assert.fail("expected registration to fail");
+      assert.include(change.failure.message, 'Cannot read GitHub repository from remote "origin"');
+      assert.include(change.failure.message, "No such remote 'origin'");
     }),
   );
 
@@ -224,7 +604,7 @@ layer(NodeServices.layer)((it) => {
       });
       const fileSystemLayer = Layer.succeed(FileSystem.FileSystem, gatedFileSystem);
       const registryContext = yield* Layer.build(
-        Registry.layerAt(storePath).pipe(Layer.provide(fileSystemLayer)),
+        registryLayerAt(storePath).pipe(Layer.provide(fileSystemLayer)),
       );
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
@@ -265,7 +645,7 @@ layer(NodeServices.layer)((it) => {
       });
       const fileSystemLayer = Layer.succeed(FileSystem.FileSystem, gatedFileSystem);
       const registryContext = yield* Layer.build(
-        Registry.layerAt(storePath).pipe(Layer.provide(fileSystemLayer)),
+        registryLayerAt(storePath).pipe(Layer.provide(fileSystemLayer)),
       );
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
@@ -290,7 +670,7 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("mints identities, keeps clone hints non-identifying, and reloads from the Control store", () =>
+  it.effect("mints distinct identities for duplicate display names and reloads from the Control store", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -300,16 +680,15 @@ layer(NodeServices.layer)((it) => {
       const secondCheckout = yield* makeCheckout(root, "second");
       const invalidCheckout = yield* makeCheckout(root, "invalid");
 
-      const registryContext = yield* Layer.build(Registry.layerAt(storePath));
+      const registryContext = yield* Layer.build(registryLayerAt(storePath));
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
       const firstChange = yield* management.register(
         registration({
           name: "first clone",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
-          issueTracker: { type: "github", repo: "acme/repo" },
-          sourceControl: { type: "github", repo: "acme/repo" },
+          issueTracker: { type: "github" },
+          sourceControl: { type: "github" },
           linearHistory: false,
           worktrees: {
             root: path.join(root, "worktrees"),
@@ -325,8 +704,7 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "first clone",
           checkoutPath: secondCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
-          issueTracker: { type: "github", repo: "acme/repo" },
+          issueTracker: { type: "github" },
           linearHistory: false,
         }),
       );
@@ -334,7 +712,7 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "invalid stored settings",
           checkoutPath: invalidCheckout,
-          issueTracker: { type: "github", repo: "acme/repo" },
+          issueTracker: { type: "github" },
           linearHistory: false,
           concurrency: 3,
         }),
@@ -356,6 +734,7 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(Registry.findWorkspace(state, first.config.name), first);
       assert.strictEqual(Registry.findWorkspace(state, second.config.name), second);
       assert.strictEqual(first.workspaceLimit, 2);
+      assert.strictEqual(first.repository, "acme/repo");
       assert.deepStrictEqual(first.config.worktrees, {
         root: path.join(root, "worktrees"),
         remote: "upstream",
@@ -376,14 +755,17 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(failure?.workspaceLimit, 3);
       const liveIssueTracker = Registry.findWorkspaceIssueTracker(refreshedState, invalidName);
       assert.strictEqual(liveIssueTracker?.type, "github");
-      assert.strictEqual(liveIssueTracker?.repo, "acme/repo");
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(refreshedState, invalidName)?.repository,
+        "acme/repo",
+      );
       assert.strictEqual(refreshedState.failures.length, 1);
       assert.deepStrictEqual(
         Registry.findWorkspace(refreshedState, first.config.name)?.config.worktrees?.setup,
         ["pnpm install"],
       );
 
-      const reloadedContext = yield* Layer.build(Registry.layerAt(storePath));
+      const reloadedContext = yield* Layer.build(registryLayerAt(storePath));
       const reloaded = Context.get(reloadedContext, Registry.WorkspaceRegistry);
       const reloadedState = yield* reloaded.state;
 
@@ -393,7 +775,10 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(reloadedState.failures[0]?.workspaceLimit, 3);
       const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloadedState, invalidName);
       assert.strictEqual(reloadedIssueTracker?.type, "github");
-      assert.strictEqual(reloadedIssueTracker?.repo, "acme/repo");
+      assert.strictEqual(
+        Registry.findWorkspaceIssueTrackerBinding(reloadedState, invalidName)?.repository,
+        "acme/repo",
+      );
       assert.deepStrictEqual(
         reloadedState.workspaces.map((workspace) => workspace.config.displayName).sort(),
         ["first clone", "first clone"],
@@ -404,7 +789,7 @@ layer(NodeServices.layer)((it) => {
           registration({
             name: "relative",
             checkoutPath: ".",
-            issueTracker: { type: "github", repo: "acme/repo" },
+            issueTracker: { type: "github" },
             linearHistory: false,
           }),
         )
@@ -421,16 +806,15 @@ layer(NodeServices.layer)((it) => {
       const storePath = path.join(root, "control.db");
       const firstCheckout = yield* makeCheckout(root, "first");
       const secondCheckout = yield* makeCheckout(root, "second");
-      const registryContext = yield* Layer.build(Registry.layerAt(storePath));
+      const registryContext = yield* Layer.build(registryLayerAt(storePath));
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
       const registered = yield* management.register(
         registration({
           name: "moving workspace",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/repo.git",
-          issueTracker: { type: "github", repo: "acme/repo" },
-          sourceControl: { type: "github", repo: "acme/repo" },
+          issueTracker: { type: "github" },
+          sourceControl: { type: "github" },
           linearHistory: true,
           concurrency: 2,
         }),
@@ -462,9 +846,8 @@ layer(NodeServices.layer)((it) => {
 
       const renamedUpdate = workspaceUpdate({
         name: "renamed workspace",
-        gitRemote: "git@github.com:acme/renamed.git",
         issueTracker: { type: "linear", teams: ["ENG"] },
-        sourceControl: { type: "github", repo: "acme/renamed" },
+        sourceControl: { type: "github" },
         mcpSkills: [],
         linearHistory: false,
         worktrees: { baseBranch: "trunk", setup: ["pnpm install"] },
@@ -482,12 +865,10 @@ layer(NodeServices.layer)((it) => {
         registration({
           name: "renamed workspace",
           checkoutPath: firstCheckout,
-          gitRemote: "git@github.com:acme/renamed.git",
           issueTracker: { type: "linear", connectionId: "unbound", teams: ["ENG"] },
           sourceControl: {
             type: "github",
             connectionId: "unbound",
-            repo: "acme/renamed",
           },
           mcpSkills: [],
           linearHistory: false,
@@ -506,7 +887,7 @@ layer(NodeServices.layer)((it) => {
       if (rebound._tag === "Failed") return assert.fail("expected re-bind to succeed");
       assert.strictEqual(rebound.workspace.config.name, workspace);
       assert.strictEqual(rebound.workspace.config.checkoutPath, secondCheckout);
-      assert.strictEqual(rebound.workspace.config.sourceControl?.repo, "acme/renamed");
+      assert.strictEqual(rebound.workspace.repository, "acme/repo");
       assert.strictEqual(rebound.workspace.workspaceLimit, 4);
       assert.isTrue(yield* fs.exists(privateTree));
       const overlaysAfterRebind = yield* Effect.flatMap(
@@ -571,7 +952,7 @@ layer(NodeServices.layer)((it) => {
           file.startsWith(privateRoot) ? Effect.fail(failure) : fs.remove(file, options),
       });
       const registryContext = yield* Layer.build(
-        Registry.layerAt(storePath).pipe(
+        registryLayerAt(storePath).pipe(
           Layer.provide(Layer.succeed(FileSystem.FileSystem, failingFileSystem)),
         ),
       );
@@ -613,7 +994,7 @@ layer(NodeServices.layer)((it) => {
       yield* fs.makeDirectory(path.dirname(ignoredSkill), { recursive: true });
       yield* fs.writeFileString(ignoredSkill, "unregistered Skill");
 
-      const registryContext = yield* Layer.build(Registry.layerAt(storePath));
+      const registryContext = yield* Layer.build(registryLayerAt(storePath));
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
       const firstChange = yield* management.register(githubRegistration("first", firstCheckout));
@@ -661,7 +1042,7 @@ layer(NodeServices.layer)((it) => {
       yield* fs.makeDirectory(path.dirname(userSkill), { recursive: true });
       yield* fs.writeFileString(userSkill, "user Skill");
 
-      const registryContext = yield* Layer.build(Registry.layerAt(storePath, userAgentsDir));
+      const registryContext = yield* Layer.build(registryLayerAt(storePath, userAgentsDir));
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
       const change = yield* management.register(githubRegistration("user-tree", checkoutPath));
       if (change._tag === "Failed") return assert.fail("expected registration to succeed");

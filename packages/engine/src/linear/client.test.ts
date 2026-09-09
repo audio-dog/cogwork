@@ -9,7 +9,12 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
-import { CredentialError, type CredentialSource, CredentialStore } from "../credential-store";
+import {
+  CredentialError,
+  type CredentialIdentity,
+  type CredentialSource,
+  CredentialStore,
+} from "../credential-store";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
 
 const ref: LinearTeamRef = {
@@ -105,20 +110,26 @@ class CredentialInvalidations extends Context.Service<
   static readonly layer = Layer.effect(CredentialInvalidations, Ref.make<ReadonlyArray<string>>([]));
 }
 
-const stubCredentials = (token: string | null, source: CredentialSource) =>
+const stubCredentials = (
+  credential: {
+    readonly token: string;
+    readonly source: CredentialSource;
+    readonly identity: CredentialIdentity | null;
+  } | null,
+) =>
   Layer.effect(
     CredentialStore,
     Effect.map(CredentialInvalidations, (invalidated) => ({
       resolveSource: () => Effect.die("unexpected credential source resolution"),
       bearerToken: (account) =>
-        token === null
+        credential === null
           ? Effect.fail(
               new CredentialError({
                 account: account.key,
                 message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
               }),
             )
-          : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
+          : Effect.succeed({ ...credential, token: Redacted.make(credential.token) }),
       persist: () => Effect.void,
       invalidate: (account) => Ref.update(invalidated, (accounts) => [...accounts, account.key]),
       providerKey: (account) =>
@@ -131,7 +142,11 @@ const stubCredentials = (token: string | null, source: CredentialSource) =>
   ).pipe(Layer.provideMerge(CredentialInvalidations.layer));
 
 const withToken = (token: string | null = "test-key", source: CredentialSource = "env") =>
-  Effect.provide(clientLayer.pipe(Layer.provideMerge(stubCredentials(token, source))));
+  Effect.provide(
+    clientLayer.pipe(
+      Layer.provideMerge(stubCredentials(token === null ? null : { token, source, identity: null })),
+    ),
+  );
 
 const claimLabelName = "cogwork:claimed";
 
@@ -161,6 +176,39 @@ const teamBundle = {
 describe("linear client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it.effect("reads the authenticated user id for an API key", () => {
+    const fetchStub = stubLinear(() => ({ body: { data: { viewer: { id: "api-user" } } } }));
+
+    return Effect.gen(function* () {
+      const client = yield* LinearClient;
+      assert.strictEqual(yield* client.authenticatedUserId(ref), "api-user");
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken());
+  });
+
+  it.effect("reuses the stored OAuth identity without another request", () => {
+    const fetchStub = vi.fn<typeof globalThis.fetch>();
+    vi.stubGlobal("fetch", fetchStub);
+
+    return Effect.gen(function* () {
+      const client = yield* LinearClient;
+      assert.strictEqual(yield* client.authenticatedUserId(ref), "stored-user");
+      assert.strictEqual(fetchStub.mock.calls.length, 0);
+    }).pipe(
+      Effect.provide(
+        clientLayer.pipe(
+          Layer.provideMerge(
+            stubCredentials({
+              token: "oauth-token",
+              source: "stored-oauth",
+              identity: { organization: "acme", actorUserId: "stored-user" },
+            }),
+          ),
+        ),
+      ),
+    );
   });
 
   it.effect("reads a team addressed by its key with a single request", () =>

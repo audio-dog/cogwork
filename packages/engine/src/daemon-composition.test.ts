@@ -25,6 +25,7 @@ import { afterEach, vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
+import { Git, type GitService } from "./git";
 import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -33,7 +34,6 @@ import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
 
 const pushSchemaMock = vi.hoisted(() => vi.fn());
-
 vi.mock("drizzle-kit/payload/sqlite", () =>
   vi
     .importActual<typeof import("drizzle-kit/payload/sqlite")>("drizzle-kit/payload/sqlite")
@@ -47,10 +47,24 @@ const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   ensure: () => Effect.die("unused"),
+  pullRequestReadiness: () => Effect.die("unused"),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
 });
+
+const gitLayer = Layer.succeed(Git, {
+  fetch: () => Effect.die("unused"),
+  remoteBranchExists: () => Effect.die("unused"),
+  addWorktree: () => Effect.die("unused"),
+  removeWorktree: () => Effect.die("unused"),
+  listWorktrees: () => Effect.die("unused"),
+  fastForward: () => Effect.die("unused"),
+  divergence: () => Effect.die("unused"),
+  operationInProgress: () => Effect.die("unused"),
+  rebase: () => Effect.die("unused"),
+  remoteUrl: () => Effect.succeed("git@github.com:owner/repo.git"),
+} satisfies GitService);
 
 const stubRunner: HarnessRunner = {
   name: Schema.decodeSync(HarnessName)("cursor"),
@@ -130,13 +144,13 @@ const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(func
 
 const connectedWorkspace: RegisteredWorkspace = {
   source: "control-store:github",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "github",
     checkoutPath: "/repos/github",
     issueTracker: {
       type: "github",
-      repo: "owner/repo",
       connectionId: connectionIdOf("github", "acme"),
     },
   }),
@@ -161,14 +175,16 @@ function makeGitHubServerFixture() {
       (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
     );
     vi.stubEnv("GITHUB_TOKEN", "fallback-token");
-    const fetchStub = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
-      Promise.resolve(
-        new Response("[]", {
+    const fetchStub = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = url === "https://api.github.com/user" ? { login: "connected-account" } : [];
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
-      ),
-    );
+      );
+    });
     vi.stubGlobal("fetch", fetchStub);
     const toServer = new TransformStream<Uint8Array, Uint8Array>();
     const toClient = new TransformStream<Uint8Array, Uint8Array>();
@@ -185,7 +201,7 @@ function makeGitHubServerFixture() {
       userAgentsDir: join(root, ".agents"),
       worktrees: worktreeLayer,
       harnessRunners: [stubRunner],
-    });
+    }).pipe(Layer.provide(gitLayer));
     return { fetchStub, serverLayer };
   });
 }
@@ -233,7 +249,7 @@ function makeUnavailableServerFixture() {
       userAgentsDir: join(controlStore.dir, ".agents"),
       worktrees: worktreeLayer,
       harnessRunners: [stubRunner],
-    });
+    }).pipe(Layer.provide(gitLayer));
     const clientLayer = RpcClient.layerProtocolSocket().pipe(
       Layer.provide(Layer.succeed(Socket.Socket, client)),
       Layer.provide(Daemon.serializationLayer),

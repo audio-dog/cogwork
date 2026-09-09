@@ -329,6 +329,31 @@ describe("subprocess deadlines", () => {
   );
 });
 
+describe("git configuration scope", () => {
+  it.effect("reads remote URLs only from the checkout configuration", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+
+      assert.strictEqual(yield* git.remoteUrl("/repo", "origin"), "git@github.com:acme/repo.git");
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git config --local --get remote.origin.url",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer(() => exitedProcess(0, "git@github.com:acme/repo.git\n")),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+});
+
 describe("worktree setup commands", () => {
   it.layer(setupEnvironmentLayer)((it) => {
     it.effect("marks the command as CI while retaining the host environment", () =>
@@ -615,6 +640,24 @@ const operationFixtures: ReadonlyArray<{
 // past the 5s default, and a test here is slow because it queued, not because it hung.
 describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, () => {
   layer(testLayer)((it) => {
+    it.effect("returns the configured remote before insteadOf rewriting", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { root, checkout } = yield* fixture("452-configured-remote");
+
+        yield* shell(
+          root,
+          checkout,
+          "git remote set-url origin https://github.com/colonylabs/cogwork.git && git config url.git@github.com-work:.insteadOf https://github.com/",
+        );
+
+        assert.strictEqual(
+          yield* git.remoteUrl(checkout, "origin"),
+          "https://github.com/colonylabs/cogwork.git",
+        );
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("keeps identity out of the fixture repository config", () =>
       Effect.gen(function* () {
         const { root, checkout } = yield* fixture("437-environment-identity");
@@ -771,6 +814,18 @@ describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, (
       yield* git.rebase(worktree, "origin", branch);
 
       assert.deepStrictEqual(yield* git.divergence(worktree, "origin", branch), {
+        ahead: 1,
+        behind: 0,
+      });
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+
+  it.effect("measures a prepared head against a different base branch", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const { worktree, branch } = yield* fixture("474-ready-for-pr");
+
+      assert.deepStrictEqual(yield* git.divergence(worktree, "origin", "main", branch), {
         ahead: 1,
         behind: 0,
       });

@@ -69,10 +69,15 @@ import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import { projectedContributionName } from "./run-plan";
-import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
+import {
+  type OpenPullRequestInput,
+  SourceControlProvider,
+  type SourceControlProviderService,
+} from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   branchName,
+  PullRequestReadiness,
   WorktreeDivergedError,
   WorktreeManager,
   type WorktreeManagerService,
@@ -125,11 +130,12 @@ const seedResumeSession = (handle: string | null = "sess-prev") =>
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -170,11 +176,12 @@ const finished: AgUiEvent = {
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [privateSkill],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -187,22 +194,24 @@ const _codexImplementWorkspace: RegisteredWorkspace = {
 
 const mcpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
   }),
 };
 
 const mcpAuthWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
     ],
@@ -323,6 +332,23 @@ const implementFinished: AgUiEvent = finished;
 
 const implementEvents: ReadonlyArray<AgUiEvent> = [...implementStreamEvents, implementFinished];
 
+const readyForPrEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  sessionEvent("sess-42"),
+  text("Implementation complete and ready for a pull request."),
+  structuredComplete(
+    {
+      _tag: "implement",
+      outcome: "ready-for-pr",
+      summary: "Implementation complete.",
+      title: "Open pull requests from the engine",
+      body: "Closes #15",
+    },
+    '{"_tag":"implement","outcome":"ready-for-pr","summary":"Implementation complete.","title":"Open pull requests from the engine","body":"Closes #15"}',
+  ),
+  implementFinished,
+];
+
 const replaceSessionHandle = (event: AgUiEvent, handle: string) => {
   if (AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id") return sessionEvent(handle);
   return event;
@@ -367,11 +393,12 @@ const malformedImplementResultEvents: ReadonlyArray<AgUiEvent> = [
 
 const followUpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  repository: workspace.repository,
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -469,7 +496,7 @@ const disabledWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github" },
   }),
 };
 
@@ -514,7 +541,11 @@ const recordClaim = (
     Effect.andThen(claimFailure ? Effect.fail(claimFailure) : Effect.void),
   );
 
-function trackerRecorder(claimFailure?: IssueTrackerError, claimWriteActive?: Ref.Ref<boolean>) {
+function trackerRecorder(
+  claimFailure?: IssueTrackerError,
+  claimWriteActive?: Ref.Ref<boolean>,
+  attemptFailure?: IssueTrackerError,
+) {
   return Layer.effect(
     IssueTracker,
     Effect.map(
@@ -536,13 +567,15 @@ function trackerRecorder(claimFailure?: IssueTrackerError, claimWriteActive?: Re
             checks: outcome.marker.checks,
             noProgress: outcome.marker.noProgress,
           }),
-        attemptFailed: (_workspace, itemId, outcome) =>
-          record(calls, {
+        attemptFailed: (_workspace, itemId, outcome) => {
+          const recorded = record(calls, {
             method: "attemptFailed",
             item: itemId,
             stage: outcome.stage,
             reason: outcome.reason,
-          }),
+          });
+          return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
+        },
         handOff: (_workspace, itemId, outcome) =>
           record(calls, { method: "handOff", item: itemId, stage: outcome.stage, note: outcome.note }),
         handBack: () => Effect.void,
@@ -784,6 +817,8 @@ const resourceRunner: TestRunner = {
 const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
   ensure: (_workspace, item) =>
     Effect.succeed({ branch: branchName(item), path: `/wt/${branchName(item)}`, created }),
+  pullRequestReadiness: (_workspace, item) =>
+    Effect.succeed(PullRequestReadiness.Ready({ headBranch: branchName(item), baseBranch: "main" })),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -821,11 +856,24 @@ const worktreeDouble = (make: (probe: WorktreeProbeState) => WorktreeManagerServ
 
 const worktreeStubLayer: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeDouble(() => worktreeStub);
 
+const declinedPullRequestWorktree = (reason: string) =>
+  worktreeDouble(() => ({
+    ...worktreeStub,
+    pullRequestReadiness: () => Effect.succeed(PullRequestReadiness.Declined({ reason })),
+  }));
+
+const failedPullRequestReadinessWorktree = (failure: GitError) =>
+  worktreeDouble(() => ({
+    ...worktreeStub,
+    pullRequestReadiness: () => Effect.fail(failure),
+  }));
+
 const resumeRecordingWorktree = worktreeDouble((probe) => ({
   ensure: (_workspace, item, options) =>
     Ref.update(probe.ensured, (xs) => [...xs, options?.resume ?? false]).pipe(
       Effect.map(() => ({ branch: branchName(item), path: `/wt/${branchName(item)}`, created: false })),
     ),
+  pullRequestReadiness: worktreeStub.pullRequestReadiness,
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -975,8 +1023,62 @@ class PostedComments extends Context.Service<PostedComments, Ref.Ref<ReadonlyArr
 const noopProvider: SourceControlProviderService = {
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
+  findOpenPullRequest: () => Effect.succeed(null),
   openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 };
+
+class PullRequestCalls extends Context.Service<
+  PullRequestCalls,
+  {
+    readonly observations: Ref.Ref<number>;
+    readonly opened: Ref.Ref<ReadonlyArray<OpenPullRequestInput>>;
+  }
+>()("@cogwork/engine/executor.test/PullRequestCalls") {
+  static readonly layer = Layer.effect(
+    PullRequestCalls,
+    Effect.all({
+      observations: Ref.make(0),
+      opened: Ref.make<ReadonlyArray<OpenPullRequestInput>>([]),
+    }),
+  );
+}
+
+interface PullRequestProviderOptions {
+  readonly existingHead?: string;
+  readonly findError?: IssueTrackerError;
+  readonly openError?: IssueTrackerError;
+}
+
+const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
+  Layer.merge(
+    Layer.effect(
+      SourceControlProvider,
+      Effect.map(
+        PullRequestCalls,
+        (probe): SourceControlProviderService => ({
+          observe: () => Effect.succeed(new Map()),
+          findOpenPullRequest: () =>
+            Ref.update(probe.observations, (count) => count + 1).pipe(
+              Effect.flatMap(() => {
+                if (options.findError) return Effect.fail(options.findError);
+                if (!options.existingHead) return Effect.succeed(null);
+                return Effect.succeed({ number: 22, url: "https://example.test/pull/22" });
+              }),
+            ),
+          comment: () => Effect.void,
+          openPullRequest: (_workspace, input) =>
+            Ref.update(probe.opened, (opened) => [...opened, input]).pipe(
+              Effect.flatMap(() =>
+                options.openError
+                  ? Effect.fail(options.openError)
+                  : Effect.succeed({ number: 23, url: "https://example.test/pull/23" }),
+              ),
+            ),
+        }),
+      ),
+    ),
+    PostedComments.layer,
+  );
 
 const noopProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
   SourceControlProvider,
@@ -990,6 +1092,7 @@ const recordingProvider: Layer.Layer<SourceControlProvider | PostedComments> = L
     (posted): SourceControlProviderService => ({
       observe: () => Effect.succeed(new Map()),
       comment: (_workspace, item, body) => Ref.update(posted, (xs) => [...xs, { item: item.id, body }]),
+      findOpenPullRequest: () => Effect.succeed(null),
       openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
     }),
   ),
@@ -1001,6 +1104,7 @@ const unavailableCommentProvider: SourceControlProviderService = {
     Effect.fail(
       new IssueTrackerError({ reason: "unavailable", message: "GitHub comment endpoint unavailable" }),
     ),
+  findOpenPullRequest: () => Effect.succeed(null),
   openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 };
 
@@ -1387,10 +1491,14 @@ const observedWriteGateControlStoreLayer = (writeActive: Ref.Ref<boolean>) => {
   } satisfies ControlStoreService);
 };
 
-function provide(
+function provide<SourceControlRequirements = never>(
   runners: ReadonlyArray<TestRunner>,
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
-  sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
+  sourceControl: Layer.Layer<
+    SourceControlProvider | PostedComments,
+    never,
+    SourceControlRequirements
+  > = noopProviderLayer,
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
   operationSettings: ReadonlyArray<OperationSettingRow> = runnableStages,
   contextAssembler: Layer.Layer<ContextAssembler.ContextAssembler> = ContextCleanupCalls.contextAssemblerLayer,
@@ -2415,6 +2523,136 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
+  it.effect("opens the pull request and completes the work item when the engine gate passes", () =>
+    Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), [
+        {
+          headBranch: implementBranch,
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #15",
+        },
+      ]);
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "implemented"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "succeeded");
+    }).pipe(
+      Effect.provide(
+        provide([runner(readyForPrEvents)], worktreeStubLayer, pullRequestProvider()).pipe(
+          Layer.provideMerge(PullRequestCalls.layer),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("settles and releases the Run when pull request creation fails", () =>
+    Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      const error = yield* Effect.flip(execute(executor, implementWorkspace, implementItem));
+
+      assert.strictEqual(error.message, "tracker endpoint unavailable");
+      assert.lengthOf(yield* Ref.get(probe.opened), 1);
+      const log = yield* Ref.get(calls);
+      assert.isFalse(log.some((call) => call.method === "implemented"));
+      assert.isTrue(log.some((call) => call.method === "attemptFailed"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          worktreeStubLayer,
+          pullRequestProvider({
+            openError: new IssueTrackerError({
+              reason: "unavailable",
+              message: "pull request endpoint unavailable",
+            }),
+          }),
+          trackerRecorder(
+            undefined,
+            undefined,
+            new IssueTrackerError({ reason: "unavailable", message: "tracker endpoint unavailable" }),
+          ),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    ),
+  );
+
+  it.effect("records and releases a retryable failure when the git gate fails", () => {
+    const failure = new GitError({
+      command: "fetch origin",
+      message: "git fetch origin timed out",
+      reason: "timeout",
+    });
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const log = yield* Ref.get(calls);
+      assert.strictEqual(
+        log.find((call) => call.method === "attemptFailed")?.reason,
+        "git fetch origin: git fetch origin timed out",
+      );
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.isFalse(log.some((call) => call.method === "handOff"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          failedPullRequestReadinessWorktree(failure),
+          pullRequestProvider(),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    );
+  });
+
+  it.effect("records and releases a retryable failure when pull request lookup fails", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: "pull request lookup unavailable",
+    });
+    return Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.strictEqual(yield* Ref.get(probe.observations), 1);
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
+      const log = yield* Ref.get(calls);
+      assert.strictEqual(log.find((call) => call.method === "attemptFailed")?.reason, failure.message);
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.isFalse(log.some((call) => call.method === "handOff"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          worktreeStubLayer,
+          pullRequestProvider({ findError: failure }),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    );
+  });
+
   it.effect("records replay output without applying its structured outcome", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -2569,6 +2807,98 @@ describe("Executor.execute", () => {
       ),
     );
   });
+
+  it.effect("declines when the worktree is on a different branch", () =>
+    Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.strictEqual(yield* Ref.get(probe.observations), 0);
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
+      const log = yield* Ref.get(calls);
+      assert.isFalse(log.some((call) => call.method === "implemented"));
+      assert.isFalse(log.some((call) => call.method === "release"));
+      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
+      assert.isFalse(log.some((call) => call.method === "note"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+      assert.strictEqual(run?.claimDisposition, "hold");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          declinedPullRequestWorktree("worktree is on another branch"),
+          pullRequestProvider(),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    ),
+  );
+
+  it.effect("declines when the head is not ahead of the base", () =>
+    Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.strictEqual(yield* Ref.get(probe.observations), 0);
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
+      const log = yield* Ref.get(calls);
+      assert.isFalse(log.some((call) => call.method === "implemented"));
+      assert.isFalse(log.some((call) => call.method === "release"));
+      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
+      assert.isFalse(log.some((call) => call.method === "note"));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          declinedPullRequestWorktree("head is not ahead of origin/main"),
+          pullRequestProvider(),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    ),
+  );
+
+  it.effect("declines when an open pull request already exists for the head", () =>
+    Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const observation = yield* HarnessObservation;
+      const logger = Logger.make<unknown, void>(({ message }) => {
+        observation.logs.push({ message, annotations: {} });
+      });
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem).pipe(Effect.withLogger(logger));
+
+      assert.strictEqual(yield* Ref.get(probe.observations), 1);
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
+      const log = yield* Ref.get(calls);
+      assert.isFalse(log.some((call) => call.method === "implemented"));
+      assert.isFalse(log.some((call) => call.method === "release"));
+      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
+      assert.isFalse(log.some((call) => call.method === "note"));
+      const gateLog = observation.logs.find(({ message }) =>
+        Array.isArray(message) ? message.includes("pull request gate declined") : false,
+      );
+      assert.deepStrictEqual(gateLog?.message, [
+        "pull request gate declined",
+        { reason: `open pull request #22 already exists for ${implementBranch}` },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          worktreeStubLayer,
+          pullRequestProvider({ existingHead: implementBranch }),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    ),
+  );
 
   it.effect("mints an opaque-handle session for a Cursor-served run and captures its handle", () => {
     return Effect.gen(function* () {
