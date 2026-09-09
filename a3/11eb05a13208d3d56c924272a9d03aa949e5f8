@@ -1,0 +1,154 @@
+packages/engine/src/playbook.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 69-81,119-123,280,285-288,301-303
+packages/engine/src/worktree.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 3,49-56,64-73,82,85,91-94,106-109,134-150,492-621
+  s_343dd710cf5e3c::t_ec1273720ff142 622-623
+packages/engine/src/linear/client.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 12-17,113-119,125,132,145-149,181-212
+  s_343dd710cf5e3c::t_20e848f913aa7c 213
+packages/engine/src/linear/client.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 493-494,498-503,524-531,634-638
+packages/engine/src/git.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 57-58
+packages/engine/src/source-control.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 1-35
+packages/engine/src/daemon-composition.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 50,178-182,186-187
+packages/engine/src/executor.test.ts
+  s_343dd710cf5e3c::t_353e1e2ec3a671 133,138,179,184,197,202,209,214,396,401
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 72-76,80,335-350,544-548,570-571,576-578,820-821,859-870,876,1026,1030-1082,1095,1107,1494,1497-1501,2526-2655,2811-2901
+  s_343dd710cf5e3c::t_54759c7c2726ae 351
+  s_343dd710cf5e3c::t_a4ca98a1ac317f 2902
+packages/engine/src/github/client.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 100-114,138-171
+  s_343dd710cf5e3c::t_5f9eb798dc1800 172
+packages/claude-code/CONTEXT.md
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 28
+packages/engine/src/scheduler.test.ts
+  s_343dd710cf5e3c::t_f983f25ce8749e 57
+packages/engine/src/github/host.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 28-31,33,37,40,82-87,95,97-98,108,110,135-137,151-153
+packages/engine/src/source-control.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 40-44,59,62-66
+packages/contracts/CONTEXT.md
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 33,303,393
+packages/engine/src/playbook.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 60,102,202-203,215-216
+packages/contracts/src/run.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 64-66,86
+package.json
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 16
+packages/codex-cli/src/harness.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 364-365
+apps/cli/src/platform.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 178-179
+packages/engine/src/commands.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 209
+packages/engine/src/control-store-schema.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 124
+packages/engine/src/github/provider.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 23,27-30,35,46,55-66,130,145-151,166,194,197-199,281-283,288-290,293-298,301
+  s_343dd710cf5e3c::t_c54b1964fb0fb0 50,54
+packages/engine/src/recovery.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 81-87,424-435,500,504-509,994-1003,1005
+  s_343dd710cf5e3c::t_f983f25ce8749e 56,61
+  s_2d4a93510e0bcb::t_aa66d550b74647 1004,1006
+apps/cli/src/login.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 1-2,4,20,28-32,132-135,154-157,171-174,188-191
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 72-77
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 20
+packages/engine/src/observe.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 69
+packages/engine/src/retry-policy.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 1-5,29,49,64
+.vscode/settings.json
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 5-6
+apps/cli/src/ledger.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 63,68-70,126,149,162,332-338
+packages/engine/src/linear/linear.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 163
+packages/engine/src/recovery.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 6,43-45,224-226,277
+packages/engine/src/run-ledger.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 31,58
+packages/engine/src/linear/host.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 34-37,39,44,48,52-56,89-99,107,118,146-147,165
+packages/engine/src/engine.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 118,223,237,251,994
+packages/engine/src/github/client.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 125-126,274,355-360,701-703,721-727,731-733
+packages/contracts/src/triage.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 30,33-39,41-42,45-56,87-101
+packages/contracts/src/workspace.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 3,40-62
+  s_343dd710cf5e3c::t_2fef76381070f6 63
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 9
+packages/engine/src/read-model.test.ts
+  s_343dd710cf5e3c::t_f983f25ce8749e 143,148
+packages/engine/src/control-store-create.gen.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 12
+packages/engine/src/coordination-tracker.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 132
+packages/engine/src/harness.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 199-200,206-218,225-226
+packages/codex-cli/CONTEXT.md
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 52-56
+packages/engine/src/coordination-tracker.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 45,85
+packages/engine/src/worktree.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 2,105-118,282-315,380
+packages/engine/CONTEXT.md
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 33,45,93,155,215
+packages/engine/src/external-harness-runtime.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 101,441-450,457-461,467,472-473,477-479,481,484-487,497-501,511
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 10,18-21,40,56,76,89,91,93,124
+apps/cli/src/platform.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 823-834
+packages/engine/src/executor.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 25,63,101,103,183-192,198,206,933,936-946,955-957,979,1040-1122,1145-1149,1245,1666,1689-1690,1811-1819,1885,1889
+packages/claude-code/src/harness.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 419-421
+packages/engine/src/retry-policy.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 1,123-133
+  s_343dd710cf5e3c::t_f145cf6fa705ef 134
+packages/engine/src/github/github.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 158,225-226,229-232,267-280,438-472,657-684,687-690,696-708
+  s_343dd710cf5e3c::t_c54b1964fb0fb0 221,243,258
+  s_343dd710cf5e3c::t_2876d8b393aece 709
+packages/codex-cli/src/harness.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 242-250,376-415,596,600,612-646
+packages/contracts/src/triage.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 64,68-75,80-98,151-184
+packages/engine/src/event-publisher.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 246
+apps/cli/src/ledger.test.ts
+  s_343dd710cf5e3c::t_b3d1bd1e587c3a 257-274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a311eb05a13208d3d56c924272a9d03aa949e5f8",
+  "prompts": {},
+  "sessions": {
+    "s_2d4a93510e0bcb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebb-5da8-7041-b038-274987a2b9a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_343dd710cf5e3c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08277-030f-7d41-bbb3-6c128efc79fd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
