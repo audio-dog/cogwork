@@ -7,6 +7,9 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as References from "effect/References";
+import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
@@ -22,6 +25,7 @@ const diffDebounce = "250 millis";
 const debouncedPathConcurrency = 32;
 const configuredIgnoreBatchSize = 256;
 const configuredIgnoreWindow = "50 millis";
+const fallbackCadence = "1 second";
 const stderrMaxBytes = 4 * 1024;
 const processReleaseDeadline = "5 seconds";
 
@@ -298,7 +302,7 @@ const reservedScratch = /^\.tanstack-[^/]*$/;
 export const ignored = (rel: string) =>
   rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment)) || reservedScratch.test(rel);
 
-const debounceByPath = <E, R>(stream: Stream.Stream<FileSystem.WatchEvent, E, R>) =>
+const debounceByPath = <A extends { readonly path: string }, E, R>(stream: Stream.Stream<A, E, R>) =>
   stream.pipe(
     Stream.groupByKey((event) => event.path, { idleTimeToLive: diffDebounce }),
     Stream.flatMap(([, events]) => events.pipe(Stream.debounce(diffDebounce)), {
@@ -433,9 +437,228 @@ export const tolerateFeedDeath =
       Stream.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Stream.empty
-          : Stream.fromEffect(Effect.logWarning(message, { cause })).pipe(Stream.drain),
+          : Stream.fromEffect(Effect.logWarning(message, { cause: Cause.pretty(cause) })).pipe(Stream.drain),
       ),
     );
+
+const changedPathsCommand = (baseSha: string) =>
+  baseSha === ""
+    ? "git diff --name-only -z --cached -- . && git diff --name-only -z -- . && git ls-files --others --exclude-standard -z -- ."
+    : `git diff --name-only -z ${quote(baseSha)} -- . && git ls-files --others --exclude-standard -z -- .`;
+
+const pollWorktreePaths = Effect.fn("Tools.pollWorktreePaths")(function* (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+) {
+  const command = changedPathsCommand(baseSha);
+  const result = yield* exec(sandbox, command);
+  if (result.exitCode !== 0) return yield* execFailure(command, "", result);
+  return [...new Set(result.stdout.split("\0").filter((path) => path !== ""))];
+});
+
+type FeedSource = "native" | "polling";
+type SourceIdentity = { readonly source: FeedSource; readonly generation: number };
+type SourcedWatchEvent = FileSystem.WatchEvent & SourceIdentity;
+type SourcedSandboxEvent = SandboxFileEvent & SourceIdentity;
+type SourcedFileDiff = FileDiff & SourceIdentity;
+type FingerprintState = {
+  readonly generation: number;
+  readonly fingerprints: ReadonlyMap<string, string>;
+  readonly pathGenerations: ReadonlyMap<string, number>;
+};
+type PollSnapshot = {
+  readonly paths: ReadonlyArray<string>;
+  readonly pathGenerations: ReadonlyMap<string, number>;
+};
+
+const pollingContext = <A, E, R>(
+  sandbox: WorktreeSandbox,
+  source: FeedSource,
+  effect: Effect.Effect<A, E, R>,
+) =>
+  source === "native"
+    ? effect
+    : effect.pipe(
+        Effect.annotateLogs({ checkout: sandbox.root, source }),
+        Effect.provideService(References.TracerEnabled, false),
+      );
+
+const pollWorktreePathsOrNone = Effect.fn("Tools.pollWorktreePathsOrNone")(
+  (sandbox: WorktreeSandbox, baseSha: string) =>
+    pollWorktreePaths(sandbox, baseSha).pipe(
+      Effect.asSome,
+      Effect.catch((error) =>
+        Effect.logWarning("file-diff poll failed; continuing on the next poll", {
+          cause: error.message,
+        }).pipe(Effect.map(() => Option.none<Array<string>>())),
+      ),
+      (effect) => pollingContext(sandbox, "polling", effect),
+    ),
+);
+
+const watchEvents = ({ paths, pathGenerations }: PollSnapshot) =>
+  paths.flatMap((path) => {
+    const generation = pathGenerations.get(path);
+    return generation === undefined
+      ? []
+      : [{ _tag: "Update", path, source: "polling", generation } satisfies SourcedWatchEvent];
+  });
+
+const pollEvents = (snapshot: Option.Option<PollSnapshot>) =>
+  Stream.fromIterable(
+    Option.match(snapshot, {
+      onNone: () => [],
+      onSome: watchEvents,
+    }),
+  );
+
+const advanceFingerprintGeneration = Effect.fn("Tools.advanceFileDiffFingerprintGeneration")(function* (
+  state: Ref.Ref<FingerprintState>,
+  paths: ReadonlyArray<string>,
+) {
+  const dirty = new Set(paths);
+  return yield* Ref.modify(state, (previous) => {
+    const generation = previous.generation + 1;
+    const fingerprints = new Map([...previous.fingerprints].filter(([path]) => dirty.has(path)));
+    const pathGenerations = new Map(
+      paths.map((path) => [path, previous.pathGenerations.get(path) ?? generation]),
+    );
+    return [
+      { paths, pathGenerations },
+      { generation, fingerprints, pathGenerations },
+    ];
+  });
+});
+
+const pollingPathSnapshot = Effect.fn("Tools.pollingFileDiffPathSnapshot")(
+  (sandbox: WorktreeSandbox, baseSha: string, state: Ref.Ref<FingerprintState>) =>
+    pollWorktreePathsOrNone(sandbox, baseSha).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.succeedNone,
+          onSome: (paths) => advanceFingerprintGeneration(state, paths).pipe(Effect.asSome),
+        }),
+      ),
+    ),
+);
+
+const scheduledWorktreeEvents = (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  state: Ref.Ref<FingerprintState>,
+) =>
+  Stream.fromEffectSchedule(
+    pollingPathSnapshot(sandbox, baseSha, state),
+    Schedule.spaced(fallbackCadence),
+  ).pipe(Stream.flatMap(pollEvents));
+
+const pollingWorktreeEvents = (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  state: Ref.Ref<FingerprintState>,
+  stop?: Effect.Effect<void>,
+) => {
+  if (!stop) return scheduledWorktreeEvents(sandbox, baseSha, state);
+  return Stream.merge(
+    Stream.fromEffect(Effect.andThen(stop, pollingPathSnapshot(sandbox, baseSha, state))).pipe(
+      Stream.flatMap(pollEvents),
+    ),
+    scheduledWorktreeEvents(sandbox, baseSha, state),
+    { haltStrategy: "left" },
+  );
+};
+
+const stopSource = <A, E, R>(source: Stream.Stream<A, E, R>, stop?: Effect.Effect<void>) =>
+  stop
+    ? Stream.merge(source, Stream.fromEffect(stop).pipe(Stream.drain), { haltStrategy: "either" })
+    : source;
+
+const continueWithPolling = (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  cause: Cause.Cause<unknown>,
+  state: Ref.Ref<FingerprintState>,
+  stop?: Effect.Effect<void>,
+) =>
+  Stream.fromEffect(
+    Effect.logWarning("native file watcher failed; continuing with polling", {
+      cause: Cause.pretty(cause),
+    }).pipe((effect) => pollingContext(sandbox, "polling", effect)),
+  ).pipe(Stream.drain, Stream.concat(pollingWorktreeEvents(sandbox, baseSha, state, stop)));
+
+const retainConfiguredEvents = Effect.fn("Tools.retainConfiguredFileDiffEvents")(function* (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  events: ReadonlyArray<SourcedWatchEvent>,
+) {
+  const retained = yield* configuredIgnoredEvents(sandbox, baseSha, events);
+  const paths = new Set(retained.map(({ path }) => path));
+  return events.filter(({ path }) => paths.has(path));
+});
+
+const logPollingStepFailure = Effect.fn("Tools.logPollingFileDiffStepFailure")(
+  (sandbox: WorktreeSandbox, error: ToolError) =>
+    Effect.logWarning("file-diff polling step failed; continuing", {
+      cause: error.message,
+    }).pipe((effect) => pollingContext(sandbox, "polling", effect)),
+);
+
+const filterConfiguredEvents = Effect.fn("Tools.filterConfiguredFileDiffEvents")(
+  (sandbox: WorktreeSandbox, baseSha: string, events: ReadonlyArray<SourcedWatchEvent>) => {
+    if (!events.some(({ source }) => source === "polling")) {
+      return retainConfiguredEvents(sandbox, baseSha, events);
+    }
+    return retainConfiguredEvents(sandbox, baseSha, events).pipe(
+      Effect.catch((error) => logPollingStepFailure(sandbox, error).pipe(Effect.map(() => []))),
+      (effect) => pollingContext(sandbox, "polling", effect),
+    );
+  },
+);
+
+const classifySourcedEvent = Effect.fn("Tools.classifySourcedFileDiffEvent")(function* (
+  sandbox: WorktreeSandbox,
+  sourced: SourcedWatchEvent,
+) {
+  const event = yield* classifyWorktreeEvent(sandbox, sourced.path);
+  return event === null
+    ? null
+    : ({ ...event, source: sourced.source, generation: sourced.generation } satisfies SourcedSandboxEvent);
+});
+
+const attachSource =
+  ({ source, generation }: SourceIdentity) =>
+  (diff: FileDiff) =>
+    ({ ...diff, source, generation }) satisfies SourcedFileDiff;
+
+const computeSourcedFileDiff = Effect.fn("Tools.computeSourcedFileDiff")(function* (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  sourced: SourcedSandboxEvent,
+) {
+  if (sourced.source === "native") {
+    return yield* computeFileDiff(sandbox, baseSha, sourced).pipe(Effect.map(attachSource(sourced)));
+  }
+  return yield* computeFileDiff(sandbox, baseSha, sourced).pipe(
+    Effect.map(attachSource(sourced)),
+    Effect.catch((error) => logPollingStepFailure(sandbox, error).pipe(Effect.map(() => null))),
+    (effect) => pollingContext(sandbox, sourced.source, effect),
+  );
+});
+
+const dedupeWithFingerprints = Effect.fn("Tools.dedupeFileDiffWithFingerprints")(
+  (state: Ref.Ref<FingerprintState>, current: SourcedFileDiff) =>
+    Ref.modify(state, (previous) => {
+      const currentGeneration = previous.pathGenerations.get(current.path);
+      const nativeIsCurrent = current.source === "native" && previous.generation === 0;
+      const pollingIsCurrent = current.source === "polling" && current.generation === currentGeneration;
+      if (!nativeIsCurrent && !pollingIsCurrent) {
+        const events: ReadonlyArray<FileDiff> = [];
+        return [events, previous];
+      }
+      const [fingerprints, events] = dedupeFileDiff(previous.fingerprints, current);
+      return [events, { ...previous, fingerprints }];
+    }),
+);
 
 export const watchWorktreeDiffs = (
   sandbox: WorktreeSandbox,
@@ -444,29 +667,41 @@ export const watchWorktreeDiffs = (
   stop?: Effect.Effect<void>,
 ): Stream.Stream<AgUiEvent, ToolError, FileSystem.FileSystem> =>
   Stream.unwrap(
-    FileSystem.FileSystem.pipe(
-      Effect.map((fs) =>
-        fs.watch(sandbox.root, { recursive: true }).pipe(
-          Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
-          // Not `Stream.haltWhen`: it polls between pulls, and the watcher's pull
-          // blocks while the checkout is idle, so an idle feed would never stop.
-          (source) =>
-            stop
-              ? Stream.merge(source, Stream.fromEffect(stop).pipe(Stream.drain), {
-                  haltStrategy: "either",
-                })
-              : source,
-          Stream.filter((event) => !ignored(event.path)),
-          Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
-          Stream.mapEffect((events) => configuredIgnoredEvents(sandbox, baseSha, events)),
-          Stream.flatMap(Stream.fromIterable),
-          debounceByPath,
-          Stream.mapEffect((event) => classifyWorktreeEvent(sandbox, event.path)),
-          Stream.filter((event) => event !== null),
-          Stream.mapEffect((event) => computeFileDiff(sandbox, baseSha, event)),
-          Stream.mapAccum(() => new Map<string, string>(), dedupeFileDiff),
-          Stream.map(({ path, diff }) => fileDiffEvent(path, diff)),
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const state = yield* Ref.make<FingerprintState>({
+        generation: 0,
+        fingerprints: new Map(),
+        pathGenerations: new Map(),
+      });
+      return fs.watch(sandbox.root, { recursive: true }).pipe(
+        Stream.map((event) => ({ ...event, source: "native", generation: 0 }) satisfies SourcedWatchEvent),
+        (source) => stopSource(source, stop),
+        Stream.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Stream.fromEffect(Effect.interrupt)
+            : continueWithPolling(sandbox, baseSha, cause, state, stop),
         ),
-      ),
-    ),
+        Stream.filter((event) => !ignored(event.path)),
+        Stream.groupedWithin(configuredIgnoreBatchSize, configuredIgnoreWindow),
+        Stream.mapEffect((events) => filterConfiguredEvents(sandbox, baseSha, events)),
+        Stream.flatMap(Stream.fromIterable),
+        debounceByPath,
+        Stream.mapEffect((event) =>
+          classifySourcedEvent(sandbox, event).pipe((effect) =>
+            pollingContext(sandbox, event.source, effect),
+          ),
+        ),
+        Stream.filter((event) => event !== null),
+        Stream.mapEffect((event) => computeSourcedFileDiff(sandbox, baseSha, event)),
+        Stream.filter((event) => event !== null),
+        Stream.mapEffect((event) =>
+          dedupeWithFingerprints(state, event).pipe((effect) =>
+            pollingContext(sandbox, event.source, effect),
+          ),
+        ),
+        Stream.flatMap(Stream.fromIterable),
+        Stream.map(({ path, diff }) => fileDiffEvent(path, diff)),
+      );
+    }),
   );
