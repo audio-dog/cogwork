@@ -1,0 +1,89 @@
+packages/engine/src/playbook.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 29
+packages/engine/src/workspace-registry.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 16,26,30-76,120,123,144,165,174,189,208,225,229,231-316,318,320-341,343-571,607,648,683,690-691,707,715,737,758-761,768,778-781,792,809,816-817,850,890,954,995,1043
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_e4aced227df686::t_3b34ce0c82965e 230-240
+packages/engine/src/control-store-schema.ts
+  s_e4aced227df686::t_fb4799d03cccff 159
+packages/engine/src/issue-tracker-router.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 16,27
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_e4aced227df686::t_fb4799d03cccff 29-30,74,81
+packages/engine/src/availability.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 15
+packages/contracts/CONTEXT.md
+  s_e4aced227df686::t_fb4799d03cccff 29
+packages/engine/src/scheduler.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 52,57
+packages/engine/src/control-store-create.gen.ts
+  s_e4aced227df686::t_fb4799d03cccff 14
+packages/engine/src/github/client.ts
+  s_e4aced227df686::t_fb4799d03cccff 45-50
+packages/engine/src/daemon-composition.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 28,56-68,147,204,252
+packages/engine/src/commands.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 109,115,122-123
+packages/engine/src/run-plan.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 200,207,264
+packages/engine/src/registry.ts
+  s_e4aced227df686::t_fb4799d03cccff 23,27,54,58-64,133,153-156,168-170,190-234,242,260,294,308-317,324-325,332,343,350,363,398,426-443,468,489-500,502-505,517,519-522,555,571-610,619-630,636-638,647,650,657,669,689-699,705,722,739-743,745,766-769,771-772,787-790,792,838-844,860,865
+packages/engine/src/executor.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 133,138,179,184,197,202,209,214,396,401,499
+apps/cli/src/worktree-commands.ts
+  s_e4aced227df686::t_fb4799d03cccff 9,51-56
+packages/engine/src/github/host.ts
+  s_e4aced227df686::t_fb4799d03cccff 15-21,50-52,55
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_e4aced227df686::t_fb4799d03cccff 14,18
+packages/engine/src/coordination-tracker.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 179
+packages/engine/src/comments.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 27
+apps/cli/src/platform.ts
+  s_e4aced227df686::t_fb4799d03cccff 200-202
+packages/engine/src/github/github.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 216,221,238,243,253,258
+packages/engine/src/engine.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 189,206,603
+packages/engine/src/recovery.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 56,61
+apps/desktop/src/renderer/src/features/workspace-registration.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 101,126
+apps/cli/src/rpc.ts
+  s_e4aced227df686::t_fb4799d03cccff 29,323
+packages/engine/src/mcp-skill.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 61
+packages/engine/src/issue-tracker.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 17
+packages/engine/src/projector.ts
+  s_e4aced227df686::t_fb4799d03cccff 12,26
+packages/engine/src/github/provider.ts
+  s_e4aced227df686::t_fb4799d03cccff 18,36-37,40,49-50,53-54
+packages/engine/src/observe.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 20
+packages/engine/CONTEXT.md
+  s_e4aced227df686::t_fb4799d03cccff 159,227
+packages/engine/src/read-model.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 143,148
+apps/cli/src/platform.test.ts
+  s_e4aced227df686::t_fb4799d03cccff 332-356,643-660
+packages/engine/src/issue-tracker.ts
+  s_e4aced227df686::t_fb4799d03cccff 112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6edcb8f166030646ef14b914b548225731973ed4",
+  "prompts": {},
+  "sessions": {
+    "s_e4aced227df686": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08199-e7bd-7192-a391-0f2b515261a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
