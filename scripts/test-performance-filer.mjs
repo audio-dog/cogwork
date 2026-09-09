@@ -3,13 +3,15 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { tsImport } from "tsx/esm/api";
+
+const { wireCodec } = await tsImport("../packages/engine/src/github/markers.ts", import.meta.url);
 
 const dailyFilingCap = 1;
 const originLabel = "origin:selfperf";
 const signal = "test-suite-duration";
 const subsystem = "repository";
 const usage = "Usage: node scripts/test-performance-filer.mjs <comparison-report.json> <workflow-run-url>";
-const markerPattern = /<!--\s*cogwork:([^>]*)-->/g;
 const filingQueues = new WeakMap();
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
@@ -72,13 +74,13 @@ export const performanceFingerprint = (report) =>
   fingerprintFor({ signal, subsystem, direction: report.verdict });
 
 export const fingerprintMarker = (fingerprint) =>
-  `<!-- cogwork:selfperf fingerprint=${normalizeIdentityPart(fingerprint)} -->`;
+  wireCodec.encode({ name: "selfperf", pairs: `fingerprint=${normalizeIdentityPart(fingerprint)}` });
 
 const markerFingerprint = (body) =>
-  [...body.matchAll(markerPattern)]
-    .map((match) => (match[1] ?? "").trim().split(/\s+/))
-    .filter(([name]) => name === "selfperf")
-    .flatMap(([, ...pairs]) => pairs)
+  wireCodec
+    .scan(body)
+    .filter(({ name }) => name === "selfperf")
+    .flatMap(({ pairs }) => pairs.split(/\s+/))
     .map((pair) => pair.split("="))
     .find(([name]) => name === "fingerprint")?.[1];
 

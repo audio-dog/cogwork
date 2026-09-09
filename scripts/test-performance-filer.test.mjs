@@ -9,6 +9,7 @@ import {
 
 const runUrl = "https://github.com/colonylabs/cogwork/actions/runs/123";
 const now = new Date("2026-09-09T12:00:00Z");
+const persistedMarker = "<!-- cogwork:selfperf fingerprint=test-suite-duration%3Arepository%3Aslower -->";
 
 const report = ({
   verdict = "slower",
@@ -55,6 +56,14 @@ const makeTracker = (issues = []) => {
   };
 };
 
+const issue = ({ number, state, body = persistedMarker, createdAt }) => ({
+  number,
+  state,
+  body,
+  createdAt,
+  url: `https://github.com/colonylabs/cogwork/issues/${number}`,
+});
+
 describe("test-performance filer", () => {
   it("files one thin evidence issue for a new slower regression", async () => {
     const { tracker, created, comments } = makeTracker();
@@ -79,13 +88,11 @@ describe("test-performance filer", () => {
 
   it("comments with fresh evidence when the regression already has an open issue", async () => {
     const current = report({ baseMedianDurationMs: 130, headMedianDurationMs: 170, ratio: 1.307 });
-    const existing = {
+    const existing = issue({
       number: 42,
       state: "open",
-      body: "<!-- cogwork:selfperf fingerprint=test-suite-duration%3Arepository%3Aslower -->",
       createdAt: "2026-09-01T12:00:00Z",
-      url: "https://github.com/colonylabs/cogwork/issues/42",
-    };
+    });
     const { tracker, created, comments } = makeTracker([existing]);
 
     const result = await fileTestPerformanceRegression({ report: current, runUrl, now }, tracker);
@@ -102,13 +109,11 @@ describe("test-performance filer", () => {
 
   it("cross-links a closed occurrence without reopening it", async () => {
     const current = report();
-    const closed = {
+    const closed = issue({
       number: 41,
       state: "closed",
-      body: "<!-- cogwork:selfperf fingerprint=test-suite-duration%3Arepository%3Aslower -->",
       createdAt: "2026-08-01T12:00:00Z",
-      url: "https://github.com/colonylabs/cogwork/issues/41",
-    };
+    });
     const { tracker, created, comments } = makeTracker([closed]);
 
     const result = await fileTestPerformanceRegression({ report: current, runUrl, now }, tracker);
@@ -121,15 +126,14 @@ describe("test-performance filer", () => {
   });
 
   it("enforces the daily filing cap from tracker state", async () => {
-    const existing = {
+    const existing = issue({
       number: 40,
       state: "closed",
       body: fingerprintMarker(
         fingerprintFor({ signal: "daemon-heap", subsystem: "engine", direction: "higher" }),
       ),
       createdAt: "2026-09-09T01:00:00Z",
-      url: "https://github.com/colonylabs/cogwork/issues/40",
-    };
+    });
     const { tracker, created, comments } = makeTracker([existing]);
 
     const result = await fileTestPerformanceRegression({ report: report(), runUrl, now }, tracker);
