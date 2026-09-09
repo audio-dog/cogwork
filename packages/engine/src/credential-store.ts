@@ -35,6 +35,7 @@ export interface CredentialAccount {
 export class CredentialError extends Schema.TaggedError<CredentialError>()("CredentialError", {
   account: Schema.String,
   message: Schema.String,
+  retryable: Schema.Boolean,
 }) {}
 
 export const StoredToken = Schema.Struct({
@@ -166,6 +167,7 @@ const refreshUnavailable: TokenRefresh = (request) =>
     new CredentialError({
       account: request.account,
       message: `cannot refresh the stored token for ${request.account}: this credential store has no token refresh wired`,
+      retryable: false,
     }),
   );
 
@@ -229,6 +231,7 @@ const envCredential = Effect.fn("CredentialStore.env")(function* (account: Crede
     return yield* new CredentialError({
       account: account.key,
       message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
+      retryable: false,
     });
   }
   return { source: "env", token: Redacted.make(token), identity: null } satisfies Credential;
@@ -346,6 +349,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     return yield* new CredentialError({
       account: account.key,
       message: `no saved browser login for ${account.key}`,
+      retryable: false,
     });
   });
 
@@ -356,6 +360,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       return yield* new CredentialError({
         account: account.key,
         message: "GitHub CLI credentials are available only for GitHub Connections",
+        retryable: false,
       });
     }
     const source = sources.githubCli;
@@ -363,6 +368,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       return yield* new CredentialError({
         account: account.key,
         message: "GitHub CLI (`gh`) not found",
+        retryable: false,
       });
     }
     const token = account.organization ? yield* source.acquire(account.organization) : yield* source.discover;
@@ -400,6 +406,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       return yield* new CredentialError({
         account: connectionId,
         message: `invalid Connection id: ${connectionId}`,
+        retryable: false,
       });
     }
     const account = connectionAccountOf(connectionId);
@@ -416,6 +423,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     return yield* new CredentialError({
       account: connectionId,
       message: `no saved browser login for ${connectionId}`,
+      retryable: false,
     });
   });
 
@@ -436,6 +444,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
         return yield* new CredentialError({
           account: connectionId,
           message: `${source.name} is unset or empty`,
+          retryable: false,
         });
       }
     }
@@ -445,6 +454,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       return yield* new CredentialError({
         account: connectionId,
         message: "this credential store cannot persist Connection credentials",
+        retryable: false,
       });
     }
     yield* save({ ...source, connectionId });
@@ -475,6 +485,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     return yield* new CredentialError({
       account: account.provider,
       message: missingProviderKeyMessage(account),
+      retryable: false,
     });
   });
 
@@ -496,6 +507,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
         new CredentialError({
           account: key.provider,
           message: "this credential store cannot persist provider keys",
+          retryable: false,
         }),
       ),
     configureConnection: (connectionId, source) =>
@@ -519,6 +531,7 @@ export const envOnly: StoredCredentials = {
       new CredentialError({
         account: accountOf(credential),
         message: "the environment credential store cannot persist tokens",
+        retryable: false,
       }),
     ),
 };
