@@ -2,7 +2,7 @@
 
 Executes [ADR 0020](../adr/0020-telemetry-is-local-first-in-its-own-store.md) (local telemetry
 store) and [ADR 0021](../adr/0021-the-performance-sensor-files-its-own-tickets.md) (the
-performance sensor), plus the defect fixes and measurement campaign around them. The ADRs are the
+performance regression sensor), plus the defect fixes and measurement campaign around them. The ADRs are the
 *what and why*; this plan is the *how*, and where they disagree the ADRs win.
 
 The evidence base is four research documents, each cited to primary sources or `file:line`:
@@ -109,7 +109,7 @@ counts; events/second per agent and the `sandbox.file.diff` share. Output: a fin
 `docs/research/`, thresholds and baselines for the sensor, and a confirmed/killed verdict per
 Track 2 suspect. Track 2 designs and their ADRs start from that document.
 
-## Phase 5 — the performance sensor (ADR 0021)
+## Phase 5 — the performance regression sensor (ADR 0021)
 
 Built last, thresholds from Phase 4's baselines: `createIssue` on the issue tracker port (GitHub
 first); the sensor service in the daemon (enumerated signals, N-consecutive-windows transition
@@ -118,7 +118,34 @@ re-file-don't-reopen); `origin:selfperf` label. Closure stays human; VERIFY is e
 scope. Independently: widen the reconcile observation window past one page of 100
 (`packages/engine/src/github/client.ts:589`) so machine-filed tickets cannot hide real work.
 
+## Phase 6 — performance budgets (ADR 0023)
+
+Phases 1-5 all sense a change for the worse; none of them speaks while the app is uniformly slow
+and staying slow. The measurement campaign found the two largest costs in the system — a worktree
+ensure averaging 8.1s, a `git diff` exec peaking at 2426ms — and neither is a regression, so no
+sensor built so far will ever file about them.
+
+A **performance budget** is a named count of the app's own work with a target below what the app
+does today. Missing it is the normal state, and missing it files work. Counts and never durations:
+ADR 0022 measured the same suite at 14s to 56s on ambient load alone, and resource contention is
+worse on a working laptop than on a CI runner. Nothing here gates a merge — a gate at today's count
+declares today's count acceptable, and a gate at the target fails every pull request.
+
+Placement follows ADR 0022: the count is produced by running the engine under a swapped `Git`
+service layer, so it is measured in CI. Phase 6 extends the fortnightly workflow of #500 rather
+than adding a second one, and hands its verdict to the filer of #499 — one filer, one cap, one
+fingerprint contract, at `needs-triage` with `origin:selfperf`. The existing pipeline carries the
+ticket from there, which is the loop closing on the app's own speed.
+
+First budget: git invocations per worktree ensure, seeded about 20% under the measured count and
+rounded to two significant figures. When a budget is met it is lowered again, and a budget kept
+current is its own regression guard.
+
+Out of scope: duration budgets, any merge gate, and the `git diff`-per-file-event defect, which is
+a known cost with a measured size and belongs on the board as ordinary work rather than waiting for
+a sensor to notice it.
+
 ## Glossary
 
-New terms land in `packages/engine/CONTEXT.md`: **Telemetry store**, **Performance sensor**,
-**Replay runner**, **Signal**, **Fingerprint**.
+New terms land in `packages/engine/CONTEXT.md`: **Telemetry store**, **Performance regression sensor**, **Performance budget sensor**, **Performance budget**,
+**Replay runner**, **Health signal**, **Fingerprint**.

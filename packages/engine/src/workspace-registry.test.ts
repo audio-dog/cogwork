@@ -923,7 +923,8 @@ layer(NodeServices.layer)((it) => {
       assert.deepStrictEqual(contributionOverlaysAfterDeregister, [{ workspace: "other-workspace" }]);
 
       const missingUpdate = yield* management.update(workspace, renamedUpdate).pipe(Effect.flip);
-      assert.strictEqual(missingUpdate._tag, "WorkspaceNotFound");
+      assert.strictEqual(missingUpdate._tag, "WorkspaceRegistryError");
+      assert.strictEqual(missingUpdate.reason, "not-found");
 
       const registeredAgain = yield* management.register(
         githubRegistration("moving workspace", secondCheckout),
@@ -966,7 +967,8 @@ layer(NodeServices.layer)((it) => {
 
       const deregistration = yield* management.deregister(workspace).pipe(Effect.flip);
 
-      assert.strictEqual(deregistration._tag, "WorkspaceManagementError");
+      assert.strictEqual(deregistration._tag, "WorkspaceRegistryError");
+      assert.strictEqual(deregistration.reason, "management-failed");
       assert.isDefined(Registry.findWorkspace(yield* liveRegistry.state, workspace));
       assert.isTrue(yield* fs.exists(privateTree));
       const rows = yield* Effect.flatMap(

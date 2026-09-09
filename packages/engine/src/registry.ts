@@ -5,10 +5,9 @@ import {
   TrimmedNonEmptyString,
   WorkspaceConfig,
   WorkspaceId,
-  WorkspaceManagementError,
-  WorkspaceNotFound,
   WorkspaceRegistration,
   WorkspaceRegistrationError,
+  WorkspaceRegistryError,
   type WorkspaceUpdate,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
@@ -80,17 +79,15 @@ export interface WorkspaceManagementService {
   readonly register: (
     registration: WorkspaceRegistration,
   ) => Effect.Effect<WorkspaceRegistrationChange, WorkspaceRegistrationError>;
-  readonly deregister: (
-    workspace: WorkspaceId,
-  ) => Effect.Effect<WorkspaceId, WorkspaceManagementError | WorkspaceNotFound>;
+  readonly deregister: (workspace: WorkspaceId) => Effect.Effect<WorkspaceId, WorkspaceRegistryError>;
   readonly update: (
     workspace: WorkspaceId,
     update: WorkspaceUpdate,
-  ) => Effect.Effect<WorkspaceRegistrationChange, WorkspaceManagementError | WorkspaceNotFound>;
+  ) => Effect.Effect<WorkspaceRegistrationChange, WorkspaceRegistryError>;
   readonly rebind: (
     workspace: WorkspaceId,
     checkoutPath: string,
-  ) => Effect.Effect<WorkspaceRegistrationChange, WorkspaceManagementError | WorkspaceNotFound>;
+  ) => Effect.Effect<WorkspaceRegistrationChange, WorkspaceRegistryError>;
 }
 
 export type WorkspaceRegistrationChange =
@@ -101,28 +98,27 @@ export class WorkspaceManagement extends Context.Service<WorkspaceManagement, Wo
   "@cogwork/engine/registry/WorkspaceManagement",
 ) {}
 
+const workspaceNotFound = (workspace: WorkspaceId) =>
+  new WorkspaceRegistryError({
+    reason: "not-found",
+    workspace,
+    message: `Workspace "${workspace}" not found`,
+  });
+
+const workspaceManagementFailure = (workspace: WorkspaceId, operation: string, message: string) =>
+  new WorkspaceRegistryError({ reason: "management-failed", workspace, operation, message });
+
 export const managementReadOnlyLayer = Layer.succeed(WorkspaceManagement, {
   register: () => Effect.fail(new WorkspaceRegistrationError({ message: "Workspace registry is read-only" })),
-  deregister: () =>
+  deregister: (workspace) =>
     Effect.fail(
-      new WorkspaceManagementError({
-        operation: "deregister workspace",
-        message: "Workspace registry is read-only",
-      }),
+      workspaceManagementFailure(workspace, "deregister workspace", "Workspace registry is read-only"),
     ),
-  update: () =>
+  update: (workspace) =>
+    Effect.fail(workspaceManagementFailure(workspace, "update workspace", "Workspace registry is read-only")),
+  rebind: (workspace) =>
     Effect.fail(
-      new WorkspaceManagementError({
-        operation: "update workspace",
-        message: "Workspace registry is read-only",
-      }),
-    ),
-  rebind: () =>
-    Effect.fail(
-      new WorkspaceManagementError({
-        operation: "re-bind workspace",
-        message: "Workspace registry is read-only",
-      }),
+      workspaceManagementFailure(workspace, "re-bind workspace", "Workspace registry is read-only"),
     ),
 });
 
@@ -180,10 +176,12 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 
 const registrationError = (error: unknown) => new WorkspaceRegistrationError({ message: messageOf(error) });
 
-const isWorkspaceNotFound = Schema.is(WorkspaceNotFound);
+const isWorkspaceRegistryError = Schema.is(WorkspaceRegistryError);
 
-const managementError = (operation: string) => (error: unknown) =>
-  isWorkspaceNotFound(error) ? error : new WorkspaceManagementError({ operation, message: messageOf(error) });
+const managementError = (workspace: WorkspaceId, operation: string) => (error: unknown) =>
+  isWorkspaceRegistryError(error)
+    ? error
+    : workspaceManagementFailure(workspace, operation, messageOf(error));
 
 const present = <A>(value: A | null) => (value === null ? undefined : value);
 
@@ -429,13 +427,14 @@ const rebindWorkspaceRow = Effect.fn("WorkspaceRegistry.rebindWorkspaceRow")(fun
   checkoutPath: string,
 ) {
   const current = yield* selectWorkspaceRow(sql, workspace);
-  if (!current) return yield* new WorkspaceNotFound({ workspace });
+  if (!current) return yield* workspaceNotFound(workspace);
   const existing = yield* selectWorkspaceBinding(sql, checkoutPath);
   if (existing && existing.id !== workspace) {
-    return yield* new WorkspaceManagementError({
-      operation: "re-bind workspace",
-      message: `Workspace checkout path is already registered as ${existing.id}`,
-    });
+    return yield* workspaceManagementFailure(
+      workspace,
+      "re-bind workspace",
+      `Workspace checkout path is already registered as ${existing.id}`,
+    );
   }
   yield* sql.withTransaction(updateCheckoutPath(sql, workspace, checkoutPath));
   return { ...current, checkoutPath };
@@ -477,7 +476,7 @@ const updateWorkspaceRow = Effect.fn("WorkspaceRegistry.updateWorkspaceRow")(fun
       worktree_setup AS worktreeSetup,
       worktree_reap_after_millis AS worktreeReapAfterMillis,
       concurrency`;
-  if (!row) return yield* new WorkspaceNotFound({ workspace });
+  if (!row) return yield* workspaceNotFound(workspace);
   return row;
 });
 
@@ -661,6 +660,13 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
             Effect.provideService(Path.Path, path),
           ),
       } satisfies WorkspaceLoadingServices;
+      const ensureWritableStore = Effect.fn("WorkspaceManagement.ensureWritableStore")(function* (
+        workspace: WorkspaceId,
+        operation: string,
+      ) {
+        if (store.health !== "unavailable") return;
+        return yield* workspaceManagementFailure(workspace, operation, store.message);
+      });
       const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* () {
         if (store.health === "unavailable") return emptyRegistry;
         return yield* loadAvailableState(sql, loadingServices, authoringRoots);
@@ -750,27 +756,23 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         workspace: WorkspaceId,
         checkoutPath: string,
       ) {
-        if (store.health === "unavailable") {
-          return yield* new WorkspaceManagementError({
-            operation: "re-bind workspace",
-            message: store.message,
-          });
-        }
+        yield* ensureWritableStore(workspace, "re-bind workspace");
         if (!path.isAbsolute(checkoutPath)) {
-          return yield* new WorkspaceManagementError({
-            operation: "re-bind workspace",
-            message: "Workspace checkout path must be absolute",
-          });
+          return yield* workspaceManagementFailure(
+            workspace,
+            "re-bind workspace",
+            "Workspace checkout path must be absolute",
+          );
         }
         const normalizedPath = path.resolve(checkoutPath);
         const row = yield* store
           .withWrite(rebindWorkspaceRow(sql, workspace, normalizedPath))
-          .pipe(Effect.mapError(managementError("re-bind workspace")));
+          .pipe(Effect.mapError(managementError(workspace, "re-bind workspace")));
         const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
         return yield* store.withWrite(
           persistRegistrationRepository(sql, change).pipe(
             Effect.flatMap(commitChange),
-            Effect.mapError(managementError("re-bind workspace")),
+            Effect.mapError(managementError(workspace, "re-bind workspace")),
           ),
         );
       });
@@ -778,61 +780,46 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         workspace: WorkspaceId,
         workspaceUpdate: WorkspaceUpdate,
       ) {
-        if (store.health === "unavailable") {
-          return yield* new WorkspaceManagementError({
-            operation: "update workspace",
-            message: store.message,
-          });
-        }
+        yield* ensureWritableStore(workspace, "update workspace");
         const row = yield* store
           .withWrite(sql.withTransaction(updateWorkspaceRow(sql, workspace, workspaceUpdate)))
-          .pipe(Effect.mapError(managementError("update workspace")));
+          .pipe(Effect.mapError(managementError(workspace, "update workspace")));
         const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
         return yield* store.withWrite(
           persistRegistrationRepository(sql, change).pipe(
             Effect.flatMap(commitChange),
-            Effect.mapError(managementError("update workspace")),
+            Effect.mapError(managementError(workspace, "update workspace")),
           ),
         );
       });
-      const deregister = Effect.fn("WorkspaceManagement.deregister")(function* (workspace: WorkspaceId) {
-        if (store.health === "unavailable") {
-          return yield* new WorkspaceManagementError({
-            operation: "deregister workspace",
-            message: store.message,
-          });
-        }
-        return yield* store.withWrite(
-          selectWorkspaceRow(sql, workspace).pipe(
-            Effect.flatMap(
-              (row): Effect.Effect<WorkspaceId, WorkspaceManagementError | WorkspaceNotFound> => {
-                if (!row) return Effect.fail(new WorkspaceNotFound({ workspace }));
-                return sql
-                  .withTransaction(
-                    sql`DELETE FROM contribution_settings
-                    WHERE scope = 'private-workspace-overlay'
-                      AND workspace = ${workspace}`.pipe(
-                      Effect.andThen(sql`DELETE FROM operation_settings
-                      WHERE scope = 'private-workspace-overlay'
-                        AND workspace = ${workspace}`),
-                      Effect.andThen(sql`DELETE FROM workspaces WHERE id = ${workspace}`),
-                      Effect.andThen(
-                        fs.remove(path.join(privateWorkspaceRoot, workspace), {
-                          recursive: true,
-                          force: true,
-                        }),
-                      ),
-                    ),
-                  )
-                  .pipe(
-                    Effect.andThen(commitRemoval(workspace)),
-                    Effect.mapError(managementError("deregister workspace")),
-                  );
-              },
+      const deregisterStoredWorkspace = Effect.fn("WorkspaceManagement.deregisterStoredWorkspace")(function* (
+        workspace: WorkspaceId,
+      ) {
+        const row = yield* selectWorkspaceRow(sql, workspace);
+        if (!row) return yield* workspaceNotFound(workspace);
+        yield* sql.withTransaction(
+          sql`DELETE FROM contribution_settings
+              WHERE scope = 'private-workspace-overlay'
+                AND workspace = ${workspace}`.pipe(
+            Effect.andThen(sql`DELETE FROM operation_settings
+                WHERE scope = 'private-workspace-overlay'
+                  AND workspace = ${workspace}`),
+            Effect.andThen(sql`DELETE FROM workspaces WHERE id = ${workspace}`),
+            Effect.andThen(
+              fs.remove(path.join(privateWorkspaceRoot, workspace), {
+                recursive: true,
+                force: true,
+              }),
             ),
-            Effect.mapError(managementError("deregister workspace")),
           ),
         );
+        return yield* commitRemoval(workspace);
+      });
+      const deregister = Effect.fn("WorkspaceManagement.deregister")(function* (workspace: WorkspaceId) {
+        yield* ensureWritableStore(workspace, "deregister workspace");
+        return yield* store
+          .withWrite(deregisterStoredWorkspace(workspace))
+          .pipe(Effect.mapError(managementError(workspace, "deregister workspace")));
       });
       return Context.make(WorkspaceRegistry, registry).pipe(
         Context.add(WorkspaceManagement, {

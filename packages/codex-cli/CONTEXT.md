@@ -42,6 +42,8 @@ _Avoid_: Daemon startup check, provider fallback
 
 **Unattended runtime policy**:
 Every Run uses Codex `workspace-write`, so native file changes stay in the prepared Worktree.
+A registered Workspace's ambient Codex Hooks are trusted for the Run. The grant is invocation-wide,
+so the operator's enabled Codex Hooks run too; see ADR 0023.
 Codex's `read-only` mode denies the network as well as the disk, and the switch that reopens it
 (`sandbox_workspace_write.network_access`) is read only under `workspace-write`; a permission
 profile would separate the two, but `codex exec` refuses one beside the `--sandbox` argument the

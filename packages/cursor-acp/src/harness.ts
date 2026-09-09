@@ -13,6 +13,7 @@ import { createSecrets } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { cursorEfforts, cursorModelFlag, parseCursorModelList } from "./model";
@@ -230,6 +231,7 @@ const estimatedEvent = (promptChars: number, outputTextChars: number, event: AgU
 };
 
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
+type CursorRunPromise = Effect.Success<ReturnType<typeof FiberSet.makeRuntimePromise<never>>>;
 
 // Cursor's agent sends these vendor JSON-RPC requests to report completed
 // tool calls (subagents, todo updates) it already ran in-process, then ignores
@@ -246,7 +248,10 @@ class CursorTransportError extends Data.TaggedError("CursorTransportError")<{
 const transportError = (cause: unknown) =>
   new CursorTransportError({ cause, message: cause instanceof Error ? cause.message : String(cause) });
 
-export const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
+export const interceptCursorTelemetry = (
+  base: AcpJsonRpcStream,
+  runPromise: CursorRunPromise,
+): AcpJsonRpcStream => {
   const outbound = Semaphore.makeUnsafe(1);
   const withWriter = <A>(use: (writer: WritableStreamDefaultWriter<AcpMessage>) => Promise<A>) =>
     outbound.withPermit(
@@ -257,7 +262,7 @@ export const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStre
       ),
     );
   const runWithWriter = <A>(use: (writer: WritableStreamDefaultWriter<AcpMessage>) => Promise<A>) =>
-    Effect.runPromise(withWriter(use));
+    runPromise(withWriter(use));
 
   return {
     readable: Stream.fromReadableStream({
@@ -268,7 +273,10 @@ export const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStre
         if (!("method" in message && "id" in message && swallowedCursorMethods.has(message.method))) {
           return Effect.succeed(true);
         }
-        return withWriter((writer) => writer.write({ jsonrpc: "2.0", id: message.id, result: {} })).pipe(
+        return Effect.tryPromise({
+          try: () => runWithWriter((writer) => writer.write({ jsonrpc: "2.0", id: message.id, result: {} })),
+          catch: transportError,
+        }).pipe(
           Effect.ignore,
           Effect.map(() => false),
         );
@@ -283,25 +291,28 @@ export const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStre
   };
 };
 
-const openCursorTransport =
-  (agentBin: string) =>
-  (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
-    const flag = cursorModelFlag(ctx.model, ctx.modelOptions?.effort);
-    return ctx.sandbox.process
-      .spawn(`${agentBin} --model ${flag} acp`, {
-        cwd: ctx.cwd,
-        ...(ctx.signal ? { signal: ctx.signal } : {}),
-      })
-      .then((handle) => {
-        const bytes = spawnHandleToAcpTransport(handle);
-        return {
-          kind: "stream",
-          stream: interceptCursorTelemetry(ndJsonStream(bytes.writable, bytes.readable)),
-          dispose: () => bytes.kill(),
-          stderrTail: bytes.stderrTail,
-        };
-      });
-  };
+const openCursorTransport = (agentBin: string) =>
+  FiberSet.makeRuntimePromise().pipe(
+    Effect.map((runPromise) => (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
+      const flag = cursorModelFlag(ctx.model, ctx.modelOptions?.effort);
+      return ctx.sandbox.process
+        .spawn(`${agentBin} --model ${flag} acp`, {
+          cwd: ctx.cwd,
+          ...(ctx.signal ? { signal: ctx.signal } : {}),
+        })
+        .then((handle) => {
+          const bytes = spawnHandleToAcpTransport(handle);
+          return {
+            kind: "stream",
+            stream: interceptCursorTelemetry(ndJsonStream(bytes.writable, bytes.readable), runPromise),
+            dispose: () => bytes.kill(),
+            stderrTail: bytes.stderrTail,
+          };
+        });
+    }),
+  );
+
+type CursorOpenTransport = Effect.Success<ReturnType<typeof openCursorTransport>>;
 
 type CursorAdapter = AcpCompatibleTextAdapter<CursorModel, CursorModelOptions>;
 
@@ -344,63 +355,97 @@ const cursorSandboxProvider = (name: HarnessName) =>
 export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunner => {
   const agentBin = options.agentBin ?? "agent";
   const defaultModel = options.defaultModel ?? "auto";
-  const adapter = acpCompatible<typeof cursorModels, CursorModelOptions>({
-    name: options.name,
-    models: cursorModels,
-    modelOptions: {},
-    openTransport: openCursorTransport(agentBin),
-    planEventName: `${options.name}.plan`,
-    authMode: "host",
-    permissionMode: "default",
-    permissions: "headless",
-  });
-  const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter, "host"> = {
-    name: options.name,
-    sessionKind: "opaque-handle",
-    capabilities: {
-      execution: {
-        nonInteractive: true,
-        worktreeConfined: false,
-        profiles: [],
-      },
-      profile: {
-        authenticationModes: ["host"],
-        session: { affinity: "runtime-host", fork: false, humanAttach: false },
-        structuredOutput: "prompt-and-parse",
-        policyFidelity: "none",
-        fileEventFidelity: "absent",
-        usageQuality: "estimated",
-        readinessDiagnostics: true,
-        journal: false,
-        takeover: false,
-      },
-      projectedMembers: [
-        "Harness Adapter",
-        "Instructions",
-        "Messages",
-        "MCP",
-        "Middleware",
-        "Sandbox",
-        "Structured Output",
-        "Persistence",
-        "Connections",
-      ],
-      planMiddleware: ["sandbox"],
+  const sessionKind: Harness.HarnessRunner["sessionKind"] = "opaque-handle";
+  const capabilities = {
+    execution: {
+      nonInteractive: true,
+      worktreeConfined: false,
+      profiles: [],
     },
-    authentication: { mode: "host", reference: "Cursor host login" },
-    catalogSources: { fallback: generatedCatalog },
-    readiness: () => cursorReadiness(agentBin),
-    sharedGit: "none",
-    makeAdapter: ({ model }) => adapter(model),
-    projectModel: (request) => selectedCursorModel(request, defaultModel),
-    projectOptions: (request) => cursorModelOptions(request.identity.resumeHandle, request.selection.effort),
-    projectAuthentication: () => "host",
-    transport: {},
-    diagnostics: cursorDiagnostics,
-    estimateUsage: cursorUsage,
+    profile: {
+      authenticationModes: ["host"],
+      session: { affinity: "runtime-host", fork: false, humanAttach: false },
+      structuredOutput: "prompt-and-parse",
+      policyFidelity: "none",
+      fileEventFidelity: "absent",
+      usageQuality: "estimated",
+      readinessDiagnostics: true,
+      journal: false,
+      takeover: false,
+    },
+    projectedMembers: [
+      "Harness Adapter",
+      "Instructions",
+      "Messages",
+      "MCP",
+      "Middleware",
+      "Sandbox",
+      "Structured Output",
+      "Persistence",
+      "Connections",
+    ],
+    planMiddleware: ["sandbox"],
+  } satisfies ExternalHarnessRuntime.ExternalHarnessCapabilities;
+  const authentication: Harness.HarnessRunner["authentication"] = {
+    mode: "host",
+    reference: "Cursor host login",
   };
-  return ExternalHarnessRuntime.externalHarnessRunner(descriptor, {
-    authentication: hostAuthentication,
-    sandboxProvider: cursorSandboxProvider(options.name),
-  });
+  const catalogSources = { fallback: generatedCatalog };
+  const readiness = () => cursorReadiness(agentBin);
+  const makeRunner = (openTransport: CursorOpenTransport) => {
+    const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter, "host"> = {
+      name: options.name,
+      sessionKind,
+      capabilities,
+      authentication,
+      catalogSources,
+      readiness,
+      sharedGit: "none",
+      makeAdapter: ({ model }) =>
+        acpCompatible<typeof cursorModels, CursorModelOptions>({
+          name: options.name,
+          models: cursorModels,
+          modelOptions: {},
+          openTransport,
+          planEventName: `${options.name}.plan`,
+          authMode: "host",
+          permissionMode: "default",
+          permissions: "headless",
+        })(model),
+      projectModel: (request) => selectedCursorModel(request, defaultModel),
+      projectOptions: (request) =>
+        cursorModelOptions(request.identity.resumeHandle, request.selection.effort),
+      projectAuthentication: () => "host",
+      transport: {},
+      diagnostics: cursorDiagnostics,
+      estimateUsage: cursorUsage,
+    };
+    return ExternalHarnessRuntime.externalHarnessRunner(descriptor, {
+      authentication: hostAuthentication,
+      sandboxProvider: cursorSandboxProvider(options.name),
+    });
+  };
+  return {
+    name: options.name,
+    sessionKind,
+    execution: capabilities.execution,
+    capabilities: capabilities.profile,
+    authentication,
+    catalogSources,
+    readiness,
+    projectedMembers: capabilities.projectedMembers,
+    planMiddleware: capabilities.planMiddleware,
+    preflight: (input) =>
+      Effect.scoped(
+        openCursorTransport(agentBin).pipe(
+          Effect.flatMap((openTransport) => makeRunner(openTransport).preflight(input)),
+        ),
+      ),
+    run: (request) =>
+      Stream.unwrap(
+        openCursorTransport(agentBin).pipe(
+          Effect.map((openTransport) => makeRunner(openTransport).run(request)),
+        ),
+      ),
+  };
 };
