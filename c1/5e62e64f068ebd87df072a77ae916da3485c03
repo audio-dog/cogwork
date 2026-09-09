@@ -1,0 +1,25 @@
+pnpm-workspace.yaml
+  s_0c384607eedb7f::t_af63e73b97a673 23-24,27-28
+packages/engine/package.json
+  s_0c384607eedb7f::t_af63e73b97a673 19-21
+packages/cursor-acp/package.json
+  s_0c384607eedb7f::t_af63e73b97a673 25
+pnpm-lock.yaml
+  s_0c384607eedb7f::t_cc6ee915a3012f 18-23,30-35,487,533,536,539
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c15e62e64f068ebd87df072a77ae916da3485c03",
+  "prompts": {},
+  "sessions": {
+    "s_0c384607eedb7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0877c-60b7-7002-8c6b-71cfacf64f71",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
