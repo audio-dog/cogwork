@@ -25,8 +25,6 @@ const preferencesPath = join(
 const desktopLogPath = join(homedir(), "Library", "Logs", "@cogwork", "desktop", "main.log");
 
 const windowPlan = [6, 8];
-const restingGlobalLimit = 3;
-const restingPerWorkspaceLimit = 4;
 const socketPollMillis = 5_000;
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
@@ -113,6 +111,20 @@ const runCli = (...args) => {
 };
 
 const setLimit = (limit, value) => runCli("limits", "set", limit, String(value));
+
+const parseLimit = (output, limit) => {
+  const value = new RegExp(`^${limit}: (\\d+)$`, "m").exec(output)?.[1];
+  if (value === undefined) throw new Error(`could not read ${limit}`);
+  return Number(value);
+};
+
+const readLimits = () => {
+  const output = runCli("limits", "show");
+  return {
+    globalConcurrency: parseLimit(output, "global-concurrency"),
+    perWorkspaceConcurrency: parseLimit(output, "per-workspace-concurrency"),
+  };
+};
 
 const setCampaignLimits = (agents) => {
   setLimit("per-workspace-concurrency", agents);
@@ -213,13 +225,13 @@ const attemptCleanup = (description, cleanup) => {
   }
 };
 
-const restoreRestingState = () => {
+const restoreDaemonState = (limits) => {
   attemptCleanup("pause scheduling", () => runCli("scheduling", "pause"));
-  attemptCleanup(`restore the global limit to ${restingGlobalLimit}`, () =>
-    setLimit("global-concurrency", restingGlobalLimit),
+  attemptCleanup(`restore the global limit to ${limits.globalConcurrency}`, () =>
+    setLimit("global-concurrency", limits.globalConcurrency),
   );
-  attemptCleanup(`restore the per-workspace limit to ${restingPerWorkspaceLimit}`, () =>
-    setLimit("per-workspace-concurrency", restingPerWorkspaceLimit),
+  attemptCleanup(`restore the per-workspace limit to ${limits.perWorkspaceConcurrency}`, () =>
+    setLimit("per-workspace-concurrency", limits.perWorkspaceConcurrency),
   );
 };
 
@@ -234,7 +246,10 @@ const run = async (minutes) => {
   while (!(await daemonListening())) await wait(socketPollMillis);
   say("daemon is up");
 
+  const originalLimits = readLimits();
   manifest.windows = [];
+  manifest.originalLimits = originalLimits;
+  writeManifest(manifest);
   const interrupt = new AbortController();
   const handleInterrupt = () => interrupt.abort(stamp());
   process.once("SIGINT", handleInterrupt);
@@ -249,7 +264,7 @@ const run = async (minutes) => {
     process.exitCode = 130;
     return;
   } finally {
-    restoreRestingState();
+    restoreDaemonState(originalLimits);
     process.off("SIGINT", handleInterrupt);
   }
   manifest.finishedAt = stamp();
