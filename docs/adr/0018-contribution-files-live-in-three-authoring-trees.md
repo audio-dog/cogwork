@@ -78,6 +78,9 @@ the highest-precedence source. Cogwork's trust act already exists and is `regist
 **Hook is deferred.** Every harness spells a hook differently, and no projection has been designed.
 It stays a named contribution kind with its settings question unanswered, recorded as fog on the map.
 
+ADR [0023](./0023-codex-runs-trust-ambient-hooks.md) later trusts repository Hooks that Codex finds
+ambiently during a Run. Hook contribution projection and settings remain deferred.
+
 A consequence taken knowingly: registering a workspace puts every Skill, Rules, Command and Subagent
 file in its repository into your Runs. ADR 0013's "a repository may offer but never enable" narrows
 to the executing kinds. Text handed to a model sits at the same trust level as the repo's
