@@ -454,10 +454,11 @@ const resolveGitWritablePaths = Effect.fn("ExternalHarnessRuntime.resolveGitWrit
       const path = yield* Path.Path;
       const worktreeGitPath = path.resolve(checkoutPath, ".git");
       const info = yield* fs.stat(worktreeGitPath);
-      // A checkout whose `.git` is a real directory cannot be narrowed: Git writes the index by
-      // creating `index.lock` beside it, so committing needs the directory itself — which is also
-      // the common directory every linked Worktree shares.
-      if (info.type === "Directory") return [yield* fs.realPath(worktreeGitPath)];
+      // A checkout whose `.git` is a real directory gets nothing. It cannot be narrowed — Git writes
+      // the index by creating `index.lock` in that directory's root, so a commit needs the directory
+      // itself — and that directory is the common one every linked Worktree shares, which is exactly
+      // what this derivation exists to withhold. Granting it back would undo the whole narrowing.
+      if (info.type === "Directory") return [];
 
       const pointer = yield* fs.readFileString(worktreeGitPath);
       const gitDirectoryMatch = /^gitdir:\s*(.+)$/m.exec(pointer.trim());
@@ -474,19 +475,16 @@ const resolveGitWritablePaths = Effect.fn("ExternalHarnessRuntime.resolveGitWrit
 );
 
 // A read-only Operation commits nothing, so it is granted nothing: Codex protects `<checkout>/.git`
-// on its own, and an `--add-dir` over that path overrides the protection. Withholding the paths
-// rather than skipping resolution keeps the preflight, so a checkout whose Git metadata is
-// unreachable still fails before the Run starts.
+// on its own, and an `--add-dir` over that path overrides the protection.
 const gitWritablePaths = (
   descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
   profile: OperationPolicyProfile,
   checkoutPath: string,
 ) => {
-  if (descriptor.sharedGit === "none") return Effect.succeed<ReadonlyArray<string>>([]);
-  return resolveGitWritablePaths(checkoutPath).pipe(
-    Effect.map((paths): ReadonlyArray<string> => (profile === "read-only" ? [] : paths)),
-    Effect.mapError(() => sharedGitError(checkoutPath)),
-  );
+  if (descriptor.sharedGit === "none" || profile === "read-only") {
+    return Effect.succeed<ReadonlyArray<string>>([]);
+  }
+  return resolveGitWritablePaths(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
 };
 
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (

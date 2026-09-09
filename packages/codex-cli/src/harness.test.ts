@@ -373,7 +373,7 @@ describe("codexRunner", () => {
       }),
     );
 
-    it.effect("projects host authentication, native options, and shared Git without local MCP config", () =>
+    it.effect("projects host authentication and native options, granting no Git path to a checkout that owns its Git directory", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* createSandbox();
@@ -398,13 +398,9 @@ describe("codexRunner", () => {
           const capture = yield* structuredCapture(events);
           const call = calls[0];
           if (!call) return assert.fail("Codex adapter was not created");
-          const realCheckout = yield* FileSystem.FileSystem.pipe(
-            Effect.flatMap((fs) => fs.realPath(handle.id)),
-          );
-
           assert.strictEqual(call.model, defaultModel);
           assert.strictEqual(call.config.authMode, "host");
-          assert.deepStrictEqual(call.config.additionalDirectories, [`${realCheckout}/.git`]);
+          assert.isUndefined(call.config.additionalDirectories);
           assert.isUndefined(call.config.config);
           assert.isUndefined(call.config.env);
           assert.include(capture.args, 'model_reasoning_effort="high"');
