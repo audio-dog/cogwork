@@ -1170,6 +1170,35 @@ describe("file diff feed", { timeout: 30_000 }, () => {
     }).pipe(Effect.provide(queuedWatcherLayer())),
   );
 
+  it.effect("emits both sides of a rename through fallback polling", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const baseSha = yield* resolveBaseSha(original);
+      const moved = yield* Effect.promise((signal) =>
+        original.handle.process.exec("git mv seed.txt renamed.txt", {
+          env: gitFixtureEnvironment,
+          signal: testProcessSignal(signal),
+        }),
+      );
+      assert.strictEqual(moved.exitCode, 0, moved.stderr);
+      const calls = yield* ExecCalls;
+      const sandbox = yield* withExecProbe(original);
+      const stop = yield* Deferred.make<void>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha, Deferred.await(stop)).pipe(
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* awaitTestEffect(
+        Stream.fromQueue(calls).pipe(Stream.filter(isGitDiffCommand), Stream.take(1), Stream.runDrain),
+      );
+      yield* Deferred.succeed(stop, undefined);
+
+      const events = yield* Fiber.join(fiber);
+      const values = yield* Effect.forEach(events, (event) => decodeDiffValue(event.value));
+      assert.deepStrictEqual(values.map(({ path }) => path).sort(), ["renamed.txt", "seed.txt"]);
+    }).pipe(Effect.provide(deniedWatcherWithExecCalls)),
+  );
+
   it.effect("keeps polling after a transient fallback command failure", () =>
     Effect.gen(function* () {
       const original = yield* openSandbox();

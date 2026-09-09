@@ -769,8 +769,8 @@ export const tolerateFeedDeath =
 
 const changedPathsCommand = (baseSha: string) =>
   baseSha === ""
-    ? "git diff --name-only -z --cached -- . && git diff --name-only -z -- . && git ls-files --others --exclude-standard -z -- ."
-    : `git diff --name-only -z ${quote(baseSha)} -- . && git ls-files --others --exclude-standard -z -- .`;
+    ? "git diff --name-only -z --no-renames --cached -- . && git diff --name-only -z --no-renames -- . && git ls-files --others --exclude-standard -z -- ."
+    : `git diff --name-only -z --no-renames ${quote(baseSha)} -- . && git ls-files --others --exclude-standard -z -- .`;
 
 const pollWorktreePaths = Effect.fn("Tools.pollWorktreePaths")(function* (
   sandbox: WorktreeSandbox,
