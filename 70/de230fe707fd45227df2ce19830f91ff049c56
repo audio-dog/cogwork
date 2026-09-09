@@ -1,0 +1,19 @@
+packages/codex-cli/package.json
+  s_9aa9f21686394c::t_5f84edef37e573 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "70de230fe707fd45227df2ce19830f91ff049c56",
+  "prompts": {},
+  "sessions": {
+    "s_9aa9f21686394c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0884d-e625-79d1-9098-ef0797a0e808",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
