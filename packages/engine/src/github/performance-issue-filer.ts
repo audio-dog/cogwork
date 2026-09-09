@@ -29,14 +29,22 @@ const toPerformanceIssue = (issue: Effect.Success<ReturnType<GitHubClientService
   }) satisfies PerformanceIssue;
 
 export const performanceIssueHistory = Effect.fn("github.performanceIssueHistory")(function* (
-  client: Pick<GitHubClientService, "listIssues">,
+  client: Pick<GitHubClientService, "authenticatedLogin" | "listIssues">,
   repo: GitHubRepoRef,
 ) {
-  const [labeled, open] = yield* Effect.all([
-    client.listIssues(repo, { state: "all", label: originLabel }),
-    client.listIssues(repo, { state: "open" }),
-  ]);
-  const relevantOpen = open.filter((issue) => carriesSelfPerformanceMarker(issue.body));
+  const [labeled, open, authenticatedLogin] = yield* Effect.all(
+    [
+      client.listIssues(repo, { state: "all", label: originLabel }),
+      client.listIssues(repo, { state: "open" }),
+      client.authenticatedLogin(repo),
+    ],
+    { concurrency: "unbounded" },
+  );
+  const relevantOpen = open.filter(
+    (issue) =>
+      issue.authorLogin?.toLowerCase() === authenticatedLogin.toLowerCase() &&
+      carriesSelfPerformanceMarker(issue.body),
+  );
   const unique = new Map([...labeled, ...relevantOpen].map((issue) => [issue.number, issue]));
   return [...unique.values()].filter((issue) => !issue.isPullRequest).map(toPerformanceIssue);
 });

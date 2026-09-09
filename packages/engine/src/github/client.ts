@@ -61,6 +61,7 @@ export interface RawIssue {
   readonly body?: string;
   readonly state?: "open" | "closed";
   readonly createdAtMillis?: number;
+  readonly authorLogin?: string;
 }
 
 export interface RawPull {
@@ -117,6 +118,7 @@ const IssueSchema = Schema.Struct({
   body: Schema.optional(Schema.NullOr(Schema.String)),
   state: Schema.optional(Schema.Union([Schema.Literal("open"), Schema.Literal("closed")])),
   created_at: Schema.optional(Schema.String),
+  user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
 });
 
 const CreatedIssueSchema = Schema.Struct({
@@ -314,6 +316,7 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   body: issue.body ?? "",
   state: issue.state ?? "open",
   createdAtMillis: millisFromIso(issue.created_at ?? null),
+  authorLogin: issue.user?.login,
 });
 
 const openedPull = (created: typeof CreatedPullSchema.Type) =>

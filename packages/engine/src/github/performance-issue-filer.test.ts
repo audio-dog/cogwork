@@ -8,7 +8,12 @@ const marker = wireCodec.encode({
   pairs: "fingerprint=daemon.event-loop-delay-p99.above",
 });
 
-const issue = (number: number, body: string, state: "open" | "closed" = "open") => ({
+const issue = (
+  number: number,
+  body: string,
+  state: "open" | "closed" = "open",
+  authorLogin = "cogwork-bot",
+) => ({
   number,
   title: `Issue ${number}`,
   url: `https://github.com/colonylabs/cogwork/issues/${number}`,
@@ -19,16 +24,23 @@ const issue = (number: number, body: string, state: "open" | "closed" = "open") 
   body,
   state,
   createdAtMillis: number,
+  authorLogin,
 });
 
 it.effect("recovers an open marker-bearing issue whose labels were omitted during creation", () =>
   Effect.gen(function* () {
     const client = {
+      authenticatedLogin: () => Effect.succeed("cogwork-bot"),
       listIssues: (_repo: unknown, query?: { readonly state: "open" | "all"; readonly label?: string }) =>
         Effect.succeed(
           query?.label
             ? [issue(1, marker, "closed")]
-            : [issue(2, marker), issue(3, "ordinary issue"), issue(1, marker, "closed")],
+            : [
+                issue(2, marker),
+                issue(3, "ordinary issue"),
+                issue(4, marker, "open", "untrusted-user"),
+                issue(1, marker, "closed"),
+              ],
         ),
     };
 
