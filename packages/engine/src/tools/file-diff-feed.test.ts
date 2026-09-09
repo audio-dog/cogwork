@@ -55,6 +55,11 @@ const advanceUntil = (deferred: Deferred.Deferred<void>, duration: Duration.Inpu
 
 const yieldToHost = () => Effect.promise(() => yieldImmediate()).pipe(Effect.repeat({ times: 9 }));
 
+const settleWhileAdvancingClock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.raceFirst(TestClock.adjust("10 millis").pipe(Effect.andThen(yieldToHost()), Effect.forever)),
+  );
+
 const coalesceOutput = (output: AsyncIterable<string>) => ({
   [Symbol.asyncIterator]: () => {
     const iterator = Array.fromAsync(output).then((chunks) => ["", chunks.join("")][Symbol.iterator]());
@@ -121,16 +126,13 @@ const withExecProbe = Effect.fn("file-diff-feed.test.withExecProbe")(function* (
 });
 
 const settleDiff = Effect.fn("file-diff-feed.test.settleDiff")(function* (calls: Queue.Queue<string>) {
-  yield* yieldToHost();
-  yield* TestClock.adjust("100 millis");
-  const ignoreCommand = yield* Stream.fromQueue(calls).pipe(
-    Stream.filter(isGitIgnoreCommand),
-    Stream.runHead,
+  const ignoreCommand = yield* settleWhileAdvancingClock(
+    Stream.fromQueue(calls).pipe(Stream.filter(isGitIgnoreCommand), Stream.runHead),
   );
   if (Option.isNone(ignoreCommand)) return assert.fail("ignore check did not complete");
-  yield* yieldToHost();
-  yield* TestClock.adjust("1 second");
-  const diffCommand = yield* Stream.fromQueue(calls).pipe(Stream.filter(isGitDiffCommand), Stream.runHead);
+  const diffCommand = yield* settleWhileAdvancingClock(
+    Stream.fromQueue(calls).pipe(Stream.filter(isGitDiffCommand), Stream.runHead),
+  );
   if (Option.isNone(diffCommand)) return assert.fail("diff did not complete");
   return [ignoreCommand.value, diffCommand.value] as const;
 });
