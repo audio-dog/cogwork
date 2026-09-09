@@ -316,7 +316,7 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   body: issue.body ?? "",
   state: issue.state ?? "open",
   createdAtMillis: millisFromIso(issue.created_at ?? null),
-  authorLogin: issue.user?.login,
+  ...(issue.user ? { authorLogin: issue.user.login } : {}),
 });
 
 const openedPull = (created: typeof CreatedPullSchema.Type) =>
