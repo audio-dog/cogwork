@@ -1,0 +1,21 @@
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_9aa9f21686394c::t_b87bec9493b57c 2-12,14-36,38-104
+  s_9aa9f21686394c::t_14c84287489e99 1,13,105-116
+  s_9aa9f21686394c::t_827fce2cbdeb48 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "3e90be82f709a0d0a8c793b4ccdfafdce0f2e029",
+  "prompts": {},
+  "sessions": {
+    "s_9aa9f21686394c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0884d-e625-79d1-9098-ef0797a0e808",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
