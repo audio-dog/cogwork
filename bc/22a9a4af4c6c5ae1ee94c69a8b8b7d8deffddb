@@ -1,0 +1,109 @@
+packages/engine/src/engine.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 189,206,603
+packages/contracts/CONTEXT.md
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 29
+packages/engine/src/mcp-skill.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 61
+packages/engine/src/observe.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 20
+packages/engine/src/workspace-registry.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 16,26,30-76,120,123,144,165,174,189,208,225,229,231-316,318,320-341,343-571,607,648,683,690-691,707,715,737,758-761,768,778-781,792,809,816-817,850,890,954,995,1043
+packages/engine/src/comments.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 27
+packages/engine/src/daemon-composition.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 28,56-68,147,204,252
+packages/engine/src/github/host.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 15-21,50-52,55
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 29-30,74,81
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 14,18
+packages/engine/src/issue-tracker-router.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 16,27
+packages/engine/src/availability.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 15
+packages/engine/src/registry.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 23,27,54,58-64,133,153-156,168-170,190-234,242,260,294,308-317,324-325,332,343,350,363,398,426-443,468,489-500,502-505,517,519-522,555,571-610,619-630,636-638,647,650,657,669,689-699,705,722,739-743,745,766-769,771-772,787-790,792,838-844,860,865
+packages/engine/src/issue-tracker.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 17
+.github/workflows/pull-request.yml
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 20,33,48-59,64,81,101
+packages/engine/src/run-plan.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 200,207,264
+packages/engine/src/control-store-create.gen.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 14
+packages/engine/src/coordination-tracker.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 179
+apps/cli/src/platform.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 332-356,643-660
+apps/cli/src/platform.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 200-202
+packages/engine/src/commands.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 109,115,122-123
+packages/engine/src/github/github.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 216,221,238,243,253,258
+packages/engine/src/read-model.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 143,148
+scripts/test-measure.mjs
+  s_66a0e441ad731e::t_4b6b3de119de3c 2,4,13,29-43,57-59,62-64,67-69,93-97,99,101-102,116,124-136,145-152,154-158,169
+  s_66a0e441ad731e::t_19c847cea8c11c 137-144,168,170
+packages/engine/src/scheduler.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 52,57
+packages/engine/src/issue-tracker.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 112
+packages/engine/src/control-store-schema.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 159
+scripts/test-measure-summary.mjs
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 1-14
+packages/engine/src/github/provider.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 18,36-37,40,49-50,53-54
+apps/cli/src/rpc.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 29,323
+packages/engine/src/projector.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 12,26
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 229-239
+packages/engine/src/recovery.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 56,61
+packages/engine/src/github/client.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 44-49
+packages/engine/CONTEXT.md
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 159,227
+apps/cli/src/worktree-commands.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 9,51-56
+apps/desktop/src/renderer/src/features/workspace-registration.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 101,126
+packages/engine/src/executor.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 133,138,179,184,197,202,209,214,396,401,499
+packages/engine/src/playbook.test.ts
+  s_66a0e441ad731e::t_4e40d77a1ceb1a 29
+scripts/test-measure.test.mjs
+  s_66a0e441ad731e::t_b24598e2e275b9 2-4,7-8,16-20,23-24,29,42-44,51,66,70,78-100,102-107,109-126,128-131,134-151,154-165,167-182,185-189
+  s_66a0e441ad731e::t_6f8a296a653831 10,49
+scripts/test-compare.mjs
+  s_427bbbebb3e327::t_8e31afd32528f9 241
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bc22a9a4af4c6c5ae1ee94c69a8b8b7d8deffddb",
+  "prompts": {},
+  "sessions": {
+    "s_427bbbebb3e327": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08784-75c4-7810-b81a-1ebd94c21c18",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_66a0e441ad731e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06ebc-6bc4-7961-840d-44c04273a080",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
