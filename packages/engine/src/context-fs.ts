@@ -8,6 +8,7 @@ export class ContextFsError extends Schema.TaggedError<ContextFsError>()("Contex
 }) {}
 
 export interface ContextFsService {
+  readonly directoryExists: (target: string) => Effect.Effect<boolean, ContextFsError>;
   readonly readFile: (target: string) => Effect.Effect<string | null, ContextFsError>;
   readonly readDirectory: (
     target: string,

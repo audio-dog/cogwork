@@ -1,7 +1,6 @@
 import * as Redacted from "effect/Redacted";
 import { describe, expect, it } from "vitest";
 import {
-  credentialSourcesFor,
   type EstablishmentFields,
   EstablishmentFieldsValidator,
   emptyEstablishmentFields,
@@ -25,16 +24,11 @@ const issuesOf = (result: ReturnType<typeof validate>) => {
 describe("Connection form", () => {
   it("opens ready for a pasted API key", () => {
     expect(emptyEstablishmentFields("github").source).toBe("ApiKey");
-    expect(credentialSourcesFor("github")[0]?.value).toBe("ApiKey");
   });
 
-  it("offers a saved login only where the system has a browser login", () => {
-    expect(credentialSourcesFor("github").map((source) => source.value)).toEqual(["ApiKey", "Env"]);
-    expect(credentialSourcesFor("linear").map((source) => source.value)).toEqual(["ApiKey", "Env", "Stored"]);
-  });
-
-  it("reports a missing account on the account field", () => {
-    expect(issuesOf(validate({ account: "   " }))).toEqual([
+  it("requires an account only for Linear", () => {
+    expect(issuesOf(validate({ account: "   ", apiKey: "secret" }))).toEqual([]);
+    expect(issuesOf(validate({ system: "linear", account: "   ", apiKey: "secret" }))).toEqual([
       { path: ["account"], message: "Name the account this Connection signs in as." },
     ]);
   });
@@ -56,11 +50,20 @@ describe("Connection form", () => {
       ...emptyEstablishmentFields("github", "  acme  "),
       apiKey: "ghp_secret",
     });
-    expect(establishment.account).toBe("acme");
+    expect(establishment).not.toHaveProperty("account");
     expect(establishment.source._tag).toBe("ApiKey");
     if (establishment.source._tag !== "ApiKey") throw new Error("expected an API key source");
     expect(String(establishment.source.key)).not.toContain("ghp_secret");
     expect(Redacted.value(establishment.source.key)).toBe("ghp_secret");
+  });
+
+  it("builds the GitHub CLI marker without an account or token", () => {
+    expect(
+      establishmentFrom({
+        ...emptyEstablishmentFields("github"),
+        source: "GitHubCli",
+      }),
+    ).toEqual({ system: "github", source: { _tag: "GitHubCli" } });
   });
 
   it("carries the environment reference through without copying a value", () => {

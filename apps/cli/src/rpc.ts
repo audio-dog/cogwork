@@ -9,16 +9,19 @@ import { cursorRunner } from "@cogwork/cursor-acp";
 import { ContextAssembler, Daemon, Provider, Replay } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
+import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
+import * as FiberMap from "effect/FiberMap";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Tuple from "effect/Tuple";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { type FromClientEncoded, type FromServerEncoded, RequestId } from "effect/unstable/rpc/RpcMessage";
 import * as RpcMiddleware from "effect/unstable/rpc/RpcMiddleware";
@@ -123,9 +126,13 @@ const daemonClientRpcs = DaemonRpcs.middleware(DaemonDeadlineMiddleware);
 
 export const makeDaemonClient = () => RpcClient.make(daemonClientRpcs);
 
-interface PendingDeadline {
-  readonly clientId: number;
-  readonly fiber: Fiber.Fiber<void, never>;
+type ClientDeadlineKeys = ReadonlyMap<number, ReadonlySet<string>>;
+
+interface DeadlineRegistry {
+  readonly claim: (clientId: number, key: string) => Effect.Effect<boolean>;
+  readonly remove: (clientId: number, key: string) => Effect.Effect<void>;
+  readonly removeClient: (clientId: number) => Effect.Effect<void>;
+  readonly run: (clientId: number, key: string, effect: Effect.Effect<void>) => Effect.Effect<void>;
 }
 
 const deadlineKey = (clientId: number, requestId: string | number) => `${clientId}:${requestId}`;
@@ -134,51 +141,46 @@ const deadlineFailure = (tag: string, deadline: string) => {
   return new DaemonRpcTimeout({ rpc: tag, deadline });
 };
 
-const takeDeadlines = (
-  deadlines: Ref.Ref<ReadonlyMap<string, PendingDeadline>>,
-  predicate: (key: string, pending: PendingDeadline) => boolean,
-) =>
-  Ref.modify(deadlines, (current) => {
-    const matching = [...current].filter(([key, pending]) => predicate(key, pending));
-    const remaining = new Map([...current].filter(([key, pending]) => !predicate(key, pending)));
-    return [matching.map(([, pending]) => pending), remaining] as const;
+const entriesWithoutKey = <K, V>(current: ReadonlyMap<K, V>, key: K) =>
+  [...current].filter(([currentKey]) => currentKey !== key);
+
+const replaceClientDeadlineKeys = (
+  current: ClientDeadlineKeys,
+  clientId: number,
+  clientKeys: ReadonlySet<string>,
+) => {
+  const replacement = clientKeys.size === 0 ? [] : [Tuple.make(clientId, clientKeys)];
+  return new Map([...entriesWithoutKey(current, clientId), ...replacement]);
+};
+
+const addDeadlineKey = (deadlineKeys: Ref.Ref<ClientDeadlineKeys>, clientId: number, key: string) =>
+  Ref.update(deadlineKeys, (current) => {
+    const clientKeys = new Set([...(current.get(clientId) ?? []), key]);
+    return replaceClientDeadlineKeys(current, clientId, clientKeys);
   });
 
-const interruptPendingDeadlines = (pending: ReadonlyArray<PendingDeadline>) =>
-  Effect.forEach(pending, ({ fiber }) => Fiber.interrupt(fiber), { discard: true });
+const claimDeadlineKey = (deadlineKeys: Ref.Ref<ClientDeadlineKeys>, clientId: number, key: string) =>
+  Ref.modify(deadlineKeys, (current) => {
+    const clientKeys = current.get(clientId);
+    if (!clientKeys?.has(key)) return Tuple.make(false, current);
+    const remainingKeys = new Set([...clientKeys].filter((currentKey) => currentKey !== key));
+    return Tuple.make(true, replaceClientDeadlineKeys(current, clientId, remainingKeys));
+  });
 
-const cancelDeadline = (
-  deadlines: Ref.Ref<ReadonlyMap<string, PendingDeadline>>,
-  clientId: number,
-  requestId: string | number,
-) =>
-  takeDeadlines(deadlines, (key) => key === deadlineKey(clientId, requestId)).pipe(
-    Effect.flatMap(interruptPendingDeadlines),
-  );
-
-const expireDeadline = (
-  deadlines: Ref.Ref<ReadonlyMap<string, PendingDeadline>>,
-  clientId: number,
-  requestId: string | number,
-) =>
-  takeDeadlines(deadlines, (key) => key === deadlineKey(clientId, requestId)).pipe(
-    Effect.map((pending) => pending.length > 0),
-  );
-
-const cancelClientDeadlines = (deadlines: Ref.Ref<ReadonlyMap<string, PendingDeadline>>, clientId: number) =>
-  takeDeadlines(deadlines, (_key, pending) => pending.clientId === clientId).pipe(
-    Effect.flatMap(interruptPendingDeadlines),
+const takeClientDeadlineKeys = (deadlineKeys: Ref.Ref<ClientDeadlineKeys>, clientId: number) =>
+  Ref.modify(deadlineKeys, (current) =>
+    Tuple.make([...(current.get(clientId) ?? [])], replaceClientDeadlineKeys(current, clientId, new Set())),
   );
 
 const cancelResponseDeadline = (
-  deadlines: Ref.Ref<ReadonlyMap<string, PendingDeadline>>,
+  deadlines: DeadlineRegistry,
   clientId: number,
   response: FromServerEncoded,
 ) => {
-  if (response._tag === "Chunk") return cancelDeadline(deadlines, clientId, response.requestId);
-  if (response._tag === "Exit") return cancelDeadline(deadlines, clientId, response.requestId);
+  if (response._tag === "Chunk") return deadlines.remove(clientId, deadlineKey(clientId, response.requestId));
+  if (response._tag === "Exit") return deadlines.remove(clientId, deadlineKey(clientId, response.requestId));
   if (response._tag === "ClientProtocolError" || response._tag === "Defect") {
-    return cancelClientDeadlines(deadlines, clientId);
+    return deadlines.removeClient(clientId);
   }
   return Effect.void;
 };
@@ -209,39 +211,44 @@ const notifyDeadline = (
     ),
   );
 
-const startDeadline = (
-  deadlines: Ref.Ref<ReadonlyMap<string, PendingDeadline>>,
+function startDeadline(
+  deadlines: DeadlineRegistry,
   handlers: Ref.Ref<ReadonlyMap<number, (response: FromServerEncoded) => Effect.Effect<void>>>,
   upstream: RpcClient.Protocol["Service"],
   encodeError: (error: DaemonRpcTimeout) => Effect.Effect<unknown, Schema.SchemaError>,
   deadline: Duration.Input,
   clientId: number,
   request: Extract<FromClientEncoded, { readonly _tag: "Request" }>,
-) => {
+) {
   const key = deadlineKey(clientId, request.id);
-  return Effect.sleep(deadline).pipe(
-    Effect.andThen(expireDeadline(deadlines, clientId, request.id)),
-    Effect.flatMap((claimed) => {
-      if (!claimed) return Effect.void;
-      return encodeError(deadlineFailure(request.tag, String(deadline))).pipe(
-        Effect.orDie,
-        Effect.flatMap((encodedError) => notifyDeadline(handlers, clientId, request.id, encodedError)),
-        Effect.andThen(
-          sendInterrupt(upstream, clientId, request.id).pipe(
-            Effect.timeout("1 second"),
-            Effect.ignoreCause,
-            Effect.forkDetach,
-            Effect.asVoid,
+  return deadlines.run(
+    clientId,
+    key,
+    Effect.sleep(deadline).pipe(
+      Effect.andThen(deadlines.claim(clientId, key)),
+      Effect.flatMap((claimed) => {
+        if (!claimed) return Effect.void;
+        return encodeError(deadlineFailure(request.tag, String(deadline))).pipe(
+          Effect.orDie,
+          Effect.flatMap((encodedError) =>
+            notifyDeadline(handlers, clientId, request.id, encodedError).pipe(
+              Effect.ensuring(
+                sendInterrupt(upstream, clientId, request.id).pipe(
+                  Effect.timeout("1 second"),
+                  Effect.ignoreCause,
+                ),
+              ),
+            ),
           ),
-        ),
-      );
-    }),
-    Effect.forkDetach,
-    Effect.flatMap((fiber) =>
-      Ref.update(deadlines, (current) => new Map(current).set(key, { clientId, fiber })),
+        );
+      }),
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) => Effect.logError("RPC deadline fiber failed", { cause }),
+      ),
     ),
   );
-};
+}
 
 export const daemonRpcDeadlineLayer = (
   deadline: Duration.Input,
@@ -251,7 +258,33 @@ export const daemonRpcDeadlineLayer = (
     Effect.gen(function* () {
       const upstream = yield* RpcClient.Protocol;
       const encodeError = Schema.encodeUnknownEffect(upstream.codecFor(DaemonRpcTimeout));
-      const deadlines = yield* Ref.make<ReadonlyMap<string, PendingDeadline>>(new Map());
+      const deadlineFibers = yield* FiberMap.make<string>();
+      const deadlineKeys = yield* Ref.make<ClientDeadlineKeys>(new Map());
+      const deadlineGate = Semaphore.makeUnsafe(1);
+      const deadlines: DeadlineRegistry = {
+        claim: (clientId, key) => deadlineGate.withPermits(1)(claimDeadlineKey(deadlineKeys, clientId, key)),
+        remove: (clientId, key) =>
+          deadlineGate.withPermits(1)(
+            claimDeadlineKey(deadlineKeys, clientId, key).pipe(
+              Effect.flatMap((claimed) => (claimed ? FiberMap.remove(deadlineFibers, key) : Effect.void)),
+            ),
+          ),
+        removeClient: (clientId) =>
+          deadlineGate.withPermits(1)(
+            takeClientDeadlineKeys(deadlineKeys, clientId).pipe(
+              Effect.flatMap((keys) =>
+                Effect.forEach(keys, (key) => FiberMap.remove(deadlineFibers, key), { discard: true }),
+              ),
+            ),
+          ),
+        run: (clientId, key, effect) =>
+          deadlineGate.withPermits(1)(
+            addDeadlineKey(deadlineKeys, clientId, key).pipe(
+              Effect.andThen(FiberMap.run(deadlineFibers, key, effect, { startImmediately: true })),
+              Effect.asVoid,
+            ),
+          ),
+      };
       const handlers = yield* Ref.make<
         ReadonlyMap<number, (response: FromServerEncoded) => Effect.Effect<void>>
       >(new Map());
@@ -265,29 +298,27 @@ export const daemonRpcDeadlineLayer = (
               ),
             ),
             Effect.ensuring(
-              cancelClientDeadlines(deadlines, clientId).pipe(
-                Effect.andThen(
-                  Ref.update(
-                    handlers,
-                    (current) =>
-                      new Map([...current].filter(([currentClientId]) => currentClientId !== clientId)),
+              deadlines
+                .removeClient(clientId)
+                .pipe(
+                  Effect.andThen(
+                    Ref.update(handlers, (current) => new Map(entriesWithoutKey(current, clientId))),
                   ),
                 ),
-              ),
             ),
           ),
         send: (clientId, request, transferables) => {
           if (request._tag === "Interrupt") {
-            return cancelDeadline(deadlines, clientId, request.requestId).pipe(
-              Effect.andThen(upstream.send(clientId, request, transferables)),
-            );
+            return deadlines
+              .remove(clientId, deadlineKey(clientId, request.requestId))
+              .pipe(Effect.andThen(upstream.send(clientId, request, transferables)));
           }
           if (request._tag !== "Request") {
             return upstream.send(clientId, request, transferables);
           }
           return startDeadline(deadlines, handlers, upstream, encodeError, deadline, clientId, request).pipe(
             Effect.andThen(upstream.send(clientId, request, transferables)),
-            Effect.onError(() => cancelDeadline(deadlines, clientId, request.id)),
+            Effect.onError(() => deadlines.remove(clientId, deadlineKey(clientId, request.id))),
           );
         },
         supportsAck: upstream.supportsAck,
@@ -311,7 +342,7 @@ export const serverLayer = (options: DaemonOptions) =>
         Daemon.serverLayer({
           transport: transportLayer(options.socketPath),
           credentials: credentialsLayer(options.credentialsPath),
-          contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
+          contextAssembler: contextAssemblerLayer(nodePath.dirname(options.controlStorePath)),
           runLedger: ledgerLayer,
           controlStorePath: options.controlStorePath,
           userAgentsDir,

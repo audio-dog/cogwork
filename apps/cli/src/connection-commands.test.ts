@@ -5,13 +5,18 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { formatConnectionMutation, readApiKeyFrom, resolveConnectionSource } from "./connection-commands";
+import {
+  establishmentOf,
+  formatConnectionMutation,
+  readApiKeyFrom,
+  resolveConnectionSource,
+} from "./connection-commands";
 
 describe("Connection commands", () => {
   it.effect("reads an API key when no source flag is selected", () =>
     Effect.gen(function* () {
       const source = yield* resolveConnectionSource(
-        { env: Option.none(), stored: false },
+        { env: Option.none(), githubCli: false, stored: false },
         "github",
         Effect.succeed({ _tag: "ApiKey", key: Redacted.make("secret") }),
       );
@@ -23,7 +28,7 @@ describe("Connection commands", () => {
   it.effect("keeps an environment variable as an explicit alternate source", () =>
     Effect.gen(function* () {
       const source = yield* resolveConnectionSource(
-        { env: Option.some("GITHUB_TOKEN"), stored: false },
+        { env: Option.some("GITHUB_TOKEN"), githubCli: false, stored: false },
         "github",
         Effect.die(new Error("API key input must not be read")),
       );
@@ -35,7 +40,7 @@ describe("Connection commands", () => {
   it.effect("keeps Linear's saved login as an explicit alternate source", () =>
     Effect.gen(function* () {
       const source = yield* resolveConnectionSource(
-        { env: Option.none(), stored: true },
+        { env: Option.none(), githubCli: false, stored: true },
         "linear",
         Effect.die(new Error("API key input must not be read")),
       );
@@ -48,7 +53,7 @@ describe("Connection commands", () => {
     Effect.gen(function* () {
       const failure = yield* Effect.flip(
         resolveConnectionSource(
-          { env: Option.none(), stored: true },
+          { env: Option.none(), githubCli: false, stored: true },
           "github",
           Effect.die(new Error("API key input must not be read")),
         ),
@@ -62,7 +67,7 @@ describe("Connection commands", () => {
     Effect.gen(function* () {
       const failure = yield* Effect.flip(
         resolveConnectionSource(
-          { env: Option.some("GITHUB_TOKEN"), stored: true },
+          { env: Option.some("GITHUB_TOKEN"), githubCli: false, stored: true },
           "github",
           Effect.die(new Error("API key input must not be read")),
         ),
@@ -70,7 +75,46 @@ describe("Connection commands", () => {
 
       assert.strictEqual(
         failure.message,
-        "--env and --stored cannot be used together; omit both to read an API key from stdin",
+        "Choose only one credential source: --env, --github-cli, or --stored",
+      );
+    }),
+  );
+
+  it.effect("selects the GitHub CLI without reading stdin", () =>
+    Effect.gen(function* () {
+      const source = yield* resolveConnectionSource(
+        { env: Option.none(), githubCli: true, stored: false },
+        "github",
+        Effect.die(new Error("API key input must not be read")),
+      );
+
+      assert.deepStrictEqual(source, { _tag: "GitHubCli" });
+    }),
+  );
+
+  it.effect("rejects the GitHub CLI source outside GitHub", () =>
+    Effect.gen(function* () {
+      const failure = yield* Effect.flip(
+        resolveConnectionSource(
+          { env: Option.none(), githubCli: true, stored: false },
+          "linear",
+          Effect.die(new Error("API key input must not be read")),
+        ),
+      );
+
+      assert.strictEqual(failure.message, "--github-cli is available only for GitHub Connections");
+    }),
+  );
+
+  it.effect("rejects a typed GitHub account", () =>
+    Effect.gen(function* () {
+      const failure = yield* Effect.flip(
+        establishmentOf("github", Option.some("octocat"), { _tag: "GitHubCli" }),
+      );
+
+      assert.strictEqual(
+        failure.message,
+        "GitHub Connections discover the account; omit the account argument",
       );
     }),
   );

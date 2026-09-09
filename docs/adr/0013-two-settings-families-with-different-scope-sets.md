@@ -112,3 +112,9 @@ Two lines above are narrowed by this:
 
 The Operation settings family, the empty cells, and the `(scope set, operator, direction)` triple are
 unchanged, as is the Connection amendment above — a Connection has no Scope and therefore no tree.
+
+## Amendment (2026-09-09) — Codex trusts ambient Hooks for registered Workspaces
+
+ADR [0023](./0023-codex-runs-trust-ambient-hooks.md) makes a narrow Harness exception to the original
+repository-Hook prohibition. A Codex Run trusts the ambient Hooks that Codex discovers in a
+registered Workspace. This does not add Hook contributions or settle their Cogwork setting model.

@@ -1,8 +1,9 @@
 import {
+  CancelRunError,
   CancelRunResult,
   type ClassifiedItem,
   type Connection,
-  type ConnectionEstablishment,
+  ConnectionEstablishment,
   ConnectionFailure,
   type ConnectionId,
   type ConnectionMutationResult,
@@ -23,16 +24,15 @@ import {
   Principal,
   type PrincipalId,
   pluginRequiringConnection,
-  RunAlreadyFinished,
   type RunId,
-  RunNotFound,
+  type RunStatus,
   type TriageRole,
   type WorkItemId,
   WorkItemNotFound,
   type WorkspaceId,
-  WorkspaceManagementError,
   type WorkspaceRegistration,
   WorkspaceRegistrationError,
+  WorkspaceRegistryError,
   type WorkspaceUpdate,
   workspaceFailureState,
   workspaceStateFromInfo,
@@ -137,15 +137,20 @@ const parkedItem = (observed: ObservedItem | null) => {
 
 const cancelDrainDeadline = "5 seconds";
 
+const runNotFound = (runId: RunId) => new CancelRunError({ reason: "not-found", runId });
+
+const runAlreadyFinished = (runId: RunId, status: RunStatus) =>
+  new CancelRunError({ reason: "already-finished", runId, status });
+
 export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   readonly runId: RunId;
   readonly note?: string;
 }) {
   const ledger = yield* RunLedger;
   const run = yield* ledger.getRun(payload.runId);
-  if (run === null) return yield* new RunNotFound({ runId: payload.runId });
+  if (run === null) return yield* runNotFound(payload.runId);
   if (run.status !== "running") {
-    return yield* new RunAlreadyFinished({ runId: payload.runId, status: run.status });
+    return yield* runAlreadyFinished(payload.runId, run.status);
   }
 
   const runControl = yield* RunControl;
@@ -178,10 +183,10 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
 
       const endedAtMillis = yield* Clock.currentTimeMillis;
       const settled = yield* ledger.getRun(payload.runId);
-      if (settled === null) return yield* new RunNotFound({ runId: payload.runId });
+      if (settled === null) return yield* runNotFound(payload.runId);
       if (settled.status !== "running") {
         yield* releaseAbandonedClaim;
-        return yield* new RunAlreadyFinished({ runId: payload.runId, status: settled.status });
+        return yield* runAlreadyFinished(payload.runId, settled.status);
       }
       yield* ledger.updateRun(payload.runId, {
         status: "interrupted",
@@ -437,7 +442,13 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
   yield* publisher.publishWorkspaceRemoved(workspace);
   const controlStore = yield* store.picture.pipe(
     Effect.mapError(
-      (error) => new WorkspaceManagementError({ operation: "deregister workspace", message: error.message }),
+      (error) =>
+        new WorkspaceRegistryError({
+          reason: "management-failed",
+          workspace,
+          operation: "deregister workspace",
+          message: error.message,
+        }),
     ),
   );
   yield* publisher.publishControlStore(controlStore);
@@ -611,15 +622,19 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
       "Connection does not exist; establish it first",
     );
   }
-  if (existing.account !== payload.establishment.account) {
+  const requestedAccount = ConnectionEstablishment.match(payload.establishment, {
+    github: () => null,
+    linear: ({ account }) => account,
+  });
+  if (requestedAccount !== null && existing.account !== requestedAccount) {
     return yield* connectionFailure(
       "re-connect Connection",
       existing.id,
-      `Connection is established for "${existing.account}". Remove it before connecting to "${payload.establishment.account}".`,
+      `Connection is established for "${existing.account}". Remove it before connecting to "${requestedAccount}".`,
     );
   }
   const connection = yield* connections
-    .establish(payload.establishment)
+    .establish(payload.establishment, existing.account)
     .pipe(mapConnectionFailure("re-connect Connection", existing.id));
   yield* publishControlStore();
   yield* Effect.logInfo("Connection re-connected", {

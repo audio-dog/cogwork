@@ -29,8 +29,11 @@ const envFlag = Flag.string("env").pipe(
 const storedFlag = Flag.boolean("stored").pipe(
   Flag.withDescription("Use an existing stored browser-login credential"),
 );
+const githubCliFlag = Flag.boolean("github-cli").pipe(
+  Flag.withDescription("Use the login saved by gh auth login"),
+);
 const systemArgument = Argument.string("system");
-const accountArgument = Argument.string("account");
+const accountArgument = Argument.string("account").pipe(Argument.optional);
 const connectionIdArgument = Argument.string("connection-id");
 const decodeSystem = Schema.decodeUnknownEffect(ConnectionSystem);
 const decodeConnectionId = Schema.decodeUnknownEffect(ConnectionId);
@@ -38,6 +41,7 @@ const decodeConnectionId = Schema.decodeUnknownEffect(ConnectionId);
 type ApiKeySource = Extract<ConnectionEstablishment["source"], { readonly _tag: "ApiKey" }>;
 type ConnectionSourceOptions = {
   readonly env: Option.Option<string>;
+  readonly githubCli: boolean;
   readonly stored: boolean;
 };
 
@@ -65,15 +69,24 @@ export const resolveConnectionSource = Effect.fn("connection.source")(function* 
   system: ConnectionSystemType,
   readApiKey: Effect.Effect<ApiKeySource, ConnectionFailure>,
 ) {
-  if (Option.isSome(options.env) && options.stored) {
+  const selected = [Option.isSome(options.env), options.githubCli, options.stored].filter(Boolean);
+  if (selected.length > 1) {
     return yield* new ConnectionFailure({
       operation: "parse Connection source",
       connectionId: null,
-      message: "--env and --stored cannot be used together; omit both to read an API key from stdin",
+      message: "Choose only one credential source: --env, --github-cli, or --stored",
     });
   }
   if (Option.isSome(options.env))
     return { _tag: "Env", name: options.env.value } satisfies ConnectionEstablishment["source"];
+  if (options.githubCli && system !== "github") {
+    return yield* new ConnectionFailure({
+      operation: "parse Connection source",
+      connectionId: null,
+      message: "--github-cli is available only for GitHub Connections",
+    });
+  }
+  if (options.githubCli) return { _tag: "GitHubCli" } satisfies ConnectionEstablishment["source"];
   if (!options.stored) return yield* readApiKey;
   if (system !== "linear") {
     return yield* new ConnectionFailure({
@@ -113,18 +126,41 @@ const readApiKey = Effect.fn("connection.readApiKey")(function* () {
 const sourceOf = (options: ConnectionSourceOptions, system: ConnectionSystemType) =>
   resolveConnectionSource(options, system, readApiKey());
 
+export const establishmentOf = Effect.fn("connection.establishment")(function* (
+  system: ConnectionSystemType,
+  account: Option.Option<string>,
+  source: ConnectionEstablishment["source"],
+) {
+  if (system === "github" && Option.isSome(account)) {
+    return yield* new ConnectionFailure({
+      operation: "parse Connection account",
+      connectionId: null,
+      message: "GitHub Connections discover the account; omit the account argument",
+    });
+  }
+  if (system === "github") return { system, source } satisfies ConnectionEstablishment;
+  if (Option.isSome(account))
+    return { system, account: account.value, source } satisfies ConnectionEstablishment;
+  return yield* new ConnectionFailure({
+    operation: "parse Connection account",
+    connectionId: null,
+    message: "Linear Connections require an account argument",
+  });
+});
+
 const mutate = Effect.fn("connection.mutate")(function* (options: {
   readonly socket: string;
   readonly system: string;
-  readonly account: string;
+  readonly account: Option.Option<string>;
   readonly env: Option.Option<string>;
+  readonly githubCli: boolean;
   readonly stored: boolean;
   readonly operation: "establish" | "re-connect";
 }) {
   const system = yield* decodeSystem(options.system);
   const source = yield* sourceOf(options, system);
   const client = yield* makeDaemonClient();
-  const establishment = { system, account: options.account, source };
+  const establishment = yield* establishmentOf(system, options.account, source);
   const result =
     options.operation === "establish"
       ? yield* client.EstablishConnection({ establishment })
@@ -157,6 +193,7 @@ export const connectionCommand = Command.make("connection").pipe(
       system: systemArgument,
       account: accountArgument,
       env: envFlag,
+      githubCli: githubCliFlag,
       stored: storedFlag,
     }).pipe(Command.withHandler((options) => runMutation({ ...options, operation: "establish" }))),
     Command.make("re-connect", {
@@ -164,6 +201,7 @@ export const connectionCommand = Command.make("connection").pipe(
       system: systemArgument,
       account: accountArgument,
       env: envFlag,
+      githubCli: githubCliFlag,
       stored: storedFlag,
     }).pipe(Command.withHandler((options) => runMutation({ ...options, operation: "re-connect" }))),
     Command.make("remove", {

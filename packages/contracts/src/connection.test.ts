@@ -26,13 +26,30 @@ describe("Connection", () => {
   it("decodes API keys as redacted establishment input", () => {
     const establishment = Schema.decodeSync(ConnectionEstablishment)({
       system: "github",
-      account: "default",
       source: { _tag: "ApiKey", key: "secret" },
     });
 
     assert.strictEqual(establishment.source._tag, "ApiKey");
     if (establishment.source._tag !== "ApiKey") return;
     assert.strictEqual(Redacted.value(establishment.source.key), "secret");
+  });
+
+  it("decodes the GitHub CLI marker without a typed account", () => {
+    const establishment = Schema.decodeSync(ConnectionEstablishment)({
+      system: "github",
+      source: { _tag: "GitHubCli" },
+    });
+
+    assert.deepStrictEqual(establishment, {
+      system: "github",
+      source: { _tag: "GitHubCli" },
+    });
+  });
+
+  it("requires Linear establishments to name an account", () => {
+    const decode = Schema.decodeUnknownSync(ConnectionEstablishment);
+
+    assert.throws(() => decode({ system: "linear", source: { _tag: "Stored" } }));
   });
 
   it("rejects ids without a known system and account", () => {

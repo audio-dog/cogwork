@@ -7,31 +7,33 @@ import type {
   TriageResultRole,
   WorkspaceConfig,
 } from "@cogwork/contracts";
+import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import { day } from "./time";
 
-export type SuccessfulCoordinationOutcome = "triaged" | "implemented" | "followedUp";
+export type OperationOutcome = Data.TaggedEnum<{
+  Triaged: { readonly result: TriageResultRole };
+  Implemented: { readonly result: "opened-pr" };
+  PullRequestReady: { readonly result: "ready-for-pr" };
+  FollowedUp: { readonly result: Exclude<FollowUpResultOutcome, "stuck"> };
+  Failed: { readonly result: "stuck"; readonly retryable: boolean };
+}>;
+export const OperationOutcome = Data.taggedEnum<OperationOutcome>();
 
-export type OperationOutcome =
-  | {
-      readonly coordination: SuccessfulCoordinationOutcome;
-      readonly attempt: "succeeded";
-    }
-  | {
-      readonly coordination: "attemptFailed";
-      readonly attempt: "failed";
-      readonly retryable: boolean;
-    };
+type SuccessfulOperationOutcomeTag = Exclude<OperationOutcome["_tag"], "Failed">;
+type OperationOutcomeFor<Tag extends SuccessfulOperationOutcomeTag> = Extract<
+  OperationOutcome,
+  { readonly _tag: Tag | "Failed" }
+>;
 
-type StageOutcomeTable<ResultField extends string, Outcome extends string> = {
-  readonly resultField: ResultField;
-  readonly outcomes: Readonly<Record<Outcome, OperationOutcome>>;
+type StageOutcomeTable<Outcome extends string, SuccessTag extends SuccessfulOperationOutcomeTag> = {
+  readonly outcomes: ReadonlyArray<OperationOutcomeFor<SuccessTag> & { readonly result: Outcome }>;
 };
 
-interface OperationOutcomeTables {
-  readonly triage: StageOutcomeTable<"role", TriageResultRole>;
-  readonly implement: StageOutcomeTable<"outcome", ImplementResultOutcome>;
-  readonly "follow-up": StageOutcomeTable<"outcome", FollowUpResultOutcome>;
+export interface OperationOutcomeTables {
+  readonly triage: StageOutcomeTable<TriageResultRole, "Triaged">;
+  readonly implement: StageOutcomeTable<ImplementResultOutcome, "Implemented" | "PullRequestReady">;
+  readonly "follow-up": StageOutcomeTable<FollowUpResultOutcome, "FollowedUp">;
 }
 
 export type OperationOutcomeTable = OperationOutcomeTables[LifecycleStage];
@@ -78,36 +80,35 @@ interface StageDefaults<Stage extends LifecycleStage> {
   readonly outcomeTable: OperationOutcomeTables[Stage];
 }
 
-const succeeded = (coordination: SuccessfulCoordinationOutcome) =>
-  ({
-    coordination,
-    attempt: "succeeded",
-  }) satisfies OperationOutcome;
-
-const nonRetryableFailure = {
-  coordination: "attemptFailed",
-  attempt: "failed",
+const nonRetryableFailure = OperationOutcome.Failed({
+  result: "stuck",
   retryable: false,
-} satisfies OperationOutcome;
+});
 
-const triageOutcomes: Readonly<Record<TriageResultRole, OperationOutcome>> = {
-  "ready-for-agent": succeeded("triaged"),
-  "needs-info": succeeded("triaged"),
-  "ready-for-human": succeeded("triaged"),
-  wontfix: succeeded("triaged"),
-};
+const triageOutcomes = [
+  OperationOutcome.Triaged({ result: "ready-for-agent" }),
+  OperationOutcome.Triaged({ result: "needs-info" }),
+  OperationOutcome.Triaged({ result: "ready-for-human" }),
+  OperationOutcome.Triaged({ result: "wontfix" }),
+] satisfies OperationOutcomeTables["triage"]["outcomes"];
 
-const implementOutcomes: Readonly<Record<ImplementResultOutcome, OperationOutcome>> = {
-  "opened-pr": succeeded("implemented"),
-  "ready-for-pr": succeeded("implemented"),
-  stuck: nonRetryableFailure,
-};
+const implementOutcomes = [
+  OperationOutcome.Implemented({ result: "opened-pr" }),
+  OperationOutcome.PullRequestReady({ result: "ready-for-pr" }),
+  nonRetryableFailure,
+] satisfies OperationOutcomeTables["implement"]["outcomes"];
 
-const followUpOutcomes: Readonly<Record<FollowUpResultOutcome, OperationOutcome>> = {
-  pushed: succeeded("followedUp"),
-  noop: succeeded("followedUp"),
-  stuck: nonRetryableFailure,
-};
+const followUpOutcomes = [
+  OperationOutcome.FollowedUp({ result: "pushed" }),
+  OperationOutcome.FollowedUp({ result: "noop" }),
+  nonRetryableFailure,
+] satisfies OperationOutcomeTables["follow-up"]["outcomes"];
+
+export const operationOutcomeTables = {
+  triage: { outcomes: triageOutcomes },
+  implement: { outcomes: implementOutcomes },
+  "follow-up": { outcomes: followUpOutcomes },
+} satisfies OperationOutcomeTables;
 
 const resolveStageConfig = <Stage extends LifecycleStage>(
   config: WorkspaceConfig,
@@ -124,7 +125,7 @@ export const resolveTriage = (config: WorkspaceConfig) =>
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
     needs: [],
-    outcomeTable: { resultField: "role", outcomes: triageOutcomes },
+    outcomeTable: operationOutcomeTables.triage,
   });
 
 export const resolveImplement = (config: WorkspaceConfig) =>
@@ -134,7 +135,7 @@ export const resolveImplement = (config: WorkspaceConfig) =>
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
     needs: [],
-    outcomeTable: { resultField: "outcome", outcomes: implementOutcomes },
+    outcomeTable: operationOutcomeTables.implement,
   });
 
 export const resolveFollowUp = (config: WorkspaceConfig) =>
@@ -144,7 +145,7 @@ export const resolveFollowUp = (config: WorkspaceConfig) =>
     resumeMaxAgeMillis: Duration.toMillis(day),
     resumeMaxTokens: null,
     needs: [],
-    outcomeTable: { resultField: "outcome", outcomes: followUpOutcomes },
+    outcomeTable: operationOutcomeTables["follow-up"],
   });
 
 const stageResolvers: {

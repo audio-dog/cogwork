@@ -23,6 +23,7 @@ import {
 } from "@cogwork/contracts";
 
 import { assert, describe, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -218,6 +219,16 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   }),
 };
 
+class ContextAssemblyRequests extends Context.Service<
+  ContextAssemblyRequests,
+  Ref.Ref<ReadonlyArray<ContextAssembler.AssembleRequest>>
+>()("@cogwork/engine/executor.test/ContextAssemblyRequests") {
+  static readonly layer = Layer.effect(
+    ContextAssemblyRequests,
+    Ref.make<ReadonlyArray<ContextAssembler.AssembleRequest>>([]),
+  );
+}
+
 class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<ReadonlyArray<string>>>()(
   "@cogwork/engine/executor.test/ContextCleanupCalls",
 ) {
@@ -226,18 +237,21 @@ class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<R
     ContextAssembler.ContextAssembler,
     Effect.gen(function* () {
       const cleanups = yield* ContextCleanupCalls;
+      const requests = yield* ContextAssemblyRequests;
       return {
-        assemble: () =>
-          Effect.succeed({
-            layers: [],
-            operatingInstructionsPath: "/",
-            operatingInstructionResources: [],
-            sources: [],
-          }),
+        assemble: (request) =>
+          Ref.update(requests, (calls) => [...calls, request]).pipe(
+            Effect.map(() => ({
+              layers: [],
+              operatingInstructionsPath: "/",
+              operatingInstructionResources: [],
+              sources: [],
+            })),
+          ),
         cleanup: (runId) => Ref.update(cleanups, (calls) => [...calls, runId]),
       };
     }),
-  ).pipe(Layer.provideMerge(ContextCleanupCalls.layer));
+  ).pipe(Layer.provideMerge(Layer.mergeAll(ContextCleanupCalls.layer, ContextAssemblyRequests.layer)));
 }
 
 const missingOperatingInstructionsContext = Layer.succeed(ContextAssembler.ContextAssembler, {
@@ -1057,11 +1071,11 @@ const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
         PullRequestCalls,
         (probe): SourceControlProviderService => ({
           observe: () => Effect.succeed(new Map()),
-          findOpenPullRequest: () =>
+          findOpenPullRequest: (_workspace, headBranch) =>
             Ref.update(probe.observations, (count) => count + 1).pipe(
               Effect.flatMap(() => {
                 if (options.findError) return Effect.fail(options.findError);
-                if (!options.existingHead) return Effect.succeed(null);
+                if (options.existingHead !== headBranch) return Effect.succeed(null);
                 return Effect.succeed({ number: 22, url: "https://example.test/pull/22" });
               }),
             ),
@@ -1529,6 +1543,7 @@ function provide<SourceControlRequirements = never>(
         testHarness(runners),
         runnerServices,
         ContextCleanupCalls.layer,
+        ContextAssemblyRequests.layer,
         runControl,
         worktree,
         assemblerStub,
@@ -2156,9 +2171,11 @@ describe("Executor.execute", () => {
 
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
+      const assemblyRequests = yield* ContextAssemblyRequests;
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
 
+      assert.strictEqual((yield* Ref.get(assemblyRequests))[0]?.workspace, implementWorkspace.config.name);
       const [request] = yield* Ref.get(requests);
       assert.strictEqual(request?.plan.harness.model, "refreshed-model");
       const model = request?.plan.provenance.resolution.find(({ key }) => key === "model");
@@ -3184,6 +3201,31 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
   });
 
+  it.effect("releases the claim when a crash is combined with an interrupt", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* Effect.exit(execute(executor, implementWorkspace, implementItem));
+
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "claim"));
+      assert.lengthOf(
+        log.filter((call) => call.method === "release"),
+        1,
+      );
+    }).pipe(
+      Effect.provide(
+        provide([
+          capturingRunner(
+            [],
+            Stream.failCause(Cause.combine(Cause.die(new Error("harness crashed")), Cause.interrupt())),
+          ),
+        ]),
+      ),
+    );
+  });
+
   it.effect("releases the claim after a manual cancellation finishes cleanup", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -3568,26 +3610,64 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([sequenceRunner([first, restarted])])));
   });
 
-  it.effect("exhausts a failed implement job and hands the issue back to a human", () => {
-    const error = new HarnessError({ reason: "launch", retryable: false, message: "no cli" });
+  const exhaustedImplementFailure = new HarnessError({
+    reason: "launch",
+    retryable: false,
+    message: "no cli",
+  });
+  const pullRequestLookupFailure = new IssueTrackerError({
+    reason: "unavailable",
+    retryable: true,
+    message: "pull request lookup unavailable",
+  });
+  const exhaustedImplementCases = [
+    {
+      name: "exhausts a failed implement job and hands the issue back to a human",
+      options: {},
+      expectedHandOffStage: "implement",
+    },
+    {
+      name: "does not hand off an exhausted implement job with an open pull request",
+      options: { existingHead: implementBranch },
+      expectedHandOffStage: undefined,
+    },
+    {
+      name: "hands off an exhausted implement job when pull request lookup fails",
+      options: { findError: pullRequestLookupFailure },
+      expectedHandOffStage: "implement",
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: string;
+    readonly options: PullRequestProviderOptions;
+    readonly expectedHandOffStage: "implement" | undefined;
+  }>;
 
-    return Effect.gen(function* () {
+  it.effect.each(exhaustedImplementCases)("$name", ({ options, expectedHandOffStage }) =>
+    Effect.gen(function* () {
       const calls = yield* TrackerCalls;
+      const pullRequests = yield* PullRequestCalls;
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
 
       const log = yield* Ref.get(calls);
-      assert.strictEqual(log.find((c) => c.method === "attemptFailed")?.stage, "implement");
-      const handOff = log.find((c) => c.method === "handOff");
-      assert.strictEqual(handOff?.stage, "implement");
-      assert.include(handOff?.note ?? "", "no cli");
+      assert.strictEqual(log.find((call) => call.method === "attemptFailed")?.stage, "implement");
+      assert.strictEqual(log.find((call) => call.method === "handOff")?.stage, expectedHandOffStage);
+      assert.strictEqual(yield* Ref.get(pullRequests.observations), 1);
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.stage, "implement");
       assert.strictEqual(run?.status, "exhausted");
-    }).pipe(Effect.provide(provide([failingRunner(error)])));
-  });
+    }).pipe(
+      Effect.provide(
+        provide(
+          [failingRunner(exhaustedImplementFailure)],
+          worktreeStubLayer,
+          pullRequestProvider(options),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    ),
+  );
 
   it.effect("does not publish a human attach command for a programmatic-only session", () => {
     const error = new HarnessError({ reason: "turn", retryable: false, message: "resume failed" });

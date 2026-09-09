@@ -1,14 +1,16 @@
-import { spawn } from "node:child_process";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { makeLiveProcessProfiler, type ProcessProfileInput } from "@cogwork/process-diagnostics";
+import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { app, BrowserWindow, crashReporter } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
-import { EngineSupervisor } from "./engine-supervisor";
+import { EngineSupervisor, layer as engineSupervisorLayer } from "./engine-supervisor";
 import { broadcastEngineStatus, registerIpc } from "./ipc";
 import { engineLoggerLayer, mainLogger } from "./logger";
 import { installShutdownBeforeQuit } from "./quit";
@@ -40,7 +42,7 @@ const makeSupervisorLayer = () => {
   const socketPath = defaultSocketPath;
   const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
   const shutdown = resolveEngineShutdownBudgets();
-  return EngineSupervisor.layer({
+  return engineSupervisorLayer({
     command: () =>
       resolveEngineCommand({
         socketPath,
@@ -52,11 +54,6 @@ const makeSupervisorLayer = () => {
         profiling: windowPreferences.get().profiling,
       }),
     socketPath,
-    spawn: (engine) =>
-      spawn(engine.command, [...engine.args], {
-        cwd: engine.cwd,
-        stdio: ["ignore", "pipe", "pipe", "ipc"],
-      }),
     probe: isDaemonListening,
     awaitReachable: waitForDaemonListening,
     terminateTimeout: shutdown.terminateTimeoutMillis,
@@ -91,7 +88,10 @@ const engineStatusPublisherLayer = Layer.effectDiscard(
 );
 
 const makeMainLayer = () => {
-  const supervisor = makeSupervisorLayer();
+  const childProcessSpawner = NodeChildProcessSpawner.layer.pipe(
+    Layer.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer)),
+  );
+  const supervisor = makeSupervisorLayer().pipe(Layer.provide(childProcessSpawner));
   const publisher = engineStatusPublisherLayer.pipe(
     Layer.provide(supervisor),
     Layer.provide(engineLoggerLayer),

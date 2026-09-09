@@ -9,6 +9,7 @@ import {
 } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
 import { CLAUDE_CODE_MODELS, type ClaudeCodeTextProviderOptions } from "@tanstack/ai-claude-code";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -120,6 +121,7 @@ const runtimeLayer = Layer.mergeAll(
     cleanup: () => Effect.die("unexpected context cleanup"),
   }),
   NodeFileSystem.layer,
+  NodePath.layer,
   FetchHttpClient.layer,
 );
 
@@ -459,7 +461,7 @@ describe("Claude Code Harness", () => {
         );
         assert.deepStrictEqual(catalog.provenance, {
           source: "tanstack-runtime",
-          packageVersion: "0.6.3",
+          packageVersion: "0.6.4",
         });
         assert.isUndefined(catalog.efforts);
       }),

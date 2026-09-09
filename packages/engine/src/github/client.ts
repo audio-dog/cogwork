@@ -3,6 +3,7 @@ import {
   connectionAccountOf,
   type GitHubPrioritySource,
   type Priority,
+  TrimmedNonEmptyString,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
@@ -122,7 +123,7 @@ const CreatedPullSchema = Schema.Struct({
   html_url: Schema.String,
 });
 
-const AuthenticatedUserSchema = Schema.Struct({ login: Schema.String });
+const AuthenticatedUserSchema = Schema.Struct({ login: TrimmedNonEmptyString });
 
 const PullSchema = Schema.Struct({
   number: Schema.Finite,
@@ -186,6 +187,7 @@ const GraphQlResponse = Schema.Struct({
 });
 export type GraphQlPayload = typeof GraphQlResponse.Type;
 const decodeGraphQl = Schema.decodeUnknownEffect(GraphQlResponse);
+const decodeGitHubError = Schema.decodeUnknownOption(Schema.Struct({ message: Schema.String }));
 
 const ClosingReferencesPayload = Schema.Struct({
   repository: Schema.NullOr(
@@ -330,11 +332,35 @@ const headerSeconds = (value: string | undefined) => {
 const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
   const retryAfter = headerSeconds(headers["retry-after"]);
   if (retryAfter !== null) return nowMillis + retryAfter * 1000;
+  if (headers["x-ratelimit-remaining"] !== "0") return null;
   const reset = headerSeconds(headers["x-ratelimit-reset"]);
   return reset === null ? null : reset * 1000;
 };
 
 const isTransientStatus = (status: number) => status === 408 || status === 425 || status >= 500;
+
+const classifyGitHubError = (body: unknown) => {
+  const error = Option.getOrNull(decodeGitHubError(body));
+  if (!error) return "unknown";
+  const message = error.message.toLowerCase();
+  if (message.includes("secondary rate limit")) return "rate-limited";
+  if (message.includes("resource not accessible")) return "permission";
+  return "unknown";
+};
+
+const transientAttemptDeadline = "30 seconds";
+
+const classifyForbiddenResponse = Effect.fn("github.classifyForbiddenResponse")(function* (
+  response: HttpClientResponse.HttpClientResponse,
+  remaining: string | undefined,
+) {
+  if (remaining === "0" || response.headers["retry-after"] !== undefined) return "rate-limited";
+  const body = yield* response.json.pipe(
+    Effect.timeoutOption(transientAttemptDeadline),
+    Effect.catchTag("HttpClientError", () => Effect.succeed(Option.none())),
+  );
+  return Option.match(body, { onNone: () => "unknown", onSome: classifyGitHubError });
+});
 
 class GitHubAttemptError extends Data.TaggedError("GitHubAttemptError")<{
   readonly error: IssueTrackerError;
@@ -348,9 +374,17 @@ const permanentAttemptError = (error: IssueTrackerError) =>
   new GitHubAttemptError({ error, transient: false });
 
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
-const transientAttemptDeadline = "30 seconds";
 const paginationDeadline = "5 minutes";
 const pageSize = 100;
+
+const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, HttpClientError.HttpClientError, R>) =>
+  attempt.pipe(
+    Effect.catchTag("HttpClientError", (error) => Effect.fail(transientAttemptError(error.message))),
+    Effect.timeout(transientAttemptDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(transientAttemptError(`GitHub request timed out after ${transientAttemptDeadline}`)),
+    ),
+  );
 
 const openPullsPath = (repo: GitHubRepoRef, headBranch?: string) => {
   if (!headBranch) return "/pulls?state=open&per_page=100&sort=updated&direction=desc";
@@ -418,45 +452,48 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     if (cooldownUntil !== null && now < cooldownUntil) {
       return yield* permanentAttemptError(rateLimited(cooldownUntil));
     }
-    return yield* Effect.gen(function* () {
-      const response = yield* client.execute(
+    const response = yield* withTransientAttemptDeadline(
+      client.execute(
         request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
-      );
-      const remaining = response.headers["x-ratelimit-remaining"];
-      const resumeAt = rateLimitResumeAt(response.headers, now);
-      if (remaining === "0" && resumeAt !== null) {
-        yield* Ref.set(resumeAtRef, resumeAt);
-      }
-      if (response.status === 401) {
-        return yield* permanentAttemptError(
-          new IssueTrackerError({
-            reason: "auth",
-            message: "GitHub authentication failed (401)",
-          }),
-        );
-      }
-      const throttled =
-        response.status === 429 ||
-        (response.status === 403 && (remaining === "0" || response.headers["retry-after"] !== undefined));
-      if (throttled) {
-        const until = resumeAt ?? now + Duration.toMillis(defaultTrackerCooldown);
-        yield* Ref.set(resumeAtRef, until);
-        return yield* permanentAttemptError(rateLimited(until));
-      }
-      if (isTransientStatus(response.status)) {
-        return yield* transientAttemptError(`GitHub request failed (${response.status})`);
-      }
-      if (response.status >= 400) {
-        return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`));
-      }
-      return yield* consume(response);
-    }).pipe(
-      Effect.catchTag("HttpClientError", (error) => Effect.fail(transientAttemptError(error.message))),
-      Effect.timeout(transientAttemptDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        Effect.fail(transientAttemptError(`GitHub request timed out after ${transientAttemptDeadline}`)),
       ),
     );
+    const remaining = response.headers["x-ratelimit-remaining"];
+    const resumeAt = rateLimitResumeAt(response.headers, now);
+    if (remaining === "0" && resumeAt !== null) {
+      yield* Ref.set(resumeAtRef, resumeAt);
+    }
+    if (response.status === 401) {
+      return yield* permanentAttemptError(
+        new IssueTrackerError({
+          reason: "auth",
+          message: "GitHub authentication failed (401)",
+        }),
+      );
+    }
+    const forbidden =
+      response.status === 403 ? yield* classifyForbiddenResponse(response, remaining) : "unknown";
+    const throttled = response.status === 429 || forbidden === "rate-limited";
+    if (throttled) {
+      const until = resumeAt ?? now + Duration.toMillis(defaultTrackerCooldown);
+      yield* Ref.set(resumeAtRef, until);
+      return yield* permanentAttemptError(rateLimited(until));
+    }
+    if (isTransientStatus(response.status)) {
+      return yield* transientAttemptError(`GitHub request failed (${response.status})`);
+    }
+    if (forbidden === "permission") {
+      return yield* permanentAttemptError(
+        new IssueTrackerError({
+          reason: "unavailable",
+          message: `GitHub request failed (${response.status})`,
+          retryable: false,
+        }),
+      );
+    }
+    if (response.status >= 400) {
+      return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`));
+    }
+    return yield* withTransientAttemptDeadline(consume(response));
   });
 
   const send = Effect.fn("github.send")(function* <A>(
@@ -792,8 +829,10 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
     verifyCredential: (token: Redacted.Redacted<string>) =>
-      execute(HttpClientRequest.get("https://api.github.com/user"), token, acceptResponse).pipe(
+      execute(HttpClientRequest.get("https://api.github.com/user"), token, (response) => response.json).pipe(
         Effect.mapError((error) => error.error),
+        Effect.flatMap((body) => Effect.mapError(decodeAuthenticatedUser(body), toUnavailable)),
+        Effect.map((user) => user.login),
       ),
   };
 });

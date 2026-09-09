@@ -25,21 +25,88 @@ import { Input } from "@cogwork/ui/components/input";
 import { RadioGroup, RadioGroupItem } from "@cogwork/ui/components/radio-group";
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { revalidateLogic, useForm } from "@tanstack/react-form";
-import { useId, useState } from "react";
+import * as Schema from "effect/Schema";
+import { type ReactNode, useId, useState } from "react";
 import {
-  type CredentialSourceTag,
-  credentialSourcesFor,
+  CredentialSourceTag,
   EstablishmentFieldsValidator,
   emptyEstablishmentFields,
   establishmentFrom,
 } from "../features/connection-form";
 import { connectionSystemLabel } from "../features/connections-view";
 
-const sourceHint: Record<CredentialSourceTag, string> = {
-  ApiKey: "Kept in the Credential store, never the Control store.",
-  Env: "Cogwork stores the variable's name, never its value. The daemon reads it from its process environment.",
-  Stored: "Uses the browser grant saved by `cogwork login linear`.",
-};
+const isCredentialSourceTag = Schema.is(CredentialSourceTag);
+
+function CredentialSourceOption({
+  id,
+  value,
+  children,
+}: {
+  readonly id: string;
+  readonly value: CredentialSourceTag;
+  readonly children: ReactNode;
+}) {
+  return (
+    <FieldLabel htmlFor={`${id}-${value}`}>
+      <Field orientation="horizontal">
+        <RadioGroupItem id={`${id}-${value}`} value={value} />
+        <FieldContent>{children}</FieldContent>
+      </Field>
+    </FieldLabel>
+  );
+}
+
+function GitHubCredentialSources({ id }: { readonly id: string }) {
+  return (
+    <>
+      <CredentialSourceOption id={id} value="ApiKey">
+        <FieldTitle>API key</FieldTitle>
+        <FieldDescription>Kept in the Credential store, never the Control store.</FieldDescription>
+      </CredentialSourceOption>
+      <CredentialSourceOption id={id} value="GitHubCli">
+        <FieldTitle>GitHub CLI (gh)</FieldTitle>
+        <FieldDescription>
+          Uses the login saved by <code>gh auth login</code>. Cogwork never stores this token.
+        </FieldDescription>
+      </CredentialSourceOption>
+      <CredentialSourceOption id={id} value="Env">
+        <FieldTitle>Environment variable</FieldTitle>
+        <FieldDescription>
+          Cogwork stores the variable&apos;s name, never its value. The daemon reads it from its process
+          environment.
+        </FieldDescription>
+      </CredentialSourceOption>
+    </>
+  );
+}
+
+function LinearCredentialSources({ id }: { readonly id: string }) {
+  return (
+    <>
+      <CredentialSourceOption id={id} value="ApiKey">
+        <FieldTitle>API key</FieldTitle>
+        <FieldDescription>Kept in the Credential store, never the Control store.</FieldDescription>
+      </CredentialSourceOption>
+      <CredentialSourceOption id={id} value="Env">
+        <FieldTitle>Environment variable</FieldTitle>
+        <FieldDescription>
+          Cogwork stores the variable&apos;s name, never its value. The daemon reads it from its process
+          environment.
+        </FieldDescription>
+      </CredentialSourceOption>
+      <CredentialSourceOption id={id} value="Stored">
+        <FieldTitle>Saved login</FieldTitle>
+        <FieldDescription>
+          Uses the browser grant saved by <code>cogwork login linear</code>.
+        </FieldDescription>
+      </CredentialSourceOption>
+    </>
+  );
+}
+
+function CredentialSourceOptions({ id, system }: { readonly id: string; readonly system: ConnectionSystem }) {
+  return system === "github" ? <GitHubCredentialSources id={id} /> : <LinearCredentialSources id={id} />;
+}
 
 function CredentialSourceField({
   id,
@@ -55,18 +122,8 @@ function CredentialSourceField({
   return (
     <FieldSet>
       <FieldLegend variant="label">Credential source</FieldLegend>
-      <RadioGroup value={value} onValueChange={(next) => next && onChange(next as CredentialSourceTag)}>
-        {credentialSourcesFor(system).map((source) => (
-          <FieldLabel key={source.value} htmlFor={`${id}-${source.value}`}>
-            <Field orientation="horizontal">
-              <RadioGroupItem id={`${id}-${source.value}`} value={source.value} />
-              <FieldContent>
-                <FieldTitle>{source.label}</FieldTitle>
-                <FieldDescription>{sourceHint[source.value]}</FieldDescription>
-              </FieldContent>
-            </Field>
-          </FieldLabel>
-        ))}
+      <RadioGroup value={value} onValueChange={(next) => isCredentialSourceTag(next) && onChange(next)}>
+        <CredentialSourceOptions id={id} system={system} />
       </RadioGroup>
     </FieldSet>
   );
@@ -126,7 +183,7 @@ export function ConnectionEstablishmentDialog({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <FieldGroup>
-            {account === undefined ? (
+            {system === "linear" && account === undefined ? (
               <form.Field name="account">
                 {(field) => {
                   const invalid = field.state.meta.isTouched && !field.state.meta.isValid;
@@ -166,7 +223,7 @@ export function ConnectionEstablishmentDialog({
 
             <form.Subscribe selector={(state) => state.values.source}>
               {(source) => {
-                if (source === "Stored") return null;
+                if (source === "Stored" || source === "GitHubCli") return null;
                 const secret = source === "ApiKey";
                 return (
                   <form.Field name={secret ? "apiKey" : "environment"}>
