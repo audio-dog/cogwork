@@ -869,6 +869,8 @@ describe("contextFsLayer against a real filesystem", () => {
       yield* fs.makeDirectory(rules, { recursive: true });
       yield* fs.writeFileString(path.join(rules, "global.md"), "global rules");
 
+      assert.isTrue(yield* context.directoryExists(rules));
+      assert.isFalse(yield* context.directoryExists(path.join(root, "missing")));
       assert.deepStrictEqual(yield* context.readDirectory(rules), ["global.md"]);
       assert.deepStrictEqual(yield* context.readDirectory(path.join(root, "missing")), []);
 

@@ -643,6 +643,7 @@ export const make = Effect.gen(function* () {
     const mcpServers = admittedMcpServers(preparedRequest.mcpServers, contributions);
     const context = yield* contextAssembler.assemble({
       runId,
+      workspace: workspace.config.name,
       cwd: preparedRequest.checkoutPath,
       projectRoot: preparedRequest.checkoutPath,
       operatingInstructions: preparedRequest.operatingInstructions,

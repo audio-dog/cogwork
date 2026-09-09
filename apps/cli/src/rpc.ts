@@ -311,7 +311,7 @@ export const serverLayer = (options: DaemonOptions) =>
         Daemon.serverLayer({
           transport: transportLayer(options.socketPath),
           credentials: credentialsLayer(options.credentialsPath),
-          contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
+          contextAssembler: contextAssemblerLayer(nodePath.dirname(options.controlStorePath)),
           runLedger: ledgerLayer,
           controlStorePath: options.controlStorePath,
           userAgentsDir,
