@@ -1,0 +1,14 @@
+packages/codex-cli/src/harness.test.ts
+  h_46518a29d4dd91 376-415
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f0edff7799eb5201310a64cba12041fd19ba5d2b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
