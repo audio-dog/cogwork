@@ -131,13 +131,13 @@ describe("workspace record draft", () => {
     expect(workspaceRecordWritable(state)).toBe(false);
   });
 
-  it("rejects an invalid priority project instead of clearing it", () => {
+  it("rejects an invalid priority field ID instead of clearing it", () => {
     expect(
       workspaceUpdateFromDraft({
         ...emptyDraft,
         displayName: "cogwork",
         issueTrackerConnectionId: "github/acme",
-        priorityProject: "not-a-project-number",
+        priorityFieldId: "not-a-field-id",
       }),
     ).toBeNull();
   });
@@ -189,8 +189,7 @@ describe("workspace record draft", () => {
       issueTrackerConnectionId: "github/acme",
       teams: " ENG, APP ",
       assigneeAllowlist: " taylor, cogwork ",
-      priorityProject: " 12 ",
-      priorityField: " Priority ",
+      priorityFieldId: " 12 ",
       worktreeRoot: " /worktrees ",
       worktreeLinkPaths: " package.json \n config.json ",
       worktreeReapAfterMillis: " 60000 ",
@@ -204,8 +203,7 @@ describe("workspace record draft", () => {
       checkoutPath: "/repos/cogwork",
       teams: "ENG, APP",
       assigneeAllowlist: "taylor, cogwork",
-      priorityProject: "12",
-      priorityField: "Priority",
+      priorityFieldId: "12",
       worktreeRoot: "/worktrees",
       worktreeLinkPaths: "package.json\nconfig.json",
       worktreeReapAfterMillis: "60000",
