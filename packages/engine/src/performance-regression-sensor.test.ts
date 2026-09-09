@@ -1,7 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -12,6 +14,7 @@ import {
   makeEvidenceWriter,
   type PerformanceEvidenceSnapshot,
   type PerformanceHealthSnapshot,
+  PerformanceRegressionSensor,
 } from "./performance-regression-sensor";
 
 const breached = (sampledAtMillis: number) =>
@@ -46,92 +49,64 @@ const healthy = (sampledAtMillis: number) =>
     },
   }) satisfies PerformanceHealthSnapshot;
 
-const fixture = () =>
-  Effect.gen(function* () {
-    const submissions = yield* Ref.make<
-      ReadonlyArray<{ readonly fingerprint: string; readonly body: string }>
-    >([]);
-    const evidence = yield* Ref.make<ReadonlyArray<string>>([]);
-    const sensor = yield* make({
-      appVersion: "0.0.1-test",
-      submit: (input, _now) =>
-        Ref.update(submissions, (current) => [
-          ...current,
-          { fingerprint: input.fingerprint, body: input.body },
-        ]).pipe(Effect.map(() => "filed")),
-      writeEvidence: (snapshot) =>
-        Ref.update(evidence, (current) => [...current, snapshot.healthSignal.fingerprint]).pipe(
-          Effect.map(() => `/tmp/${snapshot.healthSignal.fingerprint}.json`),
-        ),
-      context: Effect.succeed({
-        runsInFlight: 2,
-        workspaceCount: 1,
-        machineLoad: { cpuCount: 8, loadAverage: [1, 0.5, 0.25], freeMemoryBytes: 1_000 },
-      }),
-    });
-    return { sensor, submissions, evidence };
+interface SensorProbeService {
+  readonly submissions: Ref.Ref<ReadonlyArray<{ readonly fingerprint: string; readonly body: string }>>;
+  readonly evidence: Ref.Ref<ReadonlyArray<string>>;
+  readonly attempts: Ref.Ref<number>;
+  readonly evidenceWrites: Ref.Ref<number>;
+}
+
+class SensorProbe extends Context.Service<SensorProbe, SensorProbeService>()(
+  "@cogwork/engine/performance-regression-sensor.test/SensorProbe",
+) {
+  static readonly layer = Layer.effect(
+    SensorProbe,
+    Effect.all({
+      submissions: Ref.make<ReadonlyArray<{ readonly fingerprint: string; readonly body: string }>>([]),
+      evidence: Ref.make<ReadonlyArray<string>>([]),
+      attempts: Ref.make(0),
+      evidenceWrites: Ref.make(0),
+    }),
+  );
+}
+
+const sensorContext = () =>
+  Effect.succeed({
+    runsInFlight: 2,
+    workspaceCount: 1,
+    machineLoad: { cpuCount: 8, loadAverage: [1, 0.5, 0.25], freeMemoryBytes: 1_000 },
   });
 
-describe("performance regression sensor", () => {
-  it.effect("files only on the transition into alarm", () =>
+const standardSensorLayer = () =>
+  Layer.effect(
+    PerformanceRegressionSensor,
     Effect.gen(function* () {
-      const { sensor, submissions, evidence } = yield* fixture();
-
-      yield* sensor.observe(breached(10_000));
-      yield* sensor.observe(breached(20_000));
-      assert.strictEqual((yield* Ref.get(submissions)).length, 0);
-
-      yield* sensor.observe(breached(30_000));
-      yield* sensor.observe(breached(40_000));
-
-      const filed = yield* Ref.get(submissions);
-      assert.deepStrictEqual(
-        filed.map(({ fingerprint }) => fingerprint),
-        ["daemon.event-loop-delay-p99.above", "daemon.heap-headroom.below", "renderer.heap-headroom.below"],
-      );
-      assert.strictEqual((yield* Ref.get(evidence)).length, 3);
-      assert.include(filed[0]?.body ?? "", "Observed: 125 ms");
-      assert.include(filed[0]?.body ?? "", "Runs in flight: 2");
-      assert.include(filed[0]?.body ?? "", "Evidence: /tmp/daemon.event-loop-delay-p99.above.json");
+      const probe = yield* SensorProbe;
+      return yield* make({
+        appVersion: "0.0.1-test",
+        submit: (input, _now) =>
+          Ref.update(probe.submissions, (current) => [
+            ...current,
+            { fingerprint: input.fingerprint, body: input.body },
+          ]).pipe(Effect.map(() => "filed")),
+        writeEvidence: (snapshot) =>
+          Ref.update(probe.evidence, (current) => [...current, snapshot.healthSignal.fingerprint]).pipe(
+            Effect.map(() => `/tmp/${snapshot.healthSignal.fingerprint}.json`),
+          ),
+        context: sensorContext(),
+      });
     }),
-  );
+  ).pipe(Layer.provideMerge(SensorProbe.layer));
 
-  it.effect("re-arms after recovery", () =>
+const retryingSensorLayer = () =>
+  Layer.effect(
+    PerformanceRegressionSensor,
     Effect.gen(function* () {
-      const { sensor, submissions } = yield* fixture();
-
-      yield* sensor.observe(breached(10_000));
-      yield* sensor.observe(breached(20_000));
-      yield* sensor.observe(breached(30_000));
-      yield* sensor.observe(healthy(40_000));
-      yield* sensor.observe(breached(50_000));
-      yield* sensor.observe(breached(60_000));
-      yield* sensor.observe(breached(70_000));
-
-      assert.strictEqual((yield* Ref.get(submissions)).length, 6);
-    }),
-  );
-
-  it.effect("ignores repeated telemetry snapshots", () =>
-    Effect.gen(function* () {
-      const { sensor, submissions } = yield* fixture();
-
-      yield* sensor.observe(breached(10_000));
-      yield* sensor.observe(breached(10_000));
-      yield* sensor.observe(breached(10_000));
-
-      assert.strictEqual((yield* Ref.get(submissions)).length, 0);
-    }),
-  );
-
-  it.effect("reuses evidence while a failed filing is retried", () =>
-    Effect.gen(function* () {
-      const attempts = yield* Ref.make(0);
-      const evidenceWrites = yield* Ref.make(0);
-      const sensor = yield* make({
+      const probe = yield* SensorProbe;
+      return yield* make({
         appVersion: "0.0.1-test",
         submit: () =>
-          Ref.updateAndGet(attempts, (count) => count + 1).pipe(
+          Ref.updateAndGet(probe.attempts, (count) => count + 1).pipe(
             Effect.flatMap((count) =>
               count === 1
                 ? Effect.fail(
@@ -145,15 +120,73 @@ describe("performance regression sensor", () => {
             ),
           ),
         writeEvidence: () =>
-          Ref.updateAndGet(evidenceWrites, (count) => count + 1).pipe(
+          Ref.updateAndGet(probe.evidenceWrites, (count) => count + 1).pipe(
             Effect.map((count) => `/tmp/evidence-${count}.json`),
           ),
-        context: Effect.succeed({
-          runsInFlight: 0,
-          workspaceCount: 1,
-          machineLoad: { cpuCount: 8, loadAverage: [1, 0.5, 0.25], freeMemoryBytes: 1_000 },
-        }),
+        context: sensorContext(),
       });
+    }),
+  ).pipe(Layer.provideMerge(SensorProbe.layer));
+
+describe("performance regression sensor", () => {
+  it.effect("files only on the transition into alarm", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
+
+      yield* sensor.observe(breached(10_000));
+      yield* sensor.observe(breached(20_000));
+      assert.strictEqual((yield* Ref.get(probe.submissions)).length, 0);
+
+      yield* sensor.observe(breached(30_000));
+      yield* sensor.observe(breached(40_000));
+
+      const filed = yield* Ref.get(probe.submissions);
+      assert.deepStrictEqual(
+        filed.map(({ fingerprint }) => fingerprint),
+        ["daemon.event-loop-delay-p99.above", "daemon.heap-headroom.below", "renderer.heap-headroom.below"],
+      );
+      assert.strictEqual((yield* Ref.get(probe.evidence)).length, 3);
+      assert.include(filed[0]?.body ?? "", "Observed: 125 ms");
+      assert.include(filed[0]?.body ?? "", "Runs in flight: 2");
+      assert.include(filed[0]?.body ?? "", "Evidence: /tmp/daemon.event-loop-delay-p99.above.json");
+    }).pipe(Effect.provide(standardSensorLayer())),
+  );
+
+  it.effect("re-arms after recovery", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
+
+      yield* sensor.observe(breached(10_000));
+      yield* sensor.observe(breached(20_000));
+      yield* sensor.observe(breached(30_000));
+      yield* sensor.observe(healthy(40_000));
+      yield* sensor.observe(breached(50_000));
+      yield* sensor.observe(breached(60_000));
+      yield* sensor.observe(breached(70_000));
+
+      assert.strictEqual((yield* Ref.get(probe.submissions)).length, 6);
+    }).pipe(Effect.provide(standardSensorLayer())),
+  );
+
+  it.effect("ignores repeated telemetry snapshots", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
+
+      yield* sensor.observe(breached(10_000));
+      yield* sensor.observe(breached(10_000));
+      yield* sensor.observe(breached(10_000));
+
+      assert.strictEqual((yield* Ref.get(probe.submissions)).length, 0);
+    }).pipe(Effect.provide(standardSensorLayer())),
+  );
+
+  it.effect("reuses evidence while a failed filing is retried", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
       const eventLoopBreach = (sampledAtMillis: number) =>
         ({
           sampledAtMillis,
@@ -170,9 +203,9 @@ describe("performance regression sensor", () => {
       yield* Effect.flip(sensor.observe(eventLoopBreach(30_000)));
       yield* sensor.observe(eventLoopBreach(40_000));
 
-      assert.strictEqual(yield* Ref.get(attempts), 2);
-      assert.strictEqual(yield* Ref.get(evidenceWrites), 1);
-    }),
+      assert.strictEqual(yield* Ref.get(probe.attempts), 2);
+      assert.strictEqual(yield* Ref.get(probe.evidenceWrites), 1);
+    }).pipe(Effect.provide(retryingSensorLayer())),
   );
 
   it.effect("writes the evidence snapshot under its fingerprint", () =>
