@@ -283,6 +283,7 @@ describe("subprocess deadlines", () => {
         assert.strictEqual(error.command, "git fetch --prune origin");
         assert.strictEqual(error.message, "git fetch --prune origin timed out after 5 minutes");
         assert.strictEqual(error.reason, "timeout");
+        assert.isTrue(error.retryable);
       }),
     );
 
