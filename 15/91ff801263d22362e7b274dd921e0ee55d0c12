@@ -1,0 +1,30 @@
+scripts/test-performance-filer.test.mjs
+  s_0c92afffe40c34::t_fe642c21de49c0 85,108,162-173
+  s_82f7907de40940::t_99304ac4ad478a 174-175
+scripts/test-performance-filer.mjs
+  s_0c92afffe40c34::t_a701d1f2085666 61-66,124,132,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1591ff801263d22362e7b274dd921e0ee55d0c12",
+  "prompts": {},
+  "sessions": {
+    "s_0c92afffe40c34": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087da-92f1-7281-9d67-ae372795a6a6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_82f7907de40940": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087e0-4dac-7861-885f-400c3fd853e9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
