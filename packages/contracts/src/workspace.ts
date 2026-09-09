@@ -20,10 +20,18 @@ export const OAuthAppConfig = Schema.Struct({
 });
 export type OAuthAppConfig = typeof OAuthAppConfig.Type;
 
-export const GitHubPrioritySource = Schema.Struct({
-  project: Schema.Int.check(Schema.isGreaterThan(0)),
-  field: Schema.optional(TrimmedNonEmptyString),
+export const GitHubIssueFieldId = Schema.Int.check(Schema.isGreaterThan(0)).pipe(
+  Schema.brand("GitHubIssueFieldId"),
+);
+export type GitHubIssueFieldId = typeof GitHubIssueFieldId.Type;
+
+export const GitHubPriorityField = Schema.Struct({
+  id: GitHubIssueFieldId,
+  name: TrimmedNonEmptyString,
 });
+export type GitHubPriorityField = typeof GitHubPriorityField.Type;
+
+export const GitHubPrioritySource = Schema.Struct({ field: GitHubIssueFieldId });
 export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
 
 export const IssueTrackerConfig = Schema.Struct({
