@@ -139,6 +139,7 @@ const missingByokHarnessLayer = harnessLayerWith(() =>
     new CredentialStore.CredentialError({
       account: "anthropic",
       message: "no api key for anthropic: ANTHROPIC_API_KEY is unset or empty",
+      retryable: false,
     }),
   ),
 );
