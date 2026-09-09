@@ -1,11 +1,14 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as MutableRef from "effect/MutableRef";
 import * as PlatformError from "effect/PlatformError";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { resolveDesktopEnvironment } from "./desktop-environment";
@@ -35,41 +38,79 @@ const outputWithPath = (path: string) =>
 const commandExecutable = (command: ChildProcess.Command) =>
   ChildProcess.isStandardCommand(command) ? command.command : "piped-command";
 
-const provideSpawner = <A, E, R>(
-  effect: Effect.Effect<A, E, R | ChildProcessSpawner.ChildProcessSpawner>,
-  spawn: ChildProcessSpawner.ChildProcessSpawner["Service"]["spawn"],
-) =>
-  effect.pipe(
-    Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, ChildProcessSpawner.make(spawn)),
+interface ResolverProbeService {
+  readonly commands: MutableRef.MutableRef<ReadonlyArray<ChildProcess.Command>>;
+  readonly messages: MutableRef.MutableRef<ReadonlyArray<unknown>>;
+}
+
+class ResolverProbe extends Context.Service<ResolverProbe, ResolverProbeService>()(
+  "@cogwork/desktop/main/desktop-environment.test/ResolverProbe",
+) {
+  static readonly layer = Layer.sync(ResolverProbe, () =>
+    ResolverProbe.of({
+      commands: MutableRef.make<ReadonlyArray<ChildProcess.Command>>([]),
+      messages: MutableRef.make<ReadonlyArray<unknown>>([]),
+    }),
+  );
+}
+
+type Spawn = ChildProcessSpawner.ChildProcessSpawner["Service"]["spawn"];
+
+const spawnerLayer = (spawn: Spawn) =>
+  Layer.effect(
+    ChildProcessSpawner.ChildProcessSpawner,
+    Effect.map(ResolverProbe, (probe) =>
+      ChildProcessSpawner.make((command) => {
+        MutableRef.update(probe.commands, (commands) => [...commands, command]);
+        return spawn(command);
+      }),
+    ),
   );
 
-const captureLogs = <A, E, R>(effect: Effect.Effect<A, E, R>) => {
-  const messages: Array<unknown> = [];
-  const logger = Logger.make(({ message }) => messages.push(message));
-  return effect.pipe(
-    Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
-    Effect.map((value) => ({ value, messages })),
-  );
-};
+const loggerLayer = Layer.unwrap(
+  Effect.map(ResolverProbe, (probe) =>
+    Logger.layer(
+      [Logger.make(({ message }) => MutableRef.update(probe.messages, (messages) => [...messages, message]))],
+      { mergeWithExisting: false },
+    ),
+  ),
+);
+
+const testLayer = (spawn: Spawn) =>
+  Layer.merge(spawnerLayer(spawn), loggerLayer).pipe(Layer.provideMerge(ResolverProbe.layer));
+
+const inheritedLinuxEnvironment = { PATH: "/usr/bin:/bin", SHELL: "/bin/bash" };
+
+const fallbackCases: ReadonlyArray<{ readonly name: string; readonly spawn: Spawn }> = [
+  {
+    name: "fails to spawn",
+    spawn: () =>
+      Effect.fail(
+        PlatformError.systemError({
+          _tag: "PermissionDenied",
+          module: "ChildProcess",
+          method: "spawn",
+          pathOrDescriptor: "/bin/bash",
+        }),
+      ),
+  },
+  { name: "exits unsuccessfully", spawn: () => Effect.succeed(processHandle("", 1)) },
+  { name: "prints no PATH", spawn: () => Effect.succeed(processHandle("startup chatter")) },
+];
 
 describe("desktop environment", () => {
   it.effect("puts login-shell PATH entries before inherited entries and removes empty duplicates", () =>
     Effect.gen(function* () {
-      const commands: Array<ChildProcess.Command> = [];
+      const probe = yield* ResolverProbe;
       const inherited = { PATH: "/usr/bin::/bin:/usr/bin", SHELL: "/bin/fish", KEEP: "yes" };
-      const environment = yield* provideSpawner(
-        resolveDesktopEnvironment({ inherited, platform: "darwin" }),
-        (command) => {
-          commands.push(command);
-          return Effect.succeed(processHandle(outputWithPath("/opt/homebrew/bin:/usr/bin::/opt/bin")));
-        },
-      );
+      const environment = yield* resolveDesktopEnvironment({ inherited, platform: "darwin" });
 
       assert.deepStrictEqual(environment, {
         PATH: "/opt/homebrew/bin:/usr/bin:/opt/bin:/bin",
         SHELL: "/bin/fish",
         KEEP: "yes",
       });
+      const commands = MutableRef.get(probe.commands);
       assert.strictEqual(commands.length, 1);
       const command = commands[0];
       assert.isTrue(command !== undefined && ChildProcess.isStandardCommand(command));
@@ -78,157 +119,137 @@ describe("desktop environment", () => {
       assert.deepStrictEqual(command.args.slice(0, 1), ["-ilc"]);
       assert.include(command.args[1] ?? "", "__COGWORK_PATH_START__");
       assert.include(command.args[1] ?? "", "__COGWORK_PATH_END__");
-    }),
+    }).pipe(
+      Effect.provide(
+        testLayer(() =>
+          Effect.succeed(processHandle(outputWithPath("/opt/homebrew/bin:/usr/bin::/opt/bin"))),
+        ),
+      ),
+    ),
   );
 
   it.effect("uses the platform shell when SHELL is absent", () =>
     Effect.gen(function* () {
-      const commands: Array<ChildProcess.Command> = [];
-      yield* provideSpawner(
-        resolveDesktopEnvironment({ inherited: { PATH: "/usr/bin" }, platform: "linux" }),
-        (command) => {
-          commands.push(command);
-          return Effect.succeed(processHandle(outputWithPath("/home/test/.local/bin:/usr/bin")));
-        },
-      );
+      const probe = yield* ResolverProbe;
+      yield* resolveDesktopEnvironment({ inherited: { PATH: "/usr/bin" }, platform: "linux" });
 
-      assert.deepStrictEqual(commands.map(commandExecutable), ["/bin/bash"]);
-    }),
+      assert.deepStrictEqual(MutableRef.get(probe.commands).map(commandExecutable), ["/bin/bash"]);
+    }).pipe(
+      Effect.provide(
+        testLayer(() => Effect.succeed(processHandle(outputWithPath("/home/test/.local/bin:/usr/bin")))),
+      ),
+    ),
   );
 
-  it.effect("keeps inherited PATH and logs when the login shell fails", () =>
+  it.effect.each(fallbackCases)("keeps inherited PATH and logs when the login shell $name", ({ spawn }) =>
     Effect.gen(function* () {
-      const inherited = { PATH: "/usr/bin:/bin", SHELL: "/bin/bash" };
-      const { value, messages } = yield* captureLogs(
-        provideSpawner(resolveDesktopEnvironment({ inherited, platform: "linux" }), () =>
-          Effect.fail(
-            PlatformError.systemError({
-              _tag: "PermissionDenied",
-              module: "ChildProcess",
-              method: "spawn",
-              pathOrDescriptor: "/bin/bash",
-            }),
-          ),
-        ),
-      );
+      const probe = yield* ResolverProbe;
+      const environment = yield* resolveDesktopEnvironment({
+        inherited: inheritedLinuxEnvironment,
+        platform: "linux",
+      });
 
-      assert.deepStrictEqual(value, inherited);
-      assert.isAbove(messages.length, 0);
-    }),
+      assert.deepStrictEqual(environment, inheritedLinuxEnvironment);
+      assert.isAbove(MutableRef.get(probe.messages).length, 0);
+    }).pipe(Effect.provide(testLayer(spawn))),
   );
 
-  it.effect("keeps inherited PATH and logs when the login shell exits unsuccessfully", () =>
+  it.effect("keeps inherited PATH and logs when the login shell exceeds the output limit", () =>
     Effect.gen(function* () {
-      const inherited = { PATH: "/usr/bin:/bin", SHELL: "/bin/bash" };
-      const { value, messages } = yield* captureLogs(
-        provideSpawner(resolveDesktopEnvironment({ inherited, platform: "linux" }), () =>
-          Effect.succeed(processHandle("", 1)),
-        ),
-      );
+      const probe = yield* ResolverProbe;
+      const environment = yield* resolveDesktopEnvironment({
+        inherited: inheritedLinuxEnvironment,
+        platform: "linux",
+      });
 
-      assert.deepStrictEqual(value, inherited);
-      assert.isAbove(messages.length, 0);
-    }),
-  );
-
-  it.effect("keeps inherited PATH and logs when the login shell prints no PATH", () =>
-    Effect.gen(function* () {
-      const inherited = { PATH: "/usr/bin:/bin", SHELL: "/bin/bash" };
-      const { value, messages } = yield* captureLogs(
-        provideSpawner(resolveDesktopEnvironment({ inherited, platform: "linux" }), () =>
-          Effect.succeed(processHandle("startup chatter")),
-        ),
-      );
-
-      assert.deepStrictEqual(value, inherited);
-      assert.isAbove(messages.length, 0);
-    }),
+      assert.deepStrictEqual(environment, inheritedLinuxEnvironment);
+      assert.isAbove(MutableRef.get(probe.messages).length, 0);
+    }).pipe(Effect.provide(testLayer(() => Effect.succeed(processHandle("x".repeat(65_537)))))),
   );
 
   it.effect("keeps inherited PATH and logs when the login shell times out", () =>
     Effect.gen(function* () {
-      const inherited = { PATH: "/usr/bin:/bin", SHELL: "/bin/bash" };
-      const resolving = yield* provideSpawner(
-        captureLogs(resolveDesktopEnvironment({ inherited, platform: "linux" })),
-        () => Effect.never,
-      ).pipe(Effect.forkChild);
+      const probe = yield* ResolverProbe;
+      const resolving = yield* resolveDesktopEnvironment({
+        inherited: inheritedLinuxEnvironment,
+        platform: "linux",
+      }).pipe(Effect.forkChild);
       yield* TestClock.adjust("5 seconds");
-      const { value, messages } = yield* Fiber.join(resolving);
+      const environment = yield* Fiber.join(resolving);
 
-      assert.deepStrictEqual(value, inherited);
-      assert.isAbove(messages.length, 0);
-    }),
+      assert.deepStrictEqual(environment, inheritedLinuxEnvironment);
+      assert.isAbove(MutableRef.get(probe.messages).length, 0);
+    }).pipe(Effect.provide(testLayer(() => Effect.never))),
   );
 
   it.effect("reads launchctl only when the macOS login shell has no PATH", () =>
     Effect.gen(function* () {
-      const commands: Array<string> = [];
+      const probe = yield* ResolverProbe;
       const inherited = { PATH: "/usr/bin:/bin", SHELL: "/bin/zsh" };
-      const environment = yield* provideSpawner(
-        resolveDesktopEnvironment({ inherited, platform: "darwin" }),
-        (command) => {
-          const executable = commandExecutable(command);
-          commands.push(executable);
-          const stdout = executable === "/bin/launchctl" ? "/opt/homebrew/bin:/usr/bin\n" : "";
-          return Effect.succeed(processHandle(stdout));
-        },
-      );
+      const environment = yield* resolveDesktopEnvironment({ inherited, platform: "darwin" });
 
-      assert.deepStrictEqual(commands, ["/bin/zsh", "/bin/launchctl"]);
+      assert.deepStrictEqual(MutableRef.get(probe.commands).map(commandExecutable), [
+        "/bin/zsh",
+        "/bin/launchctl",
+      ]);
       assert.strictEqual(environment.PATH, "/opt/homebrew/bin:/usr/bin:/bin");
-    }),
+    }).pipe(
+      Effect.provide(
+        testLayer((command) => {
+          const stdout =
+            commandExecutable(command) === "/bin/launchctl" ? "/opt/homebrew/bin:/usr/bin\n" : "";
+          return Effect.succeed(processHandle(stdout));
+        }),
+      ),
+    ),
   );
 
   it.effect("does not read launchctl when the macOS login shell returns PATH", () =>
     Effect.gen(function* () {
-      const commands: Array<string> = [];
-      yield* provideSpawner(
-        resolveDesktopEnvironment({ inherited: { PATH: "/usr/bin" }, platform: "darwin" }),
-        (command) => {
-          commands.push(commandExecutable(command));
-          return Effect.succeed(processHandle(outputWithPath("/opt/homebrew/bin:/usr/bin")));
-        },
-      );
+      const probe = yield* ResolverProbe;
+      yield* resolveDesktopEnvironment({ inherited: { PATH: "/usr/bin" }, platform: "darwin" });
 
-      assert.deepStrictEqual(commands, ["/bin/zsh"]);
-    }),
+      assert.deepStrictEqual(MutableRef.get(probe.commands).map(commandExecutable), ["/bin/zsh"]);
+    }).pipe(
+      Effect.provide(
+        testLayer(() => Effect.succeed(processHandle(outputWithPath("/opt/homebrew/bin:/usr/bin")))),
+      ),
+    ),
   );
 
   it.effect("bounds the launchctl probe and preserves inherited PATH", () =>
     Effect.gen(function* () {
-      const commands: Array<string> = [];
+      const probe = yield* ResolverProbe;
       const inherited = { PATH: "/usr/bin:/bin", SHELL: "/bin/zsh" };
-      const resolving = yield* provideSpawner(
-        captureLogs(resolveDesktopEnvironment({ inherited, platform: "darwin" })),
-        (command) => {
-          const executable = commandExecutable(command);
-          commands.push(executable);
-          return executable === "/bin/launchctl" ? Effect.never : Effect.succeed(processHandle());
-        },
-      ).pipe(Effect.forkChild);
+      const resolving = yield* resolveDesktopEnvironment({ inherited, platform: "darwin" }).pipe(
+        Effect.forkChild,
+      );
       yield* TestClock.adjust("2 seconds");
-      const { value, messages } = yield* Fiber.join(resolving);
+      const environment = yield* Fiber.join(resolving);
 
-      assert.deepStrictEqual(value, inherited);
-      assert.deepStrictEqual(commands, ["/bin/zsh", "/bin/launchctl"]);
-      assert.isAbove(messages.length, 1);
-    }),
+      assert.deepStrictEqual(environment, inherited);
+      assert.deepStrictEqual(MutableRef.get(probe.commands).map(commandExecutable), [
+        "/bin/zsh",
+        "/bin/launchctl",
+      ]);
+      assert.isAbove(MutableRef.get(probe.messages).length, 1);
+    }).pipe(
+      Effect.provide(
+        testLayer((command) =>
+          commandExecutable(command) === "/bin/launchctl" ? Effect.never : Effect.succeed(processHandle()),
+        ),
+      ),
+    ),
   );
 
   it.effect("returns the inherited Windows environment unchanged without spawning", () =>
     Effect.gen(function* () {
+      const probe = yield* ResolverProbe;
       const inherited = { PATH: "C:\\Windows\\System32", KEEP: "yes" };
-      const commands: Array<ChildProcess.Command> = [];
-      const environment = yield* provideSpawner(
-        resolveDesktopEnvironment({ inherited, platform: "win32" }),
-        (command) => {
-          commands.push(command);
-          return Effect.succeed(processHandle());
-        },
-      );
+      const environment = yield* resolveDesktopEnvironment({ inherited, platform: "win32" });
 
       assert.strictEqual(environment, inherited);
-      assert.deepStrictEqual(commands, []);
-    }),
+      assert.deepStrictEqual(MutableRef.get(probe.commands), []);
+    }).pipe(Effect.provide(testLayer(() => Effect.succeed(processHandle())))),
   );
 });

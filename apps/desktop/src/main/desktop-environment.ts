@@ -16,6 +16,7 @@ type DesktopEnvironmentProbe = "login-shell" | "launchctl";
 const loginShellTimeout = "5 seconds";
 const launchctlTimeout = "2 seconds";
 const processTerminateGrace = "1 second";
+const outputLimit = 65_536;
 const startMarker = "__COGWORK_PATH_START__";
 const endMarker = "__COGWORK_PATH_END__";
 const printPathCommand = [
@@ -24,21 +25,28 @@ const printPathCommand = [
   `printf '%s\\n' '${endMarker}'`,
 ].join("; ");
 
-const executableName = (command: ChildProcess.Command) =>
-  ChildProcess.isStandardCommand(command) ? command.command.split("/").at(-1) : "piped-command";
+const executableName = (command: ChildProcess.StandardCommand) => command.command.split("/").at(-1);
 
-const warnProbe = (probe: DesktopEnvironmentProbe, message: string, fields = {}) =>
-  Effect.logWarning(message, { component: "desktop-environment", probe, ...fields });
+const warnProbe = (message: string, fields = {}) => Effect.logWarning(message, fields);
 
-const capture = (command: ChildProcess.Command) =>
+const collectOutput = (stream: Stream.Stream<Uint8Array, unknown>) =>
+  Stream.runFoldEffect(
+    stream,
+    () => Buffer.alloc(0),
+    (output, chunk) => {
+      if (output.length + chunk.length > outputLimit) return Effect.fail("probe output exceeds 64 KiB");
+      return Effect.succeed(Buffer.concat([output, chunk]));
+    },
+  ).pipe(Effect.map((output) => output.toString("utf8")));
+
+const capture = (command: ChildProcess.StandardCommand) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     return yield* Effect.scoped(
       Effect.flatMap(spawner.spawn(command), (handle) =>
         Effect.all(
           {
-            stdout: handle.stdout.pipe(Stream.decodeText(), Stream.mkString),
-            stderr: Stream.runDrain(handle.stderr),
+            stdout: collectOutput(handle.stdout),
             exitCode: handle.exitCode,
           },
           { concurrency: "unbounded" },
@@ -47,35 +55,42 @@ const capture = (command: ChildProcess.Command) =>
     );
   });
 
-const runProbe = Effect.fn("DesktopEnvironment.runProbe")(function* (
-  probe: DesktopEnvironmentProbe,
-  command: ChildProcess.Command,
-  timeout: Duration.Input,
-) {
-  const exit = yield* capture(command).pipe(Effect.timeoutOption(timeout), Effect.exit);
-  if (Exit.isFailure(exit)) {
-    yield* warnProbe(probe, "Desktop PATH probe failed", {
-      cause: exit.cause,
-      executable: executableName(command),
-    });
-    return null;
-  }
-  if (Option.isNone(exit.value)) {
-    yield* warnProbe(probe, "Desktop PATH probe timed out", {
-      executable: executableName(command),
-      timeout,
-    });
-    return null;
-  }
-  if (exit.value.value.exitCode !== 0) {
-    yield* warnProbe(probe, "Desktop PATH probe exited unsuccessfully", {
-      executable: executableName(command),
-      exitCode: exit.value.value.exitCode,
-    });
-    return null;
-  }
-  return exit.value.value.stdout;
-});
+const runProbe = Effect.fn("DesktopEnvironment.runProbe")(
+  function* (
+    _probe: DesktopEnvironmentProbe,
+    command: ChildProcess.StandardCommand,
+    timeout: Duration.Input,
+  ) {
+    const exit = yield* capture(command).pipe(Effect.timeoutOption(timeout), Effect.exit);
+    if (Exit.isFailure(exit)) {
+      yield* warnProbe("Desktop PATH probe failed", {
+        cause: exit.cause,
+        executable: executableName(command),
+      });
+      return null;
+    }
+    if (Option.isNone(exit.value)) {
+      yield* warnProbe("Desktop PATH probe timed out", {
+        executable: executableName(command),
+        timeout,
+      });
+      return null;
+    }
+    if (exit.value.value.exitCode !== 0) {
+      yield* warnProbe("Desktop PATH probe exited unsuccessfully", {
+        executable: executableName(command),
+        exitCode: exit.value.value.exitCode,
+      });
+      return null;
+    }
+    return exit.value.value.stdout;
+  },
+  (effect, probe) =>
+    effect.pipe(
+      Effect.annotateLogs({ component: "desktop-environment", probe }),
+      Effect.annotateSpans({ component: "desktop-environment", probe }),
+    ),
+);
 
 const extractLoginPath = (output: string) => {
   const start = output.indexOf(startMarker);
@@ -106,7 +121,7 @@ const readLoginPath = Effect.fn("DesktopEnvironment.readLoginPath")(function* (
     ChildProcess.make(shell, ["-ilc", printPathCommand], {
       stdin: "ignore",
       stdout: "pipe",
-      stderr: "pipe",
+      stderr: "ignore",
       killSignal: "SIGTERM",
       forceKillAfter: processTerminateGrace,
     }),
@@ -115,7 +130,7 @@ const readLoginPath = Effect.fn("DesktopEnvironment.readLoginPath")(function* (
   if (output === null) return undefined;
   const path = extractLoginPath(output);
   if (path) return path;
-  yield* warnProbe("login-shell", "Desktop PATH probe returned no PATH", {
+  yield* warnProbe("Desktop PATH probe returned no PATH", {
     executable: shell.split("/").at(-1),
   });
   return undefined;
@@ -127,7 +142,7 @@ const readLaunchctlPath = Effect.fn("DesktopEnvironment.readLaunchctlPath")(func
     ChildProcess.make("/bin/launchctl", ["getenv", "PATH"], {
       stdin: "ignore",
       stdout: "pipe",
-      stderr: "pipe",
+      stderr: "ignore",
       killSignal: "SIGTERM",
       forceKillAfter: processTerminateGrace,
     }),
@@ -135,7 +150,7 @@ const readLaunchctlPath = Effect.fn("DesktopEnvironment.readLaunchctlPath")(func
   );
   const path = output?.trim();
   if (path) return path;
-  if (output !== null) yield* warnProbe("launchctl", "Desktop PATH probe returned no PATH");
+  if (output !== null) yield* warnProbe("Desktop PATH probe returned no PATH");
   return undefined;
 });
 
