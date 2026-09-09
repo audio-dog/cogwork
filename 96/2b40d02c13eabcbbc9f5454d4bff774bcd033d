@@ -1,0 +1,21 @@
+packages/engine/src/tools/file-diff-feed-lifecycle.test.ts
+  s_9aa9f21686394c::t_ed55c787d71f6b 10
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_9aa9f21686394c::t_ed55c787d71f6b 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "962b40d02c13eabcbbc9f5454d4bff774bcd033d",
+  "prompts": {},
+  "sessions": {
+    "s_9aa9f21686394c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0884d-e625-79d1-9098-ef0797a0e808",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
