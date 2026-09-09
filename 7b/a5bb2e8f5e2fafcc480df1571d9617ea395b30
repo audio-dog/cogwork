@@ -1,0 +1,22 @@
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_5bcda3d0545c1b::t_3da48ef4b9cc1d 1192
+  s_5bcda3d0545c1b::t_5e3e800c81d1d7 1173-1191,1193-1201
+packages/engine/src/tools/file-diff-feed.ts
+  s_5bcda3d0545c1b::t_feccaf8529ccdf 772-773
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7ba5bb2e8f5e2fafcc480df1571d9617ea395b30",
+  "prompts": {},
+  "sessions": {
+    "s_5bcda3d0545c1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08772-ca43-70c3-a712-f8b4fcafe310",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
