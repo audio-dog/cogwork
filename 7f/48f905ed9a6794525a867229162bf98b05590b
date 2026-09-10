@@ -1,0 +1,35 @@
+docs/agent-patterns/effect-time-bounds.md
+  s_472481c30caa2e::t_f0e6243865273c 9
+  s_472481c30caa2e::t_ef11629c769cba 80-88,121
+.vscode/settings.json
+  s_bba803be3b62bf::t_86c4870f6d87f8 45-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7f48f905ed9a6794525a867229162bf98b05590b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_472481c30caa2e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1415c4a-8677-43f4-9f83-487744b8d8a1",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_bba803be3b62bf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08be5-f04d-7043-96fd-854e739ce495",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
