@@ -1,5 +1,9 @@
 lockfileVersion: '9.0'
 
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
 catalogs:
   default:
     '@effect/tsgo':
@@ -56,6 +60,12 @@ catalogs:
     react-dom:
       specifier: ^19.2.6
       version: 19.2.8
+    tsx:
+      specifier: ^4.23.13
+      version: 4.23.13
+    turbo:
+      specifier: ^2.10.12
+      version: 2.10.12
     typescript:
       specifier: ^7.0.2
       version: 7.0.2

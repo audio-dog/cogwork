@@ -35,6 +35,8 @@ catalog:
   '@types/react-dom': '^19.2.5'
   react: '^19.2.6'
   react-dom: '^19.2.6'
+  tsx: '^4.23.13'
+  turbo: '^2.10.12'
   typescript: ^7.0.2
   vitest: '^4.1.10'
 
