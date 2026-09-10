@@ -123,7 +123,14 @@ describe("GitHub client", () => {
   });
 
   it.effect("lists every open issue across GitHub pages", () => {
-    const issue = (number: number) => ({ number, title: `issue ${number}`, labels: [] });
+    const issue = (number: number) => ({
+      number,
+      title: `issue ${number}`,
+      labels: [],
+      body: null,
+      state: "open",
+      created_at: "2026-09-09T12:00:00Z",
+    });
     const firstPage = Array.from({ length: 100 }, (_, index) => issue(index + 1));
     const fetch = vi.fn<typeof globalThis.fetch>((input) => {
       const url = input instanceof Request ? input.url : String(input);
@@ -182,6 +189,20 @@ describe("GitHub client", () => {
           createdAtMillis: Date.UTC(2026, 8, 9, 12),
         },
       ]);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("rejects issue history without state and creation time", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([{ number: 416, title: "Performance regression", labels: [], body: null }]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(client.listIssues(repo, { state: "all" }));
+      assert.strictEqual(error.reason, "unavailable");
     }).pipe(withFetchClient(fetch));
   });
 

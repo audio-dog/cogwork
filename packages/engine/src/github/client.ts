@@ -121,9 +121,9 @@ const IssueSchema = Schema.Struct({
   assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
   issue_dependencies_summary: Schema.optional(Schema.NullOr(DependenciesSummarySchema)),
-  body: Schema.optional(Schema.NullOr(Schema.String)),
-  state: Schema.optional(Schema.Union([Schema.Literal("open"), Schema.Literal("closed")])),
-  created_at: Schema.optional(Schema.String),
+  body: Schema.NullOr(Schema.String),
+  state: Schema.Union([Schema.Literal("open"), Schema.Literal("closed")]),
+  created_at: Schema.String,
   user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
 });
 
@@ -402,8 +402,8 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
   body: issue.body ?? "",
-  state: issue.state ?? "open",
-  createdAtMillis: millisFromIso(issue.created_at ?? null),
+  state: issue.state,
+  createdAtMillis: millisFromIso(issue.created_at),
   ...(issue.user ? { authorLogin: issue.user.login } : {}),
 });
 
