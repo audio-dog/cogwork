@@ -82,7 +82,13 @@ import {
   type RetryFailure,
 } from "./retry-policy";
 import { RunControl } from "./run-control";
-import { handleOf, RunLedger, type RunLedgerError, type RunUpdate } from "./run-ledger";
+import {
+  encodeRunEventOperation,
+  handleOf,
+  RunLedger,
+  type RunLedgerError,
+  type RunUpdate,
+} from "./run-ledger";
 import {
   type AvailabilityContribution,
   admittedContributions,
@@ -1609,7 +1615,7 @@ export const make = Effect.gen(function* () {
     request: HarnessRequest,
   ) {
     const recordEncodingFailureTerminal = (error: PrepareError | HarnessError) => {
-      if (error._tag !== "RunLedgerError" || error.operation !== "encode run event") {
+      if (error._tag !== "RunLedgerError" || error.operation !== encodeRunEventOperation) {
         return Effect.succeed(null);
       }
       return recorder.record(record, failedTerminal);
@@ -1622,7 +1628,7 @@ export const make = Effect.gen(function* () {
       );
 
     const settleCompletionFailure = (error: RunLedgerError) => {
-      if (error.operation === "encode run event") return settleFailure(error);
+      if (error.operation === encodeRunEventOperation) return settleFailure(error);
       return Effect.fail(error);
     };
 

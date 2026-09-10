@@ -1,14 +1,14 @@
 import { NodeSocket } from "@effect/platform-node";
-import { type Cause, Deferred, Effect, Scope } from "effect";
+import { Deferred, Effect, Scope } from "effect";
 import * as Socket from "effect/unstable/socket/Socket";
-import { waitForDaemonListening } from "./wait-for-socket";
+import { type DaemonReachabilityError, waitForDaemonListening } from "./wait-for-socket";
 
 export interface DaemonBridgeSink {
   readonly onData: (frame: Uint8Array) => void;
   readonly onClosed: (reason: string | null) => void;
 }
 
-type BridgeFailure = Cause.TimeoutError | Socket.SocketError;
+type BridgeFailure = DaemonReachabilityError | Socket.SocketError;
 
 export interface DaemonBridgePort {
   readonly connect: Effect.Effect<void, BridgeFailure>;
@@ -35,7 +35,6 @@ export const createDaemonBridgePort = Effect.fn("DaemonBridge.createPort")(funct
   yield* Scope.addFinalizer(scope, Deferred.interrupt(connected));
   yield* Effect.forkIn(
     waitForDaemonListening(socketPath).pipe(
-      Effect.timeout(connectTimeout),
       Effect.andThen(
         socket.run((frame) => sink.onData(frame), {
           onOpen: Deferred.succeed(connected, undefined),

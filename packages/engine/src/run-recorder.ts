@@ -8,7 +8,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import { activityOf, DaemonEventBus } from "./daemon-event-bus";
 import { decodeStoredRunEvent, encodeStoredRunEvent } from "./run-event-codec";
-import { RunLedger, RunLedgerError } from "./run-ledger";
+import { encodeRunEventOperation, RunLedger, RunLedgerError } from "./run-ledger";
 
 // The harness hands back a session handle as untrusted output, and it is later echoed verbatim into a
 // fenced shell block in the human handoff comment. Whitespace or a backtick would break out of that
@@ -63,7 +63,7 @@ export const make = Effect.gen(function* () {
     const data = yield* encodeStoredRunEvent(event).pipe(
       Effect.mapError((error) =>
         RunLedgerError.make({
-          operation: "encode run event",
+          operation: encodeRunEventOperation,
           message: String(error),
           retryable: false,
         }),

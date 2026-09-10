@@ -246,24 +246,63 @@ layer(NodeServices.layer)((it) => {
   );
 
   it.layer(ControlStoreLogProbe.layer)((it) => {
-    it.effect("adds a column and table while preserving existing rows", () =>
+    it.effect("adds a column and table while preserving workspace and Operation settings", () =>
       Effect.gen(function* () {
         const { storePath } = yield* temporaryStore();
         const logProbe = yield* ControlStoreLogProbe;
         yield* pokeConvergedStore(
           storePath,
-          `INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history)
-         VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 0);
+          `INSERT INTO workspaces (
+           id, name, checkout_path, issue_tracker, mcp_skills, linear_history,
+           worktree_link_paths, worktree_setup
+         ) VALUES (
+           'workspace-1', 'kept', '/tmp/kept', '{"type":"github","connectionId":"unbound"}',
+           '[{"name":"linear","endpoint":"https://mcp.linear.app/mcp/readonly","auth":{"type":"credential-store"}}]', 0,
+           '[".repos"]', '["pnpm install"]'
+         );
+         INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
+         VALUES
+           ('harness', 'default', '', '', 'settings-profile', '', '"codex"'),
+           ('model', 'default', '', '', 'settings-profile', '', '"openai/gpt-5"'),
+           ('effort', 'default', '', '', 'settings-profile', '', '"high"'),
+           ('enabled', 'operation', 'coding', 'triage', 'settings-profile', '', 'true'),
+           ('enabled', 'operation', 'coding', 'implement', 'settings-profile', '', 'true'),
+           ('enabled', 'operation', 'coding', 'follow-up', 'settings-profile', '', 'true');
          ALTER TABLE workspaces DROP COLUMN source_control;
          DROP TABLE connections;`,
+        );
+        const workspaceBefore = yield* query(
+          storePath,
+          `SELECT id, name, checkout_path, issue_tracker, mcp_skills, worktree_link_paths, worktree_setup
+           FROM workspaces`,
+        );
+        const operationSettingsBefore = yield* query(
+          storePath,
+          `SELECT setting, level, workflow, operation, scope, workspace, value
+           FROM operation_settings
+           ORDER BY setting, operation`,
         );
 
         assert.deepStrictEqual(yield* storeAt(storePath).pipe(Effect.withLogger(logProbe.logger)), {
           health: "available",
         });
-        assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
-          { id: "workspace-1", name: "kept" },
-        ]);
+        assert.deepStrictEqual(
+          yield* query(
+            storePath,
+            `SELECT id, name, checkout_path, issue_tracker, mcp_skills, worktree_link_paths, worktree_setup
+             FROM workspaces`,
+          ),
+          workspaceBefore,
+        );
+        assert.deepStrictEqual(
+          yield* query(
+            storePath,
+            `SELECT setting, level, workflow, operation, scope, workspace, value
+             FROM operation_settings
+             ORDER BY setting, operation`,
+          ),
+          operationSettingsBefore,
+        );
         assert.isTrue(
           (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
             (column) => column.name === "source_control",
