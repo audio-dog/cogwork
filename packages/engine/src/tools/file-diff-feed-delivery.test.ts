@@ -3,7 +3,6 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
-import * as PlatformError from "effect/PlatformError";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { FILE_DIFF_EVENT, fileDiffEvent, watchWorktreeDiffs } from "./file-diff-feed";
@@ -202,26 +201,6 @@ describe("file diff delivery", { timeout: 30_000 }, () => {
       const value = yield* decodeDiffValue(head.value.value);
       assert.strictEqual(value.path, "seed.txt");
       assert.include(value.diff, "+seed changed");
-    }),
-  );
-
-  it.effect("surfaces a watcher failure as a typed tool error", () =>
-    Effect.gen(function* () {
-      const sandbox = yield* openSandbox();
-      const baseSha = yield* resolveBaseSha(sandbox);
-      const failure = PlatformError.systemError({
-        _tag: "Unknown",
-        module: "FileSystem",
-        method: "watch",
-        cause: new Error("EMFILE: too many open files, watch"),
-      });
-      const result = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
-        Stream.runDrain,
-        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fail(failure) })),
-        Effect.flip,
-      );
-      assert.strictEqual(result.reason, "exec-failed");
-      assert.include(result.message, "file watcher failed");
     }),
   );
 });

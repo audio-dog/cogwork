@@ -78,6 +78,7 @@ describe("file diff lifecycle", { timeout: 30_000 }, () => {
       const { fiber, terminated, killed } = yield* startBlockedBatch("SIGKILL");
       yield* advanceUntil(terminated, "5 minutes");
       yield* advanceUntil(killed, "5 seconds");
+      yield* TestClock.adjust("100 millis");
       const error = yield* Fiber.join(fiber).pipe(Effect.flip);
       assert.strictEqual(error.reason, "timeout");
     }),
