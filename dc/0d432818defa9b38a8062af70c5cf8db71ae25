@@ -1,0 +1,45 @@
+configs/sensor/test-compare.test.mjs
+  s_3cd7af69fa4be7::t_afa18572927823 157-158,177
+  s_3cd7af69fa4be7::t_fe996badbde3fd 147-150,180,202
+  s_3cd7af69fa4be7::t_aa176a03bd4508 161-164,176
+  s_3cd7af69fa4be7::t_8812b64ba8ceb6 3-5,7-10,125-143,179
+  s_3cd7af69fa4be7::t_edc49d0ab88111 154-155,166-170
+  s_3cd7af69fa4be7::t_e5ebe34c356c0f 6,144-146,151-152,156,159-160,165,171-175,178
+  s_3cd7af69fa4be7::t_5f1ea79f72d08c 100-109
+  s_3cd7af69fa4be7::t_26b7dba1e815d6 92-93,206-207,214-227
+  s_3cd7af69fa4be7::t_c8d31b6ae38ceb 153
+  s_3cd7af69fa4be7::t_6df25e5b2cf9d8 182-201
+  s_3cd7af69fa4be7::t_33fc7ec944e11c 181
+  s_3cd7af69fa4be7::t_8bddd87a1074c0 203
+configs/sensor/test-compare.mjs
+  s_3cd7af69fa4be7::t_e2636cf5d10c48 165,167
+  s_3cd7af69fa4be7::t_6bf9c68450ce72 8,29,31-42,44-45
+  s_3cd7af69fa4be7::t_da26eb77f97efa 23
+  s_3cd7af69fa4be7::t_1e1eab29fbeb22 315,318
+  s_3cd7af69fa4be7::t_4120ef112305de 182,187,200,203,271,288-289,307-311,325,335
+  s_3cd7af69fa4be7::t_c8d31b6ae38ceb 301,321-324
+  s_3cd7af69fa4be7::t_6cbf70f5f22fb3 269-270,274-280,298,302
+  s_3cd7af69fa4be7::t_edc49d0ab88111 272-273,281-287,290-294,297
+  s_3cd7af69fa4be7::t_937077ee7a6c8d 22,24
+  s_3cd7af69fa4be7::t_240abec9f57c14 16-17,21,25-28,30,43,46-47
+  s_3cd7af69fa4be7::t_33e755bed4d9ae 159
+  s_3cd7af69fa4be7::t_f6c5c26c788657 152-157,163-164,166,171-172
+  s_3cd7af69fa4be7::t_58792340918f2d 48
+  s_3cd7af69fa4be7::t_d6a602994896da 158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "dc0d432818defa9b38a8062af70c5cf8db71ae25",
+  "prompts": {},
+  "sessions": {
+    "s_3cd7af69fa4be7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08d3c-bc72-74a0-bbcb-9fd3c3c1600d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
