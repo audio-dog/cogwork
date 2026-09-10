@@ -903,18 +903,8 @@ const prepareStoreDirectory = Effect.fn("ControlStore.prepareStoreDirectory")(fu
   yield* fs.chmod(path.dirname(storePath), 0o700);
 });
 
-const storeFileNeedsInitialization = Effect.fn("ControlStore.storeFileNeedsInitialization")(function* (
-  storePath: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  if (!(yield* fs.exists(storePath))) return true;
-  return (yield* fs.stat(storePath)).size === 0n;
-});
-
-const initializeStoreFile = Effect.fn("ControlStore.initializeStoreFile")(function* (storePath: string) {
-  if (!(yield* storeFileNeedsInitialization(storePath))) return;
-  yield* runDatabasePragma(storePath, "PRAGMA auto_vacuum=INCREMENTAL;");
-});
+const initializeStoreFile = (storePath: string) =>
+  runDatabasePragma(storePath, "PRAGMA auto_vacuum=INCREMENTAL;");
 
 export const controlStoreClientLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
   Layer.unwrap(
