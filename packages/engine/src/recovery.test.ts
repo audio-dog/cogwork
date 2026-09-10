@@ -1,5 +1,6 @@
 import {
   type AttemptRecord,
+  BranchName,
   DaemonEvent,
   HarnessName,
   type OperationAvailability,
@@ -45,6 +46,7 @@ import { engineTestLayer } from "./testing/engine-test-layer";
 
 const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
+const branchName = Schema.decodeSync(BranchName);
 const session = Schema.decodeSync(SessionId)("sess-abc");
 
 const crashLoopsCapped = Metric.counter("cogwork_recovery_crash_loops_capped_total", {
@@ -68,7 +70,7 @@ const interruptedRun: RunRecord = {
   workItem: id("#1"),
   stage: "implement",
   harness: Schema.decodeSync(HarnessName)("cursor"),
-  branch: "1-ours",
+  branch: branchName("1-ours"),
   session: null,
   usage: null,
   status: "running",
