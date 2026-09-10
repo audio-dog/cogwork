@@ -1,0 +1,155 @@
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 4,29,142,162-166,175,285-294,299-300,494-516
+  s_5bcda3d0545c1b::t_d1c8c1da07d4ce 517-519
+packages/claude-code/package.json
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 13
+packages/contracts/CONTEXT.md
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 255
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 506,517-520
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-225
+packages/engine/src/daemon.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 37,285,393
+apps/desktop/src/main/index.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 12,42,57,92-97,105-112,118,136
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 26,55,98,145-146
+packages/engine/src/github/host.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 2,6,26,30-37,58,60-61,86,103,117,122-126,129-153,155,158,172-173,176
+apps/cli/src/ledger.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 185-188,242,251-255,304,306
+packages/codex-cli/src/harness-configuration.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-245
+packages/engine/src/commands.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 6,20,45,52-53,78-100,606
+scripts/test-performance-filer.mjs
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-238
+packages/engine/src/tools/file-diff-feed-delivery.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-206
+packages/engine/src/tools/file-diff-feed-content.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-351
+docs/research/performance-feedback-loop-into-tracker.md
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 90-93
+packages/engine/src/operation-resolution.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-617
+scripts/test-performance-filer.test.mjs
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-226
+packages/engine/src/github/client.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 4-5,47,88,101,111-116,224-295,349,374-443,445,570-571,852-886,914-929
+packages/codex-cli/package.json
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 13
+package.json
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 23
+packages/codex-cli/src/harness-fixtures.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-375
+packages/engine/src/run-plan.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 407,422-426,455,467-470
+turbo.json
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 3
+packages/codex-cli/src/harness-execution.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-270
+packages/engine/src/github/github.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 4,34,49,86,109,128,163-179,226,228-229,278,378-389,1382,1404,1425-1446
+packages/contracts/src/workspace.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 64-83
+apps/desktop/src/main/wait-for-socket.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1,5-14,22-26
+packages/engine/src/operation-resolution.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-273
+AGENTS.md
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 41-45
+packages/engine/src/control-store.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 221,228-243,247-257,262-278
+packages/claude-code/src/harness-environment.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-187
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-2,14,17,19,21,29,217-312,383
+packages/engine/src/tools/file-diff-feed-lifecycle.test.ts
+  s_5bcda3d0545c1b::t_85982da5aabc82 81
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-80,82-388
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 134,140,192,206
+packages/engine/src/github/client.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1,7,22-23,129-134,147,157-305
+  s_5bcda3d0545c1b::t_9d61ffac87f44c 306
+apps/desktop/src/main/desktop-environment.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-176
+packages/engine/src/index.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 21
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 5-7,10,19,25,52-56,58-60,62-67
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 2,90-97
+  s_5bcda3d0545c1b::t_27b4581be72f87 98
+apps/desktop/package.json
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 54
+packages/codex-cli/src/harness-failures.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-148
+packages/engine/docs/adr/0009-priority-orders-work-within-a-stage.md
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 12,14,21-22,26,28
+packages/engine/src/run-plan.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 745-748,794,798-801,938-951
+packages/claude-code/src/harness-fixtures.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-460
+packages/claude-code/src/harness-byok.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-138
+packages/engine/src/github/github-helpers.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 102
+packages/engine/src/run-ledger.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 17-22,127-137
+  s_5bcda3d0545c1b::t_242303a79fdd5b 138-139
+packages/engine/src/commands.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 33,266-279,295,298-321,1370,1494,1519-1572,1620,1663
+packages/engine/src/run-recorder.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 11,66
+packages/engine/src/run-recorder.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 295,301,304
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1,8,12,21,58,68-99
+packages/engine/src/testing/engine-test-layer.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1,4,6,30-44
+packages/engine/src/tools/file-diff-feed-fallback.test.ts
+  s_5bcda3d0545c1b::t_669540acabf1d5 189
+  s_5bcda3d0545c1b::t_85982da5aabc82 1-15,17-188,190-599
+  s_5bcda3d0545c1b::t_5a5ae719048eae 16
+apps/desktop/src/main/daemon-bridge.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 2,4,11
+apps/desktop/src/main/desktop-environment.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-281
+packages/engine/src/executor.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 86-91,1618,1631
+  s_5bcda3d0545c1b::t_340ddcaf4c76cf 85
+apps/desktop/src/main/engine-supervisor.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 30,34,38,269,282-283,300,451-460,496
+scripts/test-performance-baseline.json
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-4
+packages/contracts/src/rpc.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 6,37,68-73,104
+packages/engine/src/executor.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1466
+packages/contracts/src/workspace.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 23-30,32-34
+packages/engine/src/run-ledger.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 34-37,39,44-45,53,185,193
+packages/claude-code/src/harness-host.test.ts
+  s_5bcda3d0545c1b::t_07aa100ad1ab61 1-273
+pnpm-lock.yaml
+  s_5bcda3d0545c1b::t_127fc2c34d2d44 281-283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9f467d26dfade72e71125b33615a262bb152fa1f",
+  "prompts": {},
+  "sessions": {
+    "s_5bcda3d0545c1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08772-ca43-70c3-a712-f8b4fcafe310",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
