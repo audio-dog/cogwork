@@ -1,0 +1,30 @@
+apps/cli/src/performance-health.ts
+  s_e8b39c832cbe56::t_0c6e4ccbab53ac 13
+  s_e8b39c832cbe56::t_e385709f132a82 2,61,77
+  s_e8b39c832cbe56::t_e20361c1176d1e 85
+apps/cli/src/performance-health.test.ts
+  s_e8b39c832cbe56::t_79e3a68cf2bdbb 1,9-27,29-31,33-35,39-41,49
+  s_e8b39c832cbe56::t_a97651f9527008 36-38
+  s_e8b39c832cbe56::t_f2f165eaa42a9c 28,32
+  s_e8b39c832cbe56::t_630e8768d4f423 84-94
+  s_e8b39c832cbe56::t_8ae34b72828191 95-96
+packages/engine/src/performance-metrics.ts
+  s_e8b39c832cbe56::t_f2f165eaa42a9c 15,22
+  s_e8b39c832cbe56::t_bcce1f6dd5600b 14,16-20,25,28,37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "eccf1919191c62117f1941c1a49764d4b1dac5c2",
+  "prompts": {},
+  "sessions": {
+    "s_e8b39c832cbe56": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087db-c632-77b1-93bf-92101f0df387",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
