@@ -363,11 +363,11 @@ const make = Effect.fn("ledger.make")(function* () {
   });
 
   const service: RunLedger.CoreRunLedgerService = {
-    acceptRun: (record: RunRecord, plan: RunPlan) => {
+    acceptRun: Effect.fn("RunLedger.acceptRun")(function* (record: RunRecord, plan: RunPlan) {
       if (record.id !== plan.id) {
-        return runPlanError(`Run ${record.id} does not match Plan ${plan.id}`);
+        return yield* runPlanError(`Run ${record.id} does not match Plan ${plan.id}`);
       }
-      return hardWrite(() =>
+      yield* hardWrite(() =>
         sqlClient.withTransaction(
           Effect.gen(function* () {
             yield* db.insert(runs).values(runValues(record)).run();
@@ -377,8 +377,9 @@ const make = Effect.fn("ledger.make")(function* () {
               .run();
           }),
         ),
-      ).pipe(Effect.asVoid);
-    },
+      );
+      yield* RunLedger.logRunAccepted(record);
+    }),
 
     getRunPlan: (runId: RunId) =>
       readRows("getRunPlan", () =>
@@ -398,37 +399,52 @@ const make = Effect.fn("ledger.make")(function* () {
       );
     },
 
-    updateRun: (runId: RunId, patch: RunLedger.RunUpdate) =>
-      write("updateRun", () =>
+    updateRun: Effect.fn("RunLedger.updateRun")(function* (runId: RunId, patch: RunLedger.RunUpdate) {
+      const runIds = yield* writeIds("updateRun", () =>
         db
           .update(runs)
           .set({ ...runColumns(patch), ...claimDispositionUpdate(patch) })
           .where(eq(runs.id, runId))
-          .run(),
-      ),
+          .returning({ id: runs.id })
+          .all(),
+      );
+      yield* RunLedger.logRunsSettled(runIds, patch.status);
+    }),
 
     setRunSession: (runId: RunId, session: SessionId) =>
       write("setRunSession", () => db.update(runs).set({ session }).where(eq(runs.id, runId)).run()),
 
-    interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
-      writeIds("interruptRunning", () =>
+    interruptRunning: Effect.fn("RunLedger.interruptRunning")(function* (
+      startedFromMillis: number,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* writeIds("interruptRunning", () =>
         db
           .update(runs)
           .set({ status: "interrupted", endedAt: endedAtMillis })
           .where(and(eq(runs.status, "running"), gte(runs.startedAt, startedFromMillis)))
           .returning({ id: runs.id })
           .all(),
-      ),
+      );
+      yield* RunLedger.logRunsSettled(runIds, "interrupted");
+      return runIds;
+    }),
 
-    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
-      writeIds("interruptRunningBefore", () =>
+    interruptRunningBefore: Effect.fn("RunLedger.interruptRunningBefore")(function* (
+      beforeMillis: number,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* writeIds("interruptRunningBefore", () =>
         db
           .update(runs)
           .set({ status: "interrupted", endedAt: endedAtMillis })
           .where(and(eq(runs.status, "running"), lt(runs.startedAt, beforeMillis)))
           .returning({ id: runs.id })
           .all(),
-      ),
+      );
+      yield* RunLedger.logRunsSettled(runIds, "interrupted");
+      return runIds;
+    }),
 
     insertSession: (session: Session) =>
       write("insertSession", () =>
@@ -505,25 +521,39 @@ const make = Effect.fn("ledger.make")(function* () {
         ),
       ),
 
-    closeRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
-      writeIds("closeRunning", () =>
+    closeRunning: Effect.fn("RunLedger.closeRunning")(function* (
+      workspace: WorkspaceId,
+      workItem: WorkItemId,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* writeIds("closeRunning", () =>
         db
           .update(runs)
           .set({ status: "failed", endedAt: endedAtMillis })
           .where(and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")))
           .returning({ id: runs.id })
           .all(),
-      ),
+      );
+      yield* RunLedger.logRunsSettled(runIds, "failed");
+      return runIds;
+    }),
 
-    crashRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
-      writeIds("crashRunning", () =>
+    crashRunning: Effect.fn("RunLedger.crashRunning")(function* (
+      workspace: WorkspaceId,
+      workItem: WorkItemId,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* writeIds("crashRunning", () =>
         db
           .update(runs)
           .set({ status: "crashed", endedAt: endedAtMillis })
           .where(and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")))
           .returning({ id: runs.id })
           .all(),
-      ),
+      );
+      yield* RunLedger.logRunsSettled(runIds, "crashed");
+      return runIds;
+    }),
 
     consecutiveCrashes: (workspace: WorkspaceId, workItem: WorkItemId, sinceMillis: number) =>
       readRows("consecutiveCrashes", () =>
@@ -545,7 +575,7 @@ const make = Effect.fn("ledger.make")(function* () {
           .all(),
       ).pipe(Effect.map((rows) => Number(rows[0]?.count ?? 0))),
 
-    appendEvent: (runId: RunId, event: RunEvent) => {
+    appendEvent: Effect.fn("RunLedger.appendEvent")(function* (runId: RunId, event: RunEvent) {
       const values = {
         runId,
         seq: event.seq,
@@ -554,7 +584,7 @@ const make = Effect.fn("ledger.make")(function* () {
         data: event.data,
         at: event.atMillis,
       };
-      return write("appendEvent", () =>
+      yield* write("appendEvent", () =>
         sqlClient
           .withTransaction(
             Effect.gen(function* () {
@@ -579,9 +609,12 @@ const make = Effect.fn("ledger.make")(function* () {
                 .run();
             }),
           )
-          .pipe(Effect.trackDuration(runLedgerAppendDuration)),
+          .pipe(
+            Effect.trackDuration(runLedgerAppendDuration),
+            Effect.tap(() => RunLedger.logRunEventAppended(event)),
+          ),
       );
-    },
+    }),
 
     latestSeq: (runId: RunId) =>
       hardOperation(RunLedger.readRunEventsOperation, () =>
