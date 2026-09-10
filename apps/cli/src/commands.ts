@@ -13,6 +13,7 @@ import {
   operationSettingNames,
   type RunActivity,
   type RunEvent,
+  type RunHistory,
   RunId,
   type RunSummary,
   resolveOperationSetting,
@@ -328,7 +329,9 @@ const usageLabel = (usage: RunSummary["usage"]) => {
 
 const formatRun = (run: RunSummary) => {
   const session = run.session ? `  session=${run.session}` : "";
-  return `  ${run.id}  ${run.status}  ${run.stage}  ${run.workItem} [${run.harness}]  events=${run.eventCount}${session}${usageLabel(run.usage)}`;
+  const prunedHistoryLabel =
+    run.eventsPrunedAtMillis === null ? "" : `  history-pruned=${run.eventsPrunedAtMillis}`;
+  return `  ${run.id}  ${run.status}  ${run.stage}  ${run.workItem} [${run.harness}]  events=${run.eventCount}${prunedHistoryLabel}${session}${usageLabel(run.usage)}`;
 };
 
 const formatRuns = (runs: ReadonlyArray<RunSummary>) =>
@@ -337,8 +340,12 @@ const formatRuns = (runs: ReadonlyArray<RunSummary>) =>
 const formatEvent = (event: RunEvent) =>
   `  #${event.seq}  ${event.type}${event.name ? ` ${event.name}` : ""}  ${event.data}`;
 
-const formatEvents = (events: ReadonlyArray<RunEvent>) =>
-  events.length === 0 ? "(no events for this run)" : events.map(formatEvent).join("\n");
+export const formatRunEvents = (history: RunHistory) => {
+  if (history.eventsPrunedAtMillis !== null) return `(run history pruned at ${history.eventsPrunedAtMillis})`;
+  return history.events.length === 0
+    ? "(no events for this run)"
+    : history.events.map(formatEvent).join("\n");
+};
 
 const overSocket = <E, R>(effect: Effect.Effect<void, E, R>, socketPath: string) =>
   effect.pipe(
@@ -371,8 +378,8 @@ const runEvents = Effect.fn("commands.runEvents")(
   function* (options: { readonly socketPath: string; readonly id: string }) {
     const client = yield* makeDaemonClient();
     const id = yield* Schema.decodeEffect(RunId)(options.id);
-    const events = yield* client.GetRunEvents({ id });
-    yield* Console.log(formatEvents(events));
+    const history = yield* client.GetRunEvents({ id });
+    yield* Console.log(formatRunEvents(history));
   },
   (effect, options) => overSocket(effect, options.socketPath),
 );
