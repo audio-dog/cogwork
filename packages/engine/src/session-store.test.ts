@@ -1,5 +1,6 @@
 import {
   type AgUiEvent,
+  BranchName,
   HarnessName,
   type RunEvent,
   RunId,
@@ -18,6 +19,7 @@ import { foldThread, SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
 
 const runId = Schema.decodeSync(RunId);
+const branchName = Schema.decodeSync(BranchName);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
 const session = Schema.decodeSync(SessionId)("sess-1");
@@ -127,7 +129,7 @@ describe("SessionStore ledger-backed message store", () => {
           workItem,
           stage: "implement",
           harness,
-          branch: "b",
+          branch: branchName("b"),
           session,
           usage: null,
           status: "running",

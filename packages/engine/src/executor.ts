@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   AvailabilityCause,
+  BranchName,
   HarnessName,
   RunPlanObservation,
   RunRecord,
@@ -13,6 +14,7 @@ import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
+  BranchName as BranchNameSchema,
   decodeStageResultCompletion,
   ImplementStageResult,
   issueTrackerErrorIsPermanent,
@@ -132,11 +134,21 @@ export const meteredTotalTokens = (usage: TokenUsage | null | undefined) =>
 interface StageOps {
   readonly resolved: ResolvedStage;
   readonly planStage: ResolvedOperation;
-  readonly branch: string | null;
+  readonly branch: BranchName | null;
   readonly prepare: Effect.Effect<PreparedRun, PrepareError>;
   readonly fullPrompt: string;
   readonly resumePolicy: boolean;
 }
+
+type ExecutableWork = Omit<EligibleWork, "followUpBranch"> & {
+  readonly followUpBranch: BranchName | undefined;
+};
+
+const mintBranchName = (item: EligibleWork) => {
+  const { followUpBranch, ...work } = item;
+  if (item.stage !== "follow-up" || !followUpBranch) return { ...work, followUpBranch: undefined };
+  return { ...work, followUpBranch: BranchNameSchema.make(followUpBranch) };
+};
 
 declare const emptyClaimDisposition: unique symbol;
 type EmptyClaimDisposition = { readonly [emptyClaimDisposition]?: never };
@@ -160,7 +172,7 @@ const defaultFollowUp: FollowUpContext = {
   baseDivergence: "none",
 };
 
-const resumeWorktreeOptions = (item: EligibleWork) => {
+const resumeWorktreeOptions = (item: ExecutableWork) => {
   if (item.stage === "follow-up" && item.followUpBranch) {
     return { resume: true, branch: item.followUpBranch };
   }
@@ -262,13 +274,17 @@ export const make = Effect.gen(function* () {
   const nextRunId = () =>
     Effect.sync(() => `run-${randomUUID()}`).pipe(Effect.flatMap(decodeRunId), Effect.orDie);
 
-  const latestResumableBranchRun = (workspace: RegisteredWorkspace, branch: string) =>
+  const latestResumableBranchRun = (workspace: RegisteredWorkspace, branch: BranchName) =>
     Effect.all([
       ledger.sessionForBranch(workspace.config.name, branch),
       ledger.latestRunByBranch(workspace.config.name, branch),
     ]).pipe(Effect.map(([session, run]) => (session === run?.session ? run : null)));
 
-  const candidateSession = (workspace: RegisteredWorkspace, item: EligibleWork, branch: string | null) => {
+  const candidateSession = (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    branch: BranchName | null,
+  ) => {
     const resumedSession = item.resume?.session;
     if (resumedSession) return Effect.succeed(resumedSession);
     if (!branch) return Effect.succeed(null);
@@ -310,7 +326,7 @@ export const make = Effect.gen(function* () {
   const resolveCandidate = Effect.fn("Executor.resolveCandidate")(function* (
     runId: RunId,
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
+    item: ExecutableWork,
     ops: StageOps,
     prepared: PreparedRun,
     startedAtMillis: number,
@@ -682,7 +698,7 @@ export const make = Effect.gen(function* () {
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    branch: string,
+    branch: BranchName,
     context: FollowUpContext,
     prompt: string,
   ) {
@@ -703,7 +719,11 @@ export const make = Effect.gen(function* () {
     } satisfies PreparedRun;
   });
 
-  const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+  const followUpOps = (
+    workspace: RegisteredWorkspace,
+    item: ExecutableWork,
+    planStage: ResolvedOperation,
+  ) => {
     const resolved = planStage.stage;
     const branch = item.followUpBranch ?? branchName(item);
     const context = item.followUp ?? defaultFollowUp;
@@ -987,7 +1007,7 @@ export const make = Effect.gen(function* () {
 
   const resumePrepare = Effect.fn("Executor.resumePrepare")(function* (
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
+    item: ExecutableWork,
     session: SessionId,
   ) {
     if (item.stage === "triage") {
@@ -1005,7 +1025,7 @@ export const make = Effect.gen(function* () {
 
   const freshRecoveryPrepare = Effect.fn("Executor.freshRecoveryPrepare")(function* (
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
+    item: ExecutableWork,
     prompt: string,
   ) {
     if (item.stage === "triage") {
@@ -1017,7 +1037,7 @@ export const make = Effect.gen(function* () {
 
   const plannedStageOps = (
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
+    item: ExecutableWork,
     planStage: ResolvedOperation,
   ) => {
     if (item.stage === "implement") return implementOps(workspace, item, planStage);
@@ -1025,7 +1045,7 @@ export const make = Effect.gen(function* () {
     return triageOps(workspace, item, planStage);
   };
 
-  const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+  const stageOps = (workspace: RegisteredWorkspace, item: ExecutableWork, planStage: ResolvedOperation) => {
     const ops = plannedStageOps(workspace, item, planStage);
     if (!isReplayHarness(ops.resolved.harness)) return ops;
     return {
@@ -1039,7 +1059,7 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
-  const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+  const opsFor = (workspace: RegisteredWorkspace, item: ExecutableWork, planStage: ResolvedOperation) => {
     const ops = stageOps(workspace, item, planStage);
     if (isReplayHarness(ops.resolved.harness)) return ops;
     const session = item.resume?.session;
@@ -1050,7 +1070,7 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
-  const freshRecoveryOps = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
+  const freshRecoveryOps = (workspace: RegisteredWorkspace, item: ExecutableWork, ops: StageOps) => {
     const fresh = stageOps(workspace, item, ops.planStage);
     if (!item.resume) return fresh;
     return {
@@ -1199,10 +1219,11 @@ export const make = Effect.gen(function* () {
     if (!checked.resolved || !checked.availability.available) {
       return yield* decline(workspace, item, checked.availability.causes);
     }
-    const stageOps = opsFor(workspace, item, checked.resolved);
+    const executable = mintBranchName(item);
+    const stageOps = opsFor(workspace, executable, checked.resolved);
     const admission = yield* claimEnabledItem(workspace, item);
     if (!admission.claimed) return false;
-    yield* runClaimed(workspace, item, stageOps, admission.startedAtMillis, observation).pipe(
+    yield* runClaimed(workspace, executable, stageOps, admission.startedAtMillis, observation).pipe(
       Effect.tap(
         ClaimDisposition.$match({
           Hold: () => Effect.void,
@@ -1218,7 +1239,7 @@ export const make = Effect.gen(function* () {
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
+    item: ExecutableWork,
     ops: StageOps,
     startedAtMillis: number,
     observation: RunPlanObservation,
