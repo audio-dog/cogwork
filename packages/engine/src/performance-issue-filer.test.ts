@@ -18,6 +18,11 @@ const decodeWorkItemId = Schema.decodeSync(WorkItemId);
 const decodeFingerprint = Schema.decodeSync(PerformanceIssueFingerprint);
 const fingerprint = decodeFingerprint("daemon.event-loop-delay-p99.above");
 const marker = wireCodec.encode({ name: "selfperf", pairs: `fingerprint=${fingerprint}` });
+const pendingFingerprint = decodeFingerprint("renderer.heap-headroom.below");
+const pendingMarker = wireCodec.encode({
+  name: "selfperf",
+  pairs: `fingerprint=${pendingFingerprint}`,
+});
 
 interface Recorded {
   readonly created: ReadonlyArray<{
@@ -94,8 +99,9 @@ const issue = (overrides: Partial<PerformanceIssue> = {}) =>
   }) satisfies PerformanceIssue;
 
 const today = Date.UTC(2026, 8, 9, 15);
+const filedToday = issue({ id: decodeWorkItemId("#1"), body: "", createdAtMillis: today - 1 });
 const cappedIssues = [
-  issue({ id: decodeWorkItemId("#1"), body: "", createdAtMillis: today - 1 }),
+  filedToday,
   issue({ id: decodeWorkItemId("#2"), body: "", createdAtMillis: today - 2 }),
   issue({ id: decodeWorkItemId("#3"), body: "", createdAtMillis: today - 3 }),
 ];
@@ -104,6 +110,7 @@ const closedOccurrence = issue({
   createdAtMillis: Date.UTC(2026, 8, 8, 12),
   hasMergedFix: true,
 });
+const visiblePending = issue({ id: decodeWorkItemId("#2"), body: pendingMarker });
 
 describe("performance issue filer", () => {
   it.effect("comments on an open fingerprint match instead of filing", () =>
@@ -168,6 +175,18 @@ describe("performance issue filer", () => {
         filerLayer(cappedIssues.slice(0, 2), new Set([decodeFingerprint("renderer.heap-headroom.below")])),
       ),
     ),
+  );
+
+  it.effect("does not count a visible pending issue twice", () =>
+    Effect.gen(function* () {
+      const filer = yield* PerformanceIssueFiler;
+      const recorded = yield* PerformanceIssueCalls;
+
+      const result = yield* filer.submit(input, today);
+
+      assert.strictEqual(result, "filed");
+      assert.strictEqual((yield* Ref.get(recorded)).created.length, 1);
+    }).pipe(Effect.provide(filerLayer([filedToday, visiblePending], new Set([pendingFingerprint])))),
   );
 
   it.effect("comments on a closed occurrence until its fix merges", () =>

@@ -79,6 +79,15 @@ const latestClosed = (issues: ReadonlyArray<PerformanceIssue>) =>
     .toSorted((left, right) => right.createdAtMillis - left.createdAtMillis)
     .at(0);
 
+const countUnconfirmedFilings = (
+  codec: WireCodec,
+  issues: ReadonlyArray<PerformanceIssue>,
+  pendingFingerprints: ReadonlySet<PerformanceIssueFingerprint>,
+) =>
+  [...pendingFingerprints].filter(
+    (fingerprint) => !issues.some((issue) => carriesFingerprint(codec, issue, fingerprint)),
+  ).length;
+
 const recurrenceIssue = (
   codec: WireCodec,
   input: PerformanceIssueInput,
@@ -139,8 +148,9 @@ export const make = Effect.fn("PerformanceIssueFiler.make")(function* (
     }
 
     const day = utcDay(atMillis);
+    const issuesFiledToday = issues.filter((issue) => utcDay(issue.createdAtMillis) === day);
     const trackerCount =
-      issues.filter((issue) => utcDay(issue.createdAtMillis) === day).length + pendingFingerprints.size;
+      issuesFiledToday.length + countUnconfirmedFilings(host.codec, issuesFiledToday, pendingFingerprints);
     const local = yield* Ref.get(localFilings);
     const localCount = local.day === day ? local.count : 0;
     const filingCount = Math.max(trackerCount, localCount);
