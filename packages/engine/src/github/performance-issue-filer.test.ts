@@ -22,6 +22,12 @@ const decodeWorkspaceId = Schema.decodeSync(WorkspaceId);
 const performanceFingerprint = Schema.decodeSync(PerformanceIssueFingerprint)(
   "daemon.event-loop-delay-p99.above",
 );
+const performanceIssueInput = {
+  fingerprint: performanceFingerprint,
+  title: "Daemon event-loop delay p99 exceeded 100 ms",
+  body: "Signal: daemon event-loop delay p99 above threshold",
+  recurrenceBody: "Fired again.",
+};
 const noPullReferences = () => Effect.succeed([]);
 const pullReference = (body: string, merged = true) => ({
   body,
@@ -190,15 +196,9 @@ it.effect("retries creation after a transient failure that did not report accept
   Effect.gen(function* () {
     const filer = yield* PerformanceIssueFiler;
     const calls = yield* CreateIssueCalls;
-    const input = {
-      fingerprint: performanceFingerprint,
-      title: "Daemon event-loop delay p99 exceeded 100 ms",
-      body: "Signal: daemon event-loop delay p99 above threshold",
-      recurrenceBody: "Fired again.",
-    };
 
-    yield* Effect.flip(filer.submit(input, Date.UTC(2026, 8, 9, 15)));
-    const result = yield* filer.submit(input, Date.UTC(2026, 8, 9, 15));
+    yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
+    const result = yield* filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15));
 
     assert.strictEqual(result, "filed");
     assert.strictEqual(yield* Ref.get(calls), 2);
@@ -263,6 +263,28 @@ it.effect("retries creation after a transient failure that did not report accept
               readOnlyRegistry({ workspaces: [performanceWorkspace], failures: [] }),
             ),
           ).pipe(Layer.provideMerge(CreateIssueCalls.layer)),
+        ),
+      ),
+    ),
+  ),
+);
+
+it.effect("keeps an unregistered performance workspace retryable", () =>
+  Effect.gen(function* () {
+    const filer = yield* PerformanceIssueFiler;
+    const error = yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
+
+    assert.strictEqual(error.reason, "unavailable");
+    assert.isTrue(error.retryable);
+  }).pipe(
+    Effect.provide(
+      layer(performanceWorkspaceName).pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.mock(GitHubClient, {}),
+            Layer.effect(IssueTracker, makeEmpty),
+            Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces: [], failures: [] })),
+          ),
         ),
       ),
     ),

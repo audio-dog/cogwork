@@ -104,12 +104,14 @@ const missingTarget = (message: string) =>
     message,
   });
 
-const pendingConfirmation = (message: string) =>
+const retryableUnavailable = (message: string) =>
   new IssueTrackerError({
     reason: "unavailable",
     retryable: true,
     message,
   });
+
+const pendingConfirmation = retryableUnavailable;
 
 const shouldReleaseCreateReservation = (error: IssueTrackerError) => error.writeMayHaveCommitted !== true;
 
@@ -178,7 +180,7 @@ const resolvePerformanceIssueTarget = Effect.fn("github.resolvePerformanceIssueT
   const state = yield* registry.state;
   const workspace = state.workspaces.find((candidate) => candidate.config.name === workspaceName);
   if (!workspace)
-    return yield* missingTarget(`performance evidence workspace ${workspaceName} is unavailable`);
+    return yield* retryableUnavailable(`performance evidence workspace ${workspaceName} is unavailable`);
   if (workspace.config.issueTracker.type !== "github" || !workspace.repository) {
     return yield* missingTarget(`performance evidence workspace ${workspaceName} does not use GitHub issues`);
   }
