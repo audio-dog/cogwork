@@ -1,0 +1,28 @@
+configs/sensor/vitest.config.ts
+  s_cff36ee3a37fb2::t_fb29e5b0edb820 9
+  s_cff36ee3a37fb2::t_2313f2b1380146 1-8,10-12
+configs/sensor/package.json
+  s_cff36ee3a37fb2::t_2313f2b1380146 1-8,10-22,24-27
+  s_cff36ee3a37fb2::t_e72820bd20a22b 9
+  s_cff36ee3a37fb2::t_8d1d1eadfbb45f 23
+configs/sensor/tsconfig.json
+  s_cff36ee3a37fb2::t_2313f2b1380146 1-16
+pnpm-lock.yaml
+  s_cff36ee3a37fb2::t_e036805e9c5d97 357-390
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6df1656a3e94748100f60eb020197ed1146c309a",
+  "prompts": {},
+  "sessions": {
+    "s_cff36ee3a37fb2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c12-e4ef-7f50-b0f1-12ad014890f3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
