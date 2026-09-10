@@ -1,0 +1,104 @@
+packages/engine/src/recovery.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 25,53,230
+packages/engine/src/github/client.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 8
+configs/lint/tests/test-count-reporter.mjs
+  s_f65d7f46c79635::t_d5beb696e4ff61 1-13
+packages/engine/src/external-harness-runtime.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 339-340
+apps/cli/src/rpc.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 18
+packages/engine/CONTEXT.md
+  s_f65d7f46c79635::t_d5beb696e4ff61 152
+packages/engine/src/run-ledger.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 16,190-191,199
+packages/engine/src/run-plan.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 770-772,961
+packages/engine/src/tools/file-diff-feed-lifecycle.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 11
+packages/engine/src/tools/owned-tools.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 14
+configs/lint/turbo.json
+  s_f65d7f46c79635::t_d5beb696e4ff61 1-17
+packages/engine/src/recovery.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 37,398
+packages/engine/src/tools/sandbox.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 9
+apps/cli/src/login.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 18
+packages/engine/src/executor.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 19,54,80,82,116-118,211-216,225,229,310,321-322,327-338,340-351,1126,1150,1152-1159,1161-1162,1171-1177,1198,1236,1238,1242,1258,1262-1266,1331,1338-1341
+packages/engine/src/tools/file-diff-feed-fallback.test.ts
+  s_f65d7f46c79635::t_ab1d8e4b1039ec 17
+packages/engine/src/operation-resolution.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 3,52,54,94,189-202,252-263,367-368,391,537-543,549-563,647,649,652-659
+packages/engine/src/tools/file-diff-feed-content.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 9
+packages/engine/src/run-recorder.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 104,128,142,156-157,248,254-273,283,325
+configs/lint/package.json
+  s_f65d7f46c79635::t_d5beb696e4ff61 1-9
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 20
+packages/engine/src/control-store.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 26
+packages/engine/src/run-ledger.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 22,25,38-45,167-188,198,238,326-338
+  s_f65d7f46c79635::t_feb4e0956e60d0 339-340
+configs/lint/tests/fixtures/test-count-reporter.mjs
+  s_f65d7f46c79635::t_d5beb696e4ff61 1-4
+apps/cli/src/commands.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 16
+packages/engine/src/run-recorder.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 1,9,90-91,96-109
+packages/engine/src/engine.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 32
+docs/worktree-git-invocation-budget.md
+  s_f65d7f46c79635::t_d5beb696e4ff61 1-21
+packages/engine/src/linear/oauth.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 7
+apps/cli/src/ledger.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 28,232-233,248,260-284,769-806,823
+packages/engine/src/executor.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 67,1542-1543,1551-1552,1596-1597,1637-1638,1670-1671,1761,1763,1893,1924-1927,1942-1945,2026,2095,2110,3136,3561-3564,3596-3599
+packages/engine/src/model-catalog.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 6
+packages/engine/src/watch-activity.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 161-176
+packages/engine/src/external-harness-runtime.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 736,740,743-763,785,790-801,817,1124
+packages/engine/src/testing/engine-test-layer.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 52
+apps/cli/src/ledger.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 29,31,179-186,252-255,265,273-275,317-363,585-593,671
+configs/lint/tests/test-count-reporter.test.mjs
+  s_f65d7f46c79635::t_d5beb696e4ff61 1-20
+packages/engine/src/reconcile.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 31,391-392
+packages/engine/src/github/cli-credential.test.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 10
+packages/engine/src/daemon.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 73,168-169,171,174,300,307,426,428-434
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_f65d7f46c79635::t_d5beb696e4ff61 14
+.github/workflows/test-suite-comparison.yml
+  s_f65d7f46c79635::t_d5beb696e4ff61 1-44
+pnpm-lock.yaml
+  s_f65d7f46c79635::t_f2c022db278096 357-358
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c9cec3797a49ee30db5d16b65aba3c4cb15e3cd7",
+  "prompts": {},
+  "sessions": {
+    "s_f65d7f46c79635": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c81-b209-7733-b974-134ee88ff18f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
