@@ -20,6 +20,7 @@ const repo: GitHubRepoRef = {
   tokenEnv: "GITHUB_TOKEN",
 };
 const priorityFieldId = Schema.decodeSync(GitHubIssueFieldId)(42);
+const secondaryFieldId = Schema.decodeSync(GitHubIssueFieldId)(43);
 
 const jsonResponse = (body: unknown = {}, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -160,8 +161,10 @@ describe("GitHub client", () => {
           data: {
             nodes: [
               {
+                id: "I_issue_454",
                 number: 454,
                 issueFieldValues: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
                   nodes: [
                     {
                       __typename: "IssueFieldSingleSelectValue",
@@ -192,6 +195,78 @@ describe("GitHub client", () => {
       assert.strictEqual(request.url, "https://api.github.com/graphql");
       const body = yield* Effect.promise(() => request.json());
       assert.deepStrictEqual(body.variables, { ids: ["I_issue_454", "I_missing"] });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists every issue field value page", () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            nodes: [
+              {
+                id: "I_issue_454",
+                number: 454,
+                issueFieldValues: {
+                  pageInfo: { hasNextPage: true, endCursor: "cursor-454" },
+                  nodes: [
+                    {
+                      __typename: "IssueFieldSingleSelectValue",
+                      name: "High",
+                      field: { fullDatabaseId: "43" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            issue0: {
+              id: "I_issue_454",
+              number: 454,
+              issueFieldValues: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    __typename: "IssueFieldSingleSelectValue",
+                    name: "Urgent",
+                    field: { fullDatabaseId: "42" },
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      assert.deepStrictEqual(
+        yield* client.listIssueFieldValues(repo, ["I_issue_454"]),
+        new Map([
+          [
+            454,
+            new Map([
+              [secondaryFieldId, "High"],
+              [priorityFieldId, "Urgent"],
+            ]),
+          ],
+        ]),
+      );
+      assert.strictEqual(fetch.mock.calls.length, 2);
+      const bodies = yield* Effect.forEach(fetch.mock.calls, ([input, init]) => {
+        const request = new Request(input, init);
+        return Effect.promise(() => request.json());
+      });
+      assert.deepStrictEqual(
+        bodies.map(({ variables }) => variables),
+        [{ ids: ["I_issue_454"] }, { id0: "I_issue_454", cursor0: "cursor-454" }],
+      );
     }).pipe(withFetchClient(fetch));
   });
 

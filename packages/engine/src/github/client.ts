@@ -233,37 +233,65 @@ const IssueFieldValueNode = Schema.Struct({
     ),
   ),
 });
-const IssueFieldValuesPayload = Schema.Struct({
-  nodes: Schema.Array(
-    Schema.NullOr(
-      Schema.Struct({
-        number: Schema.Finite,
-        issueFieldValues: Schema.Struct({
-          nodes: Schema.Array(Schema.NullOr(IssueFieldValueNode)),
-        }),
-      }),
-    ),
-  ),
+const IssueFieldValuePageInfo = Schema.Struct({
+  hasNextPage: Schema.Boolean,
+  endCursor: Schema.NullOr(Schema.String),
 });
+const IssueFieldValues = Schema.Struct({
+  pageInfo: IssueFieldValuePageInfo,
+  nodes: Schema.Array(Schema.NullOr(IssueFieldValueNode)),
+});
+const IssueFieldValueIssue = Schema.Struct({
+  id: Schema.String,
+  number: Schema.Finite,
+  issueFieldValues: IssueFieldValues,
+});
+const IssueFieldValuesPayload = Schema.Struct({
+  nodes: Schema.Array(Schema.NullOr(IssueFieldValueIssue)),
+});
+const IssueFieldValuePagesPayload = Schema.Record(Schema.String, Schema.NullOr(IssueFieldValueIssue));
 const decodeIssueFieldValues = Schema.decodeUnknownEffect(IssueFieldValuesPayload);
+const decodeIssueFieldValuePages = Schema.decodeUnknownEffect(IssueFieldValuePagesPayload);
+
+const issueFieldValuePageSelection = (after: string) => `
+  id
+  number
+  issueFieldValues(first: 100${after}) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      __typename
+      ... on IssueFieldSingleSelectValue {
+        name
+        field { ... on IssueFieldSingleSelect { fullDatabaseId } }
+      }
+    }
+  }`;
 
 export const issueFieldValuesQuery = `
 query IssueFieldValues($ids: [ID!]!) {
   nodes(ids: $ids) {
     ... on Issue {
-      number
-      issueFieldValues(first: 100) {
-        nodes {
-          __typename
-          ... on IssueFieldSingleSelectValue {
-            name
-            field { ... on IssueFieldSingleSelect { fullDatabaseId } }
-          }
-        }
-      }
+      ${issueFieldValuePageSelection("")}
     }
   }
 }`;
+
+const issueFieldValuePagesQuery = (count: number) => {
+  const variables = Array.from(
+    { length: count },
+    (_, index) => `$id${index}: ID!, $cursor${index}: String!`,
+  ).join(", ");
+  const issues = Array.from(
+    { length: count },
+    (_, index) => `
+  issue${index}: node(id: $id${index}) {
+    ... on Issue {
+      ${issueFieldValuePageSelection(`, after: $cursor${index}`)}
+    }
+  }`,
+  ).join("");
+  return `query IssueFieldValuePages(${variables}) {${issues}\n}`;
+};
 
 export const closingReferencesQuery = `
 query ClosingReferences($owner: String!, $name: String!, $cursor: String) {
@@ -369,12 +397,49 @@ const issueFieldValues = (values: ReadonlyArray<typeof IssueFieldValueNode.Type 
     }),
   );
 
-const issueFieldValuesByIssue = (payload: typeof IssueFieldValuesPayload.Type) =>
-  new Map(
-    payload.nodes.flatMap((issue) =>
-      issue ? [[issue.number, issueFieldValues(issue.issueFieldValues.nodes)] as const] : [],
-    ),
+interface IssueFieldValueState {
+  readonly nodeId: string;
+  readonly number: number;
+  readonly values: ReadonlyMap<GitHubIssueFieldId, string>;
+  readonly cursor: string | null;
+}
+
+const issueFieldValueCursor = (pageInfo: typeof IssueFieldValuePageInfo.Type) =>
+  pageInfo.hasNextPage ? pageInfo.endCursor : null;
+
+const issueFieldValueState = (
+  issue: typeof IssueFieldValueIssue.Type,
+  previous: ReadonlyMap<GitHubIssueFieldId, string>,
+): IssueFieldValueState => ({
+  nodeId: issue.id,
+  number: issue.number,
+  values: new Map([...previous, ...issueFieldValues(issue.issueFieldValues.nodes)]),
+  cursor: issueFieldValueCursor(issue.issueFieldValues.pageInfo),
+});
+
+const completedIssueFieldValueState = (state: IssueFieldValueState): IssueFieldValueState => ({
+  ...state,
+  cursor: null,
+});
+
+const continuedIssueFieldValueState = (
+  state: IssueFieldValueState,
+  issue: typeof IssueFieldValueIssue.Type | null | undefined,
+) => {
+  if (!issue) return completedIssueFieldValueState(state);
+  return issueFieldValueState(issue, state.values);
+};
+
+const issueFieldValuePageVariables = (states: ReadonlyArray<IssueFieldValueState>) =>
+  Object.fromEntries(
+    states.flatMap((state, index) => [
+      [`id${index}`, state.nodeId],
+      [`cursor${index}`, state.cursor],
+    ]),
   );
+
+const issueFieldValuesByIssue = (states: ReadonlyArray<IssueFieldValueState>) =>
+  new Map(states.map((state) => [state.number, state.values] as const));
 
 const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIssue => ({
   nodeId: issue.node_id,
@@ -784,6 +849,41 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   const pullReferences = (repo: GitHubRepoRef, headBranch?: string) =>
     headBranch ? Effect.succeed(new Map<number, ReadonlyArray<number>>()) : pullClosingReferences(repo);
 
+  const collectIssueFieldValuePages: (
+    repo: GitHubRepoRef,
+    states: ReadonlyArray<IssueFieldValueState>,
+  ) => Effect.Effect<ReadonlyArray<IssueFieldValueState>, IssueTrackerError> = Effect.fn(
+    "github.collectIssueFieldValuePages",
+  )(function* (repo, states) {
+    const pending = states.filter((state) => state.cursor !== null);
+    if (pending.length === 0) return states;
+    const data = yield* graphql(
+      repo,
+      issueFieldValuePagesQuery(pending.length),
+      issueFieldValuePageVariables(pending),
+    );
+    const payload = yield* Effect.mapError(decodeIssueFieldValuePages(data), toUnavailable);
+    const continued = pending.map((state, index) =>
+      continuedIssueFieldValueState(state, payload[`issue${index}`]),
+    );
+    const continuedById = new Map(continued.map((state) => [state.nodeId, state] as const));
+    return yield* collectIssueFieldValuePages(
+      repo,
+      states.map((state) => continuedById.get(state.nodeId) ?? state),
+    );
+  });
+
+  const collectIssueFieldValues = Effect.fn("github.collectIssueFieldValues")(function* (
+    repo: GitHubRepoRef,
+    issueNodeIds: ReadonlyArray<string>,
+  ) {
+    const data = yield* graphql(repo, issueFieldValuesQuery, { ids: issueNodeIds });
+    const payload = yield* Effect.mapError(decodeIssueFieldValues(data), toUnavailable);
+    const states = payload.nodes.flatMap((issue) => (issue ? [issueFieldValueState(issue, new Map())] : []));
+    const completed = yield* collectIssueFieldValuePages(repo, states);
+    return issueFieldValuesByIssue(completed);
+  });
+
   const collectIssuePages: (
     repo: GitHubRepoRef,
     page?: number,
@@ -816,9 +916,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       issueNodeIds: ReadonlyArray<string>,
     ) {
       if (issueNodeIds.length === 0) return new Map();
-      const data = yield* graphql(repo, issueFieldValuesQuery, { ids: issueNodeIds });
-      const payload = yield* Effect.mapError(decodeIssueFieldValues(data), toUnavailable);
-      return issueFieldValuesByIssue(payload);
+      return yield* withPaginationDeadline(collectIssueFieldValues(repo, issueNodeIds));
     }),
     listPriorityFields: Effect.fn("github.listPriorityFields")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, orgPath(repo, "/issue-fields")).pipe(
