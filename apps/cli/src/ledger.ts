@@ -131,6 +131,7 @@ const runRecordSelection = {
 const runSummarySelection = {
   ...runRecordSelection,
   eventCount: runs.eventCount,
+  eventsPrunedAt: runs.eventsPrunedAt,
 };
 
 const runRecordFromRow = (row: {
@@ -165,10 +166,14 @@ const runRecordFromRow = (row: {
 });
 
 const runSummaryFromRow = (
-  row: Parameters<typeof runRecordFromRow>[0] & { readonly eventCount: number },
+  row: Parameters<typeof runRecordFromRow>[0] & {
+    readonly eventCount: number;
+    readonly eventsPrunedAt: number | null;
+  },
 ) => ({
   ...runRecordFromRow(row),
   eventCount: row.eventCount,
+  eventsPrunedAtMillis: row.eventsPrunedAt,
 });
 
 type RunRow = Parameters<typeof runRecordFromRow>[0];
