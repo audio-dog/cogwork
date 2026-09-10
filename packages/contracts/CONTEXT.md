@@ -252,6 +252,7 @@ Workflow
 
 **Priority**:
 One of `urgent`, `high`, `medium`, `low` — a four-level scale (`priorityRank`, highest first) that orders work *within* an operation and nowhere else. Operation is always the primary sort key, so a low-priority follow-up still runs before an urgent implementation; priority only breaks ties between items selected for the same operation, and stable tracker order breaks ties between items of the same priority. Every observed item carries a resolved priority. Each adapter reads its own tracker's field and maps it onto this scale (`resolvePriority`, case-insensitive); anything absent, blank, or unrecognized becomes the `defaultPriority`, `medium`. Priority orders work — it never gates eligibility — so a value we can't read must never drop an item; it just lands in the middle.
+For GitHub, `issueTracker.priority.field` is the stable numeric ID of an organization single-select issue field. Clients fetch the compatible catalog through the workspace's bound Connection and store a selection; they never ask a person to type GitHub coordinates. The adapter reads that ID from the issue-field values included with each listed issue. For Linear, priority is native and needs no configuration.
 _Avoid_: Operation priority (that's the fixed operation order), severity, weight, rank (alone — `priorityRank` is the ordering, priority is the value)
 
 **Triage role**:

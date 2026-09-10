@@ -87,11 +87,10 @@ An issue enters the autonomous pipeline with no human when it is:
 3. **Not labeled** `cogwork:claimed`, `wontfix`, `needs-info`, or `ready-for-human`.
 4. **Assigned** to an allowlisted account when an allowlist is configured; unassigned is fine
    otherwise (`packages/engine/src/classify.ts:136-137`).
-5. **Priority**: comes from a Projects v2 board single-select field (default field name
-   `Priority`, `packages/engine/src/github/priority.ts:4,50-72`); anything not on the board gets
-   `medium` (`packages/contracts/src/triage.ts:105`). A machine-filed ticket lands at medium
-   unless the filer also adds it to the board. Note: colonylabs uses org-level issue fields,
-   which this GraphQL query cannot see — machine tickets will sit at medium regardless.
+5. **Priority**: comes from a selected organization single-select issue field. The GitHub issue
+   listing includes its values, and the adapter matches the selected stable field ID; absent or
+   unknown values become `medium`. This matches the organization-level `Priority` field
+   colonylabs uses.
 
 **Body shape: there is no machine-readable body contract.** Triage reads the body as a human
 claim, verifies it against the codebase, and writes the Agent Brief itself

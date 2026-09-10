@@ -3,27 +3,15 @@ import { spawn } from "node:child_process";
 import { globSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { testCountMarker } from "../configs/test/test-count-reporter.ts";
 
-const countMarker = "cogwork-test-count:";
-const measuredTestStates = ["passed", "failed"];
 const scriptPath = fileURLToPath(import.meta.url);
-const vitestCountPattern = new RegExp(`${countMarker}(\\d+)`, "g");
+const vitestCountPattern = new RegExp(`${testCountMarker}(\\d+)`, "g");
 const nodeTestCountPattern = /^# tests (\d+)$/m;
 const turboTaskCountPattern = /Tasks:\s+\d+ successful, (\d+) total/;
 const defaultWorkspaceRoot = dirname(dirname(scriptPath));
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 const nodeTestPatterns = ["scripts/*.test.mjs"];
-const isMeasuredTest = (testCase) => measuredTestStates.includes(testCase.result().state);
-
-export default class TestCountReporter {
-  onTestRunEnd(testModules) {
-    const testCount = testModules
-      .flatMap((testModule) => [...testModule.children.allTests()])
-      .filter(isMeasuredTest).length;
-    console.log(`${countMarker}${testCount}`);
-  }
-}
-
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
 export const run = (file, args, workspaceRoot = defaultWorkspaceRoot) =>
@@ -55,7 +43,7 @@ const completedTestRuns = {
 };
 
 const requireCompletedTestRun = (result, suite) => {
-  if (!result.failed || completedTestRuns[suite]?.(result.stdout)) return result;
+  if (completedTestRuns[suite]?.(result.stdout)) return result;
   throw new Error(`${suite} test run did not complete`);
 };
 
@@ -102,23 +90,13 @@ export const runMeasuredNodeTests = (workspaceRoot, runTestCommand = run) => {
   return runMeasuredTests(process.execPath, nodeTestArgs(testFiles), workspaceRoot, "node", runTestCommand);
 };
 
-export const vitestTestArgs = (turboPath, reporterPath) => [
-  turboPath,
-  "test",
-  "--force",
-  "--continue=always",
-  "--output-logs=full",
-  "--",
-  "--reporter=default",
-  `--reporter=${reporterPath}`,
-];
+export const vitestTestArgs = (turboPath) => [turboPath, "test", "--continue=always", "--output-logs=full"];
 
 const runTestSuites = async (runTestCommand, workspaceRoot) => {
-  const reporterPath = pathToFileURL(scriptPath).href;
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
   const vitest = await runMeasuredTests(
     process.execPath,
-    vitestTestArgs(turboPath, reporterPath),
+    vitestTestArgs(turboPath),
     workspaceRoot,
     "vitest",
     runTestCommand,

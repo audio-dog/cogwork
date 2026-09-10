@@ -76,6 +76,10 @@ const drainGraceFlag = Flag.integer("drain-grace").pipe(
 );
 
 const telemetryFlag = Flag.choice("telemetry", ["on", "off"]).pipe(Flag.withDefault("on"));
+const performanceWorkspaceFlag = Flag.string("performance-workspace").pipe(
+  Flag.withDescription("Workspace that receives machine-local performance evidence"),
+  Flag.optional,
+);
 
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
 
@@ -275,7 +279,7 @@ export const schedulingActions = {
 } as const satisfies Record<"pause" | "resume", SchedulingState>;
 
 const runDaemon = Effect.fn("commands.runDaemon")(
-  function* (options: DaemonOptions & { readonly telemetryEnabled: boolean }) {
+  function* (options: DaemonOptions) {
     const registry = yield* (yield* Registry.WorkspaceRegistry).state;
     yield* Effect.logInfo("cogwork daemon started", {
       socket: options.socketPath,
@@ -603,16 +607,24 @@ export const daemonCommand = Command.make("daemon", {
   pollInterval: pollIntervalFlag,
   drainGrace: drainGraceFlag,
   telemetry: telemetryFlag,
+  performanceWorkspace: performanceWorkspaceFlag,
 }).pipe(
-  Command.withHandler(({ socket, controlStore, credentials, pollInterval, drainGrace, telemetry }) =>
-    runDaemon({
-      socketPath: socket,
-      controlStorePath: controlStore,
-      credentialsPath: credentials,
-      pollIntervalMillis: Duration.toMillis(Duration.seconds(pollInterval)),
-      drainGraceMillis: Duration.toMillis(Duration.seconds(drainGrace)),
-      telemetryEnabled: telemetry === "on",
-    }),
+  Command.withHandler(
+    ({ socket, controlStore, credentials, pollInterval, drainGrace, telemetry, performanceWorkspace }) =>
+      Effect.gen(function* () {
+        const configuredPerformanceWorkspace = Option.isSome(performanceWorkspace)
+          ? yield* Schema.decodeEffect(WorkspaceId)(performanceWorkspace.value)
+          : undefined;
+        yield* runDaemon({
+          socketPath: socket,
+          controlStorePath: controlStore,
+          credentialsPath: credentials,
+          pollIntervalMillis: Duration.toMillis(Duration.seconds(pollInterval)),
+          drainGraceMillis: Duration.toMillis(Duration.seconds(drainGrace)),
+          telemetryEnabled: telemetry === "on",
+          performanceWorkspace: configuredPerformanceWorkspace,
+        });
+      }),
   ),
 );
 
