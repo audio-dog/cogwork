@@ -14,7 +14,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as DaemonEventBus from "./daemon-event-bus";
-import { layerMemory as memoryLedgerLayer, RunLedger, type RunLedgerService } from "./run-ledger";
+import {
+  layerMemory as memoryLedgerLayer,
+  RunLedger,
+  RunLedgerError,
+  type RunLedgerService,
+} from "./run-ledger";
 
 const layerMemory = memoryLedgerLayer.pipe(Layer.provide(DaemonEventBus.layer));
 
@@ -117,6 +122,19 @@ const sessionRecord = (over: Partial<Session> = {}): Session => ({
   createdAtMillis: 0,
   handle: "cursor-abc",
   ...over,
+});
+
+describe("RunLedgerError", () => {
+  it("rejects unsupported operations", () => {
+    assert.throws(() =>
+      Schema.decodeUnknownSync(RunLedgerError)({
+        _tag: "RunLedgerError",
+        operation: "unsupported",
+        message: "failure",
+        retryable: false,
+      }),
+    );
+  });
 });
 
 describe("accepted Run Plan", () => {

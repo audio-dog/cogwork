@@ -404,7 +404,7 @@ describe("Run Plan assembly", () => {
         unavailableReason: null,
       },
     ];
-    const input: Omit<BuildRunPlanInput, "mcpServers"> = {
+    const input: BuildRunPlanInput = {
       runId: Schema.decodeSync(RunId)("run-identity-keyed-mcp"),
       workspace,
       item,
@@ -415,13 +415,15 @@ describe("Run Plan assembly", () => {
       sessionKind: "opaque-handle",
       projectedMembers: ["MCP"],
       middleware: [],
-      context,
       contributions,
       provenanceStamps: [],
     };
 
-    const forward = buildRunPlan({ ...input, mcpServers });
-    const reversed = buildRunPlan({ ...input, mcpServers: mcpServers.toReversed() });
+    const builder = buildRunPlan(input);
+    assert.isTrue(Object.isFrozen(builder.contributions));
+    assert.isTrue(Object.isFrozen(builder.contributions[0]));
+    const forward = builder.complete({ context, mcpServers });
+    const reversed = builder.complete({ context, mcpServers: mcpServers.toReversed() });
     const credentials = (assembly: typeof forward) =>
       [...assembly.mcpCredentials]
         .map(([identity, credential]) => [identity, Redacted.value(credential)])
@@ -450,7 +452,7 @@ describe("Run Plan assembly", () => {
     assert.isNotNull(resolved);
     if (!resolved) return;
 
-    const { plan, mcpCredentials } = buildRunPlan({
+    const builder = buildRunPlan({
       runId: Schema.decodeSync(RunId)("run-workspace-mcp-credential"),
       workspace,
       item,
@@ -461,8 +463,11 @@ describe("Run Plan assembly", () => {
       sessionKind: "opaque-handle",
       projectedMembers: ["MCP"],
       middleware: [],
-      context,
       contributions: [],
+      provenanceStamps: [],
+    });
+    const { plan, mcpCredentials } = builder.complete({
+      context,
       mcpServers: [
         {
           identity: null,
@@ -479,7 +484,6 @@ describe("Run Plan assembly", () => {
           unavailableReason: null,
         },
       ],
-      provenanceStamps: [],
     });
     const servers = plan.mcp.filter(Schema.is(RunPlanMcpServer));
     const workspaceServer = servers.find(({ name }) => name === "workspace-tools");

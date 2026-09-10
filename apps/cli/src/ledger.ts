@@ -182,8 +182,10 @@ const decodeSession = Schema.decodeUnknownEffect(SessionSchema);
 const decodeSessionId = Schema.decodeUnknownEffect(SessionId);
 const decodeRunPlan = Schema.decodeUnknownEffect(Schema.fromJsonString(RunPlanSchema));
 const encodeRunPlan = Schema.encodeSync(Schema.fromJsonString(RunPlanSchema));
-const runPlanError = (operation: string, message: string) =>
-  Effect.fail(RunLedger.RunLedgerError.make({ operation, message, retryable: false }));
+const runPlanError = (message: string) =>
+  Effect.fail(
+    RunLedger.RunLedgerError.make({ operation: RunLedger.acceptRunOperation, message, retryable: false }),
+  );
 
 const decodeOrElse = <A, E, R, B>(
   operation: string,
@@ -237,7 +239,7 @@ const make = Effect.fn("ledger.make")(function* () {
   const readRows = <A, E>(operation: string, query: () => Effect.Effect<ReadonlyArray<A>, E>) =>
     swallow(operation, query, () => [] as ReadonlyArray<A>);
 
-  const hardWrite = <A, E>(operation: string, query: () => Effect.Effect<A, E>) =>
+  const hardWrite = <A, E>(query: () => Effect.Effect<A, E>) =>
     Effect.suspend(query).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
@@ -246,7 +248,11 @@ const make = Effect.fn("ledger.make")(function* () {
             Cause.isFailReason(reason) && SqlError.isSqlError(reason.error) && reason.error.isRetryable,
         );
         return Effect.fail(
-          RunLedger.RunLedgerError.make({ operation, message: Cause.pretty(cause), retryable }),
+          RunLedger.RunLedgerError.make({
+            operation: RunLedger.acceptRunOperation,
+            message: Cause.pretty(cause),
+            retryable,
+          }),
         );
       }),
     );
@@ -295,9 +301,9 @@ const make = Effect.fn("ledger.make")(function* () {
   const service: RunLedger.CoreRunLedgerService = {
     acceptRun: (record: RunRecord, plan: RunPlan) => {
       if (record.id !== plan.id) {
-        return runPlanError("accept Run", `Run ${record.id} does not match Plan ${plan.id}`);
+        return runPlanError(`Run ${record.id} does not match Plan ${plan.id}`);
       }
-      return hardWrite("accept Run", () =>
+      return hardWrite(() =>
         sqlClient.withTransaction(
           Effect.gen(function* () {
             yield* db.insert(runs).values(runValues(record)).run();

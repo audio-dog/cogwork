@@ -40,6 +40,7 @@ import {
 
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { ConnectionStore } from "./connection";
@@ -575,7 +576,7 @@ const ensureRequiredPlugin = Effect.fn("Daemon.ensureRequiredPlugin")(function* 
   const plugin = pluginRequiringConnection(overview, system);
   if (!plugin || plugin.record) return;
   yield* publishPluginMutation(plugins.install(plugin.pluginId, principalId)).pipe(
-    Effect.tapError(() => rollback),
+    Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : rollback)),
   );
 });
 

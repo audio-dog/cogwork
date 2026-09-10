@@ -27,13 +27,14 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
+import type { DaemonReachabilityError } from "./wait-for-socket";
 
 export interface EngineSupervisorOptions {
   readonly command: () => EngineCommand;
   readonly socketPath: string;
   readonly probe: (socketPath: string) => Effect.Effect<boolean>;
   readonly maxRestarts?: number;
-  readonly awaitReachable: (socketPath: string) => Effect.Effect<void>;
+  readonly awaitReachable: (socketPath: string) => Effect.Effect<void, DaemonReachabilityError>;
   readonly terminateTimeout?: Duration.Input;
   readonly forceKillTimeout?: Duration.Input;
   readonly profileCaptureTimeout?: Duration.Input;
@@ -445,9 +446,16 @@ export function make(options: EngineSupervisorOptions) {
       const awaitClose = Deferred.await(owned.closed);
       return yield* Effect.raceFirst(
         awaitClose,
-        options
-          .awaitReachable(options.socketPath)
-          .pipe(Effect.andThen(setRunning(status)), Effect.andThen(awaitClose)),
+        options.awaitReachable(options.socketPath).pipe(
+          Effect.catchTag("DaemonReachabilityError", (error) =>
+            Effect.logError(error.message, { error }).pipe(
+              Effect.andThen(setStatus(status, "failed")),
+              Effect.andThen(Effect.fail(error)),
+            ),
+          ),
+          Effect.andThen(setRunning(status)),
+          Effect.andThen(awaitClose),
+        ),
       ).pipe(Effect.annotateLogs(annotations), Effect.annotateSpans(annotations));
     });
 
@@ -483,6 +491,7 @@ export function make(options: EngineSupervisorOptions) {
       const scope = yield* Scope.fork(ownerScope);
       yield* Ref.set(activeScope, scope);
       yield* supervise(launched).pipe(
+        Effect.catchTag("DaemonReachabilityError", () => Effect.void),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
           (cause) =>
