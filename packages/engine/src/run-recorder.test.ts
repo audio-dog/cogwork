@@ -12,7 +12,6 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -293,16 +292,16 @@ describe("RunRecorder", () => {
         const messages: Array<string> = [];
         const event = { type: "CUSTOM", content: 1n } satisfies AgUiEvent;
 
-        const exit = yield* recorder.record(record, event).pipe(
+        const error = yield* recorder.record(record, event).pipe(
           Effect.withLogger(
             Logger.make(({ message }) => {
               messages.push(String(message));
             }),
           ),
-          Effect.exit,
+          Effect.flip,
         );
 
-        assert.isTrue(Exit.isFailure(exit));
+        assert.strictEqual(error.operation, RunLedger.encodeRunEventOperation);
         assert.deepStrictEqual(yield* ledger.events(record.id), []);
         assert.isTrue(messages.some((message) => message.includes("run event encoding failed")));
       }),
