@@ -114,7 +114,13 @@ const validateSearchBase = Effect.fn("Tools.search.validateBase")(function* (
   });
   if (!exists) return yield* toolError("not-found", `search path not found: ${base}`, base);
   const lstat = sandbox.handle.fs.lstat;
-  if (lstat === undefined) return;
+  if (lstat === undefined) {
+    return yield* toolError(
+      "out-of-bounds",
+      `search path cannot be checked for symbolic links: ${base}`,
+      base,
+    );
+  }
   yield* Effect.forEach(pathPrefixes(base), (path) =>
     Effect.tryPromise({
       try: () => lstat(path),

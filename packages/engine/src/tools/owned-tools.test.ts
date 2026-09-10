@@ -560,6 +560,32 @@ describe("owned tools", () => {
     }),
   );
 
+  it.effect("rejects an explicit search base without symbolic-link inspection", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      yield* Effect.promise(() => original.handle.fs.mkdir("safe"));
+      const sandbox: WorktreeSandbox = {
+        ...original,
+        handle: {
+          ...original.handle,
+          fs: {
+            ...original.handle.fs,
+            lstat: undefined,
+          },
+          process: {
+            ...original.handle.process,
+            spawn: () => Promise.reject(new Error("search process must not start")),
+          },
+        },
+      };
+
+      const error = yield* Effect.flip(runGrep(sandbox, { pattern: "target", path: "safe" }));
+
+      assert.strictEqual(error.reason, "out-of-bounds");
+      assert.strictEqual(error.path, "safe");
+    }),
+  );
+
   it.effect("treats no grep matches as success and rejects invalid regular expressions", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
