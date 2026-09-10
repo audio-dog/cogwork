@@ -71,11 +71,18 @@ const vitestTestCount = (output) => {
   return counts.reduce((total, [, count]) => total + Number(count), 0);
 };
 
-export const vitestTestArgs = (turboPath, reporterPath) => {
-  const args = [turboPath, "test", "--continue=always", "--output-logs=full"];
+const withReporters = (args, reporterPath) => {
   if (!reporterPath) return args;
   return [...args, "--", "--reporter=default", `--reporter=${reporterPath}`];
 };
+
+const turboTestArgs = (turboPath) => [turboPath, "test", "--continue=always", "--output-logs=full"];
+
+export const vitestTestArgs = (turboPath, reporterPath) =>
+  withReporters(turboTestArgs(turboPath), reporterPath);
+
+export const configurationComparisonVitestTestArgs = (turboPath, reporterPath) =>
+  withReporters([...turboTestArgs(turboPath), "--cache=local:,remote:", "--env-mode=loose"], reporterPath);
 
 const legacyReporterPath = (workspaceRoot) => {
   const configuredReporter = join(workspaceRoot, "configs", "test", "test-count-reporter.ts");
@@ -83,12 +90,12 @@ const legacyReporterPath = (workspaceRoot) => {
   return pathToFileURL(join(import.meta.dirname, "legacy-test-count-reporter.ts")).href;
 };
 
-const runTests = async (runTestCommand, workspaceRoot) => {
+const runTests = async (runTestCommand, workspaceRoot, testArgsFor = vitestTestArgs) => {
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
   const vitest = requireCompletedTestRun(
     await runTestCommand(
       process.execPath,
-      vitestTestArgs(turboPath, legacyReporterPath(workspaceRoot)),
+      testArgsFor(turboPath, legacyReporterPath(workspaceRoot)),
       workspaceRoot,
     ),
   );
@@ -106,9 +113,13 @@ const publishMeasurement = (measurement) => {
   return measurement;
 };
 
-export const measureComparison = async (runTestCommand = run, workspaceRoot = defaultWorkspaceRoot) => {
+export const measureComparison = async (
+  runTestCommand = run,
+  workspaceRoot = defaultWorkspaceRoot,
+  testArgsFor = vitestTestArgs,
+) => {
   const startedAt = performance.now();
-  const result = await runTests(runTestCommand, workspaceRoot);
+  const result = await runTests(runTestCommand, workspaceRoot, testArgsFor);
   return publishMeasurement(buildMeasurement(startedAt, result));
 };
 
@@ -130,8 +141,11 @@ export const measure = async (runTestCommand = run, workspaceRoot = defaultWorks
 const main = async () => {
   const [mode] = process.argv.slice(2);
   if (mode === "--comparison") return measureComparison(run, process.cwd());
+  if (mode === "--configuration-comparison") {
+    return measureComparison(run, process.cwd(), configurationComparisonVitestTestArgs);
+  }
   if (!mode) return measure(run, process.cwd());
-  throw new Error("Usage: test-measure.mjs [--comparison]");
+  throw new Error("Usage: test-measure.mjs [--comparison|--configuration-comparison]");
 };
 
 if (isMain) {

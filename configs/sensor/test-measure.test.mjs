@@ -5,7 +5,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, test, vi } from "vitest";
-import { measure, measureComparison, run, vitestTestArgs } from "./test-measure.mjs";
+import {
+  configurationComparisonVitestTestArgs,
+  measure,
+  measureComparison,
+  run,
+  vitestTestArgs,
+} from "./test-measure.mjs";
 
 const completeFailedVitest = {
   failed: true,
@@ -21,6 +27,17 @@ test("measured Turbo runs every task after a failure", () => {
 
 test("measured Turbo gets test counts without cache-busting passthrough arguments", () => {
   assert.deepEqual(vitestTestArgs("turbo"), ["turbo", "test", "--continue=always", "--output-logs=full"]);
+});
+
+test("configuration comparison runs bypass cache and pass each side environment", () => {
+  assert.deepEqual(configurationComparisonVitestTestArgs("turbo"), [
+    "turbo",
+    "test",
+    "--continue=always",
+    "--output-logs=full",
+    "--cache=local:,remote:",
+    "--env-mode=loose",
+  ]);
 });
 
 test("historical worktrees get the extracted count reporter", () => {
