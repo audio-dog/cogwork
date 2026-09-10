@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, vi } from "vitest";
 import { analyzeDurations, buildReport, measurementOrder, withCleanups } from "./test-compare.mjs";
 
 const measurements = (durationMs) => Array.from({ length: 5 }, () => ({ durationMs, testCount: 1_800 }));
@@ -31,10 +31,10 @@ describe("test comparison statistics", () => {
     assert.deepEqual(calls, ["worktrees", "directory"]);
   });
 
-  it("keeps a completed comparison when cleanup fails", async (context) => {
+  it("keeps a completed comparison when cleanup fails", async () => {
     const report = { verdict: "inconclusive" };
     const writes = [];
-    context.mock.method(process.stderr, "write", (chunk) => {
+    vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
       writes.push(String(chunk));
       return true;
     });
