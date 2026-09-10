@@ -19,8 +19,8 @@
   "devDependencies": {
     "@cogwork/test-config": "workspace:*",
     "@types/node": "catalog:",
-    "tsx": "^4.23.13",
-    "turbo": "^2.10.12",
+    "tsx": "catalog:",
+    "turbo": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
