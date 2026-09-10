@@ -1463,7 +1463,7 @@ const failRunAcceptance = (retryable: boolean) => (layer: Layer.Layer<RunLedger.
         acceptRun: () =>
           Effect.fail(
             RunLedger.RunLedgerError.make({
-              operation: "accept Run",
+              operation: RunLedger.acceptRunOperation,
               message: "persistence rejected",
               retryable,
             }),

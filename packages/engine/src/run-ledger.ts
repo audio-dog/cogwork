@@ -31,14 +31,18 @@ export interface RunUpdate {
   readonly claimDisposition?: RunRecord["claimDisposition"];
 }
 
+export const acceptRunOperation = "accept Run";
+export const encodeRunEventOperation = "encode run event";
+const RunLedgerErrorOperation = Schema.Literals([acceptRunOperation, encodeRunEventOperation]);
+
 export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLedgerError", {
-  operation: Schema.String,
+  operation: RunLedgerErrorOperation,
   message: Schema.String,
   retryable: Schema.Boolean,
 }) {}
 
-const runLedgerError = (operation: string, message: string) =>
-  Effect.fail(RunLedgerError.make({ operation, message, retryable: false }));
+const acceptRunError = (message: string) =>
+  Effect.fail(RunLedgerError.make({ operation: acceptRunOperation, message, retryable: false }));
 
 const snapshotRunPlan = (plan: RunPlan) =>
   Schema.encodeEffect(RunPlanSchema)(plan).pipe(
@@ -46,7 +50,7 @@ const snapshotRunPlan = (plan: RunPlan) =>
     Effect.map(freezeRunPlan),
     Effect.mapError((error) =>
       RunLedgerError.make({
-        operation: "accept Run",
+        operation: acceptRunOperation,
         message: `Run Plan snapshot failed: ${error}`,
         retryable: false,
       }),
@@ -178,7 +182,7 @@ export const makeMemory = Effect.gen(function* () {
 
   const acceptRun = Effect.fn("RunLedger.acceptRun")(function* (record: RunRecord, plan: RunPlan) {
     if (record.id !== plan.id) {
-      return yield* runLedgerError("accept Run", `Run ${record.id} does not match Plan ${plan.id}`);
+      return yield* acceptRunError(`Run ${record.id} does not match Plan ${plan.id}`);
     }
     const snapshot = yield* snapshotRunPlan(plan);
     const accepted = yield* Ref.modify(plansRef, (plans) => {
@@ -186,7 +190,7 @@ export const makeMemory = Effect.gen(function* () {
       return [true, new Map(plans).set(record.id, snapshot)];
     });
     if (!accepted) {
-      return yield* runLedgerError("accept Run", `Run ${record.id} already has a Plan`);
+      return yield* acceptRunError(`Run ${record.id} already has a Plan`);
     }
     yield* Ref.update(runsRef, (runs) => [...runs, record]);
   });

@@ -27,13 +27,15 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
+import type { DaemonReachabilityError } from "./wait-for-socket";
 
 export interface EngineSupervisorOptions {
   readonly command: () => EngineCommand;
+  readonly environment: NodeJS.ProcessEnv;
   readonly socketPath: string;
   readonly probe: (socketPath: string) => Effect.Effect<boolean>;
   readonly maxRestarts?: number;
-  readonly awaitReachable: (socketPath: string) => Effect.Effect<void>;
+  readonly awaitReachable: (socketPath: string) => Effect.Effect<void, DaemonReachabilityError>;
   readonly terminateTimeout?: Duration.Input;
   readonly forceKillTimeout?: Duration.Input;
   readonly profileCaptureTimeout?: Duration.Input;
@@ -264,6 +266,7 @@ const sendProfileRequests = (
 const spawnEngine = (
   spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],
   command: EngineCommand,
+  environment: NodeJS.ProcessEnv,
   terminateTimeout: Duration.Input,
 ) =>
   spawner.spawn(
@@ -276,8 +279,8 @@ const spawnEngine = (
         fd3: { type: "input" },
         fd4: { type: "output" },
       },
-      env: { COGWORK_PROFILE_FD_TRANSPORT: "1" },
-      extendEnv: true,
+      env: { ...environment, COGWORK_PROFILE_FD_TRANSPORT: "1" },
+      extendEnv: false,
       forceKillAfter: terminateTimeout,
     }),
   );
@@ -294,7 +297,7 @@ const acquireChild = (
     const profileRequestTransportClosed = yield* Deferred.make<void>();
     const profileResponses = yield* Queue.sliding<ProcessProfileResponse>(16);
     const profileTransportClosed = yield* Deferred.make<void>();
-    const child = yield* spawnEngine(spawner, options.command(), terminateTimeout);
+    const child = yield* spawnEngine(spawner, options.command(), options.environment, terminateTimeout);
     const annotations = { pid: child.pid };
     yield* child.exitCode.pipe(
       Effect.match({
@@ -445,9 +448,16 @@ export function make(options: EngineSupervisorOptions) {
       const awaitClose = Deferred.await(owned.closed);
       return yield* Effect.raceFirst(
         awaitClose,
-        options
-          .awaitReachable(options.socketPath)
-          .pipe(Effect.andThen(setRunning(status)), Effect.andThen(awaitClose)),
+        options.awaitReachable(options.socketPath).pipe(
+          Effect.catchTag("DaemonReachabilityError", (error) =>
+            Effect.logError(error.message, { error }).pipe(
+              Effect.andThen(setStatus(status, "failed")),
+              Effect.andThen(Effect.fail(error)),
+            ),
+          ),
+          Effect.andThen(setRunning(status)),
+          Effect.andThen(awaitClose),
+        ),
       ).pipe(Effect.annotateLogs(annotations), Effect.annotateSpans(annotations));
     });
 
@@ -483,6 +493,7 @@ export function make(options: EngineSupervisorOptions) {
       const scope = yield* Scope.fork(ownerScope);
       yield* Ref.set(activeScope, scope);
       yield* supervise(launched).pipe(
+        Effect.catchTag("DaemonReachabilityError", () => Effect.void),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
           (cause) =>

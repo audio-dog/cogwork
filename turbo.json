@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalPassThroughEnv": ["COGWORK_HOME", "COGWORK_SOCKET", "ROOT_WORKTREE_PATH"],
+  "globalPassThroughEnv": ["ROOT_WORKTREE_PATH"],
   "tasks": {
     "//#format-and-lint": {},
     "//#format-and-lint:fix": {

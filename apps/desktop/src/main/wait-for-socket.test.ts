@@ -2,11 +2,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
+import { Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
 import { waitForDaemonListening } from "./wait-for-socket";
 
-const withTempDir = async (run: (dir: string) => Promise<void>): Promise<void> => {
+const withTempDir = async (run: (dir: string) => Promise<void>) => {
   const dir = mkdtempSync(join(tmpdir(), "cf-ready-"));
   try {
     await run(dir);
@@ -15,14 +16,13 @@ const withTempDir = async (run: (dir: string) => Promise<void>): Promise<void> =
   }
 };
 
-const listen = async (socketPath: string): Promise<net.Server> => {
+const listen = async (socketPath: string) => {
   const server = net.createServer();
   await new Promise<void>((resolve) => server.listen(socketPath, resolve));
   return server;
 };
 
-const close = (server: net.Server): Promise<void> =>
-  new Promise<void>((resolve) => server.close(() => resolve()));
+const close = (server: net.Server) => new Promise<void>((resolve) => server.close(() => resolve()));
 
 describe("waitForDaemonListening", () => {
   it("resolves true when the socket is already listening", () =>
@@ -49,12 +49,20 @@ describe("waitForDaemonListening", () => {
       }
     }));
 
-  it("stops waiting when the caller's timeout expires", () =>
-    withTempDir(async (dir) => {
-      const result = await Effect.runPromise(
-        waitForDaemonListening(join(dir, "never.sock")).pipe(Effect.timeoutOption(0)),
+  it.effect("fails with a typed timeout when the socket never listens", () =>
+    Effect.gen(function* () {
+      const dir = yield* Effect.acquireRelease(
+        Effect.sync(() => mkdtempSync(join(tmpdir(), "cf-ready-"))),
+        (path) => Effect.sync(() => rmSync(path, { recursive: true, force: true })),
       );
+      const waiting = yield* Effect.forkChild(waitForDaemonListening(join(dir, "never.sock")));
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("10 seconds");
 
-      expect(result._tag).toBe("None");
-    }));
+      const error = yield* Fiber.join(waiting).pipe(Effect.flip);
+
+      assert.strictEqual(error._tag, "DaemonReachabilityError");
+      assert.strictEqual(error.deadline, "10 seconds");
+    }),
+  );
 });

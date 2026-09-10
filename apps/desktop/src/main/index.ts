@@ -9,6 +9,7 @@ import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { app, BrowserWindow, crashReporter } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
+import { resolveDesktopEnvironment } from "./desktop-environment";
 import { resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
 import { EngineSupervisor, layer as engineSupervisorLayer } from "./engine-supervisor";
 import { broadcastEngineStatus, registerIpc } from "./ipc";
@@ -38,7 +39,7 @@ const windowDeps: MainWindowDeps = {
 
 const showWindow = () => showMainWindow(windowDeps);
 
-const makeSupervisorLayer = () => {
+const makeSupervisorLayer = (environment: NodeJS.ProcessEnv) => {
   const socketPath = defaultSocketPath;
   const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
   const shutdown = resolveEngineShutdownBudgets();
@@ -53,6 +54,7 @@ const makeSupervisorLayer = () => {
         drainGraceSeconds: shutdown.drainGraceSeconds,
         profiling: windowPreferences.get().profiling,
       }),
+    environment,
     socketPath,
     probe: isDaemonListening,
     awaitReachable: waitForDaemonListening,
@@ -87,11 +89,12 @@ const engineStatusPublisherLayer = Layer.effectDiscard(
   }),
 );
 
-const makeMainLayer = () => {
-  const childProcessSpawner = NodeChildProcessSpawner.layer.pipe(
-    Layer.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer)),
-  );
-  const supervisor = makeSupervisorLayer().pipe(Layer.provide(childProcessSpawner));
+const childProcessSpawnerLayer = NodeChildProcessSpawner.layer.pipe(
+  Layer.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer)),
+);
+
+const makeRuntimeLayer = (environment: NodeJS.ProcessEnv) => {
+  const supervisor = makeSupervisorLayer(environment).pipe(Layer.provide(childProcessSpawnerLayer));
   const publisher = engineStatusPublisherLayer.pipe(
     Layer.provide(supervisor),
     Layer.provide(engineLoggerLayer),
@@ -99,12 +102,20 @@ const makeMainLayer = () => {
   return Layer.mergeAll(supervisor, publisher, engineLoggerLayer);
 };
 
+const mainLayer = Layer.unwrap(
+  resolveDesktopEnvironment({ inherited: process.env, platform: process.platform }).pipe(
+    Effect.provide(childProcessSpawnerLayer),
+    Effect.provide(engineLoggerLayer),
+    Effect.map(makeRuntimeLayer),
+  ),
+);
+
 const bootstrap = () => {
   mkdirSync(diagnosticsDirectory, { recursive: true, mode: 0o700 });
   chmodSync(diagnosticsDirectory, 0o700);
   crashReporter.start({ uploadToServer: false });
   app.whenReady().then(async () => {
-    const runtime = ManagedRuntime.make(makeMainLayer());
+    const runtime = ManagedRuntime.make(mainLayer);
     app.on("before-quit", () => {
       control.quitting = true;
     });
@@ -122,7 +133,7 @@ const bootstrap = () => {
       mainLogger.error(`Render process gone: ${details.reason} (exitCode ${details.exitCode})`);
     });
 
-    const supervisor = runtime.runSync(EngineSupervisor);
+    const supervisor = await runtime.runPromise(EngineSupervisor);
     registerIpc({
       socketPath: defaultSocketPath,
       supervisor,

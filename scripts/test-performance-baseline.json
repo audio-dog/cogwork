@@ -1,0 +1,4 @@
+{
+  "commit": "29ddb975ba9e29d09d083b993a8397c59fd2f0e8",
+  "updatePolicy": "Move this commit manually only after a test-performance regression is resolved. Never store or advance a duration."
+}

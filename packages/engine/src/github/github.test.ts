@@ -1,6 +1,7 @@
 import {
   type AttemptRecord,
   type Claim,
+  GitHubIssueFieldId,
   type Priority,
   WorkItemId,
   WorkspaceConfig,
@@ -30,6 +31,7 @@ import {
   type RawPull,
   type RawReview,
 } from "./client";
+import { targetFor } from "./host";
 import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
 import { layer as providerLayer } from "./provider";
 
@@ -44,6 +46,7 @@ const coordinationBody = (markers: ReadonlyArray<string>) =>
   Coordination.formatCoordinationBody(wireCodec, { status: defaultStatus, markers, detail: null });
 
 interface SeedIssue {
+  readonly nodeId?: string;
   readonly number: number;
   readonly title: string;
   readonly url?: string;
@@ -80,6 +83,7 @@ interface Seed {
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
   readonly priorities?: ReadonlyArray<{ readonly issue: number; readonly priority: Priority }>;
   readonly priorityError?: boolean;
+  readonly priorityValueError?: boolean;
   readonly pullRequestError?: boolean;
 }
 
@@ -102,6 +106,7 @@ class ProviderCalls extends Context.Service<
 
 const bot = { login: "cogwork[bot]" } as const;
 const repo: GitHubRepoRef = { owner: "owner", name: "repo", tokenEnv: "GITHUB_TOKEN" };
+const priorityFieldId = Schema.decodeSync(GitHubIssueFieldId)(42);
 
 const seedComments = (comments: ReadonlyArray<SeedComment>) =>
   comments.reduce((byIssue, comment, index) => {
@@ -120,6 +125,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     seed.issues.map(
       (issue): RawIssue => ({
         ...issue,
+        nodeId: issue.nodeId ?? `I_issue_${issue.number}`,
         url: issue.url ?? `https://github.com/owner/repo/issues/${issue.number}`,
         assignees: issue.assignees ?? [],
         isPullRequest: issue.isPullRequest ?? false,
@@ -147,9 +153,6 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   );
   const pulls = seed.pulls ?? [];
   const mergeableByPull = new Map((seed.mergeable ?? []).map(({ pull, state }) => [pull, state]));
-  const prioritiesByNumber: ReadonlyMap<number, Priority> = new Map(
-    (seed.priorities ?? []).map(({ issue, priority }) => [issue, priority]),
-  );
   const patch = (number: number, update: (issue: RawIssue) => RawIssue) =>
     Ref.update(issuesRef, (issues) =>
       issues.map((issue) => (issue.number === number ? update(issue) : issue)),
@@ -157,6 +160,23 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   return {
     authenticatedLogin: () => Effect.succeed(bot.login),
     listIssues: () => Ref.get(issuesRef),
+    listIssueFieldValues: (_repo, nodeIds) =>
+      seed.priorityValueError
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "field values unavailable" }))
+        : Effect.succeed(
+            new Map(
+              seed.issues
+                .filter((issue) => nodeIds.includes(issue.nodeId ?? `I_issue_${issue.number}`))
+                .map((issue) => [
+                  issue.number,
+                  new Map(
+                    (seed.priorities ?? [])
+                      .filter((priority) => priority.issue === issue.number)
+                      .map((priority) => [priorityFieldId, priority.priority]),
+                  ),
+                ]),
+            ),
+          ),
     listPulls: () => Effect.succeed([...pulls]),
     pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
     listComments: (_repo, number) =>
@@ -203,10 +223,10 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
           ),
       ),
     listCheckRuns: (_repo, sha) => Effect.succeed([...(checksBySha.get(sha) ?? [])]),
-    projectPriorities: () =>
+    listPriorityFields: () =>
       seed.priorityError
-        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "missing read:project scope" }))
-        : Effect.succeed(prioritiesByNumber),
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "missing read:org scope" }))
+        : Effect.succeed([{ id: priorityFieldId, name: "Priority" }]),
     verifyCredential: () => Effect.succeed(bot.login),
   } satisfies GitHubClientService;
 });
@@ -255,7 +275,7 @@ const prioritizedWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-priority",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", priority: { project: 1 } },
+    issueTracker: { type: "github", priority: { field: 42 } },
   }),
 };
 
@@ -355,6 +375,18 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
 });
 
 describe("GitHub adapters", () => {
+  it("uses the workspace's bound Connection for priority field reads", () => {
+    const target = targetFor({
+      repository: "owner/repo",
+      config: Schema.decodeSync(WorkspaceConfig)({
+        name: "gh-priority-connection",
+        checkoutPath: "/repos/gh",
+        issueTracker: { type: "github", connectionId: "github/acme", priority: { field: 42 } },
+      }),
+    });
+
+    assert.strictEqual(target?.connectionId, "github/acme");
+  });
   it.effect("derives the actionable set from labels and bot-PR state", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
@@ -1347,7 +1379,7 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("resolves priority from the configured board and defaults an off-board issue to medium", () =>
+  it.effect("resolves priority from the configured issue field and defaults an unset issue to medium", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(prioritizedWorkspace);
       assert.strictEqual(items.find((item) => item.id === "#5")?.priority, "urgent");
@@ -1369,7 +1401,7 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("defaults every item to medium and still completes when the board read fails", () =>
+  it.effect("defaults every item to medium and still completes when the field catalog read fails", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(prioritizedWorkspace);
       assert.strictEqual(items.length, 2);
@@ -1390,7 +1422,28 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("reads no priority board when none is configured, defaulting every item to medium", () =>
+  it.effect("defaults every item to medium and still completes when issue field values cannot be read", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(prioritizedWorkspace);
+      assert.strictEqual(items.length, 2);
+      assert.deepStrictEqual(
+        items.map((item) => item.priority),
+        ["medium", "medium"],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 5, title: "one", labels: ["ready-for-agent"] },
+            { number: 6, title: "two", labels: ["ready-for-agent"] },
+          ],
+          priorityValueError: true,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("reads no priority field catalog when none is configured, defaulting every item to medium", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
       assert.strictEqual(items.find((item) => item.id === "#5")?.priority, "medium");

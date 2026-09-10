@@ -1,6 +1,7 @@
 import { PassThrough } from "node:stream";
 import { ProcessProfileRequest } from "@cogwork/process-diagnostics";
 import { NodeStream } from "@effect/platform-node";
+import { assert, describe, expect, it, vi } from "@effect/vitest";
 import {
   Cause,
   Deferred,
@@ -17,7 +18,6 @@ import {
 import * as Schema from "effect/Schema";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
-import { describe, expect, it, vi } from "vitest";
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
 import {
@@ -26,6 +26,7 @@ import {
   type EngineSupervisorService,
   layer as engineSupervisorLayer,
 } from "./engine-supervisor";
+import { DaemonReachabilityError } from "./wait-for-socket";
 
 class FakeChild {
   readonly pid = 1234;
@@ -138,6 +139,7 @@ const options = (
   const { spawn, ...supervisor } = overrides;
   return {
     command: () => command,
+    environment: { PATH: "/usr/bin" },
     socketPath: "/tmp/test.sock",
     probe: () => Effect.succeed(false),
     awaitReachable: () => Effect.void,
@@ -157,6 +159,11 @@ const options = (
   };
 };
 
+const supervisorTestLayer = (supervisorOptions: TestSupervisorOptions) => {
+  const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, supervisorOptions.spawner);
+  return engineSupervisorLayer(supervisorOptions).pipe(Layer.provide(spawnerLayer));
+};
+
 const withSupervisor = async (
   supervisorOptions: TestSupervisorOptions,
   run: (
@@ -165,9 +172,7 @@ const withSupervisor = async (
   ) => Promise<void>,
   loggerLayer: Layer.Layer<never> = Layer.empty,
 ) => {
-  const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, supervisorOptions.spawner);
-  const supervisorLayer = engineSupervisorLayer(supervisorOptions).pipe(Layer.provide(spawnerLayer));
-  const runtime = ManagedRuntime.make(Layer.merge(supervisorLayer, loggerLayer));
+  const runtime = ManagedRuntime.make(Layer.merge(supervisorTestLayer(supervisorOptions), loggerLayer));
   const supervisor = runtime.runSync(EngineSupervisor);
   try {
     await run(runtime, supervisor);
@@ -277,24 +282,25 @@ describe("EngineSupervisor", () => {
 
   it("spawns the resolved command through ChildProcessSpawner", async () => {
     const child = new FakeChild();
-    const spawn = vi.fn((spawned: ChildProcess.Command) => {
-      expect(ChildProcess.isStandardCommand(spawned)).toBe(true);
-      if (!ChildProcess.isStandardCommand(spawned)) return child;
+    const environment = { PATH: "/home/test/.local/bin:/usr/bin", KEEP: "yes" };
+    const spawn = vi.fn((_spawned: ChildProcess.Command) => child);
+
+    await withSupervisor(options({ environment, spawn }), async (runtime, supervisor) => {
+      await runtime.runPromise(supervisor.start);
+
+      expect(spawn).toHaveBeenCalledOnce();
+      const spawned = spawn.mock.calls[0]?.[0];
+      expect(spawned && ChildProcess.isStandardCommand(spawned)).toBe(true);
+      if (!spawned || !ChildProcess.isStandardCommand(spawned)) return;
       expect(spawned.command).toBe(command.command);
       expect(spawned.args).toEqual(command.args);
       expect(spawned.options).toMatchObject({
         cwd: command.cwd,
-        extendEnv: true,
+        env: { ...environment, COGWORK_PROFILE_FD_TRANSPORT: "1" },
+        extendEnv: false,
         forceKillAfter: 0,
         stdin: "ignore",
       });
-      return child;
-    });
-
-    await withSupervisor(options({ spawn }), async (runtime, supervisor) => {
-      await runtime.runPromise(supervisor.start);
-
-      expect(spawn).toHaveBeenCalledOnce();
     });
   });
 
@@ -482,6 +488,32 @@ describe("EngineSupervisor", () => {
 
         expect(await currentStatus(runtime, supervisor)).toBe("running");
       },
+    );
+  });
+
+  it.live("reports failed when the daemon does not become reachable", () => {
+    const child = new FakeChild("SIGUSR1");
+    const deadline = Deferred.makeUnsafe<void>();
+    const supervisorOptions = options({
+      spawn: () => child,
+      awaitReachable: () =>
+        Deferred.await(deadline).pipe(
+          Effect.andThen(Effect.fail(new DaemonReachabilityError({ deadline: "10 seconds" }))),
+        ),
+      terminateTimeout: "1 hour",
+    });
+
+    return Effect.gen(function* () {
+      const supervisor = yield* EngineSupervisor;
+      yield* supervisor.start;
+      yield* Deferred.succeed(deadline, undefined);
+      yield* Effect.yieldNow;
+
+      assert.strictEqual(yield* SubscriptionRef.get(supervisor.status), "failed");
+      yield* Effect.sync(() => crashChild(child));
+    }).pipe(
+      Effect.ensuring(Effect.sync(() => crashChild(child))),
+      Effect.provide(supervisorTestLayer(supervisorOptions)),
     );
   });
 

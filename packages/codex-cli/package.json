@@ -10,7 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:codex-live": "COGWORK_LIVE_CODEX_PROBE=1 vitest run src/harness.test.ts"
+    "test:codex-live": "COGWORK_LIVE_CODEX_PROBE=1 vitest run src/harness-execution.test.ts"
   },
   "dependencies": {
     "@cogwork/contracts": "workspace:*",

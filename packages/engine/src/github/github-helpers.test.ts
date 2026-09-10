@@ -99,6 +99,7 @@ describe("parseIssues", () => {
   const repo: GitHubRepoRef = { owner: "owner", name: "repo", tokenEnv: "GITHUB_TOKEN" };
 
   const issue = (over: Record<string, unknown>) => ({
+    node_id: `I_issue_${String(over.number ?? 1)}`,
     number: 1,
     title: "an issue",
     labels: ["ready-for-agent"],
