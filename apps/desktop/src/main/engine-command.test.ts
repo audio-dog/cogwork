@@ -74,6 +74,18 @@ describe("resolveEngineCommand", () => {
     expect(resolveEngineShutdownBudgets(30).terminateTimeoutMillis).toBe(35_000);
   });
 
+  it("passes the configured performance evidence workspace", () => {
+    const command = resolveEngineCommand({
+      socketPath,
+      packaged: true,
+      baseDir: "/res",
+      performanceWorkspace: "cogwork",
+    });
+
+    expect(command.args).toContain("--performance-workspace");
+    expect(command.args).toContain("cogwork");
+  });
+
   it("keeps continuous profiling off by default", () => {
     const command = resolveEngineCommand({ socketPath, packaged: false, baseDir: "/repo" });
 

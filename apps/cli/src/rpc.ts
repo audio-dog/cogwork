@@ -4,9 +4,9 @@ import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { claudeCodeRunner } from "@cogwork/claude-code";
 import { codexRunner } from "@cogwork/codex-cli";
-import { DaemonRpcs, HarnessName } from "@cogwork/contracts";
+import { DaemonRpcs, HarnessName, type WorkspaceId } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
-import { ContextAssembler, Daemon, Provider, Replay } from "@cogwork/engine";
+import { ContextAssembler, Daemon, PerformanceHealth, Provider, Replay } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Cause from "effect/Cause";
@@ -29,6 +29,8 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { layer as credentialsLayer } from "./credentials";
 import { layer as ledgerLayer } from "./ledger";
+import { defaultTelemetryStorePath } from "./paths";
+import { readPerformanceHealthSnapshot } from "./performance-health";
 import { contextFsLayer, gitLayer, worktreeManagerLayer } from "./platform";
 
 export interface DaemonOptions {
@@ -37,6 +39,8 @@ export interface DaemonOptions {
   readonly credentialsPath: string;
   readonly pollIntervalMillis: number;
   readonly drainGraceMillis: number;
+  readonly telemetryEnabled: boolean;
+  readonly performanceWorkspace?: WorkspaceId;
 }
 
 const prepareSocketDir = (socketPath: string) =>
@@ -335,6 +339,14 @@ const contextAssemblerLayer = (homeDir: string) =>
     operatingInstructionsDir: engineOperatingInstructionsDir,
   }).pipe(Layer.provide(contextFsLayer));
 
+const performanceHealthLayer = (options: DaemonOptions) =>
+  Layer.succeed(PerformanceHealth.PerformanceHealthSource, {
+    snapshot: readPerformanceHealthSnapshot({
+      enabled: options.telemetryEnabled,
+      storePath: defaultTelemetryStorePath,
+    }),
+  });
+
 export const serverLayer = (options: DaemonOptions) =>
   Layer.unwrap(
     harnessRunners.pipe(
@@ -348,6 +360,10 @@ export const serverLayer = (options: DaemonOptions) =>
           userAgentsDir,
           worktrees: worktreeManagerLayer,
           harnessRunners: runners,
+          appVersion: "0.0.1",
+          performanceEvidenceRoot: nodePath.join(nodePath.dirname(options.controlStorePath), "perf"),
+          performanceHealth: performanceHealthLayer(options),
+          performanceIssueWorkspace: options.performanceWorkspace,
         }),
       ),
     ),

@@ -131,6 +131,9 @@ describe("GitHub client", () => {
       number,
       title: `issue ${number}`,
       labels: [],
+      body: null,
+      state: "open",
+      created_at: "2026-09-09T12:00:00Z",
     });
     const firstPage = Array.from({ length: 100 }, (_, index) => issue(index + 1));
     const fetch = vi.fn<typeof globalThis.fetch>((input) => {
@@ -151,6 +154,105 @@ describe("GitHub client", () => {
         ),
         ["1", "2"],
       );
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists open and closed issues carrying one label", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([
+          {
+            node_id: "I_issue_416",
+            number: 416,
+            title: "Performance regression",
+            body: "<!-- cogwork:selfperf fingerprint=daemon.heap-headroom.below -->",
+            state: "closed",
+            created_at: "2026-09-09T12:00:00Z",
+            labels: ["origin:selfperf"],
+          },
+        ]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const issues = yield* client.listIssues(repo, { state: "all", label: "origin:selfperf" });
+      const request = new URL(String(fetch.mock.calls[0]?.[0]));
+
+      assert.strictEqual(request.searchParams.get("state"), "all");
+      assert.strictEqual(request.searchParams.get("labels"), "origin:selfperf");
+      assert.deepStrictEqual(issues, [
+        {
+          nodeId: "I_issue_416",
+          number: 416,
+          title: "Performance regression",
+          url: "https://github.com/colonylabs/cogwork/issues/416",
+          labels: ["origin:selfperf"],
+          assignees: [],
+          isPullRequest: false,
+          openBlockers: 0,
+          body: "<!-- cogwork:selfperf fingerprint=daemon.heap-headroom.below -->",
+          state: "closed",
+          createdAtMillis: Date.UTC(2026, 8, 9, 12),
+        },
+      ]);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("reads pull request references with an empty body", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse({
+          data: {
+            repository: {
+              issue: {
+                timelineItems: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    {
+                      source: {
+                        body: null,
+                        merged: true,
+                        repository: { nameWithOwner: "colonylabs/cogwork" },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+
+      assert.deepStrictEqual(yield* client.issuePullReferences(repo, 416), [
+        { body: "", merged: true, repository: "colonylabs/cogwork" },
+      ]);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("rejects issue history without state and creation time", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([
+          {
+            node_id: "I_issue_416",
+            number: 416,
+            title: "Performance regression",
+            labels: [],
+            body: null,
+          },
+        ]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(client.listIssues(repo, { state: "all" }));
+      assert.strictEqual(error.reason, "unavailable");
     }).pipe(withFetchClient(fetch));
   });
 
@@ -494,10 +596,31 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("retries a comment write after a hanging attempt reaches its deadline", () => {
+  it.effect("marks label repair failures as possibly committed issue writes", () => {
+    const response = vi
+      .fn<() => Response>()
+      .mockReturnValueOnce(jsonResponse({ number: 415, labels: [] }, 201))
+      .mockReturnValue(jsonResponse({ message: "Validation failed" }, 422));
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response()));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(
+        client.createIssue(repo, {
+          title: "Daemon event loop delay is high",
+          body: "Signal: event-loop-delay",
+          labels: ["needs-triage", "origin:selfperf"],
+        }),
+      );
+
+      assert.isTrue(error.writeMayHaveCommitted);
+      assert.strictEqual(fetch.mock.calls.length, 2);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("reports an ambiguous coordination comment without replaying it", () => {
     const onAbort = vi.fn();
     const fetch = vi.fn<typeof globalThis.fetch>((_input, init) => {
-      if (fetch.mock.calls.length > 1) return Promise.resolve(jsonResponse());
       init?.signal?.addEventListener("abort", onAbort);
       return Promise.withResolvers<Response>().promise;
     });
@@ -506,9 +629,22 @@ describe("GitHub client", () => {
       const client = yield* GitHubClient;
       const operation = yield* Effect.forkChild(client.createComment(repo, 287, "claim"));
       yield* TestClock.adjust("1 minute");
-      assert.strictEqual(fetch.mock.calls.length, 2);
-      yield* Fiber.join(operation);
+      assert.strictEqual(fetch.mock.calls.length, 1);
+      const error = yield* Effect.flip(Fiber.join(operation));
+      assert.strictEqual(error.reason, "unavailable");
       assert.strictEqual(onAbort.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("accepts an ambiguous performance comment without replaying it", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.withResolvers<Response>().promise);
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(client.createPerformanceComment(repo, 287, "recurrence"));
+      yield* TestClock.adjust("1 minute");
+      yield* Fiber.join(operation);
+      assert.strictEqual(fetch.mock.calls.length, 1);
     }).pipe(withFetchClient(fetch));
   });
 
@@ -528,15 +664,15 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("does not replay an accepted write whose response body stalls", () => {
+  it.effect("completes an accepted comment write without reading its response body", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(hangingResponse("{", 201)));
 
     return Effect.gen(function* () {
       const client = yield* GitHubClient;
       const operation = yield* Effect.forkChild(client.createComment(repo, 287, "claim"));
-      yield* TestClock.adjust("1 minute");
+      yield* TestClock.adjust("1 second");
       assert.strictEqual(fetch.mock.calls.length, 1);
-      yield* Fiber.join(operation);
+      assert.isDefined(operation.pollUnsafe());
     }).pipe(withFetchClient(fetch));
   });
 
@@ -579,8 +715,8 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("retries a write rejected with a transient HTTP status", () =>
-    transientWrite(408, (client) => client.createComment(repo, 287, "claim")),
+  it.effect("retries an idempotent write rejected with a transient HTTP status", () =>
+    transientWrite(408, (client) => client.editComment(repo, 287, "claim")),
   );
 
   it.effect("bounds pull closing-reference pagination as one operation", () => {

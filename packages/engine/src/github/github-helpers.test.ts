@@ -103,6 +103,9 @@ describe("parseIssues", () => {
     number: 1,
     title: "an issue",
     labels: ["ready-for-agent"],
+    body: null,
+    state: "open",
+    created_at: "2026-09-09T12:00:00Z",
     ...over,
   });
 

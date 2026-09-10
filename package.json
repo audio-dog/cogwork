@@ -17,7 +17,6 @@
     "test:compare": "node configs/sensor/test-compare.mjs",
     "test:measure": "node configs/sensor/test-measure.mjs",
     "worktree:git-invocations": "tsx configs/sensor/count-worktree-git-invocations.ts",
-    "test:lint-rules": "node --test configs/lint/tests/rules.test.mjs",
     "vendor": "node scripts/vendor.mjs",
     "setup-worktree": "node scripts/setup-worktree.mjs"
   },
