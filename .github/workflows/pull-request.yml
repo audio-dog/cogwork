@@ -45,7 +45,7 @@ jobs:
         uses: rharkor/caching-for-turbo@v2.5.0
 
       - name: Run tests
-        run: pnpm --silent test:measure > test-suite-measurement.json
+        run: pnpm --silent --filter @cogwork/sensor test:measure > test-suite-measurement.json
 
       - name: Write test suite summary
         if: ${{ !cancelled() }}
