@@ -1,4 +1,12 @@
-import { agUiTextDelta, HarnessName, RunPlan, SessionId, stageResultJsonSchema } from "@cogwork/contracts";
+import {
+  type AgUiEvent,
+  agUiIsFileDiffUnavailableEvent,
+  agUiTextDelta,
+  HarnessName,
+  RunPlan,
+  SessionId,
+  stageResultJsonSchema,
+} from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
@@ -16,6 +24,7 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
@@ -26,6 +35,7 @@ import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } f
 import {
   defaultLoopBudget,
   defaultRunBudget,
+  mergeProviderFileDiffs,
   providerInstructionContext,
   providerRunner,
   type RunChat,
@@ -307,6 +317,39 @@ describe("providerRunner", () => {
     }),
   );
 
+  it.effect("keeps the provider Run alive and reports a dead diff feed", () =>
+    Effect.gen(function* () {
+      const harnessEvents = Stream.make(
+        { type: "RUN_STARTED" } satisfies AgUiEvent,
+        { type: "RUN_FINISHED", finishReason: "stop" } satisfies AgUiEvent,
+      );
+      const merged = yield* mergeProviderFileDiffs(harnessEvents, () =>
+        Stream.fail(new Error("raw provider watcher failure")),
+      );
+      const events = yield* Stream.runCollect(merged);
+
+      assert.isTrue(events.some(agUiIsFileDiffUnavailableEvent));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.effect("releases the provider terminal event when the diff feed does not drain", () =>
+    Effect.gen(function* () {
+      const harnessEvents = Stream.make(
+        { type: "RUN_STARTED" } satisfies AgUiEvent,
+        { type: "RUN_FINISHED", finishReason: "stop" } satisfies AgUiEvent,
+      );
+      const merged = yield* mergeProviderFileDiffs(harnessEvents, () => Stream.never);
+      const collected = yield* Stream.runCollect(merged).pipe(Effect.forkChild({ startImmediately: true }));
+
+      yield* TestClock.adjust("10 seconds");
+      const events = yield* Fiber.join(collected);
+
+      assert.isTrue(events.some(agUiIsFileDiffUnavailableEvent));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
   it.live("runs owned tools with the caller's HTTP client", () =>
     Effect.gen(function* () {
       const checkoutPath = yield* scratchCheckout();
@@ -357,7 +400,7 @@ describe("providerRunner", () => {
         1,
       );
       assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
-      assert.strictEqual(events.at(-1)?.name, "structured-output.complete");
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
     }),
   );
 

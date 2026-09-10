@@ -1,6 +1,7 @@
 import {
   AgUiEvent,
   agUiIsFileDiffEvent,
+  agUiIsFileDiffUnavailableEvent,
   agUiIsSessionHandleEvent,
   agUiTextDelta,
   type RunActivity,
@@ -162,6 +163,7 @@ export type TranscriptEntry =
       readonly complete: boolean;
     }
   | { readonly kind: "diff"; readonly key: string; readonly path: string; readonly diff: string }
+  | { readonly kind: "warning"; readonly key: string; readonly message: string }
   | { readonly kind: "error"; readonly key: string; readonly message: string };
 
 interface TranscriptFold {
@@ -272,8 +274,14 @@ const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
         });
       },
       CUSTOM: (event) => {
-        if (!agUiIsFileDiffEvent(event)) return state;
-        return setDiffEntry(state, event.value.path, event.value.diff);
+        if (agUiIsFileDiffEvent(event)) return setDiffEntry(state, event.value.path, event.value.diff);
+        if (!agUiIsFileDiffUnavailableEvent(event)) return state;
+        const entry: TranscriptEntry = {
+          kind: "warning",
+          key: `warning:${activity.seq}`,
+          message: event.value.message,
+        };
+        return setTranscriptEntry(state, entry.key, entry);
       },
       RUN_ERROR: ({ message }) => {
         const entry: TranscriptEntry = {

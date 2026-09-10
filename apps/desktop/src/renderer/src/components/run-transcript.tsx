@@ -221,9 +221,22 @@ function ErrorRow({ row }: { row: Extract<TranscriptRow, { kind: "error" }> }) {
   );
 }
 
+function WarningRow({ row }: { row: Extract<TranscriptRow, { kind: "warning" }> }) {
+  return (
+    <div className="py-1">
+      <Alert>
+        <RiErrorWarningLine />
+        <AlertTitle>File changes may be incomplete</AlertTitle>
+        <AlertDescription>{row.message}</AlertDescription>
+      </Alert>
+    </div>
+  );
+}
+
 function Row({ row }: { row: TranscriptRow }) {
   if (row.kind === "work") return <WorkRow row={row} />;
   if (row.kind === "note") return <NoteRow row={row} />;
+  if (row.kind === "warning") return <WarningRow row={row} />;
   return <ErrorRow row={row} />;
 }
 

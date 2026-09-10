@@ -1,6 +1,7 @@
 import {
   type AgUiEvent,
   agUiIsFileDiffEvent,
+  agUiIsFileDiffUnavailableEvent,
   FILE_DIFF_EVENT,
   HarnessName,
   RunId,
@@ -49,6 +50,7 @@ import {
   type ExternalHarnessAuthentication,
   type ExternalHarnessDescriptor,
   externalHarnessRunner,
+  mergeCheckoutFileDiffs,
 } from "./external-harness-runtime";
 import {
   fullHarnessExecution,
@@ -513,6 +515,24 @@ describe("external Harness runtime", () => {
           seen.filter((event) => event.type === EventType.RUN_FINISHED),
           1,
         );
+      }),
+    );
+
+    it.effect("warns before finishing when the checkout diff feed dies", () =>
+      Effect.gen(function* () {
+        const harnessEvents = Stream.fromIterable([
+          { type: "RUN_STARTED" } satisfies AgUiEvent,
+          { type: "RUN_FINISHED", finishReason: "stop" } satisfies AgUiEvent,
+        ]);
+        const output = yield* mergeCheckoutFileDiffs(harnessEvents, () =>
+          Stream.fail(new Error("raw external watcher failure")),
+        ).pipe(Effect.flatMap(Stream.runCollect));
+        const warningIndex = output.findIndex(agUiIsFileDiffUnavailableEvent);
+        const finishedIndex = output.findIndex((event) => event.type === EventType.RUN_FINISHED);
+
+        assert.isAtLeast(warningIndex, 0);
+        assert.isAbove(finishedIndex, warningIndex);
+        assert.strictEqual(output.at(-1)?.type, EventType.RUN_FINISHED);
       }),
     );
 

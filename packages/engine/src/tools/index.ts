@@ -4,6 +4,7 @@ export {
   computeDiff,
   FILE_DIFF_EVENT,
   fileDiffEvent,
+  mergeFileDiffFeed,
   toFileDiffEvent,
   tolerateFeedDeath,
   watchWorktreeDiffs,
