@@ -280,15 +280,16 @@ const targetFor = Effect.fn("github.performanceIssueTarget")(function* (
     ),
     create,
     confirmPending,
-    comment: (id, body) =>
-      issueNumber(id).pipe(
-        Effect.flatMap((number) => client.createPerformanceComment(targetRepo, number, body)),
-      ),
-    ensureLabels: (issue) =>
-      ensurePerformanceIssueLabels(client, targetRepo, issue).pipe(
+    comment: Effect.fn("github.performanceIssueComment")(function* (id, body) {
+      const number = yield* issueNumber(id);
+      yield* client.createPerformanceComment(targetRepo, number, body);
+    }),
+    ensureLabels: Effect.fn("github.ensurePerformanceIssueLabels")(function* (issue) {
+      yield* ensurePerformanceIssueLabels(client, targetRepo, issue).pipe(
         Effect.andThen(clearPending(issue.body)),
         Effect.tapError(clearPendingOnPermanent(issue.body)),
-      ),
+      );
+    }),
   } satisfies PerformanceIssueFilerTarget;
 });
 

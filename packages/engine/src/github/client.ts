@@ -882,10 +882,30 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   const pullReferences = (repo: GitHubRepoRef, headBranch?: string) =>
     headBranch ? Effect.succeed(new Map<number, ReadonlyArray<number>>()) : pullClosingReferences(repo);
 
-  const createCommentOnce = (repo: GitHubRepoRef, issueNumber: number, body: string) =>
-    sendAcceptedJsonOnce(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/comments`)), {
-      body,
-    }).pipe(Effect.asVoid);
+  const createComment = Effect.fn("github.createComment")(function* (
+    repo: GitHubRepoRef,
+    issueNumber: number,
+    body: string,
+  ) {
+    yield* sendAcceptedJsonOnce(
+      repo,
+      HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/comments`)),
+      { body },
+    );
+  });
+
+  const createPerformanceComment = Effect.fn("github.createPerformanceComment")(function* (
+    repo: GitHubRepoRef,
+    issueNumber: number,
+    body: string,
+  ) {
+    yield* createComment(repo, issueNumber, body).pipe(
+      Effect.catchIf(
+        (error) => error.writeMayHaveCommitted !== false,
+        () => Effect.void,
+      ),
+    );
+  });
 
   interface IssueQuery {
     readonly state: "open" | "all";
@@ -990,14 +1010,8 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           acceptResponse,
         ),
       ),
-    createComment: createCommentOnce,
-    createPerformanceComment: (repo: GitHubRepoRef, issueNumber: number, body: string) =>
-      createCommentOnce(repo, issueNumber, body).pipe(
-        Effect.catchIf(
-          (error) => error.writeMayHaveCommitted !== false,
-          () => Effect.void,
-        ),
-      ),
+    createComment,
+    createPerformanceComment,
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
     verifyCredential: (token: Redacted.Redacted<string>) =>
