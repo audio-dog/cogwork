@@ -1,6 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
@@ -179,6 +181,30 @@ describe("desktop environment", () => {
 
       assert.deepStrictEqual(environment, inheritedLinuxEnvironment);
       assert.isAbove(MutableRef.get(probe.messages).length, 0);
+    }).pipe(Effect.provide(testLayer(() => Effect.never))),
+  );
+
+  it.effect("preserves login shell defects", () =>
+    Effect.gen(function* () {
+      const exit = yield* resolveDesktopEnvironment({
+        inherited: inheritedLinuxEnvironment,
+        platform: "linux",
+      }).pipe(Effect.exit);
+
+      assert.isTrue(Exit.isFailure(exit) && Cause.hasDies(exit.cause));
+    }).pipe(Effect.provide(testLayer(() => Effect.die("unexpected shell defect")))),
+  );
+
+  it.effect("preserves login shell interruption", () =>
+    Effect.gen(function* () {
+      const resolving = yield* resolveDesktopEnvironment({
+        inherited: inheritedLinuxEnvironment,
+        platform: "linux",
+      }).pipe(Effect.forkChild);
+      yield* Fiber.interrupt(resolving);
+      const exit = yield* Fiber.await(resolving);
+
+      assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
     }).pipe(Effect.provide(testLayer(() => Effect.never))),
   );
 

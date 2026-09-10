@@ -1,7 +1,7 @@
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
@@ -10,8 +10,6 @@ export interface DesktopEnvironmentInput {
   readonly inherited: NodeJS.ProcessEnv;
   readonly platform: NodeJS.Platform;
 }
-
-type DesktopEnvironmentProbe = "login-shell" | "launchctl";
 
 const loginShellTimeout = "5 seconds";
 const launchctlTimeout = "2 seconds";
@@ -55,42 +53,34 @@ const capture = (command: ChildProcess.StandardCommand) =>
     );
   });
 
-const runProbe = Effect.fn("DesktopEnvironment.runProbe")(
-  function* (
-    _probe: DesktopEnvironmentProbe,
-    command: ChildProcess.StandardCommand,
-    timeout: Duration.Input,
-  ) {
-    const exit = yield* capture(command).pipe(Effect.timeoutOption(timeout), Effect.exit);
-    if (Exit.isFailure(exit)) {
-      yield* warnProbe("Desktop PATH probe failed", {
-        cause: exit.cause,
-        executable: executableName(command),
-      });
-      return null;
-    }
-    if (Option.isNone(exit.value)) {
-      yield* warnProbe("Desktop PATH probe timed out", {
-        executable: executableName(command),
-        timeout,
-      });
-      return null;
-    }
-    if (exit.value.value.exitCode !== 0) {
-      yield* warnProbe("Desktop PATH probe exited unsuccessfully", {
-        executable: executableName(command),
-        exitCode: exit.value.value.exitCode,
-      });
-      return null;
-    }
-    return exit.value.value.stdout;
-  },
-  (effect, probe) =>
-    effect.pipe(
-      Effect.annotateLogs({ component: "desktop-environment", probe }),
-      Effect.annotateSpans({ component: "desktop-environment", probe }),
-    ),
-);
+const runProbe = Effect.fn("DesktopEnvironment.runProbe")(function* (
+  command: ChildProcess.StandardCommand,
+  timeout: Duration.Input,
+) {
+  const result = yield* capture(command).pipe(Effect.timeoutOption(timeout), Effect.result);
+  if (Result.isFailure(result)) {
+    yield* warnProbe("Desktop PATH probe failed", {
+      error: result.failure,
+      executable: executableName(command),
+    });
+    return null;
+  }
+  if (Option.isNone(result.success)) {
+    yield* warnProbe("Desktop PATH probe timed out", {
+      executable: executableName(command),
+      timeout,
+    });
+    return null;
+  }
+  if (result.success.value.exitCode !== 0) {
+    yield* warnProbe("Desktop PATH probe exited unsuccessfully", {
+      executable: executableName(command),
+      exitCode: result.success.value.exitCode,
+    });
+    return null;
+  }
+  return result.success.value.stdout;
+});
 
 const extractLoginPath = (output: string) => {
   const start = output.indexOf(startMarker);
@@ -112,47 +102,57 @@ const shellFor = (input: DesktopEnvironmentInput) => {
   return input.platform === "darwin" ? "/bin/zsh" : "/bin/bash";
 };
 
-const readLoginPath = Effect.fn("DesktopEnvironment.readLoginPath")(function* (
-  input: DesktopEnvironmentInput,
-) {
-  const shell = shellFor(input);
-  const output = yield* runProbe(
-    "login-shell",
-    ChildProcess.make(shell, ["-ilc", printPathCommand], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-      killSignal: "SIGTERM",
-      forceKillAfter: processTerminateGrace,
-    }),
-    loginShellTimeout,
-  );
-  if (output === null) return undefined;
-  const path = extractLoginPath(output);
-  if (path) return path;
-  yield* warnProbe("Desktop PATH probe returned no PATH", {
-    executable: shell.split("/").at(-1),
-  });
-  return undefined;
-});
+const readLoginPath = Effect.fn("DesktopEnvironment.readLoginPath")(
+  function* (input: DesktopEnvironmentInput) {
+    const shell = shellFor(input);
+    const output = yield* runProbe(
+      ChildProcess.make(shell, ["-ilc", printPathCommand], {
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "ignore",
+        killSignal: "SIGTERM",
+        forceKillAfter: processTerminateGrace,
+      }),
+      loginShellTimeout,
+    );
+    if (output === null) return undefined;
+    const path = extractLoginPath(output);
+    if (path) return path;
+    yield* warnProbe("Desktop PATH probe returned no PATH", {
+      executable: shell.split("/").at(-1),
+    });
+    return undefined;
+  },
+  (effect) =>
+    effect.pipe(
+      Effect.annotateLogs({ component: "desktop-environment", probe: "login-shell" }),
+      Effect.annotateSpans({ component: "desktop-environment", probe: "login-shell" }),
+    ),
+);
 
-const readLaunchctlPath = Effect.fn("DesktopEnvironment.readLaunchctlPath")(function* () {
-  const output = yield* runProbe(
-    "launchctl",
-    ChildProcess.make("/bin/launchctl", ["getenv", "PATH"], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-      killSignal: "SIGTERM",
-      forceKillAfter: processTerminateGrace,
-    }),
-    launchctlTimeout,
-  );
-  const path = output?.trim();
-  if (path) return path;
-  if (output !== null) yield* warnProbe("Desktop PATH probe returned no PATH");
-  return undefined;
-});
+const readLaunchctlPath = Effect.fn("DesktopEnvironment.readLaunchctlPath")(
+  function* () {
+    const output = yield* runProbe(
+      ChildProcess.make("/bin/launchctl", ["getenv", "PATH"], {
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "ignore",
+        killSignal: "SIGTERM",
+        forceKillAfter: processTerminateGrace,
+      }),
+      launchctlTimeout,
+    );
+    const path = output?.trim();
+    if (path) return path;
+    if (output !== null) yield* warnProbe("Desktop PATH probe returned no PATH");
+    return undefined;
+  },
+  (effect) =>
+    effect.pipe(
+      Effect.annotateLogs({ component: "desktop-environment", probe: "launchctl" }),
+      Effect.annotateSpans({ component: "desktop-environment", probe: "launchctl" }),
+    ),
+);
 
 const mergePaths = (paths: ReadonlyArray<string | undefined>) => {
   const entries = paths.flatMap((path) => path?.split(":") ?? []).map((entry) => entry.trim());
