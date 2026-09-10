@@ -153,7 +153,7 @@ test("the summary puts duration beside test count", () => {
   const measurementPath = path.join(directory, "measurement.json");
   try {
     writeFileSync(measurementPath, JSON.stringify({ durationMs: 17_042, testCount: 1_234 }));
-    const result = spawnSync(process.execPath, ["scripts/test-measure-summary.mjs", measurementPath], {
+    const result = spawnSync(process.execPath, ["configs/sensor/test-measure-summary.mjs", measurementPath], {
       cwd: path.resolve(import.meta.dirname, "../.."),
       encoding: "utf8",
     });
