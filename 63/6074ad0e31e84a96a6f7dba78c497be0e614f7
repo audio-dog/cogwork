@@ -1,0 +1,19 @@
+apps/cli/src/replay-commands.ts
+  s_0a993e81d3e7bc::t_3cfaf8898b977d 39,42-43,88-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "636074ad0e31e84a96a6f7dba78c497be0e614f7",
+  "prompts": {},
+  "sessions": {
+    "s_0a993e81d3e7bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c7e-bb78-7171-9cff-c0bc2d1d70ac",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
