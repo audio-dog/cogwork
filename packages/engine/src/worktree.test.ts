@@ -696,6 +696,22 @@ describe("Worktree.reconcile", () => {
     }),
   );
 
+  it.effect("does not let a normal ticket claim an encoded fallback worktree", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const branch = Worktree.branchName({ id: "!", title: "encoded" });
+      const manager = yield* Effect.provide(
+        Worktree.make,
+        provide(
+          fakeGit(recorder, { worktrees: [{ path: `/repo.worktrees/${branch}`, branch }] }),
+          fakeFs(recorder, {}),
+        ),
+      );
+      const outcome = yield* manager.reconcile(workspaceWith(), ["u"], 10_000);
+      assert.deepStrictEqual(outcome.tornDown, [branch]);
+    }),
+  );
+
   it.effect("keeps an active worktree on an externally linked branch", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();

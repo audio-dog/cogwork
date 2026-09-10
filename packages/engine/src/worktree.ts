@@ -58,9 +58,12 @@ const kebab = (value: string) =>
     .replace(/^-+|-+$/g, "");
 
 const codePointSlug = (value: string) =>
-  [...value].map((character) => character.codePointAt(0)?.toString(36) ?? "0").join("-");
+  [...value].map((character) => character.codePointAt(0)?.toString(36).padStart(5, "0") ?? "00000").join("");
 
 export const ticketSlug = (id: string) => kebab(id) || `u--${codePointSlug(id)}`;
+
+export const branchBelongsToTicketSlug = (branch: string, slug: string) =>
+  branch === slug || (branch.startsWith(`${slug}-`) && !branch.startsWith(`${slug}--`));
 
 export const slugify = (title: string) => kebab(title);
 
@@ -367,7 +370,7 @@ export const make = Effect.gen(function* () {
     const repoPath = workspace.config.checkoutPath;
     const entries = yield* managed(repoPath, config);
     const belongsToActiveTicket = (branch: string) =>
-      activeTicketKeys.some((key) => branch === key || branch.startsWith(`${key}-`));
+      activeTicketKeys.some((key) => branchBelongsToTicketSlug(branch, key));
 
     const orphaned = entries.filter((entry) => entry.branch !== null && !belongsToActiveTicket(entry.branch));
     const retained = entries.filter((entry) => entry.branch === null || belongsToActiveTicket(entry.branch));

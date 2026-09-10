@@ -29,7 +29,7 @@ describe("worktree naming", () => {
   });
 
   it("encodes a ticket id with no kebab characters", () => {
-    assert.strictEqual(branchName({ id: "!!!", title: "💣" }), "u--x-x-x");
+    assert.strictEqual(branchName({ id: "!!!", title: "💣" }), "u--0000x0000x0000x");
     assert.notStrictEqual(ticketSlug("!"), ticketSlug("x"));
   });
 
