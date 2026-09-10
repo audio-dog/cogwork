@@ -1,4 +1,4 @@
-import type { RunId, SessionId } from "@cogwork/contracts";
+import type { RunActivity, RunEvent, RunId, SessionId } from "@cogwork/contracts";
 import { AgUiEvent, agUiIsSessionHandleEvent, type RunRecord } from "@cogwork/contracts";
 import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
@@ -6,6 +6,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Stream from "effect/Stream";
 import { activityOf, DaemonEventBus } from "./daemon-event-bus";
 import { decodeStoredRunEvent, encodeStoredRunEvent } from "./run-event-codec";
 import { encodeRunEventOperation, RunLedger, RunLedgerError } from "./run-ledger";
@@ -86,18 +87,26 @@ export const make = Effect.gen(function* () {
     return handle;
   });
 
-  // A settled run reads back through the same seam it was written through: decode each stored run
-  // event and lift it into the very same run activity a live subscriber saw, dropping any event that
-  // will not decode (a forward-compat guard, same as the live path).
-  const replay = Effect.fn("RunRecorder.replay")(function* (run: RunRecord) {
-    const events = yield* ledger.events(run.id);
-    return yield* Effect.forEach(events, (event) =>
+  const decodeReplayPage = (run: RunRecord, events: ReadonlyArray<RunEvent>) =>
+    Effect.forEach(events, (event) =>
       decodeStoredRunEvent(event.data).pipe(
         Effect.map((decoded) => activityOf(run, event.seq, event.atMillis, decoded)),
         Effect.option,
       ),
-    ).pipe(Effect.map(Arr.getSomes));
-  });
+    ).pipe(
+      Effect.map(
+        (decoded) =>
+          [undefined, Arr.getSomes(decoded)] satisfies readonly [undefined, ReadonlyArray<RunActivity>],
+      ),
+    );
+
+  const replay = (run: RunRecord) =>
+    ledger.events(run.id).pipe(
+      Stream.mapAccumArrayEffect(
+        () => undefined,
+        (_, events) => decodeReplayPage(run, events),
+      ),
+    );
 
   // The decoded harness events a session's transcript fold consumes — every run that shares the
   // session, oldest first — so the session store never decodes a run event itself.

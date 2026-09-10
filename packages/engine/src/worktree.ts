@@ -1,3 +1,4 @@
+import { type BranchName, BranchName as BranchNameSchema } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -56,14 +57,20 @@ const kebab = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-export const ticketSlug = (id: string) => kebab(id);
+const codePointSlug = (value: string) =>
+  [...value].map((character) => character.codePointAt(0)?.toString(36).padStart(5, "0") ?? "00000").join("");
+
+export const ticketSlug = (id: string) => kebab(id) || `u--${codePointSlug(id)}`;
+
+export const branchBelongsToTicketSlug = (branch: string, slug: string) =>
+  branch === slug || (branch.startsWith(`${slug}-`) && !branch.startsWith(`${slug}--`));
 
 export const slugify = (title: string) => kebab(title);
 
 export const branchName = (item: WorkItemRef) => {
   const ticket = ticketSlug(item.id);
   const slug = slugify(item.title);
-  return slug ? `${ticket}-${slug}` : ticket;
+  return BranchNameSchema.make(slug ? `${ticket}-${slug}` : ticket);
 };
 
 export const worktreeRoot = (checkoutPath: string, config?: WorktreeSettings) =>
@@ -89,14 +96,14 @@ const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main"
 const linkPathsFor = (config?: WorktreeSettings) => [...new Set(config?.linkPaths ?? [])];
 
 export interface EnsuredWorktree {
-  readonly branch: string;
+  readonly branch: BranchName;
   readonly path: string;
   readonly created: boolean;
 }
 
 export interface EnsureOptions {
   readonly resume?: boolean;
-  readonly branch?: string;
+  readonly branch?: BranchName;
 }
 
 export interface ReconcileOutcome {
@@ -363,7 +370,7 @@ export const make = Effect.gen(function* () {
     const repoPath = workspace.config.checkoutPath;
     const entries = yield* managed(repoPath, config);
     const belongsToActiveTicket = (branch: string) =>
-      activeTicketKeys.some((key) => branch === key || branch.startsWith(`${key}-`));
+      activeTicketKeys.some((key) => branchBelongsToTicketSlug(branch, key));
 
     const orphaned = entries.filter((entry) => entry.branch !== null && !belongsToActiveTicket(entry.branch));
     const retained = entries.filter((entry) => entry.branch === null || belongsToActiveTicket(entry.branch));

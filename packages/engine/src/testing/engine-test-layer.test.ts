@@ -49,7 +49,7 @@ describe("engineTestLayer", () => {
           () => "opaque-handle",
         );
 
-        assert.strictEqual((yield* ledger.events(runId)).length, 1);
+        assert.strictEqual((yield* ledger.events(runId).pipe(Stream.runCollect)).length, 1);
         assert.isTrue(Option.isSome(activity));
         if (Option.isNone(activity)) return;
         assert.strictEqual(activity.value.runId, runId);
