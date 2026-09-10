@@ -52,7 +52,7 @@ const toPerformanceIssue = (
   }) satisfies PerformanceIssue;
 
 const referencesIssue = (body: string, issueNumber: number) =>
-  new RegExp(`\\bRefs\\s+#${issueNumber}\\b`, "i").test(body);
+  new RegExp(`\\b(?:Refs|Close(?:s|d)?|Fix(?:es|ed)?|Resolve(?:s|d)?)\\s+#${issueNumber}\\b`, "i").test(body);
 
 const mergedFixFor = Effect.fn("github.mergedPerformanceIssueFix")(function* (
   client: Pick<GitHubClientService, "issuePullReferences">,

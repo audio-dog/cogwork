@@ -81,6 +81,34 @@ it.effect("recovers an open marker-bearing issue whose labels were omitted durin
   }),
 );
 
+it.effect("recognizes merged pull requests with GitHub closing keywords", () =>
+  Effect.gen(function* () {
+    const references = new Map([
+      [1, [pullReference("Closes #1")]],
+      [2, [pullReference("Fixes #2")]],
+      [3, [pullReference("Resolves #3")]],
+    ]);
+    const client = {
+      authenticatedLogin: () => Effect.succeed("cogwork-bot"),
+      listIssues: () =>
+        Effect.succeed([issue(1, marker, "closed"), issue(2, marker, "closed"), issue(3, marker, "closed")]),
+      issuePullReferences: (_repo: unknown, issueNumber: number) =>
+        Effect.succeed(references.get(issueNumber) ?? []),
+    };
+
+    const history = yield* performanceIssueHistory(client, {
+      owner: "colonylabs",
+      name: "cogwork",
+      tokenEnv: "GITHUB_TOKEN",
+    });
+
+    assert.deepStrictEqual(
+      history.map(({ hasMergedFix }) => hasMergedFix),
+      [true, true, true],
+    );
+  }),
+);
+
 it.effect("repairs labels before confirming a created performance issue", () =>
   Effect.gen(function* () {
     const labels = yield* Ref.make<ReadonlyArray<string>>([]);
