@@ -1,0 +1,23 @@
+packages/engine/src/daemon.ts
+  s_bcd58a12bc39d7::t_02630c66f81f02 167-168,170,173,299
+packages/engine/src/watch-activity.test.ts
+  s_bcd58a12bc39d7::t_5292a0c595cda4 161-162,175
+  s_bcd58a12bc39d7::t_07e4c2f803fa62 163-174
+  s_bcd58a12bc39d7::t_6b04939efdcd95 176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0f251fcf32f6969c2aee4a4d76be9679f37d9737",
+  "prompts": {},
+  "sessions": {
+    "s_bcd58a12bc39d7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c2c-ffeb-7a22-97a0-4ea2b24605bb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
