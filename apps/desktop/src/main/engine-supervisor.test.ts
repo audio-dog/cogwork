@@ -279,17 +279,13 @@ describe("EngineSupervisor", () => {
   it("spawns the resolved command through ChildProcessSpawner", async () => {
     const child = new FakeChild();
     const environment = { PATH: "/home/test/.local/bin:/usr/bin", KEEP: "yes" };
-    const spawnedCommands: Array<ChildProcess.Command> = [];
-    const spawn = vi.fn((spawned: ChildProcess.Command) => {
-      spawnedCommands.push(spawned);
-      return child;
-    });
+    const spawn = vi.fn((_spawned: ChildProcess.Command) => child);
 
     await withSupervisor(options({ environment, spawn }), async (runtime, supervisor) => {
       await runtime.runPromise(supervisor.start);
 
       expect(spawn).toHaveBeenCalledOnce();
-      const spawned = spawnedCommands[0];
+      const spawned = spawn.mock.calls[0]?.[0];
       expect(spawned && ChildProcess.isStandardCommand(spawned)).toBe(true);
       if (!spawned || !ChildProcess.isStandardCommand(spawned)) return;
       expect(spawned.command).toBe(command.command);
