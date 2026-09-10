@@ -37,6 +37,7 @@ https://api.github.com/repos/colonylabs/cogwork/pulls \
   "curl -F title=Done https://api.github.com/repos/colonylabs/cogwork/pulls",
   `sh -c 'gh pr create --fill'`,
   `bash -c "gh pr create --fill"`,
+  `/bin/bash --noprofile -lc 'gh pr create --fill'`,
   `zsh -lc 'curl -X POST https://api.github.com/repos/colonylabs/cogwork/pulls -d @body.json'`,
   `eval "gh pr create --fill"`,
   `bash <<< "gh pr create --fill"`,

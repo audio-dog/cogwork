@@ -10,7 +10,8 @@ const graphqlEndpoint = /(?:^|[\s'"/])graphql(?:[?\s'";]|$)/i;
 const clientSubcommand = /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bpr\s+create\b/i;
 const httpClient = /(?:^|[\s|;&(<`])(?:gh\b[^|;&]*?\bapi\b|curl\b|wget\b|http\b)/i;
 const ghApiClient = /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bapi\b/i;
-const shellRunsTheQuote = /(?:^|[\s|;&(`])(?:(?:ba|z|k|d|a)?sh\s+-[a-z]*c|eval)\b|<<</i;
+const shellRunsTheQuote =
+  /(?:^|[\s|;&(`])(?:(?:(?:[\w.@+-]*\/)+)?(?:ba|z|k|d|a)?sh\b[^|;&]*?\s-[a-z]*c\b|eval\b)|<<</i;
 const bareWordQuote = /(^|[\s|;&(<`])(['"])([\w.@+:/?-]+)\2/g;
 const quotedSpan = /'[^']*'|"[^"]*"/g;
 const executablePrefix = /(^|[\s|;&(<`])(?:\\|(?:[\w.@+-]*\/)+)/g;
