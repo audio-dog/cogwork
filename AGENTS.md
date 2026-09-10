@@ -38,16 +38,11 @@ runs from `packages/engine`. `drizzle-kit` ships its own agent skills, which
 Drizzle file. `pnpm --filter @cogwork/engine exec drizzle-kit skills` writes a local copy for editors
 that read `.claude/skills`; those copies are ignored, not committed.
 
-Pre-alpha, there are no migrations: the Control store is created from the schema and replaced when
-the schema moves. After changing `control-store-schema.ts`, run
-`pnpm --filter @cogwork/engine drizzle:schema` to regenerate the shipped create statements;
-`pnpm --filter @cogwork/engine drizzle:check` reports when they have drifted. Then delete
-`~/.cogwork/control.db` and let boot recreate it.
-
-`drizzle-kit push` is deliberately not wired up. It reaches a schema by `ALTER TABLE`, so the store it
-leaves behind carries different DDL text and column order than the create statements produce, and
-boot's schema comparison — which is exact on purpose — refuses it. Deleting the store is the only
-supported way forward. See ADR 0015 for when migrations come back.
+Boot converges the live Control store to `control-store-schema.ts` with drizzle-kit's in-process
+SQLite differ, applies the statements through the engine's `SqlClient`, and verifies convergence with
+an empty second diff. After changing the schema, restart the daemon; do not run `drizzle-kit push` or
+delete `~/.cogwork/control.db`. Rename-shaped diffs are the pre-alpha exception: boot moves the store
+to a timestamped backup and creates a new one. See ADR 0015.
 
 ## Never start the dev server
 
