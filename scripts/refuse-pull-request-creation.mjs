@@ -2,12 +2,13 @@ const isRecord = (value) => typeof value === "object" && value !== null && !Arra
 
 const pullsCollection = /(?:^|[\s'"/])repos\/[^/\s'"?]+\/[^/\s'"?]+\/pulls(?:[?\s'";]|$)/i;
 const explicitVerb = /(?:^|\s)(?:-X|--request|--method)(?:=|\s*)([A-Za-z]+)/;
-const apiField = /(?:^|\s)(?:-f|-F|--field|--raw-field|--input)(?:=|\s+)/;
+const apiField = /(?:^|\s)(?:-[fF](?:(?=\S)|\s+)|(?:--field|--raw-field|--input)(?:=|\s+))/;
 const requestBody =
   /(?:^|\s)(?:-[dF](?:(?=\S)|\s+)|(?:--data(?:-raw|-binary|-urlencode|-ascii)?|--json|--form|--post-data|--post-file)(?:=|\s+))/;
 const graphqlMutation = /\bcreatePullRequest\s*\(/;
 const graphqlEndpoint = /(?:^|[\s'"/])graphql(?:[?\s'";]|$)/i;
-const clientSubcommand = /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bpr\s+create\b/i;
+const clientSubcommand =
+  /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bpr\b(?:\s+--?[^|;&\s]+(?:\s+(?!create\b)[^|;&\s]+)?)*\s+create\b/i;
 const httpClient = /(?:^|[\s|;&(<`])(?:gh\b[^|;&]*?\bapi\b|curl\b|wget\b|http\b)/i;
 const ghApiClient = /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bapi\b/i;
 const shellRunsTheQuote =

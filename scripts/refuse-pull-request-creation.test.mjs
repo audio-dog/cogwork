@@ -13,11 +13,13 @@ const checkout = join(import.meta.dirname, "..");
 const refusedCommands = [
   "gh pr create --base main --head 475-refuse",
   "gh pr create --draft --fill",
+  "gh pr --repo colonylabs/cogwork create --fill",
   "gh --repo colonylabs/cogwork pr create --head 475-refuse",
   "git push -u origin HEAD && gh pr create --title Done --body Ready",
   "gh api --method POST /repos/colonylabs/cogwork/pulls -f title=Done",
   "gh --hostname github.com api --method POST /repos/colonylabs/cogwork/pulls -f title=Done",
   "gh api repos/colonylabs/cogwork/pulls -f title=Done -f head=475-refuse -f base=main",
+  "gh api repos/colonylabs/cogwork/pulls -ftitle=Done -fhead=475-refuse -fbase=main",
   `gh api graphql -f query='mutation { createPullRequest(input: $input) { pullRequest { url } } }'`,
   "curl -X POST https://api.github.com/repos/colonylabs/cogwork/pulls -d @body.json",
   String.raw`curl -X POST \
