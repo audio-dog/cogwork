@@ -1,4 +1,5 @@
 import type {
+  BranchName,
   RunEvent,
   RunId,
   RunPlan,
@@ -389,7 +390,7 @@ const make = Effect.fn("ledger.make")(function* () {
         db.update(sessions).set({ handle }).where(eq(sessions.id, id)).run(),
       ),
 
-    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: BranchName) =>
       readRows("sessionForBranch", () =>
         db
           .select({ id: runs.id, session: runs.session })
@@ -519,7 +520,7 @@ const make = Effect.fn("ledger.make")(function* () {
       );
     },
 
-    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
+    latestRunByBranch: (workspace: WorkspaceId, branch: BranchName) =>
       readRun("latestRunByBranch", () =>
         db
           .select(runRecordSelection)
