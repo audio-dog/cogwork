@@ -1,0 +1,22 @@
+packages/engine/src/run-recorder.ts
+  s_bcd58a12bc39d7::t_02630c66f81f02 1,9,90-91,96-109
+packages/engine/src/run-recorder.test.ts
+  s_bcd58a12bc39d7::t_a33926792efb09 104,128,142,156-157,248,283,325
+  s_bcd58a12bc39d7::t_5292a0c595cda4 254-273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2795782266a1a182649eccba791362cbc56a3373",
+  "prompts": {},
+  "sessions": {
+    "s_bcd58a12bc39d7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c2c-ffeb-7a22-97a0-4ea2b24605bb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
