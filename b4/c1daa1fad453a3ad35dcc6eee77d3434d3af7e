@@ -1,0 +1,54 @@
+packages/engine/src/control-store.ts
+  s_0a993e81d3e7bc::t_5e95d6d024aa29 124-131,816,861-864
+  s_0a993e81d3e7bc::t_1138d676251b4c 830-831,905-912,914,916
+  s_0a993e81d3e7bc::t_fbc7bab5eac880 138,812,817,819-829,832-851,858-860,921-922,924
+  s_0a993e81d3e7bc::t_96463ffafefc60 160-183,915
+  s_0a993e81d3e7bc::t_11f9ce6b0d63ed 913
+  s_0a993e81d3e7bc::t_c34610b544368e 810
+  s_0a993e81d3e7bc::t_477abb72a9e754 865
+  s_0a993e81d3e7bc::t_46b51fe517e24c 139,809,811,815,818,852-857,866,893,923
+  s_0a993e81d3e7bc::t_8306cb43c01bb3 1037-1045,1047-1050
+  s_f65d7f46c79635::t_38be39b1783fcc 1,184,917
+packages/engine/src/control-store-schema.ts
+  s_0a993e81d3e7bc::t_fbc7bab5eac880 128
+packages/engine/src/control-store.test.ts
+  s_0a993e81d3e7bc::t_971f13260f8e52 1038,1045-1048,1053,1056-1059,1064-1082,1084-1088,1090,1092,1096-1097,1099-1101,1103
+  s_0a993e81d3e7bc::t_6bb9370ae33126 194-200,202,204,1195,1206-1212,1215-1218,1221,1231,1248
+  s_0a993e81d3e7bc::t_8c49b719b3437c 73-78,1110
+  s_0a993e81d3e7bc::t_de82772446d36c 28,1104-1109,1111-1112
+  s_0a993e81d3e7bc::t_6c85e2d00dfb80 60,65,1113-1121,1123-1128,1132-1137,1141-1143,1145-1146,1156-1160,1163
+  s_0a993e81d3e7bc::t_ff4f8433eae295 1129-1131,1138-1140,1147-1155,1161-1162
+  s_0a993e81d3e7bc::t_d599e94120b503 201
+  s_0a993e81d3e7bc::t_5e95d6d024aa29 193,203,1213-1214,1222-1230,1236,1245,1247
+  s_0a993e81d3e7bc::t_8f8f006fa2d3a0 1094-1095
+  s_0a993e81d3e7bc::t_9a25bc0a259751 1089,1091,1093,1098,1102
+  s_0a993e81d3e7bc::t_c3959b48c5abdb 1238-1240,1246
+  s_0a993e81d3e7bc::t_337b6992871cd4 1049-1052
+  s_0a993e81d3e7bc::t_8a49613a3a6970 34,37,67-72,190-192,1044,1122,1144,1164-1194,1196-1201,1219-1220,1250-1251
+  s_0a993e81d3e7bc::t_477abb72a9e754 1232-1235,1237,1241-1244,1249
+  s_f65d7f46c79635::t_fb4d0a15a28329 66,1252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b4c1daa1fad453a3ad35dcc6eee77d3434d3af7e",
+  "prompts": {},
+  "sessions": {
+    "s_0a993e81d3e7bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c7e-bb78-7171-9cff-c0bc2d1d70ac",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f65d7f46c79635": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c81-b209-7733-b974-134ee88ff18f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
