@@ -28,6 +28,7 @@ import * as Daemon from "./daemon";
 import { Git, type GitService } from "./git";
 import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
 import { IssueTracker } from "./issue-tracker";
+import { PerformanceHealthSource } from "./performance-health-source";
 import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker } from "./reconcile";
 import * as RunLedger from "./run-ledger";
@@ -42,6 +43,9 @@ vi.mock("drizzle-kit/payload/sqlite", () =>
       return { ...actual, pushSchema: pushSchemaMock };
     }),
 );
+
+const healthSourceLayer = (snapshot: Effect.Effect<{ readonly sampledAtMillis: number }>) =>
+  Layer.succeed(PerformanceHealthSource, { snapshot });
 
 const interruptionGate = Latch.makeUnsafe();
 
@@ -192,17 +196,22 @@ function makeGitHubServerFixture() {
       Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
     );
     const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
-    const serverLayer = Daemon.serverLayer({
-      transport,
-      credentials: storedGitHubCredentials,
-      contextAssembler: contextAssemblerLayer,
-      runLedger: RunLedger.layerMemoryCore,
-      controlStorePath: join(root, "control.db"),
-      userAgentsDir: join(root, ".agents"),
-      worktrees: worktreeLayer,
-      harnessRunners: [stubRunner],
-    }).pipe(Layer.provide(gitLayer));
-    return { fetchStub, serverLayer };
+    return {
+      fetchStub,
+      serverLayer: Daemon.serverLayer({
+        transport,
+        credentials: storedGitHubCredentials,
+        contextAssembler: contextAssemblerLayer,
+        runLedger: RunLedger.layerMemoryCore,
+        controlStorePath: join(root, "control.db"),
+        userAgentsDir: join(root, ".agents"),
+        worktrees: worktreeLayer,
+        harnessRunners: [stubRunner],
+        appVersion: "test",
+        performanceEvidenceRoot: join(root, "perf"),
+        performanceHealth: healthSourceLayer(Effect.succeed({ sampledAtMillis: 0 })),
+      }).pipe(Layer.provide(gitLayer)),
+    };
   });
 }
 
@@ -240,21 +249,26 @@ function makeUnavailableServerFixture() {
       Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
     );
     const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
-    const serverLayer = Daemon.serverLayer({
-      transport,
-      credentials: CredentialStore.layerEnv,
-      contextAssembler: contextAssemblerLayer,
-      runLedger: RunLedger.layerMemoryCore,
-      controlStorePath: controlStore.path,
-      userAgentsDir: join(controlStore.dir, ".agents"),
-      worktrees: worktreeLayer,
-      harnessRunners: [stubRunner],
-    }).pipe(Layer.provide(gitLayer));
     const clientLayer = RpcClient.layerProtocolSocket().pipe(
       Layer.provide(Layer.succeed(Socket.Socket, client)),
       Layer.provide(Daemon.serializationLayer),
     );
-    return { clientLayer, serverLayer };
+    return {
+      clientLayer,
+      serverLayer: Daemon.serverLayer({
+        transport,
+        credentials: CredentialStore.layerEnv,
+        contextAssembler: contextAssemblerLayer,
+        runLedger: RunLedger.layerMemoryCore,
+        controlStorePath: controlStore.path,
+        userAgentsDir: join(controlStore.dir, ".agents"),
+        worktrees: worktreeLayer,
+        harnessRunners: [stubRunner],
+        appVersion: "test",
+        performanceEvidenceRoot: join(controlStore.dir, "perf"),
+        performanceHealth: healthSourceLayer(Effect.succeed({ sampledAtMillis: 0 })),
+      }).pipe(Layer.provide(gitLayer)),
+    };
   });
 }
 
