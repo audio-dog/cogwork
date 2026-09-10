@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import { branchName, ticketSlug } from "../worktree";
 import {
   type GitHubRepoRef,
   parseIssues,
@@ -157,6 +158,11 @@ describe("branchBelongsToSlug", () => {
   it("does not let one slug swallow a longer number that merely starts the same", () => {
     assert.isFalse(branchBelongsToSlug("130-something", "13"));
     assert.isFalse(branchBelongsToSlug("14-other", "13"));
+  });
+
+  it("isolates fallback slugs from normal and longer ticket ids", () => {
+    assert.isFalse(branchBelongsToSlug(branchName({ id: "!", title: "first" }), ticketSlug("u")));
+    assert.isFalse(branchBelongsToSlug(branchName({ id: "!!", title: "second" }), ticketSlug("!")));
   });
 });
 
