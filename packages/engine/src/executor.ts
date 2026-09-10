@@ -21,7 +21,6 @@ import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
-  BranchName as BranchNameSchema,
   decodeStageResultCompletion,
   harnessEnabled,
   ImplementStageResult,
@@ -201,12 +200,10 @@ const defaultFollowUp: FollowUpContext = {
   baseDivergence: "none",
 };
 
-const explicitBranchName = (item: EligibleWork) =>
-  item.followUpBranch ? BranchNameSchema.make(item.followUpBranch) : null;
-
 const resumeWorktreeOptions = (item: EligibleWork) => {
-  const branch = explicitBranchName(item);
-  if (item.stage === "follow-up" && branch) return { resume: true, branch };
+  if (item.stage === "follow-up" && item.followUpBranch) {
+    return { resume: true, branch: item.followUpBranch };
+  }
   return { resume: true };
 };
 
@@ -1032,7 +1029,7 @@ export const make = Effect.gen(function* () {
 
   const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
     const resolved = planStage.stage;
-    const branch = explicitBranchName(item) ?? branchName(item);
+    const branch = item.followUpBranch ?? branchName(item);
     const context = item.followUp ?? defaultFollowUp;
     const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
     return {

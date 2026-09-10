@@ -1,6 +1,7 @@
 import type {
   ActionableItem,
   BlockedItem,
+  BranchName,
   Claim,
   ClaimedItem,
   ClassifiedItem,
@@ -15,7 +16,7 @@ import type {
   RunPlanWorkContextReference,
   SessionId,
 } from "@cogwork/contracts";
-import { byStageThenPriority } from "@cogwork/contracts";
+import { BranchName as BranchNameSchema, byStageThenPriority } from "@cogwork/contracts";
 import * as Chunk from "effect/Chunk";
 import * as Data from "effect/Data";
 import { exhaustionOf } from "./exhaustion";
@@ -39,7 +40,7 @@ export interface EligibleWork extends ActionableItem {
   readonly followUp?: FollowUpContext;
   readonly resume?: ResumeContext;
   readonly recovery?: ResumeContext["reason"];
-  readonly followUpBranch?: string;
+  readonly followUpBranch?: BranchName;
   readonly workContext: {
     readonly reference: RunPlanWorkContextReference;
     readonly facts: RunPlanWorkContextFacts;
@@ -210,9 +211,15 @@ export const classifiedItemOf = (item: ObservedItem) =>
     Drop: () => null,
   });
 
+const followUpBranchOf = (item: ObservedItem, stage: LifecycleStage) => {
+  if (stage !== "follow-up" || !item.pr || item.pr.followable === false) return null;
+  return BranchNameSchema.make(item.pr.headRef);
+};
+
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   const priorFailures = exhaustionOf(item, stage).failedAttempts;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
+  const followUpBranch = followUpBranchOf(item, stage);
   return {
     id: item.id,
     title: item.title,
@@ -221,7 +228,7 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
     priority: item.priority,
     priorFailures,
     ...(followUp ? { followUp } : {}),
-    ...(stage === "follow-up" && item.pr?.followable !== false ? { followUpBranch: item.pr?.headRef } : {}),
+    ...(followUpBranch ? { followUpBranch } : {}),
     ...prFields(item),
     workContext: {
       reference: { workItem: item.id, url: item.url },

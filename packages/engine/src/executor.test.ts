@@ -987,12 +987,12 @@ const failSecondPrepareWorktree = (failure: GitError | WorktreeDivergedError) =>
       ),
   }));
 
-const branchRecordingWorktree = (branch: string) =>
+const branchRecordingWorktree = (branch: BranchName) =>
   worktreeDouble((probe) => ({
     ...worktreeStubCreated(false),
     ensure: (_workspace, _item, options) =>
       Ref.update(probe.branches, (values) => [...values, options?.branch]).pipe(
-        Effect.map(() => ({ branch: decodeBranchName(branch), path: `/wt/${branch}`, created: false })),
+        Effect.map(() => ({ branch, path: `/wt/${branch}`, created: false })),
       ),
   }));
 
@@ -3999,7 +3999,7 @@ describe("Executor.execute", () => {
   });
 
   it.effect("prepares a linked external branch for follow-up", () => {
-    const externalBranch = "claude/github-issue-5-a1b2c3";
+    const externalBranch = decodeBranchName("claude/github-issue-5-a1b2c3");
     const item = { ...followUpItem, followUpBranch: externalBranch };
 
     return Effect.gen(function* () {
@@ -4181,7 +4181,7 @@ describe("Executor.execute", () => {
   });
 
   it.effect("resumes a linked external branch", () => {
-    const externalBranch = "claude/github-issue-5-a1b2c3";
+    const externalBranch = decodeBranchName("claude/github-issue-5-a1b2c3");
     const resumeItem: EligibleWork = {
       ...followUpItem,
       followUpBranch: externalBranch,
