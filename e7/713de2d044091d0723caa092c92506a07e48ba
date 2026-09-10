@@ -1,0 +1,76 @@
+apps/desktop/src/main/daemon-bridge.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 2,4,11
+scripts/test-performance-baseline.json
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 1-4
+apps/desktop/src/main/engine-supervisor.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 30,37,449-458,494
+packages/engine/src/run-ledger.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 17-22,127-137
+  s_e8b39c832cbe56::t_678326851c2eb6 138-139
+scripts/test-performance-filer.test.mjs
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 1-226
+packages/engine/src/run-ledger.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 34-37,39,44-45,53,185,193
+apps/cli/src/ledger.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 185-188,242,251-255,304,306
+packages/engine/src/run-recorder.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 11,66
+turbo.json
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 3
+packages/engine/src/executor.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 1466
+packages/engine/src/run-recorder.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 295,301,304
+package.json
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 23
+packages/engine/src/control-store.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 221,228-243,247-257,262-278
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 4,29,161-165,174,492-514
+  s_e8b39c832cbe56::t_51fd761613bba1 515-517
+AGENTS.md
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 41-45
+apps/desktop/package.json
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 54
+packages/engine/src/index.ts
+  s_e8b39c832cbe56::t_5a17ed7b3056cf 21
+packages/engine/src/run-plan.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 407,422-426,455,467-470
+packages/engine/src/commands.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 33,266-279,295,298-321,1370,1494,1519-1572,1620,1663
+packages/engine/src/operation-resolution.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 1-617
+packages/engine/src/commands.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 43,579
+packages/engine/src/run-plan.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 745-748,794,798-801,938-951
+apps/desktop/src/main/wait-for-socket.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 1,5-14,22-26
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 5-7,10,19,25,52-56,58-60,62-67
+packages/engine/src/operation-resolution.test.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 1-273
+packages/engine/src/executor.ts
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 86-91,1618,1631
+  s_e8b39c832cbe56::t_73f0b50a3ea71a 85
+scripts/test-performance-filer.mjs
+  s_e8b39c832cbe56::t_8305bb5c08a0e5 1-238
+pnpm-lock.yaml
+  s_e8b39c832cbe56::t_3f370818581a13 281-283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e7713de2d044091d0723caa092c92506a07e48ba",
+  "prompts": {},
+  "sessions": {
+    "s_e8b39c832cbe56": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087db-c632-77b1-93bf-92101f0df387",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
