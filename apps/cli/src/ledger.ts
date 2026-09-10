@@ -249,7 +249,10 @@ const make = Effect.fn("ledger.make")(function* () {
   const readRows = <A, E>(operation: string, query: () => Effect.Effect<ReadonlyArray<A>, E>) =>
     swallow(operation, query, () => [] as ReadonlyArray<A>);
 
-  const hardWrite = <A, E>(query: () => Effect.Effect<A, E>) =>
+  const hardOperation = <A, E>(
+    operation: RunLedger.RunLedgerError["operation"],
+    query: () => Effect.Effect<A, E>,
+  ) =>
     Effect.suspend(query).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
@@ -259,13 +262,16 @@ const make = Effect.fn("ledger.make")(function* () {
         );
         return Effect.fail(
           RunLedger.RunLedgerError.make({
-            operation: RunLedger.acceptRunOperation,
+            operation,
             message: Cause.pretty(cause),
             retryable,
           }),
         );
       }),
     );
+
+  const hardWrite = <A, E>(query: () => Effect.Effect<A, E>) =>
+    hardOperation(RunLedger.acceptRunOperation, query);
 
   const writeIds = <E>(
     operation: string,
@@ -309,7 +315,7 @@ const make = Effect.fn("ledger.make")(function* () {
     );
 
   const readEventPage = Effect.fn("ledger.readEventPage")(function* (runId: RunId, afterSeq: number) {
-    const rows = yield* readRows("events", () =>
+    const rows = yield* hardOperation(RunLedger.readRunEventsOperation, () =>
       sqlClient.unsafe<RunEventRow>(
         `WITH candidates AS (
           SELECT
@@ -577,7 +583,7 @@ const make = Effect.fn("ledger.make")(function* () {
     },
 
     latestSeq: (runId: RunId) =>
-      readRows("latestSeq", () =>
+      hardOperation(RunLedger.readRunEventsOperation, () =>
         db
           .select({ seq: sql<number | null>`max(${runEvents.seq})` })
           .from(runEvents)
