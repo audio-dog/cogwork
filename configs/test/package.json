@@ -7,6 +7,7 @@
     ".": "./base.ts"
   },
   "scripts": {
+    "test": "vitest run --config base.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
