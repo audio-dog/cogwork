@@ -1,0 +1,32 @@
+docs/research/six-to-eight-agent-measurement-campaign.md
+  s_cff36ee3a37fb2::t_8d1d1eadfbb45f 4
+configs/sensor/perf-campaign.mjs
+  s_cff36ee3a37fb2::t_d900ef104cb2fc 7,42-46,49,353-357,527-541,558,577-584,591-596
+  s_cff36ee3a37fb2::t_a3542cda6151e7 172,262
+  s_cff36ee3a37fb2::t_fb29e5b0edb820 6,9,16
+  s_cff36ee3a37fb2::t_bc1835a4234353 48,194,236
+  s_cff36ee3a37fb2::t_047c5bee3eacf8 1-5,8,10-15,17-41,47,50-171,173-193,195-235,237-261,263-352,358-526,542-557,559-576,585-590
+configs/sensor/process-pressure-sampler.mjs
+  s_cff36ee3a37fb2::t_047c5bee3eacf8 1-4,6-128,135-138,141-157,159-160,184-186,194-195
+  s_cff36ee3a37fb2::t_c0bd7e72ef37b7 170-175,177-182,188-191
+  s_cff36ee3a37fb2::t_ced0d39c5cae06 161-169,176
+  s_cff36ee3a37fb2::t_bc1835a4234353 187
+  s_cff36ee3a37fb2::t_d900ef104cb2fc 5,134,140,158,183,192-193,196
+  s_cff36ee3a37fb2::t_d688f3b36a0df6 129-133,139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f032eca0a538d5ce0ab2ce90daba953c95eaaaea",
+  "prompts": {},
+  "sessions": {
+    "s_cff36ee3a37fb2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c12-e4ef-7f50-b0f1-12ad014890f3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
