@@ -1,0 +1,21 @@
+apps/cli/package.json
+  s_cff36ee3a37fb2::t_015870032fef8f 41
+pnpm-lock.yaml
+  s_cff36ee3a37fb2::t_d4b57135945f6a 206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "28def14a610e89abe8aca79511dca8fc9cc22502",
+  "prompts": {},
+  "sessions": {
+    "s_cff36ee3a37fb2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c12-e4ef-7f50-b0f1-12ad014890f3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
