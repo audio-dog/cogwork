@@ -22,12 +22,14 @@ const report = ({
   base: {
     ref: "baseline",
     sha: "1111111111111111111111111111111111111111",
+    environment: {},
     medianDurationMs: baseMedianDurationMs,
     testCount: 1_800,
   },
   head: {
     ref: "main",
     sha: "2222222222222222222222222222222222222222",
+    environment: {},
     medianDurationMs: headMedianDurationMs,
     testCount: 1_800,
   },
