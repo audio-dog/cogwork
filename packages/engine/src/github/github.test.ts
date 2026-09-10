@@ -82,6 +82,7 @@ interface Seed {
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
   readonly priorities?: ReadonlyArray<{ readonly issue: number; readonly priority: Priority }>;
   readonly priorityError?: boolean;
+  readonly priorityValueError?: boolean;
   readonly pullRequestError?: boolean;
 }
 
@@ -127,11 +128,6 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         assignees: issue.assignees ?? [],
         isPullRequest: issue.isPullRequest ?? false,
         openBlockers: issue.openBlockers ?? 0,
-        issueFieldValues: new Map(
-          (seed.priorities ?? [])
-            .filter((priority) => priority.issue === issue.number)
-            .map((priority) => [priorityFieldId, priority.priority]),
-        ),
       }),
     ),
   );
@@ -162,6 +158,16 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   return {
     authenticatedLogin: () => Effect.succeed(bot.login),
     listIssues: () => Ref.get(issuesRef),
+    listIssueFieldValues: (_repo, number) =>
+      seed.priorityValueError
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "field values unavailable" }))
+        : Effect.succeed(
+            new Map(
+              (seed.priorities ?? [])
+                .filter((priority) => priority.issue === number)
+                .map((priority) => [priorityFieldId, priority.priority]),
+            ),
+          ),
     listPulls: () => Effect.succeed([...pulls]),
     pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
     listComments: (_repo, number) =>
@@ -1402,6 +1408,27 @@ describe("GitHub adapters", () => {
             { number: 6, title: "two", labels: ["ready-for-agent"] },
           ],
           priorityError: true,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("defaults every item to medium and still completes when issue field values cannot be read", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(prioritizedWorkspace);
+      assert.strictEqual(items.length, 2);
+      assert.deepStrictEqual(
+        items.map((item) => item.priority),
+        ["medium", "medium"],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 5, title: "one", labels: ["ready-for-agent"] },
+            { number: 6, title: "two", labels: ["ready-for-agent"] },
+          ],
+          priorityValueError: true,
         }),
       ),
     ),

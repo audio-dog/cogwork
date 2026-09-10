@@ -100,7 +100,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
     create: (body) => client.createComment(target, number, body),
   });
 
-  const listItem = (target: AuthenticatedGitHubTarget, priorityFor: (issue: RawIssue) => Priority) =>
+  const listItem = (target: AuthenticatedGitHubTarget, priorities: ReadonlyMap<number, Priority>) =>
     Effect.fn("github.listItem")(function* (issue: RawIssue) {
       const rawComments = yield* client.listComments(target, issue.number);
       const comments = rawComments.map(toCoordinationComment(target.actorLogin));
@@ -114,13 +114,16 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
         claimLabeled: hasClaimLabel(issue.labels),
         openBlockers: issue.openBlockers,
         acceptedClaimants: [target.actorLogin, Coordination.defaultClaimant],
-        priority: priorityFor(issue),
+        priority: priorities.get(issue.number) ?? defaultPriority,
         comments,
       } satisfies ListedItem<number>;
     });
 
-  const priorityLookup = Effect.fn("github.priorityLookup")(function* (target: GitHubTarget) {
-    const fallback = (_issue: RawIssue) => defaultPriority;
+  const priorityLookup = Effect.fn("github.priorityLookup")(function* (
+    target: GitHubTarget,
+    issues: ReadonlyArray<RawIssue>,
+  ) {
+    const fallback = new Map<number, Priority>();
     const source = target.priority;
     if (!source) return fallback;
     return yield* client.listPriorityFields(target).pipe(
@@ -132,7 +135,22 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
             message: `GitHub issue field ${source.field} is not an available single-select field`,
           }),
       ),
-      Effect.map(() => (issue: RawIssue) => resolvePriority(issue.issueFieldValues.get(source.field))),
+      Effect.flatMap(() =>
+        Effect.forEach(
+          issues.filter((issue) => !issue.isPullRequest),
+          (issue) =>
+            client
+              .listIssueFieldValues(target, issue.number)
+              .pipe(
+                Effect.map((values): readonly [number, Priority] => [
+                  issue.number,
+                  resolvePriority(values.get(source.field)),
+                ]),
+              ),
+          { concurrency: 10 },
+        ),
+      ),
+      Effect.map((entries) => new Map(entries)),
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("priority issue field read failed; defaulting every item to medium", {
           owner: target.owner,
@@ -151,10 +169,11 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
       const configuredTarget = targetFor(workspace);
       if (!configuredTarget) return [];
       const target = yield* authenticatedTarget(configuredTarget);
-      const [issues, priorityFor] = yield* Effect.all([client.listIssues(target), priorityLookup(target)]);
+      const issues = yield* client.listIssues(target);
+      const priorities = yield* priorityLookup(target, issues);
       return yield* Effect.forEach(
         issues.filter((issue) => !issue.isPullRequest),
-        listItem(target, priorityFor),
+        listItem(target, priorities),
         { concurrency: 10 },
       );
     }),
