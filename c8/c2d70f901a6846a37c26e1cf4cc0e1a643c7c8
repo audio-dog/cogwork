@@ -1,0 +1,26 @@
+configs/sensor/test-performance-baseline.json
+  s_cff36ee3a37fb2::t_047c5bee3eacf8 1-4
+configs/sensor/test-compare.mjs
+  s_cff36ee3a37fb2::t_fb29e5b0edb820 6-7,17-18
+  s_cff36ee3a37fb2::t_047c5bee3eacf8 1-5,8-16,19-280
+configs/sensor/test-compare.test.mjs
+  s_cff36ee3a37fb2::t_047c5bee3eacf8 1,3-5,7-33,35-36,38-126
+  s_cff36ee3a37fb2::t_fb29e5b0edb820 2
+  s_cff36ee3a37fb2::t_04c518d77b3ebe 6,34,37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c8c2d70f901a6846a37c26e1cf4cc0e1a643c7c8",
+  "prompts": {},
+  "sessions": {
+    "s_cff36ee3a37fb2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c12-e4ef-7f50-b0f1-12ad014890f3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
