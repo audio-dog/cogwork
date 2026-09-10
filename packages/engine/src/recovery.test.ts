@@ -25,7 +25,6 @@ import * as Stream from "effect/Stream";
 import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
 import * as DaemonEventBus from "./daemon-event-bus";
-import * as Executor from "./executor";
 import * as Harness from "./harness";
 import type { ObservedItem } from "./issue-tracker";
 import {
@@ -35,6 +34,7 @@ import {
   IssueTrackerError,
   type IssueTrackerService,
 } from "./issue-tracker";
+import * as OperationResolution from "./operation-resolution";
 import type { RegisteredWorkspace } from "./projector";
 import * as Reconcile from "./reconcile";
 import * as Recovery from "./recovery";
@@ -395,15 +395,13 @@ const makeRecoveryLayer = (options: RecoveryOptions, makeIssueTracker: MakeIssue
             seedSnapshot,
             workerSnapshotLayer(probe.snapshot),
             schedulerStub(probe.admitted, probe.paused, probe.inFlight),
-            Layer.succeed(Executor.Executor, {
+            Layer.mock(OperationResolution.OperationResolution, {
               availabilityOf: (_workspace, item) =>
                 Effect.succeed(
                   options.availability?.operation === item.stage
                     ? options.availability
                     : { operation: item.stage, available: true, causes: [] },
                 ),
-              refreshAvailability: () => Effect.succeed([]),
-              execute: () => Effect.succeed(false),
             }),
             Layer.succeed(IssueTracker, makeIssueTracker(probe)),
           ),

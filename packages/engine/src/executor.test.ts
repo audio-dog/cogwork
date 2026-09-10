@@ -64,6 +64,7 @@ import {
 } from "./harness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
+import * as OperationResolution from "./operation-resolution";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
@@ -1538,6 +1539,8 @@ function provide<SourceControlRequirements = never>(
   runControl: Layer.Layer<RunControl.RunControl> = runControlStub,
 ) {
   const engineServices = engineTestLayer({ transformRunLedger });
+  const operationResolution = OperationResolution.layer;
+  const executor = Layer.effect(Executor.Executor, Executor.make).pipe(Layer.provide(operationResolution));
   const runnerServices = Layer.mergeAll(
     engineServices,
     contextAssembler,
@@ -1545,7 +1548,8 @@ function provide<SourceControlRequirements = never>(
     FileSystem.layerNoop({}),
     FetchHttpClient.layer,
   );
-  return Executor.layer.pipe(
+  return Layer.merge(executor, operationResolution).pipe(
+    Layer.provide(Availability.Availability.layer),
     Layer.provideMerge(
       Layer.mergeAll(
         issueTracker,
@@ -1589,8 +1593,8 @@ const harnessSwitchLayer = (alternates: ReadonlyArray<HarnessName>) =>
 describe("Executor.execute", () => {
   it.effect("projects availability only for executable Operations", () => {
     return Effect.gen(function* () {
-      const executor = yield* Executor.Executor;
-      const availability = yield* executor.refreshAvailability(workspace);
+      const resolution = yield* OperationResolution.OperationResolution;
+      const availability = yield* resolution.refreshAvailability(workspace);
 
       assert.deepStrictEqual(
         availability.map(({ operation }) => operation),
@@ -1630,8 +1634,8 @@ describe("Executor.execute", () => {
         }),
       };
 
-      yield* Executor.Executor.pipe(
-        Effect.flatMap((executor) => executor.refreshAvailability(workspace)),
+      yield* OperationResolution.OperationResolution.pipe(
+        Effect.flatMap((resolution) => resolution.refreshAvailability(workspace)),
         Effect.provide(
           provide([probeRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), operationSettings),
         ),
@@ -1663,8 +1667,8 @@ describe("Executor.execute", () => {
     };
 
     return Effect.gen(function* () {
-      const executor = yield* Executor.Executor;
-      const availability = yield* executor.availabilityOf(implementWorkspace, implementItem);
+      const resolution = yield* OperationResolution.OperationResolution;
+      const availability = yield* resolution.availabilityOf(implementWorkspace, implementItem);
 
       assert.isTrue(availability.available);
       assert.deepStrictEqual(availability.causes, []);
@@ -1754,8 +1758,9 @@ describe("Executor.execute", () => {
     Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
+      const resolution = yield* OperationResolution.OperationResolution;
       const executor = yield* Executor.Executor;
-      const availability = yield* executor.availabilityOf(implementWorkspace, implementItem);
+      const availability = yield* resolution.availabilityOf(implementWorkspace, implementItem);
       const accepted = yield* execute(executor, implementWorkspace, implementItem);
 
       assert.isFalse(availability.available);
