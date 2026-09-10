@@ -375,10 +375,31 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("retries a comment write after a hanging attempt reaches its deadline", () => {
+  it.effect("marks label repair failures as possibly committed issue writes", () => {
+    const response = vi
+      .fn<() => Response>()
+      .mockReturnValueOnce(jsonResponse({ number: 415, labels: [] }, 201))
+      .mockReturnValue(jsonResponse({ message: "Validation failed" }, 422));
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response()));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(
+        client.createIssue(repo, {
+          title: "Daemon event loop delay is high",
+          body: "Signal: event-loop-delay",
+          labels: ["needs-triage", "origin:selfperf"],
+        }),
+      );
+
+      assert.isTrue(error.writeMayHaveCommitted);
+      assert.strictEqual(fetch.mock.calls.length, 2);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("does not replay a comment after an ambiguous transport failure", () => {
     const onAbort = vi.fn();
     const fetch = vi.fn<typeof globalThis.fetch>((_input, init) => {
-      if (fetch.mock.calls.length > 1) return Promise.resolve(jsonResponse());
       init?.signal?.addEventListener("abort", onAbort);
       return Promise.withResolvers<Response>().promise;
     });
@@ -387,7 +408,7 @@ describe("GitHub client", () => {
       const client = yield* GitHubClient;
       const operation = yield* Effect.forkChild(client.createComment(repo, 287, "claim"));
       yield* TestClock.adjust("1 minute");
-      assert.strictEqual(fetch.mock.calls.length, 2);
+      assert.strictEqual(fetch.mock.calls.length, 1);
       yield* Fiber.join(operation);
       assert.strictEqual(onAbort.mock.calls.length, 1);
     }).pipe(withFetchClient(fetch));
@@ -460,8 +481,8 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("retries a write rejected with a transient HTTP status", () =>
-    transientWrite(408, (client) => client.createComment(repo, 287, "claim")),
+  it.effect("retries an idempotent write rejected with a transient HTTP status", () =>
+    transientWrite(408, (client) => client.editComment(repo, 287, "claim")),
   );
 
   it.effect("bounds project priority pagination as one operation", () => {

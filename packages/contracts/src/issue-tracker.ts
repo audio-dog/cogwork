@@ -8,6 +8,7 @@ export class IssueTrackerError extends Schema.TaggedError<IssueTrackerError>()("
   retryable: Schema.optional(Schema.Boolean),
   retryAfterMillis: Schema.optional(Schema.Finite),
   connectionId: Schema.optional(ConnectionId),
+  writeMayHaveCommitted: Schema.optional(Schema.Boolean),
 }) {}
 
 // A rate limit and a rejected credential are both `retryable: false` — do not retry *now* — yet both

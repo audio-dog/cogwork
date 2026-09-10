@@ -51,6 +51,9 @@ interface SeedIssue {
   readonly assignees?: ReadonlyArray<string>;
   readonly isPullRequest?: boolean;
   readonly openBlockers?: number;
+  readonly body?: string;
+  readonly state?: "open" | "closed";
+  readonly createdAtMillis?: number;
 }
 
 interface SeedComment {
@@ -124,6 +127,9 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         assignees: issue.assignees ?? [],
         isPullRequest: issue.isPullRequest ?? false,
         openBlockers: issue.openBlockers ?? 0,
+        body: issue.body ?? "",
+        state: issue.state ?? "open",
+        createdAtMillis: issue.createdAtMillis ?? 0,
       }),
     ),
   );
@@ -158,6 +164,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     authenticatedLogin: () => Effect.succeed(bot.login),
     listIssues: () => Ref.get(issuesRef),
     listPulls: () => Effect.succeed([...pulls]),
+    issuePullReferences: () => Effect.succeed([]),
     pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
     listComments: (_repo, number) =>
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
