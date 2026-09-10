@@ -1,0 +1,56 @@
+packages/engine/src/github/performance-issue-filer.ts
+  s_e8b39c832cbe56::t_3a7b7352ab7be0 47-49
+  s_e8b39c832cbe56::t_c8e54f33bd6448 82-85,215-216,245,264,288
+  s_e8b39c832cbe56::t_708a218421bbc2 286-287,289
+  s_e8b39c832cbe56::t_a3650bdb08ae7c 284
+  s_e8b39c832cbe56::t_eb7850514f572d 115-116
+  s_e8b39c832cbe56::t_8760b18c1efa2b 34-36,38
+  s_e8b39c832cbe56::t_cbd1795fd79be8 134,143
+  s_e8b39c832cbe56::t_23626482191c61 268,312-313,315-316
+  s_e8b39c832cbe56::t_a897fa576dc438 107-113,118-132,151-152,154-157,171-173
+  s_e8b39c832cbe56::t_786a4cce5f1933 20,50
+  s_e8b39c832cbe56::t_c3d895463b87c8 175,192-207
+  s_e8b39c832cbe56::t_4ef60b3424386c 80,141,254
+  s_e8b39c832cbe56::t_57815d713c2960 231,234
+  s_e8b39c832cbe56::t_8d8b2eeca136bf 42,51,54-71,73,76-77,87-97,150,165
+  s_e8b39c832cbe56::t_2528669d10b6a6 160-161
+  s_e8b39c832cbe56::t_410f832ef78583 214,246,262,280,314
+  s_e8b39c832cbe56::t_da3b02d10ea185 232-233
+  s_e8b39c832cbe56::t_09244bec589b35 265
+  s_e8b39c832cbe56::t_cd54f370702c5d 1,4,31-33,37,40-41,43,45,135,144,153,168,221-222,293
+  s_e8b39c832cbe56::t_e3a47649100f2d 133,136-137,139-140,142,145-149,158-159,162-164,166-167,169-170,208,210-213,217-220,236,241-244,248-253,255-259,261,263,270-279,308,326
+  s_e8b39c832cbe56::t_c617c9ec0c2798 294-301
+  s_e8b39c832cbe56::t_15beb7be952a3e 5,7-12,138,209,237-240,247,266,281,285,327
+  s_e8b39c832cbe56::t_36a8428d950047 114,117,223-230,235,260,282
+  s_e8b39c832cbe56::t_147b79ecdb3ad3 19
+  s_e8b39c832cbe56::t_c8be0330966b62 39
+  s_e8b39c832cbe56::t_e8177440783eda 174
+  s_e8b39c832cbe56::t_ae55de0d310acd 267
+  s_e8b39c832cbe56::t_a25d58d4c3f60c 269
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_e8b39c832cbe56::t_70c541d83bc552 114
+  s_e8b39c832cbe56::t_a897fa576dc438 7,83-85,87,90-92,94-101,123
+  s_e8b39c832cbe56::t_6f547f63933fbc 1,5,13,19,122
+  s_e8b39c832cbe56::t_f288ff78b50ee2 14-18,62,73,75-76,93,115
+  s_e8b39c832cbe56::t_f8925d9aece4df 42-46,58-59,63,77-78
+  s_e8b39c832cbe56::t_f24069d31a0d67 4,86,88-89,102
+  s_e8b39c832cbe56::t_2528669d10b6a6 105-113,116-121,124-125
+  s_e8b39c832cbe56::t_e8f7108a84eac8 103-104
+  s_e8b39c832cbe56::t_abd5fa46b01e1c 126-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2e6e8eaf846fd971da020f326c05b5832c53ca43",
+  "prompts": {},
+  "sessions": {
+    "s_e8b39c832cbe56": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087db-c632-77b1-93bf-92101f0df387",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
