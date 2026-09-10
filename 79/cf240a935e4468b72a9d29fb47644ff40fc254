@@ -1,0 +1,28 @@
+packages/engine/src/performance-regression-sensor.ts
+  s_e8b39c832cbe56::t_f52eedc41772e0 83,90,121-122,239,251
+  s_e8b39c832cbe56::t_99f2e28d6dd1f1 87-88,237,247-250,252-254,260-268,276-277,287,317
+  s_e8b39c832cbe56::t_525f76e086bdf0 269-275
+packages/engine/src/performance-regression-sensor.test.ts
+  s_e8b39c832cbe56::t_0075378a43261c 54-64
+  s_e8b39c832cbe56::t_7e020ebf6cbbee 276,280,282-289
+  s_e8b39c832cbe56::t_0608f95c076d84 169-178,277-279,281,290-293
+  s_e8b39c832cbe56::t_63fc26770f3bb5 179-181
+  s_e8b39c832cbe56::t_36b2177241a30b 294-295
+  s_e8b39c832cbe56::t_7e87d0f99780d6 182-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "79cf240a935e4468b72a9d29fb47644ff40fc254",
+  "prompts": {},
+  "sessions": {
+    "s_e8b39c832cbe56": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087db-c632-77b1-93bf-92101f0df387",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
