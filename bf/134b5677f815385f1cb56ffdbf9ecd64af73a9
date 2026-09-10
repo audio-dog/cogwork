@@ -1,0 +1,77 @@
+packages/engine/src/index.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 21
+packages/engine/src/commands.test.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 33,266-279,295,298-321,1370,1494,1519-1572,1620,1663
+packages/engine/src/executor.test.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 1466
+packages/engine/src/operation-resolution.test.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 1-273
+packages/engine/src/run-ledger.test.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 17-22,127-137
+  s_d8d73824e17678::t_ef65c0a57a7253 138-139
+apps/desktop/package.json
+  s_d8d73824e17678::t_26d3cb0f318e48 54
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 5-7,10,19,25,52-56,58-60,62-67
+apps/desktop/src/main/wait-for-socket.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 1,5-14,22-26
+scripts/test-performance-filer.test.mjs
+  s_d8d73824e17678::t_26d3cb0f318e48 1-226
+packages/engine/src/run-plan.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 745-748,794,798-801,938-951
+packages/engine/src/run-plan.test.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 407,422-426,455,467-470
+AGENTS.md
+  s_d8d73824e17678::t_26d3cb0f318e48 41-45
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 4,29,161-165,174,492-514
+  s_d8d73824e17678::t_463f285e1c3415 515-517
+packages/engine/src/run-ledger.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 34-37,39,44-45,53,185,193
+package.json
+  s_d8d73824e17678::t_26d3cb0f318e48 23
+packages/engine/src/control-store.test.ts
+  s_d8d73824e17678::t_dde38e0c0fab43 255
+  s_d8d73824e17678::t_26d3cb0f318e48 249,256-270,274-284,289-305
+packages/engine/src/run-recorder.test.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 295,301,304
+packages/engine/src/commands.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 43,579
+apps/desktop/src/main/engine-supervisor.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 30,37,449-458,494
+apps/desktop/src/main/daemon-bridge.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 2,4,11
+packages/engine/src/run-recorder.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 11,66
+scripts/test-performance-filer.mjs
+  s_d8d73824e17678::t_26d3cb0f318e48 1-238
+apps/cli/src/ledger.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 185-188,242,251-255,304,306
+packages/engine/src/operation-resolution.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 1-617
+packages/engine/src/executor.ts
+  s_d8d73824e17678::t_26d3cb0f318e48 86-91,1618,1631
+  s_d8d73824e17678::t_d654276d59dbc8 85
+scripts/test-performance-baseline.json
+  s_d8d73824e17678::t_26d3cb0f318e48 1-4
+turbo.json
+  s_d8d73824e17678::t_26d3cb0f318e48 3
+pnpm-lock.yaml
+  s_d8d73824e17678::t_62864f69409af9 281-283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bf134b5677f815385f1cb56ffdbf9ecd64af73a9",
+  "prompts": {},
+  "sessions": {
+    "s_d8d73824e17678": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0884a-d4ca-7f73-9415-152677bcef9a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
