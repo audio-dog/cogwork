@@ -478,6 +478,23 @@ describe("owned tools", () => {
     }),
   );
 
+  it.effect("searches a file base", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* openSandbox();
+      yield* writeFile(sandbox, { path: "src/match.ts", content: "target\n" });
+
+      const globbed = yield* runGlob(sandbox, { pattern: "*.ts", path: "src/match.ts" });
+      const grepped = yield* runGrep(sandbox, {
+        pattern: "target",
+        path: "src/match.ts",
+        include: "*.ts",
+      });
+
+      assert.deepStrictEqual(globbed.matches, ["src/match.ts"]);
+      assert.deepStrictEqual(grepped.matches, [{ path: "src/match.ts", line: 1, text: "target" }]);
+    }),
+  );
+
   it.effect("applies each ignore source to search base paths", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();

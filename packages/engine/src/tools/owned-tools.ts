@@ -73,6 +73,7 @@ const relativeSearchPath = (path: string) => (path.startsWith("./") ? path.slice
 const pathWithinBase = (base: string, path: string) => {
   const relative = relativeSearchPath(path);
   if (base === "") return relative;
+  if (relative === base) return relative.slice(relative.lastIndexOf("/") + 1);
   if (!relative.startsWith(`${base}/`)) return null;
   return relative.slice(base.length + 1);
 };
