@@ -1,0 +1,86 @@
+apps/desktop/src/main/index.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 56
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-292
+packages/engine/src/performance-issue-filer.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-169
+packages/engine/src/performance-metrics.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 14-20,22,25,28,37
+packages/engine/src/daemon-composition.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 31,47-49,199-214,256-271
+packages/engine/src/github/performance-issue-filer.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-332
+packages/engine/CONTEXT.md
+  s_cff36ee3a37fb2::t_82de1b9dd08393 13,17
+apps/desktop/src/main/engine-command.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 17,20-24,30,49
+packages/engine/src/performance-health-source.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-25
+packages/engine/src/github/index.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 4
+configs/lint/tests/test-count-reporter.test.mjs
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-20
+packages/engine/src/performance-regression-sensor.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-389
+configs/lint/turbo.json
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-17
+packages/engine/src/index.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 22-23,25
+packages/engine/src/engine.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 42-43,994-999,1027-1028,1066-1067
+.github/workflows/test-suite-comparison.yml
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-44
+packages/contracts/src/issue-tracker.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 11
+packages/engine/src/performance-issue-filer.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-237
+apps/cli/src/performance-health.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-86
+packages/engine/src/performance-regression-sensor.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-395
+apps/desktop/src/main/engine-command.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 77-88
+configs/lint/tests/test-count-reporter.mjs
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-13
+packages/engine/src/github/client.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 55-64,119-122,206-209,215,239-264,355-395,453-458,460-468,549-552,570,718,739,744,768-774,781-785,846-848,859-869,890-897,977-1003,1007-1044,1082,1085-1086,1089,1102-1106,1143,1183-1184
+configs/lint/tests/fixtures/test-count-reporter.mjs
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-4
+packages/engine/src/github/github-helpers.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 106-108
+apps/cli/src/performance-health.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-96
+packages/engine/src/github/client.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 134-136,160-258,599-621,632-634,639-650,667,673,675,718-719
+configs/lint/package.json
+  s_cff36ee3a37fb2::t_82de1b9dd08393 1-9
+packages/engine/src/github/github.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 57-59,136-138,166-181,203,221-222
+packages/engine/src/daemon.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 14,27,73,75-78,347-350,380-384,412-413,434-437,439-447,449,508,518,528,537,552-563,583
+packages/engine/src/github/graphql.test.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 2-8,53-80
+  s_cff36ee3a37fb2::t_c87efbeb6f445f 81-83
+apps/cli/src/rpc.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 7,9,32-33,42-43,342-349,363-366
+apps/cli/src/commands.ts
+  s_cff36ee3a37fb2::t_82de1b9dd08393 79-82,282,610,612-627
+pnpm-lock.yaml
+  s_cff36ee3a37fb2::t_d99e641d397276 353-354
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "af467146e6d1abb5f7d5ee60ea2a16a98665bb7f",
+  "prompts": {},
+  "sessions": {
+    "s_cff36ee3a37fb2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c12-e4ef-7f50-b0f1-12ad014890f3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
