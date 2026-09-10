@@ -1,4 +1,5 @@
-import type { Connection } from "@cogwork/contracts";
+import type { Connection, ConnectionBindingId, GitHubPriorityField, WorkspaceId } from "@cogwork/contracts";
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Button } from "@cogwork/ui/components/button";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldTitle } from "@cogwork/ui/components/field";
 import { Input } from "@cogwork/ui/components/input";
@@ -10,10 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogwork/ui/components/select";
+import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Switch } from "@cogwork/ui/components/switch";
 import { Textarea } from "@cogwork/ui/components/textarea";
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
+import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use } from "react";
+import { githubPriorityFieldsAtom } from "../daemon/atoms";
 import type { WorkspaceRecordDraft } from "../features/workspace-record";
 
 export type PatchDraft = (next: Partial<WorkspaceRecordDraft>) => void;
@@ -21,7 +26,7 @@ export type PatchDraft = (next: Partial<WorkspaceRecordDraft>) => void;
 export interface WorkspaceRecordValue {
   readonly state: { readonly draft: WorkspaceRecordDraft; readonly connections: readonly Connection[] };
   readonly actions: { readonly patch: PatchDraft };
-  readonly meta: { readonly disabled: boolean };
+  readonly meta: { readonly disabled: boolean; readonly workspace: WorkspaceId | null };
 }
 
 const WorkspaceRecordContext = createContext<WorkspaceRecordValue | null>(null);
@@ -209,6 +214,102 @@ function IdentityRows() {
   );
 }
 
+export const priorityFieldItems = (fields: readonly GitHubPriorityField[], selected: string) => {
+  const selectedIsAvailable = fields.some((field) => field.id.toString() === selected);
+  const unavailable =
+    selected === "" || selectedIsAvailable
+      ? []
+      : [{ value: selected, label: `Unavailable field #${selected}` }];
+  return [
+    { value: "none", label: "Do not order by priority" },
+    ...unavailable,
+    ...fields.map((field) => ({ value: field.id.toString(), label: field.name })),
+  ];
+};
+
+function PriorityFieldSelect({ fields }: { readonly fields: readonly GitHubPriorityField[] }) {
+  const {
+    state: { draft },
+    actions: { patch },
+    meta: { disabled },
+  } = useWorkspaceRecord();
+  const items = priorityFieldItems(fields, draft.priorityFieldId);
+  return (
+    <Select
+      items={items}
+      value={draft.priorityFieldId || "none"}
+      disabled={disabled}
+      onValueChange={(value) => patch({ priorityFieldId: !value || value === "none" ? "" : value })}
+    >
+      <SelectTrigger aria-label="Priority issue field" className="w-80">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function LivePriorityFieldSelect({
+  workspace,
+  connection,
+}: {
+  readonly workspace: WorkspaceId;
+  readonly connection: ConnectionBindingId;
+}) {
+  const atom = githubPriorityFieldsAtom(workspace, connection);
+  const result = useAtomValue(atom);
+  const refresh = useAtomRefresh(atom);
+  if (result._tag === "Success") return <PriorityFieldSelect fields={result.value} />;
+  if (result._tag !== "Failure") return <Skeleton className="h-9 w-80" />;
+  return (
+    <FieldGroup className="w-auto gap-2">
+      <PriorityFieldSelect fields={[]} />
+      <Alert variant="destructive" className="max-w-80">
+        <AlertTitle>Could not load priority fields</AlertTitle>
+        <AlertDescription>{Cause.pretty(result.cause)}</AlertDescription>
+        <Button type="button" variant="outline" size="sm" onClick={refresh}>
+          Try again
+        </Button>
+      </Alert>
+    </FieldGroup>
+  );
+}
+
+function PriorityFieldRow() {
+  const {
+    state: { draft, connections },
+    meta: { disabled, workspace },
+  } = useWorkspaceRecord();
+  if (draft.issueTrackerType !== "github") return null;
+  const connection = connections.find(({ id }) => id === draft.issueTrackerConnectionId)?.id ?? "unbound";
+  return (
+    <Field orientation="responsive" data-disabled={disabled}>
+      <FieldContent>
+        <FieldTitle>Priority</FieldTitle>
+        <FieldDescription>
+          Optional organization issue field used to order work within a stage.
+        </FieldDescription>
+      </FieldContent>
+      {workspace ? (
+        <LivePriorityFieldSelect workspace={workspace} connection={connection} />
+      ) : (
+        <FieldGroup className="w-auto gap-2">
+          <PriorityFieldSelect fields={[]} />
+          <FieldDescription>Register this workspace to load fields.</FieldDescription>
+        </FieldGroup>
+      )}
+    </Field>
+  );
+}
+
 function IssueTrackerRows() {
   const {
     state: { draft, connections },
@@ -279,16 +380,7 @@ function IssueTrackerRows() {
           </Field>
         </FieldGroup>
       ) : null}
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Priority project</FieldTitle>
-          <FieldDescription>Optional GitHub project number and field.</FieldDescription>
-        </FieldContent>
-        <FieldGroup className="w-auto">
-          <DraftInput field="priorityProject" label="Priority project number" type="number" />
-          <DraftInput field="priorityField" label="Priority field" />
-        </FieldGroup>
-      </Field>
+      <PriorityFieldRow />
     </FieldGroup>
   );
 }

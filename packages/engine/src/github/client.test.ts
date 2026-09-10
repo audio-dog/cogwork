@@ -1,9 +1,10 @@
-import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
+import { GitHubIssueFieldId, issueTrackerErrorIsPermanent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -18,6 +19,8 @@ const repo: GitHubRepoRef = {
   name: "cogwork",
   tokenEnv: "GITHUB_TOKEN",
 };
+const priorityFieldId = Schema.decodeSync(GitHubIssueFieldId)(42);
+const secondaryFieldId = Schema.decodeSync(GitHubIssueFieldId)(43);
 
 const jsonResponse = (body: unknown = {}, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -124,6 +127,7 @@ describe("GitHub client", () => {
 
   it.effect("lists every open issue across GitHub pages", () => {
     const issue = (number: number) => ({
+      node_id: `I_issue_${number}`,
       number,
       title: `issue ${number}`,
       labels: [],
@@ -143,6 +147,7 @@ describe("GitHub client", () => {
       const issues = yield* client.listIssues(repo);
       assert.strictEqual(issues.length, 101);
       assert.strictEqual(issues.at(-1)?.number, 101);
+      assert.strictEqual(issues.at(-1)?.nodeId, "I_issue_101");
       assert.deepStrictEqual(
         fetch.mock.calls.map(([input]) =>
           new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
@@ -157,6 +162,7 @@ describe("GitHub client", () => {
       Promise.resolve(
         jsonResponse([
           {
+            node_id: "I_issue_416",
             number: 416,
             title: "Performance regression",
             body: "<!-- cogwork:selfperf fingerprint=daemon.heap-headroom.below -->",
@@ -177,6 +183,7 @@ describe("GitHub client", () => {
       assert.strictEqual(request.searchParams.get("labels"), "origin:selfperf");
       assert.deepStrictEqual(issues, [
         {
+          nodeId: "I_issue_416",
           number: 416,
           title: "Performance regression",
           url: "https://github.com/colonylabs/cogwork/issues/416",
@@ -230,7 +237,15 @@ describe("GitHub client", () => {
   it.effect("rejects issue history without state and creation time", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(
-        jsonResponse([{ number: 416, title: "Performance regression", labels: [], body: null }]),
+        jsonResponse([
+          {
+            node_id: "I_issue_416",
+            number: 416,
+            title: "Performance regression",
+            labels: [],
+            body: null,
+          },
+        ]),
       ),
     );
 
@@ -238,6 +253,156 @@ describe("GitHub client", () => {
       const client = yield* GitHubClient;
       const error = yield* Effect.flip(client.listIssues(repo, { state: "all" }));
       assert.strictEqual(error.reason, "unavailable");
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists issue field values in one GraphQL request and keeps partial results", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse({
+          data: {
+            nodes: [
+              {
+                id: "I_issue_454",
+                number: 454,
+                issueFieldValues: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    {
+                      __typename: "IssueFieldSingleSelectValue",
+                      name: "Urgent",
+                      field: { fullDatabaseId: "42" },
+                    },
+                    { __typename: "IssueFieldDateValue" },
+                  ],
+                },
+              },
+              null,
+            ],
+          },
+        }),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      assert.deepStrictEqual(
+        yield* client.listIssueFieldValues(repo, ["I_issue_454", "I_missing"]),
+        new Map([[454, new Map([[priorityFieldId, "Urgent"]])]]),
+      );
+      assert.strictEqual(fetch.mock.calls.length, 1);
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.url, "https://api.github.com/graphql");
+      const body = yield* Effect.promise(() => request.json());
+      assert.deepStrictEqual(body.variables, { ids: ["I_issue_454", "I_missing"] });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists every issue field value page", () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            nodes: [
+              {
+                id: "I_issue_454",
+                number: 454,
+                issueFieldValues: {
+                  pageInfo: { hasNextPage: true, endCursor: "cursor-454" },
+                  nodes: [
+                    {
+                      __typename: "IssueFieldSingleSelectValue",
+                      name: "High",
+                      field: { fullDatabaseId: "43" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            issue0: {
+              id: "I_issue_454",
+              number: 454,
+              issueFieldValues: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    __typename: "IssueFieldSingleSelectValue",
+                    name: "Urgent",
+                    field: { fullDatabaseId: "42" },
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      assert.deepStrictEqual(
+        yield* client.listIssueFieldValues(repo, ["I_issue_454"]),
+        new Map([
+          [
+            454,
+            new Map([
+              [secondaryFieldId, "High"],
+              [priorityFieldId, "Urgent"],
+            ]),
+          ],
+        ]),
+      );
+      assert.strictEqual(fetch.mock.calls.length, 2);
+      const bodies = yield* Effect.forEach(fetch.mock.calls, ([input, init]) => {
+        const request = new Request(input, init);
+        return Effect.promise(() => request.json());
+      });
+      assert.deepStrictEqual(
+        bodies.map(({ variables }) => variables),
+        [{ ids: ["I_issue_454"] }, { id0: "I_issue_454", cursor0: "cursor-454" }],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists compatible organization issue fields by stable ID", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([
+          { id: 42, name: "Priority", data_type: "single_select" },
+          { id: 43, name: "Target date", data_type: "date" },
+        ]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      assert.deepStrictEqual(yield* client.listPriorityFields(repo), [{ id: 42, name: "Priority" }]);
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.url, "https://api.github.com/orgs/colonylabs/issue-fields");
+      assert.strictEqual(request.headers.get("x-github-api-version"), "2026-03-10");
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("names the permission needed when the issue field catalog is unavailable", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(jsonResponse({ message: "Resource not accessible by integration" }, 403)),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(client.listPriorityFields(repo));
+      assert.include(error.message, "read:org or Issue Fields read permission");
+      assert.isFalse(error.retryable ?? true);
     }).pipe(withFetchClient(fetch));
   });
 
@@ -553,32 +718,6 @@ describe("GitHub client", () => {
   it.effect("retries an idempotent write rejected with a transient HTTP status", () =>
     transientWrite(408, (client) => client.editComment(repo, 287, "claim")),
   );
-
-  it.effect("bounds project priority pagination as one operation", () => {
-    const page = {
-      data: {
-        repositoryOwner: {
-          projectV2: {
-            items: {
-              pageInfo: { hasNextPage: true, endCursor: "same-cursor" },
-              nodes: [],
-            },
-          },
-        },
-      },
-    };
-    const { client: httpClient, requests } = delayedJsonClient(() => page);
-
-    return Effect.gen(function* () {
-      const client = yield* GitHubClient;
-      const error = yield* afterPaginationDeadline(
-        Effect.flip(client.projectPriorities(repo, { project: 1 })),
-      );
-      assert.strictEqual(error.reason, "unavailable");
-      assert.include(error.message, "pagination timed out");
-      assert.isAbove(requests.mock.calls.length, 1);
-    }).pipe(withHttpClient(httpClient));
-  });
 
   it.effect("bounds pull closing-reference pagination as one operation", () => {
     const page = {

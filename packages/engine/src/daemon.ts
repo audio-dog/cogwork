@@ -36,6 +36,7 @@ import {
   cancelRun,
   deregisterWorkspace,
   establishConnection,
+  getGitHubPriorityFields,
   handBack,
   installPlugin,
   rebindWorkspace,
@@ -288,6 +289,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const picture = yield* store.picture;
     return yield* harnessOverview(picture.harnessSettings);
   }),
+  GetGitHubPriorityFields: getGitHubPriorityFields,
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
     return yield* ledger.listRuns(50);
@@ -404,6 +406,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     plugins,
     connections,
     credentials,
+    githubClient,
     daemonInfoLayer,
     issueTracker,
     adapters.performanceHealth,

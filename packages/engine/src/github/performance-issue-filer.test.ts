@@ -35,6 +35,7 @@ const issue = (
   state: "open" | "closed" = "open",
   authorLogin = "cogwork-bot",
 ) => ({
+  nodeId: `I_issue_${number}`,
   number,
   title: `Issue ${number}`,
   url: `https://github.com/colonylabs/cogwork/issues/${number}`,
@@ -214,6 +215,8 @@ it.effect("retries creation after a transient failure that did not report accept
                   authenticatedLogin: () => Effect.succeed("cogwork-bot"),
                   listIssues: () =>
                     Ref.get(calls).pipe(Effect.map((count) => (count >= 2 ? [issue(2, marker)] : []))),
+                  listIssueFieldValues: unexpectedClientCall,
+                  listPriorityFields: unexpectedClientCall,
                   issuePullReferences: noPullReferences,
                   addLabel: () => Effect.void,
                   createPerformanceComment: unexpectedClientCall,
@@ -222,7 +225,6 @@ it.effect("retries creation after a transient failure that did not report accept
                   listComments: unexpectedClientCall,
                   listReviewComments: unexpectedClientCall,
                   listReviews: unexpectedClientCall,
-                  projectPriorities: unexpectedClientCall,
                   listCheckRuns: unexpectedClientCall,
                   createIssue: unexpectedClientCall,
                   createPull: unexpectedClientCall,

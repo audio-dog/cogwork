@@ -61,3 +61,23 @@ describe("workspace account bindings", () => {
     assert.isFalse("actorLogin" in encoded);
   });
 });
+
+describe("GitHub priority source", () => {
+  it("stores the stable organization issue field ID", () => {
+    const configured = Schema.decodeSync(IssueTrackerConfig)({
+      type: "github",
+      priority: { field: 42 },
+    });
+
+    assert.deepStrictEqual(configured.priority, { field: 42 });
+  });
+
+  it("rejects typed project coordinates", () => {
+    assert.throws(() =>
+      Schema.decodeUnknownSync(IssueTrackerConfig)({
+        type: "github",
+        priority: { project: 1, field: "Priority" },
+      }),
+    );
+  });
+});

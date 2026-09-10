@@ -3,6 +3,7 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import {
+  ConnectionBindingId,
   ConnectionEstablishment,
   ConnectionFailure,
   ConnectionId,
@@ -33,6 +34,7 @@ import {
 } from "./settings";
 import { TriageRole } from "./triage";
 import {
+  GitHubPriorityField,
   WorkspaceRegistration,
   WorkspaceRegistrationError,
   WorkspaceRegistryError,
@@ -61,6 +63,12 @@ export const GetConnections = Rpc.make("GetConnections", {
 export const GetHarnesses = Rpc.make("GetHarnesses", {
   success: HarnessOverview,
   error: ControlStoreFailure,
+});
+
+export const GetGitHubPriorityFields = Rpc.make("GetGitHubPriorityFields", {
+  payload: { workspace: WorkspaceId, connection: ConnectionBindingId },
+  success: Schema.Array(GitHubPriorityField),
+  error: Schema.Union([WorkspaceRegistryError, IssueTrackerError]),
 });
 
 export const ListRuns = Rpc.make("ListRuns", { success: Schema.Array(RunSummary) });
@@ -93,6 +101,7 @@ export const DaemonQueries = RpcGroup.make(
   GetPlugins,
   GetConnections,
   GetHarnesses,
+  GetGitHubPriorityFields,
   ListRuns,
   GetRunEvents,
   ResolveWatchTarget,
