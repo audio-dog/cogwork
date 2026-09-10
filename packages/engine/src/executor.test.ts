@@ -1885,7 +1885,7 @@ describe("Executor.execute", () => {
         plan?.instructions.every((instruction) => instruction.content !== request?.plan.messages[0]?.content),
       );
 
-      const events = firstRun ? yield* ledger.events(firstRun.id) : [];
+      const events = firstRun ? yield* ledger.events(firstRun.id).pipe(Stream.runCollect) : [];
       assert.strictEqual(events.length, successEvents.length);
       assert.deepStrictEqual(
         events.map((e) => e.seq),
@@ -1916,7 +1916,10 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
       assert.strictEqual(run?.eventCount, 1);
-      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+      assert.strictEqual(
+        run ? (yield* ledger.events(run.id).pipe(Stream.runCollect)).at(-1)?.type : null,
+        "RUN_FINISHED",
+      );
     }).pipe(
       Effect.provide(provide([runner([{ type: "CUSTOM", content: 1n } satisfies AgUiEvent, finished])])),
     ),
@@ -1931,7 +1934,10 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
       assert.strictEqual(run?.eventCount, successEvents.length);
-      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+      assert.strictEqual(
+        run ? (yield* ledger.events(run.id).pipe(Stream.runCollect)).at(-1)?.type : null,
+        "RUN_FINISHED",
+      );
     }).pipe(
       Effect.provide(
         provide([
@@ -2012,7 +2018,7 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       const runs = yield* ledger.listRuns(10);
-      const events = runs[0] ? yield* ledger.events(runs[0].id) : [];
+      const events = runs[0] ? yield* ledger.events(runs[0].id).pipe(Stream.runCollect) : [];
       assert.include(events.at(-1)?.data ?? "", '"finishReason":"failed"');
     }).pipe(Effect.provide(provide([runner(malformed)])));
   });
@@ -2081,7 +2087,7 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "failed");
-      const events = run ? yield* ledger.events(run.id) : [];
+      const events = run ? yield* ledger.events(run.id).pipe(Stream.runCollect) : [];
       assert.isTrue(events.some((event) => event.type === "RUN_FINISHED"));
     }).pipe(Effect.provide(provide([silentRunner])));
   });
@@ -2096,7 +2102,7 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       const runs = yield* ledger.listRuns(10);
       const id = runs[0]?.id;
-      const events = id ? yield* ledger.events(id) : [];
+      const events = id ? yield* ledger.events(id).pipe(Stream.runCollect) : [];
       assert.isTrue(events.some((event) => event.type === "RUN_FINISHED"));
     }).pipe(Effect.provide(provide([failingRunner(error)])));
   });
@@ -3122,7 +3128,7 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
-      const events = run ? yield* ledger.events(run.id) : [];
+      const events = run ? yield* ledger.events(run.id).pipe(Stream.runCollect) : [];
       assert.isFalse(events.some((event) => event.data.includes("token-for-linear")));
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
@@ -3547,7 +3553,10 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-prev");
       assert.strictEqual(run?.status, "failed");
-      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+      assert.strictEqual(
+        run ? (yield* ledger.events(run.id).pipe(Stream.runCollect)).at(-1)?.type : null,
+        "RUN_FINISHED",
+      );
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
@@ -3579,7 +3588,10 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-prev");
       assert.strictEqual(run?.status, "failed");
-      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+      assert.strictEqual(
+        run ? (yield* ledger.events(run.id).pipe(Stream.runCollect)).at(-1)?.type : null,
+        "RUN_FINISHED",
+      );
     }).pipe(Effect.provide(provide([capturingRunner(successEvents)])));
   });
 

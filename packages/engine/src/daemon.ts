@@ -164,13 +164,13 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   const subscription = yield* bus.subscribe();
   const run = yield* ledger.getRun(id);
   if (run === null) return Stream.empty;
-  const history = yield* recorder.replay(run);
-  const lastSeq = history.at(-1)?.seq ?? -1;
+  const historyHead = (yield* ledger.latestSeq(id)) ?? -1;
+  const history = recorder.replay(run).pipe(Stream.takeWhile((item) => item.seq <= historyHead));
   const live = runActivityStream(Stream.fromSubscription(subscription)).pipe(
-    Stream.filter((item) => item.runId === id && item.seq > lastSeq),
+    Stream.filter((item) => item.runId === id && item.seq > historyHead),
   );
   const settled = run.status !== "running";
-  const base = settled ? Stream.fromIterable(history) : Stream.concat(Stream.fromIterable(history), live);
+  const base = settled ? history : Stream.concat(history, live);
   return base.pipe(Stream.takeUntil(isTerminalActivity));
 });
 
@@ -296,14 +296,14 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetRunEvents: Effect.fn("Daemon.GetRunEvents")(function* (payload) {
     const ledger = yield* RunLedger;
-    return yield* ledger.events(payload.id);
+    return yield* ledger.events(payload.id).pipe(Stream.runCollect, Effect.orDie);
   }),
   ResolveWatchTarget: Effect.fn("Daemon.ResolveWatchTarget")(function* (payload) {
     const ledger = yield* RunLedger;
     const run = yield* ledger.resolveWatchTarget(payload.workItem);
     return run?.id ?? null;
   }),
-  WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)),
+  WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)).pipe(Stream.orDie),
   WatchEvents: () => Stream.unwrap(watchEvents()),
   CancelRun: cancelRun,
   HandBack: handBack,
