@@ -14,14 +14,20 @@ export interface ResolveEngineCommandInput {
   readonly nodeBinary?: string;
   readonly engineEntry?: string;
   readonly profiling?: boolean;
+  readonly performanceWorkspace?: string;
 }
 
-const daemonArgs = (socketPath: string, drainGraceSeconds: number): readonly string[] => [
+const daemonArgs = (
+  socketPath: string,
+  drainGraceSeconds: number,
+  performanceWorkspace: string | undefined,
+): readonly string[] => [
   "daemon",
   "--socket",
   socketPath,
   "--drain-grace",
   String(drainGraceSeconds),
+  ...(performanceWorkspace ? ["--performance-workspace", performanceWorkspace] : []),
 ];
 
 const diagnosticArgs = (directory: string, profiling: boolean): readonly string[] => [
@@ -40,7 +46,7 @@ export const resolveEngineShutdownBudgets = (drainGraceSeconds = defaultDrainGra
 
 export const resolveEngineCommand = (input: ResolveEngineCommandInput): EngineCommand => {
   const drainGraceSeconds = input.drainGraceSeconds ?? defaultDrainGraceSeconds;
-  const args = daemonArgs(input.socketPath, drainGraceSeconds);
+  const args = daemonArgs(input.socketPath, drainGraceSeconds, input.performanceWorkspace);
   const diagnostics = diagnosticArgs(dirname(input.socketPath), input.profiling ?? false);
 
   if (input.packaged) {

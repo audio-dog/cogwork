@@ -52,6 +52,7 @@ const makeSupervisorLayer = () => {
         engineEntry: process.env.COGWORK_ENGINE_ENTRY,
         drainGraceSeconds: shutdown.drainGraceSeconds,
         profiling: windowPreferences.get().profiling,
+        performanceWorkspace: process.env.COGWORK_PERFORMANCE_WORKSPACE,
       }),
     socketPath,
     probe: isDaemonListening,
