@@ -1,0 +1,21 @@
+configs/sensor/test-measure.test.mjs
+  s_cff36ee3a37fb2::t_3754c42fd6804a 156
+scripts/test-measure-summary.mjs
+  s_cff36ee3a37fb2::t_bd52c9998d2432 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "26a42d261d6cab8aa199b9a57441c3c7d519f247",
+  "prompts": {},
+  "sessions": {
+    "s_cff36ee3a37fb2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c12-e4ef-7f50-b0f1-12ad014890f3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
