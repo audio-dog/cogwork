@@ -33,7 +33,6 @@ import {
   controlStoreWriteGateWaitDuration,
   readControlStore,
 } from "./control-store";
-import { createStatements } from "./control-store-create.gen";
 
 const pushSchemaMock = vi.hoisted(() => vi.fn());
 
@@ -78,10 +77,15 @@ const poke = (storePath: string, statements: string) =>
     (db) => Effect.sync(() => db.close()),
   );
 
+const convergeStore = (storePath: string) => withStore(storePath, () => Effect.void);
+
+const pokeConvergedStore = (storePath: string, statements: string) =>
+  withStore(storePath, () => poke(storePath, statements));
+
 const pokeRenameShapedStore = (storePath: string) =>
-  poke(
+  pokeConvergedStore(
     storePath,
-    `${createStatements.join("\n").replace("`source_control` text", "`source_control_old` text")}
+    `ALTER TABLE workspaces RENAME COLUMN source_control TO source_control_old;
      INSERT INTO workspaces (
        id, name, checkout_path, issue_tracker, source_control_old, linear_history
      ) VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 'original', 0);`,
@@ -97,8 +101,24 @@ const query = (storePath: string, sql: string) =>
 const schemaOf = (storePath: string) =>
   query(
     storePath,
-    "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' OR name LIKE 'sqlite_autoindex_%' ORDER BY type, name",
+    "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
   );
+
+const expectedSchemaObjects = [
+  { type: "index", name: "run_events_at" },
+  { type: "index", name: "runs_started_at" },
+  { type: "table", name: "connections" },
+  { type: "table", name: "contribution_settings" },
+  { type: "table", name: "daemon_limits" },
+  { type: "table", name: "harness_settings" },
+  { type: "table", name: "operation_settings" },
+  { type: "table", name: "plugin_installs" },
+  { type: "table", name: "run_events" },
+  { type: "table", name: "run_plans" },
+  { type: "table", name: "runs" },
+  { type: "table", name: "sessions" },
+  { type: "table", name: "workspaces" },
+];
 
 const modeOf = (path: string) =>
   Effect.map(
@@ -193,16 +213,24 @@ const controlStoreBackups = (names: ReadonlyArray<string>) =>
 afterEach(() => pushSchemaMock.mockClear());
 
 layer(NodeServices.layer)((it) => {
-  it.effect("converges an empty store to the generated create schema", () =>
+  it.effect("converges an empty store directly from the schema", () =>
     Effect.gen(function* () {
-      const { dir, storePath } = yield* temporaryStore();
-      const path = yield* Path.Path;
-      const generatedPath = path.join(dir, "generated.db");
-      yield* poke(generatedPath, createStatements.join("\n"));
+      const { storePath } = yield* temporaryStore();
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-      assert.deepStrictEqual(yield* schemaOf(storePath), yield* schemaOf(generatedPath));
+      const schema = yield* schemaOf(storePath);
+      assert.deepStrictEqual(
+        schema.map(({ type, name }) => ({ type, name })),
+        expectedSchemaObjects,
+      );
+      const workspaces = schema.find(({ name }) => name === "workspaces");
+      if (typeof workspaces?.sql !== "string") return assert.fail("expected workspaces schema");
+      assert.include(workspaces.sql, "`source_control` text");
+      const runsStartedAt = schema.find(({ name }) => name === "runs_started_at");
+      if (typeof runsStartedAt?.sql !== "string") return assert.fail("expected runs_started_at schema");
+      assert.include(runsStartedAt.sql, '"started_at" desc');
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* schemaOf(storePath), schema);
     }),
   );
 
@@ -222,10 +250,9 @@ layer(NodeServices.layer)((it) => {
       Effect.gen(function* () {
         const { storePath } = yield* temporaryStore();
         const logProbe = yield* ControlStoreLogProbe;
-        yield* poke(
+        yield* pokeConvergedStore(
           storePath,
-          `${createStatements.join("\n")}
-         INSERT INTO workspaces (
+          `INSERT INTO workspaces (
            id, name, checkout_path, issue_tracker, mcp_skills, linear_history,
            worktree_link_paths, worktree_setup
          ) VALUES (
@@ -300,13 +327,24 @@ layer(NodeServices.layer)((it) => {
   it.effect("changes a column type while preserving existing rows", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
+      yield* convergeStore(storePath);
+      const [workspaceSchema] = yield* query(
+        storePath,
+        "SELECT replace(sql, '`linear_history` integer NOT NULL', '`linear_history` text NOT NULL') AS sql FROM sqlite_master WHERE name = 'workspaces'",
+      );
+      if (typeof workspaceSchema?.sql !== "string") return assert.fail("expected workspaces schema");
       yield* poke(
         storePath,
-        `${createStatements
-          .join("\n")
-          .replace("`linear_history` integer NOT NULL", "`linear_history` text NOT NULL")}
+        `PRAGMA foreign_keys = OFF;
+         DROP TABLE workspaces;
+         ${workspaceSchema.sql};
          INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history)
          VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', '0');`,
+      );
+      assert.isTrue(
+        (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
+          (column) => column.name === "linear_history" && column.type === "TEXT",
+        ),
       );
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
@@ -347,10 +385,9 @@ layer(NodeServices.layer)((it) => {
   it.effect("fails closed when the verification re-diff is not empty", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
-      yield* poke(
+      yield* pokeConvergedStore(
         storePath,
-        `${createStatements.join("\n")}
-         CREATE TABLE extra_data (value TEXT NOT NULL);
+        `CREATE TABLE extra_data (value TEXT NOT NULL);
          INSERT INTO extra_data VALUES ('kept');`,
       );
       pushSchemaMock
@@ -373,10 +410,9 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const { dir, storePath } = yield* temporaryStore();
-      yield* poke(
+      yield* pokeConvergedStore(
         storePath,
-        `${createStatements.join("\n")}
-         CREATE TABLE extra_data (value TEXT NOT NULL);
+        `CREATE TABLE extra_data (value TEXT NOT NULL);
          INSERT INTO extra_data VALUES ('kept');`,
       );
       pushSchemaMock.mockRejectedValueOnce(new Error("unexpected converge failure"));
@@ -402,10 +438,9 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const { dir, storePath } = yield* temporaryStore();
-      yield* poke(
+      yield* pokeConvergedStore(
         storePath,
-        `${createStatements.join("\n")}
-         CREATE TABLE extra_data (value TEXT NOT NULL);
+        `CREATE TABLE extra_data (value TEXT NOT NULL);
          INSERT INTO extra_data VALUES ('kept');`,
       );
       pushSchemaMock.mockResolvedValueOnce({
@@ -454,12 +489,15 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const { dir, storePath } = yield* temporaryStore();
+      yield* pokeConvergedStore(
+        storePath,
+        "ALTER TABLE workspaces RENAME COLUMN source_control TO source_control_old",
+      );
       const writer = yield* Effect.acquireRelease(
         Effect.sync(() => {
           const db = new DatabaseSync(storePath);
           db.exec(
-            `${createStatements.join("\n").replace("`source_control` text", "`source_control_old` text")}
-             PRAGMA journal_mode=WAL;
+            `PRAGMA journal_mode=WAL;
              PRAGMA wal_autocheckpoint=0;
              INSERT INTO workspaces (
                id, name, checkout_path, issue_tracker, source_control_old, linear_history
@@ -586,9 +624,9 @@ layer(NodeServices.layer)((it) => {
         existingBackupPath,
         "CREATE TABLE evidence (value TEXT NOT NULL); INSERT INTO evidence VALUES ('first');",
       );
-      yield* poke(
+      yield* pokeConvergedStore(
         storePath,
-        createStatements.join("\n").replace("`source_control` text", "`source_control_old` text"),
+        "ALTER TABLE workspaces RENAME COLUMN source_control TO source_control_old",
       );
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
@@ -887,10 +925,9 @@ layer(NodeServices.layer)((it) => {
       Effect.gen(function* () {
         const { storePath } = yield* temporaryStore();
         const logProbe = yield* ControlStoreLogProbe;
-        yield* poke(
+        yield* pokeConvergedStore(
           storePath,
-          `${createStatements.join("\n")}
-         ALTER TABLE workspaces ADD COLUMN legacy TEXT;
+          `ALTER TABLE workspaces ADD COLUMN legacy TEXT;
          INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history, legacy)
          VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 0, 'removed');
          CREATE TABLE extra_data (value TEXT NOT NULL);
