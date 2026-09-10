@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
+import { isDeepStrictEqual, parseArgs, promisify } from "node:util";
 
 const defaultConfidence = 0.95;
 const defaultIterations = 10_000;
@@ -13,9 +13,38 @@ const defaultSeed = 0x5eed1234;
 const commandTimeoutMs = 15 * 60 * 1_000;
 const exec = promisify(execFile);
 const rounds = 5;
-const usage = "Usage: pnpm --filter @cogwork/sensor test:compare <base-ref> <head-ref>\n";
+const usage =
+  "Usage: pnpm --filter @cogwork/sensor test:compare <base-ref> <head-ref> [--base-env NAME=VALUE] [--head-env NAME=VALUE]\n";
 const workspaceRoot = resolve(import.meta.dirname, "../..");
 const measurementScriptPath = join(import.meta.dirname, "test-measure.mjs");
+
+const parseEnvironmentAssignment = (assignment) => {
+  const separator = assignment.indexOf("=");
+  if (separator <= 0) throw new Error(usage.trim());
+  const name = assignment.slice(0, separator);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(usage.trim());
+  return [name, assignment.slice(separator + 1)];
+};
+
+const environmentFrom = (assignments = []) => Object.fromEntries(assignments.map(parseEnvironmentAssignment));
+
+export const parseComparisonArgs = (args) => {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      "base-env": { type: "string", multiple: true },
+      "head-env": { type: "string", multiple: true },
+    },
+    strict: true,
+  });
+  const [baseRef, headRef, ...extraRefs] = positionals;
+  if (!baseRef || !headRef || extraRefs.length > 0) throw new Error(usage.trim());
+  return {
+    base: { ref: baseRef, environment: environmentFrom(values["base-env"]) },
+    head: { ref: headRef, environment: environmentFrom(values["head-env"]) },
+  };
+};
 
 const assertPositiveNumbers = (values, label) => {
   if (!Array.isArray(values) || values.length === 0) {
@@ -120,24 +149,27 @@ const summarizeMeasurements = (measurements, label) => {
   return { durationsMs, testCount };
 };
 
-export const buildReport = (baseRef, headRef, measurements) => {
+const configurationReport = (configuration, medianDurationMs, testCount) => ({
+  ...configuration,
+  environment: configuration.environment ?? {},
+  medianDurationMs,
+  testCount,
+});
+
+export const buildReport = (baseConfiguration, headConfiguration, measurements) => {
   const base = summarizeMeasurements(measurements.base, "base");
   const head = summarizeMeasurements(measurements.head, "head");
   const comparison = analyzeDurations(base.durationsMs, head.durationsMs);
-  const verdict = baseRef.sha === headRef.sha ? "inconclusive" : comparison.verdict;
+  const baseReport = configurationReport(baseConfiguration, comparison.baseMedianMs, base.testCount);
+  const headReport = configurationReport(headConfiguration, comparison.headMedianMs, head.testCount);
+  const identical =
+    baseReport.sha === headReport.sha && isDeepStrictEqual(baseReport.environment, headReport.environment);
+  const verdict = identical ? "inconclusive" : comparison.verdict;
   return {
     schemaVersion: 1,
     verdict,
-    base: {
-      ...baseRef,
-      medianDurationMs: comparison.baseMedianMs,
-      testCount: base.testCount,
-    },
-    head: {
-      ...headRef,
-      medianDurationMs: comparison.headMedianMs,
-      testCount: head.testCount,
-    },
+    base: baseReport,
+    head: headReport,
     ratio: comparison.ratio,
     confidenceInterval: comparison.confidenceInterval,
     rounds: comparison.rounds,
@@ -147,11 +179,12 @@ export const buildReport = (baseRef, headRef, measurements) => {
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
-const run = async (file, args, cwd) => {
+const run = async (file, args, cwd, environment = process.env) => {
   try {
     return await exec(file, args, {
       cwd,
       encoding: "utf8",
+      env: environment,
       maxBuffer: 10 * 1024 * 1024,
       timeout: commandTimeoutMs,
     });
@@ -164,9 +197,10 @@ const run = async (file, args, cwd) => {
 
 const runGit = async (args) => (await run("git", args, workspaceRoot)).stdout.trim();
 
-const resolveRef = async (ref) => ({
+const resolveConfiguration = async ({ ref, environment }) => ({
   ref,
   sha: await runGit(["rev-parse", "--verify", `${ref}^{commit}`]),
+  environment,
 });
 
 const addWorktree = async (root, side, sha) => {
@@ -232,30 +266,63 @@ const parseMeasurement = (stdout) => {
   return measurement;
 };
 
-const collectMeasurements = async (worktrees) => {
+const measureWorktree = async (worktree, environment, mode) => {
+  const result = await run(process.execPath, [measurementScriptPath, mode], worktree, environment);
+  return parseMeasurement(result.stdout);
+};
+
+const measurementModeFor = (sides) => {
+  if (Object.values(sides).some(({ environment }) => Object.keys(environment).length > 0)) {
+    return "--configuration-comparison";
+  }
+  return "--comparison";
+};
+
+const sharedEnvironmentFor = (sides, ambientEnvironment) => {
+  const sideEnvironmentNames = new Set(
+    Object.values(sides).flatMap(({ environment }) => Object.keys(environment)),
+  );
+  return Object.fromEntries(
+    Object.entries(ambientEnvironment).filter(([name]) => !sideEnvironmentNames.has(name)),
+  );
+};
+
+export const collectMeasurements = async (
+  sides,
+  measure = measureWorktree,
+  ambientEnvironment = process.env,
+) => {
   const measurements = { base: [], head: [] };
   const order = measurementOrder(rounds);
+  const sharedEnvironment = sharedEnvironmentFor(sides, ambientEnvironment);
+  const mode = measurementModeFor(sides);
   for (const [index, side] of order.entries()) {
     process.stderr.write(`Measuring ${side}, run ${index + 1}/${order.length}\n`);
-    const result = await run(process.execPath, [measurementScriptPath, "--comparison"], worktrees[side]);
-    measurements[side].push(parseMeasurement(result.stdout));
+    const { worktree, environment } = sides[side];
+    measurements[side].push(await measure(worktree, { ...sharedEnvironment, ...environment }, mode));
   }
   return measurements;
 };
 
-const compareRefs = async (baseName, headName) => {
-  const [baseRef, headRef] = await Promise.all([resolveRef(baseName), resolveRef(headName)]);
+const compareConfigurations = async (inputs) => {
+  const [baseConfiguration, headConfiguration] = await Promise.all([
+    resolveConfiguration(inputs.base),
+    resolveConfiguration(inputs.head),
+  ]);
   const root = await mkdtemp(join(tmpdir(), "cogwork-test-compare-"));
   const worktrees = [];
   return withCleanups(async () => {
-    const base = await addWorktree(root, "base", baseRef.sha);
+    const base = await addWorktree(root, "base", baseConfiguration.sha);
     worktrees.push(base);
     await installWorktree(base);
-    const head = await addWorktree(root, "head", headRef.sha);
+    const head = await addWorktree(root, "head", headConfiguration.sha);
     worktrees.push(head);
     await installWorktree(head);
-    const measurements = await collectMeasurements({ base, head });
-    return buildReport(baseRef, headRef, measurements);
+    const measurements = await collectMeasurements({
+      base: { worktree: base, environment: baseConfiguration.environment },
+      head: { worktree: head, environment: headConfiguration.environment },
+    });
+    return buildReport(baseConfiguration, headConfiguration, measurements);
   }, [() => removeWorktrees(worktrees), () => rm(root, { recursive: true, force: true })]);
 };
 
@@ -265,8 +332,7 @@ const main = async () => {
     process.stdout.write(usage);
     return;
   }
-  if (args.length !== 2) throw new Error(usage.trim());
-  const report = await compareRefs(args[0], args[1]);
+  const report = await compareConfigurations(parseComparisonArgs(args));
   process.stdout.write(`${JSON.stringify(report)}\n`);
 };
 
