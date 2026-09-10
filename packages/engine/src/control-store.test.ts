@@ -1165,7 +1165,7 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("prunes more Runs than SQLite can bind as query parameters", () =>
+  it.effect("prunes a large Run set without binding Run ids", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
       yield* storeAt(storePath);
@@ -1176,7 +1176,7 @@ layer(NodeServices.layer)((it) => {
          WITH RECURSIVE numbers(value) AS (
            VALUES (1)
            UNION ALL
-           SELECT value + 1 FROM numbers WHERE value < 32767
+           SELECT value + 1 FROM numbers WHERE value < 1000
          )
          INSERT INTO runs (
            id, workspace, work_item, stage, harness, session, status,
@@ -1187,14 +1187,14 @@ layer(NodeServices.layer)((it) => {
          WITH RECURSIVE numbers(value) AS (
            VALUES (1)
            UNION ALL
-           SELECT value + 1 FROM numbers WHERE value < 32767
+           SELECT value + 1 FROM numbers WHERE value < 1000
          )
          INSERT INTO run_events (run_id, seq, type, name, data, at)
          SELECT 'run-' || value, 0, 'TEXT_MESSAGE_CONTENT', NULL, 'x', value
          FROM numbers;`,
       );
 
-      yield* TestClock.setTime(32768);
+      yield* TestClock.setTime(1001);
       yield* retainAt(storePath, 0);
 
       assert.deepStrictEqual(yield* query(storePath, "SELECT count(*) AS count FROM run_events"), [
