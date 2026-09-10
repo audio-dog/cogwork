@@ -1,0 +1,29 @@
+.github/workflows/pull-request.yml
+  s_dcb3de6fa2ac8d::t_1d0a445e681fdd 53,57,84
+  s_5d7332e091ec79::t_ddb9c663a2375d 54
+  s_5d7332e091ec79::t_96277a3815d18f 34-35,50-52,58-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2b862fb6004f05331bafe0bcabc81b77d0b7161f",
+  "prompts": {},
+  "sessions": {
+    "s_5d7332e091ec79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08d3c-c0c5-7293-8894-dcfa2fc1853d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dcb3de6fa2ac8d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08d74-a323-7b81-b26a-d2208f21326f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
