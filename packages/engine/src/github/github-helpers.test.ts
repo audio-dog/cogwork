@@ -100,9 +100,13 @@ describe("parseIssues", () => {
   const repo: GitHubRepoRef = { owner: "owner", name: "repo", tokenEnv: "GITHUB_TOKEN" };
 
   const issue = (over: Record<string, unknown>) => ({
+    node_id: `I_issue_${String(over.number ?? 1)}`,
     number: 1,
     title: "an issue",
     labels: ["ready-for-agent"],
+    body: null,
+    state: "open",
+    created_at: "2026-09-09T12:00:00Z",
     ...over,
   });
 

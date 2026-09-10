@@ -387,9 +387,6 @@ const executorStubLayer = (execute: ExecuteStub) =>
       const probe = yield* SchedulerProbe;
       const ledger = yield* RunLedger.RunLedger;
       return {
-        availabilityOf: (_workspace, item) =>
-          Effect.succeed({ operation: item.stage, available: true, causes: [] }),
-        refreshAvailability: () => Effect.succeed([]),
         execute: (workspace, item) => execute(probe, ledger, workspace, item),
       };
     }),

@@ -10,11 +10,11 @@ Role in the flow: **reconcile → schedule → execute → dispatch to a harness
 ## Language
 
 **Daemon**:
-The long-lived host process that runs the engine on one machine: it serves the RPC group and drives two heartbeats (reconcile and execute). Not a class — a set of modules composed at startup. The composition itself is the **seam** `Daemon.serverLayer(hostAdapters)`: it assembles the RPC server, its handlers, and the NDJSON framing on top of the engine's own services, taking a host's adapters (credential store, run ledger, workspace registry, worktree platform, harness runners, scheduler config, RPC transport) as its one argument. The one-credential-store rule lives here — the issue-tracker reads and the MCP-server bearer must share one store instance. `Daemon.serializationLayer` is exported so a client frames its end of the wire the same way. Any host (the CLI today, desktop next) builds those adapters and calls this.
+The long-lived host process that runs the engine on one machine: it serves the RPC group and drives three heartbeats (reconcile, execute, and performance regression). Not a class — a set of modules composed at startup. The composition itself is the **seam** `Daemon.serverLayer(hostAdapters)`: it assembles the RPC server, its handlers, and the NDJSON framing on top of the engine's own services, taking a host's adapters (credential store, run ledger, workspace registry, worktree platform, harness runners, scheduler config, RPC transport, performance health source) as its one argument. The one-credential-store rule lives here — the issue-tracker reads and the MCP-server bearer must share one store instance. `Daemon.serializationLayer` is exported so a client frames its end of the wire the same way. Any host (the CLI today, desktop next) builds those adapters and calls this.
 _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
 **Reconcile worker**:
-The background worker that polls every workspace's issue tracker, asks its configured source control provider to resolve a trusted pull request for every observed work item, classifies the combined results, and stores them in an in-memory reconcile snapshot. A coordination comment is the record of acting, not a precondition for observing a pull request. One of the daemon's two heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
+The background worker that polls every workspace's issue tracker, asks its configured source control provider to resolve a trusted pull request for every observed work item, classifies the combined results, and stores them in an in-memory reconcile snapshot. A coordination comment is the record of acting, not a precondition for observing a pull request. One of the daemon's three heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
 _Avoid_: Sync, poll loop. Distinct from worktree reconcile (cleanup) and claim recovery (resuming this daemon's own interrupted runs or releasing genuinely stale claims).
 
 **Rate-limit scope**:
@@ -149,6 +149,7 @@ _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Operation resolution**:
 The engine's combination of an Operation Definition, Operation Settings, Operating Instructions, Work Context, Tools, Skills, MCP servers, Middleware, and Sandbox Policy into an immutable Run Plan before dispatch.
+Its home is `src/operation-resolution.ts`.
 _Avoid_: Playbook, resolved stage, prompt assembly
 
 **Issue tracker adapter**:

@@ -18,11 +18,11 @@ import * as Semaphore from "effect/Semaphore";
 import { availabilityCauseSummary } from "./availability";
 import { type EligibleWork, eligibleWork, observedStage } from "./classify";
 import { type HandoffCause, handoffNote, handoffSession, recoveryReason } from "./comments";
-import { Executor } from "./executor";
 import { consecutiveFailures, isExhausted } from "./exhaustion";
 import { isStalledFollowUp } from "./follow-up";
 import { Harness } from "./harness";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
+import { OperationResolution } from "./operation-resolution";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
@@ -50,7 +50,7 @@ export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
   const harness = yield* Harness;
   const scheduler = yield* Scheduler;
-  const executor = yield* Executor;
+  const operationResolution = yield* OperationResolution;
   const releaseClaim = makeReleaseClaim(issueTracker);
   const recoveredWorkspaces = yield* Ref.make<ReadonlySet<WorkspaceId>>(new Set());
   const recoveredGenerations = yield* Ref.make<ReadonlyMap<WorkspaceId, number>>(new Map());
@@ -227,7 +227,7 @@ export const make = Effect.gen(function* () {
     const currentStage = observedStage(item);
     const work = currentStage ? eligibleWork(item, currentStage) : null;
     if (work && !isStalledFollowUp(work.stage, work.followUp)) {
-      const availability = yield* executor.availabilityOf(workspace, work);
+      const availability = yield* operationResolution.availabilityOf(workspace, work);
       if (!availability.available) {
         return yield* rejectRecovery(workspace, item, availability.causes);
       }

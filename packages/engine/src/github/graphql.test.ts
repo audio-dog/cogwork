@@ -1,5 +1,11 @@
 import { assert, describe, it } from "@effect/vitest";
-import { closingReferencesFor, closingReferencesQuery, graphQlData } from "./client";
+import {
+  closingReferencesFor,
+  closingReferencesQuery,
+  graphQlData,
+  issuePullReferencesPage,
+  issuePullReferencesQuery,
+} from "./client";
 
 describe("graphQlData", () => {
   it("keeps partial data when errors accompany accessible cards", () => {
@@ -41,6 +47,37 @@ describe("closingReferencesFor", () => {
         },
       }),
       new Map([[7, [13]]]),
+    );
+  });
+});
+
+describe("issuePullReferencesPage", () => {
+  it("reads pull request cross-references and the next cursor", () => {
+    assert.include(issuePullReferencesQuery, "CROSS_REFERENCED_EVENT");
+    assert.deepStrictEqual(
+      issuePullReferencesPage({
+        repository: {
+          issue: {
+            timelineItems: {
+              pageInfo: { hasNextPage: true, endCursor: "next" },
+              nodes: [
+                {
+                  source: {
+                    body: "Refs #10",
+                    merged: true,
+                    repository: { nameWithOwner: "owner/repo" },
+                  },
+                },
+                { source: {} },
+              ],
+            },
+          },
+        },
+      }),
+      {
+        references: [{ body: "Refs #10", merged: true, repository: "owner/repo" }],
+        nextCursor: "next",
+      },
     );
   });
 });

@@ -1,8 +1,8 @@
 import {
   type ConnectionId,
   connectionAccountOf,
-  type GitHubPrioritySource,
-  type Priority,
+  GitHubIssueFieldId,
+  type GitHubPriorityField,
   TrimmedNonEmptyString,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
@@ -27,13 +27,6 @@ import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
 import { type CreateIssueInput, defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
 import type { OpenedPullRequest, OpenPullRequestInput } from "../source-control";
-import {
-  boardMissing,
-  decodeProjectPriorities,
-  defaultPriorityField,
-  pageOf,
-  priorityQuery,
-} from "./priority";
 
 export interface GitHubRepoRef {
   readonly owner: string;
@@ -51,6 +44,7 @@ export const repoRefFromRepository = (repository: string) => {
 export type ReviewDecision = "changes-requested" | "approved" | "none";
 
 export interface RawIssue {
+  readonly nodeId: string;
   readonly number: number;
   readonly title: string;
   readonly url: string;
@@ -58,6 +52,16 @@ export interface RawIssue {
   readonly assignees: ReadonlyArray<string>;
   readonly isPullRequest: boolean;
   readonly openBlockers: number;
+  readonly body: string;
+  readonly state: "open" | "closed";
+  readonly createdAtMillis: number;
+  readonly authorLogin?: string;
+}
+
+export interface RawIssuePullReference {
+  readonly body: string;
+  readonly merged: boolean;
+  readonly repository: string;
 }
 
 export interface RawPull {
@@ -91,7 +95,7 @@ export interface RawReview {
 
 const baseHeaders = {
   Accept: "application/vnd.github+json",
-  "X-GitHub-Api-Version": "2022-11-28",
+  "X-GitHub-Api-Version": "2026-03-10",
   "User-Agent": "cogwork",
 };
 
@@ -104,6 +108,7 @@ const DependenciesSummarySchema = Schema.Struct({
 });
 
 const IssueSchema = Schema.Struct({
+  node_id: Schema.String,
   number: Schema.Finite,
   title: Schema.String,
   html_url: Schema.optional(Schema.NullOr(Schema.String)),
@@ -111,6 +116,16 @@ const IssueSchema = Schema.Struct({
   assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
   issue_dependencies_summary: Schema.optional(Schema.NullOr(DependenciesSummarySchema)),
+  body: Schema.NullOr(Schema.String),
+  state: Schema.Union([Schema.Literal("open"), Schema.Literal("closed")]),
+  created_at: Schema.String,
+  user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
+});
+
+const GitHubIssueFieldSchema = Schema.Struct({
+  id: GitHubIssueFieldId,
+  name: TrimmedNonEmptyString,
+  data_type: Schema.String,
 });
 
 const CreatedIssueSchema = Schema.Struct({
@@ -188,15 +203,16 @@ const GraphQlResponse = Schema.Struct({
 export type GraphQlPayload = typeof GraphQlResponse.Type;
 const decodeGraphQl = Schema.decodeUnknownEffect(GraphQlResponse);
 const decodeGitHubError = Schema.decodeUnknownOption(Schema.Struct({ message: Schema.String }));
+const PageInfo = Schema.Struct({
+  hasNextPage: Schema.Boolean,
+  endCursor: Schema.NullOr(Schema.String),
+});
 
 const ClosingReferencesPayload = Schema.Struct({
   repository: Schema.NullOr(
     Schema.Struct({
       pullRequests: Schema.Struct({
-        pageInfo: Schema.Struct({
-          hasNextPage: Schema.Boolean,
-          endCursor: Schema.NullOr(Schema.String),
-        }),
+        pageInfo: PageInfo,
         nodes: Schema.Array(
           Schema.NullOr(
             Schema.Struct({
@@ -220,6 +236,104 @@ const ClosingReferencesPayload = Schema.Struct({
 });
 const decodeClosingReferences = Schema.decodeUnknownEffect(ClosingReferencesPayload);
 
+const IssuePullReferencesPayload = Schema.Struct({
+  repository: Schema.NullOr(
+    Schema.Struct({
+      issue: Schema.NullOr(
+        Schema.Struct({
+          timelineItems: Schema.Struct({
+            pageInfo: PageInfo,
+            nodes: Schema.Array(
+              Schema.NullOr(
+                Schema.Struct({
+                  source: Schema.Struct({
+                    body: Schema.optional(Schema.NullOr(Schema.String)),
+                    merged: Schema.optional(Schema.Boolean),
+                    repository: Schema.optional(Schema.Struct({ nameWithOwner: Schema.String })),
+                  }),
+                }),
+              ),
+            ),
+          }),
+        }),
+      ),
+    }),
+  ),
+});
+const decodeIssuePullReferences = Schema.decodeUnknownEffect(IssuePullReferencesPayload);
+
+const GraphQlIssueFieldId = Schema.FiniteFromString.pipe(Schema.decodeTo(GitHubIssueFieldId));
+const IssueFieldValueNode = Schema.Struct({
+  __typename: Schema.String,
+  name: Schema.optionalKey(TrimmedNonEmptyString),
+  field: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({
+        fullDatabaseId: Schema.optionalKey(GraphQlIssueFieldId),
+      }),
+    ),
+  ),
+});
+const IssueFieldValuePageInfo = Schema.Struct({
+  hasNextPage: Schema.Boolean,
+  endCursor: Schema.NullOr(Schema.String),
+});
+const IssueFieldValues = Schema.Struct({
+  pageInfo: IssueFieldValuePageInfo,
+  nodes: Schema.Array(Schema.NullOr(IssueFieldValueNode)),
+});
+const IssueFieldValueIssue = Schema.Struct({
+  id: Schema.String,
+  number: Schema.Finite,
+  issueFieldValues: IssueFieldValues,
+});
+const IssueFieldValuesPayload = Schema.Struct({
+  nodes: Schema.Array(Schema.NullOr(IssueFieldValueIssue)),
+});
+const IssueFieldValuePagesPayload = Schema.Record(Schema.String, Schema.NullOr(IssueFieldValueIssue));
+const decodeIssueFieldValues = Schema.decodeUnknownEffect(IssueFieldValuesPayload);
+const decodeIssueFieldValuePages = Schema.decodeUnknownEffect(IssueFieldValuePagesPayload);
+
+const issueFieldValuePageSelection = (after: string) => `
+  id
+  number
+  issueFieldValues(first: 100${after}) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      __typename
+      ... on IssueFieldSingleSelectValue {
+        name
+        field { ... on IssueFieldSingleSelect { fullDatabaseId } }
+      }
+    }
+  }`;
+
+export const issueFieldValuesQuery = `
+query IssueFieldValues($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Issue {
+      ${issueFieldValuePageSelection("")}
+    }
+  }
+}`;
+
+const issueFieldValuePagesQuery = (count: number) => {
+  const variables = Array.from(
+    { length: count },
+    (_, index) => `$id${index}: ID!, $cursor${index}: String!`,
+  ).join(", ");
+  const issues = Array.from(
+    { length: count },
+    (_, index) => `
+  issue${index}: node(id: $id${index}) {
+    ... on Issue {
+      ${issueFieldValuePageSelection(`, after: $cursor${index}`)}
+    }
+  }`,
+  ).join("");
+  return `query IssueFieldValuePages(${variables}) {${issues}\n}`;
+};
+
 export const closingReferencesQuery = `
 query ClosingReferences($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
@@ -237,6 +351,47 @@ query ClosingReferences($owner: String!, $name: String!, $cursor: String) {
     }
   }
 }`;
+
+export const issuePullReferencesQuery = `
+query IssuePullReferences($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      timelineItems(first: 100, after: $cursor, itemTypes: [CROSS_REFERENCED_EVENT]) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          ... on CrossReferencedEvent {
+            source {
+              ... on PullRequest {
+                body
+                merged
+                repository { nameWithOwner }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+export const issuePullReferencesPage = (payload: typeof IssuePullReferencesPayload.Type) => {
+  const timeline = payload.repository?.issue?.timelineItems;
+  const references = (timeline?.nodes ?? []).flatMap((event) => {
+    const source = event?.source;
+    if (source?.body === undefined || source.merged === undefined || source.repository === undefined) {
+      return [];
+    }
+    return [
+      {
+        body: source.body ?? "",
+        merged: source.merged,
+        repository: source.repository.nameWithOwner,
+      } satisfies RawIssuePullReference,
+    ];
+  });
+  const nextCursor = timeline?.pageInfo.hasNextPage ? timeline.pageInfo.endCursor : null;
+  return { references, nextCursor };
+};
 
 const sameRepository = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 
@@ -273,6 +428,7 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
+const decodeIssueFields = Schema.decodeUnknownEffect(Schema.Array(GitHubIssueFieldSchema));
 const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
 const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
@@ -294,10 +450,95 @@ const millisFromIso = (value: string | null) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
-const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
+const unavailable = (message: string, writeMayHaveCommitted?: boolean) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    message,
+    ...(writeMayHaveCommitted === undefined ? {} : { writeMayHaveCommitted }),
+  });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
+const toAcceptedWriteError = (error: IssueTrackerError) =>
+  new IssueTrackerError({
+    reason: error.reason,
+    message: error.message,
+    writeMayHaveCommitted: true,
+    ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
+    ...(error.retryAfterMillis === undefined ? {} : { retryAfterMillis: error.retryAfterMillis }),
+    ...(error.connectionId === undefined ? {} : { connectionId: error.connectionId }),
+  });
+
+const priorityFieldReadError = (repo: GitHubRepoRef, error: IssueTrackerError) =>
+  new IssueTrackerError({
+    reason: error.reason,
+    message: `Could not load GitHub issue fields for ${repo.owner}. Grant read:org or Issue Fields read permission. ${error.message}`,
+    ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
+    ...(error.retryAfterMillis === undefined ? {} : { retryAfterMillis: error.retryAfterMillis }),
+    ...(error.connectionId === undefined ? {} : { connectionId: error.connectionId }),
+  });
+
+const issueFieldEntry = (
+  value: typeof IssueFieldValueNode.Type,
+): readonly [GitHubIssueFieldId, string] | null => {
+  if (value.__typename !== "IssueFieldSingleSelectValue" || !value.name) return null;
+  const fieldId = value.field?.fullDatabaseId;
+  return fieldId ? [fieldId, value.name] : null;
+};
+
+const issueFieldValues = (values: ReadonlyArray<typeof IssueFieldValueNode.Type | null>) =>
+  new Map(
+    values.flatMap((value) => {
+      if (!value) return [];
+      const entry = issueFieldEntry(value);
+      return entry ? [entry] : [];
+    }),
+  );
+
+interface IssueFieldValueState {
+  readonly nodeId: string;
+  readonly number: number;
+  readonly values: ReadonlyMap<GitHubIssueFieldId, string>;
+  readonly cursor: string | null;
+}
+
+const issueFieldValueCursor = (pageInfo: typeof IssueFieldValuePageInfo.Type) =>
+  pageInfo.hasNextPage ? pageInfo.endCursor : null;
+
+const issueFieldValueState = (
+  issue: typeof IssueFieldValueIssue.Type,
+  previous: ReadonlyMap<GitHubIssueFieldId, string>,
+): IssueFieldValueState => ({
+  nodeId: issue.id,
+  number: issue.number,
+  values: new Map([...previous, ...issueFieldValues(issue.issueFieldValues.nodes)]),
+  cursor: issueFieldValueCursor(issue.issueFieldValues.pageInfo),
+});
+
+const completedIssueFieldValueState = (state: IssueFieldValueState): IssueFieldValueState => ({
+  ...state,
+  cursor: null,
+});
+
+const continuedIssueFieldValueState = (
+  state: IssueFieldValueState,
+  issue: typeof IssueFieldValueIssue.Type | null | undefined,
+) => {
+  if (!issue) return completedIssueFieldValueState(state);
+  return issueFieldValueState(issue, state.values);
+};
+
+const issueFieldValuePageVariables = (states: ReadonlyArray<IssueFieldValueState>) =>
+  Object.fromEntries(
+    states.flatMap((state, index) => [
+      [`id${index}`, state.nodeId],
+      [`cursor${index}`, state.cursor],
+    ]),
+  );
+
+const issueFieldValuesByIssue = (states: ReadonlyArray<IssueFieldValueState>) =>
+  new Map(states.map((state) => [state.number, state.values] as const));
 
 const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIssue => ({
+  nodeId: issue.node_id,
   number: issue.number,
   title: issue.title,
   url: issue.html_url || `https://github.com/${repo.owner}/${repo.name}/issues/${issue.number}`,
@@ -305,6 +546,10 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
+  body: issue.body ?? "",
+  state: issue.state,
+  createdAtMillis: millisFromIso(issue.created_at),
+  ...(issue.user ? { authorLogin: issue.user.login } : {}),
 });
 
 const openedPull = (created: typeof CreatedPullSchema.Type) =>
@@ -322,6 +567,7 @@ const rateLimited = (resumeAtMillis: number) =>
   new IssueTrackerError({
     reason: "rate-limited",
     message: `GitHub rate limit exceeded; resuming after ${isoMillis(resumeAtMillis)}`,
+    writeMayHaveCommitted: false,
   });
 
 const headerSeconds = (value: string | undefined) => {
@@ -422,6 +668,8 @@ const acceptResponse = () => Effect.void;
 const repoPath = (repo: GitHubRepoRef, suffix: string) =>
   `https://api.github.com/repos/${repo.owner}/${repo.name}${suffix}`;
 
+const orgPath = (repo: GitHubRepoRef, suffix: string) => `https://api.github.com/orgs/${repo.owner}${suffix}`;
+
 const standingStates = new Set(["APPROVED", "CHANGES_REQUESTED", "DISMISSED"]);
 
 export const reviewDecisionOf = (
@@ -467,6 +715,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         new IssueTrackerError({
           reason: "auth",
           message: "GitHub authentication failed (401)",
+          writeMayHaveCommitted: false,
         }),
       );
     }
@@ -487,11 +736,12 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           reason: "unavailable",
           message: `GitHub request failed (${response.status})`,
           retryable: false,
+          writeMayHaveCommitted: false,
         }),
       );
     }
     if (response.status >= 400) {
-      return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`));
+      return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`, false));
     }
     return yield* withTransientAttemptDeadline(consume(response));
   });
@@ -515,14 +765,24 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         })
         .pipe(
           Effect.mapError((error) =>
-            permanentAttemptError(new IssueTrackerError({ reason: "auth", message: error.message })),
+            permanentAttemptError(
+              new IssueTrackerError({
+                reason: "auth",
+                message: error.message,
+                writeMayHaveCommitted: false,
+              }),
+            ),
           ),
         );
       return yield* execute(request, credential.token, consume);
     }
     const token = yield* Effect.mapError(Config.redacted(repo.tokenEnv), () =>
       permanentAttemptError(
-        new IssueTrackerError({ reason: "auth", message: `missing GitHub token in ${repo.tokenEnv}` }),
+        new IssueTrackerError({
+          reason: "auth",
+          message: `missing GitHub token in ${repo.tokenEnv}`,
+          writeMayHaveCommitted: false,
+        }),
       ),
     );
     return yield* execute(request, token, consume);
@@ -583,7 +843,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     request: HttpClientRequest.HttpClientRequest,
     body: unknown,
   ) {
-    const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), toUnavailable);
+    const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), (error) =>
+      unavailable(error.message, false),
+    );
     const response = yield* send(repo, withBody, Effect.succeed).pipe(
       Effect.mapError((error) => error.error),
     );
@@ -592,6 +854,17 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       Effect.timeoutOption(transientAttemptDeadline),
       Effect.map(Option.flatten),
     );
+  });
+
+  const sendAcceptedOnce = Effect.fn("github.sendAcceptedOnce")(function* (
+    repo: GitHubRepoRef,
+    request: HttpClientRequest.HttpClientRequest,
+    body: unknown,
+  ) {
+    const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), (error) =>
+      unavailable(error.message, false),
+    );
+    yield* send(repo, withBody, acceptResponse).pipe(Effect.mapError((error) => error.error));
   });
 
   const addLabel = Effect.fn("github.addLabel")((repo: GitHubRepoRef, issueNumber: number, label: string) =>
@@ -614,12 +887,14 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       },
     );
     if (Option.isNone(acceptedBody)) return;
-    const created = yield* Effect.mapError(decodeCreatedIssue(acceptedBody.value), toUnavailable);
-    const applied = new Set(created.labels.map(labelName));
-    yield* Effect.forEach(
-      input.labels.filter((label) => !applied.has(label)),
-      (label) => addLabel(repo, created.number, label),
-    );
+    yield* Effect.gen(function* () {
+      const created = yield* Effect.mapError(decodeCreatedIssue(acceptedBody.value), toUnavailable);
+      const applied = new Set(created.labels.map(labelName));
+      yield* Effect.forEach(
+        input.labels.filter((label) => !applied.has(label)),
+        (label) => addLabel(repo, created.number, label),
+      );
+    }).pipe(Effect.mapError(toAcceptedWriteError));
   });
 
   const recoverCreatedPull = Effect.fn("github.recoverCreatedPull")(function* (
@@ -659,7 +934,6 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return openedPull(created);
   });
 
-  // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
   const graphql = Effect.fn("github.graphql")(function* (
     repo: GitHubRepoRef,
     query: string,
@@ -675,41 +949,6 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     const result = graphQlData(decoded);
     if (!result.ok) return yield* unavailable(result.message);
     return result.data;
-  });
-
-  const collectPriorityPages: (
-    repo: GitHubRepoRef,
-    source: GitHubPrioritySource,
-    field: string,
-    cursor?: string | null,
-  ) => Effect.Effect<ReadonlyMap<number, Priority>, IssueTrackerError> = Effect.fn(
-    "github.projectPriorityPage",
-  )(function* (repo, source, field, cursor = null) {
-    const data = yield* graphql(repo, priorityQuery, {
-      owner: repo.owner,
-      number: source.project,
-      field,
-      cursor,
-    });
-    const payload = yield* Effect.mapError(decodeProjectPriorities(data), toUnavailable);
-    if (cursor === null && boardMissing(payload)) {
-      return yield* unavailable(`GitHub project ${source.project} not found for ${repo.owner}`);
-    }
-    const page = pageOf(payload, repo);
-    const current = new Map(page.entries);
-    if (page.nextCursor === null) return current;
-    const remaining = yield* collectPriorityPages(repo, source, field, page.nextCursor);
-    return new Map([...current, ...remaining]);
-  });
-
-  // One paged query so cost tracks board size, not backlog size.
-  const collectPriorities = Effect.fn("github.projectPriorities")(function* (
-    repo: GitHubRepoRef,
-    source: GitHubPrioritySource,
-  ) {
-    return yield* withPaginationDeadline(
-      collectPriorityPages(repo, source, source.field ?? defaultPriorityField),
-    );
   });
 
   const collectClosingReferencePages: (
@@ -735,21 +974,119 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return yield* withPaginationDeadline(collectClosingReferencePages(repo));
   });
 
+  const collectIssuePullReferencePages: (
+    repo: GitHubRepoRef,
+    issueNumber: number,
+    cursor?: string | null,
+  ) => Effect.Effect<ReadonlyArray<RawIssuePullReference>, IssueTrackerError> = Effect.fn(
+    "github.collectIssuePullReferencePages",
+  )(function* (repo, issueNumber, cursor = null) {
+    const data = yield* graphql(repo, issuePullReferencesQuery, {
+      owner: repo.owner,
+      name: repo.name,
+      number: issueNumber,
+      cursor,
+    });
+    const payload = yield* Effect.mapError(decodeIssuePullReferences(data), toUnavailable);
+    const page = issuePullReferencesPage(payload);
+    if (page.nextCursor === null) return page.references;
+    const remaining = yield* collectIssuePullReferencePages(repo, issueNumber, page.nextCursor);
+    return [...page.references, ...remaining];
+  });
+
+  const issuePullReferences = Effect.fn("github.issuePullReferences")(function* (
+    repo: GitHubRepoRef,
+    issueNumber: number,
+  ) {
+    return yield* withPaginationDeadline(collectIssuePullReferencePages(repo, issueNumber));
+  });
+
   const pullReferences = (repo: GitHubRepoRef, headBranch?: string) =>
     headBranch ? Effect.succeed(new Map<number, ReadonlyArray<number>>()) : pullClosingReferences(repo);
 
+  const createComment = Effect.fn("github.createComment")(function* (
+    repo: GitHubRepoRef,
+    issueNumber: number,
+    body: string,
+  ) {
+    yield* sendAcceptedOnce(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/comments`)), {
+      body,
+    });
+  });
+
+  const createPerformanceComment = Effect.fn("github.createPerformanceComment")(function* (
+    repo: GitHubRepoRef,
+    issueNumber: number,
+    body: string,
+  ) {
+    yield* createComment(repo, issueNumber, body).pipe(
+      Effect.catchIf(
+        (error) => error.writeMayHaveCommitted !== false,
+        () => Effect.void,
+      ),
+    );
+  });
+
+  interface IssueQuery {
+    readonly state: "open" | "all";
+    readonly label?: string;
+  }
+
+  const issuePagePath = (query: IssueQuery, page: number) => {
+    const parameters = new URLSearchParams({
+      state: query.state,
+      per_page: String(pageSize),
+      page: String(page),
+    });
+    if (query.label) parameters.set("labels", query.label);
+    return `/issues?${parameters}`;
+  };
+
+  const collectIssueFieldValuePages: (
+    repo: GitHubRepoRef,
+    states: ReadonlyArray<IssueFieldValueState>,
+  ) => Effect.Effect<ReadonlyArray<IssueFieldValueState>, IssueTrackerError> = Effect.fn(
+    "github.collectIssueFieldValuePages",
+  )(function* (repo, states) {
+    const pending = states.filter((state) => state.cursor !== null);
+    if (pending.length === 0) return states;
+    const data = yield* graphql(
+      repo,
+      issueFieldValuePagesQuery(pending.length),
+      issueFieldValuePageVariables(pending),
+    );
+    const payload = yield* Effect.mapError(decodeIssueFieldValuePages(data), toUnavailable);
+    const continued = pending.map((state, index) =>
+      continuedIssueFieldValueState(state, payload[`issue${index}`]),
+    );
+    const continuedById = new Map(continued.map((state) => [state.nodeId, state] as const));
+    return yield* collectIssueFieldValuePages(
+      repo,
+      states.map((state) => continuedById.get(state.nodeId) ?? state),
+    );
+  });
+
+  const collectIssueFieldValues = Effect.fn("github.collectIssueFieldValues")(function* (
+    repo: GitHubRepoRef,
+    issueNodeIds: ReadonlyArray<string>,
+  ) {
+    const data = yield* graphql(repo, issueFieldValuesQuery, { ids: issueNodeIds });
+    const payload = yield* Effect.mapError(decodeIssueFieldValues(data), toUnavailable);
+    const states = payload.nodes.flatMap((issue) => (issue ? [issueFieldValueState(issue, new Map())] : []));
+    const completed = yield* collectIssueFieldValuePages(repo, states);
+    return issueFieldValuesByIssue(completed);
+  });
+
   const collectIssuePages: (
     repo: GitHubRepoRef,
+    query: IssueQuery,
     page?: number,
   ) => Effect.Effect<ReadonlyArray<RawIssue>, IssueTrackerError> = Effect.fn("github.collectIssuePages")(
-    function* (repo, page = 1) {
-      const json = yield* fetchJson(
-        repo,
-        repoPath(repo, `/issues?state=open&per_page=${pageSize}&page=${page}`),
-      );
+    function* (repo, query, page = 1) {
+      const json = yield* fetchJson(repo, repoPath(repo, issuePagePath(query, page)));
       const current = yield* parseIssues(repo, json);
       if (current.length < pageSize) return current;
-      const remaining = yield* collectIssuePages(repo, page + 1);
+      const remaining = yield* collectIssuePages(repo, query, page + 1);
       return [...current, ...remaining];
     },
   );
@@ -762,8 +1099,27 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       const user = yield* Effect.mapError(decodeAuthenticatedUser(json), toUnavailable);
       return user.login;
     }),
-    listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
-      return yield* withPaginationDeadline(collectIssuePages(repo));
+    listIssues: Effect.fn("github.listIssues")(function* (
+      repo: GitHubRepoRef,
+      query: IssueQuery = { state: "open" },
+    ) {
+      return yield* withPaginationDeadline(collectIssuePages(repo, query));
+    }),
+    listIssueFieldValues: Effect.fn("github.listIssueFieldValues")(function* (
+      repo: GitHubRepoRef,
+      issueNodeIds: ReadonlyArray<string>,
+    ) {
+      if (issueNodeIds.length === 0) return new Map();
+      return yield* withPaginationDeadline(collectIssueFieldValues(repo, issueNodeIds));
+    }),
+    listPriorityFields: Effect.fn("github.listPriorityFields")(function* (repo: GitHubRepoRef) {
+      const json = yield* fetchJson(repo, orgPath(repo, "/issue-fields")).pipe(
+        Effect.mapError((error) => priorityFieldReadError(repo, error)),
+      );
+      const fields = yield* Effect.mapError(decodeIssueFields(json), toUnavailable);
+      return fields
+        .filter((field) => field.data_type === "single_select")
+        .map(({ id, name }) => ({ id, name }) satisfies GitHubPriorityField);
     }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
       const json = yield* fetchJson(repo, repoPath(repo, openPullsPath(repo, headBranch)));
@@ -784,6 +1140,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         }),
       );
     }),
+    issuePullReferences,
     pullMergeableState: (repo: GitHubRepoRef, pullNumber: number) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}`));
@@ -797,7 +1154,6 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     }),
     listReviewComments,
     listReviews,
-    projectPriorities: collectPriorities,
     listCheckRuns: (repo: GitHubRepoRef, sha: string) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/commits/${sha}/check-runs?per_page=100`));
@@ -824,8 +1180,8 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           acceptResponse,
         ),
       ),
-    createComment: (repo: GitHubRepoRef, issueNumber: number, body: string) =>
-      sendJson(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/comments`)), { body }),
+    createComment,
+    createPerformanceComment,
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
     verifyCredential: (token: Redacted.Redacted<string>) =>

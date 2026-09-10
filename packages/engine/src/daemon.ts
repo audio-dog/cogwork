@@ -11,6 +11,7 @@ import {
   PrincipalMiddleware,
   type RunActivity,
   type RunId,
+  type WorkspaceId,
 } from "@cogwork/contracts";
 
 import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
@@ -23,6 +24,7 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
+import * as References from "effect/References";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -34,6 +36,7 @@ import {
   cancelRun,
   deregisterWorkspace,
   establishConnection,
+  getGitHubPriorityFields,
   handBack,
   installPlugin,
   rebindWorkspace,
@@ -67,7 +70,13 @@ import { harnessOverview } from "./harness-overview";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
+import * as OperationResolution from "./operation-resolution";
+import { PerformanceHealthSource } from "./performance-health-source";
 import { recordProcessHealth, reportDaemonProcessHealth } from "./performance-metrics";
+import {
+  PerformanceRegressionSensor,
+  layer as performanceRegressionSensorLayer,
+} from "./performance-regression-sensor";
 import { PluginManager, pluginManagerLayer } from "./plugin";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import {
@@ -156,13 +165,13 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   const subscription = yield* bus.subscribe();
   const run = yield* ledger.getRun(id);
   if (run === null) return Stream.empty;
-  const history = yield* recorder.replay(run);
-  const lastSeq = history.at(-1)?.seq ?? -1;
+  const historyHead = (yield* ledger.latestSeq(id)) ?? -1;
+  const history = recorder.replay(run).pipe(Stream.takeWhile((item) => item.seq <= historyHead));
   const live = runActivityStream(Stream.fromSubscription(subscription)).pipe(
-    Stream.filter((item) => item.runId === id && item.seq > lastSeq),
+    Stream.filter((item) => item.runId === id && item.seq > historyHead),
   );
   const settled = run.status !== "running";
-  const base = settled ? Stream.fromIterable(history) : Stream.concat(Stream.fromIterable(history), live);
+  const base = settled ? history : Stream.concat(history, live);
   return base.pipe(Stream.takeUntil(isTerminalActivity));
 });
 
@@ -281,20 +290,21 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const picture = yield* store.picture;
     return yield* harnessOverview(picture.harnessSettings);
   }),
+  GetGitHubPriorityFields: getGitHubPriorityFields,
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
     return yield* ledger.listRuns(50);
   }),
   GetRunEvents: Effect.fn("Daemon.GetRunEvents")(function* (payload) {
     const ledger = yield* RunLedger;
-    return yield* ledger.events(payload.id);
+    return yield* ledger.events(payload.id).pipe(Stream.runCollect, Effect.orDie);
   }),
   ResolveWatchTarget: Effect.fn("Daemon.ResolveWatchTarget")(function* (payload) {
     const ledger = yield* RunLedger;
     const run = yield* ledger.resolveWatchTarget(payload.workItem);
     return run?.id ?? null;
   }),
-  WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)),
+  WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)).pipe(Stream.orDie),
   WatchEvents: () => Stream.unwrap(watchEvents()),
   CancelRun: cancelRun,
   HandBack: handBack,
@@ -335,6 +345,10 @@ export interface HostAdapters<E = never, R = never> {
   readonly pluginProvisionRoot?: string;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
   readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
+  readonly appVersion: string;
+  readonly performanceEvidenceRoot: string;
+  readonly performanceHealth: Layer.Layer<PerformanceHealthSource, E, R>;
+  readonly performanceIssueWorkspace?: WorkspaceId;
 }
 
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
@@ -364,6 +378,11 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
   );
+  const performanceIssueFiler = GitHub.performanceIssueFilerLayer(adapters.performanceIssueWorkspace).pipe(
+    Layer.provide(githubClient),
+    Layer.provide(issueTracker),
+    Layer.provide(registry),
+  );
   const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
     runLedgerPublishingLayer.pipe(
       Layer.provide(
@@ -388,13 +407,14 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     plugins,
     connections,
     credentials,
+    githubClient,
     daemonInfoLayer,
     issueTracker,
+    adapters.performanceHealth,
+    performanceIssueFiler,
     runLedger,
     runRecorder,
     runnerRequirements,
-    // The executor mints through the session store, so it is exposed here too;
-    // layer memoization keeps it the same instance the harness runners pull from.
     sessionStore,
     adapters.contextAssembler,
     Harness.layer(adapters.harnessRunners),
@@ -403,22 +423,33 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     runControlLayer,
   );
   const availability = Availability.layer;
-  const executor = Layer.effect(Executor.Executor, Executor.make);
+  const operationResolution = OperationResolution.layer;
   const services = Layer.mergeAll(
-    Layer.effect(ReconcileWorker, makeReconcile).pipe(Layer.provide(executor)),
-    executor,
-  ).pipe(Layer.provide(availability), Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)));
+    Layer.effect(ReconcileWorker, makeReconcile),
+    Layer.effect(Executor.Executor, Executor.make),
+  ).pipe(
+    Layer.provideMerge(operationResolution),
+    Layer.provide(availability),
+    Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)),
+  );
   return eventPublisherLayer.pipe(
     Layer.provideMerge(
-      recoveryLayer.pipe(
+      performanceRegressionSensorLayer({
+        appVersion: adapters.appVersion,
+        evidenceRoot: adapters.performanceEvidenceRoot,
+      }).pipe(
         Layer.provideMerge(
-          Layer.unwrap(
-            Effect.map(ControlStore, (store) =>
-              schedulerLayer(
-                configFromControlStore(store.health === "available" ? store.seed : defaultControlStore),
-              ),
+          recoveryLayer.pipe(
+            Layer.provideMerge(
+              Layer.unwrap(
+                Effect.map(ControlStore, (store) =>
+                  schedulerLayer(
+                    configFromControlStore(store.health === "available" ? store.seed : defaultControlStore),
+                  ),
+                ),
+              ).pipe(Layer.provideMerge(services)),
             ),
-          ).pipe(Layer.provideMerge(services)),
+          ),
         ),
       ),
     ),
@@ -477,7 +508,7 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   );
 });
 
-const continueAfterReconcileFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message: string) =>
+const continueAfterHeartbeatFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message: string) =>
   Effect.catchCauseIf(
     effect,
     (cause) => !Cause.hasInterruptsOnly(cause),
@@ -487,7 +518,7 @@ const continueAfterReconcileFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, 
 const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
   const worker = yield* ReconcileWorker;
   const publisher = yield* DaemonEventPublisher;
-  yield* continueAfterReconcileFailure(
+  yield* continueAfterHeartbeatFailure(
     worker.submit().pipe(Effect.tap((receipt) => Effect.logInfo("reconcile tick", receipt))),
     "reconcile heartbeat failed",
   );
@@ -497,7 +528,7 @@ const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
 });
 
 const reconcileHeartbeat = (pollIntervalMillis: number) =>
-  continueAfterReconcileFailure(reconcileTick(), "reconcile heartbeat failed").pipe(
+  continueAfterHeartbeatFailure(reconcileTick(), "reconcile heartbeat failed").pipe(
     Effect.repeat(Schedule.spaced(pollIntervalMillis)),
   );
 
@@ -506,7 +537,7 @@ export const bootstrap = Effect.gen(function* () {
   if (controlStore.health === "unavailable") return;
   const worker = yield* ReconcileWorker;
   const recovery = yield* Recovery;
-  yield* continueAfterReconcileFailure(worker.submit(), "reconcile bootstrap failed");
+  yield* continueAfterHeartbeatFailure(worker.submit(), "reconcile bootstrap failed");
   yield* recovery.recoverWhenLive();
 });
 
@@ -520,6 +551,18 @@ const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
 });
 
 const executeHeartbeat = () => executeTick().pipe(Effect.repeat(Schedule.spaced("5 seconds")));
+
+const performanceRegressionTick = Effect.fn("Daemon.performanceRegressionHeartbeat")(function* () {
+  const source = yield* PerformanceHealthSource;
+  const sensor = yield* PerformanceRegressionSensor;
+  yield* sensor.observe(yield* source.snapshot);
+});
+
+const performanceRegressionHeartbeat = () =>
+  continueAfterHeartbeatFailure(performanceRegressionTick(), "performance regression heartbeat failed").pipe(
+    Effect.repeat(Schedule.spaced("10 seconds")),
+    Effect.provideService(References.TracerEnabled, false),
+  );
 
 export interface HeartbeatOptions {
   readonly pollIntervalMillis: number;
@@ -540,6 +583,6 @@ const operationalHeartbeats = (options: HeartbeatOptions) =>
   });
 
 export const heartbeats = (options: HeartbeatOptions) =>
-  Effect.all([operationalHeartbeats(options), reportDaemonProcessHealth], {
+  Effect.all([operationalHeartbeats(options), reportDaemonProcessHealth, performanceRegressionHeartbeat()], {
     concurrency: "unbounded",
   });

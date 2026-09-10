@@ -156,14 +156,25 @@ describe("watchActivity", () => {
         event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" }),
       ]);
 
-      // The recorder owns the history read now, so the race is injected there: a
-      // late event is published while replay runs, after the watcher subscribed.
       const racing: RunRecorderService = {
         ...recorder,
         replay: (run) =>
-          recorder
-            .replay(run)
-            .pipe(Effect.tap(() => eventBus.publishActivity(activity("run-1", 2, late, 1002)))),
+          recorder.replay(run).pipe(
+            Stream.tap((item) =>
+              item.seq === 0
+                ? Effect.andThen(
+                    ledger.appendEvent(id, {
+                      seq: 2,
+                      type: late.type,
+                      name: null,
+                      data: JSON.stringify(late),
+                      atMillis: 1002,
+                    }),
+                    eventBus.publishActivity(activity("run-1", 2, late, 1002)),
+                  )
+                : Effect.void,
+            ),
+          ),
       };
 
       const seen = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(

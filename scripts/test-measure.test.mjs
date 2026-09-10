@@ -76,7 +76,11 @@ test("measurement treats missing root Node tests as zero", async () => {
 });
 
 test("measured Turbo runs every task after a failure", () => {
-  assert.ok(vitestTestArgs("turbo", "reporter").includes("--continue=always"));
+  assert.ok(vitestTestArgs("turbo").includes("--continue=always"));
+});
+
+test("measured Turbo gets test counts without cache-busting passthrough arguments", () => {
+  assert.deepEqual(vitestTestArgs("turbo"), ["turbo", "test", "--continue=always", "--output-logs=full"]);
 });
 
 test("a failed test command preserves its measurement output", async () => {
@@ -151,10 +155,19 @@ test("comparison measurement rejects an incomplete failed suite", async () => {
   await assert.rejects(() => measureComparison(async () => results.shift()), /did not complete/);
 });
 
+test("comparison measurement rejects an incomplete successful suite", async () => {
+  const results = [
+    { failed: false, stdout: "cogwork-test-count:2\nTasks: 2 successful, 2 total\n" },
+    { failed: false, stdout: "# tests 3" },
+  ];
+
+  await assert.rejects(() => measureComparison(async () => results.shift()), /did not complete/);
+});
+
 test("measurement matches the root test gate", async (context) => {
   const commands = [];
   const results = [
-    { failed: false, stdout: "cogwork-test-count:2" },
+    { failed: false, stdout: "cogwork-test-count:2\nTasks: 1 successful, 1 total" },
     { failed: false, stdout: "# tests 3" },
     { failed: false, stdout: "{}" },
   ];

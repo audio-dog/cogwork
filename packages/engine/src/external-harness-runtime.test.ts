@@ -1081,7 +1081,7 @@ describe("external Harness runtime", () => {
         };
         const recorder = yield* RunRecorder;
         yield* Effect.forEach(output, (event) => recorder.record(record, event));
-        const persisted = yield* (yield* RunLedger.RunLedger).events(record.id);
+        const persisted = yield* (yield* RunLedger.RunLedger).events(record.id).pipe(Stream.runCollect);
         assert.notInclude(yield* encodeJson(persisted), secret);
       }).pipe(Effect.provide(engineTestLayer())),
     );

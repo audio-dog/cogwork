@@ -3,6 +3,7 @@ import {
   CancelRunResult,
   type ClassifiedItem,
   type Connection,
+  type ConnectionBindingId,
   ConnectionEstablishment,
   ConnectionFailure,
   type ConnectionId,
@@ -16,6 +17,7 @@ import {
   type DaemonLimitUpdate,
   type HarnessName,
   HarnessNotRegistered,
+  IssueTrackerError,
   type OperationSettingUpdate,
   type PluginFailure,
   type PluginId,
@@ -47,6 +49,8 @@ import { ConnectionStore } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
+import { GitHubClient } from "./github/client";
+import { repoTargetFor as githubRepoTargetFor } from "./github/host";
 import { Harness } from "./harness";
 import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
 import { applyHandbackBarrier } from "./observe";
@@ -70,6 +74,29 @@ const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
 
 const workspaceIsRegistered = (registry: RegistryState, name: WorkspaceId) =>
   workspaceById(registry, name) !== null || registry.failures.some((failure) => failure.name === name);
+
+export const getGitHubPriorityFields = Effect.fn("Daemon.GetGitHubPriorityFields")(function* (payload: {
+  readonly workspace: WorkspaceId;
+  readonly connection: ConnectionBindingId;
+}) {
+  const registry = yield* (yield* WorkspaceRegistry).state;
+  const workspace = workspaceById(registry, payload.workspace);
+  if (!workspace) {
+    return yield* new WorkspaceRegistryError({
+      reason: "not-found",
+      workspace: payload.workspace,
+      message: `Workspace ${payload.workspace} is not registered`,
+    });
+  }
+  const target = githubRepoTargetFor(workspace, payload.connection);
+  if (!target) {
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: `Workspace ${payload.workspace} has no GitHub repository`,
+    });
+  }
+  return yield* (yield* GitHubClient).listPriorityFields(target);
+});
 
 const pluginMembership = (overview: PluginOverview) =>
   overview.plugins.map((plugin) => `${plugin.pluginId}:${plugin.record?.resolvedIdentity ?? ""}`);

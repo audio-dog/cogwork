@@ -1,4 +1,5 @@
 import {
+  type ConnectionBindingId,
   DaemonRpcs,
   type OperationSettingName,
   type RunId,
@@ -85,6 +86,15 @@ export const connectionsAtom = DaemonAtomRpc.query("GetConnections", undefined);
 
 // Reading this spawns every installed harness's CLI. Never put it on a timer.
 export const harnessesAtom = Atom.keepAlive(DaemonAtomRpc.query("GetHarnesses", undefined));
+
+const githubPriorityFieldsForWorkspaceAtom = Atom.family((workspace: WorkspaceId) =>
+  Atom.family((connection: ConnectionBindingId) =>
+    DaemonAtomRpc.query("GetGitHubPriorityFields", { workspace, connection }),
+  ),
+);
+
+export const githubPriorityFieldsAtom = (workspace: WorkspaceId, connection: ConnectionBindingId) =>
+  githubPriorityFieldsForWorkspaceAtom(workspace)(connection);
 
 export const setHarnessEnabledAtom = DaemonAtomRpc.mutation("SetHarnessEnabled");
 

@@ -14,6 +14,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as DaemonEventBus from "./daemon-event-bus";
 import {
   layerMemory as memoryLedgerLayer,
@@ -188,6 +189,8 @@ describe("RunLedger (memory)", () => {
           endedAtMillis: 2000,
         });
 
+        assert.strictEqual(yield* ledger.latestSeq(id), 1);
+
         const summaries = yield* ledger.listRuns(10);
         assert.strictEqual(summaries.length, 1);
         assert.strictEqual(summaries[0]?.status, "succeeded");
@@ -195,7 +198,7 @@ describe("RunLedger (memory)", () => {
         assert.strictEqual(summaries[0]?.session, "sess-abc");
         assert.strictEqual(summaries[0]?.usage?.inputTokens, 5);
 
-        const events = yield* ledger.events(id);
+        const events = yield* ledger.events(id).pipe(Stream.runCollect);
         assert.deepStrictEqual(
           events.map((event) => event.type),
           ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],

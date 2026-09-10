@@ -1,5 +1,6 @@
 import type {
   AvailabilityCause,
+  ControlStore as ControlStorePicture,
   FileContribution,
   HarnessName,
   LifecycleStage,
@@ -46,11 +47,11 @@ import {
   buildRunPlan,
   operationBindingsOf,
   type ResolvedOperation,
-  RunPlanAssemblyError,
   resolveEngineContributionEnabled,
   resolveRunPlanStage,
+  runPlanAssemblyError,
 } from "./run-plan";
-import { decideSessionChoice, type SessionChoiceInputs } from "./session-choice";
+import { decideSessionChoice, type SessionChoice, type SessionChoiceInputs } from "./session-choice";
 import { SessionStore } from "./session-store";
 
 interface PluginMcpContribution {
@@ -90,6 +91,7 @@ export interface AcceptedOperation {
   readonly mcpCredentials: ReadonlyMap<string, Redacted.Redacted<string>>;
   readonly session: SessionId;
   readonly resolved: ResolvedOperation;
+  readonly sessionChoice: SessionChoice;
 }
 
 export class OperationUnavailable extends Schema.TaggedError<OperationUnavailable>()("OperationUnavailable", {
@@ -184,6 +186,20 @@ const hostFailure = (
   message: string,
 ) => ({ _tag: "RuntimeHostFactFailed", fact, message }) satisfies AvailabilityCause;
 
+const disabledHarnessCause = (harnessName: HarnessName) =>
+  hostFailure("harness", `${harnessName} Harness is disabled on this Runtime host`);
+
+const unavailableHarnessCause = (message: string) =>
+  hostFailure("harness", `Harness enablement is unavailable: ${message}`);
+
+const currentHarnessDisablement = (picture: ControlStorePicture, harnessName: HarnessName) => {
+  if (harnessEnabled(picture.harnessSettings, harnessName)) return null;
+  return disabledHarnessCause(harnessName);
+};
+
+const selectedHarnessDisablement = (picture: ControlStorePicture, harnessName: HarnessName | null) =>
+  harnessName ? currentHarnessDisablement(picture, harnessName) : null;
+
 const harnessProbeKey = (resolved: ResolvedOperation) =>
   JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort]);
 
@@ -232,6 +248,18 @@ export const make = Effect.gen(function* () {
       ),
     ),
   );
+
+  const selectedHarnessCause = (harnessName: HarnessName | null) => {
+    if (controlStore.health === "unavailable") {
+      return Effect.succeed(unavailableHarnessCause(controlStore.message));
+    }
+    return controlStore.picture.pipe(
+      Effect.match({
+        onFailure: (error) => unavailableHarnessCause(error.message),
+        onSuccess: (picture) => selectedHarnessDisablement(picture, harnessName),
+      }),
+    );
+  };
 
   const loadPluginOverview = Effect.fn("OperationResolution.loadPluginOverview")(function* () {
     return yield* plugins.overview.pipe(
@@ -336,9 +364,8 @@ export const make = Effect.gen(function* () {
     resolved: ResolvedOperation,
   ) {
     const picture = yield* controlStore.picture;
-    if (!harnessEnabled(picture.harnessSettings, resolved.stage.harness)) {
-      return hostFailure("harness", `${resolved.stage.harness} Harness is disabled on this Runtime host`);
-    }
+    const disablement = currentHarnessDisablement(picture, resolved.stage.harness);
+    if (disablement) return disablement;
     return yield* harness
       .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort)
       .pipe(
@@ -361,7 +388,7 @@ export const make = Effect.gen(function* () {
     (resolved: ResolvedOperation) =>
       readHarnessAvailability(resolved).pipe(
         Effect.catchTag("ControlStoreFailure", (error) =>
-          Effect.succeed(hostFailure("harness", `Harness enablement is unavailable: ${error.message}`)),
+          Effect.succeed(unavailableHarnessCause(error.message)),
         ),
       ),
   );
@@ -507,11 +534,33 @@ export const make = Effect.gen(function* () {
     };
   });
 
+  const inspect = Effect.fn("OperationResolution.inspect")(
+    (workspace: RegisteredWorkspace, operation: LifecycleStage) =>
+      evaluateAvailability(workspace, operation).pipe(
+        Effect.map(({ availability, resolved }) => ({ availability, resolved })),
+      ),
+  );
+
   const availabilityOf = Effect.fn("OperationResolution.availabilityOf")(
     (workspace: RegisteredWorkspace, item: EligibleWork) =>
       evaluateAvailability(workspace, item.stage).pipe(Effect.map(({ availability }) => availability)),
   );
 
+  const currentHarnessCause = Effect.fn("OperationResolution.currentHarnessCause")(function* (
+    workspace: RegisteredWorkspace,
+    operation: LifecycleStage,
+  ) {
+    return yield* resolveStage(workspace, operation).pipe(
+      Effect.matchEffect({
+        onFailure: (error) => Effect.succeed(unavailableHarnessCause(error.message)),
+        onSuccess: (resolved) => selectedHarnessCause(resolved?.stage.harness ?? null),
+      }),
+    );
+  });
+
+  const harnessCause = Effect.fn("OperationResolution.harnessCause")((harnessName: HarnessName) =>
+    selectedHarnessCause(harnessName),
+  );
   const refreshAvailability = Effect.fn("OperationResolution.refreshAvailability")(function* (
     workspace: RegisteredWorkspace,
   ) {
@@ -595,17 +644,19 @@ export const make = Effect.gen(function* () {
       ));
     const assembly = yield* Effect.try({
       try: () => builder.complete({ context, mcpServers: [...workspaceMcpServers, ...pluginMcpServers] }),
-      catch: (cause) =>
-        new RunPlanAssemblyError({
-          message: `RunPlan: ${cause instanceof Error ? cause.message : String(cause)}`,
-          cause,
-          retryable: true,
-        }),
+      catch: runPlanAssemblyError,
     });
-    return { ...assembly, session, resolved } satisfies AcceptedOperation;
+    return { ...assembly, session, resolved, sessionChoice: choice } satisfies AcceptedOperation;
   });
 
-  return { availabilityOf, refreshAvailability, resolve };
+  return {
+    availabilityOf,
+    inspect,
+    refreshAvailability,
+    resolve,
+    currentHarnessCause,
+    harnessCause,
+  };
 });
 
 export type OperationResolutionService = Effect.Success<typeof make>;
