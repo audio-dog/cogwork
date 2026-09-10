@@ -118,10 +118,10 @@ importers:
         specifier: runtime:^24.20.0
         version: runtime:24.20.0
       tsx:
-        specifier: ^4.23.13
+        specifier: 'catalog:'
         version: 4.23.13
       turbo:
-        specifier: ^2.10.12
+        specifier: 'catalog:'
         version: 2.10.12
       typescript:
         specifier: 'catalog:'

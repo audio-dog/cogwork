@@ -24,8 +24,8 @@
     "@effect/tsgo": "catalog:",
     "@types/node": "catalog:",
     "effect": "catalog:effect",
-    "tsx": "^4.23.13",
-    "turbo": "^2.10.12",
+    "tsx": "catalog:",
+    "turbo": "catalog:",
     "typescript": "catalog:"
   },
   "devEngines": {
