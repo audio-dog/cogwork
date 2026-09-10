@@ -25,7 +25,7 @@ import { HarnessNotRegistered, HarnessOverview } from "./harness";
 import { IssueTrackerError } from "./issue-tracker";
 import { PluginFailure, PluginId, PluginMutationResult, PluginOverview } from "./plugin";
 import { PrincipalMiddleware } from "./principal";
-import { RunActivity, RunEvent, RunId, RunStatus, RunSummary } from "./run";
+import { RunActivity, RunHistory, RunId, RunStatus, RunSummary } from "./run";
 import {
   ContributionSettingRefused,
   ContributionSettingUpdate,
@@ -75,7 +75,7 @@ export const ListRuns = Rpc.make("ListRuns", { success: Schema.Array(RunSummary)
 
 export const GetRunEvents = Rpc.make("GetRunEvents", {
   payload: { id: RunId },
-  success: Schema.Array(RunEvent),
+  success: RunHistory,
 });
 
 export const ResolveWatchTarget = Rpc.make("ResolveWatchTarget", {

@@ -297,7 +297,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetRunEvents: Effect.fn("Daemon.GetRunEvents")(function* (payload) {
     const ledger = yield* RunLedger;
-    return yield* ledger.events(payload.id).pipe(Stream.runCollect, Effect.orDie);
+    return yield* ledger.history(payload.id).pipe(Effect.orDie);
   }),
   ResolveWatchTarget: Effect.fn("Daemon.ResolveWatchTarget")(function* (payload) {
     const ledger = yield* RunLedger;

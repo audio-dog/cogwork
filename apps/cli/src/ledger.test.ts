@@ -203,7 +203,7 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
-    it.effect("persists a run, its events, and reports a summary with event count", () =>
+    it.effect("persists a run and reports its event count and history state", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
         const id = runId("happy-1");
@@ -238,6 +238,7 @@ describe("sqlite RunLedger", () => {
         const summary = summaries.find((row) => row.id === id);
         assert.isDefined(summary);
         assert.strictEqual(storedSummary?.eventCount, 2);
+        assert.isNull(storedSummary?.eventsPrunedAtMillis);
         assert.strictEqual(summary?.status, "succeeded");
         assert.strictEqual(summary?.eventCount, 2);
         assert.strictEqual(summary?.session, "sess-replaced");
@@ -256,6 +257,15 @@ describe("sqlite RunLedger", () => {
           events.map((event) => event.type),
           ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
         );
+
+        const storePath = yield* TestStorePath;
+        yield* Effect.acquireUseRelease(
+          Effect.sync(() => new DatabaseSync(storePath)),
+          (sqlite) =>
+            Effect.sync(() => sqlite.prepare("UPDATE runs SET events_pruned_at = 3000 WHERE id = ?").run(id)),
+          (sqlite) => Effect.sync(() => sqlite.close()),
+        );
+        assert.strictEqual((yield* ledger.getRunSummary(id))?.eventsPrunedAtMillis, 3000);
       }),
     );
 
