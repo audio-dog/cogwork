@@ -129,9 +129,7 @@ type FreelistPageCount = {
   readonly freelist_count: number;
 };
 
-type PageCount = {
-  readonly page_count: number;
-};
+const PageCount = Schema.Struct({ page_count: Schema.Finite });
 
 const walBackupFailure = (error: unknown) =>
   new ControlStoreBootError({
@@ -191,8 +189,9 @@ const runDatabasePragma = Effect.fn("ControlStore.runDatabasePragma")(
 
 const initializeStoreFile = Effect.fn("ControlStore.initializeStoreFile")((storePath: string) =>
   withDatabaseFile(storePath, "initialize", (database) => {
-    const pageCount =
-      (database.prepare("PRAGMA page_count;").get() as PageCount | undefined)?.page_count ?? 0;
+    const { page_count: pageCount } = Schema.decodeUnknownSync(PageCount)(
+      database.prepare("PRAGMA page_count;").get(),
+    );
     if (pageCount > 0) return;
     database.exec("PRAGMA auto_vacuum=INCREMENTAL;");
   }),
