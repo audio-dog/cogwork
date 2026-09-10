@@ -160,6 +160,22 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     Ref.update(issuesRef, (issues) =>
       issues.map((issue) => (issue.number === number ? update(issue) : issue)),
     );
+  const createComment = (_repo: GitHubRepoRef, number: number, body: string) =>
+    Effect.gen(function* () {
+      const assigned = yield* Ref.getAndUpdate(nextId, (value) => value + 1);
+      yield* Ref.update(commentsRef, (all) =>
+        new Map(all).set(number, [
+          ...(all.get(number) ?? []),
+          {
+            id: assigned,
+            authorLogin: bot.login,
+            authorAssociation: "NONE",
+            body,
+            createdAtMillis: assigned,
+          },
+        ]),
+      );
+    });
   return {
     authenticatedLogin: () => Effect.succeed(bot.login),
     listIssues: () => Ref.get(issuesRef),
@@ -182,22 +198,8 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         ...issue,
         labels: issue.labels.filter((existing) => existing !== label),
       })),
-    createComment: (_repo, number, body) =>
-      Effect.gen(function* () {
-        const assigned = yield* Ref.getAndUpdate(nextId, (value) => value + 1);
-        yield* Ref.update(commentsRef, (all) =>
-          new Map(all).set(number, [
-            ...(all.get(number) ?? []),
-            {
-              id: assigned,
-              authorLogin: bot.login,
-              authorAssociation: "NONE",
-              body,
-              createdAtMillis: assigned,
-            },
-          ]),
-        );
-      }),
+    createComment,
+    createPerformanceComment: createComment,
     editComment: (_repo, commentId, body) =>
       Ref.update(
         commentsRef,

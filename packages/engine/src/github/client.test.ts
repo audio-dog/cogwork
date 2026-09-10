@@ -397,7 +397,7 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("does not replay a comment after an ambiguous transport failure", () => {
+  it.effect("reports an ambiguous coordination comment without replaying it", () => {
     const onAbort = vi.fn();
     const fetch = vi.fn<typeof globalThis.fetch>((_input, init) => {
       init?.signal?.addEventListener("abort", onAbort);
@@ -409,8 +409,21 @@ describe("GitHub client", () => {
       const operation = yield* Effect.forkChild(client.createComment(repo, 287, "claim"));
       yield* TestClock.adjust("1 minute");
       assert.strictEqual(fetch.mock.calls.length, 1);
-      yield* Fiber.join(operation);
+      const error = yield* Effect.flip(Fiber.join(operation));
+      assert.strictEqual(error.reason, "unavailable");
       assert.strictEqual(onAbort.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("accepts an ambiguous performance comment without replaying it", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.withResolvers<Response>().promise);
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(client.createPerformanceComment(repo, 287, "recurrence"));
+      yield* TestClock.adjust("1 minute");
+      yield* Fiber.join(operation);
+      assert.strictEqual(fetch.mock.calls.length, 1);
     }).pipe(withFetchClient(fetch));
   });
 

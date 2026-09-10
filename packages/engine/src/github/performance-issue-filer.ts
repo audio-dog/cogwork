@@ -281,7 +281,9 @@ const targetFor = Effect.fn("github.performanceIssueTarget")(function* (
     create,
     confirmPending,
     comment: (id, body) =>
-      issueNumber(id).pipe(Effect.flatMap((number) => client.createComment(targetRepo, number, body))),
+      issueNumber(id).pipe(
+        Effect.flatMap((number) => client.createPerformanceComment(targetRepo, number, body)),
+      ),
     ensureLabels: (issue) =>
       ensurePerformanceIssueLabels(client, targetRepo, issue).pipe(
         Effect.andThen(clearPending(issue.body)),
