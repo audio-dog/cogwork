@@ -3,7 +3,9 @@ import * as Schema from "effect/Schema";
 import {
   AgUiEvent,
   agUiFileDiffEvent,
+  agUiFileDiffUnavailableEvent,
   agUiIsFileDiffEvent,
+  agUiIsFileDiffUnavailableEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   agUiIsTerminal,
@@ -112,5 +114,21 @@ describe("AgUiEvent", () => {
     if (!agUiIsFileDiffEvent(event)) return assert.fail("expected file diff");
     assert.deepStrictEqual(event.value, { path: "src/index.ts", diff: "@@ changed @@" });
     assert.isFalse(agUiIsFileDiffEvent({ type: "CUSTOM", name: "sandbox.file.diff", value: { path: 1 } }));
+  });
+
+  it("owns the shared file-diff-unavailable event contract", () => {
+    const event = agUiFileDiffUnavailableEvent();
+
+    assert.isTrue(agUiIsFileDiffUnavailableEvent(event));
+    if (!agUiIsFileDiffUnavailableEvent(event)) return assert.fail("expected unavailable event");
+    assert.strictEqual(event.name, "sandbox.file.diff.unavailable");
+    assert.include(event.value.message, "File changes may be incomplete");
+    assert.isFalse(
+      agUiIsFileDiffUnavailableEvent({
+        type: "CUSTOM",
+        name: "sandbox.file.diff.unavailable",
+        value: { message: 1 },
+      }),
+    );
   });
 });
