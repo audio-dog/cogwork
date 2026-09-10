@@ -41,12 +41,10 @@ import {
   withSandbox,
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
@@ -67,7 +65,7 @@ import {
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
 import { SessionStore } from "./session-store";
-import { boundedDiff, ignored, tolerateFeedDeath, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { boundedDiff, ignored, mergeFileDiffFeed, watchWorktreeDiffs } from "./tools/file-diff-feed";
 import { openWorktreeSandbox, resolveBaseSha } from "./tools/sandbox";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
@@ -648,12 +646,6 @@ const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abortController: Abo
   },
 });
 
-// Not derived from the harness's own reported changes: Codex reports `file_change`
-// only for its `apply_patch` tool, so a shell-driven edit carries no such item.
-// Holding the terminal event on the drain means a stalled `git diff` would hold the
-// Run, so the drain gets its own bound.
-const feedDrainDeadline = "10 seconds";
-
 const checkoutFileDiffs = (
   checkoutPath: string,
   secretValues: ReadonlyArray<string>,
@@ -665,41 +657,18 @@ const checkoutFileDiffs = (
       const baseSha = yield* resolveBaseSha(sandbox);
       return watchWorktreeDiffs(sandbox, baseSha, stop);
     }),
-  ).pipe(
-    Stream.map((event) => scrubEvent(event, secretValues)),
-    Stream.interruptWhen(Effect.andThen(stop, Effect.sleep(feedDrainDeadline))),
-    tolerateFeedDeath("checkout file-diff feed stopped"),
-  );
+  ).pipe(Stream.map((event) => scrubEvent(event, secretValues)));
 
 // A client stops reading at the terminal event, so the feed must drain first.
 // `RUN_ERROR` is not held: the stream fails right behind it.
-const mergeCheckoutFileDiffs = Effect.fn("ExternalHarnessRuntime.mergeCheckoutFileDiffs")(function* (
+export const mergeCheckoutFileDiffs = Effect.fn("ExternalHarnessRuntime.mergeCheckoutFileDiffs")(function* <
+  E,
+  R,
+>(
   harnessEvents: Stream.Stream<AgUiEvent, HarnessError>,
-  checkoutPath: string,
-  secretValues: ReadonlyArray<string>,
+  fileDiffs: (stop: Effect.Effect<void>) => Stream.Stream<AgUiEvent, E, R>,
 ) {
-  const harnessDone = yield* Deferred.make<void>();
-  const withheldTerminal = yield* Ref.make<AgUiEvent | null>(null);
-  return Stream.merge(
-    harnessEvents.pipe(
-      Stream.filterEffect((event) =>
-        AgUiEvent.guards.RUN_FINISHED(event)
-          ? Effect.map(Ref.set(withheldTerminal, event), () => false)
-          : Effect.succeed(true),
-      ),
-      Stream.ensuring(Deferred.succeed(harnessDone, undefined)),
-    ),
-    checkoutFileDiffs(checkoutPath, secretValues, Deferred.await(harnessDone)),
-    { haltStrategy: "both" },
-  ).pipe(
-    Stream.concat(
-      Stream.unwrap(
-        Effect.map(Ref.get(withheldTerminal), (event) =>
-          event === null ? Stream.empty : Stream.make(event),
-        ),
-      ),
-    ),
-  );
+  return yield* mergeFileDiffFeed(harnessEvents, fileDiffs, "checkout file-diff feed stopped");
 });
 
 const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
@@ -780,7 +749,9 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                   ),
                 );
                 return descriptor.transport.runtimeFileDiffFeed
-                  ? mergeCheckoutFileDiffs(harnessEvents, resolved.checkout.path, secretValues)
+                  ? mergeCheckoutFileDiffs(harnessEvents, (stop) =>
+                      checkoutFileDiffs(resolved.checkout.path, secretValues, stop),
+                    )
                   : Effect.succeed(harnessEvents);
               }),
             ),
