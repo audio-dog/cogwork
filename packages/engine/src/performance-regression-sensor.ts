@@ -1,4 +1,5 @@
 import { availableParallelism, freemem, loadavg } from "node:os";
+import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -7,41 +8,20 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import type { IssueTrackerError } from "./issue-tracker";
+import type { PerformanceHealthSnapshot, ProcessHealthReading } from "./performance-health-source";
 import {
   PerformanceIssueFiler,
   type PerformanceIssueFilerService,
+  PerformanceIssueFingerprint,
   type PerformanceIssueInput,
 } from "./performance-issue-filer";
 import type { RegistryState } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { Scheduler, type SchedulerState } from "./scheduler";
-
-interface ProcessHealthReading {
-  readonly sampledAtMillis: number;
-  readonly heapUsedBytes: number;
-  readonly heapLimitBytes: number;
-  readonly eventLoopDelayP99Millis?: number;
-}
-
-export interface PerformanceHealthSnapshot {
-  readonly sampledAtMillis: number;
-  readonly daemon?: ProcessHealthReading;
-  readonly renderer?: ProcessHealthReading;
-}
-
-export interface PerformanceHealthSourceService {
-  readonly snapshot: Effect.Effect<PerformanceHealthSnapshot>;
-}
-
-export class PerformanceHealthSource extends Context.Service<
-  PerformanceHealthSource,
-  PerformanceHealthSourceService
->()("@cogwork/engine/performance-regression-sensor/PerformanceHealthSource") {}
-
-export const healthSourceLayer = (snapshot: Effect.Effect<PerformanceHealthSnapshot>) =>
-  Layer.succeed(PerformanceHealthSource, PerformanceHealthSource.of({ snapshot }));
 
 export interface MachineLoadSnapshot {
   readonly cpuCount: number;
@@ -56,9 +36,10 @@ export interface PerformanceEvidenceContext {
 }
 
 interface HealthSignalReading {
-  readonly fingerprint: string;
+  readonly fingerprint: PerformanceIssueFingerprint;
   readonly title: string;
   readonly display: string;
+  readonly recovery: string;
   readonly observed: number;
   readonly threshold: number;
   readonly unit: "ms" | "%";
@@ -96,14 +77,42 @@ interface HealthSignalState {
   readonly alarm: boolean;
   readonly breaches: number;
   readonly sampledAtMillis: number;
-  readonly pending?: PerformanceIssueInput;
-  readonly pendingAtMillis?: number;
+  readonly pending?: {
+    readonly issue: PerformanceIssueInput;
+    readonly capturedAtMillis: number;
+  };
 }
 
 const windowMillis = 10_000;
 const consecutiveBreaches = 3;
+const maximumConsecutiveWindowGapMillis = windowMillis * 1.5;
+const decodePerformanceIssueFingerprint = Schema.decodeSync(PerformanceIssueFingerprint);
+const performanceSignalFingerprints = {
+  daemonEventLoopDelay: decodePerformanceIssueFingerprint("daemon.event-loop-delay-p99.above"),
+  daemonHeapHeadroom: decodePerformanceIssueFingerprint("daemon.heap-headroom.below"),
+  rendererHeapHeadroom: decodePerformanceIssueFingerprint("renderer.heap-headroom.below"),
+} as const;
+
+const heapSignalMetadata = {
+  daemon: { fingerprint: performanceSignalFingerprints.daemonHeapHeadroom, label: "Daemon" },
+  renderer: { fingerprint: performanceSignalFingerprints.rendererHeapHeadroom, label: "Renderer" },
+} as const;
+
+const directionMetadata = {
+  above: {
+    operator: ">",
+    breached: (observed: number, threshold: number) => observed > threshold,
+  },
+  below: {
+    operator: "<",
+    breached: (observed: number, threshold: number) => observed < threshold,
+  },
+} as const;
 
 const initialHealthSignalState: HealthSignalState = { alarm: false, breaches: 0, sampledAtMillis: -1 };
+
+const isConsecutiveWindow = (state: HealthSignalState, sampledAtMillis: number) =>
+  state.sampledAtMillis < 0 || sampledAtMillis - state.sampledAtMillis <= maximumConsecutiveWindowGapMillis;
 
 const heapHeadroomPercent = (reading: ProcessHealthReading) => {
   if (reading.heapLimitBytes <= 0) return null;
@@ -113,12 +122,13 @@ const heapHeadroomPercent = (reading: ProcessHealthReading) => {
 const heapHealthSignal = (process: "daemon" | "renderer", reading: ProcessHealthReading) => {
   const observed = heapHeadroomPercent(reading);
   if (observed === null) return [];
-  const label = process === "daemon" ? "Daemon" : "Renderer";
+  const metadata = heapSignalMetadata[process];
   return [
     {
-      fingerprint: `${process}.heap-headroom.below`,
-      title: `${label} heap headroom fell below 25%`,
+      fingerprint: metadata.fingerprint,
+      title: `${metadata.label} heap headroom fell below 25%`,
       display: `${process} heap headroom below threshold`,
+      recovery: `${process} heap headroom is at or above the threshold`,
       observed,
       threshold: 25,
       unit: "%",
@@ -133,9 +143,10 @@ const daemonHealthSignals = (reading: ProcessHealthReading) => [
     ? []
     : [
         {
-          fingerprint: "daemon.event-loop-delay-p99.above",
+          fingerprint: performanceSignalFingerprints.daemonEventLoopDelay,
           title: "Daemon event-loop delay p99 exceeded 100 ms",
           display: "daemon event-loop delay p99 above threshold",
+          recovery: "daemon event-loop delay p99 is at or below the threshold",
           observed: reading.eventLoopDelayP99Millis,
           threshold: 100,
           unit: "ms",
@@ -152,14 +163,12 @@ const healthSignalReadings = (snapshot: PerformanceHealthSnapshot) => [
 ];
 
 const isBreached = (healthSignal: HealthSignalReading) =>
-  healthSignal.direction === "above"
-    ? healthSignal.observed > healthSignal.threshold
-    : healthSignal.observed < healthSignal.threshold;
+  directionMetadata[healthSignal.direction].breached(healthSignal.observed, healthSignal.threshold);
 
 const formatValue = (value: number) => Number(value.toFixed(2));
 
 const thresholdText = (healthSignal: HealthSignalReading) =>
-  `${healthSignal.direction === "above" ? ">" : "<"} ${healthSignal.threshold} ${healthSignal.unit}`;
+  `${directionMetadata[healthSignal.direction].operator} ${healthSignal.threshold} ${healthSignal.unit}`;
 
 const occurrenceLines = (healthSignal: HealthSignalReading) => [
   `Observed: ${formatValue(healthSignal.observed)} ${healthSignal.unit}`,
@@ -182,7 +191,7 @@ const signalBody = (
     `Cogwork version: ${appVersion}`,
     `Machine load: CPUs=${context.machineLoad.cpuCount}; averages=${context.machineLoad.loadAverage.join(", ")}; free memory=${context.machineLoad.freeMemoryBytes} bytes`,
     `Evidence: ${evidencePath}`,
-    `Close when: ${healthSignal.display.replace("above threshold", "is at or below the threshold").replace("below threshold", "is at or above the threshold")} over a ${windowMillis / 1_000}-second window.`,
+    `Close when: ${healthSignal.recovery} over a ${windowMillis / 1_000}-second window.`,
   ].join("\n\n");
 
 const recurrenceBody = (healthSignal: HealthSignalReading, evidencePath: string) =>
@@ -191,9 +200,9 @@ const recurrenceBody = (healthSignal: HealthSignalReading, evidencePath: string)
 export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
   dependencies: PerformanceRegressionSensorDependencies,
 ) {
-  const states = yield* Ref.make<ReadonlyMap<string, HealthSignalState>>(new Map());
+  const states = yield* Ref.make<ReadonlyMap<PerformanceIssueFingerprint, HealthSignalState>>(new Map());
   const gate = Semaphore.makeUnsafe(1);
-  const setHealthSignalState = (fingerprint: string, state: HealthSignalState) =>
+  const setHealthSignalState = (fingerprint: PerformanceIssueFingerprint, state: HealthSignalState) =>
     Ref.update(states, (current) => new Map(current).set(fingerprint, state));
 
   const prepareFiling = Effect.fn("PerformanceRegressionSensor.prepareFiling")(function* (
@@ -220,14 +229,20 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
     healthSignal: HealthSignalReading,
     state: HealthSignalState,
   ) {
-    if (!state.pending || state.pendingAtMillis === undefined) return false;
-    yield* dependencies.submit(state.pending, state.pendingAtMillis);
+    if (!state.pending) return;
+    yield* dependencies.submit(state.pending.issue, state.pending.capturedAtMillis).pipe(
+      Effect.catchIf(issueTrackerErrorIsPermanent, (error) =>
+        Effect.logWarning("performance issue filing rejected", {
+          fingerprint: healthSignal.fingerprint,
+          reason: error.reason,
+        }),
+      ),
+    );
     yield* setHealthSignalState(healthSignal.fingerprint, {
       alarm: true,
       breaches: state.breaches,
       sampledAtMillis: healthSignal.sampledAtMillis,
     });
-    return true;
   });
 
   const observeHealthSignal = Effect.fn("PerformanceRegressionSensor.observeHealthSignal")(function* (
@@ -236,7 +251,10 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
   ) {
     const state = (yield* Ref.get(states)).get(healthSignal.fingerprint) ?? initialHealthSignalState;
     if (healthSignal.sampledAtMillis <= state.sampledAtMillis) return;
-    if (!isBreached(healthSignal)) {
+    const breached = isBreached(healthSignal);
+    if (state.pending) yield* submitPending(healthSignal, state);
+    if (state.pending && breached) return;
+    if (!breached) {
       return yield* setHealthSignalState(healthSignal.fingerprint, {
         alarm: false,
         breaches: 0,
@@ -249,8 +267,7 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
         sampledAtMillis: healthSignal.sampledAtMillis,
       });
     }
-    if (yield* submitPending(healthSignal, state)) return;
-    const nextBreaches = state.breaches + 1;
+    const nextBreaches = isConsecutiveWindow(state, healthSignal.sampledAtMillis) ? state.breaches + 1 : 1;
     if (nextBreaches < consecutiveBreaches) {
       return yield* setHealthSignalState(healthSignal.fingerprint, {
         alarm: false,
@@ -263,24 +280,25 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
       alarm: false,
       breaches: nextBreaches,
       sampledAtMillis: healthSignal.sampledAtMillis,
-      pending,
-      pendingAtMillis: capturedAtMillis,
+      pending: { issue: pending, capturedAtMillis },
     } satisfies HealthSignalState;
     yield* setHealthSignalState(healthSignal.fingerprint, pendingState);
     yield* submitPending(healthSignal, pendingState);
   });
 
+  const observeSignals = Effect.fn("PerformanceRegressionSensor.observeSignals")(function* (
+    snapshot: PerformanceHealthSnapshot,
+  ) {
+    const results = yield* Effect.forEach(healthSignalReadings(snapshot), (healthSignal) =>
+      Effect.result(observeHealthSignal(healthSignal, snapshot.sampledAtMillis)),
+    );
+    const failure = results.find(Result.isFailure);
+    if (failure) return yield* failure.failure;
+  });
+
   return {
     observe: Effect.fn("PerformanceRegressionSensor.observe")((snapshot: PerformanceHealthSnapshot) =>
-      gate.withPermit(
-        Effect.forEach(
-          healthSignalReadings(snapshot),
-          (healthSignal) => observeHealthSignal(healthSignal, snapshot.sampledAtMillis),
-          {
-            discard: true,
-          },
-        ),
-      ),
+      gate.withPermit(observeSignals(snapshot)),
     ),
   } satisfies PerformanceRegressionSensorService;
 });

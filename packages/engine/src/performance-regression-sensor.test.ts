@@ -8,14 +8,16 @@ import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { IssueTrackerError } from "./issue-tracker";
-import type { PerformanceIssueFilingResult } from "./performance-issue-filer";
+import type { PerformanceHealthSnapshot } from "./performance-health-source";
+import { type PerformanceIssueFilingResult, PerformanceIssueFingerprint } from "./performance-issue-filer";
 import {
   make,
   makeEvidenceWriter,
   type PerformanceEvidenceSnapshot,
-  type PerformanceHealthSnapshot,
   PerformanceRegressionSensor,
 } from "./performance-regression-sensor";
+
+const decodeFingerprint = Schema.decodeSync(PerformanceIssueFingerprint);
 
 const breached = (sampledAtMillis: number) =>
   ({
@@ -112,11 +114,36 @@ const retryingSensorLayer = () =>
                 ? Effect.fail(
                     new IssueTrackerError({
                       reason: "unavailable",
-                      retryable: true,
                       message: "tracker unavailable",
                     }),
                   )
                 : Effect.succeed<PerformanceIssueFilingResult>("filed"),
+            ),
+          ),
+        writeEvidence: () =>
+          Ref.updateAndGet(probe.evidenceWrites, (count) => count + 1).pipe(
+            Effect.map((count) => `/tmp/evidence-${count}.json`),
+          ),
+        context: sensorContext(),
+      });
+    }),
+  ).pipe(Layer.provideMerge(SensorProbe.layer));
+
+const permanentFailureSensorLayer = () =>
+  Layer.effect(
+    PerformanceRegressionSensor,
+    Effect.gen(function* () {
+      const probe = yield* SensorProbe;
+      return yield* make({
+        appVersion: "0.0.1-test",
+        submit: () =>
+          Ref.update(probe.attempts, (count) => count + 1).pipe(
+            Effect.andThen(
+              new IssueTrackerError({
+                reason: "unavailable",
+                retryable: false,
+                message: "target is not configured",
+              }),
             ),
           ),
         writeEvidence: () =>
@@ -183,6 +210,23 @@ describe("performance regression sensor", () => {
     }).pipe(Effect.provide(standardSensorLayer())),
   );
 
+  it.effect("resets the breach count after a missing window", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
+
+      yield* sensor.observe(breached(10_000));
+      yield* sensor.observe(breached(30_000));
+      yield* sensor.observe(breached(40_000));
+
+      assert.strictEqual((yield* Ref.get(probe.submissions)).length, 0);
+
+      yield* sensor.observe(breached(50_000));
+
+      assert.strictEqual((yield* Ref.get(probe.submissions)).length, 3);
+    }).pipe(Effect.provide(standardSensorLayer())),
+  );
+
   it.effect("reuses evidence while a failed filing is retried", () =>
     Effect.gen(function* () {
       const sensor = yield* PerformanceRegressionSensor;
@@ -208,6 +252,39 @@ describe("performance regression sensor", () => {
     }).pipe(Effect.provide(retryingSensorLayer())),
   );
 
+  it.effect("files a pending transition after the signal recovers", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
+
+      yield* sensor.observe(breached(10_000));
+      yield* sensor.observe(breached(20_000));
+      yield* Effect.flip(sensor.observe(breached(30_000)));
+      yield* sensor.observe(healthy(40_000));
+      yield* sensor.observe(breached(50_000));
+      yield* sensor.observe(breached(60_000));
+      yield* sensor.observe(breached(70_000));
+
+      assert.strictEqual(yield* Ref.get(probe.attempts), 7);
+      assert.strictEqual(yield* Ref.get(probe.evidenceWrites), 6);
+    }).pipe(Effect.provide(retryingSensorLayer())),
+  );
+
+  it.effect("does not retry a permanent filing rejection", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
+
+      yield* sensor.observe(breached(10_000));
+      yield* sensor.observe(breached(20_000));
+      yield* sensor.observe(breached(30_000));
+      yield* sensor.observe(breached(40_000));
+
+      assert.strictEqual(yield* Ref.get(probe.attempts), 3);
+      assert.strictEqual(yield* Ref.get(probe.evidenceWrites), 3);
+    }).pipe(Effect.provide(permanentFailureSensorLayer())),
+  );
+
   it.effect("writes the evidence snapshot under its fingerprint", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -217,9 +294,10 @@ describe("performance regression sensor", () => {
       const snapshot: PerformanceEvidenceSnapshot = {
         capturedAtMillis: 30_000,
         healthSignal: {
-          fingerprint: "daemon.event-loop-delay-p99.above",
+          fingerprint: decodeFingerprint("daemon.event-loop-delay-p99.above"),
           title: "Daemon event-loop delay p99 exceeded 100 ms",
           display: "daemon event-loop delay p99 above threshold",
+          recovery: "daemon event-loop delay p99 is at or below the threshold",
           observed: 125,
           threshold: 100,
           unit: "ms",
