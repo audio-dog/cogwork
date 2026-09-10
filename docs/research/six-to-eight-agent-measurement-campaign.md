@@ -1,7 +1,7 @@
 # A six-agent baseline, and why the eight-agent question is still open
 
 Measurement campaign for #414 (spec Phase 4), run on `6e62ac57` with
-`scripts/perf-campaign.mjs`. This document does one job well and names the job it failed: it gives
+`configs/sensor/perf-campaign.mjs`. This document does one job well and names the job it failed: it gives
 the performance sensor (#416) a measured baseline and thresholds, and it does **not** pick a
 direction for the evidence-gated track.
 

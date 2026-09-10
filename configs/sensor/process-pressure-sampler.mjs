@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { scheduler } from "node:timers/promises";
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 const warn = (message) => console.warn(`process-pressure-sampler: ${message}`);
@@ -125,18 +126,19 @@ const fileDescriptorCounts = (pids) => {
   return counts;
 };
 
-let missingEngineReported = false;
+const reportMissingEngine = (alreadyReported) => {
+  if (alreadyReported) return;
+  warn("no engine daemon found yet — waiting");
+};
 
-const sample = () => {
+const sample = (missingEngineReported) => {
   const table = processTable();
   const children = childIndex(table);
   const sampled = targets(table, children);
   if (sampled.length === 0) {
-    if (!missingEngineReported) warn("no engine daemon found yet — waiting");
-    missingEngineReported = true;
-    return;
+    reportMissingEngine(missingEngineReported);
+    return true;
   }
-  missingEngineReported = false;
   const descriptors = fileDescriptorCounts(sampled.map(({ row }) => row.pid));
   const epochMillis = Date.now();
   const sampledAt = new Date(epochMillis).toISOString();
@@ -153,25 +155,42 @@ const sample = () => {
     ].join(","),
   );
   appendFileSync(output, `${rows.join("\n")}\n`);
+  return false;
 };
 
-const start = () => {
+const sampleSafely = (missingEngineReported) => {
+  try {
+    return sample(missingEngineReported);
+  } catch (error) {
+    warn(`sample failed: ${describe(error)}`);
+    return missingEngineReported;
+  }
+};
+
+const waitForNextSample = async (signal, state) => {
+  const waitMillis = Math.max(0, state.nextSampleAt - performance.now());
+  await scheduler.wait(waitMillis, { signal }).catch((error) => {
+    if (error?.name !== "AbortError") throw error;
+  });
+  if (signal.aborted) return;
+  const missingEngineReported = sampleSafely(state.missingEngineReported);
+  return waitForNextSample(signal, {
+    missingEngineReported,
+    nextSampleAt: state.nextSampleAt + intervalMillis,
+  });
+};
+
+const start = async () => {
   if (!existsSync(output)) writeFileSync(output, `${columns.join(",")}\n`);
   const limit = capture("sh", ["-c", "ulimit -n"]).trim();
   warn(`writing ${output} every ${intervalMillis} ms — file-descriptor soft limit is ${limit}`);
-  const timer = setInterval(() => {
-    try {
-      sample();
-    } catch (error) {
-      warn(`sample failed: ${describe(error)}`);
-    }
-  }, intervalMillis);
-  process.once("SIGINT", () => {
-    clearInterval(timer);
-    warn(`stopped — ${output}`);
-    process.exit(0);
+  const interrupted = new AbortController();
+  process.once("SIGINT", () => interrupted.abort());
+  await waitForNextSample(interrupted.signal, {
+    missingEngineReported: false,
+    nextSampleAt: performance.now(),
   });
-  sample();
+  warn(`stopped — ${output}`);
 };
 
-start();
+await start();
