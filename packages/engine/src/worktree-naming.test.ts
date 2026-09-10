@@ -29,7 +29,8 @@ describe("worktree naming", () => {
   });
 
   it("encodes a ticket id with no kebab characters", () => {
-    assert.strictEqual(branchName({ id: "!!!", title: "💣" }), "x-x-x");
+    assert.strictEqual(branchName({ id: "!!!", title: "💣" }), "u--x-x-x");
+    assert.notStrictEqual(ticketSlug("!"), ticketSlug("x"));
   });
 
   it("defaults the worktree root to a sibling of the checkout", () => {
