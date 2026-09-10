@@ -64,8 +64,8 @@ const storeAt = (storePath: string, options: NonNullable<Parameters<typeof bootC
       : { health: store.health, message: store.message },
   ).pipe(Effect.provide(bootControlStoreLayer(storePath, options)));
 
-const retainAt = (storePath: string, maximumBytes: number) =>
-  retainRunEvents(storePath, maximumBytes).pipe(
+const retainAt = (storePath: string, maximumBytes: number, maximumVacuumPages?: number) =>
+  retainRunEvents(storePath, maximumBytes, maximumVacuumPages).pipe(
     Effect.provide(controlStoreClientLayer(storePath)),
     Effect.scoped,
   );
@@ -1210,20 +1210,20 @@ layer(NodeServices.layer)((it) => {
       yield* storeAt(incremental.storePath);
       yield* storeAt(legacy.storePath);
       yield* poke(legacy.storePath, "PRAGMA journal_mode=DELETE; PRAGMA auto_vacuum=NONE; VACUUM;");
-      yield* seedPrunablePayload(incremental.storePath, 20 * 1024 * 1024);
-      yield* seedPrunablePayload(legacy.storePath, 20 * 1024 * 1024);
+      yield* seedPrunablePayload(incremental.storePath);
+      yield* seedPrunablePayload(legacy.storePath);
       const incrementalPagesBefore = yield* query(incremental.storePath, "PRAGMA page_count");
       const legacyPagesBefore = yield* query(legacy.storePath, "PRAGMA page_count");
 
       yield* TestClock.setTime(10);
-      yield* retainAt(incremental.storePath, 0);
-      yield* retainAt(legacy.storePath, 0);
+      yield* retainAt(incremental.storePath, 0, 128);
+      yield* retainAt(legacy.storePath, 0, 128);
 
       const incrementalPagesAfterFirstBoot = yield* query(incremental.storePath, "PRAGMA page_count");
       const incrementalFreelistAfterFirstBoot = yield* Schema.decodeUnknownEffect(Schema.Finite)(
         (yield* query(incremental.storePath, "PRAGMA freelist_count"))[0]?.freelist_count,
       );
-      yield* storeAt(incremental.storePath);
+      yield* retainAt(incremental.storePath, 0, 128);
       const incrementalPagesAfterSecondBoot = yield* query(incremental.storePath, "PRAGMA page_count");
       const incrementalFreelistAfterSecondBoot = yield* Schema.decodeUnknownEffect(Schema.Finite)(
         (yield* query(incremental.storePath, "PRAGMA freelist_count"))[0]?.freelist_count,

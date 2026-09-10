@@ -809,6 +809,7 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
 export const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* (
   storePath: string,
   byteBudget = maximumRunEventBytes,
+  vacuumPageBudget = maximumIncrementalVacuumPages,
 ) {
   const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
@@ -863,7 +864,7 @@ export const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(functio
   const [freelist] = yield* sql.unsafe<FreelistPageCount>("PRAGMA freelist_count;");
   if ((freelist?.freelist_count ?? 0) === 0) return;
   yield* sql.unsafe("PRAGMA wal_checkpoint(TRUNCATE);");
-  yield* runDatabasePragma(storePath, `PRAGMA incremental_vacuum(${maximumIncrementalVacuumPages});`);
+  yield* runDatabasePragma(storePath, `PRAGMA incremental_vacuum(${vacuumPageBudget});`);
 });
 
 const seedDaemonLimits = Effect.fn("ControlStore.seedDaemonLimits")(function* () {
