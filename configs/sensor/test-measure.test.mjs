@@ -4,13 +4,16 @@ import { once } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test, vi } from "vitest";
+import { afterAll, test, vi } from "vitest";
 import { measure, measureComparison, run, vitestTestArgs } from "./test-measure.mjs";
 
 const completeFailedVitest = {
   failed: true,
   stdout: "cogwork-test-count:2\nTasks: 0 successful, 1 total\n",
 };
+const emptyWorkspaceRoot = mkdtempSync(path.join(tmpdir(), "empty-sensor-workspace-"));
+
+afterAll(() => rmSync(emptyWorkspaceRoot, { recursive: true }));
 
 test("measured Turbo runs every task after a failure", () => {
   assert.ok(vitestTestArgs("turbo").includes("--continue=always"));
@@ -71,7 +74,7 @@ test("a completed failed suite publishes measurements and exits nonzero", () => 
       { failed: true, stdout: "cogwork-test-count:2\\nTasks: 0 successful, 1 total\\n" },
       { failed: false, stdout: "git measurement" },
     ];
-    await measure(async () => results.shift());
+    await measure(async () => results.shift(), ${JSON.stringify(emptyWorkspaceRoot)});
   `;
   const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
     cwd: path.resolve(import.meta.dirname, "../.."),
@@ -87,7 +90,7 @@ test("comparison measurement accepts a completed failed suite", async () => {
   const output = [];
   vi.spyOn(console, "log").mockImplementation((value) => output.push(value));
 
-  const measurement = await measureComparison(async () => completeFailedVitest);
+  const measurement = await measureComparison(async () => completeFailedVitest, emptyWorkspaceRoot);
 
   assert.equal(measurement.testCount, 2);
   assert.equal(JSON.parse(output[0]).testCount, 2);
@@ -111,8 +114,8 @@ test("comparison measurement rejects an incomplete successful suite", async () =
   );
 });
 
-test("comparison measurement includes historical root sensor tests", async () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "legacy-sensor-tests-"));
+test("comparison measurement includes root script tests", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "root-script-tests-"));
   try {
     mkdirSync(path.join(directory, "scripts"));
     writeFileSync(path.join(directory, "scripts", "legacy.test.mjs"), "");
@@ -141,7 +144,7 @@ test("measurement matches the package test gate", async () => {
   await measure(async (_file, args) => {
     commands.push(args);
     return results[commands.length - 1];
-  });
+  }, emptyWorkspaceRoot);
 
   assert.equal(commands.length, 2);
   assert.equal(commands[0].includes("test"), true);
