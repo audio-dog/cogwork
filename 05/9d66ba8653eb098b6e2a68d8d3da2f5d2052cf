@@ -1,0 +1,23 @@
+packages/engine/src/session-store.test.ts
+  s_bba803be3b62bf::t_6a7b1c2cddab52 3,22,132
+packages/engine/src/watch-activity.test.ts
+  s_bba803be3b62bf::t_6a7b1c2cddab52 2,17,30
+packages/engine/src/recovery.test.ts
+  s_bba803be3b62bf::t_6a7b1c2cddab52 3,49,73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "059d66ba8653eb098b6e2a68d8d3da2f5d2052cf",
+  "prompts": {},
+  "sessions": {
+    "s_bba803be3b62bf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08be5-f04d-7043-96fd-854e739ce495",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
