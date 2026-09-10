@@ -26,9 +26,9 @@ import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 import * as Cooldown from "./cooldown";
 import { DaemonEventBus } from "./daemon-event-bus";
-import { Executor } from "./executor";
 import { IssueTracker, type IssueTrackerError, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
+import { OperationResolution } from "./operation-resolution";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { SourceControlProvider } from "./source-control";
@@ -388,8 +388,8 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
 export const make = makeWithRefresh();
 
 export const makeRefreshing = Effect.gen(function* () {
-  const executor = yield* Executor;
-  return yield* makeWithRefresh(executor.refreshAvailability);
+  const operationResolution = yield* OperationResolution;
+  return yield* makeWithRefresh(operationResolution.refreshAvailability);
 });
 
 export class ReconcileWorker extends Context.Service<ReconcileWorker, Effect.Success<typeof make>>()(
