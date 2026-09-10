@@ -266,6 +266,7 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
     breached: boolean,
   ) {
     if (!state.pending) return false;
+    if (state.pending.retryAtMillis !== undefined && !breached) return false;
     if (healthSignal.sampledAtMillis < (state.pending.retryAtMillis ?? 0)) {
       yield* setHealthSignalState(healthSignal.fingerprint, {
         ...state,

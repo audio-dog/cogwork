@@ -293,6 +293,28 @@ describe("performance regression sensor", () => {
     }).pipe(Effect.provide(cappedSensorLayer())),
   );
 
+  it.effect("re-arms a capped alarm when the signal recovers", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
+      const cappedAt = Date.UTC(2026, 8, 9, 23, 59, 30);
+
+      yield* sensor.observe(eventLoopBreach(cappedAt - 20_000));
+      yield* sensor.observe(eventLoopBreach(cappedAt - 10_000));
+      yield* sensor.observe(eventLoopBreach(cappedAt));
+      yield* sensor.observe(healthy(cappedAt + 10_000));
+      yield* sensor.observe(eventLoopBreach(cappedAt + 31_000));
+      yield* sensor.observe(eventLoopBreach(cappedAt + 41_000));
+
+      assert.strictEqual(yield* Ref.get(probe.attempts), 1);
+
+      yield* sensor.observe(eventLoopBreach(cappedAt + 51_000));
+
+      assert.strictEqual(yield* Ref.get(probe.attempts), 2);
+      assert.strictEqual(yield* Ref.get(probe.evidenceWrites), 2);
+    }).pipe(Effect.provide(cappedSensorLayer())),
+  );
+
   it.effect("files a pending transition after the signal recovers", () =>
     Effect.gen(function* () {
       const sensor = yield* PerformanceRegressionSensor;
