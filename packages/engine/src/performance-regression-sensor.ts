@@ -80,10 +80,14 @@ interface HealthSignalState {
   readonly pending?: {
     readonly issue: PerformanceIssueInput;
     readonly capturedAtMillis: number;
+    readonly retryAtMillis?: number;
   };
 }
 
+type PendingFiling = NonNullable<HealthSignalState["pending"]>;
+
 const windowMillis = 10_000;
+const dayMillis = 24 * 60 * 60 * 1_000;
 const consecutiveBreaches = 3;
 const maximumConsecutiveWindowGapMillis = windowMillis * 1.5;
 const decodePerformanceIssueFingerprint = Schema.decodeSync(PerformanceIssueFingerprint);
@@ -113,6 +117,8 @@ const initialHealthSignalState: HealthSignalState = { alarm: false, breaches: 0,
 
 const isConsecutiveWindow = (state: HealthSignalState, sampledAtMillis: number) =>
   state.sampledAtMillis < 0 || sampledAtMillis - state.sampledAtMillis <= maximumConsecutiveWindowGapMillis;
+
+const nextUtcDay = (millis: number) => (Math.floor(millis / dayMillis) + 1) * dayMillis;
 
 const heapHeadroomPercent = (reading: ProcessHealthReading) => {
   if (reading.heapLimitBytes <= 0) return null;
@@ -228,9 +234,9 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
   const submitPending = Effect.fn("PerformanceRegressionSensor.submitPending")(function* (
     healthSignal: HealthSignalReading,
     state: HealthSignalState,
+    pending: PendingFiling,
   ) {
-    if (!state.pending) return;
-    yield* dependencies.submit(state.pending.issue, state.pending.capturedAtMillis).pipe(
+    const outcome = yield* dependencies.submit(pending.issue, healthSignal.sampledAtMillis).pipe(
       Effect.catchIf(issueTrackerErrorIsPermanent, (error) =>
         Effect.logWarning("performance issue filing rejected", {
           fingerprint: healthSignal.fingerprint,
@@ -238,11 +244,37 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
         }),
       ),
     );
+    if (outcome === "capped") {
+      yield* setHealthSignalState(healthSignal.fingerprint, {
+        ...state,
+        sampledAtMillis: healthSignal.sampledAtMillis,
+        pending: { ...pending, retryAtMillis: nextUtcDay(healthSignal.sampledAtMillis) },
+      });
+      return true;
+    }
     yield* setHealthSignalState(healthSignal.fingerprint, {
       alarm: true,
       breaches: state.breaches,
       sampledAtMillis: healthSignal.sampledAtMillis,
     });
+    return false;
+  });
+
+  const handlePending = Effect.fn("PerformanceRegressionSensor.handlePending")(function* (
+    healthSignal: HealthSignalReading,
+    state: HealthSignalState,
+    breached: boolean,
+  ) {
+    if (!state.pending) return false;
+    if (healthSignal.sampledAtMillis < (state.pending.retryAtMillis ?? 0)) {
+      yield* setHealthSignalState(healthSignal.fingerprint, {
+        ...state,
+        sampledAtMillis: healthSignal.sampledAtMillis,
+      });
+      return true;
+    }
+    const remainsPending = yield* submitPending(healthSignal, state, state.pending);
+    return remainsPending || breached;
   });
 
   const observeHealthSignal = Effect.fn("PerformanceRegressionSensor.observeHealthSignal")(function* (
@@ -252,8 +284,7 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
     const state = (yield* Ref.get(states)).get(healthSignal.fingerprint) ?? initialHealthSignalState;
     if (healthSignal.sampledAtMillis <= state.sampledAtMillis) return;
     const breached = isBreached(healthSignal);
-    if (state.pending) yield* submitPending(healthSignal, state);
-    if (state.pending && breached) return;
+    if (yield* handlePending(healthSignal, state, breached)) return;
     if (!breached) {
       return yield* setHealthSignalState(healthSignal.fingerprint, {
         alarm: false,
@@ -283,7 +314,7 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
       pending: { issue: pending, capturedAtMillis },
     } satisfies HealthSignalState;
     yield* setHealthSignalState(healthSignal.fingerprint, pendingState);
-    yield* submitPending(healthSignal, pendingState);
+    yield* submitPending(healthSignal, pendingState, pendingState.pending);
   });
 
   const observeSignals = Effect.fn("PerformanceRegressionSensor.observeSignals")(function* (

@@ -51,6 +51,17 @@ const healthy = (sampledAtMillis: number) =>
     },
   }) satisfies PerformanceHealthSnapshot;
 
+const eventLoopBreach = (sampledAtMillis: number) =>
+  ({
+    sampledAtMillis,
+    daemon: {
+      sampledAtMillis,
+      eventLoopDelayP99Millis: 125,
+      heapUsedBytes: 100,
+      heapLimitBytes: 1_000,
+    },
+  }) satisfies PerformanceHealthSnapshot;
+
 interface SensorProbeService {
   readonly submissions: Ref.Ref<ReadonlyArray<{ readonly fingerprint: string; readonly body: string }>>;
   readonly evidence: Ref.Ref<ReadonlyArray<string>>;
@@ -155,6 +166,26 @@ const permanentFailureSensorLayer = () =>
     }),
   ).pipe(Layer.provideMerge(SensorProbe.layer));
 
+const cappedSensorLayer = () =>
+  Layer.effect(
+    PerformanceRegressionSensor,
+    Effect.gen(function* () {
+      const probe = yield* SensorProbe;
+      return yield* make({
+        appVersion: "0.0.1-test",
+        submit: () =>
+          Ref.updateAndGet(probe.attempts, (count) => count + 1).pipe(
+            Effect.map((count) => (count === 1 ? "capped" : "filed")),
+          ),
+        writeEvidence: () =>
+          Ref.updateAndGet(probe.evidenceWrites, (count) => count + 1).pipe(
+            Effect.map((count) => `/tmp/evidence-${count}.json`),
+          ),
+        context: sensorContext(),
+      });
+    }),
+  ).pipe(Layer.provideMerge(SensorProbe.layer));
+
 describe("performance regression sensor", () => {
   it.effect("files only on the transition into alarm", () =>
     Effect.gen(function* () {
@@ -231,16 +262,6 @@ describe("performance regression sensor", () => {
     Effect.gen(function* () {
       const sensor = yield* PerformanceRegressionSensor;
       const probe = yield* SensorProbe;
-      const eventLoopBreach = (sampledAtMillis: number) =>
-        ({
-          sampledAtMillis,
-          daemon: {
-            sampledAtMillis,
-            eventLoopDelayP99Millis: 125,
-            heapUsedBytes: 100,
-            heapLimitBytes: 1_000,
-          },
-        }) satisfies PerformanceHealthSnapshot;
 
       yield* sensor.observe(eventLoopBreach(10_000));
       yield* sensor.observe(eventLoopBreach(20_000));
@@ -250,6 +271,26 @@ describe("performance regression sensor", () => {
       assert.strictEqual(yield* Ref.get(probe.attempts), 2);
       assert.strictEqual(yield* Ref.get(probe.evidenceWrites), 1);
     }).pipe(Effect.provide(retryingSensorLayer())),
+  );
+
+  it.effect("retries a capped alarm after the UTC day rolls over", () =>
+    Effect.gen(function* () {
+      const sensor = yield* PerformanceRegressionSensor;
+      const probe = yield* SensorProbe;
+      const cappedAt = Date.UTC(2026, 8, 9, 23, 59, 30);
+
+      yield* sensor.observe(eventLoopBreach(cappedAt - 20_000));
+      yield* sensor.observe(eventLoopBreach(cappedAt - 10_000));
+      yield* sensor.observe(eventLoopBreach(cappedAt));
+      yield* sensor.observe(eventLoopBreach(cappedAt + 10_000));
+
+      assert.strictEqual(yield* Ref.get(probe.attempts), 1);
+
+      yield* sensor.observe(eventLoopBreach(cappedAt + 31_000));
+
+      assert.strictEqual(yield* Ref.get(probe.attempts), 2);
+      assert.strictEqual(yield* Ref.get(probe.evidenceWrites), 1);
+    }).pipe(Effect.provide(cappedSensorLayer())),
   );
 
   it.effect("files a pending transition after the signal recovers", () =>
