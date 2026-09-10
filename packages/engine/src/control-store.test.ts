@@ -1090,17 +1090,22 @@ layer(NodeServices.layer)((it) => {
       const fresh = yield* temporaryStore("fresh.db");
       const empty = yield* temporaryStore("empty.db");
       const existing = yield* temporaryStore("existing.db");
+      const full = yield* temporaryStore("full.db");
       yield* fs.writeFile(empty.storePath, new Uint8Array());
       yield* storeAt(existing.storePath);
+      yield* storeAt(full.storePath);
       yield* poke(existing.storePath, "PRAGMA journal_mode=DELETE; PRAGMA auto_vacuum=NONE; VACUUM;");
+      yield* poke(full.storePath, "PRAGMA journal_mode=DELETE; PRAGMA auto_vacuum=FULL; VACUUM;");
 
       yield* storeAt(fresh.storePath);
       yield* storeAt(empty.storePath);
       yield* storeAt(existing.storePath);
+      yield* storeAt(full.storePath);
 
       assert.deepStrictEqual(yield* query(fresh.storePath, "PRAGMA auto_vacuum"), [{ auto_vacuum: 2 }]);
       assert.deepStrictEqual(yield* query(empty.storePath, "PRAGMA auto_vacuum"), [{ auto_vacuum: 2 }]);
       assert.deepStrictEqual(yield* query(existing.storePath, "PRAGMA auto_vacuum"), [{ auto_vacuum: 0 }]);
+      assert.deepStrictEqual(yield* query(full.storePath, "PRAGMA auto_vacuum"), [{ auto_vacuum: 1 }]);
     }),
   );
 

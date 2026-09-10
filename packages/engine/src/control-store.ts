@@ -129,6 +129,10 @@ type FreelistPageCount = {
   readonly freelist_count: number;
 };
 
+type PageCount = {
+  readonly page_count: number;
+};
+
 const walBackupFailure = (error: unknown) =>
   new ControlStoreBootError({
     message: `Control store WAL preparation failed: ${messageOf(error)}`,
@@ -162,24 +166,36 @@ const databaseFileFailure = (operation: string) => (error: unknown) =>
     message: `Control store database ${operation} failed: ${messageOf(error)}`,
   });
 
+const withDatabaseFile = <A>(storePath: string, operation: string, use: (database: DatabaseSync) => A) =>
+  Effect.acquireUseRelease(
+    Effect.try({
+      try: () => new DatabaseSync(storePath),
+      catch: databaseFileFailure("open"),
+    }),
+    (database) =>
+      Effect.try({
+        try: () => use(database),
+        catch: databaseFileFailure(operation),
+      }),
+    (database) =>
+      Effect.try({
+        try: () => database.close(),
+        catch: databaseFileFailure("close"),
+      }),
+  );
+
 const runDatabasePragma = Effect.fn("ControlStore.runDatabasePragma")(
   (storePath: string, statement: string) =>
-    Effect.acquireUseRelease(
-      Effect.try({
-        try: () => new DatabaseSync(storePath),
-        catch: databaseFileFailure("open"),
-      }),
-      (database) =>
-        Effect.try({
-          try: () => database.exec(statement),
-          catch: databaseFileFailure("pragma"),
-        }),
-      (database) =>
-        Effect.try({
-          try: () => database.close(),
-          catch: databaseFileFailure("close"),
-        }),
-    ),
+    withDatabaseFile(storePath, "pragma", (database) => database.exec(statement)),
+);
+
+const initializeStoreFile = Effect.fn("ControlStore.initializeStoreFile")((storePath: string) =>
+  withDatabaseFile(storePath, "initialize", (database) => {
+    const pageCount =
+      (database.prepare("PRAGMA page_count;").get() as PageCount | undefined)?.page_count ?? 0;
+    if (pageCount > 0) return;
+    database.exec("PRAGMA auto_vacuum=INCREMENTAL;");
+  }),
 );
 
 const schemaDiffError = (error: unknown) => {
@@ -902,9 +918,6 @@ const prepareStoreDirectory = Effect.fn("ControlStore.prepareStoreDirectory")(fu
   yield* fs.makeDirectory(path.dirname(storePath), { recursive: true, mode: 0o700 });
   yield* fs.chmod(path.dirname(storePath), 0o700);
 });
-
-const initializeStoreFile = (storePath: string) =>
-  runDatabasePragma(storePath, "PRAGMA auto_vacuum=INCREMENTAL;");
 
 export const controlStoreClientLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
   Layer.unwrap(
