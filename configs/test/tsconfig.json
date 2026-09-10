@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "module": "esnext",
     "moduleDetection": "force",
@@ -10,6 +11,6 @@
     "strict": true,
     "target": "ESNext"
   },
-  "include": ["base.ts"],
+  "include": ["base.ts", "test-count-reporter.ts", "src/**/*.ts"],
   "exclude": ["node_modules"]
 }
