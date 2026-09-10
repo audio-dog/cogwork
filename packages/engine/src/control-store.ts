@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import {
   type Connection,
   type ConnectionId,
@@ -27,7 +28,6 @@ import {
   SettingLevel,
   StaleControlStoreWrite,
 } from "@cogwork/contracts";
-
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as DrizzleSqlite from "drizzle-kit/payload/sqlite";
 import * as Cause from "effect/Cause";
@@ -121,12 +121,22 @@ type SqliteJournalMode = {
   readonly journal_mode: string;
 };
 
+type AutoVacuumMode = {
+  readonly auto_vacuum: number;
+};
+
+type FreelistPageCount = {
+  readonly freelist_count: number;
+};
+
 const walBackupFailure = (error: unknown) =>
   new ControlStoreBootError({
     message: `Control store WAL preparation failed: ${messageOf(error)}`,
   });
 
 const maximumRunEventAge = Duration.days(30);
+const maximumRunEventBytes = 256 * 1024 * 1024;
+const maximumIncrementalVacuumPages = 4096;
 const schemaPreflightLockOptions = {
   realpath: false,
   retries: {
@@ -146,6 +156,31 @@ const additiveSchemaStatementPatterns = [
 ];
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+const databaseFileFailure = (operation: string) => (error: unknown) =>
+  new ControlStoreBootError({
+    message: `Control store database ${operation} failed: ${messageOf(error)}`,
+  });
+
+const runDatabasePragma = Effect.fn("ControlStore.runDatabasePragma")(
+  (storePath: string, statement: string) =>
+    Effect.acquireUseRelease(
+      Effect.try({
+        try: () => new DatabaseSync(storePath),
+        catch: databaseFileFailure("open"),
+      }),
+      (database) =>
+        Effect.try({
+          try: () => database.exec(statement),
+          catch: databaseFileFailure("pragma"),
+        }),
+      (database) =>
+        Effect.try({
+          try: () => database.close(),
+          catch: databaseFileFailure("close"),
+        }),
+    ),
+);
 
 const schemaDiffError = (error: unknown) => {
   const message = messageOf(error);
@@ -771,18 +806,64 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
   );
 });
 
-const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
+export const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* (
+  storePath: string,
+  byteBudget = maximumRunEventBytes,
+) {
   const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
-  yield* sql`DELETE FROM run_events WHERE at < ${now - Duration.toMillis(maximumRunEventAge)}`;
-  yield* sql`
-    UPDATE runs
-    SET event_count = (
-      SELECT count(*)
-      FROM run_events
-      WHERE run_events.run_id = runs.id
-    )
-  `;
+  const cutoff = now - Duration.toMillis(maximumRunEventAge);
+  yield* sql.withTransaction(
+    Effect.gen(function* () {
+      yield* sql`
+        WITH eligible_runs AS (
+          SELECT
+            runs.id,
+            runs.started_at,
+            runs.ended_at,
+            sum(length(cast(run_events.data AS blob))) AS event_bytes
+          FROM runs
+          INNER JOIN sessions
+            ON sessions.id = runs.session
+            AND sessions.kind = 'opaque-handle'
+          INNER JOIN run_events ON run_events.run_id = runs.id
+          WHERE runs.status IN ('succeeded', 'failed', 'exhausted', 'interrupted', 'crashed')
+            AND runs.ended_at IS NOT NULL
+          GROUP BY runs.id, runs.started_at, runs.ended_at
+        ),
+        size_candidates AS (
+          SELECT
+            id,
+            sum(event_bytes) OVER (
+              ORDER BY ended_at DESC, started_at DESC, id DESC
+              ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) AS newest_bytes
+          FROM eligible_runs
+          WHERE ended_at >= ${cutoff}
+        ),
+        prunable_runs AS (
+          SELECT id FROM eligible_runs WHERE ended_at < ${cutoff}
+          UNION
+          SELECT id FROM size_candidates WHERE newest_bytes > ${byteBudget}
+        )
+        UPDATE runs
+        SET event_count = 0, events_pruned_at = ${now}
+        WHERE id IN (SELECT id FROM prunable_runs)
+      `;
+      yield* sql`
+        DELETE FROM run_events
+        WHERE run_id IN (
+          SELECT id FROM runs WHERE events_pruned_at = ${now}
+        )
+      `;
+    }),
+  );
+  const [autoVacuum] = yield* sql.unsafe<AutoVacuumMode>("PRAGMA auto_vacuum;");
+  if (autoVacuum?.auto_vacuum !== 2) return;
+  const [freelist] = yield* sql.unsafe<FreelistPageCount>("PRAGMA freelist_count;");
+  if ((freelist?.freelist_count ?? 0) === 0) return;
+  yield* sql.unsafe("PRAGMA wal_checkpoint(TRUNCATE);");
+  yield* runDatabasePragma(storePath, `PRAGMA incremental_vacuum(${maximumIncrementalVacuumPages});`);
 });
 
 const seedDaemonLimits = Effect.fn("ControlStore.seedDaemonLimits")(function* () {
@@ -809,7 +890,7 @@ const boot = Effect.fn("ControlStore.boot")(function* (storePath: string) {
   yield* fs.chmod(storePath, 0o600);
   yield* convergeSchema(controlStoreSchemaStatements());
   yield* seedDaemonLimits();
-  yield* retainRunEvents();
+  yield* retainRunEvents(storePath);
 });
 
 // The directory has to exist, and be private, before the client opens the file inside it. `mode`
@@ -821,10 +902,26 @@ const prepareStoreDirectory = Effect.fn("ControlStore.prepareStoreDirectory")(fu
   yield* fs.chmod(path.dirname(storePath), 0o700);
 });
 
+const storeFileNeedsInitialization = Effect.fn("ControlStore.storeFileNeedsInitialization")(function* (
+  storePath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  if (!(yield* fs.exists(storePath))) return true;
+  return (yield* fs.stat(storePath)).size === 0n;
+});
+
+const initializeStoreFile = Effect.fn("ControlStore.initializeStoreFile")(function* (storePath: string) {
+  if (!(yield* storeFileNeedsInitialization(storePath))) return;
+  yield* runDatabasePragma(storePath, "PRAGMA auto_vacuum=INCREMENTAL;");
+});
+
 export const controlStoreClientLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
   Layer.unwrap(
     Effect.map(prepareStoreDirectory(storePath), () =>
-      SqliteClient.layer({ filename: storePath, ...options }),
+      SqliteClient.layer({
+        filename: storePath,
+        ...(options.busyTimeout === undefined ? {} : { busyTimeout: options.busyTimeout }),
+      }),
     ),
   );
 
@@ -937,17 +1034,21 @@ const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
   (storePath: string, options: ControlStoreClientOptions) =>
     withSchemaPreflightLock(
       storePath,
-      Effect.scoped(
-        controlStoreSchemaStatements().pipe(
-          Effect.map(() => false),
-          Effect.catchTag("RenameShapedControlStoreDiff", () =>
-            prepareStoreForRenameBackup().pipe(Effect.map(() => true)),
+      Effect.andThen(
+        initializeStoreFile(storePath),
+        Effect.scoped(
+          controlStoreSchemaStatements().pipe(
+            Effect.map(() => false),
+            Effect.catchTag("RenameShapedControlStoreDiff", () =>
+              prepareStoreForRenameBackup().pipe(Effect.map(() => true)),
+            ),
+            Effect.provide(controlStoreClientLayer(storePath, options)),
           ),
-          Effect.provide(controlStoreClientLayer(storePath, options)),
+        ).pipe(
+          Effect.flatMap((requiresBackup) => backupRenameShapedStoreIfRequired(storePath, requiresBackup)),
+          Effect.andThen(initializeStoreFile(storePath)),
+          Effect.as<ControlStoreBootError | null>(null),
         ),
-      ).pipe(
-        Effect.flatMap((requiresBackup) => backupRenameShapedStoreIfRequired(storePath, requiresBackup)),
-        Effect.as<ControlStoreBootError | null>(null),
       ),
     ).pipe(Effect.catchCause(recoverSchemaPreflightFailure)),
 );
