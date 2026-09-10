@@ -1,0 +1,23 @@
+packages/engine/src/worktree.test.ts
+  s_bba803be3b62bf::t_0db44d30f25157 699-714
+packages/engine/src/worktree-naming.test.ts
+  s_bba803be3b62bf::t_a733b0001e493f 32
+packages/engine/src/worktree.ts
+  s_bba803be3b62bf::t_a733b0001e493f 61,65-67,373
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b33c18470f911613b1a808bf448632bacaf7253a",
+  "prompts": {},
+  "sessions": {
+    "s_bba803be3b62bf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08be5-f04d-7043-96fd-854e739ce495",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
