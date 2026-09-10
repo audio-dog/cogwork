@@ -1,5 +1,5 @@
 import type { AgUiEvent, RunRecord } from "@cogwork/contracts";
-import { HarnessName, RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { BranchName, HarnessName, RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -14,6 +14,7 @@ import { RunRecorder, type RunRecorderService } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
 
 const runId = Schema.decodeSync(RunId);
+const branchName = Schema.decodeSync(BranchName);
 const workspace = Schema.decodeSync(WorkspaceId)("example");
 const workItem = Schema.decodeSync(WorkItemId)("#49");
 const harness = Schema.decodeSync(HarnessName)("cursor");
@@ -26,7 +27,7 @@ const record = (id: string, status: "running" | "succeeded" = "running"): RunRec
   workItem,
   stage: "implement" as const,
   harness,
-  branch: "49-backfill",
+  branch: branchName("49-backfill"),
   session: null,
   usage: null,
   status,
@@ -155,14 +156,25 @@ describe("watchActivity", () => {
         event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" }),
       ]);
 
-      // The recorder owns the history read now, so the race is injected there: a
-      // late event is published while replay runs, after the watcher subscribed.
       const racing: RunRecorderService = {
         ...recorder,
         replay: (run) =>
-          recorder
-            .replay(run)
-            .pipe(Effect.tap(() => eventBus.publishActivity(activity("run-1", 2, late, 1002)))),
+          recorder.replay(run).pipe(
+            Stream.tap((item) =>
+              item.seq === 0
+                ? Effect.andThen(
+                    ledger.appendEvent(id, {
+                      seq: 2,
+                      type: late.type,
+                      name: null,
+                      data: JSON.stringify(late),
+                      atMillis: 1002,
+                    }),
+                    eventBus.publishActivity(activity("run-1", 2, late, 1002)),
+                  )
+                : Effect.void,
+            ),
+          ),
       };
 
       const seen = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(

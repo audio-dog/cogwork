@@ -1,4 +1,5 @@
 import type {
+  BranchName,
   RunEvent,
   RunId,
   RunPlan,
@@ -19,8 +20,10 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { DaemonEventBus, type DaemonEventBusService } from "./daemon-event-bus";
 import { freezeRunPlan } from "./run-plan";
 
@@ -33,7 +36,14 @@ export interface RunUpdate {
 
 export const acceptRunOperation = "accept Run";
 export const encodeRunEventOperation = "encode run event";
-const RunLedgerErrorOperation = Schema.Literals([acceptRunOperation, encodeRunEventOperation]);
+export const readRunEventsOperation = "read Run events";
+export const runEventPageSize = 256;
+export const runEventPageBudgetBytes = 1024 * 1024;
+const RunLedgerErrorOperation = Schema.Literals([
+  acceptRunOperation,
+  encodeRunEventOperation,
+  readRunEventsOperation,
+]);
 
 export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLedgerError", {
   operation: RunLedgerErrorOperation,
@@ -44,9 +54,12 @@ export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLed
 const acceptRunError = (message: string) =>
   Effect.fail(RunLedgerError.make({ operation: acceptRunOperation, message, retryable: false }));
 
+const encodeRunPlan = Schema.encodeEffect(RunPlanSchema);
+const decodeRunPlan = Schema.decodeEffect(RunPlanSchema);
+
 const snapshotRunPlan = (plan: RunPlan) =>
-  Schema.encodeEffect(RunPlanSchema)(plan).pipe(
-    Effect.flatMap(Schema.decodeEffect(RunPlanSchema)),
+  encodeRunPlan(plan).pipe(
+    Effect.flatMap(decodeRunPlan),
     Effect.map(freezeRunPlan),
     Effect.mapError((error) =>
       RunLedgerError.make({
@@ -155,8 +168,28 @@ const summarizeRunning = (runs: ReadonlyArray<RunRecord>, events: MemoryEvents) 
     .sort((a, b) => b.startedAtMillis - a.startedAtMillis)
     .map(summaryOf(events));
 
-const sortedEvents = (events: MemoryEvents, runId: RunId): ReadonlyArray<RunEvent> =>
-  [...(events.get(runId) ?? [])].sort((a, b) => a.seq - b.seq);
+const eventsForRun = (events: MemoryEvents, runId: RunId) => events.get(runId) ?? [];
+
+interface EventPageState {
+  readonly events: ReadonlyArray<RunEvent>;
+  readonly bytes: number;
+  readonly full: boolean;
+}
+
+const emptyEventPage: EventPageState = { events: [], bytes: 0, full: false };
+
+const appendToEventPage = (page: EventPageState, event: RunEvent) => {
+  if (page.full) return page;
+  const bytes = page.bytes + new TextEncoder().encode(event.data).byteLength;
+  if (page.events.length > 0 && bytes > runEventPageBudgetBytes) return { ...page, full: true };
+  return { events: [...page.events, event], bytes, full: false };
+};
+
+const eventPageAt = (events: ReadonlyArray<RunEvent>, index: number) =>
+  events.slice(index, index + runEventPageSize).reduce(appendToEventPage, emptyEventPage).events;
+
+const nextPageIndex = (index: number, page: ReadonlyArray<RunEvent>) =>
+  page.length === 0 ? Option.none<number>() : Option.some(index + page.length);
 
 const eventsForSession = (
   runs: ReadonlyArray<RunRecord>,
@@ -166,7 +199,7 @@ const eventsForSession = (
   [...runs]
     .filter((run) => run.session === session)
     .sort((a, b) => a.startedAtMillis - b.startedAtMillis)
-    .flatMap((run) => sortedEvents(events, run.id));
+    .flatMap((run) => eventsForRun(events, run.id));
 
 const withHandle = (session: Session, handle: string): Session =>
   session.kind === "opaque-handle" ? { ...session, handle } : session;
@@ -206,7 +239,7 @@ export const makeMemory = Effect.gen(function* () {
       ),
     insertRun: (record: RunRecord) => Ref.update(runsRef, (runs) => [...runs, record]),
     appendEvent: (runId: RunId, event: RunEvent) =>
-      Ref.update(eventsRef, (events) => new Map(events).set(runId, [...(events.get(runId) ?? []), event])),
+      Ref.update(eventsRef, (events) => new Map(events).set(runId, [...eventsForRun(events, runId), event])),
     updateRun: (runId: RunId, update: RunUpdate) =>
       Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => applyUpdate(run, update))),
     setRunSession: (runId: RunId, session: SessionId) =>
@@ -243,7 +276,7 @@ export const makeMemory = Effect.gen(function* () {
         const existing = sessions.get(id);
         return existing ? new Map(sessions).set(id, withHandle(existing, handle)) : sessions;
       }),
-    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.map(
         Ref.get(runsRef),
         (runs) =>
@@ -260,7 +293,7 @@ export const makeMemory = Effect.gen(function* () {
           applyUpdate(run, closeRunningUpdate(endedAtMillis)),
         ),
       ),
-    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
+    latestRunByBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.all([Ref.get(runsRef), Ref.get(sessionsRef)]).pipe(
         Effect.map(([runs, sessions]) =>
           latestRunWhere(
@@ -294,7 +327,21 @@ export const makeMemory = Effect.gen(function* () {
           return run ? summaryOf(events)(run) : null;
         }),
       ),
-    events: (runId: RunId) => Effect.map(Ref.get(eventsRef), (events) => sortedEvents(events, runId)),
+    latestSeq: (runId: RunId): Effect.Effect<number | null, RunLedgerError> =>
+      Effect.map(Ref.get(eventsRef), (events) => eventsForRun(events, runId).at(-1)?.seq ?? null),
+    events: (runId: RunId): Stream.Stream<RunEvent, RunLedgerError> =>
+      Stream.unwrap(
+        Effect.map(Ref.get(eventsRef), (events) => {
+          const snapshot = eventsForRun(events, runId);
+          return Stream.paginate(0, (index) => {
+            const page = eventPageAt(snapshot, index);
+            return Effect.succeed([page, nextPageIndex(index, page)] satisfies readonly [
+              ReadonlyArray<RunEvent>,
+              Option.Option<number>,
+            ]);
+          });
+        }),
+      ),
   } as const;
 });
 

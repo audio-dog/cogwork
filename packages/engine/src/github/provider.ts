@@ -6,7 +6,7 @@ import type { BaseDivergence, PrReview } from "../follow-up";
 import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace } from "../projector";
 import { type PrSignals, SourceControlProvider, type SourceControlProviderService } from "../source-control";
-import { branchName, ticketSlug } from "../worktree";
+import { branchBelongsToTicketSlug, branchName, ticketSlug } from "../worktree";
 import {
   GitHubClient,
   type GitHubClientService,
@@ -66,11 +66,7 @@ const sourceControlTarget = (workspace: RegisteredWorkspace) => {
   return target ? Effect.succeed(target) : Effect.fail(missingSourceControlTarget());
 };
 
-// The engine cuts an item's branch as `branchName(item)`, whose stable prefix is `ticketSlug(item.id)`.
-// A PR belongs to the item when its head branch is that slug or a `slug-…` extension of it — the `-`
-// keeps `12` from swallowing `120`, mirroring the worktree reaper's ownership check.
-export const branchBelongsToSlug = (headRef: string, slug: string) =>
-  headRef === slug || headRef.startsWith(`${slug}-`);
+export const branchBelongsToSlug = branchBelongsToTicketSlug;
 
 export const baseDivergenceOf = (mergeableState: string | null): BaseDivergence => {
   if (mergeableState === "dirty") return "conflict";

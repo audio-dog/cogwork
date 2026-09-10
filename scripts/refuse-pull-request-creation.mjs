@@ -1,0 +1,84 @@
+const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+
+const pullsCollection = /(?:^|[\s'"/])repos\/[^/\s'"?]+\/[^/\s'"?]+\/pulls(?:[?\s'";]|$)/i;
+const explicitVerb = /(?:^|\s)(?:-X|--request|--method)(?:=|\s*)([A-Za-z]+)/;
+const apiField = /(?:^|\s)(?:-[fF](?:(?=\S)|\s+)|(?:--field|--raw-field|--input)(?:=|\s+))/;
+const requestBody =
+  /(?:^|\s)(?:-[dF](?:(?=\S)|\s+)|(?:--data(?:-raw|-binary|-urlencode|-ascii)?|--json|--form|--post-data|--post-file)(?:=|\s+))/;
+const graphqlMutation = /\bcreatePullRequest\s*\(/;
+const graphqlEndpoint = /(?:^|[\s'"/])graphql(?:[?\s'";]|$)/i;
+const clientSubcommand =
+  /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bpr\b(?:\s+--?[^|;&\s]+(?:\s+(?!create\b)[^|;&\s]+)?)*\s+create\b/i;
+const httpClient = /(?:^|[\s|;&(<`])(?:gh\b[^|;&]*?\bapi\b|curl\b|wget\b|http\b)/i;
+const ghApiClient = /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bapi\b/i;
+const shellRunsTheQuote =
+  /(?:^|[\s|;&(`])(?:(?:(?:[\w.@+-]*\/)+)?(?:ba|z|k|d|a)?sh\b[^|;&]*?\s-[a-z]*c\b|eval\b)|<<</i;
+const bareWordQuote = /(^|[\s|;&(<`])(['"])([\w.@+:/?-]+)\2/g;
+const quotedSpan = /'[^']*'|"[^"]*"/g;
+const executablePrefix = /(^|[\s|;&(<`])(?:\\|(?:[\w.@+-]*\/)+)/g;
+const commandSegment = /(?:\\.|"(?:\\.|[^"])*"|'[^']*'|[^|;&\n])+/g;
+
+// A quoted span is usually text the agent passes on, so a commit subject or a work-item comment that
+// names the refused command must not itself be refused. Three shapes still run what they quote: a
+// shell given the span as its script, `eval`, and a here-string. Quoting or path-qualifying the
+// command word changes nothing about what runs, so both are normalized away first.
+const unquotedText = (command) => {
+  const unwrapped = command.replace(bareWordQuote, "$1$3");
+  const quotedAsText = unwrapped.replace(quotedSpan, " ");
+  return shellRunsTheQuote.test(quotedAsText) ? unwrapped.replaceAll(/['"]/g, " ") : quotedAsText;
+};
+
+const carriesRequestBody = (unquoted, executed) => {
+  const verb = explicitVerb.exec(unquoted)?.[1];
+  if (verb !== undefined) return verb.toUpperCase() === "POST";
+  return (ghApiClient.test(executed) ? apiField : requestBody).test(unquoted);
+};
+
+const createsPullRequestInSegment = (command) => {
+  const unquoted = unquotedText(command);
+  const executed = unquoted.replace(executablePrefix, "$1");
+  if (clientSubcommand.test(executed)) return true;
+  if (!httpClient.test(executed)) return false;
+  const carriesBody = carriesRequestBody(unquoted, executed);
+  return (
+    (pullsCollection.test(unquoted) && carriesBody) ||
+    (graphqlEndpoint.test(unquoted) && graphqlMutation.test(command) && carriesBody)
+  );
+};
+
+export const createsPullRequest = (command) => {
+  if (typeof command !== "string") return false;
+  const joined = command.replaceAll(/\\\r?\n/g, " ");
+  return (joined.match(commandSegment) ?? []).some((segment) => createsPullRequestInSegment(segment.trim()));
+};
+
+export const shouldRefuse = (payload) =>
+  isRecord(payload) && isRecord(payload.tool_input) && createsPullRequest(payload.tool_input.command);
+
+// Codex reads the whole reason back to the agent. A refused agent searches the repository for that
+// wording. An empty reason makes Codex ignore the refusal and run the command.
+export const refusal = {
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "deny",
+    permissionDecisionReason: "The engine opens the pull request. Report ready-for-pr instead.",
+  },
+};
+
+const readPayload = async () => {
+  if (process.stdin.isTTY) return null;
+  try {
+    process.stdin.setEncoding("utf8");
+    const raw = (await Array.fromAsync(process.stdin)).join("");
+    return raw.trim() === "" ? null : JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const run = async () => {
+  if (!shouldRefuse(await readPayload())) return;
+  process.stdout.write(`${JSON.stringify(refusal)}\n`);
+};
+
+if (import.meta.main) await run();
