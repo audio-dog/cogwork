@@ -13,7 +13,7 @@ const defaultSeed = 0x5eed1234;
 const commandTimeoutMs = 15 * 60 * 1_000;
 const exec = promisify(execFile);
 const rounds = 5;
-const usage = "Usage: pnpm test:compare <base-ref> <head-ref>\n";
+const usage = "Usage: pnpm --filter @cogwork/sensor test:compare <base-ref> <head-ref>\n";
 const workspaceRoot = resolve(import.meta.dirname, "../..");
 const measurementScriptPath = join(import.meta.dirname, "test-measure.mjs");
 
