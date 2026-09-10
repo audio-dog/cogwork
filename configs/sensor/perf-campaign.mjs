@@ -3,17 +3,17 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import * as net from "node:net";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, resolve } from "node:path";
+import { scheduler } from "node:timers/promises";
 
-const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const repoRoot = resolve(import.meta.dirname, "../..");
 const daemonHome = join(homedir(), ".cogwork");
 const socketPath = join(daemonHome, "cogwork.sock");
 const telemetryPath = join(daemonHome, "telemetry.db");
 const campaignDirectory = join(homedir(), "campaign");
 const manifestPath = join(campaignDirectory, "manifest.json");
 const csvPath = join(campaignDirectory, "process-pressure.csv");
-const samplerPath = join(repoRoot, "scripts", "process-pressure-sampler.mjs");
+const samplerPath = join(import.meta.dirname, "process-pressure-sampler.mjs");
 const preferencesPath = join(
   homedir(),
   "Library",
@@ -30,7 +30,6 @@ const socketPollMillis = 5_000;
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 const say = (message) => console.log(`perf-campaign: ${message}`);
 const stamp = () => new Date().toISOString();
-const wait = (millis) => new Promise((resolve) => setTimeout(resolve, millis));
 
 const capture = (file, args) => {
   try {
@@ -40,23 +39,14 @@ const capture = (file, args) => {
   }
 };
 
-const daemonListening = () =>
-  new Promise((resolve) => {
-    const socket = net.connect({ path: socketPath });
-    const settle = (listening) => {
-      socket.destroy();
-      resolve(listening);
-    };
-    const timer = setTimeout(() => settle(false), 500);
-    socket.once("connect", () => {
-      clearTimeout(timer);
-      settle(true);
-    });
-    socket.once("error", () => {
-      clearTimeout(timer);
-      settle(false);
-    });
+const daemonListening = async () => {
+  const socket = net.connect({ path: socketPath });
+  const connection = new Promise((resolve) => {
+    socket.once("connect", () => resolve(true));
+    socket.once("error", () => resolve(false));
   });
+  return Promise.race([connection, scheduler.wait(500).then(() => false)]).finally(() => socket.destroy());
+};
 
 const readManifest = () => {
   try {
@@ -179,7 +169,7 @@ const preflight = async (profiling) => {
   say("now do the two things only a human can do:");
   say(`  1. start the app:  cd ${repoRoot} && pnpm dev`);
   say("  2. open one item tab and leave it open");
-  say("then run:  node scripts/perf-campaign.mjs run");
+  say("then run:  node configs/sensor/perf-campaign.mjs run");
 };
 
 class CampaignInterrupted extends Error {}
@@ -201,7 +191,7 @@ const holdWindow = async (manifest, agents, minutes, signal) => {
   const deadline = Date.now() + minutes * 60_000;
   try {
     while (Date.now() < deadline) {
-      await wait(socketPollMillis);
+      await scheduler.wait(socketPollMillis);
       throwIfInterrupted(signal);
       if (record.daemonLostAt) continue;
       if (await daemonListening()) continue;
@@ -243,7 +233,7 @@ const run = async (minutes) => {
     return;
   }
   say("waiting for the daemon (start the app now if you have not)");
-  while (!(await daemonListening())) await wait(socketPollMillis);
+  while (!(await daemonListening())) await scheduler.wait(socketPollMillis);
   say("daemon is up");
 
   const originalLimits = readLimits();
@@ -269,7 +259,7 @@ const run = async (minutes) => {
   }
   manifest.finishedAt = stamp();
   writeManifest(manifest);
-  say("campaign complete — stop the app, then run: node scripts/perf-campaign.mjs readout");
+  say("campaign complete — stop the app, then run: node configs/sensor/perf-campaign.mjs readout");
 };
 
 // A live daemon keeps recent rows in the write-ahead log. `immutable=1` ignores that log, so it is
@@ -360,7 +350,11 @@ const histogramDelta = (store, metric, from, to) => {
 };
 
 const bytes = (value) => (typeof value === "number" ? `${(value / (1024 * 1024)).toFixed(0)} MB` : "n/a");
-const ms = (value) => (typeof value === "number" ? `${value.toFixed(value < 10 ? 2 : 1)} ms` : "n/a");
+const ms = (value) => {
+  if (typeof value !== "number") return "n/a";
+  const precision = value < 10 ? 2 : 1;
+  return `${value.toFixed(precision)} ms`;
+};
 
 const durationMetrics = [
   ["run ledger append", "cogwork_run_ledger_append_duration"],
@@ -531,6 +525,21 @@ const exitPhrases = [
   "Render process gone",
 ];
 
+const scanExitLines = (text, first, last) =>
+  text.split("\n").reduce(
+    (state, line) => {
+      const at = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/.exec(line);
+      const header = at ? new Date(at[1].replace(" ", "T")).getTime() : state.header;
+      const inWindow = header !== null && header >= first && header <= last;
+      const isExit = exitPhrases.some((phrase) => line.includes(phrase));
+      return {
+        header,
+        found: inWindow && isExit ? [...state.found, line.trim()] : state.found,
+      };
+    },
+    { header: null, found: [] },
+  ).found;
+
 // electron-log writes a timestamped header line and then the structured body, so the phrase that
 // names a death sits on a later line with no timestamp of its own. Carry the last header forward.
 // The log rotates at 1 MB, and a campaign is long enough to cross that, so read the previous file
@@ -546,16 +555,7 @@ const reportProcessExits = (manifest) => {
     say(`no desktop log at ${desktopLogPath} — this section proves nothing`);
     return;
   }
-  const found = [];
-  for (const file of files) {
-    let header = null;
-    for (const line of readFileSync(file, "utf8").split("\n")) {
-      const at = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/.exec(line);
-      if (at) header = new Date(at[1].replace(" ", "T")).getTime();
-      if (header === null || header < first || header > last) continue;
-      if (exitPhrases.some((phrase) => line.includes(phrase))) found.push(`${line.trim()}`);
-    }
-  }
+  const found = files.flatMap((file) => scanExitLines(readFileSync(file, "utf8"), first, last));
   console.log(
     found.length
       ? found.join("\n")
@@ -574,17 +574,23 @@ const minutesFrom = (argument) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
-if (command === "preflight") await preflight(flags.includes("--profile"));
-else if (command === "run") {
+const main = async () => {
+  if (command === "preflight") return preflight(flags.includes("--profile"));
+  if (command === "readout") return readout();
+  if (command !== "run") {
+    say("usage: perf-campaign.mjs preflight [--profile] | run [minutes] | readout");
+    process.exitCode = 1;
+    return;
+  }
   const minutes = minutesFrom(positional[0]);
   // A NaN deadline compares false, so an unvalidated argument would close both windows at once and
   // report a complete campaign over two empty windows.
   if (minutes === null) {
     say(`not a positive number of minutes: ${positional[0]}`);
     process.exitCode = 1;
-  } else await run(minutes);
-} else if (command === "readout") readout();
-else {
-  say("usage: perf-campaign.mjs preflight [--profile] | run [minutes] | readout");
-  process.exitCode = 1;
-}
+    return;
+  }
+  return run(minutes);
+};
+
+await main();

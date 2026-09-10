@@ -14,10 +14,6 @@
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
-    "test:compare": "node scripts/test-compare.mjs",
-    "test:measure": "node scripts/test-measure.mjs",
-    "test:node": "node scripts/test-measure.mjs --node-only",
-    "worktree:git-invocations": "tsx scripts/count-worktree-git-invocations.ts",
     "vendor": "node scripts/vendor.mjs",
     "setup-worktree": "node scripts/setup-worktree.mjs"
   },
@@ -28,8 +24,8 @@
     "@effect/tsgo": "catalog:",
     "@types/node": "catalog:",
     "effect": "catalog:effect",
-    "tsx": "^4.23.13",
-    "turbo": "^2.10.12",
+    "tsx": "catalog:",
+    "turbo": "catalog:",
     "typescript": "catalog:"
   },
   "devEngines": {

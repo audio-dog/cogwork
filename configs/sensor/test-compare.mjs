@@ -3,8 +3,8 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const defaultConfidence = 0.95;
@@ -13,10 +13,9 @@ const defaultSeed = 0x5eed1234;
 const commandTimeoutMs = 15 * 60 * 1_000;
 const exec = promisify(execFile);
 const rounds = 5;
-const scriptPath = fileURLToPath(import.meta.url);
-const usage = "Usage: pnpm test:compare <base-ref> <head-ref>\n";
-const workspaceRoot = dirname(dirname(scriptPath));
-const measurementScriptPath = join(workspaceRoot, "scripts", "test-measure.mjs");
+const usage = "Usage: pnpm --filter @cogwork/sensor test:compare <base-ref> <head-ref>\n";
+const workspaceRoot = resolve(import.meta.dirname, "../..");
+const measurementScriptPath = join(import.meta.dirname, "test-measure.mjs");
 
 const assertPositiveNumbers = (values, label) => {
   if (!Array.isArray(values) || values.length === 0) {

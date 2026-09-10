@@ -1,0 +1,27 @@
+{
+  "name": "@cogwork/sensor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:compare": "node test-compare.mjs",
+    "test:measure": "cd ../.. && node configs/sensor/test-measure.mjs",
+    "typecheck": "tsc --noEmit",
+    "worktree:git-invocations": "tsx count-worktree-git-invocations.ts"
+  },
+  "dependencies": {
+    "@cogwork/contracts": "workspace:*",
+    "@cogwork/engine": "workspace:*",
+    "@effect/platform-node": "catalog:effect",
+    "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "@cogwork/test-config": "workspace:*",
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

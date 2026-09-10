@@ -38,7 +38,7 @@
     "@cogwork/test-config": "workspace:*",
     "@effect/vitest": "catalog:effect",
     "@types/node": "catalog:",
-    "tsx": "^4.23.13",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

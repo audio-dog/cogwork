@@ -11,10 +11,13 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
-import { gitLayer, worktreeFsLayer } from "../apps/cli/src/platform";
-import type { RegisteredWorkspace } from "../packages/engine/src/projector";
-import { countingLayer, GitInvocationCounter } from "../packages/engine/src/testing/git-invocation-counting";
-import { managerLayer, WorktreeManager } from "../packages/engine/src/worktree";
+import { gitLayer, worktreeFsLayer } from "../../apps/cli/src/platform";
+import type { RegisteredWorkspace } from "../../packages/engine/src/projector";
+import {
+  countingLayer,
+  GitInvocationCounter,
+} from "../../packages/engine/src/testing/git-invocation-counting";
+import { managerLayer, WorktreeManager } from "../../packages/engine/src/worktree";
 
 const gitEnvironment = {
   GIT_CONFIG_GLOBAL: "/dev/null",
@@ -79,18 +82,19 @@ const makeFixture = Effect.fn("GitInvocationMeasurement.makeFixture")(function* 
   yield* executeGit(checkout, ["commit", "--quiet", "--message", "base"]);
   yield* executeGit(checkout, ["push", "--quiet", "--set-upstream", "origin", "main"]);
 
+  const config = yield* Schema.decodeEffect(WorkspaceConfig)({
+    name: "git-invocation-measurement",
+    checkoutPath: checkout,
+    issueTracker: { type: "github" },
+    worktrees: {
+      root: path.join(root, "worktrees"),
+      setup: [`${process.execPath} -e "require('node:fs').writeFileSync('setup-ran', '')"`],
+    },
+  });
   const workspace = {
     source: "count-worktree-git-invocations.ts",
     contributions: [],
-    config: Schema.decodeSync(WorkspaceConfig)({
-      name: "git-invocation-measurement",
-      checkoutPath: checkout,
-      issueTracker: { type: "github" },
-      worktrees: {
-        root: path.join(root, "worktrees"),
-        setup: [`${process.execPath} -e "require('node:fs').writeFileSync('setup-ran', '')"`],
-      },
-    }),
+    config,
   } satisfies RegisteredWorkspace;
 
   return workspace;
@@ -110,6 +114,7 @@ NodeRuntime.runMain(
     yield* manager.ensure(workspace, item, { resume: true });
     const resume = yield* counter.read;
 
-    yield* Console.log(JSON.stringify({ fresh, resume }));
+    const output = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({ fresh, resume });
+    yield* Console.log(output);
   }).pipe(Effect.provide(measurementLayer), Effect.scoped),
 );
