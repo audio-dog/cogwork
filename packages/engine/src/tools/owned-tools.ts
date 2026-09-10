@@ -427,6 +427,9 @@ const runSearch = <A>(
 const failedSearch = (name: "glob" | "grep", base: string, stderr: string, exitCode: number) =>
   toolError("exec-failed", `${name} search exited ${exitCode}: ${stderr.trim()}`, base);
 
+const searchSucceeded = (limitReached: boolean, exitCode: number) =>
+  limitReached || exitCode === 0 || exitCode === 1;
+
 export const ReadArgs = Schema.Struct({
   path: Schema.String,
   offset: Schema.optional(Schema.Natural),
@@ -551,7 +554,7 @@ export const runGlob = Effect.fn("Tools.glob")(function* (sandbox: WorktreeSandb
   const result = yield* runSearch(sandbox, command, base, (process) =>
     collectGlobMatches(process, base, matcher),
   );
-  if (!result.limitReached && result.exitCode !== 0) {
+  if (!searchSucceeded(result.limitReached, result.exitCode)) {
     return yield* failedSearch("glob", base, result.stderr, result.exitCode);
   }
   return { matches: result.matches };
@@ -589,7 +592,7 @@ export const runGrep = Effect.fn("Tools.grep")(function* (sandbox: WorktreeSandb
   const result = yield* runSearch(sandbox, command, base, (process) =>
     collectGrepOutput(process, base, include, compiled.matcher),
   );
-  if (result.limitReached || result.exitCode === 0 || result.exitCode === 1) {
+  if (searchSucceeded(result.limitReached, result.exitCode)) {
     return { matches: result.matches };
   }
   if (result.stderr.includes("regex parse error") || result.stderr.includes("PCRE2:")) {

@@ -414,6 +414,17 @@ describe("owned tools", () => {
     }),
   );
 
+  it.effect("treats no glob matches as success", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* openSandbox();
+      yield* Effect.promise(() => sandbox.handle.fs.mkdir("empty"));
+
+      const globbed = yield* runGlob(sandbox, { pattern: "**/*", path: "empty" });
+
+      assert.deepStrictEqual(globbed.matches, []);
+    }),
+  );
+
   it.effect("searches without traversing files through the sandbox filesystem", () =>
     Effect.gen(function* () {
       const original = yield* openSandbox();
