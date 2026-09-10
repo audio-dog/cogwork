@@ -11,9 +11,10 @@ const clientSubcommand = /(?:^|[\s|;&(<])gh\b[^|;&]*?\bpr\s+create\b/i;
 const httpClient = /(?:^|[\s|;&(<])(?:gh\s+api|curl|wget|http)\b/i;
 const ghApiClient = /(?:^|[\s|;&(<])gh\s+api\b/i;
 const shellRunsTheQuote = /(?:^|[\s|;&(])(?:(?:ba|z|k|d|a)?sh\s+-[a-z]*c|eval)\b|<<</i;
-const bareWordQuote = /(^|[\s|;&(<])(['"])([\w.@+/-]+)\2/g;
+const bareWordQuote = /(^|[\s|;&(<])(['"])([\w.@+:/?-]+)\2/g;
 const quotedSpan = /'[^']*'|"[^"]*"/g;
 const executablePrefix = /(^|[\s|;&(<])(?:\\|(?:[\w.@+-]*\/)+)/g;
+const commandSegment = /(?:\\.|"(?:\\.|[^"])*"|'[^']*'|[^|;&\n])+/g;
 
 // A quoted span is usually text the agent passes on, so a commit subject or a work-item comment that
 // names the refused command must not itself be refused. Three shapes still run what they quote: a
@@ -26,24 +27,27 @@ const unquotedText = (command) => {
     : unwrapped.replace(quotedSpan, " ");
 };
 
-const carriesRequestBody = (command, executed) => {
-  const verb = explicitVerb.exec(command)?.[1];
+const carriesRequestBody = (unquoted, executed) => {
+  const verb = explicitVerb.exec(unquoted)?.[1];
   if (verb !== undefined) return verb.toUpperCase() === "POST";
-  return (ghApiClient.test(executed) ? apiField : requestBody).test(command);
+  return (ghApiClient.test(executed) ? apiField : requestBody).test(unquoted);
 };
 
-export const createsPullRequest = (command) => {
-  if (typeof command !== "string") return false;
+const createsPullRequestInSegment = (command) => {
   const unquoted = unquotedText(command);
   const executed = unquoted.replace(executablePrefix, "$1");
   if (clientSubcommand.test(executed)) return true;
   if (!httpClient.test(executed)) return false;
-  const carriesBody = carriesRequestBody(command, executed);
+  const carriesBody = carriesRequestBody(unquoted, executed);
   return (
     (pullsCollection.test(unquoted) && carriesBody) ||
     (graphqlEndpoint.test(unquoted) && graphqlMutation.test(command) && carriesBody)
   );
 };
+
+export const createsPullRequest = (command) =>
+  typeof command === "string" &&
+  (command.match(commandSegment) ?? []).some((segment) => createsPullRequestInSegment(segment.trim()));
 
 export const shouldRefuse = (payload) =>
   isRecord(payload) && isRecord(payload.tool_input) && createsPullRequest(payload.tool_input.command);
