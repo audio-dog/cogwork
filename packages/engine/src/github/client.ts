@@ -246,7 +246,7 @@ const IssuePullReferencesPayload = Schema.Struct({
               Schema.NullOr(
                 Schema.Struct({
                   source: Schema.Struct({
-                    body: Schema.optional(Schema.String),
+                    body: Schema.optional(Schema.NullOr(Schema.String)),
                     merged: Schema.optional(Schema.Boolean),
                     repository: Schema.optional(Schema.Struct({ nameWithOwner: Schema.String })),
                   }),
@@ -310,7 +310,7 @@ export const issuePullReferencesPage = (payload: typeof IssuePullReferencesPaylo
     }
     return [
       {
-        body: source.body,
+        body: source.body ?? "",
         merged: source.merged,
         repository: source.repository.nameWithOwner,
       } satisfies RawIssuePullReference,

@@ -192,6 +192,41 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("reads pull request references with an empty body", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse({
+          data: {
+            repository: {
+              issue: {
+                timelineItems: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    {
+                      source: {
+                        body: null,
+                        merged: true,
+                        repository: { nameWithOwner: "colonylabs/cogwork" },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+
+      assert.deepStrictEqual(yield* client.issuePullReferences(repo, 416), [
+        { body: "", merged: true, repository: "colonylabs/cogwork" },
+      ]);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("rejects issue history without state and creation time", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(
