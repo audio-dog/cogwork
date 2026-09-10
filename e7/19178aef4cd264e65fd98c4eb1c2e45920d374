@@ -1,0 +1,138 @@
+packages/engine/src/watch-activity.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 2,17,30,162-177
+apps/cli/src/commands.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 16
+apps/cli/src/rpc.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 18
+packages/engine/src/testing/engine-test-layer.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 52
+packages/engine/src/worktree.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 1,25,264,699-711
+  s_0a993e81d3e7bc::t_a30b4323ac4f95 712-714
+packages/engine/src/control-store.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 26
+configs/lint/turbo.json
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-17
+packages/engine/src/tools/sandbox.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 9
+configs/lint/tests/test-count-reporter.test.mjs
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-20
+packages/contracts/src/run.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 4,83
+packages/engine/src/run-ledger.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 2,17,29,52,55,192-193,201,244,247-248,254-256,267-270,272-275,291-292,303,307-311,313,316,318,327,331,333,336,338,506,508,518,529-530,546
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 20
+.github/workflows/test-suite-comparison.yml
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-44
+apps/cli/src/login.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 18
+packages/engine/src/external-harness-runtime.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 341-342
+packages/engine/src/run-recorder.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 104,128,142,156-157,248,254-273,283,325
+configs/lint/tests/fixtures/test-count-reporter.mjs
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-4
+packages/engine/src/run-recorder.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 1,9,90-91,96-109
+packages/engine/src/worktree-naming.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 31-35
+packages/engine/CONTEXT.md
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 152
+packages/engine/src/run-plan.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 770-772,961
+packages/engine/src/executor.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 3,68,91,991,1544-1545,1553-1554,1598-1599,1639-1640,1672-1673,1763,1765,1895,1926-1929,1944-1947,2028,2097,2112,3138,3563-3566,3598-3601,4019,4201
+packages/engine/src/executor.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 4,17,21,56,82,84,118-120,137,143-152,175,223-228,237,241,277,283-287,326,329,337-338,343-354,356-367,701,722-726,1010,1028,1040,1048,1062,1073,1146,1170,1172-1179,1181-1182,1191-1197,1218,1222-1223,1226,1242,1257,1259,1263,1279,1283-1287,1352,1359-1362
+packages/engine/src/run-ledger.ts
+  s_0a993e81d3e7bc::t_953ae3f7dca255 354,371
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 2,24,27,40-47,58-60,62-63,175-196,206,246,283,300,334-346
+  s_0a993e81d3e7bc::t_28b933e1620a76 347-348
+packages/engine/src/tools/owned-tools.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 14
+packages/engine/src/engine.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 32
+packages/engine/src/github/github-helpers.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 3,166-169
+  s_0a993e81d3e7bc::t_6bd0b2a8150e23 170
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 14
+scripts/refuse-pull-request-creation.mjs
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-84
+scripts/refuse-pull-request-creation.test.mjs
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-187
+apps/cli/src/ledger.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 3,29,78,234-235,251,272-296,325,345,406,409-410,416-418,425,446-448,524,526,528-529,531-532,541-542,544,554,563-565,581,781-818,835
+apps/cli/src/ledger.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 2,30,32,185-192,258-261,271,279-281,323-369,461,591-600,677
+configs/lint/package.json
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-9
+packages/contracts/src/base-schemas.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 16-18
+docs/worktree-git-invocation-budget.md
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-21
+packages/engine/src/linear/oauth.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 7
+packages/engine/src/model-catalog.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 6
+packages/engine/src/operation-resolution.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 3,52,54,94,189-202,252-263,367-368,391,537-543,549-563,647,649,652-659
+packages/engine/src/recovery.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 3,38,49,73,400
+packages/engine/src/reconcile.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 31,391-392
+packages/engine/src/recovery.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 25,53,230
+packages/engine/src/tools/file-diff-feed-fallback.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 15
+packages/engine/src/tools/file-diff-feed-lifecycle.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 11
+packages/engine/src/github/cli-credential.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 10
+packages/engine/src/worktree.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 1,60-66,73,99,106,373
+configs/lint/tests/test-count-reporter.mjs
+  s_0a993e81d3e7bc::t_04d03943ff3911 1-13
+packages/engine/src/external-harness-runtime.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 716,720,723-743,765,770-781,797,1104
+packages/engine/src/daemon.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 73,168-169,171,174,307,426,428-434
+  s_0a993e81d3e7bc::t_953ae3f7dca255 300
+packages/engine/src/github/provider.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 9,69
+packages/engine/src/session-store.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 3,22,132
+packages/engine/src/github/client.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 8
+packages/engine/src/tools/file-diff-feed-content.test.ts
+  s_0a993e81d3e7bc::t_5ae9751126ccbc 9
+.codex/hooks.json
+  s_cff36ee3a37fb2::t_514d84c9101cff 3-14
+pnpm-lock.yaml
+  s_0a993e81d3e7bc::t_9b0d17ac16bdbd 357-358
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e719178aef4cd264e65fd98c4eb1c2e45920d374",
+  "prompts": {},
+  "sessions": {
+    "s_0a993e81d3e7bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c7e-bb78-7171-9cff-c0bc2d1d70ac",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_cff36ee3a37fb2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c12-e4ef-7f50-b0f1-12ad014890f3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
