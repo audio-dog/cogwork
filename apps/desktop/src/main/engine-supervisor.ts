@@ -31,6 +31,7 @@ import type { DaemonReachabilityError } from "./wait-for-socket";
 
 export interface EngineSupervisorOptions {
   readonly command: () => EngineCommand;
+  readonly environment: NodeJS.ProcessEnv;
   readonly socketPath: string;
   readonly probe: (socketPath: string) => Effect.Effect<boolean>;
   readonly maxRestarts?: number;
@@ -265,6 +266,7 @@ const sendProfileRequests = (
 const spawnEngine = (
   spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],
   command: EngineCommand,
+  environment: NodeJS.ProcessEnv,
   terminateTimeout: Duration.Input,
 ) =>
   spawner.spawn(
@@ -277,8 +279,8 @@ const spawnEngine = (
         fd3: { type: "input" },
         fd4: { type: "output" },
       },
-      env: { COGWORK_PROFILE_FD_TRANSPORT: "1" },
-      extendEnv: true,
+      env: { ...environment, COGWORK_PROFILE_FD_TRANSPORT: "1" },
+      extendEnv: false,
       forceKillAfter: terminateTimeout,
     }),
   );
@@ -295,7 +297,7 @@ const acquireChild = (
     const profileRequestTransportClosed = yield* Deferred.make<void>();
     const profileResponses = yield* Queue.sliding<ProcessProfileResponse>(16);
     const profileTransportClosed = yield* Deferred.make<void>();
-    const child = yield* spawnEngine(spawner, options.command(), terminateTimeout);
+    const child = yield* spawnEngine(spawner, options.command(), options.environment, terminateTimeout);
     const annotations = { pid: child.pid };
     yield* child.exitCode.pipe(
       Effect.match({
