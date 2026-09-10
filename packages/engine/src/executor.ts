@@ -180,12 +180,12 @@ interface StageOps {
 }
 
 type ExecutableWork = Omit<EligibleWork, "followUpBranch"> & {
-  readonly followUpBranch?: BranchName;
+  readonly followUpBranch: BranchName | undefined;
 };
 
-const mintBranchName = (item: EligibleWork): ExecutableWork => {
+const mintBranchName = (item: EligibleWork) => {
   const { followUpBranch, ...work } = item;
-  if (item.stage !== "follow-up" || !followUpBranch) return work;
+  if (item.stage !== "follow-up" || !followUpBranch) return { ...work, followUpBranch: undefined };
   return { ...work, followUpBranch: BranchNameSchema.make(followUpBranch) };
 };
 
