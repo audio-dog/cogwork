@@ -1,4 +1,4 @@
-import type { HarnessName, LifecycleStage, RunId, RunPlan } from "@cogwork/contracts";
+import type { AgUiEvent, HarnessName, LifecycleStage, RunId, RunPlan } from "@cogwork/contracts";
 import {
   type AgentLoopStrategy,
   type AnyTool,
@@ -31,10 +31,10 @@ import { resolveModelAdapter } from "./provider-resolve";
 import { SessionStore } from "./session-store";
 import {
   makeOwnedToolSet,
+  mergeFileDiffFeed,
   openWorktreeSandbox,
   policyForProfile,
   resolveBaseSha,
-  tolerateFeedDeath,
   watchWorktreeDiffs,
 } from "./tools";
 
@@ -51,6 +51,11 @@ export interface RunChatOptions {
 }
 
 export type RunChat = (options: RunChatOptions) => AsyncIterable<StreamChunk>;
+
+export const mergeProviderFileDiffs = <E, R>(
+  harnessEvents: Stream.Stream<AgUiEvent, HarnessError>,
+  fileDiffs: (stop: Effect.Effect<void>) => Stream.Stream<AgUiEvent, E, R>,
+) => mergeFileDiffFeed(harnessEvents, fileDiffs, "worktree diff feed stopped");
 
 const defaultRunChat: RunChat = (options) =>
   chat({
@@ -245,13 +250,8 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             outputSchema: plan.structuredOutput ?? undefined,
           });
 
-          // Live diffs are a nicety: a dead feed must not end the run, but it
-          // must leave a trace — on Linux a large ignored tree can exhaust
-          // inotify watches, and recursive watching cannot exclude subtrees.
-          return Stream.merge(
-            bridgeChat(chatStream),
-            watchWorktreeDiffs(sandbox, baseSha).pipe(tolerateFeedDeath("worktree diff feed stopped")),
-            { haltStrategy: "left" },
+          return yield* mergeProviderFileDiffs(bridgeChat(chatStream), (stop) =>
+            watchWorktreeDiffs(sandbox, baseSha, stop),
           );
         }),
       ),
