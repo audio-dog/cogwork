@@ -1,0 +1,21 @@
+docs/worktree-git-invocation-budget.md
+  s_17a49c5b7ac939::t_88b005ffe93b27 1-10,14
+  s_17a49c5b7ac939::t_08cad470778a7e 11-13
+  s_17a49c5b7ac939::t_fff6963b0f1d95 15-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "542b31d00d006197e8e14b94d5ac16f05df7cba5",
+  "prompts": {},
+  "sessions": {
+    "s_17a49c5b7ac939": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08bff-3ed8-7380-a959-66cc667dc5e2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
