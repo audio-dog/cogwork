@@ -4,7 +4,6 @@ import { rgPath } from "@vscode/ripgrep";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import type * as FiberSet from "effect/FiberSet";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -25,7 +24,9 @@ const MAX_MATCHES = 1000;
 const searchDeadline = "30 seconds";
 const processReleaseDeadline = "1 second";
 const stderrMaxBytes = 64 * 1024;
-const jsonRecordMaxBytes = 1024 * 1024;
+const outputRecordMaxBytes = 1024 * 1024;
+const grepLineMaxBytes = outputRecordMaxBytes / 2;
+const omittedLongMatchingLine = "[Omitted long matching line]";
 const bashDeadline = "5 minutes";
 const webFetchDeadline = "30 seconds";
 
@@ -300,7 +301,7 @@ const collectRecords = <A>(
   if (matches.length === MAX_MATCHES || index === records.length) return Effect.succeed(matches);
   const record = records[index];
   if (record === undefined || record === "") return collectRecords(records, parse, matches, index + 1);
-  if (Buffer.byteLength(record) > jsonRecordMaxBytes) {
+  if (Buffer.byteLength(record) > outputRecordMaxBytes) {
     return Effect.fail(toolError("exec-failed", "ripgrep output record exceeded the parsing limit"));
   }
   return parse(record).pipe(
@@ -319,7 +320,7 @@ const collectDelimitedOutput = <A>(
   processCommand(() => chunks.next()).pipe(
     Effect.flatMap((next) => {
       const { buffered, records } = splitRecords(output.buffered, next, separator);
-      if (Buffer.byteLength(buffered) > jsonRecordMaxBytes) {
+      if (Buffer.byteLength(buffered) > outputRecordMaxBytes) {
         return Effect.fail(toolError("exec-failed", "ripgrep output record exceeded the parsing limit"));
       }
       return collectRecords(records, parse, output.matches).pipe(
@@ -332,51 +333,27 @@ const collectDelimitedOutput = <A>(
     }),
   );
 
-const RipgrepEvent = Schema.Struct({ type: Schema.String });
-const RipgrepString = Schema.Union([
-  Schema.Struct({ text: Schema.String }),
-  Schema.Struct({ bytes: Schema.String }),
-]);
-const RipgrepMatchEvent = Schema.Struct({
-  type: Schema.Literal("match"),
-  data: Schema.Struct({
-    path: RipgrepString,
-    lines: RipgrepString,
-    line_number: Schema.Finite,
-  }),
-});
-const decodeRipgrepEvent = Schema.decodeUnknownOption(RipgrepEvent);
-const decodeRipgrepMatchEvent = Schema.decodeUnknownOption(RipgrepMatchEvent);
-const decodeRipgrepJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
-
-const parseRipgrepJson = (line: string) =>
-  decodeRipgrepJson(line).pipe(
-    Effect.mapError((cause) => toolError("exec-failed", `invalid ripgrep output: ${String(cause)}`)),
-  );
-
-const parseGrepMatch = (base: string, include: RegExp | null, matcher: RegExp, line: string) =>
+const parseGrepMatch = (base: string, include: RegExp | null, matcher: RegExp, record: string) =>
   Effect.gen(function* () {
-    const json = yield* parseRipgrepJson(line);
-    const event = decodeRipgrepEvent(json);
-    if (Option.isNone(event)) {
-      return yield* toolError("exec-failed", "invalid ripgrep event");
+    const pathSeparator = record.indexOf("\0");
+    const lineSeparator = record.indexOf(":", pathSeparator + 1);
+    if (pathSeparator <= 0 || lineSeparator === -1) {
+      return yield* toolError("exec-failed", "invalid ripgrep output");
     }
-    if (event.value.type !== "match") return null;
-    const match = decodeRipgrepMatchEvent(json);
-    if (Option.isNone(match)) {
-      return yield* toolError("exec-failed", "invalid ripgrep match event");
+    const line = Number(record.slice(pathSeparator + 1, lineSeparator));
+    if (!Number.isSafeInteger(line) || line < 1) {
+      return yield* toolError("exec-failed", "invalid ripgrep line number");
     }
-    if (!("text" in match.value.data.path) || !("text" in match.value.data.lines)) return null;
-    const path = relativeSearchPath(match.value.data.path.text);
+    const text = record.slice(lineSeparator + 1);
+    if (text === omittedLongMatchingLine) return null;
+    const path = relativeSearchPath(record.slice(0, pathSeparator));
     const relative = pathWithinBase(base, path);
     if (relative === null || (include !== null && !include.test(relative))) return null;
-    const text = match.value.data.lines.text;
-    const normalizedText = text.endsWith("\n") ? text.slice(0, -1) : text;
-    if (!matcher.test(normalizedText)) return null;
+    if (!matcher.test(text)) return null;
     return {
       path,
-      line: match.value.data.line_number,
-      text: normalizedText,
+      line,
+      text,
     } satisfies GrepMatch;
   });
 
@@ -580,8 +557,12 @@ export const runGrep = Effect.fn("Tools.grep")(function* (sandbox: WorktreeSandb
   if (yield* prepareSearchBase(sandbox, base)) return { matches: [] };
   const include = args.include === undefined ? null : globToRegExp(args.include);
   const command = searchCommand([
-    "--json",
     "--line-number",
+    "--with-filename",
+    "--null",
+    "--no-heading",
+    "--color=never",
+    `--max-columns=${grepLineMaxBytes}`,
     "--pcre2",
     ...searchArgs,
     ...searchExclusions,

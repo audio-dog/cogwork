@@ -130,14 +130,7 @@ const stalledSearchSandbox = Effect.fn("owned-tools.test.stalledSearchSandbox")(
   };
 });
 
-const ripgrepMatchEvent = (
-  path: string,
-  lines: { readonly text: string } | { readonly bytes: string } = { text: "target\n" },
-) =>
-  JSON.stringify({
-    type: "match",
-    data: { path: { text: path }, lines, line_number: 1 },
-  });
+const ripgrepMatchRecord = (path: string) => `${path}\u00001:target`;
 
 const makeTools = Effect.fn("owned-tools.test.makeTools")(function* (
   sandbox: WorktreeSandbox,
@@ -574,6 +567,18 @@ describe("owned tools", () => {
     }),
   );
 
+  it.effect("skips oversized fallback candidates without dropping later matches", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* openSandbox();
+      const oversizedLine = "x".repeat(1024 * 1024);
+      yield* writeFile(sandbox, { path: "large.txt", content: `${oversizedLine}\nfoo.bar\n` });
+
+      const grepped = yield* runGrep(sandbox, { pattern: "foo.bar" });
+
+      assert.deepStrictEqual(grepped.matches, [{ path: "large.txt", line: 2, text: "foo.bar" }]);
+    }),
+  );
+
   it.effect("preserves JavaScript identity escapes in grep patterns", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
@@ -609,18 +614,6 @@ describe("owned tools", () => {
     }),
   );
 
-  it.effect("skips byte-form ripgrep matches without dropping text matches", () =>
-    Effect.gen(function* () {
-      const original = yield* openSandbox();
-      const byteMatch = ripgrepMatchEvent("encoded.txt", { bytes: "dGFyZ2V0Cg==" });
-      const output = searchOutputSandbox(original, `${byteMatch}\n${ripgrepMatchEvent("text.txt")}\n`);
-
-      const grepped = yield* runGrep(output.sandbox, { pattern: "target" });
-
-      assert.deepStrictEqual(grepped.matches, [{ path: "text.txt", line: 1, text: "target" }]);
-    }),
-  );
-
   it.effect("shell-quotes every model-controlled search argument", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
@@ -640,7 +633,7 @@ describe("owned tools", () => {
       const globPaths = `${Array.from({ length: 1001 }, (_, index) => `file-${index}.ts`).join("\0")}\0`;
       const glob = searchOutputSandbox(original, globPaths);
       const grepEvents = `${Array.from({ length: 2001 }, (_, index) =>
-        ripgrepMatchEvent(`file-${index}.${index < 1000 ? "js" : "ts"}`),
+        ripgrepMatchRecord(`file-${index}.${index < 1000 ? "js" : "ts"}`),
       ).join("\n")}\n`;
       const grep = searchOutputSandbox(original, grepEvents);
 
