@@ -67,6 +67,7 @@ import { harnessOverview } from "./harness-overview";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
+import * as OperationResolution from "./operation-resolution";
 import { recordProcessHealth, reportDaemonProcessHealth } from "./performance-metrics";
 import { PluginManager, pluginManagerLayer } from "./plugin";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
@@ -393,8 +394,6 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     runLedger,
     runRecorder,
     runnerRequirements,
-    // The executor mints through the session store, so it is exposed here too;
-    // layer memoization keeps it the same instance the harness runners pull from.
     sessionStore,
     adapters.contextAssembler,
     Harness.layer(adapters.harnessRunners),
@@ -403,11 +402,15 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     runControlLayer,
   );
   const availability = Availability.layer;
-  const executor = Layer.effect(Executor.Executor, Executor.make);
+  const operationResolution = OperationResolution.layer;
   const services = Layer.mergeAll(
-    Layer.effect(ReconcileWorker, makeReconcile).pipe(Layer.provide(executor)),
-    executor,
-  ).pipe(Layer.provide(availability), Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)));
+    Layer.effect(ReconcileWorker, makeReconcile),
+    Layer.effect(Executor.Executor, Executor.make),
+  ).pipe(
+    Layer.provideMerge(operationResolution),
+    Layer.provide(availability),
+    Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)),
+  );
   return eventPublisherLayer.pipe(
     Layer.provideMerge(
       recoveryLayer.pipe(
