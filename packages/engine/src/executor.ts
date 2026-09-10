@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   AvailabilityCause,
+  BranchName,
   ControlStore as ControlStorePicture,
   FileContribution,
   HarnessName,
@@ -20,6 +21,7 @@ import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
+  BranchName as BranchNameSchema,
   decodeStageResultCompletion,
   harnessEnabled,
   ImplementStageResult,
@@ -170,7 +172,7 @@ export const meteredTotalTokens = (usage: TokenUsage | null | undefined) =>
 interface StageOps {
   readonly resolved: ResolvedStage;
   readonly planStage: ResolvedOperation;
-  readonly branch: string | null;
+  readonly branch: BranchName | null;
   readonly prepare: Effect.Effect<PreparedRun, PrepareError>;
   readonly fullPrompt: string;
   readonly resume: boolean;
@@ -199,10 +201,12 @@ const defaultFollowUp: FollowUpContext = {
   baseDivergence: "none",
 };
 
+const explicitBranchName = (item: EligibleWork) =>
+  item.followUpBranch ? BranchNameSchema.make(item.followUpBranch) : null;
+
 const resumeWorktreeOptions = (item: EligibleWork) => {
-  if (item.stage === "follow-up" && item.followUpBranch) {
-    return { resume: true, branch: item.followUpBranch };
-  }
+  const branch = explicitBranchName(item);
+  if (item.stage === "follow-up" && branch) return { resume: true, branch };
   return { resume: true };
 };
 
@@ -524,13 +528,17 @@ export const make = Effect.gen(function* () {
       harness.sessionKind,
     );
 
-  const latestResumableBranchRun = (workspace: RegisteredWorkspace, branch: string) =>
+  const latestResumableBranchRun = (workspace: RegisteredWorkspace, branch: BranchName) =>
     Effect.all([
       ledger.sessionForBranch(workspace.config.name, branch),
       ledger.latestRunByBranch(workspace.config.name, branch),
     ]).pipe(Effect.map(([session, run]) => (session === run?.session ? run : null)));
 
-  const candidateSession = (workspace: RegisteredWorkspace, item: EligibleWork, branch: string | null) => {
+  const candidateSession = (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    branch: BranchName | null,
+  ) => {
     const resumedSession = item.resume?.session;
     if (resumedSession) return Effect.succeed(resumedSession);
     if (!branch) return Effect.succeed(null);
@@ -1001,7 +1009,7 @@ export const make = Effect.gen(function* () {
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    branch: string,
+    branch: BranchName,
     context: FollowUpContext,
     prompt: string,
   ) {
@@ -1024,7 +1032,7 @@ export const make = Effect.gen(function* () {
 
   const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
     const resolved = planStage.stage;
-    const branch = item.followUpBranch ?? branchName(item);
+    const branch = explicitBranchName(item) ?? branchName(item);
     const context = item.followUp ?? defaultFollowUp;
     const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
     return {

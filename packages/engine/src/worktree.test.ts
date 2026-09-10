@@ -1,4 +1,4 @@
-import { WorkspaceConfig } from "@cogwork/contracts";
+import { BranchName, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -22,6 +22,7 @@ import * as Worktree from "./worktree";
 import { type FileStat, WorktreeFs, type WorktreeFsService } from "./worktree-fs";
 
 const decodeConfig = Schema.decodeSync(WorkspaceConfig);
+const decodeBranchName = Schema.decodeSync(BranchName);
 const interruptionGate = Latch.makeUnsafe();
 const item = { id: "#13", title: "Worktree lifecycle" } satisfies Worktree.WorkItemRef;
 const worktreePath = (branch = Worktree.branchName(item)) =>
@@ -260,7 +261,7 @@ describe("Worktree.ensure", () => {
   it.effect("prepares an explicitly linked branch instead of deriving one from the item", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
-      const branch = "claude/github-issue-13-a1b2c3";
+      const branch = decodeBranchName("claude/github-issue-13-a1b2c3");
       const manager = yield* Effect.provide(
         Worktree.make,
         provide(fakeGit(recorder, { remoteBranches: [branch] }), fakeFs(recorder, {})),

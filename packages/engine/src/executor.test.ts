@@ -1,5 +1,6 @@
 import {
   AgUiEvent,
+  BranchName,
   ConnectionId,
   type ContributionSettingRow,
   ControlStoreFailure,
@@ -86,6 +87,7 @@ import {
 } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
+const decodeBranchName = Schema.decodeSync(BranchName);
 const codex = Schema.decodeSync(HarnessName)("codex");
 const replay = Schema.decodeSync(HarnessName)("replay");
 const id = Schema.decodeSync(WorkItemId);
@@ -990,7 +992,7 @@ const branchRecordingWorktree = (branch: string) =>
     ...worktreeStubCreated(false),
     ensure: (_workspace, _item, options) =>
       Ref.update(probe.branches, (values) => [...values, options?.branch]).pipe(
-        Effect.map(() => ({ branch, path: `/wt/${branch}`, created: false })),
+        Effect.map(() => ({ branch: decodeBranchName(branch), path: `/wt/${branch}`, created: false })),
       ),
   }));
 

@@ -1,3 +1,4 @@
+import { type BranchName, BranchName as BranchNameSchema } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -63,7 +64,7 @@ export const slugify = (title: string) => kebab(title);
 export const branchName = (item: WorkItemRef) => {
   const ticket = ticketSlug(item.id);
   const slug = slugify(item.title);
-  return slug ? `${ticket}-${slug}` : ticket;
+  return BranchNameSchema.make(slug ? `${ticket}-${slug}` : ticket);
 };
 
 export const worktreeRoot = (checkoutPath: string, config?: WorktreeSettings) =>
@@ -89,14 +90,14 @@ const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main"
 const linkPathsFor = (config?: WorktreeSettings) => [...new Set(config?.linkPaths ?? [])];
 
 export interface EnsuredWorktree {
-  readonly branch: string;
+  readonly branch: BranchName;
   readonly path: string;
   readonly created: boolean;
 }
 
 export interface EnsureOptions {
   readonly resume?: boolean;
-  readonly branch?: string;
+  readonly branch?: BranchName;
 }
 
 export interface ReconcileOutcome {
