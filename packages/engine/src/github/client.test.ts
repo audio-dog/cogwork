@@ -126,6 +126,7 @@ describe("GitHub client", () => {
 
   it.effect("lists every open issue across GitHub pages", () => {
     const issue = (number: number) => ({
+      node_id: `I_issue_${number}`,
       number,
       title: `issue ${number}`,
       labels: [],
@@ -142,6 +143,7 @@ describe("GitHub client", () => {
       const issues = yield* client.listIssues(repo);
       assert.strictEqual(issues.length, 101);
       assert.strictEqual(issues.at(-1)?.number, 101);
+      assert.strictEqual(issues.at(-1)?.nodeId, "I_issue_101");
       assert.deepStrictEqual(
         fetch.mock.calls.map(([input]) =>
           new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),

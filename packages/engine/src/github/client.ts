@@ -44,6 +44,7 @@ export const repoRefFromRepository = (repository: string) => {
 export type ReviewDecision = "changes-requested" | "approved" | "none";
 
 export interface RawIssue {
+  readonly nodeId: string;
   readonly number: number;
   readonly title: string;
   readonly url: string;
@@ -103,6 +104,7 @@ const IssueFieldValueSchema = Schema.Struct({
 });
 
 const IssueSchema = Schema.Struct({
+  node_id: Schema.String,
   number: Schema.Finite,
   title: Schema.String,
   html_url: Schema.optional(Schema.NullOr(Schema.String)),
@@ -329,6 +331,7 @@ const issueFieldValues = (values: ReadonlyArray<typeof IssueFieldValueSchema.Typ
   );
 
 const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIssue => ({
+  nodeId: issue.node_id,
   number: issue.number,
   title: issue.title,
   url: issue.html_url || `https://github.com/${repo.owner}/${repo.name}/issues/${issue.number}`,
