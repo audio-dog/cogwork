@@ -7,13 +7,13 @@ const requestBody =
   /(?:^|\s)(?:-[dF](?:(?=\S)|\s+)|(?:--data(?:-raw|-binary|-urlencode|-ascii)?|--json|--form|--post-data|--post-file)(?:=|\s+))/;
 const graphqlMutation = /\bcreatePullRequest\s*\(/;
 const graphqlEndpoint = /(?:^|[\s'"/])graphql(?:[?\s'";]|$)/i;
-const clientSubcommand = /(?:^|[\s|;&(<])gh\b[^|;&]*?\bpr\s+create\b/i;
-const httpClient = /(?:^|[\s|;&(<])(?:gh\s+api|curl|wget|http)\b/i;
-const ghApiClient = /(?:^|[\s|;&(<])gh\s+api\b/i;
-const shellRunsTheQuote = /(?:^|[\s|;&(])(?:(?:ba|z|k|d|a)?sh\s+-[a-z]*c|eval)\b|<<</i;
-const bareWordQuote = /(^|[\s|;&(<])(['"])([\w.@+:/?-]+)\2/g;
+const clientSubcommand = /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bpr\s+create\b/i;
+const httpClient = /(?:^|[\s|;&(<`])(?:gh\b[^|;&]*?\bapi\b|curl\b|wget\b|http\b)/i;
+const ghApiClient = /(?:^|[\s|;&(<`])gh\b[^|;&]*?\bapi\b/i;
+const shellRunsTheQuote = /(?:^|[\s|;&(`])(?:(?:ba|z|k|d|a)?sh\s+-[a-z]*c|eval)\b|<<</i;
+const bareWordQuote = /(^|[\s|;&(<`])(['"])([\w.@+:/?-]+)\2/g;
 const quotedSpan = /'[^']*'|"[^"]*"/g;
-const executablePrefix = /(^|[\s|;&(<])(?:\\|(?:[\w.@+-]*\/)+)/g;
+const executablePrefix = /(^|[\s|;&(<`])(?:\\|(?:[\w.@+-]*\/)+)/g;
 const commandSegment = /(?:\\.|"(?:\\.|[^"])*"|'[^']*'|[^|;&\n])+/g;
 
 // A quoted span is usually text the agent passes on, so a commit subject or a work-item comment that
@@ -22,9 +22,8 @@ const commandSegment = /(?:\\.|"(?:\\.|[^"])*"|'[^']*'|[^|;&\n])+/g;
 // command word changes nothing about what runs, so both are normalized away first.
 const unquotedText = (command) => {
   const unwrapped = command.replace(bareWordQuote, "$1$3");
-  return shellRunsTheQuote.test(unwrapped)
-    ? unwrapped.replaceAll(/['"]/g, " ")
-    : unwrapped.replace(quotedSpan, " ");
+  const quotedAsText = unwrapped.replace(quotedSpan, " ");
+  return shellRunsTheQuote.test(quotedAsText) ? unwrapped.replaceAll(/['"]/g, " ") : quotedAsText;
 };
 
 const carriesRequestBody = (unquoted, executed) => {
@@ -45,9 +44,11 @@ const createsPullRequestInSegment = (command) => {
   );
 };
 
-export const createsPullRequest = (command) =>
-  typeof command === "string" &&
-  (command.match(commandSegment) ?? []).some((segment) => createsPullRequestInSegment(segment.trim()));
+export const createsPullRequest = (command) => {
+  if (typeof command !== "string") return false;
+  const joined = command.replaceAll(/\\\r?\n/g, " ");
+  return (joined.match(commandSegment) ?? []).some((segment) => createsPullRequestInSegment(segment.trim()));
+};
 
 export const shouldRefuse = (payload) =>
   isRecord(payload) && isRecord(payload.tool_input) && createsPullRequest(payload.tool_input.command);

@@ -16,9 +16,13 @@ const refusedCommands = [
   "gh --repo colonylabs/cogwork pr create --head 475-refuse",
   "git push -u origin HEAD && gh pr create --title Done --body Ready",
   "gh api --method POST /repos/colonylabs/cogwork/pulls -f title=Done",
+  "gh --hostname github.com api --method POST /repos/colonylabs/cogwork/pulls -f title=Done",
   "gh api repos/colonylabs/cogwork/pulls -f title=Done -f head=475-refuse -f base=main",
   `gh api graphql -f query='mutation { createPullRequest(input: $input) { pullRequest { url } } }'`,
   "curl -X POST https://api.github.com/repos/colonylabs/cogwork/pulls -d @body.json",
+  String.raw`curl -X POST \
+https://api.github.com/repos/colonylabs/cogwork/pulls \
+-d @body.json`,
   'curl -X POST "https://api.github.com/repos/colonylabs/cogwork/pulls" -d @body.json',
   "curl -X GET https://api.github.com/repos/colonylabs/cogwork/pulls && curl -X POST https://api.github.com/repos/colonylabs/cogwork/pulls -d @body.json",
   "curl -d 'note -X GET' -X POST https://api.github.com/repos/colonylabs/cogwork/pulls",
@@ -43,6 +47,7 @@ const refusedCommands = [
   "/usr/bin/curl -X POST https://api.github.com/repos/colonylabs/cogwork/pulls -d @body.json",
   String.raw`\gh pr create --fill`,
   String.raw`\curl -X POST https://api.github.com/repos/colonylabs/cogwork/pulls -d @body.json`,
+  "echo `gh pr create --fill`",
 ];
 
 const allowedCommands = [
@@ -65,6 +70,7 @@ const allowedCommands = [
   "gh api -X GET /repos/colonylabs/cogwork/pulls -f state=open",
   "git commit -m 'feat(hooks): refuse gh pr create in a Codex Run'",
   `git commit -m "refuse gh pr create"`,
+  `git commit -m 'mention eval, bash -c, and <<< before "gh pr create"'`,
   "gh issue comment 475 --body 'I did not run gh pr create; the engine opens it'",
   "gh search issues 'pr create'",
   "gh api /repos/colonylabs/cogwork/issues/475/comments -f body='blocked on gh pr create'",
