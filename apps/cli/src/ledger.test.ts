@@ -25,6 +25,7 @@ import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as GenericSqlClient from "effect/unstable/sql/SqlClient";
 import { layer as ledgerLayer, runLedgerAppendDuration } from "./ledger";
 
@@ -228,6 +229,8 @@ describe("sqlite RunLedger", () => {
           endedAtMillis: 2000,
         });
 
+        assert.strictEqual(yield* ledger.latestSeq(id), 1);
+
         const summaries = yield* ledger.listRuns(10);
         const storedSummary = yield* ledger.getRunSummary(id);
         const summary = summaries.find((row) => row.id === id);
@@ -242,7 +245,7 @@ describe("sqlite RunLedger", () => {
           totalTokens: 7,
         });
 
-        const events = yield* ledger.events(id);
+        const events = yield* ledger.events(id).pipe(Stream.runCollect);
         assert.deepStrictEqual(
           events.map((event) => event.seq),
           [0, 1],
@@ -250,6 +253,31 @@ describe("sqlite RunLedger", () => {
         assert.deepStrictEqual(
           events.map((event) => event.type),
           ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
+        );
+      }),
+    );
+
+    it.effect("pages event reads by UTF-8 payload bytes", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const id = runId("byte-pages");
+        const data = "é".repeat(300_000);
+        yield* ledger.insertRun(record(id, 1000));
+        yield* Effect.forEach([0, 1], (seq) =>
+          ledger.appendEvent(id, {
+            seq,
+            type: "CUSTOM",
+            name: null,
+            data,
+            atMillis: 1001 + seq,
+          }),
+        );
+
+        const chunks = yield* ledger.events(id).pipe(Stream.chunks, Stream.runCollect);
+
+        assert.deepStrictEqual(
+          chunks.map((chunk) => chunk.length),
+          [1, 1],
         );
       }),
     );
@@ -716,8 +744,6 @@ describe("published sqlite RunLedger mutations", () => {
   });
 });
 
-// AC: a run-event write failure never stops the daemon, and a read degrades to empty. Both go
-// through `swallow`, so both are exercised against a store whose tables have been pulled away.
 describe("sqlite RunLedger against a broken store", () => {
   const dropTables = (storePath: string) =>
     Effect.acquireUseRelease(
@@ -740,6 +766,44 @@ describe("sqlite RunLedger against a broken store", () => {
       return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
+    it.effect("fails when the event head cannot be read", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* dropTables(yield* TestStorePath);
+
+        const error = yield* ledger.latestSeq(runId("broken-head")).pipe(Effect.flip);
+        assert.strictEqual(error.operation, RunLedger.readRunEventsOperation);
+      }),
+    );
+
+    it.effect("fails when a later event page cannot be read", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const id = runId("broken-pages");
+        const storePath = yield* TestStorePath;
+        yield* ledger.insertRun(record(id, 1000));
+        yield* Effect.forEach(
+          Array.from({ length: 257 }, (_, seq) => seq),
+          (seq) =>
+            ledger.appendEvent(id, {
+              seq,
+              type: "CUSTOM",
+              name: null,
+              data: "{}",
+              atMillis: 1001 + seq,
+            }),
+          { discard: true },
+        );
+
+        const error = yield* ledger.events(id).pipe(
+          Stream.tap((item) => (item.seq === 0 ? dropTables(storePath) : Effect.void)),
+          Stream.runCollect,
+          Effect.flip,
+        );
+        assert.strictEqual(error.operation, RunLedger.readRunEventsOperation);
+      }),
+    );
+
     it.effect("completes a write whose table is gone", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
@@ -756,14 +820,13 @@ describe("sqlite RunLedger against a broken store", () => {
       }),
     );
 
-    it.effect("degrades a read whose table is gone to empty", () =>
+    it.effect("degrades non-event reads whose tables are gone to empty", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
         yield* dropTables(yield* TestStorePath);
 
         assert.deepStrictEqual(yield* ledger.listRuns(10), []);
         assert.deepStrictEqual(yield* ledger.runningRuns, []);
-        assert.deepStrictEqual(yield* ledger.events(runId("broken-1")), []);
         assert.isNull(yield* ledger.getRun(runId("broken-1")));
         assert.isNull(yield* ledger.getSession(session));
         assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, workItem, 0), 0);

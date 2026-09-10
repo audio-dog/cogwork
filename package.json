@@ -18,7 +18,6 @@
     "test:measure": "node scripts/test-measure.mjs",
     "test:node": "node scripts/test-measure.mjs --node-only",
     "worktree:git-invocations": "tsx scripts/count-worktree-git-invocations.ts",
-    "test:lint-rules": "node --test configs/lint/tests/rules.test.mjs",
     "vendor": "node scripts/vendor.mjs",
     "setup-worktree": "node scripts/setup-worktree.mjs"
   },

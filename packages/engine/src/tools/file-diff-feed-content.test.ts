@@ -6,7 +6,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Metric from "effect/Metric";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import {
   boundedDiff,
   computeDiff,

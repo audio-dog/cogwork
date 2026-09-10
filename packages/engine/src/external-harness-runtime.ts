@@ -28,12 +28,10 @@ import {
   DEFAULT_WORKSPACE_ROOT,
   defineSandbox,
   defineWorkspace,
-  getSandbox,
   mcpSkill,
   ProjectionCapability,
   provideWorkspaceProjection,
   resolveAllSecrets,
-  resolveHarnessCwd,
   type SandboxPolicy,
   type SandboxProvider,
   type Secrets,
@@ -328,7 +326,6 @@ const satisfiedProjection = (): ChatMiddleware => ({
   name: "cogwork-workspace-already-projected",
   provides: [ProjectionCapability],
   setup: (context) => {
-    const root = resolveHarnessCwd(getSandbox(context));
     // The duplicate-provide warning exists to catch accidental overwrites; this overwrite
     // is the point, and the warning would otherwise land in the daemon log on every such
     // launch. This middleware is the last provider in the chain, so muting loses nothing.
@@ -339,8 +336,8 @@ const satisfiedProjection = (): ChatMiddleware => ({
       resolveSecret: () => {
         throw new Error("this run projects no Workspace members, so no secret can be resolved");
       },
-      markerPath: `${root}/.git`,
-      root,
+      markerPath: `${DEFAULT_WORKSPACE_ROOT}/.git`,
+      root: DEFAULT_WORKSPACE_ROOT,
     });
   },
 });

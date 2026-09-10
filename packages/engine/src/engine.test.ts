@@ -29,7 +29,7 @@ import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import { ConnectionStore, connectionOverview } from "./connection";
 import { ControlStore } from "./control-store";

@@ -767,6 +767,9 @@ const formatAssemblyError = (cause: unknown) => {
   return `${schemaConstructorNameFromStack(cause)}: ${formatSchemaIssue(cause.cause)}`;
 };
 
+export const runPlanAssemblyError = (cause: unknown) =>
+  new RunPlanAssemblyError({ message: formatAssemblyError(cause), cause, retryable: true });
+
 interface PreparedRunPlanMcpServer {
   readonly plan: RunPlanMcpServer;
   readonly credential: Redacted.Redacted<string> | null;
@@ -955,7 +958,6 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => assemble(input, 
 export const tryAssembleRunPlan = Effect.fn("RunPlan.tryAssemble")((input: AssembleRunPlanInput) =>
   Effect.try({
     try: () => assembleRunPlan(input),
-    catch: (cause) =>
-      new RunPlanAssemblyError({ message: formatAssemblyError(cause), cause, retryable: true }),
+    catch: runPlanAssemblyError,
   }),
 );
