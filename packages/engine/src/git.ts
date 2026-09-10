@@ -1,5 +1,5 @@
 import * as Context from "effect/Context";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 export class GitError extends Schema.TaggedError<GitError>()("GitError", {
@@ -64,5 +64,30 @@ export interface GitService {
   readonly rebase: (worktreePath: string, remote: string, branch: string) => Effect.Effect<void, GitError>;
   readonly remoteUrl: (repoPath: string, remote: string) => Effect.Effect<string, GitError>;
 }
+
+export const withTransitionLogging = (service: GitService) =>
+  ({
+    ...service,
+    addWorktree: Effect.fn("Git.addWorktree")(function* (args) {
+      yield* service.addWorktree(args);
+      yield* Effect.logInfo("added Git worktree", {
+        worktreePath: args.worktreePath,
+        branch: args.branch,
+        startPoint: args.startPoint,
+      });
+    }),
+    removeWorktree: Effect.fn("Git.removeWorktree")(function* (repoPath, worktreePath, force) {
+      yield* service.removeWorktree(repoPath, worktreePath, force);
+      yield* Effect.logInfo("removed Git worktree", { worktreePath, force });
+    }),
+    fastForward: Effect.fn("Git.fastForward")(function* (worktreePath, remote, branch) {
+      yield* service.fastForward(worktreePath, remote, branch);
+      yield* Effect.logInfo("fast-forwarded Git branch", { worktreePath, remote, branch });
+    }),
+    rebase: Effect.fn("Git.rebase")(function* (worktreePath, remote, branch) {
+      yield* service.rebase(worktreePath, remote, branch);
+      yield* Effect.logInfo("rebased Git branch", { worktreePath, remote, branch });
+    }),
+  }) satisfies GitService;
 
 export class Git extends Context.Service<Git, GitService>()("@cogwork/engine/git") {}

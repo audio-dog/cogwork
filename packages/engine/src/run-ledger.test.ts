@@ -22,6 +22,7 @@ import {
   RunLedgerError,
   type RunLedgerService,
 } from "./run-ledger";
+import { LogProbe } from "./testing/log-probe";
 
 const layerMemory = memoryLedgerLayer.pipe(Layer.provide(DaemonEventBus.layer));
 
@@ -34,6 +35,25 @@ const bareWorkItem = Schema.decodeSync(WorkItemId)("7");
 const otherWorkItem = Schema.decodeSync(WorkItemId)("#8");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const laterSession = Schema.decodeSync(SessionId)("sess-later");
+
+const recordLoggedTransitions = Effect.fn("test.recordLoggedTransitions")(function* (
+  ledger: RunLedgerService,
+  id: RunId,
+) {
+  yield* ledger.acceptRun(record(id, 1000), runPlan(id));
+  yield* ledger.appendEvent(id, {
+    seq: 0,
+    type: "RUN_STARTED",
+    name: null,
+    data: "{}",
+    atMillis: 1001,
+  });
+  yield* ledger.updateRun(id, {
+    status: "succeeded",
+    usage: null,
+    endedAtMillis: 2000,
+  });
+});
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -159,6 +179,44 @@ describe("accepted Run Plan", () => {
         assert.isFalse(error.retryable);
       }),
     );
+  });
+
+  it.layer(Layer.merge(layerMemory, LogProbe.captureLayer))((it) => {
+    it.effect("logs accepted, appended, and settled Run transitions once", () => {
+      const id = runId("logged-transitions");
+
+      return Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        const logs = yield* LogProbe;
+        yield* recordLoggedTransitions(ledger, id).pipe(Effect.annotateLogs({ runId: id }));
+        yield* ledger.insertRun(record("batch-first", 2001));
+        yield* ledger.insertRun(record("batch-second", 2002));
+        yield* ledger.interruptRunning(0, 3000).pipe(Effect.annotateLogs({ stage: "recovery" }));
+
+        assert.deepStrictEqual(yield* logs.entries, [
+          {
+            annotations: { runId: id },
+            message: ["accepted Run", { harness: "cursor", branch: null }],
+          },
+          {
+            annotations: { runId: id },
+            message: ["appended Run event", { seq: 0 }],
+          },
+          {
+            annotations: { runId: id },
+            message: ["settled Run", { status: "succeeded" }],
+          },
+          {
+            annotations: { stage: "recovery" },
+            message: ["settled Run", { status: "interrupted" }],
+          },
+          {
+            annotations: { stage: "recovery" },
+            message: ["settled Run", { status: "interrupted" }],
+          },
+        ]);
+      });
+    });
   });
 });
 

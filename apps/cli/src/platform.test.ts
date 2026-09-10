@@ -11,6 +11,8 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as MutableRef from "effect/MutableRef";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
@@ -117,6 +119,26 @@ class GitCommands extends Context.Service<GitCommands, Ref.Ref<ReadonlyArray<str
   "@cogwork/cli/platform.test/GitCommands",
 ) {
   static readonly layer = Layer.effect(GitCommands, Ref.make<ReadonlyArray<string>>([]));
+}
+
+interface GitLogProbeService {
+  readonly capture: (entry: unknown) => void;
+  readonly entries: Effect.Effect<ReadonlyArray<unknown>>;
+}
+
+class GitLogProbe extends Context.Service<GitLogProbe, GitLogProbeService>()(
+  "@cogwork/cli/platform.test/GitLogProbe",
+) {
+  static readonly layer = Layer.sync(GitLogProbe, () => {
+    const entries = MutableRef.make<ReadonlyArray<unknown>>([]);
+    return {
+      capture: (entry) => MutableRef.update(entries, (current) => [...current, entry]),
+      entries: Effect.sync(() => MutableRef.get(entries)),
+    };
+  });
+  static readonly captureLayer = Logger.layer([
+    Effect.map(GitLogProbe, (probe) => Logger.make<unknown, void>(({ message }) => probe.capture(message))),
+  ]).pipe(Layer.provideMerge(GitLogProbe.layer));
 }
 
 const recordedSpawnerLayer = (handleFor: (command: string) => ChildProcessSpawner.ChildProcessHandle) =>
@@ -570,6 +592,37 @@ describe("worktree removal", () => {
               Path.layer,
             ),
           ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("logs a completed removal when the following prune fails", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const logs = yield* GitLogProbe;
+      yield* git.removeWorktree("/repo", "/repo.worktrees/277-stale", true);
+
+      assert.deepStrictEqual(yield* logs.entries, [
+        ["removed Git worktree", { worktreePath: "/repo.worktrees/277-stale", force: true }],
+      ]);
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git worktree remove --force /repo.worktrees/277-stale",
+        "git worktree prune",
+      ]);
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          gitLayer.pipe(
+            Layer.provideMerge(
+              Layer.mergeAll(
+                recordedSpawnerLayer((text) => exitedProcess(text === "git worktree prune" ? 1 : 0)),
+                FileSystem.layerNoop({}),
+                Path.layer,
+              ),
+            ),
+          ),
+          GitLogProbe.captureLayer,
         ),
       ),
     ),

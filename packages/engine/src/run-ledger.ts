@@ -144,6 +144,17 @@ const resolveWatchTargetFrom = (runs: ReadonlyArray<RunRecord>, workItem: WorkIt
   );
 };
 
+export const logRunAccepted = (record: RunRecord) =>
+  Effect.logInfo("accepted Run", { harness: record.harness, branch: record.branch });
+
+export const logRunEventAppended = (event: RunEvent) =>
+  Effect.logInfo("appended Run event", { seq: event.seq });
+
+export const logRunSettled = (status: RunRecord["status"]) => Effect.logInfo("settled Run", { status });
+
+export const logRunsSettled = (runIds: ReadonlyArray<RunId>, status: RunRecord["status"]) =>
+  Effect.forEach(runIds, () => logRunSettled(status), { discard: true });
+
 type MemoryEvents = ReadonlyMap<RunId, ReadonlyArray<RunEvent>>;
 
 const eventCountOf = (events: MemoryEvents, runId: RunId) => events.get(runId)?.length ?? 0;
@@ -230,6 +241,23 @@ export const makeMemory = Effect.gen(function* () {
       return yield* acceptRunError(`Run ${record.id} already has a Plan`);
     }
     yield* Ref.update(runsRef, (runs) => [...runs, record]);
+    yield* logRunAccepted(record);
+  });
+
+  const appendEvent = Effect.fn("RunLedger.appendEvent")(function* (runId: RunId, event: RunEvent) {
+    yield* Ref.update(eventsRef, (events) =>
+      new Map(events).set(runId, [...eventsForRun(events, runId), event]),
+    );
+    yield* logRunEventAppended(event);
+  });
+
+  const updateRun = Effect.fn("RunLedger.updateRun")(function* (runId: RunId, update: RunUpdate) {
+    const updated = yield* Ref.modify(runsRef, (runs) => {
+      if (!runs.some((run) => run.id === runId)) return [false, runs];
+      return [true, patchRun(runs, runId, (run) => applyUpdate(run, update))];
+    });
+    if (!updated) return;
+    yield* logRunSettled(update.status);
   });
 
   return {
@@ -242,32 +270,49 @@ export const makeMemory = Effect.gen(function* () {
         ),
       ),
     insertRun: (record: RunRecord) => Ref.update(runsRef, (runs) => [...runs, record]),
-    appendEvent: (runId: RunId, event: RunEvent) =>
-      Ref.update(eventsRef, (events) => new Map(events).set(runId, [...eventsForRun(events, runId), event])),
-    updateRun: (runId: RunId, update: RunUpdate) =>
-      Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => applyUpdate(run, update))),
+    appendEvent,
+    updateRun,
     setRunSession: (runId: RunId, session: SessionId) =>
       Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => ({ ...run, session }))),
-    interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
-      Ref.modify(runsRef, (runs) =>
+    interruptRunning: Effect.fn("RunLedger.interruptRunning")(function* (
+      startedFromMillis: number,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* Ref.modify(runsRef, (runs) =>
         transition(
           runs,
           (run) => stillRunning(run, startedFromMillis),
           (run) => interrupted(run, endedAtMillis),
         ),
-      ),
-    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
-      Ref.modify(runsRef, (runs) =>
+      );
+      yield* logRunsSettled(runIds, "interrupted");
+      return runIds;
+    }),
+    interruptRunningBefore: Effect.fn("RunLedger.interruptRunningBefore")(function* (
+      beforeMillis: number,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* Ref.modify(runsRef, (runs) =>
         transition(
           runs,
           (run) => runningBefore(run, beforeMillis),
           (run) => interrupted(run, endedAtMillis),
         ),
-      ),
-    crashRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
-      Ref.modify(runsRef, (runs) =>
+      );
+      yield* logRunsSettled(runIds, "interrupted");
+      return runIds;
+    }),
+    crashRunning: Effect.fn("RunLedger.crashRunning")(function* (
+      workspace: WorkspaceId,
+      workItem: WorkItemId,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* Ref.modify(runsRef, (runs) =>
         transition(runs, runningForItem(workspace, workItem), (run) => crashed(run, endedAtMillis)),
-      ),
+      );
+      yield* logRunsSettled(runIds, "crashed");
+      return runIds;
+    }),
     consecutiveCrashes: (workspace: WorkspaceId, workItem: WorkItemId, sinceMillis: number) =>
       Effect.map(Ref.get(runsRef), (runs) =>
         consecutiveCrashesOf(runs.filter(forItem(workspace, workItem)), sinceMillis),
@@ -291,12 +336,19 @@ export const makeMemory = Effect.gen(function* () {
       Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
         Effect.map(([runs, events]) => eventsForSession(runs, events, session)),
       ),
-    closeRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
-      Ref.modify(runsRef, (runs) =>
+    closeRunning: Effect.fn("RunLedger.closeRunning")(function* (
+      workspace: WorkspaceId,
+      workItem: WorkItemId,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* Ref.modify(runsRef, (runs) =>
         transition(runs, runningForItem(workspace, workItem), (run) =>
           applyUpdate(run, closeRunningUpdate(endedAtMillis)),
         ),
-      ),
+      );
+      yield* logRunsSettled(runIds, "failed");
+      return runIds;
+    }),
     latestRunByBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.all([Ref.get(runsRef), Ref.get(sessionsRef)]).pipe(
         Effect.map(([runs, sessions]) =>

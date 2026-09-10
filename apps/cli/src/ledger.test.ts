@@ -34,6 +34,28 @@ class TestStorePath extends Context.Service<TestStorePath, string>()(
   "@cogwork/cli/ledger.test/TestStorePath",
 ) {}
 
+interface LedgerLogProbeService {
+  readonly capture: (entry: unknown) => void;
+  readonly entries: Effect.Effect<ReadonlyArray<unknown>>;
+}
+
+class LedgerLogProbe extends Context.Service<LedgerLogProbe, LedgerLogProbeService>()(
+  "@cogwork/cli/ledger.test/LedgerLogProbe",
+) {
+  static readonly layer = Layer.sync(LedgerLogProbe, () => {
+    const entries = MutableRef.make<ReadonlyArray<unknown>>([]);
+    return {
+      capture: (entry) => MutableRef.update(entries, (current) => [...current, entry]),
+      entries: Effect.sync(() => MutableRef.get(entries)),
+    };
+  });
+  static readonly captureLayer = Logger.layer([
+    Effect.map(LedgerLogProbe, (probe) =>
+      Logger.make<unknown, void>(({ message }) => probe.capture(message)),
+    ),
+  ]).pipe(Layer.provideMerge(LedgerLogProbe.layer));
+}
+
 const bootedLedgerLayer = (storePath: string) =>
   ledgerLayer.pipe(Layer.provideMerge(bootControlStoreLayer(storePath, { busyTimeout: "25 millis" })));
 
@@ -167,7 +189,11 @@ describe("sqlite RunLedger", () => {
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-" });
       const storePath = path.join(dir, "control.db");
-      return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
+      return Layer.mergeAll(
+        bootedLedgerLayer(storePath),
+        Layer.succeed(TestStorePath, storePath),
+        LedgerLogProbe.captureLayer,
+      );
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
     it.effect("persists one immutable Plan when accepting a Run", () =>
@@ -183,6 +209,34 @@ describe("sqlite RunLedger", () => {
         assert.strictEqual(error._tag, "RunLedgerError");
         assert.isFalse(error.retryable);
         assert.deepStrictEqual(yield* ledger.getRunPlan(accepted.id), accepted);
+      }),
+    );
+
+    it.effect("logs successful Run persistence transitions once", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const logs = yield* LedgerLogProbe;
+        const before = (yield* logs.entries).length;
+        const id = runId("logged-sqlite-transitions");
+        yield* ledger.acceptRun(record(id, 1000), runPlan(id));
+        yield* ledger.appendEvent(id, {
+          seq: 0,
+          type: "RUN_STARTED",
+          name: null,
+          data: "{}",
+          atMillis: 1001,
+        });
+        yield* ledger.updateRun(id, {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 2000,
+        });
+
+        assert.deepStrictEqual((yield* logs.entries).slice(before), [
+          ["accepted Run", { harness: "cursor", branch: null }],
+          ["appended Run event", { seq: 0 }],
+          ["settled Run", { status: "succeeded" }],
+        ]);
       }),
     );
 
@@ -775,7 +829,17 @@ describe("sqlite RunLedger against a broken store", () => {
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-broken-" });
       const storePath = path.join(dir, "control.db");
-      return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
+      const core = bootedLedgerLayer(storePath);
+      const published = RunLedger.publishingLayer.pipe(
+        Layer.provide(core),
+        Layer.provide(DaemonEventBus.layer),
+      );
+      return Layer.mergeAll(
+        core,
+        published,
+        Layer.succeed(TestStorePath, storePath),
+        LedgerLogProbe.captureLayer,
+      );
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
     it.effect("fails when the event head cannot be read", () =>
@@ -816,10 +880,12 @@ describe("sqlite RunLedger against a broken store", () => {
       }),
     );
 
-    it.effect("completes a write whose table is gone", () =>
+    it.effect("does not log transitions for writes whose tables are gone", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.CoreRunLedger;
+        const ledger = yield* RunLedger.RunLedger;
+        const logs = yield* LedgerLogProbe;
         yield* dropTables(yield* TestStorePath);
+        const before = (yield* logs.entries).length;
 
         yield* ledger.insertRun(record("broken-1", 1000));
         yield* ledger.appendEvent(runId("broken-1"), {
@@ -829,6 +895,20 @@ describe("sqlite RunLedger against a broken store", () => {
           data: "{}",
           atMillis: 1000,
         });
+        yield* ledger.updateRun(runId("broken-1"), {
+          status: "failed",
+          usage: null,
+          endedAtMillis: 1001,
+        });
+
+        const transitionLogs = (yield* logs.entries)
+          .slice(before)
+          .filter((message) =>
+            ["appended Run event", "settled Run"].some((transition) =>
+              JSON.stringify(message).includes(transition),
+            ),
+          );
+        assert.deepStrictEqual(transitionLogs, []);
       }),
     );
 

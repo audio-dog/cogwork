@@ -21,6 +21,7 @@ import {
   staticCatalogSource,
 } from "./harness";
 import { SessionStore } from "./session-store";
+import { LogProbe } from "./testing/log-probe";
 
 const name = Schema.decodeSync(HarnessName)("unsupported");
 
@@ -263,6 +264,52 @@ describe("stageResultSchema", () => {
 });
 
 describe("Harness", () => {
+  it.layer(Layer.merge(harnessRunnerLayer, LogProbe.captureLayer))((it) => {
+    it.effect("logs each Harness launch and exit once", () => {
+      const failure = new HarnessError({
+        reason: "turn",
+        retryable: true,
+        message: "turn failed",
+      });
+      const runs = [
+        { stream: Stream.empty, outcome: "success" },
+        { stream: Stream.fail(failure), outcome: "failure" },
+        { stream: Stream.fromEffect(Effect.interrupt), outcome: "interrupt" },
+      ] satisfies ReadonlyArray<{
+        readonly stream: Stream.Stream<never, HarnessError>;
+        readonly outcome: "success" | "failure" | "interrupt";
+      }>;
+
+      return Effect.gen(function* () {
+        const logs = yield* LogProbe;
+        yield* Effect.forEach(
+          runs,
+          (run) => {
+            const runner = {
+              ...controlledRunnerDefaults,
+              name,
+              sessionKind: "opaque-handle",
+              projectedMembers: [],
+              planMiddleware: [],
+              execution: fullHarnessExecution,
+              run: () => run.stream,
+            } satisfies HarnessRunner;
+            return make([runner]).run(request).pipe(Stream.runDrain, Effect.exit);
+          },
+          { discard: true },
+        );
+
+        assert.deepStrictEqual(
+          (yield* logs.entries).map(({ message }) => message),
+          runs.flatMap(({ outcome }) => [
+            ["launched Harness", { harness: name }],
+            ["exited Harness", { harness: name, outcome }],
+          ]),
+        );
+      });
+    });
+  });
+
   it.layer(harnessRunnerLayer)((it) => {
     it.effect("uses runtime metadata before native discovery and fallback", () =>
       Effect.gen(function* () {
