@@ -23,8 +23,7 @@ export interface WorkspaceRecordDraft {
   readonly needsInfoLabel: string;
   readonly readyForHumanLabel: string;
   readonly wontfixLabel: string;
-  readonly priorityProject: string;
-  readonly priorityField: string;
+  readonly priorityFieldId: string;
   readonly linearHistory: boolean;
   readonly sourceControlType: "none" | "github";
   readonly sourceControlConnectionId: string;
@@ -53,8 +52,7 @@ export const emptyDraft: WorkspaceRecordDraft = {
   needsInfoLabel: "",
   readyForHumanLabel: "",
   wontfixLabel: "",
-  priorityProject: "",
-  priorityField: "",
+  priorityFieldId: "",
   linearHistory: false,
   sourceControlType: "none",
   sourceControlConnectionId: "unbound",
@@ -97,8 +95,7 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
     needsInfoLabel: tracker.roleLabels?.["needs-info"] ?? "",
     readyForHumanLabel: tracker.roleLabels?.["ready-for-human"] ?? "",
     wontfixLabel: tracker.roleLabels?.wontfix ?? "",
-    priorityProject: tracker.priority?.project.toString() ?? "",
-    priorityField: tracker.priority?.field ?? "",
+    priorityFieldId: tracker.priority?.field.toString() ?? "",
     linearHistory: record.linearHistory,
     sourceControlType: sourceControl?.type === "github" ? "github" : "none",
     sourceControlConnectionId: sourceControl?.connectionId ?? "unbound",
@@ -145,11 +142,8 @@ const positiveNumber = (value: string) => {
   return Number.isFinite(number) && number > 0 ? number : Number.NaN;
 };
 const priorityFrom = (draft: WorkspaceRecordDraft) => {
-  if (!draft.priorityProject.trim()) return undefined;
-  return {
-    project: positiveNumber(draft.priorityProject),
-    field: optional(draft.priorityField),
-  };
+  if (!draft.priorityFieldId.trim()) return undefined;
+  return { field: positiveNumber(draft.priorityFieldId) };
 };
 const missingConnectionError = (draft: WorkspaceRecordDraft) => {
   if (draft.issueTrackerConnectionId === "unbound") return "Choose an issue tracker Connection.";
