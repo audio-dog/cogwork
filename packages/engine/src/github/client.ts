@@ -51,7 +51,6 @@ export interface RawIssue {
   readonly assignees: ReadonlyArray<string>;
   readonly isPullRequest: boolean;
   readonly openBlockers: number;
-  readonly issueFieldValues: ReadonlyMap<GitHubIssueFieldId, string>;
 }
 
 export interface RawPull {
@@ -111,7 +110,6 @@ const IssueSchema = Schema.Struct({
   assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
   issue_dependencies_summary: Schema.optional(Schema.NullOr(DependenciesSummarySchema)),
-  issue_field_values: Schema.optional(Schema.Array(IssueFieldValueSchema)),
 });
 
 const GitHubIssueFieldSchema = Schema.Struct({
@@ -280,6 +278,7 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
+const decodeIssueFieldValues = Schema.decodeUnknownEffect(Schema.Array(IssueFieldValueSchema));
 const decodeIssueFields = Schema.decodeUnknownEffect(Schema.Array(GitHubIssueFieldSchema));
 const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
@@ -321,9 +320,9 @@ const issueFieldEntry = (
   return [value.issue_field_id, value.single_select_option.name];
 };
 
-const issueFieldValues = (issue: typeof IssueSchema.Type) =>
+const issueFieldValues = (values: ReadonlyArray<typeof IssueFieldValueSchema.Type>) =>
   new Map(
-    (issue.issue_field_values ?? []).flatMap((value) => {
+    values.flatMap((value) => {
       const entry = issueFieldEntry(value);
       return entry ? [entry] : [];
     }),
@@ -337,7 +336,6 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
-  issueFieldValues: issueFieldValues(issue),
 });
 
 const openedPull = (created: typeof CreatedPullSchema.Type) =>
@@ -763,6 +761,17 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     }),
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       return yield* withPaginationDeadline(collectIssuePages(repo));
+    }),
+    listIssueFieldValues: Effect.fn("github.listIssueFieldValues")(function* (
+      repo: GitHubRepoRef,
+      issueNumber: number,
+    ) {
+      const json = yield* fetchJson(
+        repo,
+        repoPath(repo, `/issues/${issueNumber}/issue-field-values?per_page=100`),
+      );
+      const values = yield* Effect.mapError(decodeIssueFieldValues(json), toUnavailable);
+      return issueFieldValues(values);
     }),
     listPriorityFields: Effect.fn("github.listPriorityFields")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, orgPath(repo, "/issue-fields")).pipe(

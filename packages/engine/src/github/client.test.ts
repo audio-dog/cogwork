@@ -124,23 +124,11 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("lists every open issue across GitHub pages with organization issue fields", () => {
+  it.effect("lists every open issue across GitHub pages", () => {
     const issue = (number: number) => ({
       number,
       title: `issue ${number}`,
       labels: [],
-      issue_field_values:
-        number === 101
-          ? [
-              {
-                issue_field_id: 42,
-                issue_field_name: "Priority",
-                data_type: "single_select",
-                value: 7,
-                single_select_option: { id: 7, name: "Urgent", color: "red" },
-              },
-            ]
-          : [],
     });
     const firstPage = Array.from({ length: 100 }, (_, index) => issue(index + 1));
     const fetch = vi.fn<typeof globalThis.fetch>((input) => {
@@ -154,12 +142,48 @@ describe("GitHub client", () => {
       const issues = yield* client.listIssues(repo);
       assert.strictEqual(issues.length, 101);
       assert.strictEqual(issues.at(-1)?.number, 101);
-      assert.strictEqual(issues.at(-1)?.issueFieldValues.get(priorityFieldId), "Urgent");
       assert.deepStrictEqual(
         fetch.mock.calls.map(([input]) =>
           new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
         ),
         ["1", "2"],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists an issue's single-select field values", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([
+          {
+            issue_field_id: 42,
+            issue_field_name: "Priority",
+            data_type: "single_select",
+            value: 7,
+            single_select_option: { id: 7, name: "Urgent", color: "red" },
+          },
+          {
+            issue_field_id: 43,
+            issue_field_name: "Target date",
+            data_type: "date",
+            value: "2026-09-09",
+          },
+        ]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      assert.deepStrictEqual(
+        yield* client.listIssueFieldValues(repo, 454),
+        new Map([[priorityFieldId, "Urgent"]]),
+      );
+      const [input] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input);
+      assert.strictEqual(
+        request.url,
+        "https://api.github.com/repos/colonylabs/cogwork/issues/454/issue-field-values?per_page=100",
       );
     }).pipe(withFetchClient(fetch));
   });
