@@ -147,7 +147,7 @@ export const gitLayer = Layer.effect(
       return { operation: found.value[0], unmergedPaths } satisfies Git.GitOperationInProgress;
     });
 
-    return {
+    return Git.withTransitionLogging({
       fetch: (repoPath, remote) => runGit(repoPath, ["fetch", "--prune", remote]).pipe(Effect.asVoid),
       remoteBranchExists: (repoPath, remote, branch) =>
         runGit(repoPath, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`]).pipe(
@@ -163,7 +163,7 @@ export const gitLayer = Layer.effect(
         const prune = runGit(repoPath, ["worktree", "prune"]);
         return runGit(repoPath, ["worktree", "remove", ...(force ? ["--force"] : []), worktreePath]).pipe(
           Effect.onError(() => Effect.ignore(prune)),
-          Effect.andThen(prune),
+          Effect.andThen(Effect.ignore(prune)),
           Effect.asVoid,
         );
       },
@@ -203,7 +203,7 @@ export const gitLayer = Layer.effect(
         runGit(repoPath, ["config", "--local", "--get", `remote.${remote}.url`]).pipe(
           Effect.map((value) => value.trim()),
         ),
-    } satisfies Git.GitService;
+    } satisfies Git.GitService);
   }),
 );
 
