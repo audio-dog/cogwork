@@ -4,10 +4,12 @@ const pullsCollection = /(?:^|[\s'"/])repos\/[^/\s'"?]+\/[^/\s'"?]+\/pulls(?:[?\
 const explicitVerb = /(?:^|\s)(?:-X|--request|--method)(?:=|\s*)([A-Za-z]+)/i;
 const apiField = /(?:^|\s)(?:-f|-F|--field|--raw-field|--input)(?:=|\s+)/;
 const requestBody =
-  /(?:^|\s)(?:-d|--data(?:-raw|-binary|-urlencode|-ascii)?|--json|--form|--post-data|--post-file)(?:=|\s+)/;
+  /(?:^|\s)(?:-d(?:(?=\S)|\s+)|(?:--data(?:-raw|-binary|-urlencode|-ascii)?|--json|--form|--post-data|--post-file)(?:=|\s+))/;
 const graphqlMutation = /\bcreatePullRequest\s*\(/;
+const graphqlEndpoint = /(?:^|[\s'"/])graphql(?:[?\s'";]|$)/i;
 const clientSubcommand = /(?:^|[\s|;&(<])gh\b[^|;&]*?\bpr\s+create\b/i;
 const httpClient = /(?:^|[\s|;&(<])(?:gh\s+api|curl|wget|http)\b/i;
+const ghApiClient = /(?:^|[\s|;&(<])gh\s+api\b/i;
 const shellRunsTheQuote = /(?:^|[\s|;&(])(?:(?:ba|z|k|d|a)?sh\s+-[a-z]*c|eval)\b|<<</i;
 const bareWordQuote = /(^|[\s|;&(<])(['"])([\w.@+/-]+)\2/g;
 const quotedSpan = /'[^']*'|"[^"]*"/g;
@@ -17,26 +19,30 @@ const executablePrefix = /(^|[\s|;&(<])(?:\\|(?:[\w.@+-]*\/)+)/g;
 // names the refused command must not itself be refused. Three shapes still run what they quote: a
 // shell given the span as its script, `eval`, and a here-string. Quoting or path-qualifying the
 // command word changes nothing about what runs, so both are normalized away first.
-const executedText = (command) => {
+const unquotedText = (command) => {
   const unwrapped = command.replace(bareWordQuote, "$1$3");
-  const script = shellRunsTheQuote.test(unwrapped)
+  return shellRunsTheQuote.test(unwrapped)
     ? unwrapped.replaceAll(/['"]/g, " ")
     : unwrapped.replace(quotedSpan, " ");
-  return script.replace(executablePrefix, "$1");
 };
 
-const carriesRequestBody = (command) => {
+const carriesRequestBody = (command, executed) => {
   const verb = explicitVerb.exec(command)?.[1];
   if (verb !== undefined) return verb.toUpperCase() === "POST";
-  return apiField.test(command) || requestBody.test(command);
+  return (ghApiClient.test(executed) ? apiField : requestBody).test(command);
 };
 
 export const createsPullRequest = (command) => {
   if (typeof command !== "string") return false;
-  const executed = executedText(command);
+  const unquoted = unquotedText(command);
+  const executed = unquoted.replace(executablePrefix, "$1");
   if (clientSubcommand.test(executed)) return true;
   if (!httpClient.test(executed)) return false;
-  return (pullsCollection.test(command) && carriesRequestBody(command)) || graphqlMutation.test(command);
+  const carriesBody = carriesRequestBody(command, executed);
+  return (
+    (pullsCollection.test(unquoted) && carriesBody) ||
+    (graphqlEndpoint.test(unquoted) && graphqlMutation.test(command) && carriesBody)
+  );
 };
 
 export const shouldRefuse = (payload) =>

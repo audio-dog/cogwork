@@ -19,6 +19,7 @@ const refusedCommands = [
   "gh api repos/colonylabs/cogwork/pulls -f title=Done -f head=475-refuse -f base=main",
   `gh api graphql -f query='mutation { createPullRequest(input: $input) { pullRequest { url } } }'`,
   "curl -X POST https://api.github.com/repos/colonylabs/cogwork/pulls -d @body.json",
+  "curl https://api.github.com/repos/colonylabs/cogwork/pulls -d@body.json",
   `curl https://api.github.com/repos/colonylabs/cogwork/pulls --data '{"title":"Done"}'`,
   `curl https://api.github.com/graphql -d '{"query":"mutation{createPullRequest(input:$i){pullRequest{url}}}"}'`,
   "wget --post-file=body.json https://api.github.com/repos/colonylabs/cogwork/pulls",
@@ -49,6 +50,7 @@ const allowedCommands = [
   "gh api /repos/colonylabs/cogwork/pulls",
   "gh api /repos/colonylabs/cogwork/pulls/475/reviews -f event=COMMENT -f body=Looks+good",
   "curl https://api.github.com/repos/colonylabs/cogwork/pulls",
+  "curl -f https://api.github.com/repos/colonylabs/cogwork/pulls",
   "git push origin HEAD",
   "git push --force-with-lease origin 475-refuse",
   "gh pr view 475 | grep 'pr create'",
@@ -61,6 +63,7 @@ const allowedCommands = [
   "gh issue comment 475 --body 'I did not run gh pr create; the engine opens it'",
   "gh search issues 'pr create'",
   "gh api /repos/colonylabs/cogwork/issues/475/comments -f body='blocked on gh pr create'",
+  "gh api /repos/colonylabs/cogwork/issues/475/comments -f body='POST /repos/colonylabs/cogwork/pulls or createPullRequest(input: $input)'",
 ];
 
 describe("createsPullRequest", () => {
