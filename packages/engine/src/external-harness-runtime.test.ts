@@ -713,19 +713,35 @@ describe("external Harness runtime", () => {
       }),
     );
 
-    it.effect("hands MCP to the descriptor and leaves the checkout untouched for native MCP projection", () =>
+    it.effect("hands native MCP a latched Sandbox projection marker", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-native-mcp-" });
+        yield* fs.writeFileString(`${checkout}/.git`, "gitdir: /elsewhere\n");
         const probe = new ControlledProbe();
-        const projections: Array<{ readonly skills: number; readonly markerGate: string }> = [];
         probe.inspect = (options) => {
-          const projection = getWorkspaceProjection(runtimeCapabilities(options));
-          projections.push({
-            skills: projection.skills.length,
-            markerGate: projection.markerPath.split("/").at(-1) ?? "",
+          const capabilities = runtimeCapabilities(options);
+          const sandbox = getSandbox(capabilities);
+          const projection = getWorkspaceProjection(capabilities);
+          return Promise.all([
+            sandbox.fs.exists(projection.markerPath),
+            sandbox.fs.exists(".git"),
+            sandbox.fs.read("../outside").then(
+              () => false,
+              (error) =>
+                error instanceof Error &&
+                error.message.includes('path "../outside" resolves outside the sandbox root'),
+            ),
+            sandbox.fs.exists("/workspace/.git"),
+          ]).then(([markerExists, relativeMarkerExists, traversalEscapeRejected, virtualMarkerExists]) => {
+            assert.strictEqual(projection.root, "/workspace");
+            assert.strictEqual(projection.skills.length, 0);
+            assert.isTrue(markerExists);
+            assert.isTrue(relativeMarkerExists);
+            assert.isTrue(traversalEscapeRejected);
+            assert.isTrue(virtualMarkerExists);
+            return sandbox.fs.write(projection.markerPath, "gitdir: /elsewhere\n");
           });
-          return Promise.resolve();
         };
         const base = descriptor(terminalEvents, probe);
         const nativeDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
@@ -746,18 +762,23 @@ describe("external Harness runtime", () => {
           ],
         });
 
-        yield* make([
+        const harness = make([
           externalHarnessRunner(nativeDescriptor, {
             authentication: hostAuthentication,
             sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
           }),
-        ])
-          .run({
-            plan,
-            session: freshSession,
-            mcpCredentials: new Map([["local:repo/mcp/linear.api", Redacted.make("native-bearer")]]),
-          })
-          .pipe(Stream.runDrain);
+        ]);
+        const run = (id: RunId) =>
+          harness
+            .run({
+              plan: RunPlan.make({ ...plan, id }),
+              session: freshSession,
+              mcpCredentials: new Map([["local:repo/mcp/linear.api", Redacted.make("native-bearer")]]),
+            })
+            .pipe(Stream.runDrain);
+
+        yield* run(request.id);
+        yield* run(secondCheckoutRunId);
 
         assert.deepStrictEqual(
           probe.resolved[0]?.request.mcp.map(({ name, endpoint, bearer }) => ({
@@ -773,8 +794,7 @@ describe("external Harness runtime", () => {
             },
           ],
         );
-        assert.deepStrictEqual(projections, [{ skills: 0, markerGate: ".git" }]);
-        assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
+        assert.deepStrictEqual(yield* fs.readDirectory(checkout), [".git"]);
       }),
     );
 
