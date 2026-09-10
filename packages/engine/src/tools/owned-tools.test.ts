@@ -69,7 +69,11 @@ const withProcessSpawn = (
   handle: { ...sandbox.handle, process: { ...sandbox.handle.process, spawn } },
 });
 
-const searchOutputSandbox = (original: WorktreeSandbox, stdout: string) => {
+const searchOutputSandbox = (
+  original: WorktreeSandbox,
+  stdout: string,
+  kill: (signal: NodeJS.Signals | number | undefined) => Promise<void> = () => Promise.resolve(),
+) => {
   const signals: Array<NodeJS.Signals | number | undefined> = [];
   const spawn: WorktreeSandbox["handle"]["process"]["spawn"] = () =>
     Promise.resolve({
@@ -83,7 +87,7 @@ const searchOutputSandbox = (original: WorktreeSandbox, stdout: string) => {
       wait: () => Promise.resolve(0),
       kill: (signal) => {
         signals.push(signal);
-        return Promise.resolve();
+        return kill(signal);
       },
     });
   return {
@@ -645,6 +649,19 @@ describe("owned tools", () => {
       assert.strictEqual(grepped.matches[0]?.path, "file-1000.ts");
       assert.deepStrictEqual(glob.signals, ["SIGTERM"]);
       assert.deepStrictEqual(grep.signals, ["SIGTERM"]);
+    }),
+  );
+
+  it.effect("returns capped output when stopping an exited subprocess", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const paths = `${Array.from({ length: 1001 }, (_, index) => `file-${index}.ts`).join("\0")}\0`;
+      const output = searchOutputSandbox(original, paths, () => Promise.reject(new Error("already exited")));
+
+      const globbed = yield* runGlob(output.sandbox, { pattern: "**/*.ts" });
+
+      assert.strictEqual(globbed.matches.length, 1000);
+      assert.deepStrictEqual(output.signals, ["SIGTERM"]);
     }),
   );
 

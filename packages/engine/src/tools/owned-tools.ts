@@ -359,7 +359,10 @@ const parseGrepMatch = (base: string, include: RegExp | null, matcher: RegExp, r
 
 const stopAtMatchLimit = <A>(process: SpawnHandle, matches: ReadonlyArray<A>) => {
   if (matches.length < MAX_MATCHES) return Effect.succeed(matches);
-  return processCommand(() => process.kill("SIGTERM")).pipe(Effect.map(() => matches));
+  return processCommand(() => process.kill("SIGTERM")).pipe(
+    Effect.ignore,
+    Effect.map(() => matches),
+  );
 };
 
 const collectGlobMatches = (process: SpawnHandle, base: string, matcher: RegExp) =>
