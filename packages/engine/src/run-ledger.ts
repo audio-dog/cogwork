@@ -35,9 +35,14 @@ export interface RunUpdate {
 
 export const acceptRunOperation = "accept Run";
 export const encodeRunEventOperation = "encode run event";
+export const readRunEventsOperation = "read Run events";
 export const runEventPageSize = 256;
 export const runEventPageBudgetBytes = 1024 * 1024;
-const RunLedgerErrorOperation = Schema.Literals([acceptRunOperation, encodeRunEventOperation]);
+const RunLedgerErrorOperation = Schema.Literals([
+  acceptRunOperation,
+  encodeRunEventOperation,
+  readRunEventsOperation,
+]);
 
 export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLedgerError", {
   operation: RunLedgerErrorOperation,
@@ -318,9 +323,9 @@ export const makeMemory = Effect.gen(function* () {
           return run ? summaryOf(events)(run) : null;
         }),
       ),
-    latestSeq: (runId: RunId) =>
+    latestSeq: (runId: RunId): Effect.Effect<number | null, RunLedgerError> =>
       Effect.map(Ref.get(eventsRef), (events) => eventsForRun(events, runId).at(-1)?.seq ?? null),
-    events: (runId: RunId) =>
+    events: (runId: RunId): Stream.Stream<RunEvent, RunLedgerError> =>
       Stream.unwrap(
         Effect.map(Ref.get(eventsRef), (events) => {
           const snapshot = eventsForRun(events, runId);

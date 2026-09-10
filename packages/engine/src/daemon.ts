@@ -296,14 +296,14 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetRunEvents: Effect.fn("Daemon.GetRunEvents")(function* (payload) {
     const ledger = yield* RunLedger;
-    return yield* ledger.events(payload.id).pipe(Stream.runCollect);
+    return yield* ledger.events(payload.id).pipe(Stream.runCollect, Effect.orDie);
   }),
   ResolveWatchTarget: Effect.fn("Daemon.ResolveWatchTarget")(function* (payload) {
     const ledger = yield* RunLedger;
     const run = yield* ledger.resolveWatchTarget(payload.workItem);
     return run?.id ?? null;
   }),
-  WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)),
+  WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)).pipe(Stream.orDie),
   WatchEvents: () => Stream.unwrap(watchEvents()),
   CancelRun: cancelRun,
   HandBack: handBack,
