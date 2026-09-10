@@ -14,9 +14,6 @@
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
-    "test:compare": "node configs/sensor/test-compare.mjs",
-    "test:measure": "node configs/sensor/test-measure.mjs",
-    "worktree:git-invocations": "tsx configs/sensor/count-worktree-git-invocations.ts",
     "vendor": "node scripts/vendor.mjs",
     "setup-worktree": "node scripts/setup-worktree.mjs"
   },
