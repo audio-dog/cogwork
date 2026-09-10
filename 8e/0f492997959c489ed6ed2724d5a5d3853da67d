@@ -1,0 +1,41 @@
+packages/engine/src/operation-resolution.ts
+  s_b44e234c28c197::t_61cb67bcf11b91 189-191,195-201,367-368
+  s_b44e234c28c197::t_25ba51ec11406e 54,94
+  s_b44e234c28c197::t_c5dfe973c05985 192-194
+  s_b44e234c28c197::t_8fd9ebdcc16593 252-260,262
+  s_b44e234c28c197::t_b8a198a72dd5c6 537-542,649,652-656,659
+  s_b44e234c28c197::t_8feb52b20f58ba 549-552,560-561,563
+  s_b44e234c28c197::t_1cdcaa873fa4e7 553-555,557
+  s_b44e234c28c197::t_8a7a124e88eee9 558
+  s_b44e234c28c197::t_c800bf7921c367 261,391,556,562
+  s_b44e234c28c197::t_87a0a9dea7fdc1 559,657-658
+  s_b44e234c28c197::t_46d3f1ea98c81e 202
+  s_b44e234c28c197::t_ede5d21bde3814 647
+  s_472481c30caa2e::t_f547becb33a917 3,52,263,543
+packages/engine/src/run-plan.ts
+  s_b44e234c28c197::t_ede5d21bde3814 770-772,961
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8e0f492997959c489ed6ed2724d5a5d3853da67d",
+  "prompts": {},
+  "sessions": {
+    "s_472481c30caa2e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1415c4a-8677-43f4-9f83-487744b8d8a1",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_b44e234c28c197": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08be5-d220-7703-885e-eba7336a720a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
