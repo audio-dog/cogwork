@@ -1,0 +1,21 @@
+packages/engine/src/performance-regression-sensor.ts
+  s_e8b39c832cbe56::t_70884bac1753b4 269
+packages/engine/src/performance-regression-sensor.test.ts
+  s_e8b39c832cbe56::t_6f30cfc7d87103 296-317
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "50c38948d2e48749a9640064a23b390d861fb7d7",
+  "prompts": {},
+  "sessions": {
+    "s_e8b39c832cbe56": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087db-c632-77b1-93bf-92101f0df387",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
