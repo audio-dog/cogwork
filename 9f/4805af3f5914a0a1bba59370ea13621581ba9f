@@ -1,0 +1,25 @@
+apps/cli/src/ledger.ts
+  s_bcd58a12bc39d7::t_5af15a10274d35 252-255,265,273-275,318
+  s_bcd58a12bc39d7::t_714bb6b9da8f46 586
+apps/cli/src/ledger.test.ts
+  s_bcd58a12bc39d7::t_714bb6b9da8f46 774-775
+  s_bcd58a12bc39d7::t_248d5dc306336a 779-797,799-802,804-806
+  s_bcd58a12bc39d7::t_5af15a10274d35 798,803,823
+  s_bcd58a12bc39d7::t_4185b6992000c2 769-773,776-778
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9f4805af3f5914a0a1bba59370ea13621581ba9f",
+  "prompts": {},
+  "sessions": {
+    "s_bcd58a12bc39d7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c2c-ffeb-7a22-97a0-4ea2b24605bb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
