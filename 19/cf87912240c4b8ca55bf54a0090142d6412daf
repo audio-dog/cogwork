@@ -1,0 +1,22 @@
+configs/sensor/count-worktree-git-invocations.ts
+  s_cff36ee3a37fb2::t_a3542cda6151e7 14-20
+  s_cff36ee3a37fb2::t_5c8f4478a2114e 117
+  s_cff36ee3a37fb2::t_047c5bee3eacf8 1-13,21-84,94-96,98-116,119-120
+  s_cff36ee3a37fb2::t_cc9d4279615673 85-93,97,118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "19cf87912240c4b8ca55bf54a0090142d6412daf",
+  "prompts": {},
+  "sessions": {
+    "s_cff36ee3a37fb2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c12-e4ef-7f50-b0f1-12ad014890f3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
