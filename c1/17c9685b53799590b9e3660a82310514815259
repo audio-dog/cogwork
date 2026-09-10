@@ -1,0 +1,19 @@
+.github/workflows/test-suite-comparison.yml
+  s_4fc0bab078d0c3::t_afe46409030d8c 24,29,41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c117c9685b53799590b9e3660a82310514815259",
+  "prompts": {},
+  "sessions": {
+    "s_4fc0bab078d0c3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c01-aafd-7f83-ac20-b6d4b6cf663f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
