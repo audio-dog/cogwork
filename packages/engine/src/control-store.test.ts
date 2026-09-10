@@ -23,15 +23,18 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { afterEach, vi } from "vitest";
 import {
   bootControlStoreLayer,
   ControlStore,
   type ControlStoreService,
+  controlStoreClientLayer,
   controlStoreWriteGateWaitDuration,
   readControlStore,
+  retainRunEvents,
 } from "./control-store";
 
 const pushSchemaMock = vi.hoisted(() => vi.fn());
@@ -54,12 +57,25 @@ lockfile.lock(process.argv[1], { realpath: false }).then(() => {
 });
 `;
 
-const storeAt = (storePath: string) =>
+const storeAt = (storePath: string, options: NonNullable<Parameters<typeof bootControlStoreLayer>[1]> = {}) =>
   Effect.map(ControlStore, (store) =>
     store.health === "available"
       ? { health: store.health }
       : { health: store.health, message: store.message },
-  ).pipe(Effect.provide(bootControlStoreLayer(storePath)));
+  ).pipe(Effect.provide(bootControlStoreLayer(storePath, options)));
+
+const retainAt = (storePath: string, maximumBytes: number, maximumVacuumPages?: number) =>
+  retainRunEvents(storePath, maximumBytes, maximumVacuumPages).pipe(
+    Effect.provide(controlStoreClientLayer(storePath)),
+    Effect.scoped,
+  );
+
+const busyTimeoutAt = (storePath: string, busyTimeout: number) =>
+  SqlClient.SqlClient.pipe(
+    Effect.flatMap((sql) => sql.unsafe<{ readonly timeout: number }>("PRAGMA busy_timeout")),
+    Effect.provide(controlStoreClientLayer(storePath, { busyTimeout })),
+    Effect.scoped,
+  );
 
 const withStore = <A, E, R>(
   storePath: string,
@@ -171,6 +187,21 @@ const establishSecondAccount = Effect.fn("test.establishSecondAccount")((storePa
 
 const retentionWindowMillis = 1000 * 60 * 60 * 24 * 30;
 const workspace = Schema.decodeSync(WorkspaceId)("example");
+const retentionSessions = `INSERT INTO sessions (id, workspace, harness, kind, handle, created_at)
+  VALUES ('opaque', 'gh', 'cursor', 'opaque-handle', 'native', 0),
+         ('owned', 'gh', 'provider', 'owned-transcript', NULL, 0);`;
+const seedPrunablePayload = (storePath: string, bytes = 1048576) =>
+  poke(
+    storePath,
+    `INSERT OR IGNORE INTO sessions (id, workspace, harness, kind, handle, created_at)
+     VALUES ('opaque', 'gh', 'cursor', 'opaque-handle', 'native', 0);
+     INSERT INTO runs (
+       id, workspace, work_item, stage, harness, session, status,
+       started_at, ended_at, event_count
+     ) VALUES ('prunable', 'gh', '#1', 'triage', 'cursor', 'opaque', 'succeeded', 1, 1, 1);
+     INSERT INTO run_events (run_id, seq, type, name, data, at)
+     VALUES ('prunable', 0, 'TEXT_MESSAGE_CONTENT', NULL, randomblob(${bytes}), 1);`,
+  );
 const schemaDiff = (sqlStatements: ReadonlyArray<string>) => ({
   sqlStatements: [...sqlStatements],
   hints: [],
@@ -1004,29 +1035,223 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("removes expired run events at boot", () =>
+  it.effect("prunes whole expired opaque Runs and preserves every exempt history", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
       yield* storeAt(storePath);
       yield* poke(
         storePath,
-        `INSERT INTO runs (id, workspace, work_item, stage, harness, status, started_at, event_count)
-         VALUES ('expired', 'gh', '#1', 'triage', 'cursor', 'succeeded', 0, 9),
-                ('current', 'gh', '#2', 'triage', 'cursor', 'running', 1, 9);
+        `${retentionSessions}
+         INSERT INTO runs (
+           id, workspace, work_item, stage, harness, session, status,
+           started_at, ended_at, event_count
+         ) VALUES
+           ('expired', 'gh', '#1', 'triage', 'cursor', 'opaque', 'succeeded', 0, 0, 2),
+           ('owned', 'gh', '#2', 'triage', 'provider', 'owned', 'succeeded', 0, 0, 1),
+           ('running', 'gh', '#3', 'triage', 'cursor', 'opaque', 'running', 0, NULL, 1),
+           ('current', 'gh', '#4', 'triage', 'cursor', 'opaque', 'succeeded', 2, 2, 1);
+         INSERT INTO run_plans (run_id, plan) VALUES ('expired', '{}');
          INSERT INTO run_events (run_id, seq, type, name, data, at)
          VALUES ('expired', 0, 'RUN_STARTED', NULL, '{}', 0),
-                ('current', 0, 'RUN_STARTED', NULL, '{}', 9999999999999);`,
+                ('expired', 1, 'TEXT_MESSAGE_CONTENT', NULL, '{}', 9999999999999),
+                ('owned', 0, 'RUN_STARTED', NULL, '{}', 0),
+                ('running', 0, 'RUN_STARTED', NULL, '{}', 0),
+                ('current', 0, 'RUN_STARTED', NULL, '{}', 0);`,
       );
 
       yield* TestClock.setTime(retentionWindowMillis + 1);
       yield* storeAt(storePath);
-      assert.deepStrictEqual(yield* query(storePath, "SELECT run_id FROM run_events ORDER BY run_id"), [
-        { run_id: "current" },
+      assert.deepStrictEqual(
+        yield* query(storePath, "SELECT run_id, seq FROM run_events ORDER BY run_id, seq"),
+        [
+          { run_id: "current", seq: 0 },
+          { run_id: "owned", seq: 0 },
+          { run_id: "running", seq: 0 },
+        ],
+      );
+      assert.deepStrictEqual(
+        yield* query(storePath, "SELECT id, event_count, events_pruned_at FROM runs ORDER BY id"),
+        [
+          { id: "current", event_count: 1, events_pruned_at: null },
+          { id: "expired", event_count: 0, events_pruned_at: retentionWindowMillis + 1 },
+          { id: "owned", event_count: 1, events_pruned_at: null },
+          { id: "running", event_count: 1, events_pruned_at: null },
+        ],
+      );
+      assert.deepStrictEqual(yield* query(storePath, "SELECT run_id FROM run_plans"), [
+        { run_id: "expired" },
       ]);
-      assert.deepStrictEqual(yield* query(storePath, "SELECT id, event_count FROM runs ORDER BY id"), [
-        { id: "current", event_count: 1 },
-        { id: "expired", event_count: 0 },
+    }),
+  );
+
+  it.effect("enables incremental auto-vacuum only for new stores", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const fresh = yield* temporaryStore("fresh.db");
+      const empty = yield* temporaryStore("empty.db");
+      const existing = yield* temporaryStore("existing.db");
+      const full = yield* temporaryStore("full.db");
+      yield* fs.writeFile(empty.storePath, new Uint8Array());
+      yield* storeAt(existing.storePath);
+      yield* storeAt(full.storePath);
+      yield* poke(existing.storePath, "PRAGMA journal_mode=DELETE; PRAGMA auto_vacuum=NONE; VACUUM;");
+      yield* poke(full.storePath, "PRAGMA journal_mode=DELETE; PRAGMA auto_vacuum=FULL; VACUUM;");
+
+      yield* storeAt(fresh.storePath);
+      yield* storeAt(empty.storePath);
+      yield* storeAt(existing.storePath);
+      yield* storeAt(full.storePath);
+
+      assert.deepStrictEqual(yield* query(fresh.storePath, "PRAGMA auto_vacuum"), [{ auto_vacuum: 2 }]);
+      assert.deepStrictEqual(yield* query(empty.storePath, "PRAGMA auto_vacuum"), [{ auto_vacuum: 2 }]);
+      assert.deepStrictEqual(yield* query(existing.storePath, "PRAGMA auto_vacuum"), [{ auto_vacuum: 0 }]);
+      assert.deepStrictEqual(yield* query(full.storePath, "PRAGMA auto_vacuum"), [{ auto_vacuum: 1 }]);
+    }),
+  );
+
+  it.effect("preserves an explicit zero busy timeout", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      const settings = yield* busyTimeoutAt(storePath, 0);
+
+      assert.deepStrictEqual(settings, [{ timeout: 0 }]);
+    }),
+  );
+
+  it.effect("prunes oldest whole opaque Runs until their event data fits the byte budget", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* storeAt(storePath);
+      yield* poke(
+        storePath,
+        `${retentionSessions}
+         INSERT INTO runs (
+           id, workspace, work_item, stage, harness, session, status,
+           started_at, ended_at, event_count
+         ) VALUES
+           ('oldest', 'gh', '#1', 'triage', 'cursor', 'opaque', 'succeeded', 1, 1, 2),
+           ('middle', 'gh', '#2', 'triage', 'cursor', 'opaque', 'succeeded', 2, 2, 2),
+           ('newest', 'gh', '#3', 'triage', 'cursor', 'opaque', 'succeeded', 3, 3, 2),
+           ('owned-budget', 'gh', '#4', 'triage', 'provider', 'owned', 'succeeded', 4, 4, 1),
+           ('running-budget', 'gh', '#5', 'triage', 'cursor', 'opaque', 'running', 5, NULL, 1);
+         INSERT INTO run_events (run_id, seq, type, name, data, at) VALUES
+           ('oldest', 0, 'TEXT_MESSAGE_CONTENT', NULL, 'aaa', 1),
+           ('oldest', 1, 'TEXT_MESSAGE_CONTENT', NULL, 'aaa', 1),
+           ('middle', 0, 'TEXT_MESSAGE_CONTENT', NULL, 'bbb', 2),
+           ('middle', 1, 'TEXT_MESSAGE_CONTENT', NULL, 'bbb', 2),
+           ('newest', 0, 'TEXT_MESSAGE_CONTENT', NULL, 'ccc', 3),
+           ('newest', 1, 'TEXT_MESSAGE_CONTENT', NULL, 'ccc', 3),
+           ('owned-budget', 0, 'TEXT_MESSAGE_CONTENT', NULL, printf('%100s', ''), 4),
+           ('running-budget', 0, 'TEXT_MESSAGE_CONTENT', NULL, printf('%100s', ''), 5);`,
+      );
+
+      yield* TestClock.setTime(10);
+      yield* retainAt(storePath, 10);
+
+      assert.deepStrictEqual(
+        yield* query(storePath, "SELECT run_id, seq FROM run_events ORDER BY run_id, seq"),
+        [
+          { run_id: "newest", seq: 0 },
+          { run_id: "newest", seq: 1 },
+          { run_id: "owned-budget", seq: 0 },
+          { run_id: "running-budget", seq: 0 },
+        ],
+      );
+      assert.deepStrictEqual(
+        yield* query(storePath, "SELECT id, event_count, events_pruned_at FROM runs ORDER BY id"),
+        [
+          { id: "middle", event_count: 0, events_pruned_at: 10 },
+          { id: "newest", event_count: 2, events_pruned_at: null },
+          { id: "oldest", event_count: 0, events_pruned_at: 10 },
+          { id: "owned-budget", event_count: 1, events_pruned_at: null },
+          { id: "running-budget", event_count: 1, events_pruned_at: null },
+        ],
+      );
+    }),
+  );
+
+  it.effect("prunes a large Run set without binding Run ids", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* storeAt(storePath);
+      yield* poke(
+        storePath,
+        `INSERT INTO sessions (id, workspace, harness, kind, handle, created_at)
+         VALUES ('opaque', 'gh', 'cursor', 'opaque-handle', 'native', 0);
+         WITH RECURSIVE numbers(value) AS (
+           VALUES (1)
+           UNION ALL
+           SELECT value + 1 FROM numbers WHERE value < 1000
+         )
+         INSERT INTO runs (
+           id, workspace, work_item, stage, harness, session, status,
+           started_at, ended_at, event_count
+         )
+         SELECT 'run-' || value, 'gh', '#1', 'triage', 'cursor', 'opaque', 'succeeded', value, value, 1
+         FROM numbers;
+         WITH RECURSIVE numbers(value) AS (
+           VALUES (1)
+           UNION ALL
+           SELECT value + 1 FROM numbers WHERE value < 1000
+         )
+         INSERT INTO run_events (run_id, seq, type, name, data, at)
+         SELECT 'run-' || value, 0, 'TEXT_MESSAGE_CONTENT', NULL, 'x', value
+         FROM numbers;`,
+      );
+
+      yield* TestClock.setTime(1001);
+      yield* retainAt(storePath, 0);
+
+      assert.deepStrictEqual(yield* query(storePath, "SELECT count(*) AS count FROM run_events"), [
+        { count: 0 },
       ]);
+    }),
+  );
+
+  it.effect("reclaims pages incrementally without fully vacuuming an existing store", () =>
+    Effect.gen(function* () {
+      const incremental = yield* temporaryStore("incremental.db");
+      const legacy = yield* temporaryStore("legacy.db");
+      yield* storeAt(incremental.storePath);
+      yield* storeAt(legacy.storePath);
+      yield* poke(legacy.storePath, "PRAGMA journal_mode=DELETE; PRAGMA auto_vacuum=NONE; VACUUM;");
+      yield* seedPrunablePayload(incremental.storePath);
+      yield* seedPrunablePayload(legacy.storePath);
+      const incrementalPagesBefore = yield* query(incremental.storePath, "PRAGMA page_count");
+      const legacyPagesBefore = yield* query(legacy.storePath, "PRAGMA page_count");
+
+      yield* TestClock.setTime(10);
+      yield* retainAt(incremental.storePath, 0, 128);
+      yield* retainAt(legacy.storePath, 0, 128);
+
+      const incrementalPagesAfterFirstBoot = yield* query(incremental.storePath, "PRAGMA page_count");
+      const incrementalFreelistAfterFirstBoot = yield* Schema.decodeUnknownEffect(Schema.Finite)(
+        (yield* query(incremental.storePath, "PRAGMA freelist_count"))[0]?.freelist_count,
+      );
+      yield* retainAt(incremental.storePath, 0, 128);
+      const incrementalPagesAfterSecondBoot = yield* query(incremental.storePath, "PRAGMA page_count");
+      const incrementalFreelistAfterSecondBoot = yield* Schema.decodeUnknownEffect(Schema.Finite)(
+        (yield* query(incremental.storePath, "PRAGMA freelist_count"))[0]?.freelist_count,
+      );
+      const legacyPagesAfter = yield* query(legacy.storePath, "PRAGMA page_count");
+      const incrementalPageCountBefore = yield* Schema.decodeUnknownEffect(Schema.Finite)(
+        incrementalPagesBefore[0]?.page_count,
+      );
+      const incrementalPageCountAfter = yield* Schema.decodeUnknownEffect(Schema.Finite)(
+        incrementalPagesAfterFirstBoot[0]?.page_count,
+      );
+      const incrementalPageCountAfterSecondBoot = yield* Schema.decodeUnknownEffect(Schema.Finite)(
+        incrementalPagesAfterSecondBoot[0]?.page_count,
+      );
+      const legacyFreelist = yield* Schema.decodeUnknownEffect(Schema.Finite)(
+        (yield* query(legacy.storePath, "PRAGMA freelist_count"))[0]?.freelist_count,
+      );
+      assert.isBelow(incrementalPageCountAfter, incrementalPageCountBefore);
+      assert.isAbove(incrementalFreelistAfterFirstBoot, 0);
+      assert.isBelow(incrementalPageCountAfterSecondBoot, incrementalPageCountAfter);
+      assert.isBelow(incrementalFreelistAfterSecondBoot, incrementalFreelistAfterFirstBoot);
+      assert.deepStrictEqual(legacyPagesAfter, legacyPagesBefore);
+      assert.isAbove(legacyFreelist, 0);
     }),
   );
 

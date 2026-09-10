@@ -5,6 +5,7 @@
 - **Amended:** 2026-08-25 — `drizzle-kit` is adopted as a development tool, see [Amendment](#amendment-2026-08-25--drizzle-kit-is-adopted-as-a-development-tool)
 - **Amended:** 2026-08-27 — pre-alpha: no migrations, see [Amendment](#amendment-2026-08-27--pre-alpha-no-migrations-no-cutover-no-backups)
 - **Amended:** 2026-09-01 — migrations return as declarative convergence, see [Amendment](#amendment-2026-09-01--migrations-return-as-declarative-convergence)
+- **Amended:** 2026-09-10 — run-event retention is bounded without breaking owned transcripts, see [Amendment](#amendment-2026-09-10--run-event-retention-is-bounded-without-breaking-owned-transcripts)
 
 ## Context
 
@@ -350,3 +351,25 @@ source of truth, and nothing a machine holds outranks it.
 practice, or a differ regression the pin and the re-diff cannot contain, is the signal to revisit —
 the fallback is the ordered-chain model this amendment declined, whose ingredients (`drizzle-kit
 generate`, Effect's `Migrator.fromRecord`) remain verified and available.
+
+## Amendment (2026-09-10) — run-event retention is bounded without breaking owned transcripts
+
+The required run-event retention existed as a 30-day event cutoff. It deleted individual events from
+every Run. That was unsafe for an owned-transcript Session, whose conversation exists only in those
+events, and it did not stop a recent event flood from filling the store.
+
+**Retention runs once at boot and removes whole Runs of events.** A Run is eligible only when it is
+terminal, has an end time, and belongs to an opaque-handle Session. An eligible Run is pruned when it
+ended more than 30 days ago. The remaining eligible event data has a 256 MiB soft budget, measured as
+the encoded `data` bytes. If it exceeds that budget, the oldest whole Runs are pruned until it fits.
+Running Runs and every owned-transcript Run are exempt. Tracker state is not available at store boot
+and does not create another exemption.
+
+**Pruning removes history, not the Run.** The Run row, immutable Run Plan, and Session remain. The Run
+reports zero retained events and records `eventsPrunedAtMillis`, so a history reader can distinguish
+removed history from a Run that never recorded an event. No folded transcript or other second copy is
+created.
+
+**New stores use incremental auto-vacuum.** Boot enables it before creating a new Control store and
+requests bounded incremental reclamation after pruning. Existing stores keep their current auto-vacuum mode:
+deleted pages can be reused, but boot never runs a blocking full `VACUUM` to retrofit them.

@@ -1,5 +1,6 @@
 import {
   AgUiEvent,
+  BranchName,
   ConnectionId,
   type ContributionSettingRow,
   ControlStoreFailure,
@@ -64,6 +65,7 @@ import {
 } from "./harness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
+import * as OperationResolution from "./operation-resolution";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
@@ -86,6 +88,7 @@ import {
 } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
+const decodeBranchName = Schema.decodeSync(BranchName);
 const codex = Schema.decodeSync(HarnessName)("codex");
 const replay = Schema.decodeSync(HarnessName)("replay");
 const id = Schema.decodeSync(WorkItemId);
@@ -985,7 +988,7 @@ const failSecondPrepareWorktree = (failure: GitError | WorktreeDivergedError) =>
       ),
   }));
 
-const branchRecordingWorktree = (branch: string) =>
+const branchRecordingWorktree = (branch: BranchName) =>
   worktreeDouble((probe) => ({
     ...worktreeStubCreated(false),
     ensure: (_workspace, _item, options) =>
@@ -1538,6 +1541,8 @@ function provide<SourceControlRequirements = never>(
   runControl: Layer.Layer<RunControl.RunControl> = runControlStub,
 ) {
   const engineServices = engineTestLayer({ transformRunLedger });
+  const operationResolution = OperationResolution.layer;
+  const executor = Layer.effect(Executor.Executor, Executor.make).pipe(Layer.provide(operationResolution));
   const runnerServices = Layer.mergeAll(
     engineServices,
     contextAssembler,
@@ -1545,7 +1550,8 @@ function provide<SourceControlRequirements = never>(
     FileSystem.layerNoop({}),
     FetchHttpClient.layer,
   );
-  return Executor.layer.pipe(
+  return Layer.merge(executor, operationResolution).pipe(
+    Layer.provide(Availability.Availability.layer),
     Layer.provideMerge(
       Layer.mergeAll(
         issueTracker,
@@ -1589,8 +1595,8 @@ const harnessSwitchLayer = (alternates: ReadonlyArray<HarnessName>) =>
 describe("Executor.execute", () => {
   it.effect("projects availability only for executable Operations", () => {
     return Effect.gen(function* () {
-      const executor = yield* Executor.Executor;
-      const availability = yield* executor.refreshAvailability(workspace);
+      const resolution = yield* OperationResolution.OperationResolution;
+      const availability = yield* resolution.refreshAvailability(workspace);
 
       assert.deepStrictEqual(
         availability.map(({ operation }) => operation),
@@ -1630,8 +1636,8 @@ describe("Executor.execute", () => {
         }),
       };
 
-      yield* Executor.Executor.pipe(
-        Effect.flatMap((executor) => executor.refreshAvailability(workspace)),
+      yield* OperationResolution.OperationResolution.pipe(
+        Effect.flatMap((resolution) => resolution.refreshAvailability(workspace)),
         Effect.provide(
           provide([probeRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), operationSettings),
         ),
@@ -1663,8 +1669,8 @@ describe("Executor.execute", () => {
     };
 
     return Effect.gen(function* () {
-      const executor = yield* Executor.Executor;
-      const availability = yield* executor.availabilityOf(implementWorkspace, implementItem);
+      const resolution = yield* OperationResolution.OperationResolution;
+      const availability = yield* resolution.availabilityOf(implementWorkspace, implementItem);
 
       assert.isTrue(availability.available);
       assert.deepStrictEqual(availability.causes, []);
@@ -1754,8 +1760,9 @@ describe("Executor.execute", () => {
     Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
+      const resolution = yield* OperationResolution.OperationResolution;
       const executor = yield* Executor.Executor;
-      const availability = yield* executor.availabilityOf(implementWorkspace, implementItem);
+      const availability = yield* resolution.availabilityOf(implementWorkspace, implementItem);
       const accepted = yield* execute(executor, implementWorkspace, implementItem);
 
       assert.isFalse(availability.available);
@@ -1885,7 +1892,7 @@ describe("Executor.execute", () => {
         plan?.instructions.every((instruction) => instruction.content !== request?.plan.messages[0]?.content),
       );
 
-      const events = firstRun ? yield* ledger.events(firstRun.id) : [];
+      const events = firstRun ? yield* ledger.events(firstRun.id).pipe(Stream.runCollect) : [];
       assert.strictEqual(events.length, successEvents.length);
       assert.deepStrictEqual(
         events.map((e) => e.seq),
@@ -1916,7 +1923,10 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
       assert.strictEqual(run?.eventCount, 1);
-      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+      assert.strictEqual(
+        run ? (yield* ledger.events(run.id).pipe(Stream.runCollect)).at(-1)?.type : null,
+        "RUN_FINISHED",
+      );
     }).pipe(
       Effect.provide(provide([runner([{ type: "CUSTOM", content: 1n } satisfies AgUiEvent, finished])])),
     ),
@@ -1931,7 +1941,10 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
       assert.strictEqual(run?.eventCount, successEvents.length);
-      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+      assert.strictEqual(
+        run ? (yield* ledger.events(run.id).pipe(Stream.runCollect)).at(-1)?.type : null,
+        "RUN_FINISHED",
+      );
     }).pipe(
       Effect.provide(
         provide([
@@ -2012,7 +2025,7 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       const runs = yield* ledger.listRuns(10);
-      const events = runs[0] ? yield* ledger.events(runs[0].id) : [];
+      const events = runs[0] ? yield* ledger.events(runs[0].id).pipe(Stream.runCollect) : [];
       assert.include(events.at(-1)?.data ?? "", '"finishReason":"failed"');
     }).pipe(Effect.provide(provide([runner(malformed)])));
   });
@@ -2081,7 +2094,7 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "failed");
-      const events = run ? yield* ledger.events(run.id) : [];
+      const events = run ? yield* ledger.events(run.id).pipe(Stream.runCollect) : [];
       assert.isTrue(events.some((event) => event.type === "RUN_FINISHED"));
     }).pipe(Effect.provide(provide([silentRunner])));
   });
@@ -2096,7 +2109,7 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       const runs = yield* ledger.listRuns(10);
       const id = runs[0]?.id;
-      const events = id ? yield* ledger.events(id) : [];
+      const events = id ? yield* ledger.events(id).pipe(Stream.runCollect) : [];
       assert.isTrue(events.some((event) => event.type === "RUN_FINISHED"));
     }).pipe(Effect.provide(provide([failingRunner(error)])));
   });
@@ -3122,7 +3135,7 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
-      const events = run ? yield* ledger.events(run.id) : [];
+      const events = run ? yield* ledger.events(run.id).pipe(Stream.runCollect) : [];
       assert.isFalse(events.some((event) => event.data.includes("token-for-linear")));
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
@@ -3547,7 +3560,10 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-prev");
       assert.strictEqual(run?.status, "failed");
-      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+      assert.strictEqual(
+        run ? (yield* ledger.events(run.id).pipe(Stream.runCollect)).at(-1)?.type : null,
+        "RUN_FINISHED",
+      );
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
@@ -3579,7 +3595,10 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-prev");
       assert.strictEqual(run?.status, "failed");
-      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+      assert.strictEqual(
+        run ? (yield* ledger.events(run.id).pipe(Stream.runCollect)).at(-1)?.type : null,
+        "RUN_FINISHED",
+      );
     }).pipe(Effect.provide(provide([capturingRunner(successEvents)])));
   });
 
@@ -3997,7 +4016,7 @@ describe("Executor.execute", () => {
   });
 
   it.effect("prepares a linked external branch for follow-up", () => {
-    const externalBranch = "claude/github-issue-5-a1b2c3";
+    const externalBranch = decodeBranchName("claude/github-issue-5-a1b2c3");
     const item = { ...followUpItem, followUpBranch: externalBranch };
 
     return Effect.gen(function* () {
@@ -4179,7 +4198,7 @@ describe("Executor.execute", () => {
   });
 
   it.effect("resumes a linked external branch", () => {
-    const externalBranch = "claude/github-issue-5-a1b2c3";
+    const externalBranch = decodeBranchName("claude/github-issue-5-a1b2c3");
     const resumeItem: EligibleWork = {
       ...followUpItem,
       followUpBranch: externalBranch,

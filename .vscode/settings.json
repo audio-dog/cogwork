@@ -42,5 +42,8 @@
     ["cellClassName:\\s*[\"'`]([^\"'`]*)[\"'`]"],
     ["headerClassName:\\s*[\"'`]([^\"'`]*)[\"'`]"]
   ],
-  "tailwindCSS.experimental.configFile": "packages/ui/src/styles/globals.css"
+  "tailwindCSS.experimental.configFile": "packages/ui/src/styles/globals.css",
+  "[javascript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
 }

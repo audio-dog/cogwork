@@ -36,8 +36,11 @@ class ReplayReportTooLarge extends Data.TaggedError("ReplayReportTooLarge")<{
 
 class EmptyReplayFixture extends Data.TaggedError("EmptyReplayFixture")<{
   readonly runId: RunId;
+  readonly eventsPrunedAtMillis: number | null;
 }> {
   override get message() {
+    if (this.eventsPrunedAtMillis !== null)
+      return `Run ${this.runId} history was pruned at ${this.eventsPrunedAtMillis}`;
     return `Run ${this.runId} has no events to export`;
   }
 }
@@ -82,8 +85,8 @@ const writeFixture = Effect.fn("replay.writeFixture")(function* (options: {
   const path = yield* Path.Path;
   const client = yield* makeDaemonClient();
   const id = yield* decodeRunId(options.id);
-  const events = yield* client.GetRunEvents({ id });
-  if (events.length === 0) return yield* new EmptyReplayFixture({ runId: id });
+  const { events, eventsPrunedAtMillis } = yield* client.GetRunEvents({ id });
+  if (events.length === 0) return yield* new EmptyReplayFixture({ runId: id, eventsPrunedAtMillis });
   const encoded = yield* Replay.encodeReplayFixture(
     Replay.ReplayFixture.make({ version: 1, sourceRunId: id, events }),
   );

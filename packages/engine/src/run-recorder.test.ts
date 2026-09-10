@@ -101,7 +101,7 @@ describe("RunRecorder", () => {
         const { activities } = yield* recordAll(record, events);
 
         const ledger = yield* RunLedger.RunLedger;
-        const appended = yield* ledger.events(record.id);
+        const appended = yield* ledger.events(record.id).pipe(Stream.runCollect);
 
         assert.strictEqual(appended.length, events.length);
         assert.strictEqual(activities.length, events.length);
@@ -125,7 +125,7 @@ describe("RunRecorder", () => {
         yield* recordAll(record, [runStarted, text("a"), text("b"), finished]);
 
         const ledger = yield* RunLedger.RunLedger;
-        assert.deepStrictEqual(seqOf(yield* ledger.events(record.id)), [0, 1, 2, 3]);
+        assert.deepStrictEqual(seqOf(yield* ledger.events(record.id).pipe(Stream.runCollect)), [0, 1, 2, 3]);
       }),
     );
 
@@ -139,7 +139,7 @@ describe("RunRecorder", () => {
 
         const ledger = yield* RunLedger.RunLedger;
         assert.deepStrictEqual(
-          (yield* ledger.events(record.id)).map(({ name }) => name),
+          (yield* ledger.events(record.id).pipe(Stream.runCollect)).map(({ name }) => name),
           ["shell", "phase"],
         );
       }),
@@ -153,8 +153,8 @@ describe("RunRecorder", () => {
         yield* recordAll(second, [runStarted, text("b"), finished]);
 
         const ledger = yield* RunLedger.RunLedger;
-        assert.deepStrictEqual(seqOf(yield* ledger.events(first.id)), [0, 1]);
-        assert.deepStrictEqual(seqOf(yield* ledger.events(second.id)), [0, 1, 2]);
+        assert.deepStrictEqual(seqOf(yield* ledger.events(first.id).pipe(Stream.runCollect)), [0, 1]);
+        assert.deepStrictEqual(seqOf(yield* ledger.events(second.id).pipe(Stream.runCollect)), [0, 1, 2]);
       }),
     );
 
@@ -245,9 +245,29 @@ describe("RunRecorder", () => {
         const { activities: live } = yield* recordAll(record, [runStarted, text("done"), finished]);
 
         const recorder = yield* RunRecorder;
-        const replayed = yield* recorder.replay(record);
+        const replayed = yield* recorder.replay(record).pipe(Stream.runCollect);
 
         assert.deepStrictEqual(replayed, live);
+      }),
+    );
+
+    it.effect("replays more than 256 events in multiple chunks", () =>
+      Effect.gen(function* () {
+        const record = run("run-replay-pages");
+        const ledger = yield* RunLedger.RunLedger;
+        yield* Effect.forEach(
+          Array.from({ length: 257 }, (_, seq) => seq),
+          (seq) => ledger.appendEvent(record.id, ledgerEvent(seq, text(String(seq)))),
+          { discard: true },
+        );
+
+        const recorder = yield* RunRecorder;
+        const chunks = yield* recorder.replay(record).pipe(Stream.chunks, Stream.runCollect);
+
+        assert.deepStrictEqual(
+          chunks.map((chunk) => chunk.length),
+          [256, 1],
+        );
       }),
     );
 
@@ -260,7 +280,7 @@ describe("RunRecorder", () => {
         yield* ledger.appendEvent(record.id, ledgerEvent(2, finished));
 
         const recorder = yield* RunRecorder;
-        const replayed = yield* recorder.replay(record);
+        const replayed = yield* recorder.replay(record).pipe(Stream.runCollect);
 
         assert.deepStrictEqual(seqOf(replayed), [0, 2]);
       }),
@@ -302,7 +322,7 @@ describe("RunRecorder", () => {
         );
 
         assert.strictEqual(error.operation, RunLedger.encodeRunEventOperation);
-        assert.deepStrictEqual(yield* ledger.events(record.id), []);
+        assert.deepStrictEqual(yield* ledger.events(record.id).pipe(Stream.runCollect), []);
         assert.isTrue(messages.some((message) => message.includes("run event encoding failed")));
       }),
     );

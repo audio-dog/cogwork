@@ -6,7 +6,7 @@ Use this reference when an Effect crosses an external boundary: a spawned subpro
 
 Work that leaves the process can stall forever. Effect makes the deadline and the retry policy part of the effect's type instead of ambient hope.
 
-- Every effect that crosses an external boundary carries a time bound.
+- Every effect that crosses an external boundary carries a time bound. A local filesystem call is not one — see **The filesystem is not a boundary**.
 - Retry only failures classified as transient. Classification reads tagged error fields, never message strings.
 - `Schedule` owns all timing math: backoff, jitter, caps, budgets. Business code never computes delays.
 - A timeout interrupts the losing effect, so the underlying operation must be abortable.
@@ -77,6 +77,15 @@ Place the bound where it means something to the domain:
 
 A bound that fires should surface through the existing typed channel — for a harness run, a `HarnessError` with `retryable: true`, so settlement logic downstream stays unchanged.
 
+### The filesystem is not a boundary
+
+Local filesystem calls are deliberately absent from that list. `sandbox.handle.fs.*` looks like it crosses into the sandbox, but every provider cogwork installs is `localProcessSandbox`, which resolves each call to `node:fs/promises` in this process. Nothing is crossed.
+
+The `SandboxFs` contract also takes no `AbortSignal`, so a deadline there returns control while the operation runs on, unwatched. On a write that is worse than no bound: the tool reports a timeout, the model writes something else, and the abandoned write lands last and wins. A wedged disk is already bounded by the run budget in `foldStream`.
+
+Where the cost is volume rather than latency — a recursive walk that reads every file — a per-call deadline never fires and is the wrong instrument. Bound the walk, or shell out to a tool that does it in one process.
+(Settled on [#554](https://github.com/colonylabs/cogwork/issues/554).)
+
 ## Make the underlying work abortable
 
 A timeout interrupts the fiber, but interruption only helps when the boundary listens. `Effect.tryPromise` passes its callback an `AbortSignal` already wired to interruption; do not build the controller by hand.
@@ -109,6 +118,7 @@ Hand-written `Math.min(base * 2 ** attempt, max)` inside a retry or wait loop si
 ## Cogwork conventions
 
 - Every subprocess, HTTP call, and harness stream carries a deadline at its port.
+- Local filesystem calls carry none, and adding one to a write is a regression — see **The filesystem is not a boundary**.
 - Convert `TimeoutError` into the port's tagged error at the boundary; downstream code reasons about the domain error.
 - Retry predicates read tagged error fields (`reason`, `retryable`), never message strings.
 - Name the schedule as a constant next to the client (`transientBackoff`), one policy per port, so the operational behavior is visible in one place.
