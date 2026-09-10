@@ -97,12 +97,6 @@ const DependenciesSummarySchema = Schema.Struct({
   blocked_by: Schema.optional(Schema.NullOr(Schema.Natural)),
 });
 
-const IssueFieldValueSchema = Schema.Struct({
-  issue_field_id: GitHubIssueFieldId,
-  data_type: Schema.String,
-  single_select_option: Schema.optional(Schema.NullOr(Schema.Struct({ name: TrimmedNonEmptyString }))),
-});
-
 const IssueSchema = Schema.Struct({
   node_id: Schema.String,
   number: Schema.Finite,
@@ -227,6 +221,50 @@ const ClosingReferencesPayload = Schema.Struct({
 });
 const decodeClosingReferences = Schema.decodeUnknownEffect(ClosingReferencesPayload);
 
+const GraphQlIssueFieldId = Schema.FiniteFromString.pipe(Schema.decodeTo(GitHubIssueFieldId));
+const IssueFieldValueNode = Schema.Struct({
+  __typename: Schema.String,
+  name: Schema.optionalKey(TrimmedNonEmptyString),
+  field: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({
+        fullDatabaseId: Schema.optionalKey(GraphQlIssueFieldId),
+      }),
+    ),
+  ),
+});
+const IssueFieldValuesPayload = Schema.Struct({
+  nodes: Schema.Array(
+    Schema.NullOr(
+      Schema.Struct({
+        number: Schema.Finite,
+        issueFieldValues: Schema.Struct({
+          nodes: Schema.Array(Schema.NullOr(IssueFieldValueNode)),
+        }),
+      }),
+    ),
+  ),
+});
+const decodeIssueFieldValues = Schema.decodeUnknownEffect(IssueFieldValuesPayload);
+
+export const issueFieldValuesQuery = `
+query IssueFieldValues($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Issue {
+      number
+      issueFieldValues(first: 100) {
+        nodes {
+          __typename
+          ... on IssueFieldSingleSelectValue {
+            name
+            field { ... on IssueFieldSingleSelect { fullDatabaseId } }
+          }
+        }
+      }
+    }
+  }
+}`;
+
 export const closingReferencesQuery = `
 query ClosingReferences($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
@@ -280,7 +318,6 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
-const decodeIssueFieldValues = Schema.decodeUnknownEffect(Schema.Array(IssueFieldValueSchema));
 const decodeIssueFields = Schema.decodeUnknownEffect(Schema.Array(GitHubIssueFieldSchema));
 const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
@@ -316,18 +353,27 @@ const priorityFieldReadError = (repo: GitHubRepoRef, error: IssueTrackerError) =
   });
 
 const issueFieldEntry = (
-  value: typeof IssueFieldValueSchema.Type,
+  value: typeof IssueFieldValueNode.Type,
 ): readonly [GitHubIssueFieldId, string] | null => {
-  if (value.data_type !== "single_select" || !value.single_select_option) return null;
-  return [value.issue_field_id, value.single_select_option.name];
+  if (value.__typename !== "IssueFieldSingleSelectValue" || !value.name) return null;
+  const fieldId = value.field?.fullDatabaseId;
+  return fieldId ? [fieldId, value.name] : null;
 };
 
-const issueFieldValues = (values: ReadonlyArray<typeof IssueFieldValueSchema.Type>) =>
+const issueFieldValues = (values: ReadonlyArray<typeof IssueFieldValueNode.Type | null>) =>
   new Map(
     values.flatMap((value) => {
+      if (!value) return [];
       const entry = issueFieldEntry(value);
       return entry ? [entry] : [];
     }),
+  );
+
+const issueFieldValuesByIssue = (payload: typeof IssueFieldValuesPayload.Type) =>
+  new Map(
+    payload.nodes.flatMap((issue) =>
+      issue ? [[issue.number, issueFieldValues(issue.issueFieldValues.nodes)] as const] : [],
+    ),
   );
 
 const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIssue => ({
@@ -767,14 +813,12 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     }),
     listIssueFieldValues: Effect.fn("github.listIssueFieldValues")(function* (
       repo: GitHubRepoRef,
-      issueNumber: number,
+      issueNodeIds: ReadonlyArray<string>,
     ) {
-      const json = yield* fetchJson(
-        repo,
-        repoPath(repo, `/issues/${issueNumber}/issue-field-values?per_page=100`),
-      );
-      const values = yield* Effect.mapError(decodeIssueFieldValues(json), toUnavailable);
-      return issueFieldValues(values);
+      if (issueNodeIds.length === 0) return new Map();
+      const data = yield* graphql(repo, issueFieldValuesQuery, { ids: issueNodeIds });
+      const payload = yield* Effect.mapError(decodeIssueFieldValues(data), toUnavailable);
+      return issueFieldValuesByIssue(payload);
     }),
     listPriorityFields: Effect.fn("github.listPriorityFields")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, orgPath(repo, "/issue-fields")).pipe(

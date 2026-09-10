@@ -153,40 +153,45 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("lists an issue's single-select field values", () => {
+  it.effect("lists issue field values in one GraphQL request and keeps partial results", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(
-        jsonResponse([
-          {
-            issue_field_id: 42,
-            issue_field_name: "Priority",
-            data_type: "single_select",
-            value: 7,
-            single_select_option: { id: 7, name: "Urgent", color: "red" },
+        jsonResponse({
+          data: {
+            nodes: [
+              {
+                number: 454,
+                issueFieldValues: {
+                  nodes: [
+                    {
+                      __typename: "IssueFieldSingleSelectValue",
+                      name: "Urgent",
+                      field: { fullDatabaseId: "42" },
+                    },
+                    { __typename: "IssueFieldDateValue" },
+                  ],
+                },
+              },
+              null,
+            ],
           },
-          {
-            issue_field_id: 43,
-            issue_field_name: "Target date",
-            data_type: "date",
-            value: "2026-09-09",
-          },
-        ]),
+        }),
       ),
     );
 
     return Effect.gen(function* () {
       const client = yield* GitHubClient;
       assert.deepStrictEqual(
-        yield* client.listIssueFieldValues(repo, 454),
-        new Map([[priorityFieldId, "Urgent"]]),
+        yield* client.listIssueFieldValues(repo, ["I_issue_454", "I_missing"]),
+        new Map([[454, new Map([[priorityFieldId, "Urgent"]])]]),
       );
-      const [input] = fetch.mock.calls[0] ?? [];
+      assert.strictEqual(fetch.mock.calls.length, 1);
+      const [input, init] = fetch.mock.calls[0] ?? [];
       assert.isDefined(input);
-      const request = new Request(input);
-      assert.strictEqual(
-        request.url,
-        "https://api.github.com/repos/colonylabs/cogwork/issues/454/issue-field-values?per_page=100",
-      );
+      const request = new Request(input, init);
+      assert.strictEqual(request.url, "https://api.github.com/graphql");
+      const body = yield* Effect.promise(() => request.json());
+      assert.deepStrictEqual(body.variables, { ids: ["I_issue_454", "I_missing"] });
     }).pipe(withFetchClient(fetch));
   });
 

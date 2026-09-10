@@ -46,6 +46,7 @@ const coordinationBody = (markers: ReadonlyArray<string>) =>
   Coordination.formatCoordinationBody(wireCodec, { status: defaultStatus, markers, detail: null });
 
 interface SeedIssue {
+  readonly nodeId?: string;
   readonly number: number;
   readonly title: string;
   readonly url?: string;
@@ -124,6 +125,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     seed.issues.map(
       (issue): RawIssue => ({
         ...issue,
+        nodeId: issue.nodeId ?? `I_issue_${issue.number}`,
         url: issue.url ?? `https://github.com/owner/repo/issues/${issue.number}`,
         assignees: issue.assignees ?? [],
         isPullRequest: issue.isPullRequest ?? false,
@@ -158,14 +160,21 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   return {
     authenticatedLogin: () => Effect.succeed(bot.login),
     listIssues: () => Ref.get(issuesRef),
-    listIssueFieldValues: (_repo, number) =>
+    listIssueFieldValues: (_repo, nodeIds) =>
       seed.priorityValueError
         ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "field values unavailable" }))
         : Effect.succeed(
             new Map(
-              (seed.priorities ?? [])
-                .filter((priority) => priority.issue === number)
-                .map((priority) => [priorityFieldId, priority.priority]),
+              seed.issues
+                .filter((issue) => nodeIds.includes(issue.nodeId ?? `I_issue_${issue.number}`))
+                .map((issue) => [
+                  issue.number,
+                  new Map(
+                    (seed.priorities ?? [])
+                      .filter((priority) => priority.issue === issue.number)
+                      .map((priority) => [priorityFieldId, priority.priority]),
+                  ),
+                ]),
             ),
           ),
     listPulls: () => Effect.succeed([...pulls]),

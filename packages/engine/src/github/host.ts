@@ -126,6 +126,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
     const fallback = new Map<number, Priority>();
     const source = target.priority;
     if (!source) return fallback;
+    const openIssues = issues.filter((issue) => !issue.isPullRequest);
     return yield* client.listPriorityFields(target).pipe(
       Effect.filterOrFail(
         (fields) => fields.some((field) => field.id === source.field),
@@ -136,21 +137,20 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
           }),
       ),
       Effect.flatMap(() =>
-        Effect.forEach(
-          issues.filter((issue) => !issue.isPullRequest),
-          (issue) =>
-            client
-              .listIssueFieldValues(target, issue.number)
-              .pipe(
-                Effect.map((values): readonly [number, Priority] => [
-                  issue.number,
-                  resolvePriority(values.get(source.field)),
-                ]),
-              ),
-          { concurrency: 10 },
+        client.listIssueFieldValues(
+          target,
+          openIssues.map((issue) => issue.nodeId),
         ),
       ),
-      Effect.map((entries) => new Map(entries)),
+      Effect.map(
+        (valuesByIssue) =>
+          new Map(
+            openIssues.map((issue): readonly [number, Priority] => [
+              issue.number,
+              resolvePriority(valuesByIssue.get(issue.number)?.get(source.field)),
+            ]),
+          ),
+      ),
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("priority issue field read failed; defaulting every item to medium", {
           owner: target.owner,
