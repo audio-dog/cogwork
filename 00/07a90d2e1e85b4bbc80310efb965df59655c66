@@ -1,0 +1,22 @@
+configs/test/package.json
+  s_d5411686bd6b0f::t_1c22789d0f01d9 10
+configs/test/tsconfig.json
+  s_d5411686bd6b0f::t_be5980d5818f12 14
+  s_d5411686bd6b0f::t_01d908a1db324d 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0007a90d2e1e85b4bbc80310efb965df59655c66",
+  "prompts": {},
+  "sessions": {
+    "s_d5411686bd6b0f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08be6-0179-7df3-ac4b-42a21e08d9b3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
