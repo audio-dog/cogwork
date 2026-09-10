@@ -28,7 +28,7 @@ import * as Daemon from "./daemon";
 import { Git, type GitService } from "./git";
 import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
 import { IssueTracker } from "./issue-tracker";
-import { healthSourceLayer } from "./performance-regression-sensor";
+import { PerformanceHealthSource } from "./performance-health-source";
 import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker } from "./reconcile";
 import * as RunLedger from "./run-ledger";
@@ -43,6 +43,9 @@ vi.mock("drizzle-kit/payload/sqlite", () =>
       return { ...actual, pushSchema: pushSchemaMock };
     }),
 );
+
+const healthSourceLayer = (snapshot: Effect.Effect<{ readonly sampledAtMillis: number }>) =>
+  Layer.succeed(PerformanceHealthSource, { snapshot });
 
 const interruptionGate = Latch.makeUnsafe();
 

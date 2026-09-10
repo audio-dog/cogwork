@@ -69,9 +69,9 @@ import { harnessOverview } from "./harness-overview";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
+import { PerformanceHealthSource } from "./performance-health-source";
 import { recordProcessHealth, reportDaemonProcessHealth } from "./performance-metrics";
 import {
-  PerformanceHealthSource,
   PerformanceRegressionSensor,
   layer as performanceRegressionSensorLayer,
 } from "./performance-regression-sensor";

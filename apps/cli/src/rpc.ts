@@ -6,7 +6,7 @@ import { claudeCodeRunner } from "@cogwork/claude-code";
 import { codexRunner } from "@cogwork/codex-cli";
 import { DaemonRpcs, HarnessName, type WorkspaceId } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
-import { ContextAssembler, Daemon, PerformanceRegressionSensor, Provider, Replay } from "@cogwork/engine";
+import { ContextAssembler, Daemon, PerformanceHealth, Provider, Replay } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Cause from "effect/Cause";
@@ -339,6 +339,14 @@ const contextAssemblerLayer = (homeDir: string) =>
     operatingInstructionsDir: engineOperatingInstructionsDir,
   }).pipe(Layer.provide(contextFsLayer));
 
+const performanceHealthLayer = (options: DaemonOptions) =>
+  Layer.succeed(PerformanceHealth.PerformanceHealthSource, {
+    snapshot: readPerformanceHealthSnapshot({
+      enabled: options.telemetryEnabled,
+      storePath: defaultTelemetryStorePath,
+    }),
+  });
+
 export const serverLayer = (options: DaemonOptions) =>
   Layer.unwrap(
     harnessRunners.pipe(
@@ -354,12 +362,7 @@ export const serverLayer = (options: DaemonOptions) =>
           harnessRunners: runners,
           appVersion: "0.0.1",
           performanceEvidenceRoot: nodePath.join(nodePath.dirname(options.controlStorePath), "perf"),
-          performanceHealth: PerformanceRegressionSensor.healthSourceLayer(
-            readPerformanceHealthSnapshot({
-              enabled: options.telemetryEnabled,
-              storePath: defaultTelemetryStorePath,
-            }),
-          ),
+          performanceHealth: performanceHealthLayer(options),
           performanceIssueWorkspace: options.performanceWorkspace,
         }),
       ),
