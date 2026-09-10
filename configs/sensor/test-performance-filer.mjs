@@ -5,13 +5,14 @@ import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
 
-const { wireCodec } = await tsImport("../packages/engine/src/github/markers.ts", import.meta.url);
+const { wireCodec } = await tsImport("@cogwork/engine/github/markers", import.meta.url);
 
 const dailyFilingCap = 1;
 const originLabel = "origin:selfperf";
 const signal = "test-suite-duration";
 const subsystem = "repository";
-const usage = "Usage: node scripts/test-performance-filer.mjs <comparison-report.json> <workflow-run-url>";
+const usage =
+  "Usage: node configs/sensor/test-performance-filer.mjs <comparison-report.json> <workflow-run-url>";
 const filingQueues = new WeakMap();
 
 const describe = (error) => (error instanceof Error ? error.message : String(error));
