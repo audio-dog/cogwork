@@ -111,9 +111,7 @@ const pendingConfirmation = (message: string) =>
     message,
   });
 
-const isDefiniteCreateRejection = (error: IssueTrackerError) =>
-  error.writeMayHaveCommitted === false ||
-  (error.writeMayHaveCommitted === undefined && issueTrackerErrorIsPermanent(error));
+const shouldReleaseCreateReservation = (error: IssueTrackerError) => error.writeMayHaveCommitted !== true;
 
 const ensurePerformanceIssueLabels = (
   client: Pick<GitHubClientService, "addLabel">,
@@ -257,7 +255,7 @@ const targetFor = Effect.fn("github.performanceIssueTarget")(function* (
       .createIssue(workspace, input)
       .pipe(
         Effect.tapError((error) =>
-          isDefiniteCreateRejection(error) ? clearPending(input.body) : Effect.void,
+          shouldReleaseCreateReservation(error) ? clearPending(input.body) : Effect.void,
         ),
       );
     yield* confirmCreated(input.body, nextReservation).pipe(
