@@ -1,0 +1,21 @@
+scripts/refuse-pull-request-creation.test.mjs
+  s_5ae3a64ff121ec::t_5faae2bb168fe2 16,22
+scripts/refuse-pull-request-creation.mjs
+  s_5ae3a64ff121ec::t_1e8ce4bac7bac0 5,10-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b4edc65456527d33e7c4b849f287ed0775710993",
+  "prompts": {},
+  "sessions": {
+    "s_5ae3a64ff121ec": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c0c-39c6-75c1-b370-2125b9aaaf3b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
