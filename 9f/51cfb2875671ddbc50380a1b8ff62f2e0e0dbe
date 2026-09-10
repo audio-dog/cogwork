@@ -1,0 +1,21 @@
+packages/engine/src/github/performance-issue-filer.ts
+  s_e8b39c832cbe56::t_e7400dc66e4a1f 283-288,291-292
+packages/engine/src/github/client.ts
+  s_e8b39c832cbe56::t_e7400dc66e4a1f 885-908,1013-1014
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9f51cfb2875671ddbc50380a1b8ff62f2e0e0dbe",
+  "prompts": {},
+  "sessions": {
+    "s_e8b39c832cbe56": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087db-c632-77b1-93bf-92101f0df387",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
