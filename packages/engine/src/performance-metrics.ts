@@ -11,14 +11,21 @@ import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schedule from "effect/Schedule";
 
+export const processHealthMetricNames = {
+  sampledAtMillis: "cogwork_process_health_sample_timestamp_milliseconds",
+  heapUsedBytes: "cogwork_process_heap_used_bytes",
+  heapLimitBytes: "cogwork_process_heap_limit_bytes",
+  eventLoopDelayP99Millis: "cogwork_process_event_loop_delay_p99_milliseconds",
+} as const;
+
 export const processHealthMetrics = {
-  sampleTimestampMillis: Metric.gauge("cogwork_process_health_sample_timestamp_milliseconds", {
+  sampleTimestampMillis: Metric.gauge(processHealthMetricNames.sampledAtMillis, {
     description: "Source timestamp of the latest health sample from a Cogwork process.",
   }),
-  heapUsedBytes: Metric.gauge("cogwork_process_heap_used_bytes", {
+  heapUsedBytes: Metric.gauge(processHealthMetricNames.heapUsedBytes, {
     description: "Current JavaScript heap bytes used by a Cogwork process.",
   }),
-  heapLimitBytes: Metric.gauge("cogwork_process_heap_limit_bytes", {
+  heapLimitBytes: Metric.gauge(processHealthMetricNames.heapLimitBytes, {
     description: "Current JavaScript heap limit for a Cogwork process.",
   }),
   heapHeadroomBytes: Metric.gauge("cogwork_process_heap_headroom_bytes", {
@@ -27,7 +34,7 @@ export const processHealthMetrics = {
   privateBytes: Metric.gauge("cogwork_process_private_bytes", {
     description: "Current private memory bytes held by a Cogwork process.",
   }),
-  eventLoopDelayP99Millis: Metric.gauge("cogwork_process_event_loop_delay_p99_milliseconds", {
+  eventLoopDelayP99Millis: Metric.gauge(processHealthMetricNames.eventLoopDelayP99Millis, {
     description: "Event-loop delay p99 during the latest process health window.",
   }),
   eventLoopUtilization: Metric.gauge("cogwork_process_event_loop_utilization_ratio", {
