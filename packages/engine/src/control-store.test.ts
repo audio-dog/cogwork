@@ -23,7 +23,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { afterEach, vi } from "vitest";
 import {
