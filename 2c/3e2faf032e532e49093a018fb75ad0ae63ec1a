@@ -1,0 +1,31 @@
+packages/contracts/src/ag-ui.ts
+  s_f65d7f46c79635::t_e4f1eee5530986 5,142-158
+  s_22d84979c2f7b7::t_28bb6e5681c731 159
+packages/contracts/src/ag-ui.test.ts
+  s_f65d7f46c79635::t_e07b3a589b02a5 6,8,118-132
+  s_f65d7f46c79635::t_538a9043c9171f 133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2c3e2faf032e532e49093a018fb75ad0ae63ec1a",
+  "prompts": {},
+  "sessions": {
+    "s_22d84979c2f7b7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c7f-e129-7cd1-ad9b-7de4189dbeab",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f65d7f46c79635": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08c81-b209-7733-b974-134ee88ff18f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
