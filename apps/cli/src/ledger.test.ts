@@ -25,6 +25,7 @@ import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as GenericSqlClient from "effect/unstable/sql/SqlClient";
 import { layer as ledgerLayer, runLedgerAppendDuration } from "./ledger";
 
@@ -228,6 +229,8 @@ describe("sqlite RunLedger", () => {
           endedAtMillis: 2000,
         });
 
+        assert.strictEqual(yield* ledger.latestSeq(id), 1);
+
         const summaries = yield* ledger.listRuns(10);
         const storedSummary = yield* ledger.getRunSummary(id);
         const summary = summaries.find((row) => row.id === id);
@@ -242,7 +245,7 @@ describe("sqlite RunLedger", () => {
           totalTokens: 7,
         });
 
-        const events = yield* ledger.events(id);
+        const events = yield* ledger.events(id).pipe(Stream.runCollect);
         assert.deepStrictEqual(
           events.map((event) => event.seq),
           [0, 1],
@@ -250,6 +253,31 @@ describe("sqlite RunLedger", () => {
         assert.deepStrictEqual(
           events.map((event) => event.type),
           ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
+        );
+      }),
+    );
+
+    it.effect("pages event reads by UTF-8 payload bytes", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const id = runId("byte-pages");
+        const data = "é".repeat(300_000);
+        yield* ledger.insertRun(record(id, 1000));
+        yield* Effect.forEach([0, 1], (seq) =>
+          ledger.appendEvent(id, {
+            seq,
+            type: "CUSTOM",
+            name: null,
+            data,
+            atMillis: 1001 + seq,
+          }),
+        );
+
+        const chunks = yield* ledger.events(id).pipe(Stream.chunks, Stream.runCollect);
+
+        assert.deepStrictEqual(
+          chunks.map((chunk) => chunk.length),
+          [1, 1],
         );
       }),
     );
@@ -763,7 +791,7 @@ describe("sqlite RunLedger against a broken store", () => {
 
         assert.deepStrictEqual(yield* ledger.listRuns(10), []);
         assert.deepStrictEqual(yield* ledger.runningRuns, []);
-        assert.deepStrictEqual(yield* ledger.events(runId("broken-1")), []);
+        assert.deepStrictEqual(yield* ledger.events(runId("broken-1")).pipe(Stream.runCollect), []);
         assert.isNull(yield* ledger.getRun(runId("broken-1")));
         assert.isNull(yield* ledger.getSession(session));
         assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, workItem, 0), 0);

@@ -26,7 +26,9 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as SqlError from "effect/unstable/sql/SqlError";
 
 const { runEvents, runPlans, runs, sessions } = ControlStoreSchema;
@@ -174,6 +176,14 @@ const runSummaryFromRow = (
 type RunRow = Parameters<typeof runRecordFromRow>[0];
 type RunSummaryRow = Parameters<typeof runSummaryFromRow>[0];
 
+interface RunEventRow {
+  readonly seq: number;
+  readonly type: string;
+  readonly name: string | null;
+  readonly data: string;
+  readonly at: number;
+}
+
 const decodeSummary = Schema.decodeUnknownEffect(RunSummarySchema);
 const decodeRunId = Schema.decodeUnknownEffect(RunIdSchema);
 const decodeEvent = Schema.decodeUnknownEffect(RunEventSchema);
@@ -297,6 +307,53 @@ const make = Effect.fn("ledger.make")(function* () {
         .limit(1)
         .get(),
     );
+
+  const readEventPage = Effect.fn("ledger.readEventPage")(function* (runId: RunId, afterSeq: number) {
+    const rows = yield* readRows("events", () =>
+      sqlClient.unsafe<RunEventRow>(
+        `WITH candidates AS (
+          SELECT
+            seq,
+            type,
+            name,
+            data,
+            at,
+            sum(length(CAST(data AS BLOB))) OVER (ORDER BY seq) AS page_bytes,
+            row_number() OVER (ORDER BY seq) AS page_row
+          FROM (
+            SELECT seq, type, name, data, at
+            FROM run_events
+            WHERE run_id = ? AND seq > ?
+            ORDER BY seq
+            LIMIT ?
+          )
+        )
+        SELECT seq, type, name, data, at
+        FROM candidates
+        WHERE page_row = 1 OR page_bytes <= ?
+        ORDER BY seq`,
+        [runId, afterSeq, RunLedger.runEventPageSize, RunLedger.runEventPageBudgetBytes],
+      ),
+    );
+    const events = yield* decodeAll(
+      "events",
+      decodeEvent,
+      rows.map((row) => ({
+        rowId: `${runId}:${row.seq}`,
+        value: {
+          seq: row.seq,
+          type: row.type,
+          name: row.name,
+          data: row.data,
+          atMillis: row.at,
+        },
+      })),
+    );
+    return [events, Option.fromNullishOr(rows.at(-1)?.seq)] satisfies readonly [
+      ReadonlyArray<RunEvent>,
+      Option.Option<number>,
+    ];
+  });
 
   const service: RunLedger.CoreRunLedgerService = {
     acceptRun: (record: RunRecord, plan: RunPlan) => {
@@ -519,6 +576,15 @@ const make = Effect.fn("ledger.make")(function* () {
       );
     },
 
+    latestSeq: (runId: RunId) =>
+      readRows("latestSeq", () =>
+        db
+          .select({ seq: sql<number | null>`max(${runEvents.seq})` })
+          .from(runEvents)
+          .where(eq(runEvents.runId, runId))
+          .all(),
+      ).pipe(Effect.map((rows) => rows[0]?.seq ?? null)),
+
     latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
       readRun("latestRunByBranch", () =>
         db
@@ -596,38 +662,7 @@ const make = Effect.fn("ledger.make")(function* () {
         db.select(runSummarySelection).from(runs).where(eq(runs.id, runId)).get(),
       ),
 
-    events: (runId: RunId) =>
-      readRows("events", () =>
-        db
-          .select({
-            seq: runEvents.seq,
-            type: runEvents.type,
-            name: runEvents.name,
-            data: runEvents.data,
-            at: runEvents.at,
-          })
-          .from(runEvents)
-          .where(eq(runEvents.runId, runId))
-          .orderBy(runEvents.seq)
-          .all(),
-      ).pipe(
-        Effect.flatMap((rows) =>
-          decodeAll(
-            "events",
-            decodeEvent,
-            rows.map((row) => ({
-              rowId: `${runId}:${row.seq}`,
-              value: {
-                seq: row.seq,
-                type: row.type,
-                name: row.name,
-                data: row.data,
-                atMillis: row.at,
-              },
-            })),
-          ),
-        ),
-      ),
+    events: (runId: RunId) => Stream.paginate(-1, (afterSeq) => readEventPage(runId, afterSeq)),
   };
 
   return service;
