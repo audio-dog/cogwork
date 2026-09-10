@@ -1,4 +1,5 @@
 import type {
+  BranchName,
   RunEvent,
   RunId,
   RunPlan,
@@ -133,6 +134,7 @@ const runRecordSelection = {
 const runSummarySelection = {
   ...runRecordSelection,
   eventCount: runs.eventCount,
+  eventsPrunedAt: runs.eventsPrunedAt,
 };
 
 const runRecordFromRow = (row: {
@@ -167,10 +169,14 @@ const runRecordFromRow = (row: {
 });
 
 const runSummaryFromRow = (
-  row: Parameters<typeof runRecordFromRow>[0] & { readonly eventCount: number },
+  row: Parameters<typeof runRecordFromRow>[0] & {
+    readonly eventCount: number;
+    readonly eventsPrunedAt: number | null;
+  },
 ) => ({
   ...runRecordFromRow(row),
   eventCount: row.eventCount,
+  eventsPrunedAtMillis: row.eventsPrunedAt,
 });
 
 type RunRow = Parameters<typeof runRecordFromRow>[0];
@@ -452,7 +458,7 @@ const make = Effect.fn("ledger.make")(function* () {
         db.update(sessions).set({ handle }).where(eq(sessions.id, id)).run(),
       ),
 
-    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: BranchName) =>
       readRows("sessionForBranch", () =>
         db
           .select({ id: runs.id, session: runs.session })
@@ -591,7 +597,7 @@ const make = Effect.fn("ledger.make")(function* () {
           .all(),
       ).pipe(Effect.map((rows) => rows[0]?.seq ?? null)),
 
-    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
+    latestRunByBranch: (workspace: WorkspaceId, branch: BranchName) =>
       readRun("latestRunByBranch", () =>
         db
           .select(runRecordSelection)

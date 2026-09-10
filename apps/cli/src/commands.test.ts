@@ -22,6 +22,7 @@ import {
   daemonStatusPicture,
   formatDaemonLimits,
   formatOperationSettings,
+  formatRunEvents,
   limitsCommand,
   makeContributionSettingUpdate,
   makeOperationSettingUpdate,
@@ -42,6 +43,19 @@ const unavailableSocket = new SocketOpenError({
   cause: new Error("socket unavailable"),
 });
 const unavailableDaemon = new RpcClientError({ reason: unavailableSocket });
+
+describe("run events", () => {
+  it("distinguishes pruned history from an eventless Run", () => {
+    assert.strictEqual(
+      formatRunEvents({ events: [], eventsPrunedAtMillis: 123 }),
+      "(run history pruned at 123)",
+    );
+    assert.strictEqual(
+      formatRunEvents({ events: [], eventsPrunedAtMillis: null }),
+      "(no events for this run)",
+    );
+  });
+});
 
 describe("watch reconnect", () => {
   it.effect("retries a daemon transport failure", () =>

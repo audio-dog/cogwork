@@ -291,10 +291,23 @@ function StreamError({ message }: { message: string }) {
  */
 function TranscriptConversation() {
   const {
-    state: { rows, running, streamError },
+    state: { run, rows, running, streamError },
   } = useRunTranscriptContext();
 
   if (streamError) return <StreamError message={streamError} />;
+  if (run.eventsPrunedAtMillis !== null)
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Empty className="m-4">
+          <EmptyHeader>
+            <EmptyTitle>Run history was pruned</EmptyTitle>
+            <EmptyDescription>
+              Cogwork removed this opaque session&apos;s events to keep local history bounded.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
+    );
   if (rows.length === 0)
     return (
       <div className="min-h-0 flex-1 overflow-y-auto">

@@ -19,7 +19,6 @@ const REPOS = [
     refIsBranch: true,
   },
   { name: "opencode", remote: "https://github.com/anomalyco/opencode.git" },
-  { name: "t3code", remote: "https://github.com/pingdotgg/t3code.git" },
   { name: "codex", remote: "https://github.com/openai/codex.git" },
   {
     name: "biome-effect-linting-rules",

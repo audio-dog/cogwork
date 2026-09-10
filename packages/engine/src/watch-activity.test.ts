@@ -1,5 +1,5 @@
 import type { AgUiEvent, RunRecord } from "@cogwork/contracts";
-import { HarnessName, RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { BranchName, HarnessName, RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -14,6 +14,7 @@ import { RunRecorder, type RunRecorderService } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
 
 const runId = Schema.decodeSync(RunId);
+const branchName = Schema.decodeSync(BranchName);
 const workspace = Schema.decodeSync(WorkspaceId)("example");
 const workItem = Schema.decodeSync(WorkItemId)("#49");
 const harness = Schema.decodeSync(HarnessName)("cursor");
@@ -26,7 +27,7 @@ const record = (id: string, status: "running" | "succeeded" = "running"): RunRec
   workItem,
   stage: "implement" as const,
   harness,
-  branch: "49-backfill",
+  branch: branchName("49-backfill"),
   session: null,
   usage: null,
   status,

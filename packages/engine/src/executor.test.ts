@@ -1,5 +1,6 @@
 import {
   AgUiEvent,
+  BranchName,
   ConnectionId,
   type ContributionSettingRow,
   ControlStoreFailure,
@@ -87,6 +88,7 @@ import {
 } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
+const decodeBranchName = Schema.decodeSync(BranchName);
 const codex = Schema.decodeSync(HarnessName)("codex");
 const replay = Schema.decodeSync(HarnessName)("replay");
 const id = Schema.decodeSync(WorkItemId);
@@ -986,7 +988,7 @@ const failSecondPrepareWorktree = (failure: GitError | WorktreeDivergedError) =>
       ),
   }));
 
-const branchRecordingWorktree = (branch: string) =>
+const branchRecordingWorktree = (branch: BranchName) =>
   worktreeDouble((probe) => ({
     ...worktreeStubCreated(false),
     ensure: (_workspace, _item, options) =>
@@ -4014,7 +4016,7 @@ describe("Executor.execute", () => {
   });
 
   it.effect("prepares a linked external branch for follow-up", () => {
-    const externalBranch = "claude/github-issue-5-a1b2c3";
+    const externalBranch = decodeBranchName("claude/github-issue-5-a1b2c3");
     const item = { ...followUpItem, followUpBranch: externalBranch };
 
     return Effect.gen(function* () {
@@ -4196,7 +4198,7 @@ describe("Executor.execute", () => {
   });
 
   it.effect("resumes a linked external branch", () => {
-    const externalBranch = "claude/github-issue-5-a1b2c3";
+    const externalBranch = decodeBranchName("claude/github-issue-5-a1b2c3");
     const resumeItem: EligibleWork = {
       ...followUpItem,
       followUpBranch: externalBranch,

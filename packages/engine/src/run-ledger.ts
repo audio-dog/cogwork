@@ -1,5 +1,7 @@
 import type {
+  BranchName,
   RunEvent,
+  RunHistory,
   RunId,
   RunPlan,
   RunRecord,
@@ -53,9 +55,12 @@ export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLed
 const acceptRunError = (message: string) =>
   Effect.fail(RunLedgerError.make({ operation: acceptRunOperation, message, retryable: false }));
 
+const encodeRunPlan = Schema.encodeEffect(RunPlanSchema);
+const decodeRunPlan = Schema.decodeEffect(RunPlanSchema);
+
 const snapshotRunPlan = (plan: RunPlan) =>
-  Schema.encodeEffect(RunPlanSchema)(plan).pipe(
-    Effect.flatMap(Schema.decodeEffect(RunPlanSchema)),
+  encodeRunPlan(plan).pipe(
+    Effect.flatMap(decodeRunPlan),
     Effect.map(freezeRunPlan),
     Effect.mapError((error) =>
       RunLedgerError.make({
@@ -143,10 +148,13 @@ type MemoryEvents = ReadonlyMap<RunId, ReadonlyArray<RunEvent>>;
 
 const eventCountOf = (events: MemoryEvents, runId: RunId) => events.get(runId)?.length ?? 0;
 
-const summaryOf = (events: MemoryEvents) => (run: RunRecord) => ({
-  ...run,
-  eventCount: eventCountOf(events, run.id),
-});
+const summaryOf =
+  (events: MemoryEvents) =>
+  (run: RunRecord): RunSummary => ({
+    ...run,
+    eventCount: eventCountOf(events, run.id),
+    eventsPrunedAtMillis: null,
+  });
 
 const summarize = (
   runs: ReadonlyArray<RunRecord>,
@@ -272,7 +280,7 @@ export const makeMemory = Effect.gen(function* () {
         const existing = sessions.get(id);
         return existing ? new Map(sessions).set(id, withHandle(existing, handle)) : sessions;
       }),
-    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.map(
         Ref.get(runsRef),
         (runs) =>
@@ -289,7 +297,7 @@ export const makeMemory = Effect.gen(function* () {
           applyUpdate(run, closeRunningUpdate(endedAtMillis)),
         ),
       ),
-    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
+    latestRunByBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.all([Ref.get(runsRef), Ref.get(sessionsRef)]).pipe(
         Effect.map(([runs, sessions]) =>
           latestRunWhere(
@@ -342,7 +350,9 @@ export const makeMemory = Effect.gen(function* () {
 });
 
 export type CoreRunLedgerService = Effect.Success<typeof makeMemory>;
-export type RunLedgerService = Omit<CoreRunLedgerService, "getRunSummary">;
+export type RunLedgerService = Omit<CoreRunLedgerService, "getRunSummary"> & {
+  readonly history: (runId: RunId) => Effect.Effect<RunHistory, RunLedgerError>;
+};
 
 export const handleOf = (ledger: RunLedgerService, session: SessionId | null) =>
   session ? Effect.map(ledger.getSession(session), sessionHandle) : Effect.succeed(null);
@@ -355,8 +365,16 @@ export class CoreRunLedger extends Context.Service<CoreRunLedger, CoreRunLedgerS
   "@cogwork/engine/run-ledger/CoreRunLedger",
 ) {}
 
-const withRunChangedPublishing = (core: CoreRunLedgerService, bus: DaemonEventBusService) => {
+const makeRunLedgerService = (core: CoreRunLedgerService, bus: DaemonEventBusService) => {
   const { getRunSummary, ...ledger } = core;
+  const history = Effect.fn("RunLedger.history")((runId: RunId) =>
+    Effect.all([ledger.events(runId).pipe(Stream.runCollect), getRunSummary(runId)]).pipe(
+      Effect.map(([events, run]) => ({
+        events,
+        eventsPrunedAtMillis: run?.eventsPrunedAtMillis ?? null,
+      })),
+    ),
+  );
   const publish = Effect.fn("RunLedger.publishRunChanged")(function* (runId: RunId) {
     const run = yield* getRunSummary(runId);
     if (run === null) return;
@@ -365,6 +383,7 @@ const withRunChangedPublishing = (core: CoreRunLedgerService, bus: DaemonEventBu
   const publishAll = (runIds: ReadonlyArray<RunId>) => Effect.forEach(runIds, publish, { discard: true });
   return {
     ...ledger,
+    history,
     acceptRun: (record: RunRecord, plan: RunPlan) =>
       Effect.andThen(core.acceptRun(record, plan), publish(record.id)).pipe(Effect.asVoid),
     insertRun: (record: RunRecord) => Effect.andThen(core.insertRun(record), publish(record.id)),
@@ -390,7 +409,7 @@ export const publishingLayer = Layer.effect(
   Effect.gen(function* () {
     const core = yield* CoreRunLedger;
     const bus = yield* DaemonEventBus;
-    return withRunChangedPublishing(core, bus);
+    return makeRunLedgerService(core, bus);
   }),
 );
 

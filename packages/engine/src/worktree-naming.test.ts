@@ -28,6 +28,11 @@ describe("worktree naming", () => {
     assert.strictEqual(branchName({ id: "#42", title: "!!!" }), "42");
   });
 
+  it("encodes a ticket id with no kebab characters", () => {
+    assert.strictEqual(branchName({ id: "!!!", title: "💣" }), "u--0000x0000x0000x");
+    assert.notStrictEqual(ticketSlug("!"), ticketSlug("x"));
+  });
+
   it("defaults the worktree root to a sibling of the checkout", () => {
     assert.strictEqual(worktreeRoot("/repos/cogwork"), "/repos/cogwork.worktrees");
   });

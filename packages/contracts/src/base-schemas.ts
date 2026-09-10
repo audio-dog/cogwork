@@ -13,6 +13,9 @@ export type WorkspaceId = typeof WorkspaceId.Type;
 export const WorkItemId = makeBrand("WorkItemId");
 export type WorkItemId = typeof WorkItemId.Type;
 
+export const BranchName = makeBrand("BranchName");
+export type BranchName = typeof BranchName.Type;
+
 export const HarnessName = makeBrand("HarnessName");
 export type HarnessName = typeof HarnessName.Type;
 
