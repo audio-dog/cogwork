@@ -15,7 +15,7 @@ import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpServer from "effect/unstable/http/HttpServer";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
