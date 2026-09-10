@@ -57,7 +57,10 @@ const kebab = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-export const ticketSlug = (id: string) => kebab(id);
+const codePointSlug = (value: string) =>
+  [...value].map((character) => character.codePointAt(0)?.toString(36) ?? "0").join("-");
+
+export const ticketSlug = (id: string) => kebab(id) || codePointSlug(id);
 
 export const slugify = (title: string) => kebab(title);
 
