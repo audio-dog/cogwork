@@ -1,0 +1,25 @@
+configs/lint/turbo.json
+  s_d72972c36e4215::t_cbf28b2a32539f 1-4,6-8,14-17
+  s_d72972c36e4215::t_f3d30e95ca77a2 5
+  s_d72972c36e4215::t_863999b2e78436 9-13
+configs/lint/package.json
+  s_d72972c36e4215::t_dd495d330355de 1-9
+pnpm-lock.yaml
+  s_d72972c36e4215::t_dde001106c8be7 357-358
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9cd41b98f1b341c876c32e5f39b97367bd5e903c",
+  "prompts": {},
+  "sessions": {
+    "s_d72972c36e4215": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08be6-06fa-7611-a75d-ea8dd399690c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
