@@ -464,15 +464,15 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("does not replay an accepted write whose response body stalls", () => {
+  it.effect("completes an accepted comment write without reading its response body", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(hangingResponse("{", 201)));
 
     return Effect.gen(function* () {
       const client = yield* GitHubClient;
       const operation = yield* Effect.forkChild(client.createComment(repo, 287, "claim"));
-      yield* TestClock.adjust("1 minute");
+      yield* TestClock.adjust("1 second");
       assert.strictEqual(fetch.mock.calls.length, 1);
-      yield* Fiber.join(operation);
+      assert.isDefined(operation.pollUnsafe());
     }).pipe(withFetchClient(fetch));
   });
 

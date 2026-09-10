@@ -709,6 +709,17 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     );
   });
 
+  const sendAcceptedOnce = Effect.fn("github.sendAcceptedOnce")(function* (
+    repo: GitHubRepoRef,
+    request: HttpClientRequest.HttpClientRequest,
+    body: unknown,
+  ) {
+    const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), (error) =>
+      unavailable(error.message, false),
+    );
+    yield* send(repo, withBody, acceptResponse).pipe(Effect.mapError((error) => error.error));
+  });
+
   const addLabel = Effect.fn("github.addLabel")((repo: GitHubRepoRef, issueNumber: number, label: string) =>
     sendJson(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/labels`)), {
       labels: [label],
@@ -887,11 +898,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     issueNumber: number,
     body: string,
   ) {
-    yield* sendAcceptedJsonOnce(
-      repo,
-      HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/comments`)),
-      { body },
-    );
+    yield* sendAcceptedOnce(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/comments`)), {
+      body,
+    });
   });
 
   const createPerformanceComment = Effect.fn("github.createPerformanceComment")(function* (
