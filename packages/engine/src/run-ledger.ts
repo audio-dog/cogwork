@@ -1,4 +1,5 @@
 import type {
+  BranchName,
   RunEvent,
   RunId,
   RunPlan,
@@ -44,9 +45,12 @@ export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLed
 const acceptRunError = (message: string) =>
   Effect.fail(RunLedgerError.make({ operation: acceptRunOperation, message, retryable: false }));
 
+const encodeRunPlan = Schema.encodeEffect(RunPlanSchema);
+const decodeRunPlan = Schema.decodeEffect(RunPlanSchema);
+
 const snapshotRunPlan = (plan: RunPlan) =>
-  Schema.encodeEffect(RunPlanSchema)(plan).pipe(
-    Effect.flatMap(Schema.decodeEffect(RunPlanSchema)),
+  encodeRunPlan(plan).pipe(
+    Effect.flatMap(decodeRunPlan),
     Effect.map(freezeRunPlan),
     Effect.mapError((error) =>
       RunLedgerError.make({
@@ -243,7 +247,7 @@ export const makeMemory = Effect.gen(function* () {
         const existing = sessions.get(id);
         return existing ? new Map(sessions).set(id, withHandle(existing, handle)) : sessions;
       }),
-    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.map(
         Ref.get(runsRef),
         (runs) =>
@@ -260,7 +264,7 @@ export const makeMemory = Effect.gen(function* () {
           applyUpdate(run, closeRunningUpdate(endedAtMillis)),
         ),
       ),
-    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
+    latestRunByBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.all([Ref.get(runsRef), Ref.get(sessionsRef)]).pipe(
         Effect.map(([runs, sessions]) =>
           latestRunWhere(
