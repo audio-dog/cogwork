@@ -742,7 +742,10 @@ export interface AssembleRunPlanInput extends RunPlanAssemblyInput {
   readonly mcpServers: ReadonlyArray<RunPlanMcpServerInput>;
 }
 
-export interface BuildRunPlanInput extends RunPlanAssemblyInput {
+export interface BuildRunPlanInput extends Omit<RunPlanAssemblyInput, "context"> {}
+
+export interface CompleteRunPlanInput {
+  readonly context: AssembledContext;
   readonly mcpServers: ReadonlyArray<RunPlanMcpServerCandidate>;
 }
 
@@ -788,14 +791,14 @@ const prepareCandidateMcpServer = (server: RunPlanMcpServerCandidate) => ({
 const assemble = <McpServer extends { readonly identity: string | null }>(
   input: RunPlanAssemblyInput & { readonly mcpServers: ReadonlyArray<McpServer> },
   prepareMcpServer: (server: McpServer) => PreparedRunPlanMcpServer,
-) => {
-  const workContext = input.item.workContext;
-  const observation = RunPlanObservation.make({ ...input.observation });
-  const admitted = admittedContributions(
+  admitted = admittedContributions(
     input.contributions,
     input.resolved.contributionSettings,
     input.workspace.config.name,
-  );
+  ),
+) => {
+  const workContext = input.item.workContext;
+  const observation = RunPlanObservation.make({ ...input.observation });
   const admittedServers = admittedMcpServers(input.mcpServers, admitted);
   const preparedMcpServers = admittedServers.map(prepareMcpServer);
   const mcpServersForRun = preparedMcpServers.map(({ plan }) => plan);
@@ -932,7 +935,20 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
   return { plan, mcpCredentials };
 };
 
-export const buildRunPlan = (input: BuildRunPlanInput) => assemble(input, prepareCandidateMcpServer);
+export const buildRunPlan = (input: BuildRunPlanInput) => {
+  const contributions = deepFreeze(
+    admittedContributions(
+      input.contributions,
+      input.resolved.contributionSettings,
+      input.workspace.config.name,
+    ).map((contribution) => ({ ...contribution })),
+  );
+  return {
+    contributions,
+    complete: ({ context, mcpServers }: CompleteRunPlanInput) =>
+      assemble({ ...input, context, mcpServers }, prepareCandidateMcpServer, contributions),
+  };
+};
 
 export const assembleRunPlan = (input: AssembleRunPlanInput) => assemble(input, preparePlanMcpServer).plan;
 

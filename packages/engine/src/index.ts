@@ -18,6 +18,7 @@ export * as Linear from "./linear";
 export * as McpSkill from "./mcp-skill";
 export * as ModelCatalog from "./model-catalog";
 export * as OperationPolicy from "./operation-policy";
+export * as OperationResolution from "./operation-resolution";
 export * as PerformanceMetrics from "./performance-metrics";
 export * as Playbook from "./playbook";
 export * as Plugin from "./plugin";
