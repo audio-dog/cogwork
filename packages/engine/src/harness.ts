@@ -12,9 +12,11 @@ import {
   type StageResultJsonSchema,
   stageResultJsonSchema,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import type * as Path from "effect/Path";
@@ -419,6 +421,24 @@ const preflightRunner = Effect.fn("Harness.preflightRunner")(function* (
   return runner;
 });
 
+const harnessOutcome = (exit: Exit.Exit<unknown, HarnessError>) => {
+  if (Exit.isSuccess(exit)) return "success";
+  if (Cause.hasInterruptsOnly(exit.cause)) return "interrupt";
+  return "failure";
+};
+
+const dispatch = (runner: HarnessRunner, request: HarnessRequest) =>
+  Stream.unwrap(
+    Effect.andThen(
+      Effect.logInfo("launched Harness", { harness: runner.name }),
+      Effect.sync(() => runner.run(request)),
+    ),
+  ).pipe(
+    Stream.onExit((exit) =>
+      Effect.logInfo("exited Harness", { harness: runner.name, outcome: harnessOutcome(exit) }),
+    ),
+  );
+
 export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
   const registry = new Map(runners.map((runner) => [runner.name, runner] as const));
   const preflight = Effect.fn("Harness.preflight")(function* (
@@ -451,11 +471,10 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
     catalog,
     preflight,
     run: (request) =>
-      Stream.fromEffect(
-        preflightRunner(registry, HarnessPreflightInput.Launch({ request })).pipe(
-          Effect.withSpan("Harness.run"),
-        ),
-      ).pipe(Stream.flatMap((runner) => runner.run(request))),
+      Stream.fromEffect(preflightRunner(registry, HarnessPreflightInput.Launch({ request }))).pipe(
+        Stream.flatMap((runner) => dispatch(runner, request)),
+        Stream.withSpan("Harness.run"),
+      ),
     sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
     capabilities: (harness) => registry.get(harness)?.capabilities ?? null,
     readiness,
