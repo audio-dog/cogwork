@@ -49,7 +49,6 @@ const item = (attempts: TrackerItem["attempts"]): TrackerItem => ({
 const tracker = (tracked: TrackerItem): IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([tracked]),
-  createIssue: () => Effect.void,
   claim: () => Effect.void,
   release: () => Effect.void,
   note: () => Effect.void,

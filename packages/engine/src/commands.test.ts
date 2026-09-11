@@ -226,7 +226,6 @@ const trackerLayer = (
     Layer.succeed(IssueTracker.IssueTracker, {
       rateLimitScope: () => null,
       observe: () => Effect.succeed([]),
-      createIssue: () => Effect.void,
       claim: () => Effect.void,
       release: () => Effect.void,
       note: () => Effect.void,
