@@ -62,7 +62,7 @@ A schedulable pairing of a registered workspace with one eligible work item, plu
 _Avoid_: Job, task
 
 **Executor**:
-The unit that runs one candidate end to end: claim, worktree, resolve its operation, assemble and atomically persist the Run with its Run Plan, dispatch the accepted plan to the harness, stream events through the run recorder, decode the terminal structured operation result once through the shared Effect Schema, and record the attempt. A Run without a Plan is never dispatched. A missing, duplicate, or malformed operation result is a retryable harness failure, not a text-parsing fallback.
+The unit that runs one candidate end to end: claim, hand the candidate to Run preparation, atomically persist the prepared Run with its Run Plan, dispatch the accepted plan to the harness, stream events through the run recorder, decode the terminal structured operation result once through the shared Effect Schema, and record the attempt. A Run without a Plan is never dispatched. A missing, duplicate, or malformed operation result is a retryable harness failure, not a text-parsing fallback.
 _Avoid_: Runner, worker, harness
 
 **Run recorder**:
@@ -152,6 +152,11 @@ The engine's combination of an Operation Definition, Operation Settings, Operati
 Its home is `src/operation-resolution.ts`.
 _Avoid_: Playbook, resolved stage, prompt assembly
 
+**Run preparation**:
+The engine module between claim and dispatch. It ensures the worktree, finds the candidate Session, runs Operation resolution, and derives the prompt, the session, and the branch from one Session choice. It returns a prepared Run that the Executor persists and dispatches. The fresh-versus-resume decision is made once, here, and nowhere else.
+Its home is `src/run-preparation.ts`.
+_Avoid_: Plan session (the old scattered name), stage ops (the executor-internal record it replaces), resolution (the step it calls, not the module)
+
 **Issue tracker adapter**:
 A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Both adapters are the coordination tracker bound to a per-tracker coordination host: the host reads tracker-native issues/labels/comments and supplies the native writes; the choreography — coordination state into a bot-owned coordination comment, human-facing notes (triage proposals) as separate comments — lives in the coordination tracker, once. Linear's host pre-fetches its coordination comments in the item listing and its Canceled-on-wontfix write rides the after-role-change hook. **Claim identity is adapter-owned**: the port's `claim` write takes no `by`; GitHub stamps the authenticated Connection account and Linear stamps `cogwork`, then each reports on every observed item whether that claim is one it would itself have written (`claimedByUs`). Nothing above the seam supplies or compares an identity string. Both hosts resolve their authenticated identity before reading coordination state, so an identity failure stops observation instead of making that state appear absent. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
 _Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
@@ -236,8 +241,17 @@ _Avoid_: Control store (the authoritative store; ADR 0015's one-database rule st
 Deterministic engine code that watches the telemetry store's health signals and, on a sustained threshold breach, files a thin evidence ticket at `needs-triage` with an `origin:selfperf` label and a fingerprint marker (ADR 0021). The proactive layer's first non-tracker sensor; it fires on transitions into alarm, dedups against the tracker itself, and never reopens a closed issue.
 _Avoid_: Performance sensor (ambiguous once budgets also file), detector, watchdog, monitor (a Datadog-style alert rule), triage (the stage that verifies what the sensor files)
 
+**Performance verdict**:
+One sensor's decision that a performance claim holds, handed to the Performance issue filer as data: the kind (health signal, suite comparison, budget), the signal, subsystem, and direction, the numbers, and the evidence. The filer renders the ticket from it; a sensor never writes ticket text or a Fingerprint string itself.
+_Avoid_: Alarm (the state a health signal is in), finding, report (the comparison tool's JSON, which a verdict is decoded from)
+
+**Performance issue filer**:
+The one engine module that turns a Performance verdict into tracker action: dedup by Fingerprint against the tracker, the shared daily cap, file or comment, re-file and never reopen (ADR 0021). Three sensors call it — the regression sensor in the daemon, the suite comparison and the budget check in CI — and one GitHub adapter sits behind it, reached through the GitHub client alone. A capped verdict in CI fails the job rather than vanishing.
+Its home is `src/performance-issue-filer.ts`.
+_Avoid_: Sensor (the caller that decides), issue tracker adapter (the coordination port, which the filer does not use), script filer (deleted)
+
 **Performance budget sensor**:
-A scheduled job that measures a performance budget and files a ticket while the budget is unmet (ADR 0023). It fires on a standing condition rather than a transition, so it files about work the app has never done; it never gates a merge, and it reuses the regression sensor's filer, label and fingerprint contract.
+A scheduled job that measures a performance budget and files a ticket while the budget is unmet (ADR 0023). It fires on a standing condition rather than a transition, so it files about work the app has never done; it never gates a merge, and it hands a `budget` Performance verdict to the Performance issue filer, sharing its label, Fingerprint, and cap.
 _Avoid_: Performance regression sensor (fires on change, not on level), budget gate (nothing here blocks a merge), optimizer (it proposes work, it does not do it)
 
 **Performance budget**:

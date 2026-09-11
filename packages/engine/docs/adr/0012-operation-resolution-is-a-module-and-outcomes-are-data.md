@@ -62,3 +62,14 @@ pruned. `run-control.ts` and `cooldown.ts` — today stubbed to identity in the 
 their first tests through their own interfaces, because a claim released wrongly on interrupt tells
 nobody. The glossary's **Operation resolution** entry gains its module home when the module lands,
 not before.
+
+## Amendment (2026-09-11): worktree ensure moves into Run preparation
+
+The 2026-09-11 architecture review found the fresh-versus-resume decision still made twice: the
+pure `decideSessionChoice` governed the prompt, an inline comparison in the executor governed the
+stage ops, and `SessionChoice.operations` had no reader. **Run preparation** becomes an engine
+module between claim and dispatch. It owns worktree ensure, the candidate-session lookup, the call
+to Operation resolution, and the derivation of prompt, session, and branch from one Session choice.
+The executor keeps claim, dispatch, and recording; "worktree" leaves its list. Operation resolution
+is unchanged: it still has no git side effect, and the checkout path it needs arrives from the
+preparation step that ensured it.

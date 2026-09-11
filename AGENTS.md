@@ -9,6 +9,12 @@ Before editing files for a substantial task:
 - Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
 <!-- intent-skills:end -->
 
+## Coding standards
+
+`CODING_STANDARDS.md` holds the code rules that `biome check` cannot test: suppressions, comments,
+control flow, TypeScript, time, and React composition. Read it before you write code. Each rule in it
+blocks a change.
+
 ## Effect TS
 
 The Effect v4 repository is cloned to `.repos/effect` for reference.
