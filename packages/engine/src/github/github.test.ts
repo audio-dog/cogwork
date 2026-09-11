@@ -7,11 +7,13 @@ import {
   WorkspaceConfig,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
 import { triageProposalBody } from "../comments";
@@ -23,6 +25,7 @@ import type { RegisteredWorkspace } from "../projector";
 import { SourceControlProvider } from "../source-control";
 import { layer as adapterLayer } from "./adapter";
 import {
+  layer as clientLayer,
   GitHubClient,
   type GitHubClientService,
   type GitHubRepoRef,
@@ -293,6 +296,22 @@ const withClient = (seed: Seed) =>
     Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))),
   );
 
+const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { GITHUB_TOKEN: "test-token" } }));
+
+const withFetchClient = (fetch: typeof globalThis.fetch) =>
+  Layer.mergeAll(adapterLayer, providerLayer).pipe(
+    Layer.provideMerge(
+      Layer.merge(
+        clientLayer.pipe(
+          Layer.provide(
+            FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetch))),
+          ),
+        ),
+        configLayer,
+      ),
+    ),
+  );
+
 const withIdentityFailure = (seed: Seed) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
     Layer.provideMerge(
@@ -439,6 +458,95 @@ describe("GitHub adapters", () => {
       ),
     ),
   );
+
+  it.effect("classifies an item whose pull request is on the second GitHub page as follow-up", () => {
+    const response = (body: unknown, headers?: HeadersInit) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json", ...headers },
+      });
+    const pullResponse = (number: number, headRef: string) => ({
+      number,
+      html_url: `https://github.com/owner/repo/pull/${number}`,
+      user: { login: bot.login },
+      head: { sha: `sha-${number}`, ref: headRef, repo: { full_name: "owner/repo" } },
+      author_association: "MEMBER",
+    });
+    const firstPage = Array.from({ length: 100 }, (_, index) =>
+      pullResponse(index + 1, `other-${index + 1}`),
+    );
+    const fetch: typeof globalThis.fetch = (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/user") return Promise.resolve(response({ login: bot.login }));
+      if (url.pathname.endsWith("/issues")) {
+        return Promise.resolve(
+          response([
+            {
+              node_id: "I_issue_50",
+              number: 50,
+              title: "older pull request",
+              labels: ["ready-for-agent"],
+              body: null,
+              state: "open",
+              created_at: "2026-09-11T12:00:00Z",
+            },
+          ]),
+        );
+      }
+      if (url.pathname === "/graphql") {
+        return Promise.resolve(
+          response({
+            data: {
+              repository: {
+                pullRequests: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [],
+                },
+              },
+            },
+          }),
+        );
+      }
+      if (url.pathname.endsWith("/pulls") && url.searchParams.get("page") === "2") {
+        return Promise.resolve(response([pullResponse(641, "50-older-pull-request")]));
+      }
+      if (url.pathname.endsWith("/pulls")) {
+        return Promise.resolve(
+          response(firstPage, {
+            link: '<https://api.github.com/repositories/123456/pulls?state=open&per_page=100&sort=updated&direction=desc&page=2>; rel="next"',
+          }),
+        );
+      }
+      if (url.pathname.endsWith("/commits/sha-641/check-runs")) {
+        return Promise.resolve(
+          response({
+            check_runs: [
+              {
+                name: "test",
+                status: "completed",
+                conclusion: "failure",
+                started_at: "2026-09-11T12:00:00Z",
+              },
+            ],
+          }),
+        );
+      }
+      if (url.pathname.endsWith("/pulls/641")) {
+        return Promise.resolve(response({ mergeable_state: "clean" }));
+      }
+      return Promise.resolve(response([]));
+    };
+
+    return Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#50");
+      const eligible = classify(items).eligible.find((entry) => entry.id === "#50");
+
+      assert.strictEqual(observed?.pr?.number, 641);
+      assert.strictEqual(observed?.pr?.checks, "failing");
+      assert.strictEqual(eligible?.stage, "follow-up");
+    }).pipe(Effect.provide(withFetchClient(fetch)));
+  });
 
   it.effect("posts a round summary to the linked PR and appends the coordination marker itself", () =>
     Effect.gen(function* () {
