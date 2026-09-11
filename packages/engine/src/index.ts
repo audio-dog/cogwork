@@ -35,6 +35,7 @@ export * as Registry from "./registry";
 export * as Replay from "./replay-harness";
 export * as RunControl from "./run-control";
 export * as RunLedger from "./run-ledger";
+export * as RunPreparation from "./run-preparation";
 export * as Scheduler from "./scheduler";
 export * as SessionStore from "./session-store";
 export * as SourceControl from "./source-control";
