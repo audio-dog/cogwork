@@ -1,0 +1,23 @@
+AGENTS.md
+  s_090cd25248d958::t_4526abfb384616 14-16
+  s_090cd25248d958::t_3a6b3db24c7ffa 12-13,17
+CODING_STANDARDS.md
+  s_090cd25248d958::t_d4f54579a4c321 1-2,5,13-14,23-26,36-38,48-50,59-61,67-69
+  s_090cd25248d958::t_8f6fc1ce15a40d 3-4,6-12,15-22,27-35,39-47,51-58,62-66,70-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4fd402a15ebbbb3aaedf7c592a515e8dca95607b",
+  "prompts": {},
+  "sessions": {
+    "s_090cd25248d958": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "549d510c-7f1a-4a49-a484-7c1f2e9be72e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
