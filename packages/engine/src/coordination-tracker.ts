@@ -13,7 +13,6 @@ import type { FollowUpMarker } from "./follow-up";
 import type {
   AttemptFailedOutcome,
   ClaimRequest,
-  CreateIssueInput,
   FollowedUpOutcome,
   HandBackOutcome,
   HandOffOutcome,
@@ -53,10 +52,6 @@ export interface CoordinationHost<Ref, CommentId> {
   readonly list: (
     workspace: WorkspaceIssueTrackerBinding,
   ) => Effect.Effect<ReadonlyArray<ListedItem<CommentId>>, IssueTrackerError>;
-  readonly createIssue: (
-    workspace: WorkspaceIssueTrackerBinding,
-    input: CreateIssueInput,
-  ) => Effect.Effect<void, IssueTrackerError>;
   readonly resolve: (
     workspace: WorkspaceIssueTrackerBinding,
     id: WorkItemId,
@@ -123,7 +118,6 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       const listed = yield* host.list(workspace);
       return listed.map((item) => buildItem(codec, item));
     }),
-    createIssue: Effect.fn("coordinationTracker.createIssue")(host.createIssue),
     claim: Effect.fn("coordinationTracker.claim")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,

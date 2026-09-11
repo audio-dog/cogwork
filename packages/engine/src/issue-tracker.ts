@@ -23,12 +23,6 @@ export const defaultTrackerCooldown = Duration.minutes(1);
 
 export type ClaimRequest = Omit<Claim, "by">;
 
-export interface CreateIssueInput {
-  readonly title: string;
-  readonly body: string;
-  readonly labels: ReadonlyArray<string>;
-}
-
 interface ObservedItemBase {
   readonly id: WorkItemId;
   readonly title: string;
@@ -129,9 +123,6 @@ const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: Wor
 export const makeEmpty = Effect.succeed({
   rateLimitScope: (_workspace: WorkspaceIssueTrackerBinding): string | null => null,
   observe: observeEmpty,
-  createIssue: Effect.fn("IssueTracker.createIssue")(
-    (workspace: WorkspaceIssueTrackerBinding, _input: CreateIssueInput) => failWhenRemote(workspace),
-  ),
   claim: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _claim: ClaimRequest) =>
     failWhenRemote(workspace),
   release: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) => failWhenRemote(workspace),
