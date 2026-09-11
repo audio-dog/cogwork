@@ -22,7 +22,6 @@ const stub = (over: Partial<IssueTrackerService>): IssueTrackerService =>
   ({
     rateLimitScope: () => null,
     observe: () => Effect.succeed([]),
-    createIssue: () => Effect.void,
     claim: () => Effect.void,
     release: () => Effect.void,
     note: () => Effect.void,

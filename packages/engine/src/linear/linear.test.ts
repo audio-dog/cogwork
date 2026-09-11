@@ -683,20 +683,4 @@ describe("linear work source adapter", () => {
       assert.strictEqual(result.failure.reason, "auth");
     }).pipe(Effect.provide(withClient({ issues: [], authError: true }))),
   );
-
-  it.effect("rejects issue creation as unsupported", () =>
-    Effect.gen(function* () {
-      const source = yield* IssueTracker;
-      const error = yield* Effect.flip(
-        source.createIssue(workspace, {
-          title: "Daemon event loop delay is high",
-          body: "Signal: event-loop-delay",
-          labels: ["needs-triage", "origin:selfperf"],
-        }),
-      );
-      assert.strictEqual(error.reason, "unavailable");
-      assert.isFalse(error.retryable ?? true);
-      assert.include(error.message, "not supported");
-    }).pipe(Effect.provide(withClient({ issues: [] }))),
-  );
 });

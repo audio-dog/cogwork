@@ -84,9 +84,6 @@ const numberOf = (id: WorkItemId) => Number.parseInt(id.replace(/^#/, ""), 10);
 
 const makeFakeHost = Effect.fn("fakeHost")(function* (seed: ReadonlyArray<SeedItem>) {
   const items = yield* Ref.make(new Map<number, FakeItem>(seed.map(toFakeItem)));
-  const nextIssueNumber = yield* Ref.make(
-    seed.reduce((highest, item) => Math.max(highest, item.number), 0) + 1,
-  );
   const nextCommentId = yield* Ref.make(1000);
   const roleLog = yield* Ref.make<ReadonlyArray<{ readonly number: number; readonly changes: RoleChanges }>>(
     [],
@@ -138,21 +135,6 @@ const makeFakeHost = Effect.fn("fakeHost")(function* (seed: ReadonlyArray<SeedIt
     codec,
     rateLimitScope: () => null,
     list: () => Ref.get(items).pipe(Effect.map((all) => [...all.values()].map(toListed))),
-    createIssue: (_workspace, input) =>
-      Effect.gen(function* () {
-        const number = yield* Ref.getAndUpdate(nextIssueNumber, (value) => value + 1);
-        yield* Ref.update(items, (all) =>
-          new Map(all).set(number, {
-            number,
-            title: input.title,
-            body: input.body,
-            labels: input.labels,
-            assignees: [],
-            openBlockers: 0,
-            comments: [],
-          }),
-        );
-      }),
     resolve: (_workspace, id) => Effect.succeed(numberOf(id)),
     comments: commentsFor,
     claimIdentity: () => claimant,
@@ -184,23 +166,6 @@ const observed = (tracker: ReturnType<typeof makeCoordinationTracker>, id: strin
   tracker.observe(workspace).pipe(Effect.map((items) => items.find((item) => item.id === id)));
 
 describe("coordination tracker", () => {
-  it.effect("creates an issue with its requested labels through the port", () =>
-    Effect.gen(function* () {
-      const { host, itemAt } = yield* makeFakeHost([]);
-      const tracker = makeCoordinationTracker(host);
-      yield* tracker.createIssue(workspace, {
-        title: "Daemon event loop delay is high",
-        body: "Signal: event-loop-delay",
-        labels: ["needs-triage", "origin:selfperf"],
-      });
-      const [created] = yield* tracker.observe(workspace);
-      assert.strictEqual(created?.title, "Daemon event loop delay is high");
-      assert.deepStrictEqual(created?.roles, ["needs-triage"]);
-      assert.deepStrictEqual((yield* itemAt(1))?.labels, ["needs-triage", "origin:selfperf"]);
-      assert.strictEqual((yield* itemAt(1))?.body, "Signal: event-loop-delay");
-    }),
-  );
-
   it.effect("claims an item, then observes the claim as ours with its stage carried", () =>
     Effect.gen(function* () {
       const { host } = yield* makeFakeHost([{ number: 7, labels: ["ready-for-agent"] }]);

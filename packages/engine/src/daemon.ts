@@ -380,7 +380,6 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const performanceIssueFiler = GitHub.performanceIssueFilerLayer(adapters.performanceIssueWorkspace).pipe(
     Layer.provide(githubClient),
-    Layer.provide(issueTracker),
     Layer.provide(registry),
   );
   const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =

@@ -5,11 +5,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { IssueTracker, IssueTrackerError, makeEmpty } from "../issue-tracker";
+import { IssueTrackerError } from "../issue-tracker";
 import { PerformanceIssueFiler, PerformanceIssueFingerprint } from "../performance-issue-filer";
 import type { RegisteredWorkspace } from "../projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "../registry";
 import { GitHubClient, type GitHubClientService } from "./client";
+import { makePerformanceIssueFilerTarget } from "./index";
 import { wireCodec } from "./markers";
 import { confirmPerformanceIssue, layer, performanceIssueHistory } from "./performance-issue-filer";
 
@@ -72,8 +73,27 @@ const performanceWorkspace: RegisteredWorkspace = {
     issueTracker: { type: "github" },
   }),
 };
+const linearPerformanceWorkspaceName = decodeWorkspaceId("linear-performance");
+const linearPerformanceWorkspace: RegisteredWorkspace = {
+  ...performanceWorkspace,
+  repository: "colonylabs/cogwork",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: linearPerformanceWorkspaceName,
+    checkoutPath: "/repos/linear-performance",
+    issueTracker: { type: "linear", teams: ["CGW"] },
+  }),
+};
 
 const unexpectedClientCall = () => Effect.die("unexpected GitHub client call");
+const filerLayer = (workspaceName: WorkspaceId | undefined, workspaces: ReadonlyArray<RegisteredWorkspace>) =>
+  layer(workspaceName).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.mock(GitHubClient, {}),
+        Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces, failures: [] })),
+      ),
+    ),
+  );
 
 it.effect("recovers an open marker-bearing issue whose labels were omitted during creation", () =>
   Effect.gen(function* () {
@@ -192,6 +212,32 @@ it.effect("confirms the accepted occurrence after it closes", () =>
   }),
 );
 
+it.effect("builds a target from a GitHub client and repository reference", () =>
+  Effect.gen(function* () {
+    const created = yield* CreateIssueCalls;
+    const target = yield* makePerformanceIssueFilerTarget(
+      {
+        addLabel: () => Effect.void,
+        authenticatedLogin: () => Effect.succeed("cogwork-bot"),
+        createIssue: () => Ref.update(created, (count) => count + 1),
+        createPerformanceComment: unexpectedClientCall,
+        issuePullReferences: noPullReferences,
+        listIssues: () =>
+          Ref.get(created).pipe(Effect.map((count) => (count === 0 ? [] : [issue(2, marker)]))),
+      },
+      { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" },
+    );
+
+    yield* target.create({
+      title: performanceIssueInput.title,
+      body: marker,
+      labels: ["needs-triage", "origin:selfperf"],
+    });
+
+    assert.strictEqual(yield* Ref.get(created), 1);
+  }).pipe(Effect.provide(CreateIssueCalls.layer)),
+);
+
 it.effect("retries creation after a transient failure that did not report acceptance", () =>
   Effect.gen(function* () {
     const filer = yield* PerformanceIssueFiler;
@@ -226,22 +272,6 @@ it.effect("retries creation after a transient failure that did not report accept
                   listReviewComments: unexpectedClientCall,
                   listReviews: unexpectedClientCall,
                   listCheckRuns: unexpectedClientCall,
-                  createIssue: unexpectedClientCall,
-                  createPull: unexpectedClientCall,
-                  removeLabel: unexpectedClientCall,
-                  createComment: unexpectedClientCall,
-                  editComment: unexpectedClientCall,
-                  verifyCredential: unexpectedClientCall,
-                } satisfies GitHubClientService;
-              }),
-            ),
-            Layer.effect(
-              IssueTracker,
-              Effect.gen(function* () {
-                const calls = yield* CreateIssueCalls;
-                const base = yield* makeEmpty;
-                return {
-                  ...base,
                   createIssue: () =>
                     Ref.updateAndGet(calls, (count) => count + 1).pipe(
                       Effect.flatMap((count) =>
@@ -255,7 +285,12 @@ it.effect("retries creation after a transient failure that did not report accept
                           : Effect.void,
                       ),
                     ),
-                };
+                  createPull: unexpectedClientCall,
+                  removeLabel: unexpectedClientCall,
+                  createComment: unexpectedClientCall,
+                  editComment: unexpectedClientCall,
+                  verifyCredential: unexpectedClientCall,
+                } satisfies GitHubClientService;
               }),
             ),
             Layer.succeed(
@@ -276,17 +311,30 @@ it.effect("keeps an unregistered performance workspace retryable", () =>
 
     assert.strictEqual(error.reason, "unavailable");
     assert.isTrue(error.retryable);
-  }).pipe(
-    Effect.provide(
-      layer(performanceWorkspaceName).pipe(
-        Layer.provide(
-          Layer.mergeAll(
-            Layer.mock(GitHubClient, {}),
-            Layer.effect(IssueTracker, makeEmpty),
-            Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces: [], failures: [] })),
-          ),
-        ),
-      ),
-    ),
-  ),
+  }).pipe(Effect.provide(filerLayer(performanceWorkspaceName, []))),
+);
+
+it.effect("rejects a missing performance workspace configuration permanently", () =>
+  Effect.gen(function* () {
+    const filer = yield* PerformanceIssueFiler;
+    const error = yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
+
+    assert.strictEqual(error.reason, "unavailable");
+    assert.isFalse(error.retryable ?? true);
+    assert.strictEqual(error.message, "performance evidence workspace is not configured");
+  }).pipe(Effect.provide(filerLayer(undefined, []))),
+);
+
+it.effect("rejects a non-GitHub performance workspace permanently", () =>
+  Effect.gen(function* () {
+    const filer = yield* PerformanceIssueFiler;
+    const error = yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
+
+    assert.strictEqual(error.reason, "unavailable");
+    assert.isFalse(error.retryable ?? true);
+    assert.strictEqual(
+      error.message,
+      `performance evidence workspace ${linearPerformanceWorkspaceName} does not use GitHub issues`,
+    );
+  }).pipe(Effect.provide(filerLayer(linearPerformanceWorkspaceName, [linearPerformanceWorkspace]))),
 );

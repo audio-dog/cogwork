@@ -5,7 +5,7 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import type { WireCodec } from "./coordination";
-import type { CreateIssueInput, IssueTrackerError } from "./issue-tracker";
+import type { IssueTrackerError } from "./issue-tracker";
 
 export interface PerformanceIssue {
   readonly id: WorkItemId;
@@ -20,6 +20,12 @@ export interface PerformanceIssue {
 export const PerformanceIssueFingerprint = makeBrand("PerformanceIssueFingerprint");
 export type PerformanceIssueFingerprint = typeof PerformanceIssueFingerprint.Type;
 
+export interface PerformanceIssueCreateInput {
+  readonly title: string;
+  readonly body: string;
+  readonly labels: ReadonlyArray<string>;
+}
+
 export interface PerformanceIssueFilerHost {
   readonly codec: WireCodec;
   readonly target: Effect.Effect<PerformanceIssueFilerTarget, IssueTrackerError>;
@@ -28,7 +34,7 @@ export interface PerformanceIssueFilerHost {
 export interface PerformanceIssueFilerTarget {
   readonly list: Effect.Effect<ReadonlyArray<PerformanceIssue>, IssueTrackerError>;
   readonly pendingFingerprints: Effect.Effect<ReadonlySet<PerformanceIssueFingerprint>, IssueTrackerError>;
-  readonly create: (input: CreateIssueInput) => Effect.Effect<void, IssueTrackerError>;
+  readonly create: (input: PerformanceIssueCreateInput) => Effect.Effect<void, IssueTrackerError>;
   readonly comment: (id: WorkItemId, body: string) => Effect.Effect<void, IssueTrackerError>;
   readonly ensureLabels: (issue: PerformanceIssue) => Effect.Effect<void, IssueTrackerError>;
   readonly confirmPending: (issue: PerformanceIssue) => Effect.Effect<boolean, IssueTrackerError>;
