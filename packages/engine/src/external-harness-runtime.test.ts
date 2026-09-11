@@ -32,6 +32,7 @@ import type {
 import {
   createSecrets,
   getSandbox,
+  getSandboxPolicy,
   getWorkspaceProjection,
   SandboxDurabilityCapability,
 } from "@tanstack/ai-sandbox";
@@ -52,18 +53,13 @@ import {
   externalHarnessRunner,
   mergeCheckoutFileDiffs,
 } from "./external-harness-runtime";
-import {
-  fullHarnessExecution,
-  HarnessError,
-  HarnessPreflightInput,
-  make,
-  staticCatalogSource,
-} from "./harness";
+import { fullHarnessExecution, HarnessError, make, staticCatalogSource } from "./harness";
 import { messageFromUnknown } from "./provider-bridge";
 import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { fullProfile } from "./tools/policy";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -122,9 +118,7 @@ class ControlledAdapter
 }
 
 class ControlledProbe {
-  readonly resolved: Array<
-    Parameters<ExternalHarnessDescriptor<ControlledAdapter, string>["makeAdapter"]>[0]
-  > = [];
+  readonly resolved: Array<Parameters<ExternalHarnessDescriptor<ControlledAdapter>["makeAdapter"]>[0]> = [];
   readonly chatOptions: Array<TextOptions<ControlledOptions>> = [];
   readonly cancellations: Array<true> = [];
   readonly sandboxDestructions: Array<true> = [];
@@ -338,9 +332,8 @@ const request = Schema.decodeSync(RunPlan)({
 const descriptor = (
   chunks: ReadonlyArray<StreamChunk>,
   probe: ControlledProbe,
-): ExternalHarnessDescriptor<ControlledAdapter, string> => ({
+): ExternalHarnessDescriptor<ControlledAdapter> => ({
   name,
-  sessionKind: "opaque-handle",
   capabilities: {
     execution: fullHarnessExecution,
     profile: {
@@ -354,8 +347,6 @@ const descriptor = (
       journal: false,
       takeover: false,
     },
-    projectedMembers: ["Harness Adapter", "Instructions", "Messages", "MCP", "Sandbox", "Structured Output"],
-    planMiddleware: ["sandbox"],
   },
   authentication: { mode: "host", reference: "controlled host login" },
   catalogSources: {
@@ -394,7 +385,6 @@ const descriptor = (
     authentication: resolved.authentication.mode,
     sessionId: resolved.identity.resumeHandle,
   }),
-  projectAuthentication: (authentication) => authentication.mode,
   transport: {},
   diagnostics: (cause) =>
     new HarnessError({
@@ -423,7 +413,7 @@ const descriptor = (
 });
 
 const makeHarness = (
-  controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string>,
+  controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter>,
   created: Array<string>,
   destructions: Array<true> = [],
   options: {
@@ -452,6 +442,27 @@ const terminalEvents: ReadonlyArray<StreamChunk> = [
 
 describe("external Harness runtime", () => {
   it.layer(harnessRunnerLayer)((it) => {
+    it("owns the common external Harness declaration", () => {
+      const runner = externalHarnessRunner(descriptor([], new ControlledProbe()), {
+        authentication: () => Effect.succeed({ mode: "host", secrets: {} }),
+        sandboxProvider: () => Effect.succeed(controlledProvider([], [])),
+      });
+
+      assert.strictEqual(runner.sessionKind, "opaque-handle");
+      assert.deepStrictEqual(runner.projectedMembers, [
+        "Harness Adapter",
+        "Instructions",
+        "Messages",
+        "MCP",
+        "Middleware",
+        "Sandbox",
+        "Structured Output",
+        "Persistence",
+        "Connections",
+      ]);
+      assert.deepStrictEqual(runner.planMiddleware, ["sandbox"]);
+    });
+
     it.effect(
       "projects mandatory instructions through one Harness Workspace and keeps work context user-authored",
       () =>
@@ -764,7 +775,7 @@ describe("external Harness runtime", () => {
           });
         };
         const base = descriptor(terminalEvents, probe);
-        const nativeDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
+        const nativeDescriptor: ExternalHarnessDescriptor<ControlledAdapter> = {
           ...base,
           transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
         };
@@ -815,47 +826,6 @@ describe("external Harness runtime", () => {
           ],
         );
         assert.deepStrictEqual(yield* fs.readDirectory(checkout), [".git"]);
-      }),
-    );
-
-    it.effect("rejects a required MCP projection before the native Harness launches", () =>
-      Effect.gen(function* () {
-        const created: Array<string> = [];
-        const probe = new ControlledProbe();
-        const base = descriptor(terminalEvents, probe);
-        const harness = makeHarness(
-          {
-            ...base,
-            capabilities: {
-              ...base.capabilities,
-              projectedMembers: base.capabilities.projectedMembers.filter((member) => member !== "MCP"),
-            },
-          },
-          created,
-        );
-        const plan = RunPlan.make({
-          ...request,
-          mcp: [
-            {
-              identity: "local:repo/mcp/required",
-              name: "required",
-              projectedName: "required",
-              endpoint: "https://required.example.test/mcp",
-              authenticated: false,
-              unavailableReason: null,
-            },
-          ],
-        });
-
-        const error = yield* harness
-          .run({ plan, session: freshSession, mcpCredentials: new Map() })
-          .pipe(Stream.runDrain, Effect.flip);
-
-        assert.strictEqual(error.reason, "workspace");
-        assert.strictEqual(error.retryable, false);
-        assert.include(error.message, "MCP");
-        assert.deepStrictEqual(created, []);
-        assert.deepStrictEqual(probe.resolved, []);
       }),
     );
 
@@ -922,6 +892,9 @@ describe("external Harness runtime", () => {
           .pipe(Stream.runCollect);
 
         assert.deepStrictEqual(created, ["none"]);
+        const chatOptions = probe.chatOptions[0];
+        if (!chatOptions) return assert.fail("adapter received no chat options");
+        assert.strictEqual(getSandboxPolicy(runtimeCapabilities(chatOptions)), fullProfile);
         assert.strictEqual(output.filter((event) => event.name === "structured-output.complete").length, 1);
         const diagnostic = output.find((event) => event.name === "controlled.diagnostic");
         assert.deepStrictEqual(diagnostic?.value, { native: true });
@@ -943,7 +916,7 @@ describe("external Harness runtime", () => {
 
         const launch = probe.resolved[0];
         assert.strictEqual(launch?.model, "controlled");
-        assert.strictEqual(launch?.authentication, "host");
+        assert.strictEqual(launch?.nativeAuthentication, "host");
         assert.strictEqual(launch?.request.identity.run, request.id);
         assert.strictEqual(launch?.request.identity.session, freshSession);
         assert.strictEqual(launch?.request.policy, "full");
@@ -1225,7 +1198,7 @@ describe("external Harness runtime", () => {
         const probe = new ControlledProbe();
         const created: Array<string> = [];
         const nativeFailure = new Error("controlled executable missing");
-        const controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
+        const controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter> = {
           ...descriptor([], probe),
           makeAdapter: () => {
             throw nativeFailure;
@@ -1275,41 +1248,6 @@ describe("external Harness runtime", () => {
 
         assert.strictEqual(error.reason, "sandbox");
         assert.include(error.message, "killable processes");
-        assert.deepStrictEqual(probe.resolved, []);
-      }),
-    );
-
-    it.effect("rejects missing Workspace projection before resolving policy", () =>
-      Effect.gen(function* () {
-        const probe = new ControlledProbe();
-        const base = descriptor([], probe);
-        const runner = externalHarnessRunner(
-          {
-            ...base,
-            capabilities: {
-              ...base.capabilities,
-              projectedMembers: base.capabilities.projectedMembers.filter(
-                (member) => member !== "Instructions",
-              ),
-            },
-          },
-          {
-            authentication: () => Effect.succeed({ mode: "host", secrets: {} }),
-            sandboxProvider: () => Effect.succeed(controlledProvider([], [])),
-            sandboxPolicy: () => Effect.die(new Error("policy resolution must follow Workspace resolution")),
-          },
-        );
-
-        const error = yield* runner
-          .preflight(
-            HarnessPreflightInput.Launch({
-              request: { plan: request, session: freshSession, mcpCredentials: new Map() },
-            }),
-          )
-          .pipe(Effect.flip);
-
-        assert.strictEqual(error.reason, "workspace");
-        assert.include(error.message, "Instructions");
         assert.deepStrictEqual(probe.resolved, []);
       }),
     );
