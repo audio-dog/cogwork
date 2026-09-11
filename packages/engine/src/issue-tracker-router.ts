@@ -14,9 +14,6 @@ export const route = (github: IssueTrackerService, linear: IssueTrackerService):
   return {
     rateLimitScope: (workspace) => forWorkspace(workspace).rateLimitScope(workspace),
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
-    createIssue: Effect.fn("issueTrackerRouter.createIssue")((workspace, input) =>
-      forWorkspace(workspace).createIssue(workspace, input),
-    ),
     claim: (workspace, id, claim) => forWorkspace(workspace).claim(workspace, id, claim),
     release: (workspace, id) => forWorkspace(workspace).release(workspace, id),
     note: (workspace, id, detail) => forWorkspace(workspace).note(workspace, id, detail),

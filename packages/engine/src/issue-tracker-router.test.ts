@@ -27,9 +27,11 @@ const workspaceOf = (
 const githubWorkspace = workspaceOf("gh", { type: "github" });
 const linearWorkspace = workspaceOf("lin", { type: "linear", teams: ["AUD"] });
 
-type Recorded =
-  | { readonly source: string; readonly action: "attemptFailed"; readonly reason: string | undefined }
-  | { readonly source: string; readonly action: "createIssue"; readonly title: string };
+type Recorded = {
+  readonly source: string;
+  readonly action: "attemptFailed";
+  readonly reason: string | undefined;
+};
 
 class RouterCalls extends Context.Service<RouterCalls, Ref.Ref<ReadonlyArray<Recorded>>>()(
   "@cogwork/engine/issue-tracker-router.test/RouterCalls",
@@ -40,11 +42,6 @@ class RouterCalls extends Context.Service<RouterCalls, Ref.Ref<ReadonlyArray<Rec
 const fakeSource = (source: string, calls: Ref.Ref<ReadonlyArray<Recorded>>): IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
-  createIssue: (_workspace, input) =>
-    Ref.update(calls, (recorded) => [
-      ...recorded,
-      { source, action: "createIssue", title: input.title } satisfies Recorded,
-    ]),
   claim: () => Effect.void,
   release: () => Effect.void,
   note: () => Effect.void,
@@ -73,27 +70,6 @@ const routerLayer = () =>
   ).pipe(Layer.provideMerge(RouterCalls.layer));
 
 describe("issueTrackerRouter", () => {
-  it.effect("routes issue creation to the adapter for the workspace's source", () =>
-    Effect.gen(function* () {
-      const calls = yield* RouterCalls;
-      const router = yield* IssueTracker;
-      yield* router.createIssue(githubWorkspace, {
-        title: "GitHub ticket",
-        body: "Signal: event-loop-delay",
-        labels: ["needs-triage"],
-      });
-      yield* router.createIssue(linearWorkspace, {
-        title: "Linear ticket",
-        body: "Signal: event-loop-delay",
-        labels: ["needs-triage"],
-      });
-      assert.deepStrictEqual(yield* Ref.get(calls), [
-        { source: "github", action: "createIssue", title: "GitHub ticket" },
-        { source: "linear", action: "createIssue", title: "Linear ticket" },
-      ]);
-    }).pipe(Effect.provide(routerLayer())),
-  );
-
   it.effect("forwards the failure reason to the adapter for the workspace's source", () =>
     Effect.gen(function* () {
       const calls = yield* RouterCalls;
