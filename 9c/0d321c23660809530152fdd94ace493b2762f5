@@ -1,0 +1,30 @@
+packages/engine/src/external-harness-runtime.test.ts
+  s_8498454036837d::t_abea4822b425a1 62
+  s_8498454036837d::t_cf5ef3a7fb141e 121,335,416,778,1201
+  s_8498454036837d::t_11f36765abdfc5 465
+  s_8498454036837d::t_cbfb8e4a7d8e66 35,445-464,895-897,919
+  s_8498454036837d::t_894514a7ed4476 56
+packages/engine/src/external-harness-runtime.ts
+  s_8498454036837d::t_f0e7d4faf95792 162,164,174-176
+  s_8498454036837d::t_12051eb0c217d9 338-346,348,350,352-353
+  s_8498454036837d::t_b111d36fde4768 641,684,686
+  s_8498454036837d::t_d0787eee9994c3 62,112,134,149,177,198-199,245-246,358,381,489,568-569,578-581,632-633,647,660-661
+  s_8498454036837d::t_cbfb8e4a7d8e66 144,640
+  s_8498454036837d::t_de09fec454bbc9 163,165-173,673
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9c0d321c23660809530152fdd94ace493b2762f5",
+  "prompts": {},
+  "sessions": {
+    "s_8498454036837d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0927d-cf8d-7522-ab13-ad9b48980f06",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
