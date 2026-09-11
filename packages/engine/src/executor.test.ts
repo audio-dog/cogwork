@@ -572,7 +572,6 @@ function trackerRecorder(
       (calls): IssueTrackerService => ({
         rateLimitScope: () => null,
         observe: () => Effect.succeed([]),
-        createIssue: () => Effect.void,
         claim: (_workspace, itemId) => recordClaim(calls, itemId, claimWriteActive, claimFailure),
         release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
         note: (_workspace, itemId, detail) => record(calls, { method: "note", item: itemId, note: detail }),
