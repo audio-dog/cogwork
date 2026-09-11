@@ -1,0 +1,20 @@
+docs/research/feldspar-workflow-ideas.md
+  s_90a98e4750af62::t_73a082d7e8f08b 212,214,216,218,220
+  s_90a98e4750af62::t_4eed42ba5ea95a 1-211,213,215,217,219,221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "71b97159fdff306016cf18d053258af8e287624f",
+  "prompts": {},
+  "sessions": {
+    "s_90a98e4750af62": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eaca13fa-5b81-406d-9ace-58af3aab5eb7",
+        "model": "claude-fable-5-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
