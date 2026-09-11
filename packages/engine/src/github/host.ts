@@ -177,11 +177,6 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
         { concurrency: 10 },
       );
     }),
-    createIssue: Effect.fn("github.createIssue")(function* (workspace, input) {
-      const target = targetFor(workspace);
-      if (!target) return yield* notGitHub(workspace);
-      yield* client.createIssue(target, input);
-    }),
     resolve: Effect.fn("github.resolve")(function* (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) {
       const configuredTarget = targetFor(workspace);
       if (!configuredTarget) return yield* notGitHub(workspace);
