@@ -1,0 +1,19 @@
+packages/engine/src/session-choice.test.ts
+  s_6a36ccf8c4fdc2::t_d7f8cfd3df19e3 92,96,100,110,124,158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ac43ad255f232f63a4649888a151c0133c52afff",
+  "prompts": {},
+  "sessions": {
+    "s_6a36ccf8c4fdc2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0922c-5be7-7930-bf9b-ba8091f997cd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
