@@ -355,7 +355,6 @@ const cursorSandboxProvider = (name: HarnessName) =>
 export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunner => {
   const agentBin = options.agentBin ?? "agent";
   const defaultModel = options.defaultModel ?? "auto";
-  const sessionKind: Harness.HarnessRunner["sessionKind"] = "opaque-handle";
   const capabilities = {
     execution: {
       nonInteractive: true,
@@ -373,18 +372,6 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
       journal: false,
       takeover: false,
     },
-    projectedMembers: [
-      "Harness Adapter",
-      "Instructions",
-      "Messages",
-      "MCP",
-      "Middleware",
-      "Sandbox",
-      "Structured Output",
-      "Persistence",
-      "Connections",
-    ],
-    planMiddleware: ["sandbox"],
   } satisfies ExternalHarnessRuntime.ExternalHarnessCapabilities;
   const authentication: Harness.HarnessRunner["authentication"] = {
     mode: "host",
@@ -393,9 +380,8 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   const catalogSources = { fallback: generatedCatalog };
   const readiness = () => cursorReadiness(agentBin);
   const makeRunner = (openTransport: CursorOpenTransport) => {
-    const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter, "host"> = {
+    const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter> = {
       name: options.name,
-      sessionKind,
       capabilities,
       authentication,
       catalogSources,
@@ -415,7 +401,6 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
       projectModel: (request) => selectedCursorModel(request, defaultModel),
       projectOptions: (request) =>
         cursorModelOptions(request.identity.resumeHandle, request.selection.effort),
-      projectAuthentication: () => "host",
       transport: {},
       diagnostics: cursorDiagnostics,
       estimateUsage: cursorUsage,
@@ -427,14 +412,12 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   };
   return {
     name: options.name,
-    sessionKind,
+    ...ExternalHarnessRuntime.externalHarnessDeclaration,
     execution: capabilities.execution,
     capabilities: capabilities.profile,
     authentication,
     catalogSources,
     readiness,
-    projectedMembers: capabilities.projectedMembers,
-    planMiddleware: capabilities.planMiddleware,
     preflight: (input) =>
       Effect.scoped(
         openCursorTransport(agentBin).pipe(
