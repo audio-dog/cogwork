@@ -1,0 +1,19 @@
+scripts/perf-campaign.mjs
+  s_f057860d769802::t_671ec6bec4907e 191-201,206,249,269,582-583,585,590-591,594-595,597,600
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "700a5ae49376617f20d8110967d1106cb6408d34",
+  "prompts": {},
+  "sessions": {
+    "s_f057860d769802": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "760de61b-db8f-4576-a18f-cbe9e59bef01",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
