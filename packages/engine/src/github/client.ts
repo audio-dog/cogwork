@@ -25,7 +25,7 @@ import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
-import { type CreateIssueInput, defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
+import { defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
 import type { OpenedPullRequest, OpenPullRequestInput } from "../source-control";
 
 export interface GitHubRepoRef {
@@ -33,6 +33,12 @@ export interface GitHubRepoRef {
   readonly name: string;
   readonly tokenEnv: string;
   readonly connectionId?: ConnectionId;
+}
+
+export interface GitHubIssueCreateInput {
+  readonly title: string;
+  readonly body: string;
+  readonly labels: ReadonlyArray<string>;
 }
 
 export const repoRefFromRepository = (repository: string) => {
@@ -950,7 +956,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
 
   const createIssue = Effect.fn("github.createIssue")(function* (
     repo: GitHubRepoRef,
-    input: CreateIssueInput,
+    input: GitHubIssueCreateInput,
   ) {
     const acceptedBody = yield* sendAcceptedJsonOnce(
       repo,
