@@ -1,0 +1,29 @@
+packages/engine/src/daemon-event-bus.test.ts
+  s_f057860d769802::t_91f507984452a7 33-36,39,42-44
+  s_f057860d769802::t_5d59fa040e63ca 49,62
+  s_f057860d769802::t_03b49424164e7f 37-38,40-41
+packages/engine/src/daemon-event-bus.ts
+  s_f057860d769802::t_5d59fa040e63ca 19
+  s_f057860d769802::t_6ed45760702ff6 85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "77918caf8342fd13048e62c67a1b6aaf54d9b577",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_f057860d769802": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "760de61b-db8f-4576-a18f-cbe9e59bef01",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
