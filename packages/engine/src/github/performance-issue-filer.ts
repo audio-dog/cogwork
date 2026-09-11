@@ -4,15 +4,11 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import {
-  type CreateIssueInput,
-  IssueTracker,
-  IssueTrackerError,
-  type IssueTrackerService,
-} from "../issue-tracker";
+import { IssueTrackerError } from "../issue-tracker";
 import {
   make,
   type PerformanceIssue,
+  type PerformanceIssueCreateInput,
   PerformanceIssueFiler,
   type PerformanceIssueFilerHost,
   type PerformanceIssueFilerTarget,
@@ -189,23 +185,27 @@ const resolvePerformanceIssueTarget = Effect.fn("github.resolvePerformanceIssueT
     return yield* missingTarget(`performance evidence workspace ${workspaceName} has no GitHub repository`);
   const connectionId = workspace.config.issueTracker.connectionId;
   return {
-    workspace,
-    repo: {
-      ...repo,
-      ...(connectionId === "unbound" ? {} : { connectionId }),
-    } satisfies GitHubRepoRef,
-  };
+    ...repo,
+    ...(connectionId === "unbound" ? {} : { connectionId }),
+  } satisfies GitHubRepoRef;
 });
 
-const targetFor = Effect.fn("github.performanceIssueTarget")(function* (
-  client: GitHubClientService,
-  tracker: IssueTrackerService,
-  registry: WorkspaceRegistryService,
-  workspaceName: WorkspaceId | undefined,
+type PerformanceIssueGitHubClient = Pick<
+  GitHubClientService,
+  | "addLabel"
+  | "authenticatedLogin"
+  | "createIssue"
+  | "createPerformanceComment"
+  | "issuePullReferences"
+  | "listIssues"
+>;
+
+const targetForRepository = (
+  client: PerformanceIssueGitHubClient,
+  targetRepo: GitHubRepoRef,
   pendingCreations: Ref.Ref<PendingCreations>,
-) {
-  const { repo: targetRepo, workspace } = yield* resolvePerformanceIssueTarget(registry, workspaceName);
-  const target = targetIdentity(targetRepo);
+) => {
+  const repositoryIdentity = targetIdentity(targetRepo);
   const clearPending = (body: string) =>
     Ref.update(pendingCreations, (pending) => {
       const fingerprint = selfPerformanceFingerprint(body);
@@ -234,7 +234,7 @@ const targetFor = Effect.fn("github.performanceIssueTarget")(function* (
     );
     return true;
   });
-  const create = Effect.fn("github.createPerformanceIssue")(function* (input: CreateIssueInput) {
+  const create = Effect.fn("github.createPerformanceIssue")(function* (input: PerformanceIssueCreateInput) {
     const fingerprint = selfPerformanceFingerprint(input.body);
     if (!fingerprint) return yield* missingTarget("performance issue fingerprint is missing");
     const pending = yield* Ref.get(pendingCreations);
@@ -251,10 +251,14 @@ const targetFor = Effect.fn("github.performanceIssueTarget")(function* (
         .filter((issue) => selfPerformanceFingerprint(issue.body) === fingerprint)
         .map((issue) => issue.id),
     );
-    const nextReservation = { fingerprint, knownIssueIds, target } satisfies PendingCreation;
+    const nextReservation = {
+      fingerprint,
+      knownIssueIds,
+      target: repositoryIdentity,
+    } satisfies PendingCreation;
     yield* Ref.update(pendingCreations, (current) => new Map([...current, [key, nextReservation]]));
-    yield* tracker
-      .createIssue(workspace, input)
+    yield* client
+      .createIssue(targetRepo, input)
       .pipe(
         Effect.tapError((error) =>
           shouldReleaseCreateReservation(error) ? clearPending(input.body) : Effect.void,
@@ -273,7 +277,7 @@ const targetFor = Effect.fn("github.performanceIssueTarget")(function* (
         (pending) =>
           new Set(
             [...pending.values()]
-              .filter((reservation) => reservation.target === target)
+              .filter((reservation) => reservation.target === repositoryIdentity)
               .map((reservation) => reservation.fingerprint),
           ),
       ),
@@ -291,6 +295,14 @@ const targetFor = Effect.fn("github.performanceIssueTarget")(function* (
       );
     }),
   } satisfies PerformanceIssueFilerTarget;
+};
+
+export const makeTarget = Effect.fn("github.makePerformanceIssueTarget")(function* (
+  client: PerformanceIssueGitHubClient,
+  repo: GitHubRepoRef,
+) {
+  const pendingCreations = yield* Ref.make<PendingCreations>(new Map());
+  return targetForRepository(client, repo, pendingCreations);
 });
 
 const issueNumber = Effect.fn("github.performanceIssueNumber")(function* (id: WorkItemId) {
@@ -305,14 +317,14 @@ const issueNumber = Effect.fn("github.performanceIssueNumber")(function* (id: Wo
 
 const host = (
   client: GitHubClientService,
-  tracker: IssueTrackerService,
   registry: WorkspaceRegistryService,
   workspaceName: WorkspaceId | undefined,
   pendingCreations: Ref.Ref<PendingCreations>,
 ) =>
   ({
     codec: wireCodec,
-    target: targetFor(client, tracker, registry, workspaceName, pendingCreations).pipe(
+    target: resolvePerformanceIssueTarget(registry, workspaceName).pipe(
+      Effect.map((repo) => targetForRepository(client, repo, pendingCreations)),
       Effect.tapError((error) =>
         issueTrackerErrorIsPermanent(error) ? Ref.set(pendingCreations, new Map()) : Effect.void,
       ),
@@ -324,9 +336,8 @@ export const layer = (workspaceName: WorkspaceId | undefined) =>
     PerformanceIssueFiler,
     Effect.gen(function* () {
       const client = yield* GitHubClient;
-      const tracker = yield* IssueTracker;
       const registry = yield* WorkspaceRegistry;
       const pendingCreations = yield* Ref.make<PendingCreations>(new Map());
-      return yield* make(host(client, tracker, registry, workspaceName, pendingCreations));
+      return yield* make(host(client, registry, workspaceName, pendingCreations));
     }),
   );
