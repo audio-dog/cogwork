@@ -188,6 +188,8 @@ const candidateFacts = (session: OperationResolution.CandidateSessionFacts["sess
   startedAtMillis: 1000,
   sessionChoice: {
     session,
+    recoverySession: null,
+    latestBranchSession: session?.id ?? null,
     applyResumePolicy: false,
     lastRunStartedAtMillis: session?.createdAtMillis ?? null,
     lastRunTotalTokens: session ? 100 : null,

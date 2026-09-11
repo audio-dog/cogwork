@@ -13,6 +13,7 @@ const selectedHarness = Schema.decodeSync(HarnessName)("codex");
 const otherHarness = Schema.decodeSync(HarnessName)("claude-code");
 const workspace = Schema.decodeSync(WorkspaceId)("workspace");
 const sessionId = Schema.decodeSync(SessionId)("session-1");
+const latestBranchSessionId = Schema.decodeSync(SessionId)("session-2");
 
 const opaqueSession = (over: Partial<OpaqueHandleSession> = {}) =>
   ({
@@ -38,6 +39,8 @@ const ownedSession = (over: Partial<OwnedTranscriptSession> = {}) =>
 const inputs = (over: Partial<SessionChoiceInputs> = {}) =>
   ({
     session: opaqueSession(),
+    recoverySession: null,
+    latestBranchSession: sessionId,
     selectedHarness,
     sessionAffinity: "runtime-host",
     applyResumePolicy: true,
@@ -74,6 +77,16 @@ const expectChoice = (over: Partial<SessionChoiceInputs>, expected: SessionChoic
 };
 
 describe("decideSessionChoice", () => {
+  it("starts fresh when recovery no longer points at the branch's latest session", () => {
+    expectChoice(
+      {
+        recoverySession: sessionId,
+        latestBranchSession: latestBranchSessionId,
+      },
+      full,
+    );
+  });
+
   describe("same-harness × resumes-previous × fresh", () => {
     it("continues the previous session with only the continuation prompt", () => {
       expectChoice({}, continuation);
