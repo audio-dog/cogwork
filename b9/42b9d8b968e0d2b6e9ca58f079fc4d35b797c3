@@ -1,0 +1,19 @@
+packages/engine/src/issue-tracker-router.test.ts
+  s_4106734322ba93::t_79a1750834e857 30-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b942b9d8b968e0d2b6e9ca58f079fc4d35b797c3",
+  "prompts": {},
+  "sessions": {
+    "s_4106734322ba93": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0922c-5e35-7c10-ac3b-1dbc8f6cb54d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
