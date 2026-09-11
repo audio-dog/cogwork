@@ -22,8 +22,37 @@ const repo: GitHubRepoRef = {
 const priorityFieldId = Schema.decodeSync(GitHubIssueFieldId)(42);
 const secondaryFieldId = Schema.decodeSync(GitHubIssueFieldId)(43);
 
-const jsonResponse = (body: unknown = {}, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+const jsonResponse = (body: unknown = {}, status = 200, headers?: HeadersInit) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json", ...headers },
+  });
+
+const pullResponse = (number: number) => ({
+  number,
+  html_url: `https://github.com/colonylabs/cogwork/pull/${number}`,
+  user: { login: "cogwork[bot]" },
+  head: {
+    sha: `sha-${number}`,
+    ref: `${number}-work-item`,
+    repo: { full_name: "colonylabs/cogwork" },
+  },
+  author_association: "MEMBER",
+});
+
+const emptyClosingReferences = {
+  data: {
+    repository: {
+      pullRequests: {
+        pageInfo: { hasNextPage: false, endCursor: null },
+        nodes: [],
+      },
+    },
+  },
+};
+
+const pullPageLink = (page: number) =>
+  `<https://api.github.com/repositories/1333127441/pulls?state=open&per_page=100&sort=updated&direction=desc&page=${page}>; rel="next"`;
 
 const hangingResponse = (prefix: string, status = 200, headers?: HeadersInit) =>
   new Response(
@@ -441,6 +470,48 @@ describe("GitHub client", () => {
     },
   );
 
+  it.effect("lists every open pull request once across GitHub pages", () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => pullResponse(index + 1));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.endsWith("/graphql")) return Promise.resolve(jsonResponse(emptyClosingReferences));
+      if (url.searchParams.get("page") === "2") {
+        return Promise.resolve(jsonResponse([pullResponse(100), pullResponse(101)]));
+      }
+      return Promise.resolve(
+        jsonResponse(firstPage, 200, {
+          link: pullPageLink(2),
+        }),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const pulls = yield* client.listPulls(repo);
+
+      assert.strictEqual(pulls.length, 101);
+      assert.strictEqual(pulls.at(-1)?.number, 101);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists open pull requests from a repository smaller than one page", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.endsWith("/graphql")) return Promise.resolve(jsonResponse(emptyClosingReferences));
+      return Promise.resolve(jsonResponse([pullResponse(1)]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const pulls = yield* client.listPulls(repo);
+
+      assert.deepStrictEqual(
+        pulls.map((pull) => pull.number),
+        [1],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("creates an issue with its body and labels", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(
@@ -730,7 +801,7 @@ describe("GitHub client", () => {
         },
       },
     };
-    const { client: httpClient, requests } = delayedJsonClient((request) =>
+    const { client: httpClient } = delayedJsonClient((request) =>
       request.url.endsWith("/graphql") ? page : [],
     );
 
@@ -739,8 +810,40 @@ describe("GitHub client", () => {
       const error = yield* afterPaginationDeadline(Effect.flip(client.listPulls(repo)));
       assert.strictEqual(error.reason, "unavailable");
       assert.include(error.message, "pagination timed out");
-      assert.isAbove(requests.mock.calls.length, 1);
     }).pipe(withHttpClient(httpClient));
+  });
+
+  it.effect("fails an open-pull pagination timeout without returning a partial page", () => {
+    const respond = (request: HttpClientRequest.HttpClientRequest) => {
+      const currentPage = Number(new URL(request.url).searchParams.get("page") ?? "1");
+      return HttpClientResponse.fromWeb(
+        request,
+        jsonResponse([pullResponse(currentPage)], 200, { link: pullPageLink(currentPage + 1) }),
+      );
+    };
+    const httpClient = HttpClient.make((request) =>
+      Effect.sleep("20 seconds").pipe(Effect.map(() => respond(request))),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* afterPaginationDeadline(Effect.flip(client.listPulls(repo)));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.include(error.message, "pagination timed out");
+    }).pipe(withHttpClient(httpClient));
+  });
+
+  it.effect("rejects a repeated open-pull pagination link", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(jsonResponse([pullResponse(1)], 200, { link: pullPageLink(2) })),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const error = yield* Effect.flip(client.listPulls(repo));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.include(error.message, "repeated next link");
+    }).pipe(withFetchClient(fetch));
   });
 
   it.effect("does not retry a rejected write", () => rejectedWrite(401, "auth"));

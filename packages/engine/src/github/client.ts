@@ -655,9 +655,14 @@ const withPaginationDeadline = <A, R>(operation: Effect.Effect<A, IssueTrackerEr
 interface EtagEntry {
   readonly etag: string;
   readonly body: unknown;
+  readonly nextLink: string | null;
 }
 
-const bodyWithEtag = (body: unknown, etag: string | undefined) => ({ body, etag });
+const responseWithEtag = (body: unknown, etag: string | undefined, nextLink: string | null) => ({
+  body,
+  etag,
+  nextLink,
+});
 
 type ConsumeResponse<A> = (
   response: HttpClientResponse.HttpClientResponse,
@@ -788,22 +793,92 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return yield* execute(request, token, consume);
   });
 
-  const fetchJson = Effect.fn("github.fetchJson")(function* (repo: GitHubRepoRef, path: string) {
+  const fetchJsonResponse = Effect.fn("github.fetchJsonResponse")(function* (
+    repo: GitHubRepoRef,
+    path: string,
+  ) {
     const cached = (yield* Ref.get(etags)).get(path);
     const base = HttpClientRequest.get(path);
     const request = cached ? HttpClientRequest.setHeader(base, "if-none-match", cached.etag) : base;
-    const { body, etag } = yield* withTransientRetry(
+    const response = yield* withTransientRetry(
       send(repo, request, (response) => {
         if (response.status === 304 && cached) {
-          return Effect.succeed(bodyWithEtag(cached.body, undefined));
+          return Effect.succeed(responseWithEtag(cached.body, undefined, cached.nextLink));
         }
-        return Effect.map(response.json, (body) => bodyWithEtag(body, response.headers.etag));
+        return Effect.map(response.json, (body) =>
+          responseWithEtag(body, response.headers.etag, response.headers.link ?? null),
+        );
       }),
     );
+    const etag = response.etag;
     if (etag !== undefined) {
-      yield* Ref.update(etags, (entries) => new Map(entries).set(path, { etag, body }));
+      yield* Ref.update(etags, (entries) =>
+        new Map(entries).set(path, { etag, body: response.body, nextLink: response.nextLink }),
+      );
     }
-    return body;
+    return response;
+  });
+
+  const fetchJson = Effect.fn("github.fetchJson")(function* (repo: GitHubRepoRef, path: string) {
+    return (yield* fetchJsonResponse(repo, path)).body;
+  });
+
+  const nextPullPageUrl = Effect.fn("github.nextPullPageUrl")(function* (
+    repo: GitHubRepoRef,
+    header: string | undefined,
+  ) {
+    const next = header?.split(",").find((part) => part.includes('rel="next"'));
+    if (!next) return null;
+    const candidateUrl = /^<([^>]+)>/.exec(next.trim())?.[1];
+    const url = candidateUrl && URL.canParse(candidateUrl) ? new URL(candidateUrl) : null;
+    const expectedPath = `/repos/${repo.owner}/${repo.name}/pulls`;
+    const canonicalPath = /^\/repositories\/[1-9]\d*\/pulls$/;
+    const page = url?.searchParams.get("page");
+    if (
+      url?.origin !== "https://api.github.com" ||
+      (url.pathname !== expectedPath && !canonicalPath.test(url.pathname)) ||
+      !page ||
+      !/^[1-9]\d*$/.test(page)
+    ) {
+      return yield* unavailable("GitHub pull pagination returned an invalid next link");
+    }
+    return repoPath(repo, `${openPullsPath(repo)}&page=${page}`);
+  });
+
+  const fetchPullPage = Effect.fn("github.fetchPullPage")(function* (repo: GitHubRepoRef, path: string) {
+    const response = yield* fetchJsonResponse(repo, path);
+    const nextUrl = yield* nextPullPageUrl(repo, response.nextLink ?? undefined);
+    return { pulls: yield* Effect.mapError(decodePulls(response.body), toUnavailable), nextUrl };
+  });
+
+  const collectPullPages: (
+    repo: GitHubRepoRef,
+    path: string,
+    visited?: ReadonlySet<string>,
+  ) => Effect.Effect<ReadonlyArray<typeof PullSchema.Type>, IssueTrackerError> = Effect.fn(
+    "github.collectPullPages",
+  )(function* (repo, path, visited = new Set()) {
+    if (visited.has(path)) {
+      return yield* unavailable("GitHub pull pagination returned a repeated next link");
+    }
+    const page = yield* fetchPullPage(repo, path);
+    if (page.nextUrl === null) return page.pulls;
+    const remaining = yield* collectPullPages(repo, page.nextUrl, new Set(visited).add(path));
+    return [...page.pulls, ...remaining];
+  });
+
+  const uniquePulls = (pulls: ReadonlyArray<typeof PullSchema.Type>) => [
+    ...new Map(pulls.map((pull) => [pull.number, pull])).values(),
+  ];
+
+  const readPulls = Effect.fn("github.readPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
+    const path = repoPath(repo, openPullsPath(repo, headBranch));
+    if (headBranch) {
+      const json = yield* fetchJson(repo, path);
+      return yield* Effect.mapError(decodePulls(json), toUnavailable);
+    }
+    const pulls = yield* withPaginationDeadline(collectPullPages(repo, path));
+    return uniquePulls(pulls);
   });
 
   const listReviews = Effect.fn("github.listReviews")(function* (repo: GitHubRepoRef, pullNumber: number) {
@@ -1122,9 +1197,8 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         .map(({ id, name }) => ({ id, name }) satisfies GitHubPriorityField);
     }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
-      const json = yield* fetchJson(repo, repoPath(repo, openPullsPath(repo, headBranch)));
+      const pulls = yield* readPulls(repo, headBranch);
       const references = yield* pullReferences(repo, headBranch);
-      const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
       return pulls.map(
         (pull): RawPull => ({
           number: pull.number,
