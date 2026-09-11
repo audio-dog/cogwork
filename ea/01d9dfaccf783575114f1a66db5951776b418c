@@ -1,0 +1,51 @@
+packages/engine/src/performance-issue-filer.ts
+  s_1ecd276e2ac8cd::t_1d4e8e48cb68f6 6,25,45-50,53,56-58,61,65-69,81,110-131,135-145,148-149,152-169,177,179-184,203,206,210,212,214,217-218,224,229-230,236,240,244
+  s_1ecd276e2ac8cd::t_57f27673feee5b 71-74,132-133,146
+  s_1ecd276e2ac8cd::t_3a1a7728b10cf1 147,150-151
+  s_1ecd276e2ac8cd::t_03f4fe030eff6e 173,223,242
+  s_1ecd276e2ac8cd::t_b1a39f83ab7a85 175-176,178,185
+  s_1ecd276e2ac8cd::t_acb0663d7fb4b1 15,134
+  s_1ecd276e2ac8cd::t_668e8cb422752b 51-52,54-55,59-60,62-64
+  s_cd13911ea9515b::t_a652f82e6212f3 70
+packages/engine/src/performance-regression-sensor.ts
+  s_1ecd276e2ac8cd::t_3a1a7728b10cf1 90-92,146
+  s_1ecd276e2ac8cd::t_57f27673feee5b 19-20,39-40,79,112,128-129,169-185,194,325
+  s_1ecd276e2ac8cd::t_b1a39f83ab7a85 113
+  s_1ecd276e2ac8cd::t_acb0663d7fb4b1 18
+  s_1ecd276e2ac8cd::t_1c987c537a20b8 193,197,203,210,222,227,241-242,245,247,254,261,274
+  s_1ecd276e2ac8cd::t_36963ca22bd8d4 272
+packages/engine/src/performance-issue-filer.test.ts
+  s_1ecd276e2ac8cd::t_c059c55f835ad1 120,125-126,171
+  s_1ecd276e2ac8cd::t_7e215ba4dc3acc 16,32-58,110,133-136,149,160,176,188,204,216,221,238,252-270
+  s_1ecd276e2ac8cd::t_2946b6fb3f814e 24,196
+  s_1ecd276e2ac8cd::t_98f625c0cbd664 118-119,121-122
+  s_1ecd276e2ac8cd::t_b1a39f83ab7a85 12,27,144,232,248
+packages/engine/src/performance-regression-sensor.test.ts
+  s_1ecd276e2ac8cd::t_fb04c1d82cbf3e 13-16,68,80,102-103,205-210,213-230,380-381
+  s_1ecd276e2ac8cd::t_b1a39f83ab7a85 104-109
+  s_1ecd276e2ac8cd::t_fdcbf192088b55 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ea01d9dfaccf783575114f1a66db5951776b418c",
+  "prompts": {},
+  "sessions": {
+    "s_1ecd276e2ac8cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0926a-8b7e-72e1-9fe8-6fc75f0a0bb9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_cd13911ea9515b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0926a-8792-71d0-8513-6aef6ce10d35",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
