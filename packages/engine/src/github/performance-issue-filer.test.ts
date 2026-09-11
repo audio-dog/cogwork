@@ -6,7 +6,11 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { IssueTrackerError } from "../issue-tracker";
-import { PerformanceIssueFiler, PerformanceIssueFingerprint } from "../performance-issue-filer";
+import {
+  PerformanceIssueFiler,
+  PerformanceIssueFingerprint,
+  type PerformanceVerdict,
+} from "../performance-issue-filer";
 import type { RegisteredWorkspace } from "../projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "../registry";
 import { GitHubClient, type GitHubClientService } from "./client";
@@ -23,12 +27,24 @@ const decodeWorkspaceId = Schema.decodeSync(WorkspaceId);
 const performanceFingerprint = Schema.decodeSync(PerformanceIssueFingerprint)(
   "daemon.event-loop-delay-p99.above",
 );
-const performanceIssueInput = {
-  fingerprint: performanceFingerprint,
-  title: "Daemon event-loop delay p99 exceeded 100 ms",
-  body: "Signal: daemon event-loop delay p99 above threshold",
-  recurrenceBody: "Fired again.",
-};
+const performanceVerdict = {
+  kind: "health-signal",
+  signal: "event-loop-delay-p99",
+  subsystem: "daemon",
+  direction: "above",
+  observed: 125,
+  threshold: 100,
+  unit: "ms",
+  windowMillis: 10_000,
+  consecutiveBreaches: 3,
+  evidence: {
+    path: "/tmp/daemon.event-loop-delay-p99.above.json",
+    appVersion: "0.0.1-test",
+    runsInFlight: 2,
+    workspaceCount: 1,
+    machineLoad: { cpuCount: 8, loadAverage: [1, 0.5, 0.25], freeMemoryBytes: 1_000 },
+  },
+} satisfies PerformanceVerdict;
 const noPullReferences = () => Effect.succeed([]);
 const pullReference = (body: string, merged = true) => ({
   body,
@@ -95,7 +111,7 @@ const filerLayer = (workspaceName: WorkspaceId | undefined, workspaces: Readonly
     ),
   );
 
-it.effect("recovers an open marker-bearing issue whose labels were omitted during creation", () =>
+it.effect("decodes fingerprints once and keeps labeled markerless issues for cap accounting", () =>
   Effect.gen(function* () {
     const references = new Map([
       [1, [pullReference("Refs #1")]],
@@ -104,19 +120,16 @@ it.effect("recovers an open marker-bearing issue whose labels were omitted durin
     ]);
     const client = {
       authenticatedLogin: () => Effect.succeed("cogwork-bot"),
-      listIssues: (_repo: unknown, query?: { readonly state: "open" | "all"; readonly label?: string }) =>
-        Effect.succeed(
-          query?.label
-            ? [issue(1, marker, "closed")]
-            : [
-                issue(2, marker),
-                issue(3, "ordinary issue"),
-                issue(4, marker, "open", "untrusted-user"),
-                issue(1, marker, "closed"),
-                issue(5, marker, "closed"),
-                issue(6, marker, "closed"),
-              ],
-        ),
+      listIssues: () =>
+        Effect.succeed([
+          issue(2, marker),
+          issue(3, "ordinary issue"),
+          issue(4, marker, "open", "untrusted-user"),
+          issue(1, marker, "closed"),
+          issue(5, marker, "closed"),
+          issue(6, marker, "closed"),
+          { ...issue(7, "malformed marker"), labels: ["origin:selfperf"] },
+        ]),
       issuePullReferences: (_repo: unknown, issueNumber: number) =>
         Effect.succeed(references.get(issueNumber) ?? []),
     };
@@ -128,12 +141,13 @@ it.effect("recovers an open marker-bearing issue whose labels were omitted durin
     });
 
     assert.deepStrictEqual(
-      history.map(({ id, state, hasMergedFix }) => ({ id, state, hasMergedFix })),
+      history.map(({ id, state, fingerprint, hasMergedFix }) => ({ id, state, fingerprint, hasMergedFix })),
       [
-        { id: "#1", state: "closed", hasMergedFix: true },
-        { id: "#2", state: "open", hasMergedFix: false },
-        { id: "#5", state: "closed", hasMergedFix: false },
-        { id: "#6", state: "closed", hasMergedFix: false },
+        { id: "#1", state: "closed", fingerprint: performanceFingerprint, hasMergedFix: true },
+        { id: "#2", state: "open", fingerprint: performanceFingerprint, hasMergedFix: false },
+        { id: "#5", state: "closed", fingerprint: performanceFingerprint, hasMergedFix: false },
+        { id: "#6", state: "closed", fingerprint: performanceFingerprint, hasMergedFix: false },
+        { id: "#7", state: "open", fingerprint: undefined, hasMergedFix: false },
       ],
     );
   }),
@@ -174,15 +188,14 @@ it.effect("repairs labels before confirming a created performance issue", () =>
       addLabel: (_repo: unknown, _number: number, label: string) =>
         Ref.update(labels, (current) => [...current, label]),
       authenticatedLogin: () => Effect.succeed("cogwork-bot"),
-      listIssues: (_repo: unknown, query?: { readonly state: "open" | "all"; readonly label?: string }) =>
-        Effect.succeed(query?.label ? [] : [issue(2, marker)]),
+      listIssues: () => Effect.succeed([issue(2, marker)]),
       issuePullReferences: noPullReferences,
     };
 
     yield* confirmPerformanceIssue(
       client,
       { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" },
-      marker,
+      performanceFingerprint,
     );
 
     assert.deepStrictEqual(yield* Ref.get(labels), ["needs-triage", "origin:selfperf"]);
@@ -204,7 +217,7 @@ it.effect("confirms the accepted occurrence after it closes", () =>
     yield* confirmPerformanceIssue(
       client,
       { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" },
-      marker,
+      performanceFingerprint,
       new Set([decodeWorkItemId("#1000")]),
     );
 
@@ -229,7 +242,8 @@ it.effect("builds a target from a GitHub client and repository reference", () =>
     );
 
     yield* target.create({
-      title: performanceIssueInput.title,
+      fingerprint: performanceFingerprint,
+      title: "Daemon event-loop delay p99 exceeded 100 ms",
       body: marker,
       labels: ["needs-triage", "origin:selfperf"],
     });
@@ -243,8 +257,8 @@ it.effect("retries creation after a transient failure that did not report accept
     const filer = yield* PerformanceIssueFiler;
     const calls = yield* CreateIssueCalls;
 
-    yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
-    const result = yield* filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15));
+    yield* Effect.flip(filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15)));
+    const result = yield* filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15));
 
     assert.strictEqual(result, "filed");
     assert.strictEqual(yield* Ref.get(calls), 2);
@@ -307,7 +321,7 @@ it.effect("retries creation after a transient failure that did not report accept
 it.effect("keeps an unregistered performance workspace retryable", () =>
   Effect.gen(function* () {
     const filer = yield* PerformanceIssueFiler;
-    const error = yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
+    const error = yield* Effect.flip(filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15)));
 
     assert.strictEqual(error.reason, "unavailable");
     assert.isTrue(error.retryable);
@@ -317,7 +331,7 @@ it.effect("keeps an unregistered performance workspace retryable", () =>
 it.effect("rejects a missing performance workspace configuration permanently", () =>
   Effect.gen(function* () {
     const filer = yield* PerformanceIssueFiler;
-    const error = yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
+    const error = yield* Effect.flip(filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15)));
 
     assert.strictEqual(error.reason, "unavailable");
     assert.isFalse(error.retryable ?? true);
@@ -328,7 +342,7 @@ it.effect("rejects a missing performance workspace configuration permanently", (
 it.effect("rejects a non-GitHub performance workspace permanently", () =>
   Effect.gen(function* () {
     const filer = yield* PerformanceIssueFiler;
-    const error = yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
+    const error = yield* Effect.flip(filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15)));
 
     assert.strictEqual(error.reason, "unavailable");
     assert.isFalse(error.retryable ?? true);

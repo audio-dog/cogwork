@@ -21,13 +21,10 @@ import { wireCodec } from "./markers";
 
 const originLabel = "origin:selfperf";
 
-const carriesSelfPerformanceMarker = (body: string | undefined) =>
-  wireCodec.scan(body ?? "").some((marker) => marker.name === "selfperf");
-
 const decodeWorkItemId = Schema.decodeSync(WorkItemId);
 const decodePerformanceIssueFingerprint = Schema.decodeUnknownOption(PerformanceIssueFingerprint);
 
-const selfPerformanceFingerprint = (body: string | undefined) => {
+const decodeSelfPerformanceFingerprint = (body: string | undefined) => {
   const pairs = wireCodec.scan(body ?? "").find((marker) => marker.name === "selfperf")?.pairs;
   if (!pairs?.startsWith("fingerprint=")) return undefined;
   return Option.getOrUndefined(decodePerformanceIssueFingerprint(pairs.slice("fingerprint=".length)));
@@ -35,13 +32,14 @@ const selfPerformanceFingerprint = (body: string | undefined) => {
 
 const toPerformanceIssue = (
   issue: Effect.Success<ReturnType<GitHubClientService["listIssues"]>>[number],
+  fingerprint: PerformanceIssueFingerprint | undefined,
   hasMergedFix: boolean,
 ) =>
   ({
     id: decodeWorkItemId(`#${issue.number}`),
     url: issue.url,
     state: issue.state,
-    body: issue.body,
+    fingerprint,
     createdAtMillis: issue.createdAtMillis,
     labels: issue.labels,
     hasMergedFix,
@@ -73,21 +71,21 @@ export const performanceIssueHistory = Effect.fn("github.performanceIssueHistory
     [client.listIssues(repo, { state: "all" }), client.authenticatedLogin(repo)],
     { concurrency: "unbounded" },
   );
-  const relevant = all.filter(
-    (issue) =>
-      !issue.isPullRequest &&
-      (issue.labels.includes(originLabel) ||
-        (issue.authorLogin?.toLowerCase() === authenticatedLogin.toLowerCase() &&
-          carriesSelfPerformanceMarker(issue.body))),
-  );
+  const relevant = all.flatMap((issue) => {
+    if (issue.isPullRequest) return [];
+    const fingerprint = decodeSelfPerformanceFingerprint(issue.body);
+    const trustedAuthor = issue.authorLogin?.toLowerCase() === authenticatedLogin.toLowerCase();
+    if (!issue.labels.includes(originLabel) && !(trustedAuthor && fingerprint)) return [];
+    return [{ issue, fingerprint }];
+  });
   const issues = yield* Effect.forEach(
     relevant,
-    (issue) =>
+    ({ issue, fingerprint }) =>
       issue.state === "closed"
         ? mergedFixFor(client, repo, issue.number).pipe(
-            Effect.map((hasMergedFix) => toPerformanceIssue(issue, hasMergedFix)),
+            Effect.map((hasMergedFix) => toPerformanceIssue(issue, fingerprint, hasMergedFix)),
           )
-        : Effect.succeed(toPerformanceIssue(issue, false)),
+        : Effect.succeed(toPerformanceIssue(issue, fingerprint, false)),
     { concurrency: 5 },
   );
   return issues.toSorted((left, right) => left.createdAtMillis - right.createdAtMillis);
@@ -139,20 +137,18 @@ const targetIdentity = (repo: GitHubRepoRef) => `${repo.owner.toLowerCase()}/${r
 const pendingKey = (repo: GitHubRepoRef, fingerprint: PerformanceIssueFingerprint) =>
   `${targetIdentity(repo)}:${fingerprint}`;
 
-const clearPendingKey = (pending: PendingCreations, key: string | undefined) =>
-  key ? new Map([...pending].filter(([current]) => current !== key)) : pending;
+const clearPendingKey = (pending: PendingCreations, key: string) =>
+  new Map([...pending].filter(([current]) => current !== key));
 
 const createdPerformanceIssue = Effect.fn("github.createdPerformanceIssue")(function* (
   client: Pick<GitHubClientService, "authenticatedLogin" | "issuePullReferences" | "listIssues">,
   repo: GitHubRepoRef,
-  body: string,
+  fingerprint: PerformanceIssueFingerprint,
   knownIssueIds: ReadonlySet<WorkItemId>,
 ) {
-  const fingerprint = selfPerformanceFingerprint(body);
-  if (!fingerprint) return yield* missingTarget("performance issue fingerprint is missing");
   const history = yield* performanceIssueHistory(client, repo);
   return history
-    .filter((issue) => !knownIssueIds.has(issue.id) && selfPerformanceFingerprint(issue.body) === fingerprint)
+    .filter((issue) => !knownIssueIds.has(issue.id) && issue.fingerprint === fingerprint)
     .toSorted((left, right) => right.createdAtMillis - left.createdAtMillis)
     .at(0);
 });
@@ -160,10 +156,10 @@ const createdPerformanceIssue = Effect.fn("github.createdPerformanceIssue")(func
 export const confirmPerformanceIssue = Effect.fn("github.confirmPerformanceIssue")(function* (
   client: Pick<GitHubClientService, "addLabel" | "authenticatedLogin" | "issuePullReferences" | "listIssues">,
   repo: GitHubRepoRef,
-  body: string,
+  fingerprint: PerformanceIssueFingerprint,
   knownIssueIds: ReadonlySet<WorkItemId> = new Set(),
 ) {
-  const created = yield* createdPerformanceIssue(client, repo, body, knownIssueIds);
+  const created = yield* createdPerformanceIssue(client, repo, fingerprint, knownIssueIds);
   if (!created) return yield* pendingConfirmation("created performance issue is not visible yet");
   yield* ensurePerformanceIssueLabels(client, repo, created);
 });
@@ -206,53 +202,43 @@ const targetForRepository = (
   pendingCreations: Ref.Ref<PendingCreations>,
 ) => {
   const repositoryIdentity = targetIdentity(targetRepo);
-  const clearPending = (body: string) =>
-    Ref.update(pendingCreations, (pending) => {
-      const fingerprint = selfPerformanceFingerprint(body);
-      return clearPendingKey(pending, fingerprint ? pendingKey(targetRepo, fingerprint) : undefined);
-    });
+  const clearPending = (fingerprint: PerformanceIssueFingerprint) =>
+    Ref.update(pendingCreations, (pending) => clearPendingKey(pending, pendingKey(targetRepo, fingerprint)));
   const clearAllPending = Ref.set(pendingCreations, new Map());
-  const clearPendingOnPermanent = (body: string) => (error: IssueTrackerError) =>
-    issueTrackerErrorIsPermanent(error) ? clearPending(body) : Effect.void;
-  const confirmCreated = Effect.fn("github.confirmCreatedPerformanceIssue")(function* (
-    body: string,
-    reservation: PendingCreation,
-  ) {
-    yield* confirmPerformanceIssue(client, targetRepo, body, reservation.knownIssueIds);
-    yield* clearPending(body);
-  });
+  const clearPendingOnPermanent = (fingerprint: PerformanceIssueFingerprint) => (error: IssueTrackerError) =>
+    issueTrackerErrorIsPermanent(error) ? clearPending(fingerprint) : Effect.void;
+  const confirmCreated = Effect.fn("github.confirmCreatedPerformanceIssue")((reservation: PendingCreation) =>
+    confirmPerformanceIssue(client, targetRepo, reservation.fingerprint, reservation.knownIssueIds).pipe(
+      Effect.andThen(clearPending(reservation.fingerprint)),
+    ),
+  );
   const confirmPending = Effect.fn("github.confirmPendingPerformanceIssue")(function* (
     issue: PerformanceIssue,
   ) {
-    const fingerprint = selfPerformanceFingerprint(issue.body);
-    if (!fingerprint) return false;
-    const reservation = (yield* Ref.get(pendingCreations)).get(pendingKey(targetRepo, fingerprint));
+    if (!issue.fingerprint) return false;
+    const reservation = (yield* Ref.get(pendingCreations)).get(pendingKey(targetRepo, issue.fingerprint));
     if (!reservation || reservation.knownIssueIds.has(issue.id)) return false;
     yield* ensurePerformanceIssueLabels(client, targetRepo, issue).pipe(
-      Effect.andThen(clearPending(issue.body)),
-      Effect.tapError(clearPendingOnPermanent(issue.body)),
+      Effect.andThen(clearPending(issue.fingerprint)),
+      Effect.tapError(clearPendingOnPermanent(issue.fingerprint)),
     );
     return true;
   });
   const create = Effect.fn("github.createPerformanceIssue")(function* (input: PerformanceIssueCreateInput) {
-    const fingerprint = selfPerformanceFingerprint(input.body);
-    if (!fingerprint) return yield* missingTarget("performance issue fingerprint is missing");
     const pending = yield* Ref.get(pendingCreations);
-    const key = pendingKey(targetRepo, fingerprint);
+    const key = pendingKey(targetRepo, input.fingerprint);
     const reservation = pending.get(key);
     if (reservation) {
-      return yield* confirmCreated(input.body, reservation).pipe(
-        Effect.tapError(clearPendingOnPermanent(input.body)),
+      return yield* confirmCreated(reservation).pipe(
+        Effect.tapError(clearPendingOnPermanent(input.fingerprint)),
       );
     }
     const history = yield* performanceIssueHistory(client, targetRepo);
     const knownIssueIds = new Set(
-      history
-        .filter((issue) => selfPerformanceFingerprint(issue.body) === fingerprint)
-        .map((issue) => issue.id),
+      history.filter((issue) => issue.fingerprint === input.fingerprint).map((issue) => issue.id),
     );
     const nextReservation = {
-      fingerprint,
+      fingerprint: input.fingerprint,
       knownIssueIds,
       target: repositoryIdentity,
     } satisfies PendingCreation;
@@ -261,12 +247,10 @@ const targetForRepository = (
       .createIssue(targetRepo, input)
       .pipe(
         Effect.tapError((error) =>
-          shouldReleaseCreateReservation(error) ? clearPending(input.body) : Effect.void,
+          shouldReleaseCreateReservation(error) ? clearPending(input.fingerprint) : Effect.void,
         ),
       );
-    yield* confirmCreated(input.body, nextReservation).pipe(
-      Effect.tapError(clearPendingOnPermanent(input.body)),
-    );
+    yield* confirmCreated(nextReservation).pipe(Effect.tapError(clearPendingOnPermanent(input.fingerprint)));
   });
   return {
     list: performanceIssueHistory(client, targetRepo).pipe(
@@ -284,14 +268,17 @@ const targetForRepository = (
     ),
     create,
     confirmPending,
-    comment: Effect.fn("github.performanceIssueComment")(function* (id, body) {
-      const number = yield* issueNumber(id);
-      yield* client.createPerformanceComment(targetRepo, number, body);
-    }),
-    ensureLabels: Effect.fn("github.ensurePerformanceIssueLabels")(function* (issue) {
-      yield* ensurePerformanceIssueLabels(client, targetRepo, issue).pipe(
-        Effect.andThen(clearPending(issue.body)),
-        Effect.tapError(clearPendingOnPermanent(issue.body)),
+    comment: Effect.fn("github.performanceIssueComment")((id, body) =>
+      issueNumber(id).pipe(
+        Effect.flatMap((number) => client.createPerformanceComment(targetRepo, number, body)),
+      ),
+    ),
+    ensureLabels: Effect.fn("github.ensurePerformanceIssueLabels")((issue) => {
+      const ensured = ensurePerformanceIssueLabels(client, targetRepo, issue);
+      if (!issue.fingerprint) return ensured;
+      return ensured.pipe(
+        Effect.andThen(clearPending(issue.fingerprint)),
+        Effect.tapError(clearPendingOnPermanent(issue.fingerprint)),
       );
     }),
   } satisfies PerformanceIssueFilerTarget;
