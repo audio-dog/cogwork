@@ -115,6 +115,12 @@ interface PreparedResumeCandidate {
   readonly fresh: boolean;
 }
 
+interface SessionCandidates {
+  readonly candidateSession: SessionId | null;
+  readonly recoverySession: SessionId | null;
+  readonly latestBranchSession: SessionId | null;
+}
+
 type HarnessAdmission<A> =
   | { readonly cause: AvailabilityCause; readonly value: null }
   | { readonly cause: null; readonly value: A };
@@ -274,21 +280,44 @@ export const make = Effect.gen(function* () {
   const nextRunId = () =>
     Effect.sync(() => `run-${randomUUID()}`).pipe(Effect.flatMap(decodeRunId), Effect.orDie);
 
-  const latestResumableBranchRun = (workspace: RegisteredWorkspace, branch: BranchName) =>
+  const branchSessionFacts = (workspace: RegisteredWorkspace, branch: BranchName) =>
     Effect.all([
       ledger.sessionForBranch(workspace.config.name, branch),
       ledger.latestRunByBranch(workspace.config.name, branch),
-    ]).pipe(Effect.map(([session, run]) => (session === run?.session ? run : null)));
+    ]).pipe(
+      Effect.map(([latestBranchSession, latestResumableBranchRun]) => ({
+        latestBranchSession,
+        currentResumableRun:
+          latestBranchSession === latestResumableBranchRun?.session ? latestResumableBranchRun : null,
+      })),
+    );
 
-  const candidateSession = (
+  const currentResumableBranchRun = (workspace: RegisteredWorkspace, branch: BranchName) =>
+    branchSessionFacts(workspace, branch).pipe(Effect.map(({ currentResumableRun }) => currentResumableRun));
+
+  const candidateSessions = (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     branch: BranchName | null,
   ) => {
-    const resumedSession = item.resume?.session;
-    if (resumedSession) return Effect.succeed(resumedSession);
-    if (!branch) return Effect.succeed(null);
-    return latestResumableBranchRun(workspace, branch).pipe(Effect.map((run) => run?.session ?? null));
+    const recoverySession = item.resume?.session ?? null;
+    if (!branch) {
+      return Effect.succeed({
+        candidateSession: recoverySession,
+        recoverySession,
+        latestBranchSession: null,
+      } satisfies SessionCandidates);
+    }
+    return branchSessionFacts(workspace, branch).pipe(
+      Effect.map(({ latestBranchSession, currentResumableRun }) => {
+        const latestResumableBranchSession = currentResumableRun?.session ?? null;
+        return {
+          candidateSession: recoverySession ?? latestResumableBranchSession,
+          recoverySession,
+          latestBranchSession,
+        } satisfies SessionCandidates;
+      }),
+    );
   };
 
   const logSessionChoice = Effect.fn("Executor.logSessionChoice")(function* (
@@ -315,12 +344,12 @@ export const make = Effect.gen(function* () {
   const loadSessionChoiceCandidate = Effect.fn("Executor.loadSessionChoiceCandidate")(function* (
     ops: StageOps,
     prepared: PreparedRun,
-    previous: SessionId | null,
+    candidateSession: SessionId | null,
   ) {
     if (prepared.session) return yield* ledger.getSession(prepared.session);
     if (ops.resumePolicy) return prepared.resumeCandidate?.session ?? null;
-    if (!previous) return null;
-    return yield* ledger.getSession(previous);
+    if (!candidateSession) return null;
+    return yield* ledger.getSession(candidateSession);
   });
 
   const resolveCandidate = Effect.fn("Executor.resolveCandidate")(function* (
@@ -330,11 +359,11 @@ export const make = Effect.gen(function* () {
     ops: StageOps,
     prepared: PreparedRun,
     startedAtMillis: number,
-    previous: SessionId | null,
+    sessions: SessionCandidates,
     observation: RunPlanObservation,
   ) {
     const candidate = prepared.resumeCandidate;
-    const preparedSession = yield* loadSessionChoiceCandidate(ops, prepared, previous);
+    const preparedSession = yield* loadSessionChoiceCandidate(ops, prepared, sessions.candidateSession);
     const accepted = yield* operationResolution.resolve({
       runId,
       workspace,
@@ -345,6 +374,8 @@ export const make = Effect.gen(function* () {
       startedAtMillis,
       sessionChoice: {
         session: preparedSession,
+        recoverySession: sessions.recoverySession,
+        latestBranchSession: sessions.latestBranchSession,
         lastRunStartedAtMillis: candidate?.lastRunStartedAtMillis ?? null,
         lastRunTotalTokens: candidate?.lastRunTotalTokens ?? null,
         worktreeRecreated: candidate?.worktreeRecreated ?? prepared.worktreeRecreated ?? false,
@@ -703,7 +734,7 @@ export const make = Effect.gen(function* () {
     prompt: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item, { branch });
-    const last = yield* latestResumableBranchRun(workspace, branch);
+    const last = yield* currentResumableBranchRun(workspace, branch);
     const session = last?.session ? yield* ledger.getSession(last.session) : null;
     return {
       checkoutPath: worktree.path,
@@ -1023,18 +1054,6 @@ export const make = Effect.gen(function* () {
     } satisfies PreparedRun;
   });
 
-  const freshRecoveryPrepare = Effect.fn("Executor.freshRecoveryPrepare")(function* (
-    workspace: RegisteredWorkspace,
-    item: ExecutableWork,
-    prompt: string,
-  ) {
-    if (item.stage === "triage") {
-      return { checkoutPath: workspace.config.checkoutPath, prompt, session: null } satisfies PreparedRun;
-    }
-    const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    return { checkoutPath: worktree.path, prompt, session: null } satisfies PreparedRun;
-  });
-
   const plannedStageOps = (
     workspace: RegisteredWorkspace,
     item: ExecutableWork,
@@ -1067,15 +1086,6 @@ export const make = Effect.gen(function* () {
     return {
       ...ops,
       prepare: resumePrepare(workspace, item, session),
-    } satisfies StageOps;
-  };
-
-  const freshRecoveryOps = (workspace: RegisteredWorkspace, item: ExecutableWork, ops: StageOps) => {
-    const fresh = stageOps(workspace, item, ops.planStage);
-    if (!item.resume) return fresh;
-    return {
-      ...fresh,
-      prepare: freshRecoveryPrepare(workspace, item, fresh.fullPrompt),
     } satisfies StageOps;
   };
 
@@ -1252,61 +1262,63 @@ export const make = Effect.gen(function* () {
       runId,
     };
     const prepareAcceptedRun = Effect.fn("Executor.prepareAcceptedRun")(function* (
-      previous: SessionId | null,
+      sessions: SessionCandidates,
       prepared: PreparedRun,
-      selectedOps: StageOps,
     ) {
       const planned = yield* resolveCandidate(
         runId,
         workspace,
         item,
-        selectedOps,
+        ops,
         prepared,
         startedAtMillis,
-        previous,
+        sessions,
         observation,
       );
       return yield* acceptEnabledHarnessRun(runId, workspace, item, startedAtMillis, planned);
     });
+    const runWithSessionCandidates = Effect.fn("Executor.runWithSessionCandidates")(function* (
+      sessions: SessionCandidates,
+    ) {
+      return yield* ops.prepare.pipe(
+        Effect.flatMap((prepared) => prepareAcceptedRun(sessions, prepared)),
+        Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+        Effect.matchEffect({
+          onFailure: (error) => {
+            if (error._tag === "OperationUnavailable") {
+              return noteUnavailableResume(workspace, item, error.availability.causes).pipe(
+                Effect.map(() => ClaimDisposition.Release({})),
+              );
+            }
+            const storedSession = sessions.candidateSession
+              ? ledger.getSession(sessions.candidateSession)
+              : Effect.succeed(null);
+            return storedSession.pipe(
+              Effect.flatMap((session) =>
+                reportFailure(
+                  workspace,
+                  item,
+                  error,
+                  session?.harness ?? ops.resolved.harness,
+                  sessionHandle(session),
+                ),
+              ),
+              Effect.map(() => ClaimDisposition.Release({})),
+            );
+          },
+          onSuccess: (accepted) => {
+            if (!accepted) return Effect.succeed(ClaimDisposition.Release({}));
+            const { request, selectedOps: acceptedOps, record } = accepted;
+            return settleOutcome(workspace, item, acceptedOps, record, runId, request);
+          },
+        }),
+      );
+    });
     return yield* runControl.run(
       runId,
       workspace,
-      candidateSession(workspace, item, ops.branch).pipe(
-        Effect.flatMap((previous) => {
-          const selectedOps: StageOps =
-            previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
-          return selectedOps.prepare.pipe(
-            Effect.flatMap((prepared) => prepareAcceptedRun(previous, prepared, selectedOps)),
-            Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
-            Effect.matchEffect({
-              onFailure: (error) => {
-                if (error._tag === "OperationUnavailable") {
-                  return noteUnavailableResume(workspace, item, error.availability.causes).pipe(
-                    Effect.map(() => ClaimDisposition.Release({})),
-                  );
-                }
-                const storedSession = previous ? ledger.getSession(previous) : Effect.succeed(null);
-                return storedSession.pipe(
-                  Effect.flatMap((session) =>
-                    reportFailure(
-                      workspace,
-                      item,
-                      error,
-                      session?.harness ?? selectedOps.resolved.harness,
-                      sessionHandle(session),
-                    ),
-                  ),
-                  Effect.map(() => ClaimDisposition.Release({})),
-                );
-              },
-              onSuccess: (accepted) => {
-                if (!accepted) return Effect.succeed(ClaimDisposition.Release({}));
-                const { request, selectedOps: acceptedOps, record } = accepted;
-                return settleOutcome(workspace, item, acceptedOps, record, runId, request);
-              },
-            }),
-          );
-        }),
+      candidateSessions(workspace, item, ops.branch).pipe(
+        Effect.flatMap(runWithSessionCandidates),
         Effect.ensuring(cleanupRunContext(runId)),
         Effect.annotateLogs(correlation),
         Effect.annotateSpans(correlation),

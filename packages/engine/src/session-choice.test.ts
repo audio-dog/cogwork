@@ -13,6 +13,7 @@ const selectedHarness = Schema.decodeSync(HarnessName)("codex");
 const otherHarness = Schema.decodeSync(HarnessName)("claude-code");
 const workspace = Schema.decodeSync(WorkspaceId)("workspace");
 const sessionId = Schema.decodeSync(SessionId)("session-1");
+const latestBranchSessionId = Schema.decodeSync(SessionId)("session-2");
 
 const opaqueSession = (over: Partial<OpaqueHandleSession> = {}) =>
   ({
@@ -38,6 +39,8 @@ const ownedSession = (over: Partial<OwnedTranscriptSession> = {}) =>
 const inputs = (over: Partial<SessionChoiceInputs> = {}) =>
   ({
     session: opaqueSession(),
+    recoverySession: null,
+    latestBranchSession: sessionId,
     selectedHarness,
     sessionAffinity: "runtime-host",
     applyResumePolicy: true,
@@ -54,19 +57,16 @@ const inputs = (over: Partial<SessionChoiceInputs> = {}) =>
 const continuation = SessionChoice.Continuation({
   session: sessionId,
   prompt: "continuation",
-  operations: "current",
 });
 
 const combined = SessionChoice.Combined({
   session: null,
   prompt: "combined",
-  operations: "current",
 });
 
 const full = SessionChoice.FreshRecovery({
   session: null,
   prompt: "full",
-  operations: "fresh-recovery",
 });
 
 const expectChoice = (over: Partial<SessionChoiceInputs>, expected: SessionChoice) => {
@@ -74,20 +74,30 @@ const expectChoice = (over: Partial<SessionChoiceInputs>, expected: SessionChoic
 };
 
 describe("decideSessionChoice", () => {
+  it("starts fresh when recovery no longer points at the branch's latest session", () => {
+    expectChoice(
+      {
+        recoverySession: sessionId,
+        latestBranchSession: latestBranchSessionId,
+      },
+      full,
+    );
+  });
+
   describe("same-harness × resumes-previous × fresh", () => {
     it("continues the previous session with only the continuation prompt", () => {
       expectChoice({}, continuation);
     });
 
-    it("uses only the full prompt and fresh-recovery operations when fresh was requested", () => {
+    it("uses only the full prompt when fresh was requested", () => {
       expectChoice({ fresh: true }, full);
     });
 
-    it("uses fresh-recovery operations when the previous session cannot resume", () => {
+    it("starts fresh when the previous session cannot resume", () => {
       expectChoice({ session: opaqueSession({ handle: null }) }, full);
     });
 
-    it("keeps fresh-recovery operations when fresh is requested for an unresumable session", () => {
+    it("stays fresh when requested for an unresumable session", () => {
       expectChoice(
         {
           session: opaqueSession({ handle: null }),
@@ -97,7 +107,7 @@ describe("decideSessionChoice", () => {
       );
     });
 
-    it("uses fresh-recovery operations and only the full prompt after a harness switch", () => {
+    it("uses only the full prompt after a harness switch", () => {
       expectChoice({ session: opaqueSession({ harness: otherHarness }) }, full);
     });
 
@@ -111,7 +121,7 @@ describe("decideSessionChoice", () => {
       );
     });
 
-    it("uses fresh-recovery operations when no previous session exists", () => {
+    it("starts fresh when no previous session exists", () => {
       expectChoice({ session: null }, full);
     });
   });
@@ -145,7 +155,7 @@ describe("decideSessionChoice", () => {
     });
   });
 
-  describe("operations without resume policy", () => {
+  describe("without resume policy", () => {
     it("continues an opaque session before its handle has been captured", () => {
       expectChoice(
         {

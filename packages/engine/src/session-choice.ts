@@ -7,23 +7,22 @@ export type SessionChoice = Data.TaggedEnum<{
   Continuation: {
     readonly session: SessionId;
     readonly prompt: "continuation";
-    readonly operations: "current";
   };
   Combined: {
     readonly session: null;
     readonly prompt: "combined";
-    readonly operations: "current";
   };
   FreshRecovery: {
     readonly session: null;
     readonly prompt: "full";
-    readonly operations: "fresh-recovery";
   };
 }>;
 export const SessionChoice = Data.taggedEnum<SessionChoice>();
 
 export interface SessionChoiceInputs extends Omit<ResumeInputs, "sessionKind" | "handle"> {
   readonly session: Session | null;
+  readonly recoverySession: SessionId | null;
+  readonly latestBranchSession: SessionId | null;
   readonly selectedHarness: HarnessName;
   readonly sessionAffinity: HarnessCapabilityProfile["session"]["affinity"] | null;
   readonly applyResumePolicy: boolean;
@@ -44,9 +43,23 @@ const resumePolicyAllows = (session: Session, facts: ResumeFacts) =>
     },
   );
 
+const recoverySessionIsNotLatest = (
+  recoverySession: SessionId | null,
+  latestBranchSession: SessionId | null,
+) => recoverySession !== null && latestBranchSession !== null && recoverySession !== latestBranchSession;
+
 export const decideSessionChoice = (inputs: SessionChoiceInputs) => {
-  const { session, selectedHarness, sessionAffinity, applyResumePolicy, ...resumeFacts } = inputs;
+  const {
+    session,
+    recoverySession,
+    latestBranchSession,
+    selectedHarness,
+    sessionAffinity,
+    applyResumePolicy,
+    ...resumeFacts
+  } = inputs;
   if (
+    recoverySessionIsNotLatest(recoverySession, latestBranchSession) ||
     !session ||
     session.harness !== selectedHarness ||
     (applyResumePolicy && !resumePolicyAllows(session, resumeFacts))
@@ -54,19 +67,16 @@ export const decideSessionChoice = (inputs: SessionChoiceInputs) => {
     return SessionChoice.FreshRecovery({
       session: null,
       prompt: "full",
-      operations: "fresh-recovery",
     });
   }
   if (resumeFacts.worktreeRecreated && sessionAffinity === "sandbox-lineage") {
     return SessionChoice.Combined({
       session: null,
       prompt: "combined",
-      operations: "current",
     });
   }
   return SessionChoice.Continuation({
     session: session.id,
     prompt: "continuation",
-    operations: "current",
   });
 };
