@@ -7,17 +7,14 @@ export type SessionChoice = Data.TaggedEnum<{
   Continuation: {
     readonly session: SessionId;
     readonly prompt: "continuation";
-    readonly operations: "current";
   };
   Combined: {
     readonly session: null;
     readonly prompt: "combined";
-    readonly operations: "current";
   };
   FreshRecovery: {
     readonly session: null;
     readonly prompt: "full";
-    readonly operations: "fresh-recovery";
   };
 }>;
 export const SessionChoice = Data.taggedEnum<SessionChoice>();
@@ -70,19 +67,16 @@ export const decideSessionChoice = (inputs: SessionChoiceInputs) => {
     return SessionChoice.FreshRecovery({
       session: null,
       prompt: "full",
-      operations: "fresh-recovery",
     });
   }
   if (resumeFacts.worktreeRecreated && sessionAffinity === "sandbox-lineage") {
     return SessionChoice.Combined({
       session: null,
       prompt: "combined",
-      operations: "current",
     });
   }
   return SessionChoice.Continuation({
     session: session.id,
     prompt: "continuation",
-    operations: "current",
   });
 };

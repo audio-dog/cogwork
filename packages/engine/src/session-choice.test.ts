@@ -57,19 +57,16 @@ const inputs = (over: Partial<SessionChoiceInputs> = {}) =>
 const continuation = SessionChoice.Continuation({
   session: sessionId,
   prompt: "continuation",
-  operations: "current",
 });
 
 const combined = SessionChoice.Combined({
   session: null,
   prompt: "combined",
-  operations: "current",
 });
 
 const full = SessionChoice.FreshRecovery({
   session: null,
   prompt: "full",
-  operations: "fresh-recovery",
 });
 
 const expectChoice = (over: Partial<SessionChoiceInputs>, expected: SessionChoice) => {
@@ -92,15 +89,15 @@ describe("decideSessionChoice", () => {
       expectChoice({}, continuation);
     });
 
-    it("uses only the full prompt and fresh-recovery operations when fresh was requested", () => {
+    it("uses only the full prompt when fresh was requested", () => {
       expectChoice({ fresh: true }, full);
     });
 
-    it("uses fresh-recovery operations when the previous session cannot resume", () => {
+    it("starts fresh when the previous session cannot resume", () => {
       expectChoice({ session: opaqueSession({ handle: null }) }, full);
     });
 
-    it("keeps fresh-recovery operations when fresh is requested for an unresumable session", () => {
+    it("stays fresh when requested for an unresumable session", () => {
       expectChoice(
         {
           session: opaqueSession({ handle: null }),
@@ -110,7 +107,7 @@ describe("decideSessionChoice", () => {
       );
     });
 
-    it("uses fresh-recovery operations and only the full prompt after a harness switch", () => {
+    it("uses only the full prompt after a harness switch", () => {
       expectChoice({ session: opaqueSession({ harness: otherHarness }) }, full);
     });
 
@@ -124,7 +121,7 @@ describe("decideSessionChoice", () => {
       );
     });
 
-    it("uses fresh-recovery operations when no previous session exists", () => {
+    it("starts fresh when no previous session exists", () => {
       expectChoice({ session: null }, full);
     });
   });
@@ -158,7 +155,7 @@ describe("decideSessionChoice", () => {
     });
   });
 
-  describe("operations without resume policy", () => {
+  describe("without resume policy", () => {
     it("continues an opaque session before its handle has been captured", () => {
       expectChoice(
         {
