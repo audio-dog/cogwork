@@ -1,0 +1,28 @@
+packages/engine/src/resume-policy.ts
+  s_cd13911ea9515b::t_b55e203b825db4 1,12-14
+  s_1ecd276e2ac8cd::t_6495be3e64e5b5 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "32dc2627d5a9dd195e8975942ebd255b81c86f3a",
+  "prompts": {},
+  "sessions": {
+    "s_1ecd276e2ac8cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0926a-8b7e-72e1-9fe8-6fc75f0a0bb9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_cd13911ea9515b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0926a-8792-71d0-8513-6aef6ce10d35",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
