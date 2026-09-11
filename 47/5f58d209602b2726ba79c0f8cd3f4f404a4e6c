@@ -1,0 +1,22 @@
+configs/test/base.ts
+  s_45a1fe2d46dd58::t_4109e62119bba5 4-6,11
+configs/test/src/test-count-reporter.test.ts
+  s_45a1fe2d46dd58::t_b58ba2ecee3a7a 2,13-15
+  s_45a1fe2d46dd58::t_e14ef56b478419 16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "475f58d209602b2726ba79c0f8cd3f4f404a4e6c",
+  "prompts": {},
+  "sessions": {
+    "s_45a1fe2d46dd58": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a090f0-734d-7202-80b9-63c03e694cf1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
