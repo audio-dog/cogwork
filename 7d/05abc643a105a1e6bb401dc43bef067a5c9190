@@ -1,0 +1,32 @@
+apps/desktop/src/renderer/src/components/prototype-workflows-by-trigger.tsx
+  s_c3b6a593ba2064::t_3f57058dae8a2a 1-159
+apps/desktop/src/renderer/src/components/prototype-switcher.tsx
+  s_c3b6a593ba2064::t_6e63da31c9097d 1-67
+apps/desktop/src/renderer/src/routes/_app/workflows.tsx
+  s_c3b6a593ba2064::t_846850a65dd97b 1-22,25-27,31-37,39-41,43-49
+apps/desktop/src/renderer/src/features/prototype-workflows-data.ts
+  s_c3b6a593ba2064::t_a5192106eb6630 43,111,160,207,242,268,306
+  s_c3b6a593ba2064::t_5e80f8b16bbe38 1-42,44-110,112-159,161-206,208-241,243-267,269-305,307-337
+apps/desktop/src/renderer/src/components/prototype-workflows-graph-cards.tsx
+  s_c3b6a593ba2064::t_2b42914fa309b3 1-258
+apps/desktop/src/renderer/src/components/prototype-workflows-inventory.tsx
+  s_c3b6a593ba2064::t_0ddd77a928a6cb 1-174
+apps/desktop/src/renderer/src/components/prototype-workflows-workbench.tsx
+  s_c3b6a593ba2064::t_c30d74eed02a58 1-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7d05abc643a105a1e6bb401dc43bef067a5c9190",
+  "prompts": {},
+  "sessions": {
+    "s_c3b6a593ba2064": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4a0a777e-1ba8-4999-a420-5eb53f6831d5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
