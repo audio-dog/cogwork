@@ -1,0 +1,40 @@
+apps/desktop/src/renderer/src/components/prototype-workflow-editor-wizard.tsx
+  s_c3b6a593ba2064::t_953bcb26d0d639 1-132
+apps/desktop/src/renderer/src/routes/_app/workflows/index.tsx
+  s_c3b6a593ba2064::t_7cee5951d96367 1-6
+apps/desktop/src/renderer/src/components/prototype-trigger-picker.tsx
+  s_c3b6a593ba2064::t_88edace8b451d0 1-202
+apps/desktop/src/renderer/src/features/prototype-trigger-catalog.ts
+  s_c3b6a593ba2064::t_8a115dacf5d048 1-110
+apps/desktop/src/renderer/src/routes/_app/workflows/new.tsx
+  s_c3b6a593ba2064::t_3791d75cecfc7c 1-49
+apps/desktop/src/renderer/src/components/prototype-workflows-list.tsx
+  s_c3b6a593ba2064::t_5c8100669c3f85 273,295-299
+  s_c3b6a593ba2064::t_43935e0e243bd2 270-272,274-275
+  s_c3b6a593ba2064::t_7996925a4ebaaf 1-269,276-294,300-311
+apps/desktop/src/renderer/src/features/prototype-workflows-data.ts
+  s_c3b6a593ba2064::t_604eb982b9b50a 95-97,120,137,142,144,162,179,184,202,208,220,234,240,255,267,273,284-286,299
+apps/desktop/src/renderer/src/components/prototype-workflow-editor-form.tsx
+  s_c3b6a593ba2064::t_7e69ddbd286469 1-133
+apps/desktop/src/renderer/src/components/prototype-workflow-editor-shell.tsx
+  s_c3b6a593ba2064::t_42527a33bc9bcf 1-42,44-121
+  s_c3b6a593ba2064::t_5c8100669c3f85 43
+apps/desktop/src/renderer/src/components/prototype-workflow-editor-sentence.tsx
+  s_c3b6a593ba2064::t_4fbbfa3e5e95c8 1-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d06e330f7a60e3024566021c09efa644544af9b9",
+  "prompts": {},
+  "sessions": {
+    "s_c3b6a593ba2064": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4a0a777e-1ba8-4999-a420-5eb53f6831d5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
