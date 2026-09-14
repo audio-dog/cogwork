@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/prototype-trigger-picker.tsx
+  s_c3b6a593ba2064::t_548e48514a141e 172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8eb14ea68f386a9c5a8f97e481f6ce75750b952e",
+  "prompts": {},
+  "sessions": {
+    "s_c3b6a593ba2064": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4a0a777e-1ba8-4999-a420-5eb53f6831d5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
