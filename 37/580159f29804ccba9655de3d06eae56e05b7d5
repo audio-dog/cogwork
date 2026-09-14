@@ -1,0 +1,32 @@
+apps/desktop/src/renderer/src/routes/_app/workflows/new.tsx
+  s_c3b6a593ba2064::t_a92993193d0cd5 1-2,5
+apps/desktop/src/renderer/src/features/prototype-catalog.ts
+  s_c3b6a593ba2064::t_259254712da075 1-249
+apps/desktop/src/renderer/src/components/prototype-catalog-menu.tsx
+  s_c3b6a593ba2064::t_98bc7c094c156b 1-261,263,265-279,287-301,303,305-314,322-325
+  s_c3b6a593ba2064::t_242cbeeeb986b0 280-286
+  s_c3b6a593ba2064::t_6922ace49c091f 262,264
+  s_c3b6a593ba2064::t_8483edbda07edc 302,304
+  s_c3b6a593ba2064::t_8aa665adbb0ff4 315-321
+apps/desktop/src/renderer/src/components/prototype-workflow-editor.tsx
+  s_c3b6a593ba2064::t_7a20416317aee6 1-169,171-273
+  s_c3b6a593ba2064::t_26ad61780a4062 170
+apps/desktop/src/renderer/src/components/prototype-workflows-list.tsx
+  s_c3b6a593ba2064::t_e49806d0894670 270,290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "37580159f29804ccba9655de3d06eae56e05b7d5",
+  "prompts": {},
+  "sessions": {
+    "s_c3b6a593ba2064": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4a0a777e-1ba8-4999-a420-5eb53f6831d5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
