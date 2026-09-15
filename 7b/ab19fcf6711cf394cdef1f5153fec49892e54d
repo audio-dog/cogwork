@@ -1,0 +1,19 @@
+.cursor/commands/review.md
+  s_e574e4b7c24c79::t_196587b73e40a4 7,9-11,19,21,23-26,28,32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7bab19fcf6711cf394cdef1f5153fec49892e54d",
+  "prompts": {},
+  "sessions": {
+    "s_e574e4b7c24c79": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "cc176e2f-1718-4dde-8057-c0fbbffd0923",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
