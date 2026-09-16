@@ -83,6 +83,11 @@ export const catalogChoiceLabel = (choices: ReadonlyArray<HarnessCatalogChoice>,
 
 const effortOptionId = "effort";
 
+export interface ModelOptionSets {
+  readonly own: ReadonlyArray<OperationModelOption> | null;
+  readonly inherited: ReadonlyArray<OperationModelOption>;
+}
+
 const declaredOptions = (catalog: HarnessCatalog | null, model: string | null) =>
   catalog?.models.find((candidate) => candidate.value === model)?.options ?? [];
 
@@ -91,8 +96,43 @@ export const effortChoices = (catalog: HarnessCatalog | null, model: string | nu
   catalog?.efforts ??
   null;
 
-export const modelOptionControls = (catalog: HarnessCatalog | null, model: string | null) =>
+const declaredControls = (catalog: HarnessCatalog | null, model: string | null) =>
   declaredOptions(catalog, model).filter((option) => option.id !== effortOptionId);
+
+/** No choices, so `modelOptionCell` reads whatever is in effect for it as stale. */
+const retiredOption = (id: string): HarnessModelOption => ({
+  id,
+  label: id,
+  choices: [],
+  fallback: null,
+});
+
+/**
+ * A model pick clears this workspace's own set, which lets a parent scope's set apply to a model
+ * that never declared its options. Preflight refuses those, so they are shown rather than
+ * filtered away: an option nobody can see is one nobody can clear.
+ */
+export const modelOptionControls = (
+  catalog: HarnessCatalog | null,
+  model: string | null,
+  sets: ModelOptionSets = { own: null, inherited: [] },
+) => {
+  const declared = declaredControls(catalog, model);
+  const undeclared = (sets.own ?? sets.inherited)
+    .map(({ option }) => option)
+    .filter((option) => option !== effortOptionId && !declared.some((entry) => entry.id === option));
+  return [...declared, ...undeclared.map(retiredOption)];
+};
+
+/** Seeds an edit, so writing one option cannot persist another the model never declared. */
+export const modelOptionsInEffect = (
+  catalog: HarnessCatalog | null,
+  model: string | null,
+  sets: ModelOptionSets,
+) => {
+  const declared = declaredControls(catalog, model);
+  return (sets.own ?? sets.inherited).filter((pair) => declared.some((entry) => entry.id === pair.option));
+};
 
 export const selectedModelOption = (selected: ReadonlyArray<OperationModelOption>, option: string) =>
   selected.find((candidate) => candidate.option === option)?.value ?? null;
@@ -156,19 +196,30 @@ const asDisplayValue = (value: ReturnType<typeof resolveOperationSetting>) => {
   return value;
 };
 
+const effectiveValue = (
+  controlStore: ControlStore | null,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+  setting: OperationSettingName,
+) => {
+  const rows = controlStore?.operationSettings ?? [];
+  const stored = storedOverride(rows, setting, operation, workspace);
+  const inherited = asDisplayValue(inheritedValue(rows, setting, operation, workspace));
+  const fallback = setting === "permission-profile" ? defaultProfile(operation) : null;
+  return {
+    own: stored ? asDisplayValue(stored.value) : null,
+    inherited: inherited ?? fallback,
+  };
+};
+
 export const settingCell = (
   controlStore: ControlStore | null,
   catalogs: ReadonlyArray<HarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
   setting: OperationSettingName,
-) => {
-  const rows = controlStore?.operationSettings ?? [];
-  const resolvedInherited = asDisplayValue(inheritedValue(rows, setting, operation, workspace));
-  const inherited =
-    resolvedInherited ?? (setting === "permission-profile" ? defaultProfile(operation) : null);
-  const stored = storedOverride(rows, setting, operation, workspace);
-  const own = stored ? asDisplayValue(stored.value) : null;
+): SettingCell => {
+  const { own, inherited } = effectiveValue(controlStore, workspace, operation, setting);
   const effective = own ?? inherited;
   return {
     own,
@@ -190,7 +241,11 @@ const isStale = (
   if (value === null) return false;
   if (setting === "harness") return catalogFor(catalogs, value) === null;
   if (setting !== "model" && setting !== "effort" && setting !== "permission-profile") return false;
-  const harness = settingCell(controlStore, catalogs, workspace, operation, "harness").effective;
+  const resolved = (name: OperationSettingName) => {
+    const { own, inherited } = effectiveValue(controlStore, workspace, operation, name);
+    return own ?? inherited;
+  };
+  const harness = resolved("harness");
   if (harness === null) return false;
   const catalog = catalogFor(catalogs, harness);
   if (!catalog) return true;
@@ -198,8 +253,7 @@ const isStale = (
     return !catalog.policyProfiles.some((profile) => profile === value);
   }
   if (setting === "model") return !catalog.models.some((model) => model.value === value);
-  const model = settingCell(controlStore, catalogs, workspace, operation, "model").effective;
-  return !(effortChoices(catalog, model) ?? []).some((choice) => choice.value === value);
+  return !(effortChoices(catalog, resolved("model")) ?? []).some((choice) => choice.value === value);
 };
 
 /** A one-line summary of an operation, for a collapsed row. */
@@ -236,12 +290,14 @@ export const modelOptionSets = (
   };
 };
 
-export type ModelOptionSets = ReturnType<typeof modelOptionSets>;
-
+/**
+ * The whole set resolves as one value, so the set that wins answers for every option in it.
+ * An option the winning set omits falls to the Harness, never to the set it replaced.
+ */
 export const modelOptionCell = (sets: ModelOptionSets, option: HarnessModelOption) => {
   const own = selectedModelOption(sets.own ?? [], option.id);
   const inherited = selectedModelOption(sets.inherited, option.id) ?? option.fallback;
-  const effective = own ?? inherited;
+  const effective = sets.own ? (own ?? option.fallback) : inherited;
   return {
     own,
     inherited,

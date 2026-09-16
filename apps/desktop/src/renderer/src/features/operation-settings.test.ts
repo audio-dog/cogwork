@@ -18,8 +18,10 @@ import {
   effortChoices,
   harnessCatalogLoad,
   harnessIsDisabled,
+  modelOptionCell,
   modelOptionControls,
   modelOptionsAfter,
+  modelOptionsInEffect,
   modelOptionsUpdate,
   operationSettingUpdate,
   selectableHarnessCatalogs,
@@ -103,34 +105,34 @@ describe("effortChoices", () => {
   });
 });
 
-describe("modelOptionControls", () => {
-  const fast = {
-    id: "fast",
-    label: "Fast",
-    fallback: "true",
-    choices: [
-      { value: "false", label: "Off" },
-      { value: "true", label: "Fast" },
+const fast = {
+  id: "fast",
+  label: "Fast",
+  fallback: "true",
+  choices: [
+    { value: "false", label: "Off" },
+    { value: "true", label: "Fast" },
+  ],
+};
+const effortOption = {
+  id: "effort",
+  label: "Effort",
+  fallback: "high",
+  choices: [{ value: "high", label: "High" }],
+};
+const parameterized = {
+  harness: harness("cursor"),
+  ...HarnessOptionCatalog.make({
+    models: [
+      { value: "claude-opus-5", label: "Claude Opus 5", options: [effortOption, fast] },
+      { value: "composer-2.5", label: "Composer 2.5", options: [] },
     ],
-  };
-  const effort = {
-    id: "effort",
-    label: "Effort",
-    fallback: "high",
-    choices: [{ value: "high", label: "High" }],
-  };
-  const parameterized = {
-    harness: harness("cursor"),
-    ...HarnessOptionCatalog.make({
-      models: [
-        { value: "claude-opus-5", label: "Claude Opus 5", options: [effort, fast] },
-        { value: "composer-2.5", label: "Composer 2.5", options: [] },
-      ],
-      policyProfiles: ["full"],
-      provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
-    }),
-  };
+    policyProfiles: ["full"],
+    provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
+  }),
+};
 
+describe("modelOptionControls", () => {
   it("leaves effort out, because it has a setting of its own", () => {
     expect(modelOptionControls(parameterized, "claude-opus-5")).toEqual([fast]);
   });
@@ -141,6 +143,58 @@ describe("modelOptionControls", () => {
 
   it("offers nothing for a model absent from the catalog", () => {
     expect(modelOptionControls(parameterized, "retired-model")).toEqual([]);
+  });
+
+  it("shows an option in effect that the model never declared, so it can be cleared", () => {
+    const inherited = { own: null, inherited: [{ option: "context", value: "1m" }] };
+
+    expect(modelOptionControls(parameterized, "composer-2.5", inherited).map(({ id }) => id)).toEqual([
+      "context",
+    ]);
+    expect(modelOptionCell(inherited, retiredContext).stale).toBe(true);
+  });
+});
+
+const retiredContext = { id: "context", label: "context", choices: [], fallback: null };
+
+describe("modelOptionsInEffect", () => {
+  it("seeds an edit from the options this model declares, dropping the rest", () => {
+    expect(
+      modelOptionsInEffect(parameterized, "claude-opus-5", {
+        own: null,
+        inherited: [
+          { option: "fast", value: "true" },
+          { option: "context", value: "1m" },
+        ],
+      }),
+    ).toEqual([{ option: "fast", value: "true" }]);
+  });
+});
+
+describe("modelOptionCell", () => {
+  const option = {
+    id: "fast",
+    label: "Fast",
+    choices: [
+      { value: "false", label: "Off" },
+      { value: "true", label: "Fast" },
+    ],
+    fallback: "true",
+  };
+
+  it("reads an option the winning set omits as the Harness default, not the set it replaced", () => {
+    const cell = modelOptionCell(
+      { own: [{ option: "context", value: "1m" }], inherited: [{ option: "fast", value: "false" }] },
+      option,
+    );
+
+    expect(cell.effective).toBe("true");
+  });
+
+  it("reads the inherited value while no set of its own exists", () => {
+    const cell = modelOptionCell({ own: null, inherited: [{ option: "fast", value: "false" }] }, option);
+
+    expect(cell.effective).toBe("false");
   });
 });
 

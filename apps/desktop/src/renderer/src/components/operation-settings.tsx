@@ -53,6 +53,7 @@ import {
   modelOptionControls,
   modelOptionSets,
   modelOptionsAfter,
+  modelOptionsInEffect,
   operationLabels,
   operationSummaries,
   operationSummaryLine,
@@ -386,21 +387,24 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   const harnessCell = cell("harness");
   const modelCell = cell("model");
   const pairOwn = modelCell.own ?? harnessCell.own;
+  const effortCell = cell("effort");
   const modelEfforts = effortChoices(catalog, modelCell.effective);
   const optionSets = modelOptionSets(controlStore, workspace, operation);
-  const selectedOptions = optionSets.own ?? optionSets.inherited;
-  const optionSpecs: readonly ControlSpec[] = modelOptionControls(catalog, modelCell.effective).map(
-    (option) => ({
-      key: `model-options/${option.id}`,
-      label: option.label,
-      options: option.choices,
-      cell: modelOptionCell(optionSets, option),
-      select: (value) => writeModelOptions(operation, modelOptionsAfter(selectedOptions, option.id, value)),
-      // The set resolves as one value, so only clearing all of it brings the inherited set back.
-      // Dropping one pair would leave the Harness to pick for that option instead.
-      reset: () => writeModelOptions(operation, null),
-    }),
-  );
+  const selectedOptions = modelOptionsInEffect(catalog, modelCell.effective, optionSets);
+  const optionSpecs: readonly ControlSpec[] = modelOptionControls(
+    catalog,
+    modelCell.effective,
+    optionSets,
+  ).map((option) => ({
+    key: `model-options/${option.id}`,
+    label: option.label,
+    options: option.choices,
+    cell: modelOptionCell(optionSets, option),
+    select: (value) => writeModelOptions(operation, modelOptionsAfter(selectedOptions, option.id, value)),
+    // The set resolves as one value, so only clearing all of it brings the inherited set back.
+    // Dropping one pair would leave the Harness to pick for that option instead.
+    reset: () => writeModelOptions(operation, null),
+  }));
   const profileSpec: ControlSpec | null = catalog
     ? {
         key: "permission-profile",
@@ -432,13 +436,15 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
       select: (value) => set("model", value),
       reset: resetHarnessAndModel,
     },
-    ...(modelEfforts
+    // A model with no effort axis still shows the control when an effort is in effect, which
+    // a parent scope can leave behind. It reads stale there, and preflight would refuse it.
+    ...(modelEfforts || effortCell.effective
       ? [
           {
             key: "effort" as const,
             label: "Effort",
-            options: modelEfforts,
-            cell: cell("effort"),
+            options: modelEfforts ?? [],
+            cell: effortCell,
             select: (value: string) => set("effort", value),
             reset: () => set("effort", null),
           },
