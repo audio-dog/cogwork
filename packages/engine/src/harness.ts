@@ -320,24 +320,36 @@ const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolic
     message: `harness runner ${runner.name} cannot enforce ${posture} for the ${profile} profile`,
   });
 
-const staleSelection = (runner: HarnessRunner, option: string, value: string) =>
+/**
+ * `model` and `effort` are the engine's own axes. A model option id is whatever the Harness
+ * declared for the selected model, so it stays wrapped rather than joining a union it would
+ * widen to `string`.
+ */
+export type HarnessSelectionAxis = "model" | "effort" | { readonly modelOption: string };
+
+const axisName = (axis: HarnessSelectionAxis) =>
+  typeof axis === "string" ? axis : `model option ${axis.modelOption}`;
+
+const staleSelection = (runner: HarnessRunner, axis: HarnessSelectionAxis, value: string) =>
   new HarnessError({
     reason: "stale-selection",
     retryable: false,
-    message: `harness runner ${runner.name} no longer offers ${option} ${value} on this Runtime Host`,
+    message: `harness runner ${runner.name} no longer offers ${axisName(axis)} ${value} on this Runtime Host`,
   });
 
-const catalogHas = (choices: ReadonlyArray<{ readonly value: string }> | undefined, value: string) =>
+type SelectableValues = ReadonlyArray<HarnessCatalogChoice | HarnessCatalogModel> | undefined;
+
+const catalogHas = (choices: SelectableValues, value: string) =>
   choices?.some((choice) => choice.value === value) ?? false;
 
 const validateSelectionValue = (
   runner: HarnessRunner,
-  option: string,
-  choices: ReadonlyArray<{ readonly value: string }> | undefined,
+  axis: HarnessSelectionAxis,
+  choices: SelectableValues,
   value: string | null,
 ) => {
   if (!value || catalogHas(choices, value)) return Effect.void;
-  return Effect.fail(staleSelection(runner, option, value));
+  return Effect.fail(staleSelection(runner, axis, value));
 };
 
 const declaredOptions = (catalog: HarnessCatalogSourceResult, model: string | null) =>
@@ -350,8 +362,8 @@ const modelOptionChoices = (options: ReadonlyArray<HarnessModelOption>, option: 
   option === effortOptionId ? undefined : options.find((declared) => declared.id === option)?.choices;
 
 interface SelectionCheck {
-  readonly option: string;
-  readonly choices: ReadonlyArray<{ readonly value: string }> | undefined;
+  readonly axis: HarnessSelectionAxis;
+  readonly choices: SelectableValues;
   readonly value: string | null;
 }
 
@@ -362,17 +374,17 @@ const validateSelection = (
 ) => {
   const declared = declaredOptions(catalog, selection.model);
   const checks: ReadonlyArray<SelectionCheck> = [
-    { option: "model", choices: catalog.models, value: selection.model },
-    { option: "effort", choices: effortChoices(catalog, selection.model), value: selection.effort },
+    { axis: "model", choices: catalog.models, value: selection.model },
+    { axis: "effort", choices: effortChoices(catalog, selection.model), value: selection.effort },
     ...selection.modelOptions.map(({ option, value }) => ({
-      option,
+      axis: { modelOption: option },
       choices: modelOptionChoices(declared, option),
       value,
     })),
   ];
   return Effect.forEach(
     checks,
-    (check) => validateSelectionValue(runner, check.option, check.choices, check.value),
+    (check) => validateSelectionValue(runner, check.axis, check.choices, check.value),
     { discard: true },
   );
 };
