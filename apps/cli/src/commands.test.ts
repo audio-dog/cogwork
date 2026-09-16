@@ -205,7 +205,7 @@ describe("operation settings", () => {
         },
         { workflow: "coding", operation: "implement", workspace: null },
       ),
-      "enabled: unset\nharness: unset\nmodel: operation-model\neffort: unset\npermission-profile: unset\nbindings: unset",
+      "enabled: unset\nharness: unset\nmodel: operation-model\neffort: unset\nmodel-options: unset\npermission-profile: unset\nbindings: unset",
     );
     assert.isDefined(operationSettingsCommand);
   });
@@ -233,6 +233,55 @@ describe("operation settings", () => {
           value: false,
         },
       });
+    }),
+  );
+
+  it.effect("reads a comma-separated model option list into typed pairs", () =>
+    Effect.gen(function* () {
+      const update = yield* makeOperationSettingUpdate(
+        {
+          setting: "model-options",
+          scope: "overlay",
+          level: "operation",
+          workflow: "coding",
+          operation: "implement",
+          workspace: Option.some("example"),
+        },
+        Option.some("fast=false,context=1m"),
+      );
+
+      assert.deepStrictEqual(update, {
+        _tag: "Set",
+        row: {
+          setting: "model-options",
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId("example") },
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          value: [
+            { option: "fast", value: "false" },
+            { option: "context", value: "1m" },
+          ],
+        },
+      });
+    }),
+  );
+
+  it.effect("refuses effort inside model options, naming the setting that owns it", () =>
+    Effect.gen(function* () {
+      const failure = yield* Effect.flip(
+        makeOperationSettingUpdate(
+          {
+            setting: "model-options",
+            scope: "overlay",
+            level: "operation",
+            workflow: "coding",
+            operation: "implement",
+            workspace: Option.some("example"),
+          },
+          Option.some("effort=high"),
+        ),
+      );
+
+      assert.include(failure.message, "effort setting");
     }),
   );
 

@@ -6,6 +6,7 @@ import {
   type ControlStore,
   type DaemonEvent,
   type DaemonStatus,
+  effortOptionId,
   initialBoard,
   type OperationSettingContext,
   type OperationSettingName,
@@ -112,6 +113,7 @@ const operationSettingArgument = Argument.choice("setting", [
   "harness",
   "model",
   "effort",
+  "model-options",
   "permission-profile",
   "bindings",
 ]);
@@ -231,20 +233,31 @@ const operationSettingCell = (options: OperationSettingOptions) => ({
   level: operationSettingLevel(options),
 });
 
-const bindingValue = (value: string) =>
+const keyedPairs = (value: string) =>
   value.split(",").map((entry) => {
-    const [need = "", ...contribution] = entry.split("=");
-    return { need, contribution: contribution.join("=") };
+    const [key = "", ...rest] = entry.split("=");
+    return { key, value: rest.join("=") };
   });
 
-const operationSettingValue = (setting: OperationSettingName, value: string) => {
-  if (setting === "enabled") {
-    if (value === "on") return true;
-    if (value === "off") return false;
-  }
-  if (setting === "bindings") return bindingValue(value);
-  return value;
+const bindingValue = (value: string) =>
+  keyedPairs(value).map((pair) => ({ need: pair.key, contribution: pair.value }));
+
+const modelOptionsValue = (value: string) =>
+  keyedPairs(value).map((pair) => ({ option: pair.key, value: pair.value }));
+
+const reservesEffort = (value: unknown) =>
+  Array.isArray(value) && value.some((pair) => pair?.option === effortOptionId);
+
+const operationSettingValues: Partial<
+  Record<OperationSettingName, (value: string) => boolean | string | object | undefined>
+> = {
+  enabled: (value) => ({ on: true, off: false })[value],
+  bindings: bindingValue,
+  "model-options": modelOptionsValue,
 };
+
+const operationSettingValue = (setting: OperationSettingName, value: string) =>
+  operationSettingValues[setting]?.(value) ?? value;
 
 const decodeOperationSettingUpdate = (input: unknown) =>
   decodeOperationSettingUpdateInput(input).pipe(
@@ -268,10 +281,15 @@ export const makeOperationSettingUpdate = (
 ) => {
   const cell = operationSettingCell(options);
   if (Option.isNone(value)) return decodeOperationSettingUpdate({ _tag: "Clear", cell });
-  return decodeOperationSettingUpdate({
-    _tag: "Set",
-    row: { ...cell, value: operationSettingValue(options.setting, value.value) },
-  });
+  const setValue = operationSettingValue(options.setting, value.value);
+  if (options.setting === "model-options" && reservesEffort(setValue)) {
+    return Effect.fail(
+      new OperationSettingInputError({
+        message: `set ${effortOptionId} through the effort setting, not model-options`,
+      }),
+    );
+  }
+  return decodeOperationSettingUpdate({ _tag: "Set", row: { ...cell, value: setValue } });
 };
 
 export const schedulingActions = {
