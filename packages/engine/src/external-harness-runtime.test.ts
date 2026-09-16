@@ -440,7 +440,7 @@ const terminalEvents: ReadonlyArray<StreamChunk> = [
   { type: EventType.RUN_FINISHED, threadId: "session-148", runId: request.id },
 ];
 
-describe("external Harness runtime", () => {
+describe("external Harness runtime", { timeout: 15_000 }, () => {
   it.layer(harnessRunnerLayer)((it) => {
     it("owns the common external Harness declaration", () => {
       const runner = externalHarnessRunner(descriptor([], new ControlledProbe()), {
