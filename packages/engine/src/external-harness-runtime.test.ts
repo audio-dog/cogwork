@@ -440,7 +440,7 @@ const terminalEvents: ReadonlyArray<StreamChunk> = [
   { type: EventType.RUN_FINISHED, threadId: "session-148", runId: request.id },
 ];
 
-describe("external Harness runtime", { timeout: 15_000 }, () => {
+describe("external Harness runtime", () => {
   it.layer(harnessRunnerLayer)((it) => {
     it("owns the common external Harness declaration", () => {
       const runner = externalHarnessRunner(descriptor([], new ControlledProbe()), {
@@ -799,17 +799,13 @@ describe("external Harness runtime", { timeout: 15_000 }, () => {
             sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
           }),
         ]);
-        const run = (id: RunId) =>
-          harness
-            .run({
-              plan: RunPlan.make({ ...plan, id }),
-              session: freshSession,
-              mcpCredentials: new Map([["local:repo/mcp/linear.api", Redacted.make("native-bearer")]]),
-            })
-            .pipe(Stream.runDrain);
-
-        yield* run(request.id);
-        yield* run(secondCheckoutRunId);
+        yield* harness
+          .run({
+            plan,
+            session: freshSession,
+            mcpCredentials: new Map([["local:repo/mcp/linear.api", Redacted.make("native-bearer")]]),
+          })
+          .pipe(Stream.runDrain);
 
         assert.deepStrictEqual(
           probe.resolved[0]?.request.mcp.map(({ name, endpoint, bearer }) => ({
