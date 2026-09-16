@@ -1,0 +1,24 @@
+apps/desktop/src/renderer/src/features/provider-presentation.ts
+  s_82a5917ed09baa::t_2342ea4e2324e1 1,7
+apps/desktop/src/renderer/src/components/provider-glyph.tsx
+  s_82a5917ed09baa::t_d2d95c7d407009 1
+  s_82a5917ed09baa::t_3d8521f79000d1 2,5-12,20-21
+apps/desktop/src/renderer/src/features/provider-presentation.test.ts
+  s_82a5917ed09baa::t_72e5dbec1ead1b 6-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e6bcbd7e1d8d8e97b43e59680ba4dfac2db05b7f",
+  "prompts": {},
+  "sessions": {
+    "s_82a5917ed09baa": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed36c22b-3ad0-4bc5-9830-20443e458195",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
