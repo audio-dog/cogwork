@@ -21,6 +21,8 @@ import {
   HarnessName,
   type LifecycleStage,
   OperationBinding as OperationBindingSchema,
+  type OperationModelOption,
+  OperationModelOption as OperationModelOptionSchema,
   operationSettingNames,
   type ProvenanceStamp,
   type RunId,
@@ -328,6 +330,7 @@ export interface ResolvedStage extends OperationDefinition {
   readonly harness: HarnessName;
   readonly model: string | null;
   readonly effort: string | null;
+  readonly modelOptions: ReadonlyArray<OperationModelOption>;
 }
 
 export interface ResolvedOperation {
@@ -338,6 +341,10 @@ export interface ResolvedOperation {
 }
 
 const isOperationBindings = Schema.is(Schema.Array(OperationBindingSchema));
+
+const isModelOptions = Schema.is(Schema.Array(OperationModelOptionSchema));
+
+const modelOptionsValue = (value: unknown) => (isModelOptions(value) ? value : []);
 
 export const operationBindingsOf = (resolved: ResolvedOperation) => {
   const value = resolved.settings.get("bindings")?.value;
@@ -367,6 +374,7 @@ export const resolveRunPlanStage = (
       harness,
       model: trimmedStringValue(settingValueOf("model"), null),
       effort: trimmedStringValue(settingValueOf("effort"), null),
+      modelOptions: modelOptionsValue(settingValueOf("model-options")),
     },
     profile: policyProfileValue(settingValueOf("permission-profile"), operationPolicyProfile(operation)),
     settings,
@@ -412,14 +420,18 @@ const winningRows = (winning: OperationSettingRow | readonly OperationSettingRow
   return "setting" in winning ? [winning] : winning;
 };
 
-const effectiveSettingValue = (resolved: ResolvedOperation, setting: OperationSettingName) => {
-  if (setting === "enabled") return resolved.stage.enabled;
-  if (setting === "harness") return resolved.stage.harness;
-  if (setting === "model") return resolved.stage.model;
-  if (setting === "effort") return resolved.stage.effort;
-  if (setting === "permission-profile") return resolved.profile;
-  return resolved.settings.get("bindings")?.value ?? [];
-};
+const effectiveSettingValues = {
+  enabled: (resolved: ResolvedOperation) => resolved.stage.enabled,
+  harness: (resolved: ResolvedOperation) => resolved.stage.harness,
+  model: (resolved: ResolvedOperation) => resolved.stage.model,
+  effort: (resolved: ResolvedOperation) => resolved.stage.effort,
+  "model-options": (resolved: ResolvedOperation) => resolved.stage.modelOptions,
+  "permission-profile": (resolved: ResolvedOperation) => resolved.profile,
+  bindings: (resolved: ResolvedOperation) => resolved.settings.get("bindings")?.value ?? [],
+} satisfies { [T in OperationSettingName]: (resolved: ResolvedOperation) => unknown };
+
+const effectiveSettingValue = (resolved: ResolvedOperation, setting: OperationSettingName) =>
+  effectiveSettingValues[setting](resolved);
 
 const resolutionTrace = (
   resolved: ResolvedOperation,
@@ -844,6 +856,7 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
       name: input.resolved.stage.harness,
       model: input.resolved.stage.model,
       effort: input.resolved.stage.effort,
+      modelOptions: input.resolved.stage.modelOptions,
       profile: input.resolved.profile,
     }),
     contentStamp("Engine Messages", [{ role: "user", content: input.prompt }]),
@@ -863,6 +876,7 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
         name: input.resolved.stage.harness,
         model: input.resolved.stage.model,
         effort: input.resolved.stage.effort,
+        modelOptions: input.resolved.stage.modelOptions,
         profile: input.resolved.profile,
       }),
       instructions: instructions(input.context),

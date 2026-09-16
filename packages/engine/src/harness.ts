@@ -1,9 +1,13 @@
 import {
   type AgUiEvent,
   type HarnessCatalogChoice as ContractHarnessCatalogChoice,
+  type HarnessCatalogModel as ContractHarnessCatalogModel,
   type HarnessCatalogProvenance as ContractHarnessCatalogProvenance,
+  type HarnessModelOption as ContractHarnessModelOption,
   type HarnessOptionCatalog as ContractHarnessOptionCatalog,
+  effortOptionId,
   type HarnessName,
+  type OperationModelOption,
   type RunPlan,
   type RunPlanMember,
   type RunPlanMiddlewareName,
@@ -64,8 +68,12 @@ export interface HarnessExecution {
 
 export type HarnessCatalogChoice = ContractHarnessCatalogChoice;
 
+export type HarnessModelOption = ContractHarnessModelOption;
+
+export type HarnessCatalogModel = ContractHarnessCatalogModel;
+
 export interface HarnessCatalogOptions {
-  readonly models: ReadonlyArray<HarnessCatalogChoice>;
+  readonly models: ReadonlyArray<HarnessCatalogModel>;
   readonly efforts?: ReadonlyArray<HarnessCatalogChoice>;
 }
 
@@ -137,6 +145,7 @@ export interface HarnessSelection {
   readonly name: HarnessName;
   readonly model: string | null;
   readonly effort: string | null;
+  readonly modelOptions: ReadonlyArray<OperationModelOption>;
   readonly profile: OperationPolicyProfile;
 }
 
@@ -250,6 +259,7 @@ export interface HarnessService {
     profile: OperationPolicyProfile,
     model: string | null,
     effort?: string | null,
+    modelOptions?: ReadonlyArray<OperationModelOption>,
   ) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
@@ -310,36 +320,62 @@ const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolic
     message: `harness runner ${runner.name} cannot enforce ${posture} for the ${profile} profile`,
   });
 
-type HarnessSelectionOption = "model" | "effort";
-
-const staleSelection = (runner: HarnessRunner, option: HarnessSelectionOption, value: string) =>
+const staleSelection = (runner: HarnessRunner, option: string, value: string) =>
   new HarnessError({
     reason: "stale-selection",
     retryable: false,
     message: `harness runner ${runner.name} no longer offers ${option} ${value} on this Runtime Host`,
   });
 
-const catalogHas = (choices: ReadonlyArray<HarnessCatalogChoice> | undefined, value: string) =>
+const catalogHas = (choices: ReadonlyArray<{ readonly value: string }> | undefined, value: string) =>
   choices?.some((choice) => choice.value === value) ?? false;
 
 const validateSelectionValue = (
   runner: HarnessRunner,
-  option: "model" | "effort",
-  choices: ReadonlyArray<HarnessCatalogChoice> | undefined,
+  option: string,
+  choices: ReadonlyArray<{ readonly value: string }> | undefined,
   value: string | null,
 ) => {
   if (!value || catalogHas(choices, value)) return Effect.void;
   return Effect.fail(staleSelection(runner, option, value));
 };
 
+const declaredOptions = (catalog: HarnessCatalogSourceResult, model: string | null) =>
+  catalog.models.find((candidate) => candidate.value === model)?.options ?? [];
+
+const effortChoices = (catalog: HarnessCatalogSourceResult, model: string | null) =>
+  declaredOptions(catalog, model).find((option) => option.id === effortOptionId)?.choices ?? catalog.efforts;
+
+const modelOptionChoices = (options: ReadonlyArray<HarnessModelOption>, option: string) =>
+  option === effortOptionId ? undefined : options.find((declared) => declared.id === option)?.choices;
+
+interface SelectionCheck {
+  readonly option: string;
+  readonly choices: ReadonlyArray<{ readonly value: string }> | undefined;
+  readonly value: string | null;
+}
+
 const validateSelection = (
   runner: HarnessRunner,
   catalog: HarnessCatalogSourceResult,
   selection: HarnessSelection,
-) =>
-  validateSelectionValue(runner, "model", catalog.models, selection.model).pipe(
-    Effect.andThen(validateSelectionValue(runner, "effort", catalog.efforts, selection.effort)),
+) => {
+  const declared = declaredOptions(catalog, selection.model);
+  const checks: ReadonlyArray<SelectionCheck> = [
+    { option: "model", choices: catalog.models, value: selection.model },
+    { option: "effort", choices: effortChoices(catalog, selection.model), value: selection.effort },
+    ...selection.modelOptions.map(({ option, value }) => ({
+      option,
+      choices: modelOptionChoices(declared, option),
+      value,
+    })),
+  ];
+  return Effect.forEach(
+    checks,
+    (check) => validateSelectionValue(runner, check.option, check.choices, check.value),
+    { discard: true },
   );
+};
 
 const validateAuthenticationMode = (runner: HarnessRunner) => {
   if (!runner.capabilities.authenticationModes.includes(runner.authentication.mode)) {
@@ -446,11 +482,12 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
     profile: OperationPolicyProfile,
     model: string | null,
     effort: string | null = null,
+    modelOptions: ReadonlyArray<OperationModelOption> = [],
   ) {
     yield* preflightRunner(
       registry,
       HarnessPreflightInput.Static({
-        selection: { name: harness, profile, model, effort },
+        selection: { name: harness, profile, model, effort, modelOptions },
       }),
     );
   });

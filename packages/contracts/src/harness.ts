@@ -33,9 +33,25 @@ export const HarnessState = Schema.TaggedUnion({
 });
 export type HarnessState = typeof HarnessState.Type;
 
+/** Reserved: an Operation's own `effort` setting binds to this option, never `model-options`. */
+export const effortOptionId = "effort";
+
 export class HarnessCatalogChoice extends Schema.Class<HarnessCatalogChoice>("HarnessCatalogChoice")({
   value: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
+}) {}
+
+export class HarnessModelOption extends Schema.Class<HarnessModelOption>("HarnessModelOption")({
+  id: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  choices: Schema.Array(HarnessCatalogChoice),
+  fallback: Schema.NullOr(TrimmedNonEmptyString),
+}) {}
+
+export class HarnessCatalogModel extends Schema.Class<HarnessCatalogModel>("HarnessCatalogModel")({
+  value: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  options: Schema.optionalKey(Schema.Array(HarnessModelOption)),
 }) {}
 
 export const HarnessCatalogProvenance = Schema.Union([
@@ -56,7 +72,7 @@ export const HarnessCatalogProvenance = Schema.Union([
 export type HarnessCatalogProvenance = typeof HarnessCatalogProvenance.Type;
 
 export class HarnessOptionCatalog extends Schema.Class<HarnessOptionCatalog>("HarnessOptionCatalog")({
-  models: Schema.Array(HarnessCatalogChoice),
+  models: Schema.Array(HarnessCatalogModel),
   efforts: Schema.optionalKey(Schema.Array(HarnessCatalogChoice)),
   policyProfiles: Schema.Array(RunPlanPolicyProfile),
   provenance: HarnessCatalogProvenance,

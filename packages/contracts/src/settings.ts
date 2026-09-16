@@ -59,6 +59,7 @@ export const OperationSettingName = Schema.Literals([
   "harness",
   "model",
   "effort",
+  "model-options",
   "permission-profile",
   "bindings",
 ]);
@@ -73,6 +74,12 @@ export const OperationBinding = Schema.Struct({
   contribution: TrimmedNonEmptyString,
 });
 export type OperationBinding = typeof OperationBinding.Type;
+
+export const OperationModelOption = Schema.Struct({
+  option: TrimmedNonEmptyString,
+  value: TrimmedNonEmptyString,
+});
+export type OperationModelOption = typeof OperationModelOption.Type;
 
 const principalOperationScope = Schema.Union([SettingsProfileScope, PrivateWorkspaceOverlayScope]);
 const operationCellFields = { level: SettingLevel };
@@ -97,6 +104,11 @@ const effortCell = Schema.Struct({
   setting: Schema.Literal("effort"),
   scope: principalOperationScope,
 });
+const modelOptionsCell = Schema.Struct({
+  ...operationCellFields,
+  setting: Schema.Literal("model-options"),
+  scope: principalOperationScope,
+});
 const permissionProfileCell = Schema.Struct({
   ...operationCellFields,
   setting: Schema.Literal("permission-profile"),
@@ -113,6 +125,7 @@ export const OperationSettingCell = Schema.Union([
   harnessCell,
   modelCell,
   effortCell,
+  modelOptionsCell,
   permissionProfileCell,
   bindingsCell,
 ]);
@@ -123,6 +136,7 @@ export const OperationSettingRow = Schema.Union([
   Schema.Struct({ ...harnessCell.fields, value: TrimmedNonEmptyString }),
   Schema.Struct({ ...modelCell.fields, value: TrimmedNonEmptyString }),
   Schema.Struct({ ...effortCell.fields, value: TrimmedNonEmptyString }),
+  Schema.Struct({ ...modelOptionsCell.fields, value: Schema.Array(OperationModelOption) }),
   Schema.Struct({ ...permissionProfileCell.fields, value: TrimmedNonEmptyString }),
   Schema.Struct({ ...bindingsCell.fields, value: Schema.Array(OperationBinding) }),
 ]);
@@ -342,7 +356,12 @@ export type SettingResolutionCase =
       readonly setting: OperationSettingName;
       readonly operator: ResolutionOperator;
       readonly context: OperationSettingContext;
-      readonly expected: boolean | string | readonly OperationBinding[] | null;
+      readonly expected:
+        | boolean
+        | string
+        | readonly OperationBinding[]
+        | readonly OperationModelOption[]
+        | null;
     };
 
 const profile: SettingsProfileScope = { _tag: "SettingsProfile" };
@@ -590,5 +609,68 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
       { need: "source-control", contribution: "plugin:github/mcp/github" },
       { need: "review", contribution: "local:private/skill/review" },
     ],
+  },
+  {
+    _tag: "Admissible",
+    name: "admits model options at Private workspace overlay",
+    family: "operation",
+    setting: "model-options",
+    scope: overlay,
+    expected: true,
+  },
+  {
+    _tag: "Admissible",
+    name: "leaves the model options Runtime host cell empty",
+    family: "operation",
+    setting: "model-options",
+    scope: host,
+    expected: false,
+  },
+  {
+    _tag: "Operation",
+    name: "takes one model's whole option set rather than merging two models' sets",
+    setting: "model-options",
+    operator: "override-scalar",
+    context: codingImplement,
+    rows: [
+      {
+        setting: "model-options",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: profile,
+        value: [
+          { option: "fast", value: "false" },
+          { option: "context", value: "1m" },
+        ],
+      },
+      {
+        setting: "model-options",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: overlay,
+        value: [{ option: "fast", value: "true" }],
+      },
+    ],
+    expected: [{ option: "fast", value: "true" }],
+  },
+  {
+    _tag: "Operation",
+    name: "resolves the level before Scope for a model option set",
+    setting: "model-options",
+    operator: "override-scalar",
+    context: codingImplement,
+    rows: [
+      {
+        setting: "model-options",
+        level: { _tag: "Default" },
+        scope: overlay,
+        value: [{ option: "fast", value: "true" }],
+      },
+      {
+        setting: "model-options",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: profile,
+        value: [{ option: "optimize_for", value: "intelligence" }],
+      },
+    ],
+    expected: [{ option: "optimize_for", value: "intelligence" }],
   },
 ];

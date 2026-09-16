@@ -206,7 +206,8 @@ The engine-authored contract for one operation: its behavior, defaults, required
 _Avoid_: Playbook, run plan, operation settings
 
 **Operation settings**:
-The scoped choices that configure an operation: on / off, Harness, model, effort, permission profile, and the contributions **bound** to the Operation Definition's declared needs. Settings bind; the Definition declares what is required; a Plugin only offers, and can never mark itself required for an Operation it does not own.
+The scoped choices that configure an operation: on / off, Harness, model, effort, **model options**, permission profile, and the contributions **bound** to the Operation Definition's declared needs. Settings bind; the Definition declares what is required; a Plugin only offers, and can never mark itself required for an Operation it does not own.
+**Model options** carry the axes beyond effort that a Harness parameterizes the selected model on — Cursor's `fast`, `context`, `optimize_for`. They resolve as one override scalar: the whole set belongs to one model, so a more specific scope replaces it rather than merging two models' sets. Effort keeps its own setting because every Harness has one; an option the selected model does not declare is stale, and preflight refuses it.
 Each may be written three ways — as a **default**, for one **Workflow**, or for one **Operation** — and the most specific of the three wins before Scope is consulted. A default must never outrank a value that names the work.
 An Operation Definition may lock a setting against override. That lock **is** Engine policy, not a second mechanism: it constrains rather than overwrites, and refuses with its source named.
 _Avoid_: Playbook, operation definition, run plan, target (say default / Workflow / Operation)
@@ -359,7 +360,7 @@ The credentials an external CLI harness owns and resolves from its host installa
 _Avoid_: Provider key, Cogwork login, harness fallback
 
 **Harness option catalog**:
-The controlled model and option choices one Harness currently offers on one Runtime host, stamped with the runtime metadata, native discovery, or versioned Cogwork fallback that produced them. An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input.
+The controlled model and option choices one Harness currently offers on one Runtime host, stamped with the runtime metadata, native discovery, or versioned Cogwork fallback that produced them. An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input. Each model carries its display name and its own **model options** — the axes that Harness parameterizes *that* model on. The catalog's single `efforts` list is for a Harness that applies one effort to every model it offers; a Harness that varies effort per model puts the choices on the model and leaves the list absent. The `effort` model option is the one the Operation's `effort` setting binds to, so the model answers first and the catalog's list is the fallback.
 _Avoid_: Model catalog, settings, arbitrary option
 
 **Harness readiness**:

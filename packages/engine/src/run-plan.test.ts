@@ -299,6 +299,23 @@ describe("stage settings come from Operation settings", () => {
     assert.isNull(resolved);
   });
 
+  it("carries the resolved model options onto the stage", () => {
+    const fastOff: OperationSettingRow = {
+      ...profileDefault,
+      setting: "model-options",
+      value: [{ option: "fast", value: "false" }],
+    };
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [codexHarness, fastOff]);
+
+    assert.deepStrictEqual(resolved?.stage.modelOptions, [{ option: "fast", value: "false" }]);
+  });
+
+  it("leaves the stage with no model options when nothing selects one", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [codexHarness]);
+
+    assert.deepStrictEqual(resolved?.stage.modelOptions, []);
+  });
+
   it("takes the harness from the Runtime host scope", () => {
     const resolved = resolveRunPlanStage(bareConfig, "implement", [stageEnabled, hostHarness]);
 

@@ -4,6 +4,7 @@ import {
   agUiIsFileDiffEvent,
   FILE_DIFF_EVENT,
   type HarnessName,
+  type OperationModelOption,
   type RunId,
   type RunPlanInstruction,
   type RunPlanMessage,
@@ -90,6 +91,7 @@ export interface ExternalHarnessIdentity {
 export interface ExternalHarnessSelection {
   readonly model: string | null;
   readonly effort: string | null;
+  readonly modelOptions: ReadonlyArray<OperationModelOption>;
 }
 
 export interface ExternalHarnessCheckout {
@@ -496,7 +498,11 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
   );
   return {
     identity: { run: request.plan.id, session, resumeHandle },
-    selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
+    selection: {
+      model: request.plan.harness.model,
+      effort: request.plan.harness.effort,
+      modelOptions: request.plan.harness.modelOptions,
+    },
     authentication,
     policy: request.plan.harness.profile,
     instructions: request.plan.instructions,
