@@ -25,6 +25,7 @@ import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom, useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
+import { useRouter } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { harnessesAtom, operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
@@ -219,6 +220,7 @@ function LiveOperationSettings({
 }) {
   const harnesses = useAtomValue(harnessesAtom);
   const refreshHarnesses = useAtomRefresh(harnessesAtom);
+  const router = useRouter();
   const overview = harnesses._tag === "Success" ? harnesses.value : null;
   const load = harnessCatalogLoad(overview, harnesses._tag === "Failure");
 
@@ -237,7 +239,14 @@ function LiveOperationSettings({
         <RiAlertLine />
         <AlertTitle>Could not load Harness catalogs</AlertTitle>
         <AlertDescription>Workspace operation settings are unchanged.</AlertDescription>
-        <Button size="sm" variant="outline" onClick={refreshHarnesses}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            refreshHarnesses();
+            router.invalidate();
+          }}
+        >
           Try again
         </Button>
       </Alert>

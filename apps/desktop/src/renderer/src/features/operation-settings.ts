@@ -266,8 +266,10 @@ export const operationSummaryLine = (
   const harness = settingCell(controlStore, catalogs, workspace, operation, "harness").effective;
   const model = settingCell(controlStore, catalogs, workspace, operation, "model").effective;
   const effort = settingCell(controlStore, catalogs, workspace, operation, "effort").effective;
-  const harnessLabel = harness && catalogFor(catalogs, harness) ? providerLabel(harness) : harness;
-  const parts = [harnessLabel, model, effort].filter(
+  const catalog = catalogFor(catalogs, harness);
+  const harnessLabel = harness && catalog ? providerLabel(harness) : harness;
+  const modelLabel = catalog?.models.find((entry) => entry.value === model)?.label ?? model;
+  const parts = [harnessLabel, modelLabel, effort].filter(
     (part): part is string => typeof part === "string" && part.length > 0,
   );
   return parts.length === 0 ? "Inherited" : parts.join(" · ");

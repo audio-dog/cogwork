@@ -1,11 +1,13 @@
 import { SidebarProvider } from "@cogwork/ui/components/sidebar";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { FormDevtoolsPanel } from "@tanstack/react-form-devtools";
-import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import type * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry";
 import type { CSSProperties } from "react";
 import { RightPanelWidthProvider } from "../components/right-panel-resize";
 import { useSidebarWidth } from "../components/sidebar-resize";
+import { harnessesAtom } from "../daemon/atoms";
 import { ActivitySessionProvider } from "../features/activity-session";
 
 const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
@@ -45,4 +47,14 @@ function RootLayout() {
   );
 }
 
-export const Route = createRootRoute({ component: RootLayout });
+export const Route = createRootRouteWithContext<{ readonly registry: AtomRegistry.AtomRegistry }>()({
+  // Every provider surface reads this catalog, so the read starts with the route rather than
+  // when a page first asks for it. The atom stays the store the components read; this only
+  // decides when it is first asked. `staleTime` is infinite because each read spawns every
+  // installed Harness's CLI — Settings refreshes it through `router.invalidate` instead.
+  loader: ({ context }) => {
+    context.registry.get(harnessesAtom);
+  },
+  staleTime: Number.POSITIVE_INFINITY,
+  component: RootLayout,
+});

@@ -18,7 +18,7 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import { createContext, type ReactNode, use, useState } from "react";
@@ -82,7 +82,8 @@ const checkLabel = (checking: boolean, checkedAtMillis: number | null, now: numb
 function Providers({ children }: { readonly children: ReactNode }) {
   const boardResult = useBoard();
   const queried = useAtomValue(harnessesAtom);
-  const refresh = useAtomRefresh(harnessesAtom);
+  const refreshCatalog = useAtomRefresh(harnessesAtom);
+  const router = useRouter();
   const [chosen, setChosen] = useState<HarnessName | null>(null);
   const [enablementOverlay, setEnablementOverlay] = useState<HarnessEnablementOverlay | null>(null);
   const setEnabled = useAtomSet(setHarnessEnabledAtom, { mode: "promiseExit" });
@@ -103,7 +104,10 @@ function Providers({ children }: { readonly children: ReactNode }) {
     },
     actions: {
       select: setChosen,
-      check: refresh,
+      check: () => {
+        refreshCatalog();
+        router.invalidate();
+      },
       setEnabled: (harness, enabled) =>
         setEnabled({ payload: { harness, enabled } }).then((exit) => {
           if (!Exit.isSuccess(exit)) return;
