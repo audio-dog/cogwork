@@ -1,4 +1,4 @@
-import { makeBrand, type WorkItemId } from "@cogwork/contracts";
+import { GitCommitSha, GitHubWorkflowRunUrl, makeBrand, type WorkItemId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
@@ -42,29 +42,57 @@ export interface PerformanceIssueFilerTarget {
   readonly confirmPending: (issue: PerformanceIssue) => Effect.Effect<boolean, IssueTrackerError>;
 }
 
-export const PerformanceVerdict = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal("health-signal"),
-    signal: Schema.Literals(["event-loop-delay-p99", "heap-headroom"]),
-    subsystem: Schema.Literals(["daemon", "renderer"]),
-    direction: Schema.Literals(["above", "below"]),
-    observed: Schema.Finite,
-    threshold: Schema.Finite,
-    unit: Schema.Literals(["ms", "%"]),
-    windowMillis: Schema.Finite,
-    consecutiveBreaches: Schema.Finite,
-    evidence: Schema.Struct({
-      path: Schema.String,
-      appVersion: Schema.String,
-      runsInFlight: Schema.Finite,
-      workspaceCount: Schema.Finite,
-      machineLoad: Schema.Struct({
-        cpuCount: Schema.Finite,
-        loadAverage: Schema.Array(Schema.Finite),
-        freeMemoryBytes: Schema.Finite,
-      }),
+const HealthSignalPerformanceVerdict = Schema.Struct({
+  kind: Schema.Literal("health-signal"),
+  signal: Schema.Literals(["event-loop-delay-p99", "heap-headroom"]),
+  subsystem: Schema.Literals(["daemon", "renderer"]),
+  direction: Schema.Literals(["above", "below"]),
+  observed: Schema.Finite,
+  threshold: Schema.Finite,
+  unit: Schema.Literals(["ms", "%"]),
+  windowMillis: Schema.Finite,
+  consecutiveBreaches: Schema.Finite,
+  evidence: Schema.Struct({
+    path: Schema.String,
+    appVersion: Schema.String,
+    runsInFlight: Schema.Finite,
+    workspaceCount: Schema.Finite,
+    machineLoad: Schema.Struct({
+      cpuCount: Schema.Finite,
+      loadAverage: Schema.Array(Schema.Finite),
+      freeMemoryBytes: Schema.Finite,
     }),
   }),
+});
+type HealthSignalPerformanceVerdict = typeof HealthSignalPerformanceVerdict.Type;
+
+const SuiteComparisonPerformanceVerdict = Schema.Struct({
+  kind: Schema.Literal("suite-comparison"),
+  signal: Schema.Literal("test-suite-duration"),
+  subsystem: Schema.Literal("repository"),
+  direction: Schema.Literal("slower"),
+  base: Schema.Struct({
+    medianDurationMs: Schema.Finite,
+    sha: GitCommitSha,
+  }),
+  head: Schema.Struct({
+    medianDurationMs: Schema.Finite,
+    sha: GitCommitSha,
+  }),
+  ratio: Schema.Finite,
+  confidenceInterval: Schema.Struct({
+    lowRatio: Schema.Finite,
+    highRatio: Schema.Finite,
+    confidence: Schema.Finite,
+  }),
+  rounds: Schema.Int.check(Schema.isGreaterThan(0)),
+  workflowRunUrl: GitHubWorkflowRunUrl,
+});
+type SuiteComparisonPerformanceVerdict = typeof SuiteComparisonPerformanceVerdict.Type;
+
+export const PerformanceVerdict = Schema.Union([
+  HealthSignalPerformanceVerdict,
+  SuiteComparisonPerformanceVerdict,
 ]).pipe(Schema.toTaggedUnion("kind"));
 export type PerformanceVerdict = typeof PerformanceVerdict.Type;
 
@@ -125,7 +153,7 @@ const subsystemTitle = {
   renderer: "Renderer",
 } as const;
 
-const titleThreshold = (threshold: number, unit: PerformanceVerdict["unit"]) =>
+const titleThreshold = (threshold: number, unit: HealthSignalPerformanceVerdict["unit"]) =>
   unit === "%" ? `${threshold}${unit}` : `${threshold} ${unit}`;
 
 const formatValue = (value: number) => Number(value.toFixed(2));
@@ -133,14 +161,14 @@ const formatValue = (value: number) => Number(value.toFixed(2));
 export const performanceVerdictFingerprint = (verdict: PerformanceVerdictIdentity) =>
   PerformanceIssueFingerprint.make(`${verdict.subsystem}.${verdict.signal}.${verdict.direction}`);
 
-const occurrenceLines = (verdict: PerformanceVerdict) => [
+const occurrenceLines = (verdict: HealthSignalPerformanceVerdict) => [
   `Observed: ${formatValue(verdict.observed)} ${verdict.unit}`,
   `Threshold: ${directionMetadata[verdict.direction].operator} ${verdict.threshold} ${verdict.unit}`,
   `Window: ${verdict.windowMillis / 1_000} seconds`,
   `Consecutive breaches: ${verdict.consecutiveBreaches}`,
 ];
 
-const renderHealthSignal = (verdict: PerformanceVerdict) => {
+const renderHealthSignal = (verdict: HealthSignalPerformanceVerdict) => {
   const signal = signalNames[verdict.signal];
   const direction = directionMetadata[verdict.direction];
   const fingerprint = performanceVerdictFingerprint(verdict);
@@ -165,8 +193,38 @@ const renderHealthSignal = (verdict: PerformanceVerdict) => {
   };
 };
 
+const suiteComparisonEvidence = (verdict: SuiteComparisonPerformanceVerdict) =>
+  [
+    "Signal: Test suite duration — repository — slower",
+    "",
+    `- Baseline median: ${formatValue(verdict.base.medianDurationMs)} ms`,
+    `- Current median: ${formatValue(verdict.head.medianDurationMs)} ms`,
+    `- Ratio: ${verdict.ratio}`,
+    `- ${verdict.confidenceInterval.confidence * 100}% confidence interval: ${verdict.confidenceInterval.lowRatio}–${verdict.confidenceInterval.highRatio}`,
+    `- Rounds: ${verdict.rounds}`,
+    `- Baseline commit: ${verdict.base.sha}`,
+    `- Current commit: ${verdict.head.sha}`,
+    `- Measurement run: ${verdict.workflowRunUrl}`,
+    "",
+    "Close when: a follow-up comparison against the baseline no longer reports a statistically significant slowdown.",
+  ].join("\n");
+
+const renderSuiteComparison = (verdict: SuiteComparisonPerformanceVerdict) => {
+  const body = suiteComparisonEvidence(verdict);
+  return {
+    fingerprint: performanceVerdictFingerprint(verdict),
+    title: "Test suite performance regressed",
+    recurrenceTitle: "Test suite performance regressed again",
+    body,
+    recurrenceBody: `Fired again.\n\n${body}`,
+  };
+};
+
 const renderVerdict = (verdict: PerformanceVerdict) =>
-  PerformanceVerdict.match(verdict, { "health-signal": renderHealthSignal });
+  PerformanceVerdict.match(verdict, {
+    "health-signal": renderHealthSignal,
+    "suite-comparison": renderSuiteComparison,
+  });
 
 const recurrenceIssue = (
   codec: WireCodec,

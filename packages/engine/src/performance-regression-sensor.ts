@@ -23,6 +23,8 @@ import type { RegistryState } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { Scheduler, type SchedulerState } from "./scheduler";
 
+type HealthSignalPerformanceVerdict = Extract<PerformanceVerdict, { readonly kind: "health-signal" }>;
+
 export interface MachineLoadSnapshot {
   readonly cpuCount: number;
   readonly loadAverage: ReadonlyArray<number>;
@@ -36,8 +38,8 @@ export interface PerformanceEvidenceContext {
 }
 
 interface HealthSignalReading {
-  readonly signal: PerformanceVerdict["signal"];
-  readonly subsystem: PerformanceVerdict["subsystem"];
+  readonly signal: HealthSignalPerformanceVerdict["signal"];
+  readonly subsystem: HealthSignalPerformanceVerdict["subsystem"];
   readonly observed: number;
   readonly threshold: number;
   readonly unit: "ms" | "%";
@@ -76,7 +78,7 @@ interface HealthSignalState {
   readonly breaches: number;
   readonly sampledAtMillis: number;
   readonly pending?: {
-    readonly verdict: PerformanceVerdict;
+    readonly verdict: HealthSignalPerformanceVerdict;
     readonly retryAtMillis?: number;
   };
 }
@@ -182,7 +184,7 @@ export const make = Effect.fn("PerformanceRegressionSensor.make")(function* (
         workspaceCount: context.workspaceCount,
         machineLoad: context.machineLoad,
       },
-    } satisfies PerformanceVerdict;
+    } satisfies HealthSignalPerformanceVerdict;
   });
 
   const submitPending = Effect.fn("PerformanceRegressionSensor.submitPending")(function* (
