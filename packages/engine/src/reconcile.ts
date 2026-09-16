@@ -71,7 +71,7 @@ export interface ReconcileSnapshot {
 type ReconcileReceiptDeferred = Deferred.Deferred<ReconcileReceipt, WorkspaceRegistrationError>;
 
 interface ReconcileJob {
-  readonly receipt: ReconcileReceiptDeferred;
+  readonly receipt: ReconcileReceiptDeferred | null;
 }
 
 interface ReceiptSelection {
@@ -155,6 +155,7 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
   const observe = observeWorkspace(issueTracker, provider);
   const queue = yield* Queue.make<ReconcileJob>();
   const pendingReceipt = yield* Ref.make<ReconcileReceiptDeferred | null>(null);
+  const queuedRequest = yield* Ref.make(false);
   const snapshotRef = yield* Ref.make<ReconcileSnapshot>({
     generation: 0,
     observedAtMillis: 0,
@@ -332,9 +333,14 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
 
   const runJob = (job: ReconcileJob) =>
     Effect.uninterruptibleMask((restore) =>
-      restore(reconcile()).pipe(
-        Effect.flatMap((receipt) => settleReceiptSuccess(job.receipt, receipt)),
-        Effect.catchCause((cause) => settleReceiptFailure(job.receipt, cause)),
+      Ref.set(queuedRequest, false).pipe(
+        Effect.andThen(restore(reconcile())),
+        Effect.flatMap((receipt) => (job.receipt ? settleReceiptSuccess(job.receipt, receipt) : Effect.void)),
+        Effect.catchCause((cause) =>
+          job.receipt
+            ? settleReceiptFailure(job.receipt, cause)
+            : Effect.logError("reconcile request failed", { cause }),
+        ),
       ),
     );
 
@@ -361,25 +367,22 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
     return selection.receipt;
   });
 
-  const receiptAfterCurrent = Effect.fn("ReconcileWorker.receiptAfterCurrent")(function* () {
-    const receipt = yield* Deferred.make<ReconcileReceipt, WorkspaceRegistrationError>();
-    yield* Queue.offer(queue, { receipt });
-    return receipt;
-  });
-
   const submit = Effect.fn("ReconcileWorker.submit")(function* () {
     const receipt = yield* Effect.uninterruptible(receiptForSubmit());
     return yield* awaitReceipt(receipt);
   });
 
-  const submitAfterCurrent = Effect.fn("ReconcileWorker.submitAfterCurrent")(function* () {
-    const receipt = yield* Effect.uninterruptible(receiptAfterCurrent());
-    return yield* awaitReceipt(receipt);
-  });
+  // A settings write needs a pass that starts after it, so this never joins the pass already
+  // running. One queued pass covers every write that lands before it starts.
+  const requestAfterCurrent = Effect.fn("ReconcileWorker.requestAfterCurrent")(function* () {
+    const alreadyQueued = yield* Ref.getAndSet(queuedRequest, true);
+    if (alreadyQueued) return;
+    yield* Queue.offer(queue, { receipt: null });
+  }, Effect.uninterruptible);
 
   return {
     submit,
-    submitAfterCurrent,
+    requestAfterCurrent,
     snapshot: Ref.get(snapshotRef),
     invalidateAvailability: availability.invalidate,
   };

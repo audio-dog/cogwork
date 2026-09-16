@@ -364,7 +364,7 @@ const workerLayer = Layer.effect(
   Reconcile.ReconcileWorker,
   Effect.map(SchedulerProbe, (probe) => ({
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
-    submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+    requestAfterCurrent: () => Effect.void,
     snapshot: Ref.get(probe.snapshots),
     invalidateAvailability: () => Effect.void,
   })),

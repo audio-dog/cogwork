@@ -107,7 +107,16 @@ const commandHarnessRunner: HarnessRunner = {
 };
 const reconcileStubLayer = Layer.succeed(Reconcile.ReconcileWorker, {
   submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
-  submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+  requestAfterCurrent: () => Effect.void,
+  snapshot: Effect.succeed({ generation: 0, observedAtMillis: 0, workspaces: [] }),
+  invalidateAvailability: () => Effect.void,
+});
+
+const reconcileRequests = Ref.makeUnsafe(0);
+
+const wedgedReconcileLayer = Layer.succeed(Reconcile.ReconcileWorker, {
+  submit: () => Effect.never,
+  requestAfterCurrent: () => Ref.update(reconcileRequests, (count) => count + 1),
   snapshot: Effect.succeed({ generation: 0, observedAtMillis: 0, workspaces: [] }),
   invalidateAvailability: () => Effect.void,
 });
@@ -1186,6 +1195,34 @@ describe("SetOperationSetting", () => {
       if (!OperationSettingUpdate.guards.Set(modelUpdate)) return assert.fail("expected set update");
       assert.deepStrictEqual(returned.operationSettings, [modelUpdate.row]);
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("answers without waiting for the reconcile pass its change asks for", () =>
+    Effect.gen(function* () {
+      yield* Ref.set(reconcileRequests, 0);
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+
+      const returned = yield* client.SetOperationSetting({ update: modelUpdate });
+
+      if (!OperationSettingUpdate.guards.Set(modelUpdate)) return assert.fail("expected set update");
+      assert.deepStrictEqual(returned.operationSettings, [modelUpdate.row]);
+      assert.strictEqual(yield* Ref.get(reconcileRequests), 1);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          pluginManagerLayer,
+          connectionStoreLayer,
+          RunControl.layer,
+          [],
+          wedgedReconcileLayer,
+        ),
+      ),
+      Effect.scoped,
+    ),
   );
 
   it.effect("refuses a locked setting with its Operation Definition named", () =>

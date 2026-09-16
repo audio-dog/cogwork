@@ -244,7 +244,7 @@ const snapshotOf = (
 const workerSnapshotLayer = (snapshot: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
   Layer.succeed(Reconcile.ReconcileWorker, {
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
-    submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+    requestAfterCurrent: () => Effect.void,
     snapshot: Ref.get(snapshot),
     invalidateAvailability: () => Effect.void,
   });

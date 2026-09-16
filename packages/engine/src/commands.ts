@@ -320,7 +320,7 @@ const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutatio
   const publisher = yield* DaemonEventPublisher;
   const worker = yield* ReconcileWorker;
   const controlStore = yield* store.withWrite(update.pipe(Effect.tap(() => worker.invalidateAvailability())));
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  yield* worker.requestAfterCurrent();
   const published = yield* publisher.publishControlStore(controlStore);
   yield* publisher.publishWorkspaces();
   return published;
@@ -434,7 +434,7 @@ export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")
       return updated;
     }),
   );
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  yield* worker.requestAfterCurrent();
   const published = yield* publisher.publishControlStore(controlStore);
   yield* publisher.publishWorkspaces();
   return published;
@@ -501,7 +501,7 @@ export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (pa
   const worker = yield* ReconcileWorker;
   const change = yield* management.update(payload.workspace, payload.update);
   const state = workspaceStateFromChange(change);
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  yield* worker.requestAfterCurrent();
   const published = yield* publisher.publishWorkspaces();
   yield* publisher.publishScheduler();
   return published.find((workspace) => workspace.name === payload.workspace) ?? state;
@@ -535,7 +535,7 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
       return { overview, notices };
     }),
   );
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  yield* worker.requestAfterCurrent();
   yield* publisher.publishPlugins(result.overview, result.notices);
   yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
   yield* publisher.publishWorkspaces();

@@ -324,7 +324,10 @@ describe("reconcile worker", () => {
   const postCurrentSource = coordinatedSource((probe) =>
     Effect.fn("test.postCurrentSource")(function* () {
       const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
-      if (count > 0) return [];
+      if (count > 0) {
+        yield* Deferred.succeed(probe.secondStarted, undefined);
+        return [];
+      }
       yield* probe.firstStarted.open;
       yield* probe.release.await;
       return [];
@@ -456,16 +459,33 @@ describe("reconcile worker", () => {
     }).pipe(Effect.provide(coordinatedWorkerLayer(coalescingSource)), Effect.scoped),
   );
 
-  it.effect("runs a post-current submission after an in-flight reconcile", () =>
+  it.effect("runs a post-current request after an in-flight reconcile without awaiting it", () =>
     Effect.gen(function* () {
       const probe = yield* ReconcileCoordinationProbe;
       const worker = yield* Reconcile.ReconcileWorker;
       const current = yield* Effect.forkChild(worker.submit());
       yield* probe.firstStarted.await;
-      const next = yield* Effect.forkChild(worker.submitAfterCurrent());
+      yield* worker.requestAfterCurrent();
       yield* probe.release.open;
       yield* Fiber.join(current);
-      yield* Fiber.join(next);
+      yield* Deferred.await(probe.secondStarted);
+
+      assert.strictEqual(yield* Ref.get(probe.observes), 2);
+    }).pipe(Effect.provide(coordinatedWorkerLayer(postCurrentSource)), Effect.scoped),
+  );
+
+  it.effect("covers every request that lands before the queued pass starts with one pass", () =>
+    Effect.gen(function* () {
+      const probe = yield* ReconcileCoordinationProbe;
+      const worker = yield* Reconcile.ReconcileWorker;
+      const current = yield* Effect.forkChild(worker.submit());
+      yield* probe.firstStarted.await;
+      yield* worker.requestAfterCurrent();
+      yield* worker.requestAfterCurrent();
+      yield* worker.requestAfterCurrent();
+      yield* probe.release.open;
+      yield* Fiber.join(current);
+      yield* Deferred.await(probe.secondStarted);
 
       assert.strictEqual(yield* Ref.get(probe.observes), 2);
     }).pipe(Effect.provide(coordinatedWorkerLayer(postCurrentSource)), Effect.scoped),
