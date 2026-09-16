@@ -1,0 +1,22 @@
+packages/claude-code/src/harness-byok.test.ts
+  s_5ca649ee7894ad::t_a4c5cfcadc7816 40,43-45,47-48,50-51
+  s_5ca649ee7894ad::t_83f6bee83ad1d1 21
+packages/claude-code/src/harness-fixtures.ts
+  s_5ca649ee7894ad::t_a4c5cfcadc7816 287-294
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d8bd26b3467448dd982ade96298dcd1b9a4d3710",
+  "prompts": {},
+  "sessions": {
+    "s_5ca649ee7894ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ab79-083b-71b3-9bbc-c2f2333ba4bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
