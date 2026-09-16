@@ -1,0 +1,25 @@
+packages/contracts/src/harness.ts
+  s_82a5917ed09baa::t_25de81a9ed805f 36-38,44-56,75
+packages/engine/src/external-harness-runtime.ts
+  s_82a5917ed09baa::t_75bb49b75ca3c3 7,94,501-505
+packages/engine/src/harness.ts
+  s_82a5917ed09baa::t_b4746c77f9586a 4,6,8,10,71-74,76,148,262,323,330,335-336,343-357,362-376,378,485,490
+packages/engine/src/operation-resolution.ts
+  s_82a5917ed09baa::t_64b42ce6c936d3 204-210,376-382
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0011dd759971d248fb0f2bcd4adc29ef8b5948d9",
+  "prompts": {},
+  "sessions": {
+    "s_82a5917ed09baa": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed36c22b-3ad0-4bc5-9830-20443e458195",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
