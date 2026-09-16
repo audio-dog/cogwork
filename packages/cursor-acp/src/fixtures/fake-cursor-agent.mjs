@@ -33,12 +33,47 @@ const responseContent = async (sessionParams) => {
   });
 };
 
+const parameterizedModels = {
+  models: [
+    { value: "auto-smart", name: "Auto" },
+    {
+      value: "fake-native",
+      name: "Fake Native",
+      configOptions: [
+        {
+          id: "effort",
+          name: "Effort",
+          category: "thought_level",
+          type: "select",
+          currentValue: "high",
+          options: [
+            { value: "low", name: "Low" },
+            { value: "high", name: "High" },
+          ],
+        },
+        {
+          id: "fast",
+          name: "Fast",
+          category: "model_config",
+          type: "select",
+          currentValue: "false",
+          options: [
+            { value: "false", name: "Off" },
+            { value: "true", name: "Fast\u200b" },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 class FakeCursorAgent {
   constructor(connection) {
     this.connection = connection;
   }
 
   initialize(params) {
+    this.parameterizedPicker = params.clientCapabilities?._meta?.parameterizedModelPicker === true;
     return Promise.resolve({
       protocolVersion: params.protocolVersion,
       agentCapabilities: { loadSession: true },
@@ -50,6 +85,14 @@ class FakeCursorAgent {
         },
       ],
     });
+  }
+
+  extMethod(method) {
+    if (method !== "cursor/list_available_models") {
+      return Promise.reject(new Error(`unexpected extension method ${method}`));
+    }
+    if (!this.parameterizedPicker) return Promise.resolve({ models: [] });
+    return Promise.resolve(parameterizedModels);
   }
 
   authenticate() {

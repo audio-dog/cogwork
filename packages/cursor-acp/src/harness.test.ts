@@ -95,7 +95,7 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
       operation,
       harness: {
         name: cursorName,
-        model: "auto",
+        model: "auto-smart",
         effort: null,
         profile,
       },
@@ -140,16 +140,40 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
 describe("Cursor Harness registry", () => {
-  it.effect("uses the generated model tuple for the catalog and every supported effort", () =>
+  it.effect("reads Cursor's own picker: base models, display names, and per-model options", () =>
     Effect.gen(function* () {
       const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+      const catalog = yield* Harness.make([runner]).catalog(cursorName);
+
+      assert.deepStrictEqual(
+        catalog.models.map(({ value, label }) => ({ value, label })),
+        [
+          { value: "auto-smart", label: "Auto" },
+          { value: "fake-native", label: "Fake Native" },
+        ],
+      );
+      assert.deepStrictEqual(catalog.models[0]?.options, []);
+      assert.deepStrictEqual(
+        catalog.models[1]?.options?.map(({ id, label }) => ({ id, label })),
+        [
+          { id: "effort", label: "Effort" },
+          { id: "fast", label: "Fast" },
+        ],
+      );
+      assert.isUndefined(catalog.efforts);
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("falls back to the generated catalog when Cursor's picker cannot be reached", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-catalog" });
       const catalog = yield* Harness.make([runner]).catalog(cursorName);
 
       assert.deepStrictEqual(
         catalog.models.map(({ value }) => value),
         Array.from(cursorModels),
       );
-      assert.isTrue(catalog.efforts?.some(({ value }) => value === "none"));
+      assert.strictEqual(catalog.provenance.source, "cogwork-fallback");
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -176,10 +200,45 @@ describe("Cursor Harness registry", () => {
       const staleModel = yield* harness
         .preflight(cursorName, "full", "retired-cursor-model", "high")
         .pipe(Effect.flip);
-      const staleEffort = yield* harness.preflight(cursorName, "full", "auto", "extreme").pipe(Effect.flip);
+      const staleEffort = yield* harness
+        .preflight(cursorName, "full", "fake-native", "extreme")
+        .pipe(Effect.flip);
 
       assert.strictEqual(staleModel.reason, "stale-selection");
       assert.strictEqual(staleEffort.reason, "stale-selection");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("rejects a model option the selected model does not parameterize", () =>
+    Effect.gen(function* () {
+      const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
+
+      const unknownOption = yield* harness
+        .preflight(cursorName, "full", "fake-native", null, [{ option: "context", value: "1m" }])
+        .pipe(Effect.flip);
+      const unknownValue = yield* harness
+        .preflight(cursorName, "full", "fake-native", null, [{ option: "fast", value: "maybe" }])
+        .pipe(Effect.flip);
+      const declined = yield* harness
+        .preflight(cursorName, "full", "auto-smart", null, [{ option: "fast", value: "true" }])
+        .pipe(Effect.flip);
+
+      assert.strictEqual(unknownOption.reason, "stale-selection");
+      assert.include(unknownOption.message, "context");
+      assert.strictEqual(unknownValue.reason, "stale-selection");
+      assert.strictEqual(declined.reason, "stale-selection");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("carries a declared option past the selection check", () =>
+    Effect.gen(function* () {
+      const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
+
+      const accepted = yield* harness
+        .preflight(cursorName, "full", "fake-native", "high", [{ option: "fast", value: "false" }])
+        .pipe(Effect.flip);
+
+      assert.notStrictEqual(accepted.reason, "stale-selection");
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -451,7 +510,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
       assert.include(observation.instructions, "Mandatory repository context.");
       assert.include(observation.instructions, "/operating-instructions/triage-agent");
-      assert.strictEqual(observation.model, "auto[effort=high]");
+      assert.strictEqual(observation.model, "auto-smart[effort=high]");
       assert.deepStrictEqual(observation.mcp, [
         {
           name: "linear",
@@ -608,15 +667,26 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
 describe("cursorModelOptions", () => {
   it("turns a resolved handle into Cursor's resume sessionId", () => {
-    assert.deepStrictEqual(cursorModelOptions("cursor-abc", null), { sessionId: "cursor-abc" });
+    assert.deepStrictEqual(cursorModelOptions("cursor-abc", null, []), { sessionId: "cursor-abc" });
   });
 
   it("omits sessionId when there is no handle to resume from", () => {
-    assert.deepStrictEqual(cursorModelOptions(null, "high"), { effort: "high" });
+    assert.deepStrictEqual(cursorModelOptions(null, "high", []), {
+      modelOptions: [{ option: "effort", value: "high" }],
+    });
   });
 
-  it("is empty when the run neither resumes nor sets an effort", () => {
-    assert.deepStrictEqual(cursorModelOptions(null, null), {});
+  it("carries the effort setting beside the model's other selected options", () => {
+    assert.deepStrictEqual(cursorModelOptions(null, "high", [{ option: "fast", value: "false" }]), {
+      modelOptions: [
+        { option: "fast", value: "false" },
+        { option: "effort", value: "high" },
+      ],
+    });
+  });
+
+  it("is empty when the run neither resumes nor selects an option", () => {
+    assert.deepStrictEqual(cursorModelOptions(null, null, []), {});
   });
 });
 

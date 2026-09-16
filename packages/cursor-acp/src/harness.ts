@@ -1,5 +1,5 @@
 import { ndJsonStream, RequestError } from "@agentclientprotocol/sdk";
-import { AgUiEvent, type HarnessName } from "@cogwork/contracts";
+import { AgUiEvent, effortOptionId, type HarnessName, type OperationModelOption } from "@cogwork/contracts";
 import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
   type AcpCompatibleTextAdapter,
@@ -16,8 +16,10 @@ import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import { cursorEfforts, cursorModelFlag, parseCursorModelList } from "./model";
-import { type CursorModel, cursorModels } from "./models.generated";
+import { cursorModelFlag, parseCursorModelList } from "./model";
+import { type CursorModel, cursorModelCatalog } from "./models.generated";
+import { cursorAcpCatalog, cursorProbeError, missingCursorExecutable } from "./probe";
+import { cursorScrubEnv } from "./scrub-env";
 
 export interface CursorRunnerOptions {
   readonly name: HarnessName;
@@ -27,11 +29,10 @@ export interface CursorRunnerOptions {
 
 export type CursorModelOptions = {
   readonly sessionId?: string;
-  readonly effort?: string;
+  readonly modelOptions?: ReadonlyArray<OperationModelOption>;
 };
 
 const cursorProbeDeadline = "5 seconds";
-const missingCursorExecutable = /ENOENT|EACCES|command not found/i;
 const cursorVersionRequirement = ">=2026.08.11";
 const minimumCursorVersion = [2026, 8, 11] as const;
 
@@ -44,20 +45,11 @@ const cursorVersionCompatible = (version: string) => {
   );
 };
 
-const cursorProbeError = (cause: unknown) => {
-  const message = String(cause);
-  return new Harness.HarnessError({
-    reason: missingCursorExecutable.test(message) ? "missing-harness" : "launch",
-    retryable: false,
-    message,
-  });
-};
-
 const cursorCommand = Effect.fn("CursorRunner.command")((agentBin: string, argument: string) =>
   Effect.scoped(
     Effect.acquireRelease(
       Effect.tryPromise({
-        try: () => localProcessSandbox({ dir: process.cwd() }).create({}),
+        try: () => localProcessSandbox({ dir: process.cwd(), scrubEnv: [...cursorScrubEnv] }).create({}),
         catch: cursorProbeError,
       }),
       (sandbox) => Effect.promise(() => sandbox.destroy()),
@@ -113,8 +105,13 @@ const requireCursorCommand = Effect.fn("CursorRunner.requireCommand")(function* 
   return result;
 });
 
-const cursorRuntimeVersion = Effect.fn("CursorRunner.runtimeVersion")(function* (agentBin: string) {
+const cursorVersion = Effect.fn("CursorRunner.version")(function* (agentBin: string) {
   const versionResult = yield* requireCursorCommand(agentBin, "--version");
+  return versionResult.stdout.trim() || versionResult.stderr.trim();
+});
+
+const cursorRuntimeVersion = Effect.fn("CursorRunner.runtimeVersion")(function* (agentBin: string) {
+  const version = yield* cursorVersion(agentBin);
   const modelResult = yield* requireCursorCommand(agentBin, "--list-models");
   const models = parseCursorModelList(modelResult.stdout);
   if (models.length === 0) {
@@ -124,8 +121,7 @@ const cursorRuntimeVersion = Effect.fn("CursorRunner.runtimeVersion")(function* 
       message: "Cursor returned no model catalog. Update Cursor, then retry.",
     });
   }
-  const harnessVersion = versionResult.stdout.trim() || versionResult.stderr.trim();
-  return harnessVersion;
+  return version;
 });
 
 const unavailableCursorReadiness = (error: Harness.HarnessError) =>
@@ -173,10 +169,17 @@ const cursorReadiness = Effect.fn("CursorRunner.readiness")((agentBin: string) =
 );
 
 // Cursor keeps conversation history server-side; the opaque handle is how you resume it.
-export const cursorModelOptions = (handle: string | null, effort: string | null) => ({
-  ...(handle ? { sessionId: handle } : {}),
-  ...(effort ? { effort } : {}),
-});
+export const cursorModelOptions = (
+  handle: string | null,
+  effort: string | null,
+  options: ReadonlyArray<OperationModelOption>,
+) => {
+  const modelOptions = effort ? [...options, { option: effortOptionId, value: effort }] : options;
+  return {
+    ...(handle ? { sessionId: handle } : {}),
+    ...(modelOptions.length > 0 ? { modelOptions } : {}),
+  };
+};
 
 const launchCodes = new Set(["ENOENT", "EACCES"]);
 
@@ -294,7 +297,7 @@ export const interceptCursorTelemetry = (
 const openCursorTransport = (agentBin: string) =>
   FiberSet.makeRuntimePromise().pipe(
     Effect.map((runPromise) => (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
-      const flag = cursorModelFlag(ctx.model, ctx.modelOptions?.effort);
+      const flag = cursorModelFlag(ctx.model, ctx.modelOptions?.modelOptions ?? []);
       return ctx.sandbox.process
         .spawn(`${agentBin} --model ${flag} acp`, {
           cwd: ctx.cwd,
@@ -314,21 +317,12 @@ const openCursorTransport = (agentBin: string) =>
 
 type CursorOpenTransport = Effect.Success<ReturnType<typeof openCursorTransport>>;
 
-type CursorAdapter = AcpCompatibleTextAdapter<CursorModel, CursorModelOptions>;
+type CursorAdapter = AcpCompatibleTextAdapter<string, CursorModelOptions>;
 
-const generatedCatalog = Harness.staticCatalogSource(
-  {
-    models: cursorModels.map((model) => ({ value: model, label: model })),
-    efforts: cursorEfforts.map((effort) => ({ value: effort, label: effort })),
-  },
-  { source: "cogwork-fallback", fallbackVersion: "cursor-models-generated-1" },
-);
-const cursorScrubEnv: ReadonlyArray<string> = ["GITHUB_TOKEN", "GH_TOKEN", "CURSOR_API_KEY"];
-
-const selectedCursorModel = (
-  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
-  fallback: CursorModel,
-) => cursorModels.find((model) => model === (request.selection.model ?? fallback)) ?? fallback;
+const generatedCatalog = Harness.staticCatalogSource(cursorModelCatalog, {
+  source: "cogwork-fallback",
+  fallbackVersion: "cursor-models-generated-2",
+});
 
 const promptCharacters = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
   request.prompt.reduce((total, message) => total + message.content.length, 0);
@@ -354,7 +348,7 @@ const cursorSandboxProvider = (name: HarnessName) =>
 
 export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunner => {
   const agentBin = options.agentBin ?? "agent";
-  const defaultModel = options.defaultModel ?? "auto";
+  const defaultModel = options.defaultModel ?? "auto-smart";
   const sessionKind: Harness.HarnessRunner["sessionKind"] = "opaque-handle";
   const capabilities = {
     execution: {
@@ -390,7 +384,12 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     mode: "host",
     reference: "Cursor host login",
   };
-  const catalogSources = { fallback: generatedCatalog };
+  const catalogSources = {
+    native: cursorAcpCatalog(agentBin, () =>
+      cursorVersion(agentBin).pipe(Effect.orElseSucceed(() => "unknown")),
+    ),
+    fallback: generatedCatalog,
+  };
   const readiness = () => cursorReadiness(agentBin);
   const makeRunner = (openTransport: CursorOpenTransport) => {
     const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter, "host"> = {
@@ -402,9 +401,8 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
       readiness,
       sharedGit: "none",
       makeAdapter: ({ model }) =>
-        acpCompatible<typeof cursorModels, CursorModelOptions>({
+        acpCompatible<ReadonlyArray<string>, CursorModelOptions>({
           name: options.name,
-          models: cursorModels,
           modelOptions: {},
           openTransport,
           planEventName: `${options.name}.plan`,
@@ -412,9 +410,13 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
           permissionMode: "default",
           permissions: "headless",
         })(model),
-      projectModel: (request) => selectedCursorModel(request, defaultModel),
+      projectModel: (request) => request.selection.model ?? defaultModel,
       projectOptions: (request) =>
-        cursorModelOptions(request.identity.resumeHandle, request.selection.effort),
+        cursorModelOptions(
+          request.identity.resumeHandle,
+          request.selection.effort,
+          request.selection.modelOptions,
+        ),
       projectAuthentication: () => "host",
       transport: {},
       diagnostics: cursorDiagnostics,

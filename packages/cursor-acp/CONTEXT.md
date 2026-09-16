@@ -10,7 +10,7 @@ events.
 ## Language
 
 **cursorRunner**:
-The Cursor descriptor passed to the engine's shared External Harness runtime. It retains only Cursor's ACP transport, model and effort projection, telemetry acknowledgments, diagnostics, and optional token estimate. The shared runtime owns Workspace and MCP projection, host authentication, Sandbox lifecycle, chat streaming, event bridging, and cancellation. When a request references a Session, the descriptor hands its stored opaque handle to Cursor as `modelOptions.sessionId`. Cursor sessions support programmatic resume but no human attach command.
+The Cursor descriptor passed to the engine's shared External Harness runtime. It retains only Cursor's ACP transport, catalog discovery, model and effort projection, telemetry acknowledgments, diagnostics, and optional token estimate. The shared runtime owns Workspace and MCP projection, host authentication, Sandbox lifecycle, chat streaming, event bridging, and cancellation. When a request references a Session, the descriptor hands its stored opaque handle to Cursor as `modelOptions.sessionId`. Cursor sessions support programmatic resume but no human attach command.
 _Avoid_: Harness, driver
 
 Cursor ACP has no journal or takeover capability. Driver loss is never treated as safe detachment.
@@ -18,8 +18,12 @@ Cursor ACP has no journal or takeover capability. Driver loss is never treated a
 Cursor ACP also declares file-event fidelity `absent`. Its ACP stream has no supported file-diff event, and the current execution posture rejects local-process Runs before a workspace watcher could be authoritative.
 
 **Cursor model / effort**:
-Harness-native strings for Cursor. The picker and adapter share the generated, versioned `cursorModels` tuple (`models:sync` → `models.generated.ts`), never a second live catalog. `models:check` detects drift from the local CLI. Runtime readiness still probes the installed CLI and its model command without changing the picker source. Config authors get autocomplete via `satisfies CursorModel`. Effort is optional (`none` | `low` | `medium` | `high` | `xhigh` | `max`) and becomes a bracket `--model` override for parameterized base ids; the listed preset ids already embed their effort.
-_Avoid_: Sync's semantic model tiers (`fast` / `default` / `powerful`); hand-maintaining the model catalog
+Harness-native strings for Cursor, as **parameterized base ids** — `claude-opus-5`, not `claude-opus-5-thinking-high`. `--model` takes parameters as a bracket list on a base id (`'claude-opus-5[context=1m,effort=high,fast=false]'`), so the base id and its parameters are the two halves of one selection. Effort is one such parameter and differs per model: `composer-2.5` takes none, `claude-opus-5` takes five. It is never a Harness-wide list.
+
+The Operation's `effort` setting supplies the `effort` parameter; its **model options** setting supplies the rest. The runner composes both onto the base id as one bracket list, replacing any parameter the stored id already carries.
+
+`agent --list-models` cannot express this — it flattens every combination into one id and drops the display name — so the catalog comes from Cursor's own picker over ACP: `cursor/list_available_models`, answered only for a client that declares `_meta.parameterizedModelPicker`. That is the runner's `native` catalog source. The generated, versioned `cursorModelCatalog` (`models:sync` → `models.generated.ts`) is the `fallback`, so an unreachable agent narrows the picker rather than emptying it; `models:check` detects drift. Runtime readiness still probes the installed CLI and its model command without changing the picker source. Config authors get autocomplete via `satisfies CursorModel`.
+_Avoid_: Sync's semantic model tiers (`fast` / `default` / `powerful`); hand-maintaining the model catalog; the flattened `--list-models` ids as a catalog; a Harness-wide Cursor effort list
 
 **ACP (Agent Client Protocol)**:
 The stdio JSON-RPC protocol the Cursor CLI exposes via `agent acp`. The wire format this adapter speaks; not a concept the rest of the repo sees.
