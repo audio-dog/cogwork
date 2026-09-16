@@ -48,6 +48,23 @@ Other documents hold the other rules:
 
 ## TypeScript
 
+- Make each type as narrow as the values it holds. A widened type is the same refusal as `as any`:
+  it makes the type check pass without correcting the type.
+- Do not widen a type to make an assignment work. If a value is one of a known set, the type is
+  that set. `string` is correct only for a value that a person types or an external system sends,
+  and never for a set this repository chooses.
+- Do not write `"a" | "b" | (string & {})`. That union widens to `string`, so the type accepts
+  every string and only the editor still sees `"a"` and `"b"`. Either the set is closed and the
+  union is the type, or it is open and `string` is the type.
+- If one field holds both a closed set and an open value, they are two kinds. Name each one, and
+  wrap the open one: `"model" | "effort" | { readonly modelOption: string }`. See
+  `HarnessSelectionAxis` in `packages/engine/src/harness.ts`.
+- Do not take `unknown` or `object` for a value this repository built. Take the union it belongs
+  to, and narrow it at the one boundary that decodes it.
+- Do not replace a named type with its shape to escape a mismatch. `ReadonlyArray<{ value: string }>`
+  in place of `ReadonlyArray<HarnessCatalogChoice>` accepts anything with a `value`, so the next
+  caller passes the wrong thing and the type check agrees. Name the union of what the function
+  really takes.
 - Let TypeScript infer the return type of a component, a hook, a helper, or a normal function.
 - Write an explicit return type only for an overload, a recursive function, a generic inference
   boundary, or a requirement of the type check.
