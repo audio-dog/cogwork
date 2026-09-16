@@ -352,6 +352,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   const sessionKind: Harness.HarnessRunner["sessionKind"] = "opaque-handle";
   const capabilities = {
     execution: {
+      selectable: true,
       nonInteractive: true,
       worktreeConfined: false,
       profiles: [],
