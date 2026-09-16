@@ -33,6 +33,7 @@ import { workspaceConnectionChoices } from "../features/connections-view";
 import {
   type HarnessCatalog,
   harnessCatalogLoad,
+  modelOptionsUpdate,
   operationSettingUpdate,
 } from "../features/operation-settings";
 import {
@@ -199,6 +200,7 @@ const writableSettings = [
   "harness",
   "model",
   "effort",
+  "model-options",
   "permission-profile",
 ] as const satisfies readonly OperationSettingName[];
 
@@ -269,8 +271,16 @@ function LoadedOperationSettings({
   const harness = useAtom(key("harness"));
   const model = useAtom(key("model"));
   const effort = useAtom(key("effort"));
+  const modelOptions = useAtom(key("model-options"));
   const permission = useAtom(key("permission-profile"));
-  const writers = { enabled, harness, model, effort, "permission-profile": permission };
+  const writers = {
+    enabled,
+    harness,
+    model,
+    effort,
+    "model-options": modelOptions,
+    "permission-profile": permission,
+  };
   const failure = writableSettings
     .map((setting) => writers[setting][0])
     .find((result) => result._tag === "Failure");
@@ -287,6 +297,8 @@ function LoadedOperationSettings({
               payload: { update: operationSettingUpdate(workspace, operation, setting, value) },
             });
           },
+          writeModelOptions: (operation, value) =>
+            modelOptions[1]({ payload: { update: modelOptionsUpdate(workspace, operation, value) } }),
         },
         meta: { disabled: disabled || writableSettings.some((setting) => writers[setting][0].waiting) },
       }}

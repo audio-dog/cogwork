@@ -1,11 +1,13 @@
 import {
   type ControlStore,
   type HarnessCatalogChoice,
+  type HarnessModelOption,
   type HarnessName,
   type HarnessOptionCatalog,
   type HarnessOverview,
   harnessEnabled,
   LifecycleStage,
+  OperationModelOption,
   type OperationSettingName,
   type OperationSettingRow,
   type OperationSettingUpdate,
@@ -13,6 +15,7 @@ import {
   resolveOperationSetting,
   type WorkspaceId,
 } from "@cogwork/contracts";
+import * as Schema from "effect/Schema";
 import { providerLabel } from "./provider-presentation";
 
 /** `operationSettingRefusal` refuses any workflow but this one, so it is fixed today. */
@@ -78,6 +81,28 @@ export const policyProfileChoices = (catalog: HarnessCatalog | null) =>
 export const catalogChoiceLabel = (choices: ReadonlyArray<HarnessCatalogChoice>, value: string | null) =>
   value === null ? "Not set" : (choices.find((choice) => choice.value === value)?.label ?? value);
 
+const effortOptionId = "effort";
+
+const declaredOptions = (catalog: HarnessCatalog | null, model: string | null) =>
+  catalog?.models.find((candidate) => candidate.value === model)?.options ?? [];
+
+export const effortChoices = (catalog: HarnessCatalog | null, model: string | null) =>
+  declaredOptions(catalog, model).find((option) => option.id === effortOptionId)?.choices ??
+  catalog?.efforts ??
+  null;
+
+export const modelOptionControls = (catalog: HarnessCatalog | null, model: string | null) =>
+  declaredOptions(catalog, model).filter((option) => option.id !== effortOptionId);
+
+export const selectedModelOption = (selected: ReadonlyArray<OperationModelOption>, option: string) =>
+  selected.find((candidate) => candidate.option === option)?.value ?? null;
+
+export const modelOptionsAfter = (
+  selected: ReadonlyArray<OperationModelOption>,
+  option: string,
+  value: string,
+) => [...selected.filter((candidate) => candidate.option !== option), { option, value }];
+
 export const catalogChoiceMatches = (choice: HarnessCatalogChoice, query: string) => {
   const needle = query.trim().toLowerCase();
   return choice.label.toLowerCase().includes(needle) || choice.value.toLowerCase().includes(needle);
@@ -105,6 +130,25 @@ const isOverride = (row: OperationSettingRow, operation: LifecycleStage, workspa
   row.scope._tag === "PrivateWorkspaceOverlay" &&
   row.scope.workspace === workspace;
 
+const storedOverride = (
+  rows: ReadonlyArray<OperationSettingRow>,
+  setting: OperationSettingName,
+  operation: LifecycleStage,
+  workspace: WorkspaceId,
+) => rows.find((row) => row.setting === setting && isOverride(row, operation, workspace)) ?? null;
+
+const inheritedValue = (
+  rows: ReadonlyArray<OperationSettingRow>,
+  setting: OperationSettingName,
+  operation: LifecycleStage,
+  workspace: WorkspaceId,
+) =>
+  resolveOperationSetting(
+    rows.filter((row) => !isOverride(row, operation, workspace)),
+    setting,
+    { workflow: codingWorkflow, operation, workspace },
+  );
+
 const asDisplayValue = (value: ReturnType<typeof resolveOperationSetting>) => {
   if (value === null) return null;
   if (typeof value === "boolean") return String(value);
@@ -120,17 +164,10 @@ export const settingCell = (
   setting: OperationSettingName,
 ) => {
   const rows = controlStore?.operationSettings ?? [];
-  const context = { workflow: codingWorkflow, operation, workspace };
-  const resolvedInherited = asDisplayValue(
-    resolveOperationSetting(
-      rows.filter((row) => !isOverride(row, operation, workspace)),
-      setting,
-      context,
-    ),
-  );
+  const resolvedInherited = asDisplayValue(inheritedValue(rows, setting, operation, workspace));
   const inherited =
     resolvedInherited ?? (setting === "permission-profile" ? defaultProfile(operation) : null);
-  const stored = rows.find((row) => row.setting === setting && isOverride(row, operation, workspace));
+  const stored = storedOverride(rows, setting, operation, workspace);
   const own = stored ? asDisplayValue(stored.value) : null;
   const effective = own ?? inherited;
   return {
@@ -160,8 +197,9 @@ const isStale = (
   if (setting === "permission-profile") {
     return !catalog.policyProfiles.some((profile) => profile === value);
   }
-  const options = setting === "model" ? catalog.models : (catalog.efforts ?? []);
-  return !options.some((option) => option.value === value);
+  if (setting === "model") return !catalog.models.some((model) => model.value === value);
+  const model = settingCell(controlStore, catalogs, workspace, operation, "model").effective;
+  return !(effortChoices(catalog, model) ?? []).some((choice) => choice.value === value);
 };
 
 /** A one-line summary of an operation, for a collapsed row. */
@@ -181,6 +219,57 @@ export const operationSummaryLine = (
   return parts.length === 0 ? "Inherited" : parts.join(" · ");
 };
 
+const isModelOptions = Schema.is(Schema.Array(OperationModelOption));
+
+const modelOptionsValue = (value: unknown) => (isModelOptions(value) ? value : []);
+
+export const modelOptionSets = (
+  controlStore: ControlStore | null,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+) => {
+  const rows = controlStore?.operationSettings ?? [];
+  const stored = storedOverride(rows, "model-options", operation, workspace);
+  return {
+    own: stored ? modelOptionsValue(stored.value) : null,
+    inherited: modelOptionsValue(inheritedValue(rows, "model-options", operation, workspace)),
+  };
+};
+
+export type ModelOptionSets = ReturnType<typeof modelOptionSets>;
+
+export const modelOptionCell = (sets: ModelOptionSets, option: HarnessModelOption) => {
+  const own = selectedModelOption(sets.own ?? [], option.id);
+  const inherited = selectedModelOption(sets.inherited, option.id) ?? option.fallback;
+  const effective = own ?? inherited;
+  return {
+    own,
+    inherited,
+    effective,
+    stale: effective !== null && !option.choices.some((choice) => choice.value === effective),
+  };
+};
+
+const overlayCell = <Setting extends OperationSettingName>(
+  setting: Setting,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+) => ({
+  setting,
+  level: { _tag: "Operation" as const, workflow: codingWorkflow, operation },
+  scope: { _tag: "PrivateWorkspaceOverlay" as const, workspace },
+});
+
+export const modelOptionsUpdate = (
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+  value: ReadonlyArray<OperationModelOption> | null,
+) => {
+  const cell = overlayCell("model-options", workspace, operation);
+  if (value === null || value.length === 0) return { _tag: "Clear", cell } as OperationSettingUpdate;
+  return { _tag: "Set", row: { ...cell, value } } as OperationSettingUpdate;
+};
+
 /** The act that writes one setting, or clears it back onto the default. */
 export const operationSettingUpdate = (
   workspace: WorkspaceId,
@@ -188,13 +277,9 @@ export const operationSettingUpdate = (
   setting: OperationSettingName,
   value: string | null,
 ) => {
-  const level = { _tag: "Operation" as const, workflow: codingWorkflow, operation };
-  const scope = { _tag: "PrivateWorkspaceOverlay" as const, workspace };
-  if (value === null) return { _tag: "Clear", cell: { setting, level, scope } } as OperationSettingUpdate;
+  const cell = overlayCell(setting, workspace, operation);
+  if (value === null) return { _tag: "Clear", cell } as OperationSettingUpdate;
   // `enabled` is the one boolean in the family; every other setting is a string.
-  const row =
-    setting === "enabled"
-      ? { setting, level, scope, value: value === "true" }
-      : { setting, level, scope, value };
+  const row = setting === "enabled" ? { ...cell, value: value === "true" } : { ...cell, value };
   return { _tag: "Set", row } as OperationSettingUpdate;
 };

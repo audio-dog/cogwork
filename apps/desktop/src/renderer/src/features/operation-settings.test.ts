@@ -15,10 +15,15 @@ import {
   availableHarnessCatalogs,
   catalogChoiceLabel,
   catalogChoiceMatches,
+  effortChoices,
   harnessCatalogLoad,
   harnessIsDisabled,
+  modelOptionControls,
+  modelOptionsAfter,
+  modelOptionsUpdate,
   operationSettingUpdate,
   selectableHarnessCatalogs,
+  selectedModelOption,
   settingCell,
   unavailableHarnessLabel,
 } from "./operation-settings";
@@ -49,6 +54,151 @@ const optionCatalog = (
     policyProfiles,
     provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
   });
+
+describe("effortChoices", () => {
+  const perModel = {
+    harness: harness("cursor"),
+    ...HarnessOptionCatalog.make({
+      models: [
+        {
+          value: "claude-opus-5",
+          label: "Claude Opus 5",
+          options: [
+            {
+              id: "effort",
+              label: "Effort",
+              fallback: "high",
+              choices: [
+                { value: "low", label: "Low" },
+                { value: "high", label: "High" },
+              ],
+            },
+          ],
+        },
+        { value: "composer-2.5", label: "Composer 2.5", options: [] },
+      ],
+      policyProfiles: ["full"],
+      provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
+    }),
+  };
+
+  it("takes the choices from the model that parameterizes its own effort", () => {
+    expect(effortChoices(perModel, "claude-opus-5")).toEqual([
+      { value: "low", label: "Low" },
+      { value: "high", label: "High" },
+    ]);
+  });
+
+  it("offers no effort for a model that takes none, even beside one that does", () => {
+    expect(effortChoices(perModel, "composer-2.5")).toBeNull();
+  });
+
+  it("falls back to the one list a Harness applies to every model it offers", () => {
+    const shared = {
+      harness: harness("codex"),
+      ...optionCatalog(["full"], [{ value: "minimal", label: "Minimal" }]),
+    };
+
+    expect(effortChoices(shared, "model-a")).toEqual([{ value: "minimal", label: "Minimal" }]);
+  });
+});
+
+describe("modelOptionControls", () => {
+  const fast = {
+    id: "fast",
+    label: "Fast",
+    fallback: "true",
+    choices: [
+      { value: "false", label: "Off" },
+      { value: "true", label: "Fast" },
+    ],
+  };
+  const effort = {
+    id: "effort",
+    label: "Effort",
+    fallback: "high",
+    choices: [{ value: "high", label: "High" }],
+  };
+  const parameterized = {
+    harness: harness("cursor"),
+    ...HarnessOptionCatalog.make({
+      models: [
+        { value: "claude-opus-5", label: "Claude Opus 5", options: [effort, fast] },
+        { value: "composer-2.5", label: "Composer 2.5", options: [] },
+      ],
+      policyProfiles: ["full"],
+      provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
+    }),
+  };
+
+  it("leaves effort out, because it has a setting of its own", () => {
+    expect(modelOptionControls(parameterized, "claude-opus-5")).toEqual([fast]);
+  });
+
+  it("offers nothing for a model that parameterizes nothing", () => {
+    expect(modelOptionControls(parameterized, "composer-2.5")).toEqual([]);
+  });
+
+  it("offers nothing for a model absent from the catalog", () => {
+    expect(modelOptionControls(parameterized, "retired-model")).toEqual([]);
+  });
+});
+
+describe("selectedModelOption", () => {
+  const selected = [
+    { option: "fast", value: "false" },
+    { option: "context", value: "1m" },
+  ];
+
+  it("reads the value chosen for one option", () => {
+    expect(selectedModelOption(selected, "context")).toBe("1m");
+  });
+
+  it("has no value for an option nobody chose", () => {
+    expect(selectedModelOption(selected, "thinking")).toBeNull();
+  });
+});
+
+describe("modelOptionsAfter", () => {
+  it("replaces the value for one option and leaves the rest alone", () => {
+    expect(modelOptionsAfter([{ option: "fast", value: "true" }], "fast", "false")).toEqual([
+      { option: "fast", value: "false" },
+    ]);
+  });
+
+  it("adds an option nothing had chosen yet", () => {
+    expect(modelOptionsAfter([{ option: "fast", value: "true" }], "context", "1m")).toEqual([
+      { option: "fast", value: "true" },
+      { option: "context", value: "1m" },
+    ]);
+  });
+});
+
+describe("modelOptionsUpdate", () => {
+  const workspace = Schema.decodeSync(WorkspaceId)("w");
+
+  it("clears the whole cell, because one option cannot revert without its siblings", () => {
+    expect(modelOptionsUpdate(workspace, "implement", null)).toEqual({
+      _tag: "Clear",
+      cell: {
+        setting: "model-options",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+      },
+    });
+  });
+
+  it("reads an emptied set as no override at all", () => {
+    expect(modelOptionsUpdate(workspace, "implement", [])).toMatchObject({ _tag: "Clear" });
+  });
+
+  it("writes a chosen set onto the workspace overlay", () => {
+    expect(modelOptionsUpdate(workspace, "implement", [{ option: "fast", value: "false" }])).toMatchObject({
+      _tag: "Set",
+      row: { setting: "model-options", value: [{ option: "fast", value: "false" }] },
+    });
+  });
+});
 
 describe("availableHarnessCatalogs", () => {
   it("keeps published labels and absence of effort while excluding unusable harnesses", () => {
