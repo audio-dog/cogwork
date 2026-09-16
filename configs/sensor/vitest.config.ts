@@ -5,7 +5,7 @@ export default mergeConfig(
   base,
   defineConfig({
     test: {
-      include: ["*.test.mjs"],
+      include: ["*.test.{mjs,ts}"],
       restoreMocks: true,
     },
   }),

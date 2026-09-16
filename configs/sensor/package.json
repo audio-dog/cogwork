@@ -18,6 +18,7 @@
   },
   "devDependencies": {
     "@cogwork/test-config": "workspace:*",
+    "@effect/vitest": "catalog:effect",
     "@types/node": "catalog:",
     "tsx": "catalog:",
     "turbo": "catalog:",
