@@ -1,0 +1,19 @@
+apps/cli/src/commands.ts
+  s_82a5917ed09baa::t_ef3a0623a93546 9,116,236,238-239,242-256,259-261,284-292
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7974b4a35adaf8b5999132dbc992e3c0f289873f",
+  "prompts": {},
+  "sessions": {
+    "s_82a5917ed09baa": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed36c22b-3ad0-4bc5-9830-20443e458195",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
