@@ -37,7 +37,7 @@ import { ControlStore } from "./control-store";
 import { CredentialStore } from "./credential-store";
 import { Harness, type HarnessCapabilityProfile, type HarnessRunnerEnv } from "./harness";
 import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
-import { buildFollowUpPrompt, buildImplementPrompt, buildTriagePrompt } from "./playbook";
+import { buildOperationPrompt } from "./playbook";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import {
@@ -207,14 +207,6 @@ const sessionAffinity = (
   session: Session | null,
   capabilities: (harness: HarnessName) => HarnessCapabilityProfile | null,
 ) => (session ? (capabilities(session.harness)?.session.affinity ?? null) : null);
-
-const promptFor = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedOperation) => {
-  if (item.stage === "implement") return buildImplementPrompt(resolved.stage, item);
-  if (item.stage === "follow-up") {
-    return buildFollowUpPrompt(resolved.stage, item, workspace.config.linearHistory);
-  }
-  return buildTriagePrompt(resolved.stage, item);
-};
 
 const selectedPrompt = (
   choice: ReturnType<typeof decideSessionChoice>,
@@ -596,7 +588,7 @@ export const make = Effect.gen(function* () {
       maxTokens: resolved.stage.resumeMaxTokens,
       now: yield* Clock.currentTimeMillis,
     });
-    const fullPrompt = promptFor(facts.workspace, facts.item, resolved);
+    const fullPrompt = buildOperationPrompt(resolved.stage, facts.item, facts.workspace.config.linearHistory);
     const prompt = selectedPrompt(choice, fullPrompt, facts.continuationPrompt);
     const prepared = prepareResolution(facts.workspace, evaluated.overview);
     const builder = buildRunPlan({

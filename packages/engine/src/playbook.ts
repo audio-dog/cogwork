@@ -225,3 +225,13 @@ export const buildFollowUpPrompt = (
   buildPrompt(resolved, item, null, {
     linearHistory: linearHistory ? "required" : "not required",
   });
+
+export const buildOperationPrompt = (
+  resolved: OperationDefinition,
+  item: PromptItem & { readonly stage: LifecycleStage },
+  linearHistory: WorkspaceConfig["linearHistory"],
+) => {
+  if (item.stage === "implement") return buildImplementPrompt(resolved, item);
+  if (item.stage === "follow-up") return buildFollowUpPrompt(resolved, item, linearHistory);
+  return buildTriagePrompt(resolved, item);
+};

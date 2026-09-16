@@ -1,12 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type {
   AvailabilityCause,
-  BranchName,
   HarnessName,
   RunPlanObservation,
   RunRecord,
-  Session,
-  SessionId,
   StageResult,
   TokenUsage,
 } from "@cogwork/contracts";
@@ -14,7 +11,6 @@ import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
-  BranchName as BranchNameSchema,
   decodeStageResultCompletion,
   ImplementStageResult,
   issueTrackerErrorIsPermanent,
@@ -54,14 +50,7 @@ import type { GitError } from "./git";
 import { Harness, HarnessError, type HarnessRequest, type HarnessRunnerEnv } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import * as OperationResolution from "./operation-resolution";
-import {
-  buildContinuationNudge,
-  buildFollowUpPrompt,
-  buildImplementPrompt,
-  buildTriagePrompt,
-  OperationOutcome,
-  type OperationOutcomeTable,
-} from "./playbook";
+import { OperationOutcome, type OperationOutcomeTable } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import {
@@ -79,9 +68,10 @@ import {
   type RunLedgerError,
   type RunUpdate,
 } from "./run-ledger";
-import type { ResolvedOperation, ResolvedStage } from "./run-plan";
+import type { ResolvedOperation } from "./run-plan";
+import type { PreparedRun } from "./run-preparation";
+import * as RunPreparation from "./run-preparation";
 import { RunRecorder } from "./run-recorder";
-import { SessionChoice } from "./session-choice";
 import { SessionStore } from "./session-store";
 import { type OpenedPullRequest, SourceControlProvider } from "./source-control";
 import { branchName, PullRequestReadiness, WorktreeManager } from "./worktree";
@@ -90,35 +80,11 @@ export const harnessEventFoldDuration = Metric.timer("cogwork_harness_event_fold
   description: "Time to fold one harness event into Run state.",
 });
 
-const isReplayHarness = (harness: HarnessName) => harness === "replay";
-
 interface RunAccumulator {
   readonly handle: string | null;
   readonly usage: TokenUsage | null;
   readonly structuredOutputs: ReadonlyArray<unknown>;
   readonly deferredTerminal: AgUiEvent | null;
-}
-
-interface PreparedRun {
-  readonly checkoutPath: string;
-  readonly session: SessionId | null;
-  readonly prompt: string;
-  readonly worktreeRecreated?: boolean;
-  readonly resumeCandidate?: PreparedResumeCandidate;
-}
-
-interface PreparedResumeCandidate {
-  readonly session: Session | null;
-  readonly lastRunStartedAtMillis: number | null;
-  readonly lastRunTotalTokens: number | null;
-  readonly worktreeRecreated: boolean;
-  readonly fresh: boolean;
-}
-
-interface SessionCandidates {
-  readonly candidateSession: SessionId | null;
-  readonly recoverySession: SessionId | null;
-  readonly latestBranchSession: SessionId | null;
 }
 
 type HarnessAdmission<A> =
@@ -132,29 +98,7 @@ const emptyAccumulator: RunAccumulator = {
   deferredTerminal: null,
 };
 
-// A best-guess estimate undercounts the real transcript, so it must never trip the
-// resume token cap — only metered usage from the harness can gate the resume decision.
-export const meteredTotalTokens = (usage: TokenUsage | null | undefined) =>
-  usage && !usage.estimated ? (usage.totalTokens ?? null) : null;
-
-interface StageOps {
-  readonly resolved: ResolvedStage;
-  readonly planStage: ResolvedOperation;
-  readonly branch: BranchName | null;
-  readonly prepare: Effect.Effect<PreparedRun, PrepareError>;
-  readonly fullPrompt: string;
-  readonly resumePolicy: boolean;
-}
-
-type ExecutableWork = Omit<EligibleWork, "followUpBranch"> & {
-  readonly followUpBranch: BranchName | undefined;
-};
-
-const mintBranchName = (item: EligibleWork) => {
-  const { followUpBranch, ...work } = item;
-  if (item.stage !== "follow-up" || !followUpBranch) return { ...work, followUpBranch: undefined };
-  return { ...work, followUpBranch: BranchNameSchema.make(followUpBranch) };
-};
+export { meteredTotalTokens } from "./resume-policy";
 
 declare const emptyClaimDisposition: unique symbol;
 type EmptyClaimDisposition = { readonly [emptyClaimDisposition]?: never };
@@ -176,13 +120,6 @@ const defaultFollowUp: FollowUpContext = {
   stalled: false,
   fresh: false,
   baseDivergence: "none",
-};
-
-const resumeWorktreeOptions = (item: ExecutableWork) => {
-  if (item.stage === "follow-up" && item.followUpBranch) {
-    return { resume: true, branch: item.followUpBranch };
-  }
-  return { resume: true };
 };
 
 const withHandle = (acc: RunAccumulator, handle: string | null) => ({ ...acc, handle });
@@ -245,6 +182,7 @@ export const make = Effect.gen(function* () {
   const sourceControl = yield* SourceControlProvider;
   const contextAssembler = yield* ContextAssembler;
   const controlStore = yield* ControlStore;
+  const runPreparation = yield* RunPreparation.make;
   const harnessRunnerContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
     Effect.map(
       Context.pick(
@@ -279,124 +217,6 @@ export const make = Effect.gen(function* () {
 
   const nextRunId = () =>
     Effect.sync(() => `run-${randomUUID()}`).pipe(Effect.flatMap(decodeRunId), Effect.orDie);
-
-  const branchSessionFacts = (workspace: RegisteredWorkspace, branch: BranchName) =>
-    Effect.all([
-      ledger.sessionForBranch(workspace.config.name, branch),
-      ledger.latestRunByBranch(workspace.config.name, branch),
-    ]).pipe(
-      Effect.map(([latestBranchSession, latestResumableBranchRun]) => ({
-        latestBranchSession,
-        currentResumableRun:
-          latestBranchSession === latestResumableBranchRun?.session ? latestResumableBranchRun : null,
-      })),
-    );
-
-  const currentResumableBranchRun = (workspace: RegisteredWorkspace, branch: BranchName) =>
-    branchSessionFacts(workspace, branch).pipe(Effect.map(({ currentResumableRun }) => currentResumableRun));
-
-  const candidateSessions = (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    branch: BranchName | null,
-  ) => {
-    const recoverySession = item.resume?.session ?? null;
-    if (!branch) {
-      return Effect.succeed({
-        candidateSession: recoverySession,
-        recoverySession,
-        latestBranchSession: null,
-      } satisfies SessionCandidates);
-    }
-    return branchSessionFacts(workspace, branch).pipe(
-      Effect.map(({ latestBranchSession, currentResumableRun }) => {
-        const latestResumableBranchSession = currentResumableRun?.session ?? null;
-        return {
-          candidateSession: recoverySession ?? latestResumableBranchSession,
-          recoverySession,
-          latestBranchSession,
-        } satisfies SessionCandidates;
-      }),
-    );
-  };
-
-  const logSessionChoice = Effect.fn("Executor.logSessionChoice")(function* (
-    ops: StageOps,
-    session: Session | null,
-    choice: SessionChoice,
-  ) {
-    if (!session) return;
-    if (session.harness !== ops.resolved.harness) {
-      yield* Effect.logInfo("started fresh after harness switch", {
-        ...(ops.branch ? { branch: ops.branch } : {}),
-        oldHarness: session.harness,
-        newHarness: ops.resolved.harness,
-      });
-      return;
-    }
-    if (!SessionChoice.$is("Combined")(choice)) return;
-    yield* Effect.logInfo("started fresh after Sandbox lineage was recreated", {
-      ...(ops.branch ? { branch: ops.branch } : {}),
-      harness: session.harness,
-    });
-  });
-
-  const loadSessionChoiceCandidate = Effect.fn("Executor.loadSessionChoiceCandidate")(function* (
-    ops: StageOps,
-    prepared: PreparedRun,
-    candidateSession: SessionId | null,
-  ) {
-    if (prepared.session) return yield* ledger.getSession(prepared.session);
-    if (ops.resumePolicy) return prepared.resumeCandidate?.session ?? null;
-    if (!candidateSession) return null;
-    return yield* ledger.getSession(candidateSession);
-  });
-
-  const resolveCandidate = Effect.fn("Executor.resolveCandidate")(function* (
-    runId: RunId,
-    workspace: RegisteredWorkspace,
-    item: ExecutableWork,
-    ops: StageOps,
-    prepared: PreparedRun,
-    startedAtMillis: number,
-    sessions: SessionCandidates,
-    observation: RunPlanObservation,
-  ) {
-    const candidate = prepared.resumeCandidate;
-    const preparedSession = yield* loadSessionChoiceCandidate(ops, prepared, sessions.candidateSession);
-    const accepted = yield* operationResolution.resolve({
-      runId,
-      workspace,
-      item,
-      observation,
-      checkoutPath: prepared.checkoutPath,
-      continuationPrompt: prepared.prompt,
-      startedAtMillis,
-      sessionChoice: {
-        session: preparedSession,
-        recoverySession: sessions.recoverySession,
-        latestBranchSession: sessions.latestBranchSession,
-        lastRunStartedAtMillis: candidate?.lastRunStartedAtMillis ?? null,
-        lastRunTotalTokens: candidate?.lastRunTotalTokens ?? null,
-        worktreeRecreated: candidate?.worktreeRecreated ?? prepared.worktreeRecreated ?? false,
-        fresh: candidate?.fresh ?? false,
-        applyResumePolicy:
-          ops.resumePolicy && prepared.session === null && prepared.resumeCandidate !== undefined,
-      },
-    });
-    const selectedOps = stageOps(workspace, item, accepted.resolved);
-    yield* logSessionChoice(selectedOps, preparedSession, accepted.sessionChoice);
-    return {
-      request: {
-        plan: accepted.plan,
-        session: accepted.session,
-        mcpCredentials: accepted.mcpCredentials,
-      } satisfies HarnessRequest,
-      session: accepted.session,
-      plan: accepted.plan,
-      selectedOps,
-    };
-  });
 
   const claimScope = (workspace: RegisteredWorkspace, item: EligibleWork) =>
     `${workspace.config.name}:${item.id}:${item.stage}`;
@@ -662,46 +482,6 @@ export const make = Effect.gen(function* () {
     return acc.structuredOutputs[0];
   });
 
-  const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    prompt: string,
-  ) {
-    const worktree = yield* worktrees.ensure(workspace, item);
-    return { checkoutPath: worktree.path, prompt, session: null } satisfies PreparedRun;
-  });
-
-  const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
-    const resolved = planStage.stage;
-    const fullPrompt = buildTriagePrompt(resolved, item);
-    return {
-      resolved,
-      planStage,
-      branch: null,
-      prepare: Effect.succeed({
-        checkoutPath: workspace.config.checkoutPath,
-        prompt: fullPrompt,
-        session: null,
-      }),
-      fullPrompt,
-      resumePolicy: false,
-    } satisfies StageOps;
-  };
-
-  const implementOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
-    const resolved = planStage.stage;
-    const branch = branchName(item);
-    const fullPrompt = buildImplementPrompt(resolved, item);
-    return {
-      resolved,
-      planStage,
-      branch,
-      prepare: prepareImplement(workspace, item, fullPrompt),
-      fullPrompt,
-      resumePolicy: false,
-    } satisfies StageOps;
-  };
-
   const followUpMarker = (context: FollowUpContext, noProgress: number) => ({
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
@@ -725,49 +505,6 @@ export const make = Effect.gen(function* () {
         ),
       );
   });
-
-  const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    branch: BranchName,
-    context: FollowUpContext,
-    prompt: string,
-  ) {
-    const worktree = yield* worktrees.ensure(workspace, item, { branch });
-    const last = yield* currentResumableBranchRun(workspace, branch);
-    const session = last?.session ? yield* ledger.getSession(last.session) : null;
-    return {
-      checkoutPath: worktree.path,
-      prompt,
-      session: null,
-      resumeCandidate: {
-        session,
-        lastRunStartedAtMillis: last?.startedAtMillis ?? null,
-        lastRunTotalTokens: meteredTotalTokens(last?.usage),
-        worktreeRecreated: worktree.created,
-        fresh: context.fresh,
-      },
-    } satisfies PreparedRun;
-  });
-
-  const followUpOps = (
-    workspace: RegisteredWorkspace,
-    item: ExecutableWork,
-    planStage: ResolvedOperation,
-  ) => {
-    const resolved = planStage.stage;
-    const branch = item.followUpBranch ?? branchName(item);
-    const context = item.followUp ?? defaultFollowUp;
-    const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
-    return {
-      resolved,
-      planStage,
-      branch,
-      prepare: prepareFollowUp(workspace, item, branch, context, fullPrompt),
-      fullPrompt,
-      resumePolicy: true,
-    } satisfies StageOps;
-  };
 
   const outcomeForResult = (table: OperationOutcomeTable, result: string) =>
     table.outcomes.find((outcome) => outcome.result === result) ?? null;
@@ -995,7 +732,7 @@ export const make = Effect.gen(function* () {
   const completeOperation = Effect.fn("Executor.completeOperation")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    ops: StageOps,
+    outcomeTable: OperationOutcomeTable,
     record: RunRecord,
     acc: RunAccumulator,
   ) {
@@ -1004,7 +741,7 @@ export const make = Effect.gen(function* () {
       if (status === "failed") return recorder.record(record, failedTerminal);
       return recorder.record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" });
     };
-    return yield* decodeOperationOutcome(item.stage, ops.resolved.outcomeTable, acc).pipe(
+    return yield* decodeOperationOutcome(item.stage, outcomeTable, acc).pipe(
       Effect.matchEffect({
         onFailure: (error) =>
           recordCompletionTerminal("failed").pipe(
@@ -1036,63 +773,10 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const resumePrepare = Effect.fn("Executor.resumePrepare")(function* (
-    workspace: RegisteredWorkspace,
-    item: ExecutableWork,
-    session: SessionId,
-  ) {
-    if (item.stage === "triage") {
-      const path = workspace.config.checkoutPath;
-      return { checkoutPath: path, prompt: buildContinuationNudge(path), session } satisfies PreparedRun;
-    }
-    const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    return {
-      checkoutPath: worktree.path,
-      prompt: buildContinuationNudge(worktree.path),
-      session,
-      worktreeRecreated: worktree.created,
-    } satisfies PreparedRun;
-  });
-
-  const plannedStageOps = (
-    workspace: RegisteredWorkspace,
-    item: ExecutableWork,
-    planStage: ResolvedOperation,
-  ) => {
-    if (item.stage === "implement") return implementOps(workspace, item, planStage);
-    if (item.stage === "follow-up") return followUpOps(workspace, item, planStage);
-    return triageOps(workspace, item, planStage);
-  };
-
-  const stageOps = (workspace: RegisteredWorkspace, item: ExecutableWork, planStage: ResolvedOperation) => {
-    const ops = plannedStageOps(workspace, item, planStage);
-    if (!isReplayHarness(ops.resolved.harness)) return ops;
-    return {
-      ...ops,
-      branch: null,
-      prepare: Effect.succeed({
-        checkoutPath: workspace.config.checkoutPath,
-        prompt: ops.fullPrompt,
-        session: null,
-      }),
-    } satisfies StageOps;
-  };
-
-  const opsFor = (workspace: RegisteredWorkspace, item: ExecutableWork, planStage: ResolvedOperation) => {
-    const ops = stageOps(workspace, item, planStage);
-    if (isReplayHarness(ops.resolved.harness)) return ops;
-    const session = item.resume?.session;
-    if (!session) return ops;
-    return {
-      ...ops,
-      prepare: resumePrepare(workspace, item, session),
-    } satisfies StageOps;
-  };
-
   const settleOutcome = Effect.fn("Executor.settleOutcome")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    ops: StageOps,
+    outcomeTable: OperationOutcomeTable,
     record: RunRecord,
     runId: RunId,
     request: HarnessRequest,
@@ -1107,7 +791,7 @@ export const make = Effect.gen(function* () {
     const settleFailure = (error: PrepareError | HarnessError) =>
       recordEncodingFailureTerminal(error).pipe(
         Effect.andThen(handleOf(ledger, record.session)),
-        Effect.flatMap((handle) => applyFailure(workspace, item, runId, error, ops.resolved.harness, handle)),
+        Effect.flatMap((handle) => applyFailure(workspace, item, runId, error, record.harness, handle)),
       );
 
     const settleCompletionFailure = (error: RunLedgerError) => {
@@ -1139,12 +823,12 @@ export const make = Effect.gen(function* () {
         }),
       );
 
-    if (isReplayHarness(record.harness)) {
+    if (record.harness === "replay") {
       yield* settleRecorded(foldHarness(record, request, false));
       return ClaimDisposition.Release({});
     }
     return yield* settle(foldHarness(record, request, item.stage === "triage"), (acc) =>
-      completeOperation(workspace, item, ops, record, acc),
+      completeOperation(workspace, item, outcomeTable, record, acc),
     );
   });
 
@@ -1153,23 +837,23 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     startedAtMillis: number,
-    planned: Effect.Success<ReturnType<typeof resolveCandidate>>,
+    prepared: PreparedRun,
   ) {
     const record: RunRecord = {
       id: runId,
       workspace: workspace.config.name,
       workItem: item.id,
       stage: item.stage,
-      harness: planned.selectedOps.resolved.harness,
-      branch: planned.selectedOps.branch,
-      session: planned.session,
+      harness: prepared.operation.stage.harness,
+      branch: prepared.branch,
+      session: prepared.session,
       usage: null,
       status: "running",
       startedAtMillis,
       endedAtMillis: null,
     };
-    yield* ledger.acceptRun(record, planned.plan);
-    return { ...planned, record };
+    yield* ledger.acceptRun(record, prepared.plan);
+    return { ...prepared, record };
   });
 
   const acceptEnabledHarnessRun = Effect.fn("Executor.acceptEnabledHarnessRun")(function* (
@@ -1177,14 +861,14 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     startedAtMillis: number,
-    planned: Effect.Success<ReturnType<typeof resolveCandidate>>,
+    prepared: PreparedRun,
   ) {
     const admission = yield* controlStore.withWrite(
       operationResolution
-        .harnessCause(planned.selectedOps.resolved.harness)
+        .harnessCause(prepared.operation.stage.harness)
         .pipe(
           Effect.flatMap((cause) =>
-            admitHarness(cause, acceptPlannedRun(runId, workspace, item, startedAtMillis, planned)),
+            admitHarness(cause, acceptPlannedRun(runId, workspace, item, startedAtMillis, prepared)),
           ),
         ),
     );
@@ -1229,11 +913,9 @@ export const make = Effect.gen(function* () {
     if (!checked.resolved || !checked.availability.available) {
       return yield* decline(workspace, item, checked.availability.causes);
     }
-    const executable = mintBranchName(item);
-    const stageOps = opsFor(workspace, executable, checked.resolved);
     const admission = yield* claimEnabledItem(workspace, item);
     if (!admission.claimed) return false;
-    yield* runClaimed(workspace, executable, stageOps, admission.startedAtMillis, observation).pipe(
+    yield* runClaimed(workspace, item, checked.resolved, admission.startedAtMillis, observation).pipe(
       Effect.tap(
         ClaimDisposition.$match({
           Hold: () => Effect.void,
@@ -1249,80 +931,82 @@ export const make = Effect.gen(function* () {
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
-    item: ExecutableWork,
-    ops: StageOps,
+    item: EligibleWork,
+    operation: ResolvedOperation,
     startedAtMillis: number,
     observation: RunPlanObservation,
   ) {
     const runId = yield* nextRunId();
+    type PreparationFailure = Effect.Error<ReturnType<typeof runPreparation.prepare>>;
     const correlation = {
       workspace: workspace.config.name,
       item: item.id,
       stage: item.stage,
       runId,
     };
-    const prepareAcceptedRun = Effect.fn("Executor.prepareAcceptedRun")(function* (
-      sessions: SessionCandidates,
-      prepared: PreparedRun,
-    ) {
-      const planned = yield* resolveCandidate(
-        runId,
-        workspace,
-        item,
-        ops,
-        prepared,
-        startedAtMillis,
-        sessions,
-        observation,
-      );
-      return yield* acceptEnabledHarnessRun(runId, workspace, item, startedAtMillis, planned);
-    });
-    const runWithSessionCandidates = Effect.fn("Executor.runWithSessionCandidates")(function* (
-      sessions: SessionCandidates,
-    ) {
-      return yield* ops.prepare.pipe(
-        Effect.flatMap((prepared) => prepareAcceptedRun(sessions, prepared)),
-        Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+    const acceptPreparedRun = Effect.fn("Executor.acceptPreparedRun")(function* (prepared: PreparedRun) {
+      const accepted = yield* acceptEnabledHarnessRun(runId, workspace, item, startedAtMillis, prepared).pipe(
         Effect.matchEffect({
-          onFailure: (error) => {
-            if (error._tag === "OperationUnavailable") {
-              return noteUnavailableResume(workspace, item, error.availability.causes).pipe(
-                Effect.map(() => ClaimDisposition.Release({})),
-              );
-            }
-            const storedSession = sessions.candidateSession
-              ? ledger.getSession(sessions.candidateSession)
-              : Effect.succeed(null);
-            return storedSession.pipe(
-              Effect.flatMap((session) =>
-                reportFailure(
-                  workspace,
-                  item,
-                  error,
-                  session?.harness ?? ops.resolved.harness,
-                  sessionHandle(session),
-                ),
-              ),
-              Effect.map(() => ClaimDisposition.Release({})),
-            );
-          },
-          onSuccess: (accepted) => {
-            if (!accepted) return Effect.succeed(ClaimDisposition.Release({}));
-            const { request, selectedOps: acceptedOps, record } = accepted;
-            return settleOutcome(workspace, item, acceptedOps, record, runId, request);
-          },
+          onFailure: (error) =>
+            reportFailure(
+              workspace,
+              item,
+              error,
+              prepared.failureSession?.harness ?? prepared.operation.stage.harness,
+              sessionHandle(prepared.failureSession),
+            ).pipe(Effect.map(() => null)),
+          onSuccess: Effect.succeed,
         }),
       );
+      return accepted;
+    });
+    const settleAcceptedRun = Effect.fn("Executor.settleAcceptedRun")(function* (
+      accepted: Effect.Success<ReturnType<typeof acceptPreparedRun>>,
+    ) {
+      if (!accepted) return ClaimDisposition.Release({});
+      const { request, outcomeTable, record } = accepted;
+      return yield* settleOutcome(workspace, item, outcomeTable, record, runId, request);
+    });
+    const reportPreparationFailure = Effect.fn("Executor.reportPreparationFailure")(function* ({
+      error,
+      session,
+    }: PreparationFailure) {
+      if (error._tag === "OperationUnavailable") {
+        yield* noteUnavailableResume(workspace, item, error.availability.causes);
+        return null;
+      }
+      yield* reportFailure(
+        workspace,
+        item,
+        error,
+        session?.harness ?? operation.stage.harness,
+        sessionHandle(session),
+      );
+      return null;
     });
     return yield* runControl.run(
       runId,
       workspace,
-      candidateSessions(workspace, item, ops.branch).pipe(
-        Effect.flatMap(runWithSessionCandidates),
-        Effect.ensuring(cleanupRunContext(runId)),
-        Effect.annotateLogs(correlation),
-        Effect.annotateSpans(correlation),
-      ),
+      runPreparation
+        .prepare({
+          runId,
+          workspace,
+          item,
+          operation,
+          startedAtMillis,
+          observation,
+        })
+        .pipe(
+          Effect.matchEffect({
+            onFailure: reportPreparationFailure,
+            onSuccess: acceptPreparedRun,
+          }),
+          Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+          Effect.flatMap(settleAcceptedRun),
+          Effect.ensuring(cleanupRunContext(runId)),
+          Effect.annotateLogs(correlation),
+          Effect.annotateSpans(correlation),
+        ),
       releaseClaim(workspace, item.id),
     );
   });
