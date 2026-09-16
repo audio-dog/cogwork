@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_82a5917ed09baa::t_7d83fa3fd70717 36,203,274,276-283,300-301
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_82a5917ed09baa::t_960b3d052d6691 18,21-23,26,58-202
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_82a5917ed09baa::t_f09fab00f6a276 4,10,18,84-105,133-151,167,170,200-202,222-272,280-281,283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8e946b5d7af47b77619254bea20736559e6a773c",
+  "prompts": {},
+  "sessions": {
+    "s_82a5917ed09baa": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed36c22b-3ad0-4bc5-9830-20443e458195",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
