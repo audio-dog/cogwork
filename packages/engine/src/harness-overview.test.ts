@@ -156,6 +156,24 @@ const runner = (
 });
 
 describe("harnessOverview", () => {
+  it.effect("leaves out a runner nobody may choose, so it reaches no picker", () =>
+    Effect.gen(function* () {
+      const overview = yield* harnessOverview();
+
+      assert.deepStrictEqual(
+        overview.harnesses.map((item) => item.harness),
+        ["codex"],
+      );
+    }).pipe(
+      Effect.provide(
+        probeLayer([
+          runner("codex"),
+          runner("replay", { execution: { ...fullHarnessExecution, selectable: false } }),
+        ]),
+      ),
+    ),
+  );
+
   it.effect("carries stored enablement beside readiness", () =>
     Effect.gen(function* () {
       const overview = yield* harnessOverview([{ harness: harness("codex"), enabled: false }]);

@@ -655,15 +655,25 @@ describe("Harness", () => {
         const postures = [
           {
             expected: "non-interactive",
-            execution: { nonInteractive: false, worktreeConfined: true, profiles: ["read-only"] },
+            execution: {
+              selectable: true,
+              nonInteractive: false,
+              worktreeConfined: true,
+              profiles: ["read-only"],
+            },
           },
           {
             expected: "worktree confinement",
-            execution: { nonInteractive: true, worktreeConfined: false, profiles: ["read-only"] },
+            execution: {
+              selectable: true,
+              nonInteractive: true,
+              worktreeConfined: false,
+              profiles: ["read-only"],
+            },
           },
           {
             expected: "read-only operation posture",
-            execution: { nonInteractive: true, worktreeConfined: true, profiles: [] },
+            execution: { selectable: true, nonInteractive: true, worktreeConfined: true, profiles: [] },
           },
         ] satisfies ReadonlyArray<{ readonly expected: string; readonly execution: HarnessExecution }>;
 
@@ -706,6 +716,7 @@ describe("Harness", () => {
           projectedMembers: [],
           planMiddleware: [],
           execution: {
+            selectable: true,
             nonInteractive: true,
             worktreeConfined: true,
             profiles: ["read-only"],

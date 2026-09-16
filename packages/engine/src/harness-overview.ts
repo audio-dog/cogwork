@@ -76,7 +76,7 @@ export const harnessOverview = Effect.fn("Harness.overview")(function* (
 ) {
   const harness = yield* Harness;
   const harnesses = yield* Effect.forEach(
-    harness.names,
+    harness.names.filter((name) => harness.selectable(name)),
     (name) => {
       const enabled = harnessEnabled(settings, name);
       return overviewItem(harness, name, enabled).pipe(

@@ -64,6 +64,12 @@ export interface HarnessExecution {
   readonly nonInteractive: boolean;
   readonly worktreeConfined: boolean;
   readonly profiles: ReadonlyArray<OperationPolicyProfile>;
+  /**
+   * Whether a person may choose this runner. The measurement runner generates load and the
+   * provider runner is unreleased scaffolding: both must run when an Operation already names
+   * them, and neither belongs in a picker.
+   */
+  readonly selectable: boolean;
 }
 
 export type HarnessCatalogChoice = ContractHarnessCatalogChoice;
@@ -167,6 +173,7 @@ export const selectionOfPreflightInput = HarnessPreflightInput.$match({
 });
 
 export const fullHarnessExecution: HarnessExecution = {
+  selectable: true,
   nonInteractive: true,
   worktreeConfined: true,
   profiles: ["read-only", "full"],
@@ -264,6 +271,7 @@ export interface HarnessService {
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
   readonly capabilities: (harness: HarnessName) => HarnessCapabilityProfile | null;
+  readonly selectable: (harness: HarnessName) => boolean;
   readonly readiness: (
     harness: HarnessName,
   ) => Effect.Effect<HarnessReadiness, HarnessError, HarnessRunnerEnv>;
@@ -526,6 +534,7 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
       ),
     sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
     capabilities: (harness) => registry.get(harness)?.capabilities ?? null,
+    selectable: (harness) => registry.get(harness)?.execution.selectable ?? false,
     readiness,
     projectedMembers: (harness) => registry.get(harness)?.projectedMembers ?? [],
     planMiddleware: (harness) => registry.get(harness)?.planMiddleware ?? [],

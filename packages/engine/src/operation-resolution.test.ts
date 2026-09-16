@@ -122,6 +122,7 @@ const harnessService = Layer.mock(Harness, {
   signIn: () => null,
   preflight: () => Effect.void,
   sessionKind: () => "opaque-handle",
+  selectable: () => true,
   capabilities: () => ({
     authenticationModes: ["host"],
     session: { affinity: "runtime-host", fork: false, humanAttach: false },

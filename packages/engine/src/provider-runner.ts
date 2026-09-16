@@ -142,7 +142,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
       "Persistence",
     ],
     planMiddleware: ["persistence", "instruction-context"],
-    execution: fullHarnessExecution,
+    execution: { ...fullHarnessExecution, selectable: false },
     capabilities: {
       authenticationModes: ["byok"],
       session: { affinity: "portable", fork: false, humanAttach: false },

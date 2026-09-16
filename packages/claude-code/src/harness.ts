@@ -294,11 +294,19 @@ const claudeReadiness = Effect.fn("ClaudeCode.readinessResult")(
     ),
 );
 
-const modelLabel = (model: string) =>
-  model
-    .split("-")
+const isVersionSegment = (part: string) => /^\d+$/.test(part);
+
+// Anthropic writes `claude-opus-4-8` as "Claude Opus 4.8", so the version segments join on a
+// dot. Space-joining every segment reads as "Claude Opus 4 8".
+const modelLabel = (model: string) => {
+  const parts = model.split("-");
+  const name = parts
+    .filter((part) => !isVersionSegment(part))
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");
+  const version = parts.filter(isVersionSegment).join(".");
+  return version ? `${name} ${version}` : name;
+};
 
 const modelChoices = (models: ReadonlyArray<ClaudeCodeModel>) =>
   [...new Set(models)].map((model) => ({ value: model, label: modelLabel(model) }));

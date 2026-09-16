@@ -382,7 +382,7 @@ export const replayRunner = Effect.fn("ReplayHarness.runner")(function* (options
         ({
           name: options.name,
           sessionKind: "owned-transcript",
-          execution: fullHarnessExecution,
+          execution: { ...fullHarnessExecution, selectable: false },
           capabilities: {
             authenticationModes: ["host"],
             session: { affinity: "portable", fork: false, humanAttach: false },
