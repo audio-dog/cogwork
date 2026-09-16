@@ -10,6 +10,7 @@ import {
   initialBoard,
   type OperationSettingContext,
   type OperationSettingName,
+  type OperationSettingRow,
   OperationSettingUpdate,
   operationSettingNames,
   type RunActivity,
@@ -245,19 +246,24 @@ const bindingValue = (value: string) =>
 const modelOptionsValue = (value: string) =>
   keyedPairs(value).map((pair) => ({ option: pair.key, value: pair.value }));
 
-const reservesEffort = (value: unknown) =>
-  Array.isArray(value) && value.some((pair) => pair?.option === effortOptionId);
-
-const operationSettingValues: Partial<
-  Record<OperationSettingName, (value: string) => boolean | string | object | undefined>
-> = {
-  enabled: (value) => ({ on: true, off: false })[value],
+// An unreadable value stays the raw string, so the update fails decode rather than being
+// silently read as something the operator did not type.
+const operationSettingValues = {
+  enabled: (value: string) => ({ on: true, off: false })[value],
   bindings: bindingValue,
   "model-options": modelOptionsValue,
-};
+} satisfies Partial<
+  Record<OperationSettingName, (value: string) => OperationSettingRow["value"] | undefined>
+>;
+
+const parsesSetting = (setting: OperationSettingName): setting is keyof typeof operationSettingValues =>
+  setting in operationSettingValues;
 
 const operationSettingValue = (setting: OperationSettingName, value: string) =>
-  operationSettingValues[setting]?.(value) ?? value;
+  parsesSetting(setting) ? (operationSettingValues[setting](value) ?? value) : value;
+
+const reservesEffort = (value: OperationSettingRow["value"] | string) =>
+  Array.isArray(value) && value.some((pair) => "option" in pair && pair.option === effortOptionId);
 
 const decodeOperationSettingUpdate = (input: unknown) =>
   decodeOperationSettingUpdateInput(input).pipe(
