@@ -284,16 +284,14 @@ const makeLiveHarness = (
         ),
       ).pipe(Effect.timeout(testProcessDeadline)),
     ),
-    Effect.map((handle) => ({
-      handle,
-      harness: Harness.make([
-        claudeCodeRunner({
-          name,
-          authentication,
-          claudeExecutable: fakeClaudeExecutable(args),
-        }),
-      ]),
-    })),
+    Effect.map((handle) => {
+      const runner = claudeCodeRunner({
+        name,
+        authentication,
+        claudeExecutable: fakeClaudeExecutable(args),
+      });
+      return { handle, harness: Harness.make([runner]), runner };
+    }),
   );
 
 const structuredObjects = (events: ReadonlyArray<Harness.AgUiEvent>) =>

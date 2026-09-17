@@ -37,20 +37,18 @@ describe("Claude Code BYOK Harness", () => {
       }),
     );
 
-    it.effect("resolves the Anthropic credential again for each Run", () =>
+    it.effect("does not cache the Anthropic credential after launch preflight", () =>
       Effect.gen(function* () {
         const version = yield* CredentialVersion;
-        const { handle, harness } = yield* makeLiveHarness("", byokAuthentication);
-        const first = yield* harness.run(makeRequest(handle.id)).pipe(Stream.runCollect);
+        const { handle, harness, runner } = yield* makeLiveHarness("", byokAuthentication);
+        const request = makeRequest(handle.id);
+        yield* runner.preflight(Harness.HarnessPreflightInput.Launch({ request }));
         yield* Ref.set(version, "two");
-        const second = yield* harness.run(makeRequest(handle.id)).pipe(Stream.runCollect);
-        const captures = [yield* captureFrom(first), yield* captureFrom(second)];
+        const events = yield* harness.run(request).pipe(Stream.runCollect);
+        const capture = yield* captureFrom(events);
 
-        assert.deepStrictEqual(
-          captures.map(({ apiKeyVersion }) => apiKeyVersion),
-          ["one", "two"],
-        );
-        assert.isTrue(captures.every(({ apiKey }) => apiKey === "[redacted]"));
+        assert.strictEqual(capture.apiKeyVersion, "two");
+        assert.strictEqual(capture.apiKey, "[redacted]");
       }).pipe(Effect.provide(rotatingByokHarnessLayer)),
     );
 

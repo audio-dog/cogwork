@@ -1,5 +1,5 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
+import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
   CLAUDE_CODE_MODELS,
   type ClaudeCodeModel,
@@ -430,11 +430,10 @@ const providerOptions = (request: ExternalHarnessRuntime.ExternalHarnessResolved
 
 const descriptor = (
   options: ClaudeCodeRunnerOptions,
-): ExternalHarnessRuntime.ExternalHarnessDescriptor<ClaudeCodeTextAdapter<ClaudeCodeModel>, "host"> => {
+): ExternalHarnessRuntime.ExternalHarnessDescriptor<ClaudeCodeTextAdapter<ClaudeCodeModel>> => {
   const executable = options.claudeExecutable ?? "claude";
   return {
     name: options.name,
-    sessionKind: "opaque-handle",
     capabilities: {
       execution: Harness.fullHarnessExecution,
       profile: {
@@ -448,18 +447,6 @@ const descriptor = (
         journal: true,
         takeover: true,
       },
-      projectedMembers: [
-        "Harness Adapter",
-        "Instructions",
-        "Messages",
-        "MCP",
-        "Middleware",
-        "Sandbox",
-        "Structured Output",
-        "Persistence",
-        "Connections",
-      ],
-      planMiddleware: ["sandbox"],
     },
     authentication: authenticationProfiles[options.authentication.mode].binding,
     signIn: authenticationProfiles[options.authentication.mode].signIn,
@@ -469,7 +456,6 @@ const descriptor = (
     makeAdapter: ({ model, request }) => claudeCodeText(model, adapterConfig(executable, request)),
     projectModel: (request) => request.selection.model ?? "sonnet",
     projectOptions: providerOptions,
-    projectAuthentication: () => nativeAuthenticationMode,
     transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
     diagnostics: (cause) => turnDiagnostics(options.authentication.mode, cause),
   };
@@ -506,6 +492,5 @@ export const claudeCodeRunner = (options: ClaudeCodeRunnerOptions) => {
       Harness.validateCheckoutDirectory(options.name, request.checkout.path).pipe(
         Effect.andThen(sandboxProviderFor(request.authentication.mode)(request)),
       ),
-    sandboxPolicy: (request) => Effect.succeed(Tools.policyForProfile(request.policy)),
   });
 };

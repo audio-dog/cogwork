@@ -1,8 +1,7 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
+import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
   CODEX_MODELS,
-  type CodexAuthMode,
   type CodexModel,
   type CodexTextAdapter,
   type CodexTextConfig,
@@ -314,13 +313,12 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
 
 const codexDescriptor = (
   options: CodexRunnerOptions,
-): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>, CodexAuthMode> => {
+): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>> => {
   const makeAdapter = options.makeAdapter ?? codexText;
   const executable = options.codexExecutable ?? codexExecutableWithRepositoryHooks;
   const scrubEnv = scrubbedEnvironment(options.environment);
   return {
     name: options.name,
-    sessionKind: "opaque-handle",
     capabilities: {
       execution: Harness.fullHarnessExecution,
       profile: {
@@ -334,18 +332,6 @@ const codexDescriptor = (
         journal: true,
         takeover: true,
       },
-      projectedMembers: [
-        "Harness Adapter",
-        "Instructions",
-        "Messages",
-        "MCP",
-        "Middleware",
-        "Sandbox",
-        "Structured Output",
-        "Persistence",
-        "Connections",
-      ],
-      planMiddleware: ["sandbox"],
     },
     authentication: { mode: "host", reference: "Codex host login" },
     signIn: "codex login",
@@ -359,10 +345,10 @@ const codexDescriptor = (
     },
     readiness: () => codexReadiness(executable, scrubEnv),
     sharedGit: "required",
-    makeAdapter: ({ model, authentication, request }) => {
+    makeAdapter: ({ model, nativeAuthentication, request }) => {
       const mcp = codexMcpProjection(request.mcp);
       return makeAdapter(model, {
-        authMode: authentication,
+        authMode: nativeAuthentication,
         approvalPolicy: "never",
         codexExecutable: executable,
         // Codex's `read-only` sandbox mode blocks network too, cutting a read-only
@@ -381,7 +367,6 @@ const codexDescriptor = (
       modelReasoningEffort: selectedEffort(request.selection.effort),
       authMode: "host",
     }),
-    projectAuthentication: () => "host",
     transport: {
       instructionProjection: "system-prompt",
       mcpProjection: "native",
@@ -397,6 +382,5 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
   return ExternalHarnessRuntime.externalHarnessRunner(codexDescriptor(options), {
     authentication: hostAuthentication,
     sandboxProvider: ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({ scrubEnv }),
-    sandboxPolicy: (request) => Effect.succeed(Tools.policyForProfile(request.policy)),
   });
 };
