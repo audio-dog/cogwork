@@ -1,0 +1,19 @@
+packages/engine/src/external-harness-runtime.ts
+  s_f0a21ebb5515c0::t_2a4789e5db35f1 182-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "88fce74184e254a0a445e584e87ba1a94f4d1668",
+  "prompts": {},
+  "sessions": {
+    "s_f0a21ebb5515c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0afed-bb3f-76c2-b696-294c07f11818",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
