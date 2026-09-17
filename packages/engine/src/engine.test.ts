@@ -1,4 +1,5 @@
 import {
+  BranchName,
   Connection,
   type ConnectionId,
   type ConnectionReadiness,
@@ -6,7 +7,9 @@ import {
   DaemonEvent,
   DaemonRpcs,
   defaultControlStore,
+  HarnessName,
   PollState,
+  RunId,
   WorkItemId,
   WorkspaceConfig,
   WorkspaceId,
@@ -36,7 +39,7 @@ import { ControlStore } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as EventPublisher from "./event-publisher";
-import type { TrackerItem } from "./issue-tracker";
+import type { ObservedItem, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import { PerformanceHealthSource } from "./performance-health-source";
@@ -46,11 +49,12 @@ import * as Reconcile from "./reconcile";
 import * as Recovery from "./recovery";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
+import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
-import { WorktreeManager } from "./worktree";
+import { type ReconcileInput, WorktreeManager } from "./worktree";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const interruptionGate = Latch.makeUnsafe();
@@ -1005,7 +1009,98 @@ class BootstrapRecoveryCalls extends Context.Service<BootstrapRecoveryCalls, Ref
   ).pipe(Layer.provideMerge(BootstrapRecoveryCalls.layer));
 }
 
+class WorktreeReconcileInputs extends Context.Service<
+  WorktreeReconcileInputs,
+  Ref.Ref<ReadonlyArray<ReconcileInput>>
+>()("@cogwork/engine/engine.test/WorktreeReconcileInputs") {
+  static readonly layer = Layer.effect(WorktreeReconcileInputs, Ref.make<ReadonlyArray<ReconcileInput>>([]));
+  static readonly managerLayer = Layer.effect(
+    WorktreeManager,
+    Effect.map(WorktreeReconcileInputs, (inputs) => ({
+      ensure: () => Effect.die("unused"),
+      pullRequestReadiness: () => Effect.die("unused"),
+      list: () => Effect.succeed([]),
+      remove: () => Effect.void,
+      reconcile: (_workspace, input) =>
+        Ref.update(inputs, (current) => [...current, input]).pipe(
+          Effect.map(() => ({ tornDown: [], reaped: [] })),
+        ),
+      withProtection: (_workspace, _branch, effect) => effect,
+    })),
+  ).pipe(Layer.provideMerge(WorktreeReconcileInputs.layer));
+}
+
+const maintenanceWorkspace: Registry.RegisteredWorkspace = {
+  ...registeredWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "example",
+    checkoutPath: "/repos/example",
+    issueTracker: { type: "linear" },
+    worktrees: {},
+  }),
+};
+
+const maintenanceItem: ObservedItem = {
+  id: id("AUD-1"),
+  title: "active ticket",
+  url: "https://linear.app/acme/issue/AUD-1",
+  priority: "medium",
+  roles: ["ready-for-agent"],
+  assignees: [],
+  claimLabeled: false,
+  claim: null,
+  claimedByUs: false,
+  attempts: [],
+  handback: null,
+  pr: null,
+  openBlockers: 0,
+  proposal: null,
+};
+const maintenanceBranch = Schema.decodeSync(BranchName)("695-live-run");
+const maintenanceRunId = Schema.decodeSync(RunId)("maintenance-run");
+const maintenanceHarness = Schema.decodeSync(HarnessName)("codex");
+
+const maintenanceWorkerLayer = (observed: ReadonlyArray<ObservedItem>) =>
+  Layer.succeed(Reconcile.ReconcileWorker, {
+    submit: () => Effect.succeed({ workspaces: 1, failures: 0, pendingWork: 0, paused: 0 }),
+    submitAfterCurrent: () => Effect.succeed({ workspaces: 1, failures: 0, pendingWork: 0, paused: 0 }),
+    snapshot: Effect.succeed({
+      generation: 1,
+      observedAtMillis: 1,
+      workspaces: [
+        {
+          name: maintenanceWorkspace.config.name,
+          poll: { status: "ok" },
+          eligible: [],
+          claimed: [],
+          blocked: [],
+          needsHuman: [],
+          readyToMerge: [],
+          observed,
+          observedCount: observed.length,
+          availability: [],
+        },
+      ],
+    } satisfies Reconcile.ReconcileSnapshot),
+    invalidateAvailability: () => Effect.void,
+  });
+
+const maintenanceLayer = (observed: ReadonlyArray<ObservedItem>) => {
+  const registry = Layer.succeed(
+    Registry.WorkspaceRegistry,
+    Registry.readOnlyRegistry({ workspaces: [maintenanceWorkspace], failures: [] }),
+  );
+  const ledger = RunLedger.layerMemory.pipe(Layer.provide(DaemonEventBus.layer));
+  return Layer.mergeAll(
+    registry,
+    ledger,
+    maintenanceWorkerLayer(observed),
+    WorktreeReconcileInputs.managerLayer,
+  );
+};
+
 describe("daemon heartbeats", () => {
+  const runLedgerLayer = RunLedger.layerMemory.pipe(Layer.provide(DaemonEventBus.layer));
   const performanceRegressionSensorLayer = Layer.succeed(PerformanceRegressionSensor, {
     observe: () => Effect.void,
   });
@@ -1018,6 +1113,7 @@ describe("daemon heartbeats", () => {
     list: () => Effect.succeed([]),
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+    withProtection: (_workspace, _branch, effect) => effect,
   });
   const emptyWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
@@ -1041,6 +1137,7 @@ describe("daemon heartbeats", () => {
           DaemonEventBus.layer,
           performanceRegressionSensorLayer,
           performanceHealthSourceLayer,
+          runLedgerLayer,
           Layer.succeed(Recovery.Recovery, {
             recover: () => Effect.void,
             recoverWhenLive: () => Effect.void,
@@ -1069,6 +1166,22 @@ describe("daemon heartbeats", () => {
       publishConnections: (connections) => Effect.succeed(connections),
     })),
   );
+  const maintenanceHeartbeatLayer = countingPublisherLayer.pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(
+        maintenanceLayer([maintenanceItem]),
+        Layer.succeed(Scheduler.Scheduler, schedulerStubService),
+        availableControlStore,
+        performanceRegressionSensorLayer,
+        performanceHealthSourceLayer,
+        Layer.succeed(Recovery.Recovery, {
+          recover: () => Effect.void,
+          recoverWhenLive: () => Effect.void,
+        }),
+      ),
+    ),
+    Layer.provideMerge(PublishedItemCount.layer),
+  );
   const publishingHeartbeatLayer = countingPublisherLayer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
@@ -1080,6 +1193,7 @@ describe("daemon heartbeats", () => {
         DaemonEventBus.layer,
         performanceRegressionSensorLayer,
         performanceHealthSourceLayer,
+        runLedgerLayer,
         Layer.succeed(Recovery.Recovery, {
           recover: () => Effect.void,
           recoverWhenLive: () => Effect.void,
@@ -1087,6 +1201,37 @@ describe("daemon heartbeats", () => {
       ),
     ),
     Layer.provideMerge(PublishedItemCount.layer),
+  );
+
+  it.effect("passes running Run branches to worktree maintenance", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun({
+        id: maintenanceRunId,
+        workspace: maintenanceWorkspace.config.name,
+        workItem: maintenanceItem.id,
+        stage: "implement",
+        harness: maintenanceHarness,
+        branch: maintenanceBranch,
+        session: null,
+        usage: null,
+        status: "running",
+        startedAtMillis: 1,
+        endedAtMillis: null,
+      });
+      const beats = yield* Effect.forkChild(
+        Daemon.heartbeats({
+          pollIntervalMillis: 60_000,
+          drain: { graceMillis: 0, abort: Latch.makeUnsafe(false).await },
+        }),
+      );
+      yield* TestClock.adjust("1 second");
+      yield* Fiber.interrupt(beats);
+
+      assert.deepStrictEqual(yield* Ref.get(yield* WorktreeReconcileInputs), [
+        { activeTicketKeys: ["aud-1"], protectedBranches: [maintenanceBranch] },
+      ]);
+    }).pipe(Effect.provide(maintenanceHeartbeatLayer), Effect.scoped),
   );
 
   it.effect("drains the scheduler when a stop signal interrupts them", () =>

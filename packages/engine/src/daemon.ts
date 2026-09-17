@@ -475,6 +475,8 @@ const activeTicketKeys = (state: WorkspaceReconcileState) =>
 
 const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   const manager = yield* WorktreeManager;
+  const ledger = yield* RunLedger;
+  const runningRuns = yield* Effect.cached(ledger.runningRuns);
   const worker = yield* ReconcileWorker;
   const snapshot = yield* worker.snapshot;
   const now = yield* Clock.currentTimeMillis;
@@ -492,7 +494,21 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
     reconcilable,
     ({ workspace, state }) => {
       const correlation = { workspace: workspace.config.name };
-      return manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
+      const ticketKeys = activeTicketKeys(state);
+      const protectedBranches = ticketKeys.length
+        ? runningRuns.pipe(
+            Effect.map((running) =>
+              running.flatMap((run) => {
+                const protectsWorkspace = run.workspace === workspace.config.name && run.branch !== null;
+                return protectsWorkspace ? [run.branch] : [];
+              }),
+            ),
+          )
+        : Effect.succeed([]);
+      return protectedBranches.pipe(
+        Effect.flatMap((branches) =>
+          manager.reconcile(workspace, { activeTicketKeys: ticketKeys, protectedBranches: branches }, now),
+        ),
         Effect.tap((outcome) => Effect.logInfo("worktree maintenance", outcome)),
         Effect.catchTag("GitError", (error) =>
           Effect.logWarning("worktree maintenance failed", {
