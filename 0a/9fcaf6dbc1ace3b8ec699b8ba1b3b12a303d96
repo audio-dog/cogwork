@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_f2c23f7cef4f3a::t_2560c20e766273 259,262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0a9fcaf6dbc1ace3b8ec699b8ba1b3b12a303d96",
+  "prompts": {},
+  "sessions": {
+    "s_f2c23f7cef4f3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b12f-4644-7392-86d2-89a64da6f6bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
