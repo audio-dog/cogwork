@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { pathToFileURL } from "node:url";
-import { GitCommitSha, GitHubWorkflowRunUrl } from "@cogwork/contracts";
 import { GitHub, PerformanceIssueFiler as PerformanceIssueFilerModule } from "@cogwork/engine";
 import { wireCodec } from "@cogwork/engine/github/markers";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
@@ -22,11 +21,11 @@ const SuiteComparisonReport = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   verdict: Schema.Literals(["slower", "faster", "inconclusive"]),
   base: Schema.Struct({
-    sha: GitCommitSha,
+    sha: PerformanceIssueFilerModule.GitCommitSha,
     medianDurationMs: positiveFinite,
   }),
   head: Schema.Struct({
-    sha: GitCommitSha,
+    sha: PerformanceIssueFilerModule.GitCommitSha,
     medianDurationMs: positiveFinite,
   }),
   ratio: positiveFinite,
@@ -96,7 +95,7 @@ const normalizeWorkflowRunUrl = (value: string, repository: GitHub.GitHubRepoRef
         /^[1-9]\d*$/.test(runId ?? "") &&
         extra === undefined;
       if (!isExpectedWorkflowRun) throw new Error("unexpected workflow run URL");
-      return GitHubWorkflowRunUrl.make(url.href);
+      return PerformanceIssueFilerModule.GitHubWorkflowRunUrl.make(url.href);
     },
     catch: () =>
       new SuiteComparisonEntryError({
@@ -107,7 +106,7 @@ const normalizeWorkflowRunUrl = (value: string, repository: GitHub.GitHubRepoRef
 
 const suiteComparisonVerdict = (
   report: typeof SuiteComparisonReport.Type,
-  workflowRunUrl: GitHubWorkflowRunUrl,
+  workflowRunUrl: PerformanceIssueFilerModule.GitHubWorkflowRunUrl,
 ) =>
   ({
     kind: "suite-comparison",
