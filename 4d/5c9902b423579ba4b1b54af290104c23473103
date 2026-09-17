@@ -1,0 +1,41 @@
+packages/engine/src/external-harness-runtime.test.ts
+  s_f0a21ebb5515c0::t_6eab4f4f061a06 359-366,401-421
+  s_f0a21ebb5515c0::t_94efa2d8911739 63,301,449-450,452,454-456,460,466
+  s_f0a21ebb5515c0::t_0385251a8dbedd 453,482,799,850,970,1091,1105,1124-1128,1130,1151,1165,1181,1199
+  s_f0a21ebb5515c0::t_47b6bd9d4c3f84 552,554-556
+  s_f0a21ebb5515c0::t_d6dc0171079532 47,351-358,422-423
+  s_f0a21ebb5515c0::t_5d569ae0082918 1036
+  s_f0a21ebb5515c0::t_250136a9d2b15e 290,469
+  s_f0a21ebb5515c0::t_30ea2009b7e332 545,653,752
+  s_f0a21ebb5515c0::t_4e786fa2272729 50,367-382,391-400,559
+  s_f0a21ebb5515c0::t_065321a1c46e7b 467-468
+  s_f0a21ebb5515c0::t_6f5442b0da3cca 463-465
+  s_f0a21ebb5515c0::t_202c5911b50499 383-390
+  s_f0a21ebb5515c0::t_e7cf8cde4840a1 233
+  s_f0a21ebb5515c0::t_8da5b98b7cb692 840,883,912,917,922,928,935,940,946,953,961
+  s_732bc6f19af584::t_b2b1a2b39c0b6d 44,557-558
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4d5c9902b423579ba4b1b54af290104c23473103",
+  "prompts": {},
+  "sessions": {
+    "s_732bc6f19af584": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "36372b86-fdc3-4b2f-88e4-15668f1edd5b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f0a21ebb5515c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0afed-bb3f-76c2-b696-294c07f11818",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
