@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  s_b523edca52e463::t_69c33213ec3d85 2
+apps/desktop/src/renderer/src/features/plugin-configuration.test.ts
+  s_b523edca52e463::t_69c33213ec3d85 12
+apps/desktop/src/renderer/src/features/configuration-draft.test.ts
+  s_cec752c54456e1::t_ffe1109945a355 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ea7acac01d307b98c011d7ba755d10bd4d0bc167",
+  "prompts": {},
+  "sessions": {
+    "s_b523edca52e463": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b062-0581-7691-8ca8-42a2c8deddd9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_cec752c54456e1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b034-c907-7402-a620-af8b1cfaab39",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
