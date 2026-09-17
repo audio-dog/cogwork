@@ -192,6 +192,21 @@ new Operation choices, and remain visible when an existing Operation still selec
 _Avoid_: Harnesses (as the section's name — only as what it currently lists), Models (that is one of
 its tabs), Source control provider (a different noun in contracts)
 
+**Provider picker**:
+The per-Operation control that selects a Provider and its model. It is Operation-aware: it offers
+only Providers whose declared profiles include that Operation's locked permission profile (ADR
+0025). An unavailable Provider (not installed, not signed in, failed probe) stays visible with its
+state but cannot be newly picked; a saved selection survives unavailability and shows the state. A
+Provider whose readiness is still unknown stays pickable — the picker never waits on a probe.
+_Avoid_: Harness rail (implementation detail), model dropdown, provider switcher
+
+**Traits**:
+The per-model options menu beside the model picker, rendered generically from the selected model's
+option descriptors: one radio group per select axis, On/Off per boolean. It hard-codes no Harness's
+axes; a model with no descriptors shows no Traits control. What it saves is the contracts term
+**model options**.
+_Avoid_: Effort dropdown (one axis of it, the old UI), parameters, model settings
+
 ## Cross-context edges
 
 - **desktop → cli.** In development the supervisor spawns the CLI `daemon` command as the engine
