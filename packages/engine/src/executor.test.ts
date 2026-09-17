@@ -2765,7 +2765,7 @@ describe("Executor.execute", () => {
 
       yield* execute(executor, implementWorkspace, implementItem);
 
-      assert.strictEqual(yield* Ref.get(probe.observations), 0);
+      assert.strictEqual(yield* Ref.get(probe.observations), 1);
       assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "implemented"));
@@ -2797,7 +2797,7 @@ describe("Executor.execute", () => {
 
       yield* execute(executor, implementWorkspace, implementItem);
 
-      assert.strictEqual(yield* Ref.get(probe.observations), 0);
+      assert.strictEqual(yield* Ref.get(probe.observations), 1);
       assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "implemented"));
@@ -2866,7 +2866,7 @@ describe("Executor.execute", () => {
     ),
   );
 
-  it.effect("settles successfully when an open pull request already exists for the head", () =>
+  it.effect("settles successfully when an open pull request already exists despite a gate decline", () =>
     Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
       const calls = yield* TrackerCalls;
@@ -2896,7 +2896,7 @@ describe("Executor.execute", () => {
       Effect.provide(
         provide(
           [runner(readyForPrEvents)],
-          worktreeStubLayer,
+          declinedPullRequestWorktree("head has not been pushed to origin"),
           pullRequestProvider({ existingHead: implementBranch }),
         ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
       ),

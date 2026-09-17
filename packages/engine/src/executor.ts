@@ -645,7 +645,15 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const createOrSettlePullRequest = Effect.fn("Executor.createOrSettlePullRequest")(function* (
+  const settleImplemented = (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    accepted: AcceptedRun,
+    acc: RunAccumulator,
+  ) =>
+    applySuccessfulOutcome(accepted.record, acc, (atMillis) => applyImplemented(workspace, item, atMillis));
+
+  const createPullRequest = Effect.fn("Executor.createPullRequest")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     accepted: AcceptedRun,
@@ -654,25 +662,37 @@ export const make = Effect.gen(function* () {
     headBranch: string,
     baseBranch: string,
   ) {
-    return yield* sourceControl.findOpenPullRequest(workspace, headBranch).pipe(
-      Effect.flatMap((existing) =>
-        existing
-          ? Effect.void
-          : sourceControl
-              .openPullRequest(workspace, {
-                headBranch,
-                baseBranch,
-                title: result.title,
-                body: result.body,
-              })
-              .pipe(Effect.asVoid),
-      ),
+    return yield* sourceControl
+      .openPullRequest(workspace, {
+        headBranch,
+        baseBranch,
+        title: result.title,
+        body: result.body,
+      })
+      .pipe(
+        Effect.matchEffect({
+          onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
+          onSuccess: () => settleImplemented(workspace, item, accepted, acc),
+        }),
+      );
+  });
+
+  const createReadyPullRequest = Effect.fn("Executor.createReadyPullRequest")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    accepted: AcceptedRun,
+    acc: RunAccumulator,
+    result: Extract<StageResult, { readonly outcome: "ready-for-pr" }>,
+  ) {
+    return yield* worktrees.pullRequestReadiness(workspace, item).pipe(
       Effect.matchEffect({
         onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
-        onSuccess: () =>
-          applySuccessfulOutcome(accepted.record, acc, (atMillis) =>
-            applyImplemented(workspace, item, atMillis),
-          ),
+        onSuccess: (readiness) =>
+          PullRequestReadiness.$match(readiness, {
+            Declined: ({ reason }) => declinePullRequest(workspace, item, accepted, acc, reason),
+            Ready: ({ headBranch, baseBranch }) =>
+              createPullRequest(workspace, item, accepted, acc, result, headBranch, baseBranch),
+          }),
       }),
     );
   });
@@ -693,15 +713,13 @@ export const make = Effect.gen(function* () {
         acc.handle,
       );
     }
-    return yield* worktrees.pullRequestReadiness(workspace, item).pipe(
+    return yield* sourceControl.findOpenPullRequest(workspace, branchName(item)).pipe(
       Effect.matchEffect({
         onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
-        onSuccess: (readiness) =>
-          PullRequestReadiness.$match(readiness, {
-            Declined: ({ reason }) => declinePullRequest(workspace, item, accepted, acc, reason),
-            Ready: ({ headBranch, baseBranch }) =>
-              createOrSettlePullRequest(workspace, item, accepted, acc, result, headBranch, baseBranch),
-          }),
+        onSuccess: (existing) =>
+          existing
+            ? settleImplemented(workspace, item, accepted, acc)
+            : createReadyPullRequest(workspace, item, accepted, acc, result),
       }),
     );
   });
