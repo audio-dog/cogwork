@@ -1,4 +1,4 @@
-import { GitCommitSha, GitHubWorkflowRunUrl, makeBrand, type WorkItemId } from "@cogwork/contracts";
+import { makeBrand, type WorkItemId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
@@ -20,6 +20,16 @@ export interface PerformanceIssue {
 
 export const PerformanceIssueFingerprint = makeBrand("PerformanceIssueFingerprint");
 export type PerformanceIssueFingerprint = typeof PerformanceIssueFingerprint.Type;
+
+export const GitCommitSha = makeBrand("GitCommitSha").check(Schema.isPattern(/^[0-9a-f]{40}$/i));
+export type GitCommitSha = typeof GitCommitSha.Type;
+
+export const GitHubWorkflowRunUrl = makeBrand("GitHubWorkflowRunUrl").check(
+  Schema.isPattern(
+    /^https:\/\/github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]+\/actions\/runs\/[1-9]\d*$/,
+  ),
+);
+export type GitHubWorkflowRunUrl = typeof GitHubWorkflowRunUrl.Type;
 
 export interface PerformanceIssueCreateInput {
   readonly fingerprint: PerformanceIssueFingerprint;

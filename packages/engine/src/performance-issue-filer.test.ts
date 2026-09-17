@@ -1,9 +1,4 @@
-import {
-  GitCommitSha,
-  GitHubWorkflowRunUrl,
-  WorkItemId,
-  type WorkItemId as WorkItemIdType,
-} from "@cogwork/contracts";
+import { WorkItemId, type WorkItemId as WorkItemIdType } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -12,6 +7,8 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { wireCodec } from "./github/markers";
 import {
+  GitCommitSha,
+  GitHubWorkflowRunUrl,
   make,
   type PerformanceIssue,
   type PerformanceIssueCreateInput,
