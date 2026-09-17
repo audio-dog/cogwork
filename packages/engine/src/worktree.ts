@@ -83,9 +83,10 @@ export const checkoutPathFor = (
   item: WorkItemRef,
   stage: string,
   config?: WorktreeSettings,
+  branch: BranchName = branchName(item),
 ) => {
   if (stage === "triage") return checkoutPath;
-  return worktreePathFor(worktreeRoot(checkoutPath, config), branchName(item));
+  return worktreePathFor(worktreeRoot(checkoutPath, config), branch);
 };
 
 const safeBranch = (branch: string) => /^[a-z0-9][a-z0-9-]*$/.test(branch);
