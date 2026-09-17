@@ -498,9 +498,6 @@ importers:
         specifier: catalog:effect
         version: 4.0.0-rc.112
     devDependencies:
-      '@catenarycloud/linteffect':
-        specifier: ^0.0.7
-        version: 0.0.7
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
