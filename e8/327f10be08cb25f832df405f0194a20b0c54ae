@@ -1,0 +1,21 @@
+docs/adr/0024-harness-catalogs-are-managed-not-probed.md
+  s_b117151f0cdd18::t_ef65da27538f37 1-50
+packages/contracts/CONTEXT.md
+  s_b117151f0cdd18::t_29f3d0ea638996 362-375
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e8327f10be08cb25f832df405f0194a20b0c54ae",
+  "prompts": {},
+  "sessions": {
+    "s_b117151f0cdd18": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d079ae34-8606-4821-b611-8fd7f4103ebc",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
