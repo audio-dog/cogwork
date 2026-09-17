@@ -55,6 +55,7 @@ const worktreeLayer = Layer.succeed(WorktreeManager, {
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+  withProtection: (_workspace, _branch, effect) => effect,
 });
 
 const gitLayer = Layer.succeed(Git, {
