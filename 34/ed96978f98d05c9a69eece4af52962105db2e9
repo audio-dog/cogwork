@@ -1,0 +1,58 @@
+packages/engine/src/executor.ts
+  s_5666feb5dbef58::t_f2a7783647918c 658-669,672-675,696
+  s_5666feb5dbef58::t_cb979b34e58696 485-489,496,500-501,628-644
+  s_5666feb5dbef58::t_576d6ef8c40aa5 75,616-617,619,622-624,626,645,648-651,653-655,670-671,676-677,701,703
+  s_5666feb5dbef58::t_8f7b5f497baa6d 657
+  s_5666feb5dbef58::t_0e208142c0e2a4 502
+  s_5666feb5dbef58::t_30c4cc1f626fc4 627
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_5666feb5dbef58::t_1f8ed0acc06e65 132
+packages/contracts/src/run.ts
+  s_5666feb5dbef58::t_9e61294ebfcf2d 58
+apps/desktop/src/renderer/src/features/run-status.ts
+  s_5666feb5dbef58::t_cb979b34e58696 1-11
+apps/desktop/src/renderer/src/components/badges.tsx
+  s_5666feb5dbef58::t_cb979b34e58696 4,8-15,19
+apps/desktop/src/renderer/src/features/feed.ts
+  s_5666feb5dbef58::t_e970077241871b 34
+apps/desktop/src/renderer/src/features/run-status.test.ts
+  s_5666feb5dbef58::t_e4c4f3f2d95920 1-8
+apps/desktop/src/renderer/src/features/feed.test.ts
+  s_5666feb5dbef58::t_ef6386e5c33a78 4,33-58
+  s_5666feb5dbef58::t_c7deecef0ef72b 59-60
+packages/engine/src/control-store.ts
+  s_5666feb5dbef58::t_9e61294ebfcf2d 846
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  s_5666feb5dbef58::t_1f8ed0acc06e65 263
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_5666feb5dbef58::t_1f8ed0acc06e65 67
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_5666feb5dbef58::t_cb979b34e58696 42,554,560
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_5666feb5dbef58::t_2d4e6f91e02f63 175
+  s_5666feb5dbef58::t_cb979b34e58696 14,185,187
+packages/engine/src/executor.test.ts
+  s_5666feb5dbef58::t_e4c4f3f2d95920 2812-2819,2823-2844
+  s_5666feb5dbef58::t_7068aeb694d084 54,83,88-89,91,833-882,2474,2497,2820
+  s_5666feb5dbef58::t_fe8dcc0d5d5122 2760,2772-2776,2779-2780,2785,2804-2808,2810-2811,2869,2884-2885,2888-2891,2893-2894
+  s_5666feb5dbef58::t_9f596b074200fd 2845-2857
+  s_5666feb5dbef58::t_35b9b4b4fcab4e 2821-2822
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  s_5666feb5dbef58::t_fe8dcc0d5d5122 181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "34ed96978f98d05c9a69eece4af52962105db2e9",
+  "prompts": {},
+  "sessions": {
+    "s_5666feb5dbef58": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b158-ce44-72f1-ae72-1d25fecefb1d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
