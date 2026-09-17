@@ -178,6 +178,7 @@ describe("stepBody", () => {
 describe("runLine", () => {
   it("reports the terminal state before anything else", () => {
     expect(runLine([], "succeeded")).toBe("Run finished.");
+    expect(runLine([], "declined")).toBe("Pull request creation declined.");
     expect(runLine([], "crashed")).toBe("Run failed.");
     expect(runLine([], "interrupted")).toBe("Run interrupted.");
     expect(runLine([], "running")).toBe("Starting…");

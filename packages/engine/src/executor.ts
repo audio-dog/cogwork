@@ -72,7 +72,7 @@ import type { PreparedRun } from "./run-preparation";
 import * as RunPreparation from "./run-preparation";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
-import { type OpenedPullRequest, SourceControlProvider } from "./source-control";
+import { SourceControlProvider } from "./source-control";
 import { branchName, PullRequestReadiness, WorktreeManager } from "./worktree";
 
 export const harnessEventFoldDuration = Metric.timer("cogwork_harness_event_fold_duration", {
@@ -482,16 +482,23 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const settleReportedFailure = (runId: RunId, reported: Effect.Effect<RunUpdate, IssueTrackerError>) =>
+  const settleReportedRun = (
+    runId: RunId,
+    reported: Effect.Effect<RunUpdate, IssueTrackerError>,
+    updateRun: (update: RunUpdate) => RunUpdate,
+  ) =>
     reported.pipe(
       Effect.tapError(() =>
         Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
           settleRun(runId, { status: "failed", usage: null, endedAtMillis }),
         ),
       ),
-      Effect.flatMap((update) => settleRun(runId, update)),
+      Effect.flatMap((update) => settleRun(runId, updateRun(update))),
       Effect.map(() => ClaimDisposition.Release({})),
     );
+
+  const settleReportedFailure = (runId: RunId, reported: Effect.Effect<RunUpdate, IssueTrackerError>) =>
+    settleReportedRun(runId, reported, (update) => update);
 
   const structuredResultError = (message: string) =>
     new HarnessError({ reason: "turn", retryable: true, message });
@@ -606,41 +613,68 @@ export const make = Effect.gen(function* () {
     return ClaimDisposition.Release({});
   });
 
-  const existingPullRequestReadiness = (headBranch: string, pull: OpenedPullRequest | null) =>
-    pull
-      ? PullRequestReadiness.Declined({
-          reason: `open pull request #${pull.number} already exists for ${headBranch}`,
-        })
-      : null;
-
-  const pullRequestReadiness = Effect.fn("Executor.pullRequestReadiness")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-  ) {
-    const readiness = yield* worktrees.pullRequestReadiness(workspace, item);
-    return yield* PullRequestReadiness.$match(readiness, {
-      Declined: (declined) => Effect.succeed(declined),
-      Ready: (ready) =>
-        sourceControl
-          .findOpenPullRequest(workspace, ready.headBranch)
-          .pipe(Effect.map((existing) => existingPullRequestReadiness(ready.headBranch, existing) ?? ready)),
-    });
-  });
+  const retryableOperationDecision = (attempts: number) =>
+    ({ retryable: true, handoffCause: { kind: "max-attempts", attempts } }) satisfies RetryDecision;
 
   const declinePullRequest = Effect.fn("Executor.declinePullRequest")(function* (
-    runId: RunId,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    accepted: AcceptedRun,
     acc: RunAccumulator,
     reason: string,
   ) {
-    const endedAtMillis = yield* Clock.currentTimeMillis;
+    const { record } = accepted;
     yield* Effect.logWarning("pull request gate declined", { reason });
-    yield* settleRun(runId, {
-      status: "failed",
-      usage: acc.usage,
-      endedAtMillis,
-      claimDisposition: "hold",
-    });
-    return ClaimDisposition.Hold({});
+    return yield* settleReportedRun(
+      record.id,
+      reportDecidedFailure(
+        workspace,
+        item,
+        retryableOperationDecision(item.priorFailures + 1),
+        reason,
+        record.harness,
+        acc.handle,
+        accepted.checkoutPath,
+      ),
+      (update) => ({
+        ...update,
+        status: "declined",
+        usage: acc.usage,
+        claimDisposition: "release",
+      }),
+    );
+  });
+
+  const createOrSettlePullRequest = Effect.fn("Executor.createOrSettlePullRequest")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    accepted: AcceptedRun,
+    acc: RunAccumulator,
+    result: Extract<StageResult, { readonly outcome: "ready-for-pr" }>,
+    headBranch: string,
+    baseBranch: string,
+  ) {
+    return yield* sourceControl.findOpenPullRequest(workspace, headBranch).pipe(
+      Effect.flatMap((existing) =>
+        existing
+          ? Effect.void
+          : sourceControl
+              .openPullRequest(workspace, {
+                headBranch,
+                baseBranch,
+                title: result.title,
+                body: result.body,
+              })
+              .pipe(Effect.asVoid),
+      ),
+      Effect.matchEffect({
+        onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
+        onSuccess: () =>
+          applySuccessfulOutcome(accepted.record, acc, (atMillis) =>
+            applyImplemented(workspace, item, atMillis),
+          ),
+      }),
+    );
   });
 
   const openPullRequest = Effect.fn("Executor.openPullRequest")(function* (
@@ -650,7 +684,6 @@ export const make = Effect.gen(function* () {
     acc: RunAccumulator,
     result: StageResult,
   ) {
-    const { record } = accepted;
     if (!ImplementStageResult.guards["ready-for-pr"](result)) {
       return yield* applyFailure(
         workspace,
@@ -660,36 +693,18 @@ export const make = Effect.gen(function* () {
         acc.handle,
       );
     }
-    return yield* pullRequestReadiness(workspace, item).pipe(
+    return yield* worktrees.pullRequestReadiness(workspace, item).pipe(
       Effect.matchEffect({
         onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
         onSuccess: (readiness) =>
           PullRequestReadiness.$match(readiness, {
-            Declined: ({ reason }) => declinePullRequest(record.id, acc, reason),
+            Declined: ({ reason }) => declinePullRequest(workspace, item, accepted, acc, reason),
             Ready: ({ headBranch, baseBranch }) =>
-              sourceControl
-                .openPullRequest(workspace, {
-                  headBranch,
-                  baseBranch,
-                  title: result.title,
-                  body: result.body,
-                })
-                .pipe(
-                  Effect.matchEffect({
-                    onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
-                    onSuccess: () =>
-                      applySuccessfulOutcome(record, acc, (atMillis) =>
-                        applyImplemented(workspace, item, atMillis),
-                      ),
-                  }),
-                ),
+              createOrSettlePullRequest(workspace, item, accepted, acc, result, headBranch, baseBranch),
           }),
       }),
     );
   });
-
-  const retryableOperationDecision = (attempts: number) =>
-    ({ retryable: true, handoffCause: { kind: "max-attempts", attempts } }) satisfies RetryDecision;
 
   const operationDecision = (
     outcome: Extract<OperationOutcome, { readonly _tag: "Failed" }>,

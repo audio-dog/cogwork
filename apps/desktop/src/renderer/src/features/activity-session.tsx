@@ -129,6 +129,7 @@ const classifiedState = (item: ClassifiedItem) =>
 export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
   running: "info",
   succeeded: "success",
+  declined: "warn",
   failed: "error",
   exhausted: "warn",
   interrupted: "warn",

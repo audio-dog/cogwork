@@ -55,6 +55,7 @@ export type TokenUsage = typeof TokenUsage.Type;
 export const RunStatus = Schema.Literals([
   "running",
   "succeeded",
+  "declined",
   "failed",
   "exhausted",
   "interrupted",
