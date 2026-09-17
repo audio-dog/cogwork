@@ -1,0 +1,23 @@
+packages/engine/src/reconcile.ts
+  s_0e9805ca3f66a9::t_fc48b0069d9421 42-45
+  s_0e9805ca3f66a9::t_32fff5ebfe4904 247-252
+packages/engine/src/engine.test.ts
+  s_0e9805ca3f66a9::t_b1102225f608ef 354-367
+  s_0e9805ca3f66a9::t_9945abf3fdbf04 368-369
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "03b43b39b15d1300fcc768f3bc76ef5d72886709",
+  "prompts": {},
+  "sessions": {
+    "s_0e9805ca3f66a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b156-94a5-7462-974b-4b497954230e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
