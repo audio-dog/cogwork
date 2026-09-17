@@ -31,6 +31,13 @@ const responseContent = async (sessionParams) => {
       authenticated: server.headers.some((header) => header.name === "Authorization"),
     })),
     cursorConfigDir: process.env.CURSOR_CONFIG_DIR ?? null,
+    windowsEnvironment: {
+      USERPROFILE: process.env.USERPROFILE ?? null,
+      HOMEDRIVE: process.env.HOMEDRIVE ?? null,
+      HOMEPATH: process.env.HOMEPATH ?? null,
+      APPDATA: process.env.APPDATA ?? null,
+      SYSTEMROOT: process.env.SYSTEMROOT ?? null,
+    },
     hasCursorApiKey: process.env.CURSOR_API_KEY !== undefined,
   });
 };

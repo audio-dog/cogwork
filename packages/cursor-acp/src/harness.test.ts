@@ -48,6 +48,13 @@ const decodeObservation = Schema.decodeUnknownSync(
         }),
       ),
       cursorConfigDir: Schema.NullOr(Schema.String),
+      windowsEnvironment: Schema.Struct({
+        USERPROFILE: Schema.NullOr(Schema.String),
+        HOMEDRIVE: Schema.NullOr(Schema.String),
+        HOMEPATH: Schema.NullOr(Schema.String),
+        APPDATA: Schema.NullOr(Schema.String),
+        SYSTEMROOT: Schema.NullOr(Schema.String),
+      }),
       hasCursorApiKey: Schema.Boolean,
     }),
   ),
@@ -59,6 +66,19 @@ const restoreEnvironment = (name: string, value: string | undefined) =>
 const cursorEnvironmentProbe = {
   CURSOR_CONFIG_DIR: "/tmp/cogwork-cursor-config",
   CURSOR_API_KEY: "inherited-cursor-key",
+  USERPROFILE: "C:\\Users\\cogwork",
+  HOMEDRIVE: "C:",
+  HOMEPATH: "\\Users\\cogwork",
+  APPDATA: "C:\\Users\\cogwork\\AppData\\Roaming",
+  SYSTEMROOT: "C:\\Windows",
+};
+
+const cursorWindowsEnvironmentProbe = {
+  USERPROFILE: cursorEnvironmentProbe.USERPROFILE,
+  HOMEDRIVE: cursorEnvironmentProbe.HOMEDRIVE,
+  HOMEPATH: cursorEnvironmentProbe.HOMEPATH,
+  APPDATA: cursorEnvironmentProbe.APPDATA,
+  SYSTEMROOT: cursorEnvironmentProbe.SYSTEMROOT,
 };
 
 const withCursorEnvironment = <Value, Error, Requirements>(
@@ -489,6 +509,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
           },
         ]);
         assert.strictEqual(observation.cursorConfigDir, cursorEnvironmentProbe.CURSOR_CONFIG_DIR);
+        assert.deepStrictEqual(observation.windowsEnvironment, cursorWindowsEnvironmentProbe);
         assert.isFalse(observation.hasCursorApiKey);
         assert.notInclude(output, "cursor-mcp-secret");
       }),

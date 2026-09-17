@@ -33,7 +33,11 @@ const cursorProbeDeadline = "5 seconds";
 const missingCursorExecutable = /ENOENT|EACCES|command not found/i;
 const cursorVersionRequirement = ">=2026.08.11";
 const minimumCursorVersion = [2026, 8, 11] as const;
-const inheritedEnvironment = [...ExternalHarnessRuntime.defaultInheritedEnvironment, "CURSOR_CONFIG_DIR"];
+const inheritedEnvironment = [
+  ...ExternalHarnessRuntime.defaultInheritedEnvironment,
+  ...ExternalHarnessRuntime.windowsInheritedEnvironment,
+  "CURSOR_CONFIG_DIR",
+];
 
 const cursorVersionCompatible = (version: string) => {
   const match = version.match(/\b(\d{4})\.(\d{2})\.(\d{2})\b/);
