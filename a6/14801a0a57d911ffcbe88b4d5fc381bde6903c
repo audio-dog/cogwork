@@ -1,0 +1,21 @@
+packages/engine/src/worktree.ts
+  s_5666feb5dbef58::t_9e61294ebfcf2d 309-312
+packages/engine/src/worktree.test.ts
+  s_5666feb5dbef58::t_fe8dcc0d5d5122 15,56,108-109,523,530-542,547-569,588,591
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a614801a0a57d911ffcbe88b4d5fc381bde6903c",
+  "prompts": {},
+  "sessions": {
+    "s_5666feb5dbef58": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b158-ce44-72f1-ae72-1d25fecefb1d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
