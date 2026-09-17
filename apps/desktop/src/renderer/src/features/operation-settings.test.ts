@@ -17,6 +17,7 @@ import {
   catalogChoiceMatches,
   harnessCatalogLoad,
   harnessIsDisabled,
+  lockedPolicyProfile,
   operationSettingUpdate,
   selectableHarnessCatalogs,
   settingCell,
@@ -115,7 +116,33 @@ describe("selectableHarnessCatalogs", () => {
       harnessSettings: [HarnessEnablement.make({ harness: harness("codex"), enabled: false })],
     };
 
-    expect(selectableHarnessCatalogs(controlStore, catalogs)).toEqual([]);
+    expect(selectableHarnessCatalogs(controlStore, catalogs, "triage")).toEqual([]);
+  });
+
+  it("offers only Harnesses that declare the Operation's locked profile", () => {
+    const operationCatalogs = availableHarnessCatalogs(
+      HarnessOverview.make({
+        harnesses: [
+          harnessItem("codex", optionCatalog(["read-only", "full"])),
+          harnessItem("cursor", optionCatalog(["full"])),
+          harnessItem("reader", optionCatalog(["read-only"])),
+        ],
+        checkedAtMillis: 1,
+      }),
+    );
+
+    expect(selectableHarnessCatalogs(defaultControlStore, operationCatalogs, "triage")).toEqual([
+      operationCatalogs[0],
+      operationCatalogs[2],
+    ]);
+    expect(selectableHarnessCatalogs(defaultControlStore, operationCatalogs, "implement")).toEqual([
+      operationCatalogs[0],
+      operationCatalogs[1],
+    ]);
+    expect(selectableHarnessCatalogs(defaultControlStore, operationCatalogs, "follow-up")).toEqual([
+      operationCatalogs[0],
+      operationCatalogs[1],
+    ]);
   });
 
   it("identifies a disabled Harness without a published catalog", () => {
@@ -283,29 +310,11 @@ describe("an unset harness", () => {
     expect(cell.effective).toBeNull();
     expect(cell.stale).toBe(false);
     expect(settingCell(controlStore, catalogs, workspace, "triage", "model").stale).toBe(false);
-    expect(settingCell(controlStore, catalogs, workspace, "triage", "permission-profile").stale).toBe(false);
   });
 });
 
 describe("a policy profile the selected harness cannot enforce", () => {
-  it("is stale", () => {
-    const controlStore = store([
-      profileDefault("harness", "codex"),
-      profileDefault("permission-profile", "full"),
-    ]);
-    const readOnlyCatalogs = availableHarnessCatalogs(
-      HarnessOverview.make({
-        harnesses: [harnessItem("codex", optionCatalog(["read-only"]))],
-        checkedAtMillis: 1,
-      }),
-    );
-
-    expect(settingCell(controlStore, readOnlyCatalogs, workspace, "triage", "permission-profile").stale).toBe(
-      true,
-    );
-  });
-
-  it("checks the implicit stage default", () => {
+  it("makes the saved Harness selection stale", () => {
     const controlStore = store([profileDefault("harness", "codex")]);
     const fullOnlyCatalogs = availableHarnessCatalogs(
       HarnessOverview.make({
@@ -314,9 +323,17 @@ describe("a policy profile the selected harness cannot enforce", () => {
       }),
     );
 
-    const cell = settingCell(controlStore, fullOnlyCatalogs, workspace, "triage", "permission-profile");
-    expect(cell.inherited).toBe("read-only");
-    expect(cell.effective).toBe("read-only");
-    expect(cell.stale).toBe(true);
+    expect(settingCell(controlStore, fullOnlyCatalogs, workspace, "triage", "harness").stale).toBe(true);
+    expect(settingCell(controlStore, fullOnlyCatalogs, workspace, "implement", "harness").stale).toBe(false);
+  });
+});
+
+describe("lockedPolicyProfile", () => {
+  it.each([
+    ["triage", "read-only", "Read only", "Triage Operation Definition"],
+    ["implement", "full", "Full", "Implement Operation Definition"],
+    ["follow-up", "full", "Full", "Follow-up Operation Definition"],
+  ] as const)("describes %s from its Operation Definition", (operation, value, label, provenance) => {
+    expect(lockedPolicyProfile(operation)).toEqual({ value, label, provenance });
   });
 });
