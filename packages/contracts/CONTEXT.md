@@ -359,8 +359,20 @@ The credentials an external CLI harness owns and resolves from its host installa
 _Avoid_: Provider key, Cogwork login, harness fallback
 
 **Harness option catalog**:
-The controlled model and option choices one Harness currently offers on one Runtime host, stamped with the runtime metadata, native discovery, or versioned Cogwork fallback that produced them. An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input.
-_Avoid_: Model catalog, settings, arbitrary option
+The controlled model and option choices one Harness offers: checked-in generated data shipped by that Harness's package, stamped with the package version and the CLI version it was generated against — never a runtime observation (ADR 0024). An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input.
+_Avoid_: Model catalog, settings, arbitrary option, probed catalog
+
+**Option descriptor**:
+The declaration on one catalog model of one selectable axis: a select with its permitted values, or a boolean. Descriptors are what clients render and what validation checks; a model with no descriptors is opaque and offers only itself.
+_Avoid_: Setting (that is the saved choice), flag, capability
+
+**Canonical option id**:
+The shared name for an option axis more than one Harness has: `effort`, `speed`, `context`. Only the axis name unifies — each catalog keeps its own native value list. A Harness-specific axis keeps its own id.
+_Avoid_: reasoningEffort, fastMode, per-Harness synonyms for a shared axis
+
+**Model options**:
+The saved option selections (`id` → value pairs) of one Operation, stored and cleared atomically with its model: options mean nothing apart from the model they modify. Each Harness translates them to its native form at dispatch. Replaces the retired standalone effort setting.
+_Avoid_: Effort setting (retired), model suffix, traits (the desktop menu, not the data)
 
 **Harness readiness**:
 An observation of one Harness's installation, compatible version, and selected authentication binding on the current Runtime host. It can block a Run when negative but never guarantees that a later launch will succeed, and it never selects a fallback Harness or authentication mode.
