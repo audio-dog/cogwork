@@ -179,6 +179,14 @@ export const defaultInheritedEnvironment = Object.freeze([
   "LC_CTYPE",
 ]);
 
+export const windowsInheritedEnvironment = Object.freeze([
+  "USERPROFILE",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "APPDATA",
+  "SYSTEMROOT",
+]);
+
 export const externalHarnessDeclaration = Object.freeze({
   sessionKind: "opaque-handle",
   projectedMembers: Object.freeze([
