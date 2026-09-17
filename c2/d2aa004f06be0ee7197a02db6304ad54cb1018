@@ -1,0 +1,19 @@
+packages/cursor-acp/package.json
+  s_c86f3f7a1ecd36::t_5b9f3e9b390ac8 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c2d2aa004f06be0ee7197a02db6304ad54cb1018",
+  "prompts": {},
+  "sessions": {
+    "s_c86f3f7a1ecd36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b033-a118-7282-85df-d7f3f0e8905c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
