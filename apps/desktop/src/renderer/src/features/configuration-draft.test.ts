@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { cogworkWorkspaceId, contributionById } from "../testing/configuration";
 import { type DraftEntry, draftCellAt, draftKey, withDraft } from "./configuration-draft";
 import type { Contribution, ScopeRef } from "./configuration-model";
-import { cogworkWorkspaceId, contributionById } from "./configuration-placeholder";
 import { resolveEnablement } from "./configuration-resolve";
 
 const machine: ScopeRef = { kind: "settings-profile" };
