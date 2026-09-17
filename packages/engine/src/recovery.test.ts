@@ -420,14 +420,17 @@ const recoveryLayerWithAttemptFailure = (options: RecoveryOptions, failure: Issu
   makeRecoveryLayer(options, (probe) => attemptFailureIssueTracker(probe, failure));
 
 describe("Recovery.recover", () => {
-  it.effect("preserves a claim held by a declined pull request gate", () =>
+  it.effect("recovers a legacy claim held by a declined pull request gate", () =>
     Effect.gen(function* () {
       const probe = yield* RecoveryProbe;
       const recovery = yield* Recovery.Recovery;
       yield* probe.ledger.insertRun(heldRun);
       yield* recovery.recover();
-      assert.deepStrictEqual(yield* Ref.get(probe.released), []);
-      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
+      assert.deepStrictEqual(
+        (yield* Ref.get(probe.attempts)).map(({ outcome }) => outcome.stage),
+        ["implement"],
+      );
       assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
     }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs] }))),
   );
@@ -990,7 +993,7 @@ describe("Recovery.recoverWhenLive", () => {
     }).pipe(Effect.provide(recoveryLayer({ observed: [] }))),
   );
 
-  it.effect("preserves a newly observed claim held by a declined pull request gate", () =>
+  it.effect("releases a newly observed legacy claim held by a declined pull request gate", () =>
     Effect.gen(function* () {
       const probe = yield* RecoveryProbe;
       const recovery = yield* Recovery.Recovery;
@@ -999,7 +1002,7 @@ describe("Recovery.recoverWhenLive", () => {
       yield* recovery.recoverWhenLive();
       yield* Ref.set(probe.snapshot, { ...snapshotOf([claimedByUs]), generation: 2 });
       yield* recovery.recoverWhenLive();
-      assert.deepStrictEqual(yield* Ref.get(probe.released), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
     }).pipe(Effect.provide(recoveryLayer({ observed: [] }))),
   );
 
