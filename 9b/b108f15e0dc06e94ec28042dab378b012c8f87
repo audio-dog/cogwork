@@ -1,0 +1,21 @@
+packages/engine/src/harness.ts
+  s_f0a21ebb5515c0::t_b86a9df3157a3e 236,415-418
+packages/engine/CONTEXT.md
+  s_f0a21ebb5515c0::t_92942de76b99f2 93,97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9bb108f15e0dc06e94ec28042dab378b012c8f87",
+  "prompts": {},
+  "sessions": {
+    "s_f0a21ebb5515c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0afed-bb3f-76c2-b696-294c07f11818",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
