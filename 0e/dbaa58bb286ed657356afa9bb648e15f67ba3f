@@ -1,0 +1,19 @@
+configs/sensor/test-performance-filer.ts
+  s_b6f4b8d42229ea::t_33b1667f4bd9b4 24,28,98,109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0edbaa58bb286ed657356afa9bb648e15f67ba3f",
+  "prompts": {},
+  "sessions": {
+    "s_b6f4b8d42229ea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ab7c-99d5-7872-88cf-c187cb72cfa4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
