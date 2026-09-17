@@ -1,0 +1,21 @@
+docs/adr/0025-cursor-declares-only-the-full-profile.md
+  s_b117151f0cdd18::t_ce962eed1f8bc1 1-29
+packages/cursor-acp/CONTEXT.md
+  s_b117151f0cdd18::t_9e1fa1980ddba8 36-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b40bdcb97313386504bc8c91b452549dfa9a7b8a",
+  "prompts": {},
+  "sessions": {
+    "s_b117151f0cdd18": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d079ae34-8606-4821-b611-8fd7f4103ebc",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
