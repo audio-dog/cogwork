@@ -85,6 +85,7 @@ const inheritedEnvironment = {
   ANTHROPIC_AUTH_TOKEN: environmentValue("ANTHROPIC_AUTH_TOKEN"),
   GITHUB_TOKEN: environmentValue("GITHUB_TOKEN"),
   GH_TOKEN: environmentValue("GH_TOKEN"),
+  CLAUDE_CONFIG_DIR: environmentValue("CLAUDE_CONFIG_DIR"),
 };
 
 const persistence = memoryPersistence();
@@ -328,6 +329,7 @@ const Capture = Schema.Struct({
   authToken: Schema.NullOr(Schema.String),
   githubToken: Schema.NullOr(Schema.String),
   ghToken: Schema.NullOr(Schema.String),
+  claudeConfigDir: Schema.NullOr(Schema.String),
 });
 
 const NativeSandboxSettings = Schema.fromJsonString(
@@ -400,6 +402,7 @@ const withInheritedCredentialEnvironment = <Value, Error, Requirements>(
       Reflect.set(process.env, "ANTHROPIC_AUTH_TOKEN", "inherited-auth-token");
       Reflect.set(process.env, "GITHUB_TOKEN", "inherited-github-token");
       Reflect.set(process.env, "GH_TOKEN", "inherited-gh-token");
+      Reflect.set(process.env, "CLAUDE_CONFIG_DIR", "/tmp/cogwork-claude-config");
     }),
     () => effect,
     () =>

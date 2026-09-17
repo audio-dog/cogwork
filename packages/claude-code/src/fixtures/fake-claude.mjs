@@ -87,6 +87,7 @@ const capture = {
   authToken: process.env.ANTHROPIC_AUTH_TOKEN ?? null,
   githubToken: process.env.GITHUB_TOKEN ?? null,
   ghToken: process.env.GH_TOKEN ?? null,
+  claudeConfigDir: process.env.CLAUDE_CONFIG_DIR ?? null,
 };
 const sessionId = capture.resume ?? "fake-claude-session-1";
 const init = {
