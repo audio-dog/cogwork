@@ -1,0 +1,19 @@
+apps/cli/CONTEXT.md
+  s_f2c23f7cef4f3a::t_0d2ecee1488beb 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "64533600ae37a8744a0f29c1b103477d6ecfb46f",
+  "prompts": {},
+  "sessions": {
+    "s_f2c23f7cef4f3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b12f-4644-7392-86d2-89a64da6f6bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
