@@ -1,0 +1,36 @@
+packages/cursor-acp/FINDINGS.md
+  s_b523edca52e463::t_9ccc696dce19cc 31,204-210
+packages/cursor-acp/FINDINGS-RESUME.md
+  s_b523edca52e463::t_9ccc696dce19cc 28-29,213,215-216
+packages/cursor-acp/package.json
+  s_b523edca52e463::t_9ccc696dce19cc 14
+packages/engine/src/executor.ts
+  s_b523edca52e463::t_9ccc696dce19cc 89-92,400,426,437,443,452,455-464,470-477,479-482,649,653,658,665,679,705,710,720,728,734,736,743,754,757,767,771,798,800,811,832,848,873,974,982,985,995
+packages/engine/src/executor.test.ts
+  s_b523edca52e463::t_9ccc696dce19cc 3,414-415,854-876,3422-3442,3650-3672
+  s_b523edca52e463::t_808a6ebe76f3f8 3673-3674
+packages/engine/src/worktree.ts
+  s_b523edca52e463::t_9ccc696dce19cc 86,89
+packages/engine/src/classify.ts
+  s_b523edca52e463::t_9ccc696dce19cc 4,19,43,58-63,223,232
+packages/engine/src/comments.ts
+  s_b523edca52e463::t_9ccc696dce19cc 1,127,136,148-156
+packages/engine/src/run-preparation.ts
+  s_b523edca52e463::t_9ccc696dce19cc 56,63,70,120,133,199-200
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "50f49dfa48b257f3941704f7ae761da9373abdd9",
+  "prompts": {},
+  "sessions": {
+    "s_b523edca52e463": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b062-0581-7691-8ca8-42a2c8deddd9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
