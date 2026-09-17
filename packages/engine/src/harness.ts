@@ -233,6 +233,7 @@ export interface HarnessRunner {
   readonly catalogSources: HarnessCatalogSources;
   readonly projectedMembers: ReadonlyArray<RunPlanMember>;
   readonly planMiddleware: ReadonlyArray<RunPlanMiddlewareName>;
+  readonly validateLaunch?: (request: HarnessRequest) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly preflight: (input: HarnessPreflightInput) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
@@ -411,6 +412,10 @@ const preflightRunner = Effect.fn("Harness.preflightRunner")(function* (
 ) {
   const selection = selectionOfPreflightInput(input);
   const runner = yield* runnerFor(registry, selection.name);
+  yield* HarnessPreflightInput.$match({
+    Static: () => Effect.void,
+    Launch: ({ request }) => runner.validateLaunch?.(request) ?? Effect.void,
+  })(input);
   const catalog = yield* resolveCatalog(runner);
   yield* validateSelection(runner, catalog, selection);
   const posture = unsupportedPosture(runner, selection.profile);
