@@ -32,7 +32,11 @@ const supportedClaudeMajor = 2;
 const minimumClaudeVersion: ReadonlyArray<number> = [2, 1, 83];
 const versionRequirement = `>=${minimumClaudeVersion.join(".")} <${supportedClaudeMajor + 1}.0.0`;
 const commandDeadline = "5 seconds";
-const inheritedEnvironment = [...ExternalHarnessRuntime.defaultInheritedEnvironment, "CLAUDE_CONFIG_DIR"];
+const inheritedEnvironment = [
+  ...ExternalHarnessRuntime.defaultInheritedEnvironment,
+  ...ExternalHarnessRuntime.windowsInheritedEnvironment,
+  "CLAUDE_CONFIG_DIR",
+];
 type ClaudeAuthenticationMode = ClaudeCodeRunnerOptions["authentication"]["mode"];
 const claudeAuthenticationModes = ["host", "byok"] as const satisfies ReadonlyArray<ClaudeAuthenticationMode>;
 const requiredEnvironmentName = (names: ReadonlyArray<string> | undefined) => {

@@ -86,6 +86,19 @@ const inheritedEnvironment = {
   GITHUB_TOKEN: environmentValue("GITHUB_TOKEN"),
   GH_TOKEN: environmentValue("GH_TOKEN"),
   CLAUDE_CONFIG_DIR: environmentValue("CLAUDE_CONFIG_DIR"),
+  USERPROFILE: environmentValue("USERPROFILE"),
+  HOMEDRIVE: environmentValue("HOMEDRIVE"),
+  HOMEPATH: environmentValue("HOMEPATH"),
+  APPDATA: environmentValue("APPDATA"),
+  SYSTEMROOT: environmentValue("SYSTEMROOT"),
+};
+
+const windowsEnvironmentProbe = {
+  USERPROFILE: "C:\\Users\\cogwork",
+  HOMEDRIVE: "C:",
+  HOMEPATH: "\\Users\\cogwork",
+  APPDATA: "C:\\Users\\cogwork\\AppData\\Roaming",
+  SYSTEMROOT: "C:\\Windows",
 };
 
 const persistence = memoryPersistence();
@@ -330,6 +343,13 @@ const Capture = Schema.Struct({
   githubToken: Schema.NullOr(Schema.String),
   ghToken: Schema.NullOr(Schema.String),
   claudeConfigDir: Schema.NullOr(Schema.String),
+  windowsEnvironment: Schema.Struct({
+    USERPROFILE: Schema.NullOr(Schema.String),
+    HOMEDRIVE: Schema.NullOr(Schema.String),
+    HOMEPATH: Schema.NullOr(Schema.String),
+    APPDATA: Schema.NullOr(Schema.String),
+    SYSTEMROOT: Schema.NullOr(Schema.String),
+  }),
 });
 
 const NativeSandboxSettings = Schema.fromJsonString(
@@ -403,6 +423,7 @@ const withInheritedCredentialEnvironment = <Value, Error, Requirements>(
       Reflect.set(process.env, "GITHUB_TOKEN", "inherited-github-token");
       Reflect.set(process.env, "GH_TOKEN", "inherited-gh-token");
       Reflect.set(process.env, "CLAUDE_CONFIG_DIR", "/tmp/cogwork-claude-config");
+      Object.assign(process.env, windowsEnvironmentProbe);
     }),
     () => effect,
     () =>
@@ -457,5 +478,6 @@ export {
   sessionStore,
   structuredObjects,
   testProcessDeadline,
+  windowsEnvironmentProbe,
   withInheritedCredentialEnvironment,
 };

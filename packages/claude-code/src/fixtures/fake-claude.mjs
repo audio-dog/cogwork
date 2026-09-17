@@ -88,6 +88,13 @@ const capture = {
   githubToken: process.env.GITHUB_TOKEN ?? null,
   ghToken: process.env.GH_TOKEN ?? null,
   claudeConfigDir: process.env.CLAUDE_CONFIG_DIR ?? null,
+  windowsEnvironment: {
+    USERPROFILE: process.env.USERPROFILE ?? null,
+    HOMEDRIVE: process.env.HOMEDRIVE ?? null,
+    HOMEPATH: process.env.HOMEPATH ?? null,
+    APPDATA: process.env.APPDATA ?? null,
+    SYSTEMROOT: process.env.SYSTEMROOT ?? null,
+  },
 };
 const sessionId = capture.resume ?? "fake-claude-session-1";
 const init = {

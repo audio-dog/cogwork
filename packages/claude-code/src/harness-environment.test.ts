@@ -20,6 +20,7 @@ import {
   name,
   sessionHandles,
   structuredObjects,
+  windowsEnvironmentProbe,
   withInheritedCredentialEnvironment,
 } from "./harness-fixtures";
 
@@ -81,6 +82,7 @@ describe("Claude Code inherited environment", () => {
         assert.isNull(capture.apiKey);
         assert.isNull(capture.authToken);
         assert.strictEqual(capture.claudeConfigDir, "/tmp/cogwork-claude-config");
+        assert.deepStrictEqual(capture.windowsEnvironment, windowsEnvironmentProbe);
         assert.notInclude(capture.files, ".mcp.json");
         assert.match(capture.mcpConfigArgument ?? "", /^\{"mcpServers":/);
         assert.notInclude(capture.files, ".cogwork-mcp.json");
