@@ -10,7 +10,6 @@ import {
 } from "@tanstack/ai-claude-code";
 import { claudeCodeByok } from "@tanstack/ai-claude-code/byok";
 import { createSecrets, type SandboxHandle } from "@tanstack/ai-sandbox";
-import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -33,9 +32,7 @@ const supportedClaudeMajor = 2;
 const minimumClaudeVersion: ReadonlyArray<number> = [2, 1, 83];
 const versionRequirement = `>=${minimumClaudeVersion.join(".")} <${supportedClaudeMajor + 1}.0.0`;
 const commandDeadline = "5 seconds";
-const anthropicEnvironment = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
-const sourceControlEnvironment = ["GH_TOKEN", "GITHUB_TOKEN"] as const;
-const claudeEnvironment = [...anthropicEnvironment, ...sourceControlEnvironment];
+const inheritedEnvironment = [...ExternalHarnessRuntime.defaultInheritedEnvironment, "CLAUDE_CONFIG_DIR"];
 type ClaudeAuthenticationMode = ClaudeCodeRunnerOptions["authentication"]["mode"];
 const claudeAuthenticationModes = ["host", "byok"] as const satisfies ReadonlyArray<ClaudeAuthenticationMode>;
 const requiredEnvironmentName = (names: ReadonlyArray<string> | undefined) => {
@@ -62,7 +59,6 @@ const authenticationProfiles = {
     installNextStep: "Install Claude Code, then run `claude auth login`.",
     credentialGuidance: "Claude Code host login is unavailable. Run `claude auth login`, then retry.",
     failurePattern: missingLoginPattern,
-    scrubEnv: claudeEnvironment,
   },
   byok: {
     binding: { mode: "byok", reference: "Anthropic provider key in the Credential store" },
@@ -72,7 +68,6 @@ const authenticationProfiles = {
     credentialGuidance:
       "Claude Code API-key authentication is unavailable. Store an Anthropic key with `cogwork login key --provider anthropic`, then retry.",
     failurePattern: rejectedApiKeyPattern,
-    scrubEnv: ["ANTHROPIC_AUTH_TOKEN", ...sourceControlEnvironment],
   },
 } as const satisfies Record<ClaudeAuthenticationMode, unknown>;
 const modelPattern = /['"]((?:claude-[a-z0-9-]+)|opus|sonnet|haiku|fable)['"]/gi;
@@ -112,25 +107,9 @@ const commandCauseError = (cause: unknown) => {
 const commandTimeoutError = (subject: string) =>
   harnessError("launch", true, `Claude Code did not answer ${subject} within ${commandDeadline}`);
 
-const createProbeSandbox = Effect.fn("ClaudeCode.createProbeSandbox")(() =>
-  Effect.tryPromise({
-    try: () => localProcessSandbox({ dir: ".", scrubEnv: [...claudeEnvironment] }).create({}),
-    catch: commandCauseError,
-  }).pipe(
-    Effect.timeout(commandDeadline),
-    Effect.catchTag("TimeoutError", () => commandTimeoutError("sandbox creation")),
-  ),
-);
-
-const destroyProbeSandbox = (sandbox: SandboxHandle) =>
-  Effect.tryPromise({ try: () => sandbox.destroy(), catch: () => null }).pipe(
-    Effect.timeout(commandDeadline),
-    Effect.ignore,
-  );
-
 const withProbeSandbox = <Value, Requirements>(
   use: (sandbox: SandboxHandle) => Effect.Effect<Value, Harness.HarnessError, Requirements>,
-) => Effect.scoped(Effect.acquireUseRelease(createProbeSandbox(), use, destroyProbeSandbox));
+) => ExternalHarnessRuntime.withLocalProcessSandbox(".", inheritedEnvironment, commandCauseError, use);
 
 const claudeCommand = Effect.fn("ClaudeCode.command")(
   (sandbox: SandboxHandle, executable: string, argument: string) =>
@@ -453,6 +432,7 @@ const descriptor = (
     catalogSources: claudeCodeCatalogSources(executable),
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
+    inheritedEnvironment,
     makeAdapter: ({ model, request }) => claudeCodeText(model, adapterConfig(executable, request)),
     projectModel: (request) => request.selection.model ?? "sonnet",
     projectOptions: providerOptions,
@@ -480,17 +460,8 @@ const resolvedAuthentication = Effect.fn("ClaudeCode.resolveAuthentication")(fun
   } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication;
 });
 
-const sandboxProviderFor = (mode: ClaudeAuthenticationMode) =>
-  ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({
-    scrubEnv: authenticationProfiles[mode].scrubEnv,
-  });
-
 export const claudeCodeRunner = (options: ClaudeCodeRunnerOptions) => {
   return ExternalHarnessRuntime.externalHarnessRunner(descriptor(options), {
     authentication: () => resolvedAuthentication(options.authentication.mode),
-    sandboxProvider: (request) =>
-      Harness.validateCheckoutDirectory(options.name, request.checkout.path).pipe(
-        Effect.andThen(sandboxProviderFor(request.authentication.mode)(request)),
-      ),
   });
 };
