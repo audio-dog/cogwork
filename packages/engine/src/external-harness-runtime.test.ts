@@ -46,6 +46,7 @@ import {
   type ExternalHarnessDescriptor,
   environmentVariablesToRemove,
   externalHarnessRunner,
+  mcpBearerEnvironmentName,
   mergeCheckoutFileDiffs,
   withLocalProcessSandbox,
 } from "./external-harness-runtime";
@@ -695,8 +696,31 @@ describe("external Harness runtime", () => {
             })
             .pipe(Stream.runCollect);
 
-        yield* runWith("first");
-        yield* runWith("rotated");
+        const bearerNames = ["linear.api", "linear-api"].map(mcpBearerEnvironmentName);
+        yield* Effect.acquireUseRelease(
+          Effect.sync(() => {
+            const original = Object.fromEntries(
+              bearerNames.map((environmentName) => [
+                environmentName,
+                Reflect.get(process.env, environmentName),
+              ]),
+            );
+            Object.assign(
+              process.env,
+              Object.fromEntries(bearerNames.map((environmentName) => [environmentName, "host-bearer"])),
+            );
+            return original;
+          }),
+          () => Effect.forEach(["first", "rotated"], runWith, { discard: true }),
+          (original) =>
+            Effect.sync(() =>
+              Object.entries(original).map(([environmentName, value]) =>
+                value === undefined
+                  ? Reflect.deleteProperty(process.env, environmentName)
+                  : Reflect.set(process.env, environmentName, value),
+              ),
+            ),
+        );
         assert.deepStrictEqual(observations, [
           {
             names: ["public.mcp", "linear.api", "linear-api"],
