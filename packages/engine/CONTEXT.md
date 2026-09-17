@@ -42,7 +42,7 @@ The scheduler's graceful stop: it picks no further candidates and gives the runs
 _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, graceful kill
 
 **Claim recovery**:
-The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when no current run requires it and the scheduler does not hold the work item in flight. A terminal run whose factual gate decline recorded `claimDisposition: hold` still requires its current claim.
+The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when no current run requires it and the scheduler does not hold the work item in flight. Legacy gate-decline holds are stale claims and recover normally.
 _Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
 
 **Claim hold-off**:
@@ -218,7 +218,7 @@ The single bot-owned comment an adapter keeps on an issue for control-plane stat
 _Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (proposals are separate notes).
 
 **Worktree manager**:
-The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. It also reports whether the prepared implement worktree is still on the Engine-cut branch and whether that head is ahead of the configured base before the Engine can open a pull request. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
+The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. Before the Engine opens a pull request, it fetches through the repository checkout and reports whether the pushed Engine-cut head exists and is ahead of the pushed base. Pull request readiness does not depend on a Run worktree still existing. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
 _Avoid_: Checkout, clone, worktree setup (that is the repo-local harness concern, not this)
 
 **Branch divergence**:
