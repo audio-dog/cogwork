@@ -1,6 +1,7 @@
 import { HarnessName } from "@cogwork/contracts";
 import { Harness } from "@cogwork/engine";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, layer } from "@effect/vitest";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { harnessRunners } from "./rpc";
@@ -39,24 +40,42 @@ const externalProfiles = [
 ] as const;
 
 describe("external harness registration", () => {
-  it.effect("registers Claude Code and Codex beside Cursor and the owned provider", () =>
-    Effect.gen(function* () {
-      const runners = yield* harnessRunners;
-      assert.deepStrictEqual(
-        runners.map((runner) => runner.name),
-        ["cursor", "claude", "codex", "provider", "replay"],
-      );
-    }),
-  );
+  layer(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))((it) => {
+    it.effect("registers only runnable Harnesses when no replay fixture is configured", () =>
+      Effect.gen(function* () {
+        const runners = yield* harnessRunners;
+        assert.deepStrictEqual(
+          runners.map((runner) => runner.name),
+          ["cursor", "claude", "codex"],
+        );
+      }),
+    );
 
-  it.effect("publishes intentional native inequalities through the Harness service", () =>
-    Effect.gen(function* () {
-      const harness = Harness.make(yield* harnessRunners);
+    it.effect("publishes intentional native inequalities through the Harness service", () =>
+      Effect.gen(function* () {
+        const harness = Harness.make(yield* harnessRunners);
 
-      for (const { name, ...expected } of externalProfiles) {
-        const profile = harness.capabilities(name);
-        assert.deepNestedInclude(profile, expected);
-      }
-    }),
-  );
+        for (const { name, ...expected } of externalProfiles) {
+          const profile = harness.capabilities(name);
+          assert.deepNestedInclude(profile, expected);
+        }
+      }),
+    );
+  });
+
+  layer(
+    ConfigProvider.layer(
+      ConfigProvider.fromEnv({ env: { COGWORK_REPLAY_FIXTURE: "/tmp/replay-fixture.json" } }),
+    ),
+  )((it) => {
+    it.effect("registers replay when its fixture is configured", () =>
+      Effect.gen(function* () {
+        const runners = yield* harnessRunners;
+        assert.deepStrictEqual(
+          runners.map((runner) => runner.name),
+          ["cursor", "claude", "codex", "replay"],
+        );
+      }),
+    );
+  });
 });

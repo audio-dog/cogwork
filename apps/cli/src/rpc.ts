@@ -6,7 +6,7 @@ import { claudeCodeRunner } from "@cogwork/claude-code";
 import { codexRunner } from "@cogwork/codex-cli";
 import { DaemonRpcs, HarnessName, type WorkspaceId } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
-import { ContextAssembler, Daemon, PerformanceHealth, Provider, Replay } from "@cogwork/engine";
+import { ContextAssembler, Daemon, PerformanceHealth, Replay } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Cause from "effect/Cause";
@@ -88,20 +88,22 @@ export const transportLayer = (socketPath: string) =>
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
 const claudeName = Schema.decodeSync(HarnessName)("claude");
 const codexName = Schema.decodeSync(HarnessName)("codex");
-const providerName = Schema.decodeSync(HarnessName)("provider");
 const replayName = Schema.decodeSync(HarnessName)("replay");
 
 const standardHarnessRunners = [
   cursorRunner({ name: cursorName }),
   claudeCodeRunner({ name: claudeName, authentication: { mode: "host" } }),
   codexRunner({ name: codexName, environment: process.env }),
-  Provider.providerRunner({ name: providerName }),
 ];
 
-export const harnessRunners = Replay.replayRunner({
-  name: replayName,
-  fixturePath: Config.option(Config.string("COGWORK_REPLAY_FIXTURE")).pipe(Effect.map(Option.getOrUndefined)),
-}).pipe(Effect.map((runner) => [...standardHarnessRunners, runner]));
+export const harnessRunners = Config.option(Config.string("COGWORK_REPLAY_FIXTURE")).pipe(
+  Effect.flatMap((fixturePath) =>
+    Effect.forEach(Option.toArray(fixturePath), (path) =>
+      Replay.replayRunner({ name: replayName, fixturePath: Effect.succeed(path) }),
+    ),
+  ),
+  Effect.map((replayRunners) => [...standardHarnessRunners, ...replayRunners]),
+);
 
 const engineOperatingInstructionsDir = nodePath.resolve(
   nodePath.dirname(fileURLToPath(import.meta.resolve("@cogwork/engine"))),
