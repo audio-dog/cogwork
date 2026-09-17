@@ -1,5 +1,6 @@
 import {
   AgUiEvent,
+  BranchName,
   ConnectionId,
   type ContributionSettingRow,
   ControlStoreFailure,
@@ -410,6 +411,8 @@ const followUpItem = {
 };
 
 const followUpBranch = branchName(followUpItem);
+const externalFollowUpBranch = Schema.decodeSync(BranchName)("review/external-branch");
+const externalFollowUpCheckout = "/external-checkouts/review";
 
 const followUpEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
@@ -842,6 +845,29 @@ const divergedWorktree = worktreeDouble(() => ({
       new WorktreeDivergedError({
         remote: "origin",
         branch: branchName(item),
+        message: "branch has diverged from origin and replaying the local commits failed",
+        retryable: false,
+      }),
+    ),
+}));
+
+const externalFollowUpWorktree = worktreeDouble(() => ({
+  ...worktreeStub,
+  ensure: () =>
+    Effect.succeed({
+      branch: externalFollowUpBranch,
+      path: externalFollowUpCheckout,
+      created: false,
+    }),
+}));
+
+const divergedExternalFollowUpWorktree = worktreeDouble(() => ({
+  ...worktreeStub,
+  ensure: () =>
+    Effect.fail(
+      new WorktreeDivergedError({
+        remote: "origin",
+        branch: externalFollowUpBranch,
         message: "branch has diverged from origin and replaying the local commits failed",
         retryable: false,
       }),
@@ -3393,6 +3419,27 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], divergedWorktree)));
   });
 
+  it.effect("derives a pre-preparation follow-up hand-off from its linked external branch", () => {
+    const item: EligibleWork = {
+      ...followUpItem,
+      followUpBranch: externalFollowUpBranch,
+      resume: { session: previousSession, reason: "interrupted" },
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* seedResumeSession();
+      yield* execute(executor, followUpWorkspace, item);
+
+      const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
+      assert.include(
+        handOff?.note ?? "",
+        "cd '/repos/gh.worktrees/review/external-branch' && codex resume 'sess-prev'",
+      );
+    }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], divergedExternalFollowUpWorktree)));
+  });
+
   it.effect("hands a permanent Run acceptance failure to a human without retrying", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -3598,6 +3645,31 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
+  });
+
+  it.effect("names the prepared linked-branch checkout in a follow-up hand-off", () => {
+    const item: EligibleWork = { ...followUpItem, followUpBranch: externalFollowUpBranch };
+    const error = new HarnessError({
+      reason: "turn",
+      retryable: false,
+      message: "follow-up failed",
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, item);
+
+      const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
+      assert.include(handOff?.note ?? "", `cd '${externalFollowUpCheckout}' && codex resume 'sess-linked'`);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner([runStarted, sessionEvent("sess-linked")], Stream.fail(error))],
+          externalFollowUpWorktree,
+        ),
+      ),
+    );
   });
 
   it.effect("retries a follow-up with no structured result", () => {

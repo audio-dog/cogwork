@@ -46,7 +46,6 @@ import * as Cooldown from "./cooldown";
 import { CredentialStore } from "./credential-store";
 import { isExhausted } from "./exhaustion";
 import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
-import type { GitError } from "./git";
 import { Harness, HarnessError, type HarnessRequest, type HarnessRunnerEnv } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import * as OperationResolution from "./operation-resolution";
@@ -85,6 +84,10 @@ interface RunAccumulator {
   readonly usage: TokenUsage | null;
   readonly structuredOutputs: ReadonlyArray<unknown>;
   readonly deferredTerminal: AgUiEvent | null;
+}
+
+interface AcceptedRun extends PreparedRun {
+  readonly record: RunRecord;
 }
 
 type HarnessAdmission<A> =
@@ -394,6 +397,7 @@ export const make = Effect.gen(function* () {
     reason: string,
     harnessName: HarnessName,
     handle: string | null,
+    checkoutPath: string | undefined,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     const attempts = item.priorFailures + 1;
@@ -419,6 +423,7 @@ export const make = Effect.gen(function* () {
           cause: handoffCause,
           reason,
           session: handoffSession(handle, harness.capabilities(harnessName)?.session.humanAttach),
+          checkoutPath,
         }),
       });
     }
@@ -429,12 +434,13 @@ export const make = Effect.gen(function* () {
     } satisfies RunUpdate;
   });
 
-  const reportFailure = (
+  const reportFailureAtCheckout = (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     failure: RetryFailure,
     harnessName: HarnessName,
     handle: string | null,
+    checkoutPath: string | undefined,
   ) =>
     reportDecidedFailure(
       workspace,
@@ -443,17 +449,37 @@ export const make = Effect.gen(function* () {
       prepareFailureReason(failure),
       harnessName,
       handle,
+      checkoutPath,
     );
+
+  const reportFailure = (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    failure: RetryFailure,
+    harnessName: HarnessName,
+    handle: string | null,
+    checkoutPath: string,
+  ) => reportFailureAtCheckout(workspace, item, failure, harnessName, handle, checkoutPath);
+
+  const reportUnpreparedFailure = (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    failure: RetryFailure,
+    harnessName: HarnessName,
+    handle: string | null,
+  ) => reportFailureAtCheckout(workspace, item, failure, harnessName, handle, undefined);
 
   const applyFailure = Effect.fn("Executor.applyFailure")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    runId: RunId,
+    accepted: AcceptedRun,
     failure: RetryFailure,
-    harnessName: HarnessName,
     handle: string | null,
   ) {
-    return yield* settleReportedFailure(runId, reportFailure(workspace, item, failure, harnessName, handle));
+    return yield* settleReportedFailure(
+      accepted.record.id,
+      reportFailure(workspace, item, failure, accepted.record.harness, handle, accepted.checkoutPath),
+    );
   });
 
   const settleReportedFailure = (runId: RunId, reported: Effect.Effect<RunUpdate, IssueTrackerError>) =>
@@ -617,36 +643,26 @@ export const make = Effect.gen(function* () {
     return ClaimDisposition.Hold({});
   });
 
-  const applyPullRequestFailure = Effect.fn("Executor.applyPullRequestFailure")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    record: RunRecord,
-    acc: RunAccumulator,
-    error: GitError | IssueTrackerError,
-  ) {
-    return yield* applyFailure(workspace, item, record.id, error, record.harness, acc.handle);
-  });
-
   const openPullRequest = Effect.fn("Executor.openPullRequest")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    record: RunRecord,
+    accepted: AcceptedRun,
     acc: RunAccumulator,
     result: StageResult,
   ) {
+    const { record } = accepted;
     if (!ImplementStageResult.guards["ready-for-pr"](result)) {
       return yield* applyFailure(
         workspace,
         item,
-        record.id,
+        accepted,
         structuredResultError("ready-for-pr outcome has no pull request content"),
-        record.harness,
         acc.handle,
       );
     }
     return yield* pullRequestReadiness(workspace, item).pipe(
       Effect.matchEffect({
-        onFailure: (error) => applyPullRequestFailure(workspace, item, record, acc, error),
+        onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
         onSuccess: (readiness) =>
           PullRequestReadiness.$match(readiness, {
             Declined: ({ reason }) => declinePullRequest(record.id, acc, reason),
@@ -660,7 +676,7 @@ export const make = Effect.gen(function* () {
                 })
                 .pipe(
                   Effect.matchEffect({
-                    onFailure: (error) => applyPullRequestFailure(workspace, item, record, acc, error),
+                    onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
                     onSuccess: () =>
                       applySuccessfulOutcome(record, acc, (atMillis) =>
                         applyImplemented(workspace, item, atMillis),
@@ -686,11 +702,12 @@ export const make = Effect.gen(function* () {
   const applyOperationFailure = Effect.fn("Executor.applyOperationFailure")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    record: RunRecord,
+    accepted: AcceptedRun,
     acc: RunAccumulator,
     detail: string,
     outcome: Extract<OperationOutcome, { readonly _tag: "Failed" }>,
   ) {
+    const { record } = accepted;
     return yield* settleReportedFailure(
       record.id,
       reportDecidedFailure(
@@ -700,6 +717,7 @@ export const make = Effect.gen(function* () {
         detail,
         record.harness,
         acc.handle,
+        accepted.checkoutPath,
       ),
     );
   });
@@ -707,21 +725,22 @@ export const make = Effect.gen(function* () {
   const applyOperationOutcome = Effect.fn("Executor.applyOperationOutcome")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    record: RunRecord,
+    accepted: AcceptedRun,
     acc: RunAccumulator,
     detail: string,
     outcome: OperationOutcome,
     result: StageResult,
   ) {
+    const { record } = accepted;
     return yield* OperationOutcome.$match(outcome, {
-      Failed: (outcome) => applyOperationFailure(workspace, item, record, acc, detail, outcome),
+      Failed: (outcome) => applyOperationFailure(workspace, item, accepted, acc, detail, outcome),
       FollowedUp: (outcome) =>
         applySuccessfulOutcome(record, acc, (atMillis) =>
           applyFollowedUp(workspace, item, detail, outcome, atMillis),
         ),
       Implemented: () =>
         applySuccessfulOutcome(record, acc, (atMillis) => applyImplemented(workspace, item, atMillis)),
-      PullRequestReady: () => openPullRequest(workspace, item, record, acc, result),
+      PullRequestReady: () => openPullRequest(workspace, item, accepted, acc, result),
       Triaged: (outcome) =>
         applySuccessfulOutcome(record, acc, (atMillis) =>
           applyTriaged(workspace, item, detail, outcome, atMillis),
@@ -732,10 +751,10 @@ export const make = Effect.gen(function* () {
   const completeOperation = Effect.fn("Executor.completeOperation")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    outcomeTable: OperationOutcomeTable,
-    record: RunRecord,
+    accepted: AcceptedRun,
     acc: RunAccumulator,
   ) {
+    const { outcomeTable, record } = accepted;
     const recordCompletionTerminal = (status: "failed" | "succeeded") => {
       if (item.stage !== "triage") return Effect.succeed(null);
       if (status === "failed") return recorder.record(record, failedTerminal);
@@ -745,11 +764,11 @@ export const make = Effect.gen(function* () {
       Effect.matchEffect({
         onFailure: (error) =>
           recordCompletionTerminal("failed").pipe(
-            Effect.andThen(applyFailure(workspace, item, record.id, error, record.harness, acc.handle)),
+            Effect.andThen(applyFailure(workspace, item, accepted, error, acc.handle)),
           ),
         onSuccess: ({ detail, outcome, result }) =>
           recordCompletionTerminal("succeeded").pipe(
-            Effect.andThen(applyOperationOutcome(workspace, item, record, acc, detail, outcome, result)),
+            Effect.andThen(applyOperationOutcome(workspace, item, accepted, acc, detail, outcome, result)),
           ),
       }),
     );
@@ -776,11 +795,9 @@ export const make = Effect.gen(function* () {
   const settleOutcome = Effect.fn("Executor.settleOutcome")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    outcomeTable: OperationOutcomeTable,
-    record: RunRecord,
-    runId: RunId,
-    request: HarnessRequest,
+    accepted: AcceptedRun,
   ) {
+    const { record, request } = accepted;
     const recordEncodingFailureTerminal = (error: PrepareError | HarnessError) => {
       if (error._tag !== "RunLedgerError" || error.operation !== encodeRunEventOperation) {
         return Effect.succeed(null);
@@ -791,7 +808,7 @@ export const make = Effect.gen(function* () {
     const settleFailure = (error: PrepareError | HarnessError) =>
       recordEncodingFailureTerminal(error).pipe(
         Effect.andThen(handleOf(ledger, record.session)),
-        Effect.flatMap((handle) => applyFailure(workspace, item, runId, error, record.harness, handle)),
+        Effect.flatMap((handle) => applyFailure(workspace, item, accepted, error, handle)),
       );
 
     const settleCompletionFailure = (error: RunLedgerError) => {
@@ -812,7 +829,7 @@ export const make = Effect.gen(function* () {
 
     const settleRecordedRun = (status: "failed" | "succeeded", usage: TokenUsage | null) =>
       Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
-        settleRun(runId, { status, usage, endedAtMillis }),
+        settleRun(record.id, { status, usage, endedAtMillis }),
       );
 
     const settleRecorded = <R>(attempt: Effect.Effect<RunAccumulator, PrepareError | HarnessError, R>) =>
@@ -828,7 +845,7 @@ export const make = Effect.gen(function* () {
       return ClaimDisposition.Release({});
     }
     return yield* settle(foldHarness(record, request, item.stage === "triage"), (acc) =>
-      completeOperation(workspace, item, outcomeTable, record, acc),
+      completeOperation(workspace, item, accepted, acc),
     );
   });
 
@@ -853,7 +870,7 @@ export const make = Effect.gen(function* () {
       endedAtMillis: null,
     };
     yield* ledger.acceptRun(record, prepared.plan);
-    return { ...prepared, record };
+    return { ...prepared, record } satisfies AcceptedRun;
   });
 
   const acceptEnabledHarnessRun = Effect.fn("Executor.acceptEnabledHarnessRun")(function* (
@@ -954,6 +971,7 @@ export const make = Effect.gen(function* () {
               error,
               prepared.failureSession?.harness ?? prepared.operation.stage.harness,
               sessionHandle(prepared.failureSession),
+              prepared.checkoutPath,
             ).pipe(Effect.map(() => null)),
           onSuccess: Effect.succeed,
         }),
@@ -961,11 +979,10 @@ export const make = Effect.gen(function* () {
       return accepted;
     });
     const settleAcceptedRun = Effect.fn("Executor.settleAcceptedRun")(function* (
-      accepted: Effect.Success<ReturnType<typeof acceptPreparedRun>>,
+      accepted: AcceptedRun | null,
     ) {
       if (!accepted) return ClaimDisposition.Release({});
-      const { request, outcomeTable, record } = accepted;
-      return yield* settleOutcome(workspace, item, outcomeTable, record, runId, request);
+      return yield* settleOutcome(workspace, item, accepted);
     });
     const reportPreparationFailure = Effect.fn("Executor.reportPreparationFailure")(function* ({
       error,
@@ -975,7 +992,7 @@ export const make = Effect.gen(function* () {
         yield* noteUnavailableResume(workspace, item, error.availability.causes);
         return null;
       }
-      yield* reportFailure(
+      yield* reportUnpreparedFailure(
         workspace,
         item,
         error,

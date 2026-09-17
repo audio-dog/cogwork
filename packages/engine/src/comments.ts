@@ -1,4 +1,4 @@
-import type { LifecycleStage, WorkItemId } from "@cogwork/contracts";
+import type { BranchName, LifecycleStage, WorkItemId } from "@cogwork/contracts";
 import type { HarnessHumanAttach } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
 import { checkoutPathFor } from "./worktree";
@@ -124,6 +124,7 @@ export const handoffComment = (
 interface HandoffItem {
   readonly id: WorkItemId;
   readonly title: string;
+  readonly followUpBranch?: BranchName;
 }
 
 export interface HandoffRequest {
@@ -132,6 +133,7 @@ export interface HandoffRequest {
   readonly stage: LifecycleStage;
   readonly cause: HandoffCause;
   readonly reason: string;
+  readonly checkoutPath?: string;
   readonly session:
     | {
         readonly handle: string;
@@ -143,7 +145,15 @@ export interface HandoffRequest {
 
 export const handoffNote = (request: HandoffRequest) => {
   const { workspace, item, stage, cause, reason, session } = request;
-  const checkout = checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
+  const checkout =
+    request.checkoutPath ??
+    checkoutPathFor(
+      workspace.config.checkoutPath,
+      item,
+      stage,
+      workspace.config.worktrees,
+      item.followUpBranch,
+    );
   const resume = session?.access === "codex-cli" ? attachCommand(checkout, session.handle) : undefined;
   return handoffComment(stage, cause, reason, resume);
 };
