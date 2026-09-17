@@ -1,0 +1,19 @@
+apps/desktop/CONTEXT.md
+  s_b117151f0cdd18::t_d202b7d7aee254 195-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "016428880dd8cd527804b1fed4b0319f80db60bd",
+  "prompts": {},
+  "sessions": {
+    "s_b117151f0cdd18": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d079ae34-8606-4821-b611-8fd7f4103ebc",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
