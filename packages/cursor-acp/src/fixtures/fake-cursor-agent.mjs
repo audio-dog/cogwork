@@ -30,6 +30,8 @@ const responseContent = async (sessionParams) => {
       url: server.url,
       authenticated: server.headers.some((header) => header.name === "Authorization"),
     })),
+    cursorConfigDir: process.env.CURSOR_CONFIG_DIR ?? null,
+    hasCursorApiKey: process.env.CURSOR_API_KEY !== undefined,
   });
 };
 

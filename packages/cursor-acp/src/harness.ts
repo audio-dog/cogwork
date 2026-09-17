@@ -10,7 +10,6 @@ import {
   spawnHandleToAcpTransport,
 } from "@tanstack/ai-acp";
 import { createSecrets } from "@tanstack/ai-sandbox";
-import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
@@ -34,6 +33,7 @@ const cursorProbeDeadline = "5 seconds";
 const missingCursorExecutable = /ENOENT|EACCES|command not found/i;
 const cursorVersionRequirement = ">=2026.08.11";
 const minimumCursorVersion = [2026, 8, 11] as const;
+const inheritedEnvironment = [...ExternalHarnessRuntime.defaultInheritedEnvironment, "CURSOR_CONFIG_DIR"];
 
 const cursorVersionCompatible = (version: string) => {
   const match = version.match(/\b(\d{4})\.(\d{2})\.(\d{2})\b/);
@@ -54,32 +54,26 @@ const cursorProbeError = (cause: unknown) => {
 };
 
 const cursorCommand = Effect.fn("CursorRunner.command")((agentBin: string, argument: string) =>
-  Effect.scoped(
-    Effect.acquireRelease(
+  ExternalHarnessRuntime.withLocalProcessSandbox(
+    process.cwd(),
+    inheritedEnvironment,
+    cursorProbeError,
+    (sandbox) =>
       Effect.tryPromise({
-        try: () => localProcessSandbox({ dir: process.cwd() }).create({}),
+        try: (signal) => sandbox.process.exec(`${agentBin} ${argument}`, { signal }),
         catch: cursorProbeError,
-      }),
-      (sandbox) => Effect.promise(() => sandbox.destroy()),
-    ).pipe(
-      Effect.flatMap((sandbox) =>
-        Effect.tryPromise({
-          try: (signal) => sandbox.process.exec(`${agentBin} ${argument}`, { signal }),
-          catch: cursorProbeError,
-        }),
+      }).pipe(
+        Effect.timeout(cursorProbeDeadline),
+        Effect.catchTag(
+          "TimeoutError",
+          () =>
+            new Harness.HarnessError({
+              reason: "launch",
+              retryable: true,
+              message: `Cursor did not answer ${argument} within ${cursorProbeDeadline}`,
+            }),
+        ),
       ),
-    ),
-  ).pipe(
-    Effect.timeout(cursorProbeDeadline),
-    Effect.catchTag(
-      "TimeoutError",
-      () =>
-        new Harness.HarnessError({
-          reason: "launch",
-          retryable: true,
-          message: `Cursor did not answer ${argument} within ${cursorProbeDeadline}`,
-        }),
-    ),
   ),
 );
 
@@ -323,8 +317,6 @@ const generatedCatalog = Harness.staticCatalogSource(
   },
   { source: "cogwork-fallback", fallbackVersion: "cursor-models-generated-1" },
 );
-const cursorScrubEnv: ReadonlyArray<string> = ["GITHUB_TOKEN", "GH_TOKEN", "CURSOR_API_KEY"];
-
 const selectedCursorModel = (
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
   fallback: CursorModel,
@@ -341,16 +333,6 @@ const hostAuthentication = () =>
     mode: "host",
     secrets: createSecrets({}),
   } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication);
-
-const cursorSandboxProvider = (name: HarnessName) =>
-  Effect.fn("CursorRunner.sandboxProvider")(function* (
-    request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
-  ) {
-    yield* Harness.validateCheckoutDirectory(name, request.checkout.path);
-    return yield* ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({
-      scrubEnv: cursorScrubEnv,
-    })(request);
-  });
 
 export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunner => {
   const agentBin = options.agentBin ?? "agent";
@@ -387,6 +369,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
       catalogSources,
       readiness,
       sharedGit: "none",
+      inheritedEnvironment,
       makeAdapter: ({ model }) =>
         acpCompatible<typeof cursorModels, CursorModelOptions>({
           name: options.name,
@@ -407,7 +390,6 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     };
     return ExternalHarnessRuntime.externalHarnessRunner(descriptor, {
       authentication: hostAuthentication,
-      sandboxProvider: cursorSandboxProvider(options.name),
     });
   };
   return {
@@ -418,6 +400,8 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     authentication,
     catalogSources,
     readiness,
+    validateLaunch: (request) =>
+      Harness.validateCheckoutDirectory(options.name, request.plan.sandbox.workspace),
     preflight: (input) =>
       Effect.scoped(
         openCursorTransport(agentBin).pipe(
