@@ -234,9 +234,9 @@ an installable world Cogwork is not in. Do not restore any of them on the argume
 install may arrive one day. If it arrives, it gets a fresh decision against whatever sources exist
 then.
 
-Two of #135's four decisions are untouched, because neither depends on where bytes come from: the
-**Engine ceiling**, hard at a non-interactive turn, worktree confinement and the Operation read/write
-posture; and **a bundle names an env key while the engine supplies the value**.
+Two of #135's four decisions are untouched by the Plugin changes, because neither depends on where
+bytes come from: the **Engine ceiling** and **a bundle names an env key while the engine supplies the
+value**. ADR 0025 later narrows the ceiling's worktree-confinement requirement to Read only.
 
 ### Two acts, and a rule at load
 
