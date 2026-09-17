@@ -256,10 +256,10 @@ describe("enabled", () => {
   });
 });
 
-describe("an unknown harness", () => {
+describe("an unregistered Harness", () => {
   it("makes the model saved under it stale, because no catalog can vouch for it", () => {
     const controlStore = store([
-      profileDefault("harness", "retired-harness"),
+      profileDefault("harness", "provider"),
       profileDefault("model", "gpt-5.6-sol"),
     ]);
     expect(settingCell(controlStore, catalogs, workspace, "triage", "harness").stale).toBe(true);
