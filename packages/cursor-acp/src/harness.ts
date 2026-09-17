@@ -359,7 +359,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     execution: {
       nonInteractive: true,
       worktreeConfined: false,
-      profiles: [],
+      profiles: ["full"],
     },
     profile: {
       authenticationModes: ["host"],
