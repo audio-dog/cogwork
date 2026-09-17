@@ -26,6 +26,11 @@ export interface BranchDivergence {
   readonly behind: number;
 }
 
+export interface DivergenceHead {
+  readonly branch: string;
+  readonly remote?: string;
+}
+
 export type GitOperation = "merge" | "rebase" | "cherry-pick";
 
 export interface GitOperationInProgress {
@@ -56,7 +61,7 @@ export interface GitService {
     worktreePath: string,
     remote: string,
     baseBranch: string,
-    headBranch?: string,
+    head?: DivergenceHead,
   ) => Effect.Effect<BranchDivergence, GitError>;
   readonly operationInProgress: (
     worktreePath: string,
