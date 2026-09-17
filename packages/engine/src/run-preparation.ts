@@ -8,7 +8,6 @@ import type {
   Session,
   SessionId,
 } from "@cogwork/contracts";
-import { BranchName as BranchNameSchema } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type { EligibleWork } from "./classify";
@@ -22,10 +21,6 @@ import { RunLedger } from "./run-ledger";
 import type { ResolvedOperation } from "./run-plan";
 import { SessionChoice } from "./session-choice";
 import { branchName, WorktreeManager } from "./worktree";
-
-type PreparationWorkItem = Omit<EligibleWork, "followUpBranch"> & {
-  readonly followUpBranch: BranchName | undefined;
-};
 
 class PreparationFailure extends Data.TaggedError("PreparationFailure")<{
   readonly error: PrepareError | OperationResolution.OperationUnavailable;
@@ -58,27 +53,21 @@ interface BranchSessionFacts {
 }
 
 type PrepareCandidateInput = Omit<PrepareRunInput, "item"> & {
-  readonly item: PreparationWorkItem;
+  readonly item: EligibleWork;
   readonly branch: BranchName | null;
   readonly replay: boolean;
 };
 
 const isReplayHarness = (harness: HarnessName) => harness === "replay";
 
-const prepareWorkItem = (item: EligibleWork) => {
-  const { followUpBranch, ...work } = item;
-  if (item.stage !== "follow-up" || !followUpBranch) return { ...work, followUpBranch: undefined };
-  return { ...work, followUpBranch: BranchNameSchema.make(followUpBranch) };
-};
-
-const resumeWorktreeOptions = (item: PreparationWorkItem) => {
+const resumeWorktreeOptions = (item: EligibleWork) => {
   if (item.stage === "follow-up" && item.followUpBranch) {
     return { resume: true, branch: item.followUpBranch };
   }
   return { resume: true };
 };
 
-const branchFor = (item: PreparationWorkItem, operation: ResolvedOperation) => {
+const branchFor = (item: EligibleWork, operation: ResolvedOperation) => {
   if (isReplayHarness(operation.stage.harness) || item.stage === "triage") return null;
   if (item.stage === "follow-up") return item.followUpBranch ?? branchName(item);
   return branchName(item);
@@ -128,7 +117,7 @@ export const make = Effect.gen(function* () {
 
   const ensureCheckout = Effect.fn("RunPreparation.ensureCheckout")(function* (
     workspace: RegisteredWorkspace,
-    item: PreparationWorkItem,
+    item: EligibleWork,
     branch: BranchName | null,
     replay: boolean,
   ) {
@@ -141,7 +130,7 @@ export const make = Effect.gen(function* () {
   });
 
   const candidateSession = Effect.fn("RunPreparation.candidateSession")(function* (
-    item: PreparationWorkItem,
+    item: EligibleWork,
     facts: BranchSessionFacts,
   ) {
     const sessionId = item.resume?.session ?? facts.currentResumableRun?.session ?? null;
@@ -207,11 +196,8 @@ export const make = Effect.gen(function* () {
     } satisfies PreparedRun;
   });
 
-  const prepare = Effect.fn("RunPreparation.prepare")(function* ({
-    item: rawItem,
-    ...input
-  }: PrepareRunInput) {
-    const item = prepareWorkItem(rawItem);
+  const prepare = Effect.fn("RunPreparation.prepare")(function* (input: PrepareRunInput) {
+    const { item } = input;
     const branch = branchFor(item, input.operation);
     const replay = isReplayHarness(input.operation.stage.harness);
     return yield* prepareCandidate({ ...input, item, branch, replay }).pipe(
