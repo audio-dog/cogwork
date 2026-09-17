@@ -1,0 +1,21 @@
+docs/spec/settings-and-plugins.md
+  s_61f5c7d71d15d1::t_c3c36135ed94c0 301-304
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  s_61f5c7d71d15d1::t_c3c36135ed94c0 237-239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "446e23b858571ed171b7db0a60d74445e5fb259d",
+  "prompts": {},
+  "sessions": {
+    "s_61f5c7d71d15d1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b140-40b9-70d0-b17a-7fe482e0774a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
