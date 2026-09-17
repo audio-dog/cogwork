@@ -67,7 +67,7 @@ const resumeWorktreeOptions = (item: EligibleWork) => {
   return { resume: true };
 };
 
-const branchFor = (item: EligibleWork, operation: ResolvedOperation) => {
+export const branchFor = (item: EligibleWork, operation: ResolvedOperation) => {
   if (isReplayHarness(operation.stage.harness) || item.stage === "triage") return null;
   if (item.stage === "follow-up") return item.followUpBranch ?? branchName(item);
   return branchName(item);

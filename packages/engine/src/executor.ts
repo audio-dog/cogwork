@@ -1001,30 +1001,34 @@ export const make = Effect.gen(function* () {
       );
       return null;
     });
-    return yield* runControl.run(
-      runId,
+    return yield* worktrees.withProtection(
       workspace,
-      runPreparation
-        .prepare({
-          runId,
-          workspace,
-          item,
-          operation,
-          startedAtMillis,
-          observation,
-        })
-        .pipe(
-          Effect.matchEffect({
-            onFailure: reportPreparationFailure,
-            onSuccess: acceptPreparedRun,
-          }),
-          Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
-          Effect.flatMap(settleAcceptedRun),
-          Effect.ensuring(cleanupRunContext(runId)),
-          Effect.annotateLogs(correlation),
-          Effect.annotateSpans(correlation),
-        ),
-      releaseClaim(workspace, item.id),
+      RunPreparation.branchFor(item, operation),
+      runControl.run(
+        runId,
+        workspace,
+        runPreparation
+          .prepare({
+            runId,
+            workspace,
+            item,
+            operation,
+            startedAtMillis,
+            observation,
+          })
+          .pipe(
+            Effect.matchEffect({
+              onFailure: reportPreparationFailure,
+              onSuccess: acceptPreparedRun,
+            }),
+            Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+            Effect.flatMap(settleAcceptedRun),
+            Effect.ensuring(cleanupRunContext(runId)),
+            Effect.annotateLogs(correlation),
+            Effect.annotateSpans(correlation),
+          ),
+        releaseClaim(workspace, item.id),
+      ),
     );
   });
 

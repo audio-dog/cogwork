@@ -796,6 +796,7 @@ const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+  withProtection: (_workspace, _branch, effect) => effect,
 });
 
 const worktreeStub = worktreeStubCreated(true);

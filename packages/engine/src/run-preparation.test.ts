@@ -177,6 +177,7 @@ const worktreeLayer = ({
         list: () => Effect.succeed([]),
         remove: () => Effect.void,
         reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+        withProtection: (_workspace, _branch, effect) => effect,
       }),
     ),
   ).pipe(Layer.provideMerge(WorktreeCalls.layer));
