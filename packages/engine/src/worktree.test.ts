@@ -62,14 +62,14 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
 
 type Recorder = Effect.Success<ReturnType<typeof makeRecorder>>;
 
-class ReadinessRecorder extends Context.Service<ReadinessRecorder, Recorder>()(
-  "@cogwork/engine/worktree.test/ReadinessRecorder",
+class WorktreeTestRecorder extends Context.Service<WorktreeTestRecorder, Recorder>()(
+  "@cogwork/engine/worktree.test/WorktreeTestRecorder",
 ) {
-  static readonly layer = Layer.effect(ReadinessRecorder, makeRecorder());
+  static readonly layer = Layer.effect(WorktreeTestRecorder, makeRecorder());
 }
 
-class ReadinessWorktree extends Context.Service<ReadinessWorktree, Worktree.WorktreeManagerService>()(
-  "@cogwork/engine/worktree.test/ReadinessWorktree",
+class WorktreeUnderTest extends Context.Service<WorktreeUnderTest, Worktree.WorktreeManagerService>()(
+  "@cogwork/engine/worktree.test/WorktreeUnderTest",
 ) {}
 
 const inSync: BranchDivergence = { ahead: 0, behind: 0 };
@@ -132,20 +132,23 @@ const fakeFs = (recorder: Recorder, stats: Readonly<Record<string, FileStat>>) =
 const provide = (git: GitService, fs: WorktreeFsService) =>
   Layer.mergeAll(Layer.succeed(Git, git), Layer.succeed(WorktreeFs, fs));
 
-const readinessLayer = (options: Parameters<typeof fakeGit>[1]) => {
+const worktreeTestLayer = (
+  options: Parameters<typeof fakeGit>[1],
+  stats: Readonly<Record<string, FileStat>> = {},
+) => {
   const dependencies = Layer.merge(
     Layer.effect(
       Git,
-      Effect.map(ReadinessRecorder, (recorder) => fakeGit(recorder, options)),
+      Effect.map(WorktreeTestRecorder, (recorder) => fakeGit(recorder, options)),
     ),
     Layer.effect(
       WorktreeFs,
-      Effect.map(ReadinessRecorder, (recorder) => fakeFs(recorder, {})),
+      Effect.map(WorktreeTestRecorder, (recorder) => fakeFs(recorder, stats)),
     ),
   );
-  return Layer.effect(ReadinessWorktree, Worktree.make).pipe(
+  return Layer.effect(WorktreeUnderTest, Worktree.make).pipe(
     Layer.provide(dependencies),
-    Layer.provideMerge(ReadinessRecorder.layer),
+    Layer.provideMerge(WorktreeTestRecorder.layer),
   );
 };
 
@@ -504,14 +507,14 @@ describe("Worktree.pullRequestReadiness", () => {
       retryable: true,
     });
     return Effect.gen(function* () {
-      const manager = yield* ReadinessWorktree;
+      const manager = yield* WorktreeUnderTest;
 
       const error = yield* Effect.flip(manager.pullRequestReadiness(workspaceWith(), item));
 
       assert.strictEqual(error, failure);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeTestLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
           fetchFailure: failure,
         }),
@@ -521,8 +524,8 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("declines when the worktree is not on the branch the engine cut", () =>
     Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeTestRecorder;
+      const manager = yield* WorktreeUnderTest;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -533,7 +536,7 @@ describe("Worktree.pullRequestReadiness", () => {
       assert.deepStrictEqual(yield* Ref.get(recorder.fetched), []);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeTestLayer({
           worktrees: [{ path: worktreePath(), branch: "another-branch" }],
         }),
       ),
@@ -542,8 +545,8 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("declines when the head is not ahead of the base", () =>
     Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeTestRecorder;
+      const manager = yield* WorktreeUnderTest;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith({ baseBranch: "trunk" }), item);
 
@@ -567,7 +570,7 @@ describe("Worktree.pullRequestReadiness", () => {
       ]);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeTestLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
           remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: {
@@ -581,8 +584,8 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("declines when the local head has not been pushed", () =>
     Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeTestRecorder;
+      const manager = yield* WorktreeUnderTest;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -593,7 +596,7 @@ describe("Worktree.pullRequestReadiness", () => {
       assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), []);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeTestLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
         }),
       ),
@@ -602,8 +605,8 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("returns the engine-owned head and base when the gate passes", () =>
     Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeTestRecorder;
+      const manager = yield* WorktreeUnderTest;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -615,7 +618,7 @@ describe("Worktree.pullRequestReadiness", () => {
       assert.deepStrictEqual(yield* Ref.get(recorder.fetched), ["origin"]);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeTestLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
           remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: {
@@ -650,7 +653,7 @@ describe("Worktree.reconcile", () => {
       );
       const outcome = yield* manager.reconcile(
         workspaceWith({ reapAfterMillis: 1000 }),
-        ["active", "idle"],
+        { activeTicketKeys: ["active", "idle"], protectedBranches: [] },
         10_000,
       );
       assert.deepStrictEqual(outcome.tornDown, ["gone"]);
@@ -663,6 +666,88 @@ describe("Worktree.reconcile", () => {
     }),
   );
 
+  it.effect("keeps a running Run's worktree out of teardown and idle reaping", () => {
+    const liveEntries: ReadonlyArray<WorktreeEntry> = [
+      { path: "/repo.worktrees/live", branch: "live" },
+      { path: "/repo.worktrees/gone", branch: "gone" },
+    ];
+    return Effect.gen(function* () {
+      const recorder = yield* WorktreeTestRecorder;
+      const manager = yield* WorktreeUnderTest;
+
+      const outcome = yield* manager.reconcile(
+        workspaceWith({ reapAfterMillis: 1000 }),
+        { activeTicketKeys: ["other"], protectedBranches: ["live"] },
+        10_000,
+      );
+
+      assert.deepStrictEqual(outcome, { tornDown: ["gone"], reaped: [] });
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), [
+        { path: "/repo.worktrees/gone", force: true },
+      ]);
+    }).pipe(
+      Effect.provide(
+        worktreeTestLayer(
+          { worktrees: liveEntries },
+          {
+            "/repo.worktrees/live": { mtimeMillis: 0 },
+            "/repo.worktrees/gone": { mtimeMillis: 0 },
+          },
+        ),
+      ),
+    );
+  });
+
+  it.effect("keeps a preparing Run protected before it reaches the Run ledger", () => {
+    const liveEntries: ReadonlyArray<WorktreeEntry> = [
+      { path: "/repo.worktrees/live", branch: "scratch" },
+      { path: "/repo.worktrees/gone", branch: "gone" },
+    ];
+    return Effect.gen(function* () {
+      const recorder = yield* WorktreeTestRecorder;
+      const manager = yield* WorktreeUnderTest;
+      const started = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const preparing = yield* Effect.forkChild(
+        manager.withProtection(
+          workspaceWith(),
+          decodeBranchName("live"),
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release))),
+        ),
+      );
+      yield* Deferred.await(started);
+
+      const outcome = yield* manager.reconcile(
+        workspaceWith(),
+        { activeTicketKeys: ["other"], protectedBranches: [] },
+        10_000,
+      );
+
+      assert.deepStrictEqual(outcome, { tornDown: ["gone"], reaped: [] });
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), [
+        { path: "/repo.worktrees/gone", force: true },
+      ]);
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(preparing);
+    }).pipe(Effect.provide(worktreeTestLayer({ worktrees: liveEntries })));
+  });
+
+  it.effect("declines all teardown when no active ticket keys were observed", () =>
+    Effect.gen(function* () {
+      const recorder = yield* WorktreeTestRecorder;
+      const manager = yield* WorktreeUnderTest;
+
+      const outcome = yield* manager.reconcile(
+        workspaceWith({ reapAfterMillis: 1000 }),
+        { activeTicketKeys: [], protectedBranches: [] },
+        10_000,
+      );
+
+      assert.deepStrictEqual(outcome, { tornDown: [], reaped: [] });
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
+    }).pipe(Effect.provide(worktreeTestLayer({ worktrees: entries }))),
+  );
+
   it.effect("only tears down orphans when no reap age is configured", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
@@ -671,7 +756,11 @@ describe("Worktree.reconcile", () => {
         Worktree.make,
         provide(fakeGit(recorder, { worktrees: entries }), fs),
       );
-      const outcome = yield* manager.reconcile(workspaceWith(), ["active", "idle"], 10_000);
+      const outcome = yield* manager.reconcile(
+        workspaceWith(),
+        { activeTicketKeys: ["active", "idle"], protectedBranches: [] },
+        10_000,
+      );
       assert.deepStrictEqual(outcome.reaped, []);
       assert.deepStrictEqual(outcome.tornDown, ["gone"]);
       const removed = yield* Ref.get(recorder.removed);
@@ -689,7 +778,11 @@ describe("Worktree.reconcile", () => {
         Worktree.make,
         provide(fakeGit(recorder, { worktrees: renamed }), fakeFs(recorder, {})),
       );
-      const outcome = yield* manager.reconcile(workspaceWith(), ["13"], 10_000);
+      const outcome = yield* manager.reconcile(
+        workspaceWith(),
+        { activeTicketKeys: ["13"], protectedBranches: [] },
+        10_000,
+      );
       assert.deepStrictEqual(outcome.tornDown, []);
       const removed = yield* Ref.get(recorder.removed);
       assert.deepStrictEqual(removed, []);
@@ -707,7 +800,11 @@ describe("Worktree.reconcile", () => {
           fakeFs(recorder, {}),
         ),
       );
-      const outcome = yield* manager.reconcile(workspaceWith(), ["u"], 10_000);
+      const outcome = yield* manager.reconcile(
+        workspaceWith(),
+        { activeTicketKeys: ["u"], protectedBranches: [] },
+        10_000,
+      );
       assert.deepStrictEqual(outcome.tornDown, [branch]);
     }),
   );
@@ -723,7 +820,11 @@ describe("Worktree.reconcile", () => {
           fakeFs(recorder, {}),
         ),
       );
-      const outcome = yield* manager.reconcile(workspaceWith(), ["13", branch], 10_000);
+      const outcome = yield* manager.reconcile(
+        workspaceWith(),
+        { activeTicketKeys: ["13", branch], protectedBranches: [] },
+        10_000,
+      );
       assert.deepStrictEqual(outcome.tornDown, []);
       assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
     }),

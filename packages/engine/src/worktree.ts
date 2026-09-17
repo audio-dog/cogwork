@@ -5,7 +5,9 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
 import type { RegisteredWorkspace } from "./projector";
 import { WorktreeFs } from "./worktree-fs";
@@ -112,6 +114,11 @@ export interface ReconcileOutcome {
   readonly reaped: ReadonlyArray<string>;
 }
 
+export interface ReconcileInput {
+  readonly activeTicketKeys: ReadonlyArray<string>;
+  readonly protectedBranches: ReadonlyArray<string>;
+}
+
 export type PullRequestReadiness = Data.TaggedEnum<{
   Ready: {
     readonly headBranch: string;
@@ -165,9 +172,38 @@ const operationMessage = (branch: string, operation: GitOperationInProgress) => 
 export const make = Effect.gen(function* () {
   const git = yield* Git;
   const fs = yield* WorktreeFs;
+  const protectionGate = Semaphore.makeUnsafe(1);
+  const protections = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
 
   const pathFor = (repoPath: string, config: WorktreeSettings | undefined, branch: string) =>
     worktreePathFor(worktreeRoot(repoPath, config), branch);
+
+  const changeProtection = (worktreePath: string, delta: number) =>
+    Ref.update(protections, (current) => {
+      const next = new Map(current);
+      const count = (next.get(worktreePath) ?? 0) + delta;
+      if (count === 0) {
+        next.delete(worktreePath);
+        return next;
+      }
+      next.set(worktreePath, count);
+      return next;
+    });
+
+  const withProtection = Effect.fn("Worktree.withProtection")(function* <A, E, R>(
+    workspace: RegisteredWorkspace,
+    branch: BranchName | null,
+    effect: Effect.Effect<A, E, R>,
+  ) {
+    if (branch === null) return yield* effect;
+    const repoPath = workspace.config.checkoutPath;
+    const worktreePath = pathFor(repoPath, workspace.config.worktrees, branch);
+    return yield* Effect.acquireUseRelease(
+      protectionGate.withPermit(changeProtection(worktreePath, 1)),
+      () => effect,
+      () => protectionGate.withPermit(changeProtection(worktreePath, -1)),
+    );
+  });
 
   const linkPath = Effect.fn("Worktree.linkPath")(function* (
     repoPath: string,
@@ -362,19 +398,32 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const reconcile = Effect.fn("Worktree.reconcile")(function* (
+  const reconcileUnlocked = Effect.fn("Worktree.reconcileProtected")(function* (
     workspace: RegisteredWorkspace,
-    activeTicketKeys: ReadonlyArray<string>,
+    input: ReconcileInput,
     now: number,
   ) {
-    const config = workspace.config.worktrees;
+    if (input.activeTicketKeys.length === 0) {
+      yield* Effect.logWarning("worktree maintenance declined because no active ticket keys were observed");
+      return { tornDown: [], reaped: [] } satisfies ReconcileOutcome;
+    }
     const repoPath = workspace.config.checkoutPath;
+    const config = workspace.config.worktrees;
     const entries = yield* managed(repoPath, config);
+    const protectedPaths = yield* Ref.get(protections);
+    const protectedBranches = new Set(input.protectedBranches);
     const belongsToActiveTicket = (branch: string) =>
-      activeTicketKeys.some((key) => branchBelongsToTicketSlug(branch, key));
+      input.activeTicketKeys.some((key) => branchBelongsToTicketSlug(branch, key));
+    const isProtected = (entry: WorktreeEntry) =>
+      protectedPaths.has(entry.path) || (entry.branch !== null && protectedBranches.has(entry.branch));
 
-    const orphaned = entries.filter((entry) => entry.branch !== null && !belongsToActiveTicket(entry.branch));
-    const retained = entries.filter((entry) => entry.branch === null || belongsToActiveTicket(entry.branch));
+    const removable = entries.filter((entry) => !isProtected(entry));
+    const orphaned = removable.filter(
+      (entry) => entry.branch !== null && !belongsToActiveTicket(entry.branch),
+    );
+    const retained = removable.filter(
+      (entry) => entry.branch === null || belongsToActiveTicket(entry.branch),
+    );
     const reapAfterMillis = config?.reapAfterMillis;
     const idle =
       reapAfterMillis === undefined
@@ -390,7 +439,12 @@ export const make = Effect.gen(function* () {
     } satisfies ReconcileOutcome;
   });
 
-  return { ensure, pullRequestReadiness, list, remove, reconcile } as const;
+  const reconcile = Effect.fn("Worktree.reconcile")(
+    (workspace: RegisteredWorkspace, input: ReconcileInput, now: number) =>
+      protectionGate.withPermit(reconcileUnlocked(workspace, input, now)),
+  );
+
+  return { ensure, pullRequestReadiness, list, remove, reconcile, withProtection } as const;
 });
 
 export type WorktreeManagerService = Effect.Success<typeof make>;
