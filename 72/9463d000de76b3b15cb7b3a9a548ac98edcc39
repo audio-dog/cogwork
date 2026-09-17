@@ -1,0 +1,31 @@
+packages/codex-cli/src/harness-configuration.test.ts
+  s_f0a21ebb5515c0::t_785959c257ad25 33-41,47-58,60-61,125-153
+  s_f0a21ebb5515c0::t_6b4b43ac1e4efd 42-46,59
+  s_f0a21ebb5515c0::t_2868d3a2f01bd6 159-160,165-168
+  s_f0a21ebb5515c0::t_b7423df7d2fbda 11,162-164
+  s_f0a21ebb5515c0::t_671b77941d8785 154-155
+  s_f0a21ebb5515c0::t_bd783f106ab7d9 161
+  s_f0a21ebb5515c0::t_ceb2b6c590c102 169-170
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_f0a21ebb5515c0::t_77f1601c24bb5f 77
+packages/codex-cli/src/harness-execution.test.ts
+  s_f0a21ebb5515c0::t_77f1601c24bb5f 240
+packages/codex-cli/src/harness-fixtures.ts
+  s_f0a21ebb5515c0::t_77f1601c24bb5f 284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "729463d000de76b3b15cb7b3a9a548ac98edcc39",
+  "prompts": {},
+  "sessions": {
+    "s_f0a21ebb5515c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0afed-bb3f-76c2-b696-294c07f11818",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
