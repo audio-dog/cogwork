@@ -1,0 +1,21 @@
+apps/cli/src/external-harness.test.ts
+  s_f2c23f7cef4f3a::t_d556ceeffdc081 3-4,43-52,54-56,58-80
+apps/cli/src/rpc.ts
+  s_f2c23f7cef4f3a::t_61f3ae197510d5 9,99-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c854cd84f7fcc64621b47629d185caef3583255f",
+  "prompts": {},
+  "sessions": {
+    "s_f2c23f7cef4f3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b12f-4644-7392-86d2-89a64da6f6bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
