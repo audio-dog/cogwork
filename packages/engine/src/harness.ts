@@ -147,15 +147,41 @@ export type HarnessPreflightInput = Data.TaggedEnum<{
 
 export const HarnessPreflightInput = Data.taggedEnum<HarnessPreflightInput>();
 
+type HarnessPreflightTag = HarnessPreflightInput["_tag"];
+type HarnessPreflightVariant<Tag extends HarnessPreflightTag> = Extract<
+  HarnessPreflightInput,
+  { readonly _tag: Tag }
+>;
+type HarnessPreflightTable<Value, Arguments extends ReadonlyArray<unknown> = []> = {
+  readonly [Tag in HarnessPreflightTag]: (
+    input: HarnessPreflightVariant<Tag>,
+    ...arguments_: Arguments
+  ) => Value;
+};
+
+const applyPreflightTable = <
+  Tag extends HarnessPreflightTag,
+  Value,
+  Arguments extends ReadonlyArray<unknown>,
+>(
+  input: HarnessPreflightVariant<Tag>,
+  table: HarnessPreflightTable<Value, Arguments>,
+  ...arguments_: Arguments
+) => (table[input._tag] as HarnessPreflightTable<Value, Arguments>[Tag])(input, ...arguments_);
+
 export const staticCatalogSource = (
   options: HarnessCatalogOptions,
   provenance: HarnessCatalogProvenance,
 ) => ({ catalog: Effect.succeed({ ...options, provenance }) });
 
-export const selectionOfPreflightInput = HarnessPreflightInput.$match({
+const selectionByPreflightTag = {
   Static: ({ selection }) => selection,
   Launch: ({ request }) => request.plan.harness,
-});
+} satisfies HarnessPreflightTable<HarnessSelection>;
+
+export const selectionOfPreflightInput = <Tag extends HarnessPreflightTag>(
+  input: HarnessPreflightVariant<Tag>,
+) => applyPreflightTable(input, selectionByPreflightTag);
 
 export const fullHarnessExecution: HarnessExecution = {
   nonInteractive: true,
@@ -406,16 +432,26 @@ const runnerFor = Effect.fn("Harness.runnerFor")(function* (
   return runner;
 });
 
+const launchValidationByPreflightTag = {
+  Static: () => Effect.void,
+  Launch: ({ request }, runner) => runner.validateLaunch?.(request) ?? Effect.void,
+} satisfies HarnessPreflightTable<
+  Effect.Effect<void, HarnessError, HarnessRunnerEnv>,
+  [runner: HarnessRunner]
+>;
+
+const validateLaunch = <Tag extends HarnessPreflightTag>(
+  input: HarnessPreflightVariant<Tag>,
+  runner: HarnessRunner,
+) => applyPreflightTable(input, launchValidationByPreflightTag, runner);
+
 const preflightRunner = Effect.fn("Harness.preflightRunner")(function* (
   registry: ReadonlyMap<HarnessName, HarnessRunner>,
   input: HarnessPreflightInput,
 ) {
   const selection = selectionOfPreflightInput(input);
   const runner = yield* runnerFor(registry, selection.name);
-  yield* HarnessPreflightInput.$match({
-    Static: () => Effect.void,
-    Launch: ({ request }) => runner.validateLaunch?.(request) ?? Effect.void,
-  })(input);
+  yield* validateLaunch(input, runner);
   const catalog = yield* resolveCatalog(runner);
   yield* validateSelection(runner, catalog, selection);
   const posture = unsupportedPosture(runner, selection.profile);
