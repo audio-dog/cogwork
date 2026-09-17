@@ -2012,7 +2012,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([unsupported])));
   });
 
-  it.effect("preflights the resolved permission profile", () => {
+  it.effect("refuses a saved Harness that cannot run the Operation's locked profile", () => {
     const readOnlyRunner = runner(implementEvents, {
       ...fullHarnessExecution,
       profiles: ["read-only"],
@@ -2025,8 +2025,12 @@ describe("Executor.execute", () => {
     };
 
     return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      const ledger = yield* RunLedger.RunLedger;
+      assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
     }).pipe(
       Effect.provide(
         provide([readOnlyRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), [

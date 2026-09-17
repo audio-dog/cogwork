@@ -37,7 +37,7 @@ import {
   RunPlanObservation,
   RunPlanOperatingInstructions,
   RunPlanPersistence,
-  RunPlanPolicyProfile,
+  type RunPlanPolicyProfile,
   RunPlanProjectedName,
   RunPlanProjectionDisposition,
   RunPlanProvenance,
@@ -318,11 +318,6 @@ const isHarnessName = Schema.is(HarnessName);
 
 const harnessValue = (value: unknown) => (isHarnessName(value) ? value : null);
 
-const isPolicyProfile = Schema.is(RunPlanPolicyProfile);
-
-const policyProfileValue = (value: unknown, fallback: RunPlanPolicyProfile) =>
-  isPolicyProfile(value) ? value : fallback;
-
 export interface ResolvedStage extends OperationDefinition {
   readonly enabled: boolean;
   readonly harness: HarnessName;
@@ -368,7 +363,7 @@ export const resolveRunPlanStage = (
       model: trimmedStringValue(settingValueOf("model"), null),
       effort: trimmedStringValue(settingValueOf("effort"), null),
     },
-    profile: policyProfileValue(settingValueOf("permission-profile"), operationPolicyProfile(operation)),
+    profile: operationPolicyProfile(operation),
     settings,
     contributionSettings,
   };
@@ -428,19 +423,30 @@ const resolutionTrace = (
 ) => {
   const resolution = resolved.settings.get(setting);
   const winners = resolution ? winningRows(resolution.winning) : [];
-  const winner = winners.at(-1);
+  const definitionLocked = setting === "permission-profile";
+  const winner = definitionLocked ? undefined : winners.at(-1);
   const contributors = setting === "bindings" ? winners.map(resolutionCandidate) : [];
   const effective = effectiveSettingValue(resolved, setting);
+  const shadowed = resolution?.shadowed ?? [];
+  const lockedRows = definitionLocked ? [...winners, ...shadowed] : [];
+  const dropped = [
+    ...(resolution?.dropped.map(({ row, reason }) =>
+      RunPlanDroppedCandidate.make({ candidate: resolutionCandidate(row), reason }),
+    ) ?? []),
+    ...lockedRows.map((row) =>
+      RunPlanDroppedCandidate.make({
+        candidate: resolutionCandidate(row),
+        reason: "Operation Definition locks this setting",
+      }),
+    ),
+  ];
   return RunPlanResolutionTrace.make({
     key: setting,
     operator: operatorForSetting(setting),
     winner: winner ? resolutionCandidate(winner) : engineCandidate(operation, effective),
     contributors,
-    shadowed: resolution?.shadowed.map(resolutionCandidate) ?? [],
-    dropped:
-      resolution?.dropped.map(({ row, reason }) =>
-        RunPlanDroppedCandidate.make({ candidate: resolutionCandidate(row), reason }),
-      ) ?? [],
+    shadowed: definitionLocked ? [] : shadowed.map(resolutionCandidate),
+    dropped,
   });
 };
 

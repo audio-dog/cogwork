@@ -2,14 +2,15 @@ import {
   LifecycleStage,
   OperationSettingRefused,
   OperationSettingUpdate,
+  operationPolicyProfiles,
+  type RunPlanPolicyProfile,
   SettingLevel,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 
-export type OperationPolicyProfile = "read-only" | "full";
+export type OperationPolicyProfile = RunPlanPolicyProfile;
 
-export const operationPolicyProfile = (stage: LifecycleStage): OperationPolicyProfile =>
-  stage === "triage" ? "read-only" : "full";
+export const operationPolicyProfile = (stage: LifecycleStage) => operationPolicyProfiles[stage];
 
 const isLifecycleStage = Schema.is(LifecycleStage);
 

@@ -758,6 +758,12 @@ describe("Run Plan assembly", () => {
         },
         {
           setting: "permission-profile",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: "full",
+        },
+        {
+          setting: "permission-profile",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
           value: "read-only",
@@ -810,13 +816,23 @@ describe("Run Plan assembly", () => {
       },
     );
     assert.strictEqual(plan.harness.model, "private-model");
-    assert.strictEqual(plan.harness.profile, "read-only");
+    assert.strictEqual(plan.harness.profile, "full");
     assert.deepStrictEqual(
       plan.provenance.resolution.slice(0, operationSettingNames.length).map((entry) => entry.key),
       [...operationSettingNames],
     );
     const modelTrace = plan.provenance.resolution.find((entry) => entry.key === "model");
     assert.strictEqual(modelTrace?.winner?.source, "Private workspace overlay workspace");
+    const permissionTrace = plan.provenance.resolution.find((entry) => entry.key === "permission-profile");
+    assert.strictEqual(permissionTrace?.winner?.source, "implement Operation Definition");
+    assert.deepStrictEqual(permissionTrace?.shadowed, []);
+    assert.deepStrictEqual(
+      permissionTrace?.dropped.map(({ candidate, reason }) => ({ value: candidate.value, reason })),
+      [
+        { value: "read-only", reason: "Operation Definition locks this setting" },
+        { value: "full", reason: "Operation Definition locks this setting" },
+      ],
+    );
     assert.deepStrictEqual(
       modelTrace?.shadowed.map((candidate) => candidate.value),
       ["profile-model", "default-model"],
