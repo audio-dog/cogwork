@@ -39,6 +39,10 @@ const rateLimitHits = Metric.counter("cogwork_reconcile_rate_limit_hits_total", 
 export const reconcilePollDuration = Metric.timer("cogwork_reconcile_poll_duration", {
   description: "Time to poll and classify one workspace.",
 });
+export const reconcileObservedItems = Metric.histogram("cogwork_reconcile_observed_items", {
+  description: "Observed work items returned by each successful workspace poll.",
+  boundaries: [0, 1, 5, 10, 25, 50, 100, 250],
+});
 
 const submitTimeout = "30 seconds";
 
@@ -240,6 +244,12 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
       Effect.tap(() => clearCooldown(scope)),
       Effect.flatMap((items) =>
         refreshedAvailability(workspace).pipe(
+          Effect.tap(() =>
+            Metric.update(
+              Metric.withAttributes(reconcileObservedItems, { workspace: workspace.config.name }),
+              items.length,
+            ),
+          ),
           Effect.map((current) =>
             okState(
               workspace,

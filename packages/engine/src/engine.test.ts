@@ -351,6 +351,22 @@ describe("reconcile worker", () => {
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
   );
 
+  it.effect("records a zero observed count for each successful workspace poll", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const metric = Metric.withAttributes(Reconcile.reconcileObservedItems, {
+        workspace: registeredWorkspace.config.name,
+      });
+      const before = yield* Metric.value(metric);
+
+      yield* worker.submit();
+
+      const after = yield* Metric.value(metric);
+      assert.strictEqual(after.count, before.count + 1);
+      assert.strictEqual(after.sum, before.sum);
+    }).pipe(Effect.provide(workerLayer), Effect.scoped),
+  );
+
   it.effect("keeps a registry refresh failure typed", () => {
     const failure = new WorkspaceRegistrationError({ message: "registry refresh failed" });
     const failedRegistry = Layer.succeed(Registry.WorkspaceRegistry, {
