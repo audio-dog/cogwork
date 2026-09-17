@@ -1,6 +1,5 @@
 import {
   AgUiEvent,
-  BranchName,
   ConnectionId,
   type ContributionSettingRow,
   ControlStoreFailure,
@@ -84,11 +83,9 @@ import {
   WorktreeDivergedError,
   WorktreeManager,
   type WorktreeManagerService,
-  WorktreeOperationInProgressError,
 } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
-const decodeBranchName = Schema.decodeSync(BranchName);
 const codex = Schema.decodeSync(HarnessName)("codex");
 const replay = Schema.decodeSync(HarnessName)("replay");
 const id = Schema.decodeSync(WorkItemId);
@@ -257,18 +254,6 @@ class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<R
   ).pipe(Layer.provideMerge(Layer.mergeAll(ContextCleanupCalls.layer, ContextAssemblyRequests.layer)));
 }
 
-const missingOperatingInstructionsContext = Layer.succeed(ContextAssembler.ContextAssembler, {
-  assemble: (request) =>
-    Effect.fail(
-      new ContextAssembler.ContextAssemblerError({
-        source: request.operatingInstructions,
-        message: `Operating Instructions "${request.operatingInstructions}" have no readable INSTRUCTIONS.md`,
-        retryable: false,
-      }),
-    ),
-  cleanup: () => Effect.void,
-});
-
 const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () =>
     Effect.succeed({
@@ -297,17 +282,6 @@ const contributionContext = Layer.succeed(ContextAssembler.ContextAssembler, {
           source: contribution.file,
           content: contribution.id,
         })),
-      operatingInstructionsPath: "/",
-      operatingInstructionResources: [],
-      sources: [],
-    }),
-  cleanup: () => Effect.void,
-});
-
-const invalidRunPlanContext = Layer.succeed(ContextAssembler.ContextAssembler, {
-  assemble: () =>
-    Effect.succeed({
-      layers: [{ kind: "repo" as const, source: "/repos/gh/AGENTS.md", content: "trailing newline\n" }],
       operatingInstructionsPath: "/",
       operatingInstructionResources: [],
       sources: [],
@@ -372,17 +346,6 @@ const replaceSessionHandle = (event: AgUiEvent, handle: string) => {
   if (AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id") return sessionEvent(handle);
   return event;
 };
-
-const resumedImplementEvents: ReadonlyArray<AgUiEvent> = [
-  runStarted,
-  sessionEvent("sess-prev"),
-  text("Picked up where I left off."),
-  structuredComplete(
-    { _tag: "implement", outcome: "opened-pr", summary: "Opened PR #99." },
-    '{"_tag":"implement","outcome":"opened-pr","summary":"Opened PR #99."}',
-  ),
-  implementFinished,
-];
 
 const stuckImplementEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
@@ -495,16 +458,6 @@ const malformedFollowUpResultEvents: ReadonlyArray<AgUiEvent> = [
   structuredComplete(
     { _tag: "follow-up", outcome: "pushed", summary: " " },
     '{"_tag":"follow-up","outcome":"pushed","summary":" "}',
-  ),
-  finished,
-];
-
-const ownedFollowUpEvents: ReadonlyArray<AgUiEvent> = [
-  runStarted,
-  text("Fixed the failing check and pushed."),
-  structuredComplete(
-    { _tag: "follow-up", outcome: "pushed", summary: "Fixed the failing check and pushed." },
-    '{"_tag":"follow-up","outcome":"pushed","summary":"Fixed the failing check and pushed."}',
   ),
   finished,
 ];
@@ -845,8 +798,6 @@ const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
 const worktreeStub = worktreeStubCreated(true);
 
 interface WorktreeProbeState {
-  readonly ensured: Ref.Ref<ReadonlyArray<boolean>>;
-  readonly branches: Ref.Ref<ReadonlyArray<string | undefined>>;
   readonly ensureCount: Ref.Ref<number>;
   readonly entered: Deferred.Deferred<void>;
   readonly release: Deferred.Deferred<void>;
@@ -858,8 +809,6 @@ class WorktreeProbe extends Context.Service<WorktreeProbe, WorktreeProbeState>()
   static readonly layer = Layer.effect(
     WorktreeProbe,
     Effect.all({
-      ensured: Ref.make<ReadonlyArray<boolean>>([]),
-      branches: Ref.make<ReadonlyArray<string | undefined>>([]),
       ensureCount: Ref.make(0),
       entered: Deferred.make<void>(),
       release: Deferred.make<void>(),
@@ -886,17 +835,6 @@ const failedPullRequestReadinessWorktree = (failure: GitError) =>
     pullRequestReadiness: () => Effect.fail(failure),
   }));
 
-const resumeRecordingWorktree = worktreeDouble((probe) => ({
-  ensure: (_workspace, item, options) =>
-    Ref.update(probe.ensured, (xs) => [...xs, options?.resume ?? false]).pipe(
-      Effect.map(() => ({ branch: branchName(item), path: `/wt/${branchName(item)}`, created: false })),
-    ),
-  pullRequestReadiness: worktreeStub.pullRequestReadiness,
-  list: () => Effect.succeed([]),
-  remove: () => Effect.void,
-  reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
-}));
-
 const divergedWorktree = worktreeDouble(() => ({
   ...worktreeStub,
   ensure: (_workspace, item) =>
@@ -906,32 +844,6 @@ const divergedWorktree = worktreeDouble(() => ({
         branch: branchName(item),
         message: "branch has diverged from origin and replaying the local commits failed",
         retryable: false,
-      }),
-    ),
-}));
-
-const operationInProgressWorktree = worktreeDouble(() => ({
-  ...worktreeStub,
-  ensure: (_workspace, item) =>
-    Effect.fail(
-      new WorktreeOperationInProgressError({
-        branch: branchName(item),
-        operation: "merge",
-        unmergedPaths: ["src/index.ts"],
-        message: `branch ${branchName(item)} has a merge in progress: src/index.ts`,
-        retryable: false,
-      }),
-    ),
-}));
-
-const unreachableRemoteWorktree = worktreeDouble(() => ({
-  ...worktreeStub,
-  ensure: () =>
-    Effect.fail(
-      new GitError({
-        command: "fetch origin",
-        message: "could not resolve host github.com",
-        retryable: true,
       }),
     ),
 }));
@@ -969,32 +881,6 @@ const blockedPrepareWorktree = worktreeDouble((probe) => ({
       })),
     ),
 }));
-
-const failSecondPrepareWorktree = (failure: GitError | WorktreeDivergedError) =>
-  worktreeDouble((probe) => ({
-    ...worktreeStubCreated(false),
-    ensure: (_workspace, item) =>
-      Ref.getAndUpdate(probe.ensureCount, (count) => count + 1).pipe(
-        Effect.flatMap((count) =>
-          count === 1
-            ? Effect.fail(failure)
-            : Effect.succeed({
-                branch: branchName(item),
-                path: `/wt/${branchName(item)}`,
-                created: false,
-              }),
-        ),
-      ),
-  }));
-
-const branchRecordingWorktree = (branch: BranchName) =>
-  worktreeDouble((probe) => ({
-    ...worktreeStubCreated(false),
-    ensure: (_workspace, _item, options) =>
-      Ref.update(probe.branches, (values) => [...values, options?.branch]).pipe(
-        Effect.map(() => ({ branch, path: `/wt/${branch}`, created: false })),
-      ),
-  }));
 
 const failingRunner = (error: HarnessError): TestRunner => ({
   make: () => ({
@@ -1278,60 +1164,13 @@ const cursorHarness: OperationSettingRow = {
   value: "cursor",
 };
 
-const codexHarness: OperationSettingRow = {
-  setting: "harness",
-  level: { _tag: "Default" },
-  scope: { _tag: "SettingsProfile" },
-  value: "codex",
-};
-
 const replayHarness: OperationSettingRow = {
   ...cursorHarness,
   value: "replay",
 };
 
 const runnableStages = [stagesEnabled, cursorHarness];
-const runnableCodexStages = [stagesEnabled, codexHarness];
 const runnableReplayStages = [stagesEnabled, replayHarness];
-
-class SelectedHarness extends Context.Service<SelectedHarness, Ref.Ref<ReadonlyArray<OperationSettingRow>>>()(
-  "@cogwork/engine/executor.test/SelectedHarness",
-) {
-  static readonly layer = Layer.effect(
-    SelectedHarness,
-    Ref.make<ReadonlyArray<OperationSettingRow>>(runnableStages),
-  );
-  static readonly controlStoreLayer = Layer.effect(
-    ControlStore,
-    Effect.gen(function* () {
-      const selected = yield* SelectedHarness;
-      const gate = Semaphore.makeUnsafe(1);
-      const pictureOf = (operationSettings: ReadonlyArray<OperationSettingRow>) => ({
-        ...defaultControlStore,
-        operationSettings,
-        contributionSettings: [],
-      });
-      return {
-        health: "available" as const,
-        seed: pictureOf(runnableStages),
-        picture: Effect.map(Ref.get(selected), pictureOf),
-        setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
-        establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
-        revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
-        removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
-        setHarnessEnabled: () => Effect.die(new Error("unexpected Harness enablement update")),
-        updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
-        installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
-        uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
-        updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
-        withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
-      } satisfies ControlStoreService;
-    }),
-  ).pipe(Layer.provideMerge(SelectedHarness.layer));
-}
-
-const selectHarness = (rows: ReadonlyArray<OperationSettingRow>) =>
-  Effect.flatMap(SelectedHarness, (selected) => Ref.set(selected, rows));
 
 const controlStoreLayer = (
   operationSettings: ReadonlyArray<OperationSettingRow>,
@@ -1530,9 +1369,10 @@ function provide<SourceControlRequirements = never>(
   contextAssembler: Layer.Layer<ContextAssembler.ContextAssembler> = ContextCleanupCalls.contextAssemblerLayer,
   plugins: Layer.Layer<PluginManager> = pluginManagerStub,
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
-  controlStore:
-    | ReturnType<typeof controlStoreLayer>
-    | typeof SelectedHarness.controlStoreLayer = controlStoreLayer(operationSettings, contributionSettings),
+  controlStore: ReturnType<typeof controlStoreLayer> = controlStoreLayer(
+    operationSettings,
+    contributionSettings,
+  ),
   transformRunLedger: (
     layer: Layer.Layer<RunLedger.RunLedger>,
   ) => Layer.Layer<RunLedger.RunLedger> = runLedgerIdentity,
@@ -1574,22 +1414,6 @@ function provide<SourceControlRequirements = never>(
 
 const provideReplay = (runners: ReadonlyArray<TestRunner>) =>
   provide(runners, worktreeStubLayer, noopProviderLayer, trackerRecorder(), runnableReplayStages);
-
-const harnessSwitchLayer = (alternates: ReadonlyArray<HarnessName>) =>
-  provide(
-    [
-      capturingRunner(implementEvents),
-      ...alternates.map((name) => capturingRunner(implementEvents, Stream.empty, "opaque-handle", name)),
-    ],
-    worktreeStubLayer,
-    noopProviderLayer,
-    trackerRecorder(),
-    runnableStages,
-    ContextCleanupCalls.contextAssemblerLayer,
-    pluginManagerStub,
-    [],
-    SelectedHarness.controlStoreLayer,
-  );
 
 describe("Executor.execute", () => {
   it.effect("projects availability only for executable Operations", () => {
@@ -3342,195 +3166,6 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([runner(restarted)])));
   });
 
-  it.effect("resumes the branch's persisted session on a later implement run", () => {
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      const captured = yield* Ref.get(requests);
-      assert.strictEqual(captured.length, 2);
-      const ledger = yield* RunLedger.RunLedger;
-      const [run] = yield* ledger.listRuns(10);
-      assert.strictEqual(captured[0]?.session, run?.session);
-      assert.strictEqual(captured[1]?.session, run?.session);
-      assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
-    }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
-  });
-
-  it.effect("starts fresh when the branch's latest session is unresumable", () => {
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      const ledger = yield* RunLedger.RunLedger;
-      yield* execute(executor, implementWorkspace, implementItem);
-      const [first] = yield* ledger.listRuns(1);
-      assert.isDefined(first);
-      yield* ledger.updateRun(first.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
-
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      const captured = yield* Ref.get(requests);
-      assert.strictEqual(captured.length, 2);
-      assert.notStrictEqual(captured[0]?.session, captured[1]?.session);
-    }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
-  });
-
-  it.effect("starts fresh whenever the selected implement harness changes", () => {
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
-      yield* selectHarness(runnableCodexStages);
-      yield* execute(executor, implementWorkspace, implementItem);
-      yield* selectHarness(runnableStages);
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      const captured = yield* Ref.get(requests);
-      assert.deepStrictEqual(
-        captured.map((request) => request.plan.harness.name),
-        [cursor, codex, cursor],
-      );
-      assert.notStrictEqual(captured[0]?.session, captured[1]?.session);
-      assert.notStrictEqual(captured[1]?.session, captured[2]?.session);
-      assert.notStrictEqual(captured[0]?.session, captured[2]?.session);
-      assert.isTrue(
-        captured
-          .slice(1)
-          .every((request) => !request.plan.messages[0]?.content.includes("just been resumed")),
-      );
-    }).pipe(Effect.provide(harnessSwitchLayer([codex])));
-  });
-
-  it.effect("does not resurrect an older implement session after an interrupted harness switch", () => {
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      const ledger = yield* RunLedger.RunLedger;
-      yield* execute(executor, implementWorkspace, implementItem);
-      yield* selectHarness(runnableCodexStages);
-      yield* execute(executor, implementWorkspace, implementItem);
-      const [latest] = yield* ledger.listRuns(1);
-      assert.isDefined(latest);
-      yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
-
-      yield* selectHarness(runnableStages);
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      const captured = yield* Ref.get(requests);
-      assert.strictEqual(captured.length, 3);
-      assert.notStrictEqual(captured[2]?.session, captured[0]?.session);
-    }).pipe(Effect.provide(harnessSwitchLayer([codex])));
-  });
-
-  it.effect("resumes an interrupted run with a continuation nudge and its persisted session", () => {
-    const resumeItem: EligibleWork = {
-      ...implementItem,
-      resume: { session: previousSession, reason: "interrupted" },
-    };
-
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const requests = yield* HarnessRequests;
-      const { ensured } = yield* WorktreeProbe;
-      const executor = yield* Executor.Executor;
-      yield* seedResumeSession();
-      yield* execute(executor, implementWorkspace, resumeItem);
-
-      const captured = yield* Ref.get(requests);
-      assert.strictEqual(captured.length, 1);
-      const [request] = captured;
-      assert.strictEqual(request?.plan.sandbox.workspace, `/wt/${implementBranch}`);
-      assert.strictEqual(request?.session, previousSession);
-      assert.include(request?.plan.messages[0]?.content ?? "", "You were interrupted part-way through");
-      assert.include(request?.plan.messages[0]?.content ?? "", `Inspect /wt/${implementBranch}`);
-      assert.notInclude(request?.plan.messages[0]?.content ?? "", "implement-agent");
-      assert.notInclude(request?.plan.messages[0]?.content ?? "", "IMPLEMENT-RESULT");
-
-      assert.deepStrictEqual(yield* Ref.get(ensured), [true]);
-
-      const log = yield* Ref.get(calls);
-      assert.isTrue(log.some((c) => c.method === "implemented"));
-    }).pipe(Effect.provide(provide([capturingRunner(resumedImplementEvents)], resumeRecordingWorktree)));
-  });
-
-  it.effect("starts a fresh Session when recovery recreates the Sandbox lineage", () => {
-    const resumeItem: EligibleWork = {
-      ...implementItem,
-      resume: { session: previousSession, reason: "interrupted" },
-    };
-
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* seedResumeSession();
-      yield* execute(executor, implementWorkspace, resumeItem);
-
-      const [request] = yield* Ref.get(requests);
-      assert.notStrictEqual(request?.session, previousSession);
-      assert.include(request?.plan.messages[0]?.content ?? "", "Implement playbook");
-      assert.include(request?.plan.messages[0]?.content ?? "", "You were interrupted part-way through");
-      assert.include(request?.plan.messages[0]?.content ?? "", "prepared Worktree as ground truth");
-    }).pipe(
-      Effect.provide(
-        provide([
-          capturingRunner(
-            implementEvents,
-            Stream.empty,
-            "opaque-handle",
-            cursor,
-            "codex-cli",
-            "sandbox-lineage",
-          ),
-        ]),
-      ),
-    );
-  });
-
-  it.effect("cold-starts recovery when its selected harness changed", () => {
-    const resumeItem: EligibleWork = {
-      ...implementItem,
-      resume: { session: previousSession, reason: "interrupted" },
-    };
-
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const requests = yield* HarnessRequests;
-      const { ensured } = yield* WorktreeProbe;
-      yield* seedResumeSession();
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, resumeItem);
-
-      const [request] = yield* Ref.get(requests);
-      assert.strictEqual(request?.plan.harness.name, codex);
-      assert.notStrictEqual(request?.session, previousSession);
-      assert.include(request?.plan.messages[0]?.content ?? "", "implement-agent");
-      assert.notInclude(request?.plan.messages[0]?.content ?? "", "just been resumed");
-      assert.deepStrictEqual(yield* Ref.get(ensured), [true]);
-
-      const callsAfterRun = yield* Ref.get(calls);
-      assert.isFalse(callsAfterRun.some((call) => call.method === "attemptFailed"));
-
-      const ledger = yield* RunLedger.RunLedger;
-      const [run] = yield* ledger.listRuns(10);
-      assert.strictEqual(run?.session, request?.session);
-    }).pipe(
-      Effect.provide(
-        provide(
-          [
-            capturingRunner(implementEvents),
-            capturingRunner(implementEvents, Stream.empty, "opaque-handle", codex),
-          ],
-          resumeRecordingWorktree,
-          noopProviderLayer,
-          trackerRecorder(),
-          runnableCodexStages,
-        ),
-      ),
-    );
-  });
-
   it.effect("fails a resumed implement run when the harness rejects its session", () => {
     const resumeItem: EligibleWork = {
       ...implementItem,
@@ -3730,11 +3365,17 @@ describe("Executor.execute", () => {
   });
 
   it.effect("hands a diverged worktree to a human on the first attempt without retrying", () => {
+    const resumeItem: EligibleWork = {
+      ...implementItem,
+      resume: { session: previousSession, reason: "interrupted" },
+    };
+
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
+      yield* seedResumeSession();
+      yield* execute(executor, implementWorkspace, resumeItem);
 
       assert.strictEqual((yield* Ref.get(requests)).length, 0);
       const log = yield* Ref.get(calls);
@@ -3745,111 +3386,11 @@ describe("Executor.execute", () => {
       assert.strictEqual(handOff?.stage, "implement");
       assert.include(handOff?.note ?? "", "non-retryable failure");
       assert.include(handOff?.note ?? "", "diverged");
+      assert.include(handOff?.note ?? "", "sess-prev");
 
       const ledger = yield* RunLedger.RunLedger;
       assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], divergedWorktree)));
-  });
-
-  it.effect("hands a worktree with an operation in progress to a human on the first attempt", () => {
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      assert.strictEqual((yield* Ref.get(requests)).length, 0);
-      const log = yield* Ref.get(calls);
-      const attempt = log.find((call) => call.method === "attemptFailed");
-      assert.include(attempt?.reason ?? "", "merge in progress");
-      const handOff = log.find((call) => call.method === "handOff");
-      assert.include(handOff?.note ?? "", "non-retryable failure");
-      assert.include(handOff?.note ?? "", "src/index.ts");
-    }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], operationInProgressWorktree)));
-  });
-
-  it.effect("hands missing Operating Instructions to a human without retrying", () => {
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      const log = yield* Ref.get(calls);
-      const attempt = log.find((call) => call.method === "attemptFailed");
-      assert.strictEqual(attempt?.stage, "implement");
-      assert.include(attempt?.reason ?? "", "no readable INSTRUCTIONS.md");
-      const handOff = log.find((call) => call.method === "handOff");
-      assert.strictEqual(handOff?.stage, "implement");
-      assert.include(handOff?.note ?? "", "non-retryable failure");
-
-      const ledger = yield* RunLedger.RunLedger;
-      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
-    }).pipe(
-      Effect.provide(
-        provide(
-          [runner(implementEvents)],
-          worktreeStubLayer,
-          noopProviderLayer,
-          trackerRecorder(),
-          runnableStages,
-          missingOperatingInstructionsContext,
-        ),
-      ),
-    );
-  });
-
-  it.effect("keeps retrying a prepare failure that is not a divergence", () => {
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      const log = yield* Ref.get(calls);
-      assert.strictEqual(log.find((c) => c.method === "attemptFailed")?.stage, "implement");
-      assert.isFalse(log.some((c) => c.method === "handOff"));
-
-      const ledger = yield* RunLedger.RunLedger;
-      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
-    }).pipe(Effect.provide(provide([runner(implementEvents)], unreachableRemoteWorktree)));
-  });
-
-  it.effect("records invalid Run Plan input through the normal attempt path", () => {
-    const atCap = { ...implementItem, priorFailures: 2 };
-
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
-      yield* execute(executor, implementWorkspace, atCap);
-
-      const log = yield* Ref.get(calls);
-      const attempts = log.filter((call) => call.method === "attemptFailed");
-      assert.strictEqual(attempts.length, 2);
-      assert.isTrue(
-        attempts.every(
-          (attempt) =>
-            attempt.reason?.includes("RunPlanInstruction") === true && attempt.reason.includes("content"),
-        ),
-      );
-      const handOff = log.find((call) => call.method === "handOff");
-      assert.include(handOff?.note ?? "", "3 failed implement attempts");
-      assert.strictEqual((yield* Ref.get(requests)).length, 0);
-
-      const ledger = yield* RunLedger.RunLedger;
-      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
-    }).pipe(
-      Effect.provide(
-        provide(
-          [capturingRunner(implementEvents)],
-          worktreeStubLayer,
-          noopProviderLayer,
-          trackerRecorder(),
-          runnableStages,
-          invalidRunPlanContext,
-        ),
-      ),
-    );
   });
 
   it.effect("hands a permanent Run acceptance failure to a human without retrying", () => {
@@ -3876,78 +3417,6 @@ describe("Executor.execute", () => {
           [],
           controlStoreLayer(runnableStages),
           failRunAcceptance(false),
-        ),
-      ),
-    );
-  });
-
-  it.effect("keeps an owned transcript through a failed prepare and retry", () => {
-    const worktree = failSecondPrepareWorktree(
-      new GitError({
-        command: "fetch origin",
-        message: "could not resolve host github.com",
-        retryable: true,
-      }),
-    );
-
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
-      yield* execute(executor, implementWorkspace, implementItem);
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      const ledger = yield* RunLedger.RunLedger;
-      const runs = yield* ledger.listRuns(10);
-      const succeeded = runs.find((run) => run.status === "succeeded");
-      const captured = yield* Ref.get(requests);
-      assert.strictEqual(runs.length, 2);
-      assert.strictEqual(captured[1]?.session, succeeded?.session);
-      assert.isAbove((yield* ledger.sessionEvents(succeeded?.session ?? previousSession)).length, 0);
-    }).pipe(
-      Effect.provide(provide([capturingRunner(implementEvents, Stream.empty, "owned-transcript")], worktree)),
-    );
-  });
-
-  it.effect("uses the stored session attach capability when switched prepare fails", () => {
-    const worktree = failSecondPrepareWorktree(
-      new WorktreeDivergedError({
-        remote: "origin",
-        branch: implementBranch,
-        message: "branch has diverged from origin and replaying the local commits failed",
-        retryable: false,
-      }),
-    );
-
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, implementWorkspace, implementItem);
-      yield* selectHarness(runnableCodexStages);
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      const ledger = yield* RunLedger.RunLedger;
-      const runs = yield* ledger.listRuns(10);
-      const succeeded = runs.find((run) => run.status === "succeeded");
-      const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
-      assert.strictEqual(runs.length, 1);
-      assert.strictEqual(runs[0]?.session, succeeded?.session);
-      assert.notInclude(handOff?.note ?? "", "codex resume");
-    }).pipe(
-      Effect.provide(
-        provide(
-          [
-            capturingRunner(implementEvents, Stream.empty, "opaque-handle", cursor, false),
-            capturingRunner(implementEvents, Stream.empty, "opaque-handle", codex, "codex-cli"),
-          ],
-          worktree,
-          noopProviderLayer,
-          trackerRecorder(),
-          runnableStages,
-          ContextCleanupCalls.contextAssemblerLayer,
-          pluginManagerStub,
-          [],
-          SelectedHarness.controlStoreLayer,
         ),
       ),
     );
@@ -4012,25 +3481,6 @@ describe("Executor.execute", () => {
       assert.strictEqual(run?.branch, followUpBranch);
       assert.strictEqual(run?.status, "succeeded");
     }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], existingWorktree)));
-  });
-
-  it.effect("prepares a linked external branch for follow-up", () => {
-    const externalBranch = decodeBranchName("claude/github-issue-5-a1b2c3");
-    const item = { ...followUpItem, followUpBranch: externalBranch };
-
-    return Effect.gen(function* () {
-      const { branches } = yield* WorktreeProbe;
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, followUpWorkspace, item);
-
-      assert.deepStrictEqual(yield* Ref.get(branches), [externalBranch]);
-      assert.strictEqual((yield* Ref.get(requests))[0]?.plan.sandbox.workspace, `/wt/${externalBranch}`);
-      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
-      assert.strictEqual(run?.branch, externalBranch);
-    }).pipe(
-      Effect.provide(provide([capturingRunner(followUpEvents)], branchRecordingWorktree(externalBranch))),
-    );
   });
 
   it.effect("posts the structured round summary to the pull request", () => {
@@ -4178,145 +3628,6 @@ describe("Executor.execute", () => {
       );
       assert.isFalse(log.some((call) => call.method === "handOff"));
     }).pipe(Effect.provide(provide([runner(malformedFollowUpResultEvents)], existingWorktree)));
-  });
-
-  it.effect("resumes the branch session on a later follow-up when the worktree was not recreated", () => {
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, followUpWorkspace, followUpItem);
-      yield* execute(executor, followUpWorkspace, followUpItem);
-
-      const captured = yield* Ref.get(requests);
-      const ledger = yield* RunLedger.RunLedger;
-      const [run] = yield* ledger.listRuns(10);
-      assert.strictEqual(captured[0]?.session, run?.session);
-      assert.strictEqual(captured[1]?.session, run?.session);
-      assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
-    }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], existingWorktree)));
-  });
-
-  it.effect("resumes a linked external branch", () => {
-    const externalBranch = decodeBranchName("claude/github-issue-5-a1b2c3");
-    const resumeItem: EligibleWork = {
-      ...followUpItem,
-      followUpBranch: externalBranch,
-      resume: { session: previousSession, reason: "interrupted" },
-    };
-
-    return Effect.gen(function* () {
-      const { branches } = yield* WorktreeProbe;
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* seedResumeSession();
-      yield* execute(executor, followUpWorkspace, resumeItem);
-
-      assert.deepStrictEqual(yield* Ref.get(branches), [externalBranch]);
-      assert.strictEqual((yield* Ref.get(requests))[0]?.plan.sandbox.workspace, `/wt/${externalBranch}`);
-    }).pipe(
-      Effect.provide(provide([capturingRunner(followUpEvents)], branchRecordingWorktree(externalBranch))),
-    );
-  });
-
-  it.effect("does not resurrect an older follow-up session after an interrupted harness switch", () => {
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      const ledger = yield* RunLedger.RunLedger;
-      yield* execute(executor, followUpWorkspace, followUpItem);
-      yield* selectHarness(runnableCodexStages);
-      yield* execute(executor, followUpWorkspace, followUpItem);
-      const [latest] = yield* ledger.listRuns(1);
-      assert.isDefined(latest);
-      yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
-
-      yield* selectHarness(runnableStages);
-      yield* execute(executor, followUpWorkspace, followUpItem);
-
-      const captured = yield* Ref.get(requests);
-      assert.strictEqual(captured.length, 3);
-      assert.notStrictEqual(captured[2]?.session, captured[0]?.session);
-    }).pipe(
-      Effect.provide(
-        provide(
-          [
-            capturingRunner(followUpEvents),
-            capturingRunner(followUpEvents, Stream.empty, "opaque-handle", codex),
-            capturingRunner(followUpEvents),
-          ],
-          existingWorktree,
-          noopProviderLayer,
-          trackerRecorder(),
-          runnableStages,
-          ContextCleanupCalls.contextAssemblerLayer,
-          pluginManagerStub,
-          [],
-          SelectedHarness.controlStoreLayer,
-        ),
-      ),
-    );
-  });
-
-  it.effect("mints and dispatches a new session for an explicit fresh follow-up", () => {
-    const freshItem = {
-      ...followUpItem,
-      followUp: { ...followUpItem.followUp, fresh: true },
-    };
-
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, followUpWorkspace, followUpItem);
-      yield* execute(executor, followUpWorkspace, freshItem);
-
-      const [freshRequest] = (yield* Ref.get(requests)).slice(-1);
-      const ledger = yield* RunLedger.RunLedger;
-      const [priorRun, freshRun] = yield* ledger.listRuns(10);
-      assert.notStrictEqual(freshRun?.session, priorRun?.session);
-      assert.strictEqual(freshRequest?.session, freshRun?.session);
-      assert.include(freshRequest?.plan.messages[0]?.content ?? "", "follow-up-agent");
-      assert.notInclude(
-        freshRequest?.plan.messages[0]?.content ?? "",
-        "You were interrupted part-way through",
-      );
-    }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], existingWorktree)));
-  });
-
-  it.effect("resumes an owned-transcript follow-up by default, with no handle to lean on", () => {
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, followUpWorkspace, followUpItem);
-      yield* execute(executor, followUpWorkspace, followUpItem);
-
-      const captured = yield* Ref.get(requests);
-      const ledger = yield* RunLedger.RunLedger;
-      const [second, first] = yield* ledger.listRuns(10);
-      assert.strictEqual(first?.session, second?.session);
-      assert.strictEqual(captured[1]?.session, second?.session);
-      assert.strictEqual(yield* kindOf(ledger, captured[1]?.session), "owned-transcript");
-      assert.isNull(yield* handleOf(ledger, captured[1]?.session));
-      assert.isAbove((yield* ledger.sessionEvents(second?.session ?? previousSession)).length, 0);
-    }).pipe(
-      Effect.provide(
-        provide([capturingRunner(ownedFollowUpEvents, Stream.empty, "owned-transcript")], existingWorktree),
-      ),
-    );
-  });
-
-  it.effect("starts a fresh follow-up session when the worktree was recreated", () => {
-    return Effect.gen(function* () {
-      const requests = yield* HarnessRequests;
-      const executor = yield* Executor.Executor;
-      yield* execute(executor, followUpWorkspace, followUpItem);
-      yield* execute(executor, followUpWorkspace, followUpItem);
-
-      const captured = yield* Ref.get(requests);
-      const ledger = yield* RunLedger.RunLedger;
-      const [priorRun, freshRun] = yield* ledger.listRuns(10);
-      assert.notStrictEqual(freshRun?.session, priorRun?.session);
-      assert.strictEqual(captured[1]?.session, freshRun?.session);
-    }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], worktreeStubLayer)));
   });
 
   it.effect("hands a stalled follow-up to a human when its Operation is unavailable", () => {
