@@ -106,6 +106,16 @@ const commandHarnessRunner: HarnessRunner = {
   preflight: () => Effect.void,
   run: () => Stream.die("unused"),
 };
+const alternateHarnessRunner = {
+  ...commandHarnessRunner,
+  name: harness("codex"),
+  catalogSources: {
+    fallback: staticCatalogSource(
+      { models: [{ value: "codex-model", label: "Codex model" }] },
+      { source: "cogwork-fallback", fallbackVersion: "test" },
+    ),
+  },
+} satisfies HarnessRunner;
 const reconcileStubLayer = Layer.succeed(Reconcile.ReconcileWorker, {
   submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
   submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
@@ -479,6 +489,7 @@ const daemonLayer = (
 const daemonLayerWithHarness = (
   source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>,
   controlStore = controlStoreStub(),
+  harnessRunners: ReadonlyArray<HarnessRunner> = [commandHarnessRunner],
 ) =>
   daemonLayer(
     source,
@@ -488,7 +499,7 @@ const daemonLayerWithHarness = (
     pluginManagerLayer,
     connectionStoreLayer,
     RunControl.layer,
-    [commandHarnessRunner],
+    harnessRunners,
     reconcileStubLayer,
   );
 
@@ -1223,6 +1234,26 @@ describe("SetOperationSetting", () => {
       ],
     },
   });
+  const shadowedOtherHarnessStore = controlStoreStub({
+    seed: {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        {
+          setting: "harness",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "codex",
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "codex-model",
+        },
+      ],
+    },
+  });
   const modelUpdate: OperationSettingUpdate = {
     _tag: "Set",
     row: {
@@ -1376,6 +1407,35 @@ describe("SetOperationSetting", () => {
         assert.include(failure.reason, "does not offer model retired-model");
       });
     }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
+  );
+
+  it.effect("persists a broad selection shadowed by another Harness", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({
+        updates: [
+          {
+            _tag: "Set",
+            row: {
+              setting: "model",
+              level: { _tag: "Default" },
+              scope: { _tag: "SettingsProfile" },
+              value: "test",
+            },
+          },
+        ],
+      });
+
+      assert.strictEqual(returned.operationSettings[0]?.value, "test");
+    }).pipe(
+      Effect.provide(
+        daemonLayerWithHarness(trackerLayer({}), shadowedOtherHarnessStore, [
+          commandHarnessRunner,
+          alternateHarnessRunner,
+        ]),
+      ),
+      Effect.scoped,
+    ),
   );
 
   it.effect("clears a selection without requiring a cached catalog", () =>

@@ -395,7 +395,7 @@ const validateSelectionContext = Effect.fn("Daemon.validateSelectionContext")(fu
   const emptyClear = change.requestedValue === null && effectiveValue === null;
   const validationUnneeded = unchangedClear || emptyClear;
   if (validationUnneeded) return;
-  const selectedValue = change.requestedValue ?? effectiveValue;
+  const selectedValue = effectiveValue;
   if (typeof selectedValue !== "string") return;
   const selectedHarness =
     change.setting === "harness" ? selectedValue : resolveOperationSetting(rows, "harness", change);
