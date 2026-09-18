@@ -91,12 +91,20 @@ describe("catalog choices", () => {
 });
 
 describe("harnessSelectionUpdates", () => {
-  it("clears settings constrained by the selected Harness", () => {
-    expect(harnessSelectionUpdates("cursor", "cursor-auto")).toEqual([
+  it("clears settings constrained by a newly selected Harness", () => {
+    expect(harnessSelectionUpdates("codex", "cursor", "cursor-auto")).toEqual([
       { setting: "harness", value: "cursor" },
       { setting: "model", value: "cursor-auto" },
       { setting: "effort", value: null },
       { setting: "permission-profile", value: null },
+    ]);
+  });
+
+  it("keeps Permissions when only the model changes", () => {
+    expect(harnessSelectionUpdates("codex", "codex", "gpt-5.6-sol")).toEqual([
+      { setting: "harness", value: "codex" },
+      { setting: "model", value: "gpt-5.6-sol" },
+      { setting: "effort", value: null },
     ]);
   });
 });

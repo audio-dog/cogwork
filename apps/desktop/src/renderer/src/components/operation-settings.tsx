@@ -364,17 +364,17 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   } = useOperationSettings();
   const cell = (setting: WritableOperationSettingName) =>
     settingCell(controlStore, catalogs, workspace, operation, setting);
-  const catalog = catalogFor(catalogs, cell("harness").effective);
+  const harnessCell = cell("harness");
+  const catalog = catalogFor(catalogs, harnessCell.effective);
   const selectableCatalogs = selectableHarnessCatalogs(controlStore, catalogs);
   const set = (setting: WritableOperationSettingName, value: string | null) =>
     write(setting, operation, value);
   const applyHarnessSelection = (harness: string | null, model: string | null) => {
-    harnessSelectionUpdates(harness, model).forEach(({ setting, value }) => {
+    harnessSelectionUpdates(harnessCell.effective, harness, model).forEach(({ setting, value }) => {
       set(setting, value);
     });
   };
   const resetHarnessAndModel = () => applyHarnessSelection(null, null);
-  const harnessCell = cell("harness");
   const modelCell = cell("model");
   const pairOwn = modelCell.own ?? harnessCell.own;
   const profileSpec: ControlSpec | null = catalog

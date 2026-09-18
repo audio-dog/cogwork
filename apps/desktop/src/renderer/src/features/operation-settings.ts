@@ -98,16 +98,23 @@ export interface SettingCell {
 
 type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindings">;
 
-export const harnessSelectionUpdates = (harness: string | null, model: string | null) =>
-  [
-    { setting: "harness", value: harness },
-    { setting: "model", value: model },
-    { setting: "effort", value: null },
-    { setting: "permission-profile", value: null },
+export const harnessSelectionUpdates = (
+  currentHarness: string | null,
+  harness: string | null,
+  model: string | null,
+) => {
+  const updates = [
+    { setting: "harness", value: harness, applies: true },
+    { setting: "model", value: model, applies: true },
+    { setting: "effort", value: null, applies: true },
+    { setting: "permission-profile", value: null, applies: currentHarness !== harness },
   ] satisfies ReadonlyArray<{
     readonly setting: DisplayedOperationSettingName;
     readonly value: string | null;
+    readonly applies: boolean;
   }>;
+  return updates.filter(({ applies }) => applies).map(({ setting, value }) => ({ setting, value }));
+};
 
 const isOverride = (row: OperationSettingRow, operation: LifecycleStage, workspace: WorkspaceId) =>
   row.level._tag === "Operation" &&
