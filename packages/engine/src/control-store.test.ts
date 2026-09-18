@@ -738,29 +738,26 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
       yield* withStore(storePath, (store) =>
-        Effect.all(
-          [
-            store.updateOperationSetting({
-              _tag: "Set",
-              row: {
-                setting: "model",
-                level: { _tag: "Default" },
-                scope: { _tag: "PrivateWorkspaceOverlay", workspace },
-                value: "overlay-default",
-              },
-            }),
-            store.updateOperationSetting({
-              _tag: "Set",
-              row: {
-                setting: "model",
-                level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-                scope: { _tag: "SettingsProfile" },
-                value: "profile-operation",
-              },
-            }),
-          ],
-          { discard: true },
-        ),
+        store.updateOperationSettings([
+          {
+            _tag: "Set",
+            row: {
+              setting: "model",
+              level: { _tag: "Default" },
+              scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+              value: "overlay-default",
+            },
+          },
+          {
+            _tag: "Set",
+            row: {
+              setting: "model",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+              value: "profile-operation",
+            },
+          },
+        ]),
       );
 
       const reloaded = yield* withStore(storePath, (store) => Effect.succeed(store.seed));
@@ -775,14 +772,16 @@ layer(NodeServices.layer)((it) => {
       );
 
       const cleared = yield* withStore(storePath, (store) =>
-        store.updateOperationSetting({
-          _tag: "Clear",
-          cell: {
-            setting: "model",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-            scope: { _tag: "SettingsProfile" },
+        store.updateOperationSettings([
+          {
+            _tag: "Clear",
+            cell: {
+              setting: "model",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+            },
           },
-        }),
+        ]),
       );
 
       assert.strictEqual(
