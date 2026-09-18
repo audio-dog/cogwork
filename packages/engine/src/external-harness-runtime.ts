@@ -189,6 +189,12 @@ export const windowsInheritedEnvironment = Object.freeze([
   "COMSPEC",
 ]);
 
+export const nodeNetworkInheritedEnvironment = Object.freeze([
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "NODE_EXTRA_CA_CERTS",
+]);
+
 export const externalHarnessDeclaration = Object.freeze({
   sessionKind: "opaque-handle",
   projectedMembers: Object.freeze([
