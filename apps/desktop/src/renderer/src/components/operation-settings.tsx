@@ -8,9 +8,8 @@ import type {
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Collapsible, CollapsibleContent } from "@cogwork/ui/components/collapsible";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@cogwork/ui/components/field";
+import { FieldDescription } from "@cogwork/ui/components/field";
 import { Input } from "@cogwork/ui/components/input";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
 import {
   Item,
   ItemActions,
@@ -39,7 +38,6 @@ import {
   RiArrowDownSLine,
   RiArrowGoBackLine,
   RiCheckLine,
-  RiLockLine,
   RiSearchLine,
 } from "@remixicon/react";
 import { createContext, type ReactNode, use, useState } from "react";
@@ -49,11 +47,11 @@ import {
   catalogFor,
   type HarnessCatalog,
   harnessIsDisabled,
-  lockedPolicyProfile,
   operationLabels,
   operationSummaries,
   operationSummaryLine,
   operations,
+  policyProfileChoices,
   type SettingCell,
   selectableHarnessCatalogs,
   settingCell,
@@ -68,7 +66,7 @@ interface OperationSettingsState {
   readonly workspace: WorkspaceId;
 }
 
-type WritableOperationSettingName = Exclude<OperationSettingName, "permission-profile" | "bindings">;
+type WritableOperationSettingName = Exclude<OperationSettingName, "bindings">;
 
 interface OperationSettingsActions {
   readonly write: (
@@ -366,7 +364,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   const cell = (setting: WritableOperationSettingName) =>
     settingCell(controlStore, catalogs, workspace, operation, setting);
   const catalog = catalogFor(catalogs, cell("harness").effective);
-  const selectableCatalogs = selectableHarnessCatalogs(controlStore, catalogs, operation);
+  const selectableCatalogs = selectableHarnessCatalogs(controlStore, catalogs);
   const set = (setting: WritableOperationSettingName, value: string | null) =>
     write(setting, operation, value);
   // Harness, model and effort are chosen together, so they revert together — an effort left
@@ -379,7 +377,16 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   const harnessCell = cell("harness");
   const modelCell = cell("model");
   const pairOwn = modelCell.own ?? harnessCell.own;
-  const profile = lockedPolicyProfile(operation);
+  const profileSpec: ControlSpec | null = catalog
+    ? {
+        key: "permission-profile",
+        label: "Permissions",
+        options: policyProfileChoices(catalog),
+        cell: cell("permission-profile"),
+        select: (value) => set("permission-profile", value),
+        reset: () => set("permission-profile", null),
+      }
+    : null;
 
   const specs: readonly ControlSpec[] = [
     {
@@ -415,6 +422,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
           },
         ]
       : []),
+    ...(profileSpec ? [profileSpec] : []),
   ];
 
   const [harnessSpec, modelSpec, ...rest] = specs;
@@ -439,20 +447,6 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
           <BadgedControl spec={spec} />
         </div>
       ))}
-      <FieldGroup className="gap-0">
-        <Field orientation="horizontal" className="gap-3">
-          <FieldLabel htmlFor={`${operation}-permissions`} className="w-28 shrink-0 flex-none">
-            Permissions
-          </FieldLabel>
-          <InputGroup className="w-64">
-            <InputGroupAddon>
-              <RiLockLine />
-            </InputGroupAddon>
-            <InputGroupInput id={`${operation}-permissions`} readOnly value={profile.label} />
-            <InputGroupAddon align="inline-end">{profile.provenance}</InputGroupAddon>
-          </InputGroup>
-        </Field>
-      </FieldGroup>
     </div>
   );
 }
@@ -475,7 +469,7 @@ function EnabledSwitch({ operation }: { readonly operation: LifecycleStage }) {
   );
 }
 
-const ownSettings = ["harness", "model", "effort"] as const;
+const ownSettings = ["harness", "model", "effort", "permission-profile"] as const;
 
 function OperationRow({ operation }: { readonly operation: LifecycleStage }) {
   const {

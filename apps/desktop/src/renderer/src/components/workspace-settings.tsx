@@ -199,6 +199,7 @@ const writableSettings = [
   "harness",
   "model",
   "effort",
+  "permission-profile",
 ] as const satisfies readonly OperationSettingName[];
 
 /**
@@ -268,7 +269,8 @@ function LoadedOperationSettings({
   const harness = useAtom(key("harness"));
   const model = useAtom(key("model"));
   const effort = useAtom(key("effort"));
-  const writers = { enabled, harness, model, effort };
+  const permission = useAtom(key("permission-profile"));
+  const writers = { enabled, harness, model, effort, "permission-profile": permission };
   const failure = writableSettings
     .map((setting) => writers[setting][0])
     .find((result) => result._tag === "Failure");
