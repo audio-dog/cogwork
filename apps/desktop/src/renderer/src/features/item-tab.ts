@@ -64,6 +64,7 @@ export type AttemptTone = "succeeded" | "failed" | "abandoned";
 export const attemptTone: Record<RunStatus, AttemptTone> = {
   running: "abandoned",
   succeeded: "succeeded",
+  declined: "abandoned",
   failed: "failed",
   crashed: "failed",
   exhausted: "abandoned",

@@ -260,6 +260,9 @@ layer(NodeServices.layer)((it) => {
       const runsStartedAt = schema.find(({ name }) => name === "runs_started_at");
       if (typeof runsStartedAt?.sql !== "string") return assert.fail("expected runs_started_at schema");
       assert.include(runsStartedAt.sql, '"started_at" desc');
+      const runs = schema.find(({ name }) => name === "runs");
+      if (typeof runs?.sql !== "string") return assert.fail("expected runs schema");
+      assert.notInclude(runs.sql, "claim_disposition");
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
       assert.deepStrictEqual(yield* schemaOf(storePath), schema);
     }),

@@ -12,6 +12,7 @@ import * as Schema from "effect/Schema";
 import {
   type AddWorktreeArgs,
   type BranchDivergence,
+  type DivergenceHead,
   Git,
   GitError,
   type GitOperationInProgress,
@@ -52,7 +53,7 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
         readonly path: string;
         readonly remote: string;
         readonly branch: string;
-        readonly headBranch: string | undefined;
+        readonly head: DivergenceHead | undefined;
       }>
     >([]),
     linked: yield* Ref.make<ReadonlyArray<{ readonly target: string; readonly linkPath: string }>>([]),
@@ -104,8 +105,8 @@ const fakeGit = (
     listWorktrees: (_repoPath: string) => Effect.succeed(options.worktrees ?? []),
     fastForward: (worktreePath: string, _remote: string, _branch: string) =>
       Ref.update(recorder.fastForwarded, (log) => [...log, worktreePath]),
-    divergence: (path: string, remote: string, branch: string, headBranch?: string) =>
-      Ref.update(recorder.divergenceChecks, (log) => [...log, { path, remote, branch, headBranch }]).pipe(
+    divergence: (path: string, remote: string, branch: string, head?: DivergenceHead) =>
+      Ref.update(recorder.divergenceChecks, (log) => [...log, { path, remote, branch, head }]).pipe(
         Effect.map(() => options.divergenceByBase?.[branch] ?? options.divergence ?? inSync),
       ),
     operationInProgress: (worktreePath: string) =>
@@ -519,22 +520,53 @@ describe("Worktree.pullRequestReadiness", () => {
     );
   });
 
-  it.effect("declines when the worktree is not on the branch the engine cut", () =>
+  it.effect("uses the pushed head when the expected worktree is on another branch", () =>
     Effect.gen(function* () {
       const recorder = yield* ReadinessRecorder;
       const manager = yield* ReadinessWorktree;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
-      if (!Worktree.PullRequestReadiness.$is("Declined")(result)) {
-        return assert.fail("expected the gate to decline");
-      }
-      assert.include(result.reason, "another-branch");
-      assert.deepStrictEqual(yield* Ref.get(recorder.fetched), []);
+      assert.deepStrictEqual(result, {
+        _tag: "Ready",
+        headBranch: Worktree.branchName(item),
+        baseBranch: "main",
+      });
+      assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), [
+        {
+          path: "/repo",
+          remote: "origin",
+          branch: "main",
+          head: { branch: Worktree.branchName(item), remote: "origin" },
+        },
+      ]);
     }).pipe(
       Effect.provide(
         readinessLayer({
           worktrees: [{ path: worktreePath(), branch: "another-branch" }],
+          remoteBranches: [Worktree.branchName(item)],
+          divergenceByBase: { main: { ahead: 2, behind: 0 } },
+        }),
+      ),
+    ),
+  );
+
+  it.effect("uses the pushed head when the expected worktree is missing", () =>
+    Effect.gen(function* () {
+      const manager = yield* ReadinessWorktree;
+
+      const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
+
+      assert.deepStrictEqual(result, {
+        _tag: "Ready",
+        headBranch: Worktree.branchName(item),
+        baseBranch: "main",
+      });
+    }).pipe(
+      Effect.provide(
+        readinessLayer({
+          remoteBranches: [Worktree.branchName(item)],
+          divergenceByBase: { main: { ahead: 1, behind: 0 } },
         }),
       ),
     ),
@@ -553,16 +585,10 @@ describe("Worktree.pullRequestReadiness", () => {
       assert.include(result.reason, "not ahead of origin/trunk");
       assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), [
         {
-          path: worktreePath(),
-          remote: "origin",
-          branch: Worktree.branchName(item),
-          headBranch: undefined,
-        },
-        {
-          path: worktreePath(),
+          path: "/repo",
           remote: "origin",
           branch: "trunk",
-          headBranch: Worktree.branchName(item),
+          head: { branch: Worktree.branchName(item), remote: "origin" },
         },
       ]);
     }).pipe(
@@ -571,7 +597,6 @@ describe("Worktree.pullRequestReadiness", () => {
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
           remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: {
-            [Worktree.branchName(item)]: inSync,
             trunk: { ahead: 0, behind: 0 },
           },
         }),
@@ -619,7 +644,6 @@ describe("Worktree.pullRequestReadiness", () => {
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
           remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: {
-            [Worktree.branchName(item)]: inSync,
             main: { ahead: 2, behind: 1 },
           },
         }),

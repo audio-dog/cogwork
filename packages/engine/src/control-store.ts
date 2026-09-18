@@ -843,7 +843,7 @@ export const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(functio
             ON sessions.id = runs.session
             AND sessions.kind = 'opaque-handle'
           INNER JOIN run_events ON run_events.run_id = runs.id
-          WHERE runs.status IN ('succeeded', 'failed', 'exhausted', 'interrupted', 'crashed')
+          WHERE runs.status IN ('succeeded', 'declined', 'failed', 'exhausted', 'interrupted', 'crashed')
             AND runs.ended_at IS NOT NULL
           GROUP BY runs.id, runs.started_at, runs.ended_at
         ),

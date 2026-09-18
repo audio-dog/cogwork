@@ -55,15 +55,13 @@ export type TokenUsage = typeof TokenUsage.Type;
 export const RunStatus = Schema.Literals([
   "running",
   "succeeded",
+  "declined",
   "failed",
   "exhausted",
   "interrupted",
   "crashed",
 ]);
 export type RunStatus = typeof RunStatus.Type;
-
-export const RunClaimDisposition = Schema.Literals(["release", "hold"]);
-export type RunClaimDisposition = typeof RunClaimDisposition.Type;
 
 export const RunEvent = Schema.Struct({
   seq: Schema.Natural,
@@ -84,7 +82,6 @@ export const RunRecord = Schema.Struct({
   session: Schema.NullOr(SessionId),
   usage: Schema.NullOr(TokenUsage),
   status: RunStatus,
-  claimDisposition: Schema.optionalKey(RunClaimDisposition),
   startedAtMillis: Schema.Natural,
   endedAtMillis: Schema.NullOr(Schema.Natural),
 });

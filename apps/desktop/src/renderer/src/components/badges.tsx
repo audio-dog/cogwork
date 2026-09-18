@@ -1,21 +1,22 @@
 import type { PrBaseDivergence, PrChecks, PrReviewStatus, RunStatus } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import type { ComponentProps } from "react";
+import { runStatusLabel } from "../features/run-status";
 
 type BadgeVariant = ComponentProps<typeof Badge>["variant"];
 
-const runStatus: Record<RunStatus, { label: string; variant: BadgeVariant }> = {
-  running: { label: "Running", variant: "default" },
-  succeeded: { label: "Succeeded", variant: "secondary" },
-  failed: { label: "Failed", variant: "destructive" },
-  exhausted: { label: "Exhausted", variant: "outline" },
-  interrupted: { label: "Interrupted", variant: "outline" },
-  crashed: { label: "Crashed", variant: "destructive" },
+const runStatus: Record<RunStatus, BadgeVariant> = {
+  running: "default",
+  succeeded: "secondary",
+  declined: "outline",
+  failed: "destructive",
+  exhausted: "outline",
+  interrupted: "outline",
+  crashed: "destructive",
 };
 
 export function RunStatusBadge({ status }: { status: RunStatus }) {
-  const { label, variant } = runStatus[status];
-  return <Badge variant={variant}>{label}</Badge>;
+  return <Badge variant={runStatus[status]}>{runStatusLabel[status]}</Badge>;
 }
 
 const prChecks: Record<PrChecks, { label: string; variant: BadgeVariant }> = {
