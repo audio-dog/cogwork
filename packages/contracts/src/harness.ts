@@ -33,11 +33,6 @@ export const HarnessState = Schema.TaggedUnion({
 });
 export type HarnessState = typeof HarnessState.Type;
 
-export class HarnessCatalogChoice extends Schema.Class<HarnessCatalogChoice>("HarnessCatalogChoice")({
-  value: TrimmedNonEmptyString,
-  label: TrimmedNonEmptyString,
-}) {}
-
 export const HarnessCatalogProvenance = Schema.Union([
   Schema.Struct({
     source: Schema.Literal("tanstack-runtime"),
@@ -55,9 +50,148 @@ export const HarnessCatalogProvenance = Schema.Union([
 ]).pipe(Schema.toTaggedUnion("source"));
 export type HarnessCatalogProvenance = typeof HarnessCatalogProvenance.Type;
 
+const HarnessModelOptionValue = Schema.Struct({
+  value: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+});
+
+interface SelectOptionShape {
+  readonly values: ReadonlyArray<{ readonly value: string }>;
+  readonly defaultValue: string;
+}
+
+const validSelectOption = Schema.makeFilter((descriptor: SelectOptionShape) => {
+  const values = descriptor.values.map(({ value }) => value);
+  const hasValidValues =
+    values.length > 0 && new Set(values).size === values.length && values.includes(descriptor.defaultValue);
+  return hasValidValues ? undefined : "Expected unique values containing the default value";
+});
+
+export const HarnessModelOptionDescriptor = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("select"),
+    id: TrimmedNonEmptyString,
+    label: TrimmedNonEmptyString,
+    values: Schema.Array(HarnessModelOptionValue),
+    defaultValue: TrimmedNonEmptyString,
+  }).check(validSelectOption),
+  Schema.Struct({
+    type: Schema.Literal("boolean"),
+    id: TrimmedNonEmptyString,
+    label: TrimmedNonEmptyString,
+    defaultValue: Schema.Boolean,
+  }),
+]).pipe(Schema.toTaggedUnion("type"));
+export type HarnessModelOptionDescriptor = typeof HarnessModelOptionDescriptor.Type;
+
+const HarnessCatalogModelFields = {
+  value: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  options: Schema.optionalKey(Schema.Array(HarnessModelOptionDescriptor)),
+};
+
+const HarnessModelOptions = Schema.Record(
+  TrimmedNonEmptyString,
+  Schema.Union([TrimmedNonEmptyString, Schema.Boolean]),
+);
+const HarnessRawModelSelection = Schema.Struct({
+  model: TrimmedNonEmptyString,
+  options: HarnessModelOptions,
+});
+
+export class HarnessCatalogChoice extends Schema.Class<HarnessCatalogChoice>("HarnessCatalogChoice")({
+  ...HarnessCatalogModelFields,
+  default: Schema.optionalKey(Schema.Boolean),
+}) {}
+
+export class HarnessManagedCatalogModel extends Schema.Class<HarnessManagedCatalogModel>(
+  "HarnessManagedCatalogModel",
+)({
+  ...HarnessCatalogModelFields,
+  default: Schema.Boolean,
+}) {}
+
+interface ManagedCatalogShape {
+  readonly models: ReadonlyArray<{
+    readonly value: string;
+    readonly default: boolean;
+    readonly options?: ReadonlyArray<HarnessModelOptionDescriptor>;
+  }>;
+  readonly rawModelIds: ReadonlyArray<string>;
+  readonly rawModelSelections: Readonly<
+    Record<string, { readonly model: string; readonly options: Readonly<Record<string, string | boolean>> }>
+  >;
+}
+
+const validManagedCatalog = Schema.makeFilter((catalog: ManagedCatalogShape) => {
+  const modelIds = catalog.models.map(({ value }) => value);
+  const modelsById = new Map(catalog.models.map((model) => [model.value, model]));
+  const hasUniqueModels = new Set(modelIds).size === modelIds.length;
+  const hasOneDefault = catalog.models.filter(({ default: isDefault }) => isDefault).length === 1;
+  const hasUniqueOptionIds = catalog.models.every(({ options = [] }) => {
+    const optionIds = options.map(({ id }) => id);
+    return new Set(optionIds).size === optionIds.length;
+  });
+  const hasUniqueRawIds = new Set(catalog.rawModelIds).size === catalog.rawModelIds.length;
+  const optionOracleIds = Object.keys(catalog.rawModelSelections);
+  const hasCompleteOptionOracle =
+    optionOracleIds.length === catalog.rawModelIds.length &&
+    optionOracleIds.every((id) => catalog.rawModelIds.includes(id));
+  const hasValidSelections = Object.values(catalog.rawModelSelections).every((selection) => {
+    const model = modelsById.get(selection.model);
+    if (!model) return false;
+    const descriptors = model.options ?? [];
+    const optionIds = Object.keys(selection.options);
+    const hasExactOptions =
+      optionIds.length === descriptors.length &&
+      descriptors.every(({ id }) => Object.hasOwn(selection.options, id));
+    const hasValidValues = descriptors.every((descriptor) => {
+      const value = selection.options[descriptor.id];
+      return HarnessModelOptionDescriptor.match(descriptor, {
+        boolean: () => typeof value === "boolean",
+        select: ({ values }) => {
+          const isValidSelectValue =
+            typeof value === "string" && values.some((choice) => choice.value === value);
+          return isValidSelectValue;
+        },
+      });
+    });
+    const isValidSelection = hasExactOptions && hasValidValues;
+    return isValidSelection;
+  });
+  const selectionFingerprints = Object.values(catalog.rawModelSelections).map((selection) => {
+    const descriptors = modelsById.get(selection.model)?.options ?? [];
+    const values = descriptors.map(({ id }) => selection.options[id]);
+    return JSON.stringify([selection.model, values]);
+  });
+  const hasUniqueSelections = new Set(selectionFingerprints).size === selectionFingerprints.length;
+  const isValid =
+    hasUniqueModels &&
+    hasOneDefault &&
+    hasUniqueOptionIds &&
+    hasUniqueRawIds &&
+    hasCompleteOptionOracle &&
+    hasValidSelections &&
+    hasUniqueSelections;
+  return isValid
+    ? undefined
+    : "Expected unique ids, valid raw model selections, and exactly one default model";
+});
+
+export class HarnessManagedCatalog extends Schema.Class<HarnessManagedCatalog>("HarnessManagedCatalog")(
+  Schema.Struct({
+    models: Schema.Array(HarnessManagedCatalogModel),
+    generatedAgainst: TrimmedNonEmptyString,
+    rawModelIds: Schema.Array(TrimmedNonEmptyString),
+    rawModelSelections: Schema.Record(TrimmedNonEmptyString, HarnessRawModelSelection),
+  }).check(validManagedCatalog),
+) {}
+
 export class HarnessOptionCatalog extends Schema.Class<HarnessOptionCatalog>("HarnessOptionCatalog")({
   models: Schema.Array(HarnessCatalogChoice),
   efforts: Schema.optionalKey(Schema.Array(HarnessCatalogChoice)),
+  generatedAgainst: Schema.optionalKey(TrimmedNonEmptyString),
+  rawModelIds: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
   policyProfiles: Schema.Array(RunPlanPolicyProfile),
   provenance: HarnessCatalogProvenance,
 }) {}
