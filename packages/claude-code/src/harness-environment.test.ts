@@ -18,6 +18,7 @@ import {
   makeLiveHarness,
   makeRequest,
   name,
+  networkEnvironmentProbe,
   sessionHandles,
   structuredObjects,
   windowsEnvironmentProbe,
@@ -83,6 +84,7 @@ describe("Claude Code inherited environment", () => {
         assert.isNull(capture.authToken);
         assert.strictEqual(capture.claudeConfigDir, "/tmp/cogwork-claude-config");
         assert.deepStrictEqual(capture.windowsEnvironment, windowsEnvironmentProbe);
+        assert.deepStrictEqual(capture.networkEnvironment, networkEnvironmentProbe);
         assert.notInclude(capture.files, ".mcp.json");
         assert.match(capture.mcpConfigArgument ?? "", /^\{"mcpServers":/);
         assert.notInclude(capture.files, ".cogwork-mcp.json");

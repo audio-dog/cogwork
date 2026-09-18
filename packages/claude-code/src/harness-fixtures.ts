@@ -93,6 +93,12 @@ const inheritedEnvironment = {
   SYSTEMROOT: environmentValue("SYSTEMROOT"),
   PATHEXT: environmentValue("PATHEXT"),
   COMSPEC: environmentValue("COMSPEC"),
+  HTTP_PROXY: environmentValue("HTTP_PROXY"),
+  HTTPS_PROXY: environmentValue("HTTPS_PROXY"),
+  NO_PROXY: environmentValue("NO_PROXY"),
+  http_proxy: environmentValue("http_proxy"),
+  https_proxy: environmentValue("https_proxy"),
+  NODE_EXTRA_CA_CERTS: environmentValue("NODE_EXTRA_CA_CERTS"),
 };
 
 const windowsEnvironmentProbe = {
@@ -103,6 +109,15 @@ const windowsEnvironmentProbe = {
   SYSTEMROOT: "C:\\Windows",
   PATHEXT: ".COM;.EXE;.BAT;.CMD",
   COMSPEC: "C:\\Windows\\System32\\cmd.exe",
+};
+
+const networkEnvironmentProbe = {
+  HTTP_PROXY: "http://proxy.example.test:8080",
+  HTTPS_PROXY: "https://proxy.example.test:8443",
+  NO_PROXY: "localhost,.example.test",
+  http_proxy: "http://lowercase-proxy.example.test:8080",
+  https_proxy: "https://lowercase-proxy.example.test:8443",
+  NODE_EXTRA_CA_CERTS: "/tmp/cogwork-enterprise-ca.pem",
 };
 
 const persistence = memoryPersistence();
@@ -356,6 +371,14 @@ const Capture = Schema.Struct({
     PATHEXT: Schema.NullOr(Schema.String),
     COMSPEC: Schema.NullOr(Schema.String),
   }),
+  networkEnvironment: Schema.Struct({
+    HTTP_PROXY: Schema.NullOr(Schema.String),
+    HTTPS_PROXY: Schema.NullOr(Schema.String),
+    NO_PROXY: Schema.NullOr(Schema.String),
+    http_proxy: Schema.NullOr(Schema.String),
+    https_proxy: Schema.NullOr(Schema.String),
+    NODE_EXTRA_CA_CERTS: Schema.NullOr(Schema.String),
+  }),
 });
 
 const NativeSandboxSettings = Schema.fromJsonString(
@@ -430,6 +453,7 @@ const withInheritedCredentialEnvironment = <Value, Error, Requirements>(
       Reflect.set(process.env, "GH_TOKEN", "inherited-gh-token");
       Reflect.set(process.env, "CLAUDE_CONFIG_DIR", "/tmp/cogwork-claude-config");
       Object.assign(process.env, windowsEnvironmentProbe);
+      Object.assign(process.env, networkEnvironmentProbe);
     }),
     () => effect,
     () =>
@@ -472,6 +496,7 @@ export {
   missingByokHarnessLayer,
   NativeSandboxSettings,
   name,
+  networkEnvironmentProbe,
   occurrences,
   outputSchema,
   persistence,

@@ -35,7 +35,11 @@ const commandDeadline = "5 seconds";
 const inheritedEnvironment = [
   ...ExternalHarnessRuntime.defaultInheritedEnvironment,
   ...ExternalHarnessRuntime.windowsInheritedEnvironment,
+  ...ExternalHarnessRuntime.nodeNetworkInheritedEnvironment,
   "CLAUDE_CONFIG_DIR",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
 ];
 type ClaudeAuthenticationMode = ClaudeCodeRunnerOptions["authentication"]["mode"];
 const claudeAuthenticationModes = ["host", "byok"] as const satisfies ReadonlyArray<ClaudeAuthenticationMode>;
