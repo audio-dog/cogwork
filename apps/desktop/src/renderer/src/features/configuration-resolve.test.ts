@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "../testing/configuration";
 import {
   Authority,
   type Contribution,
@@ -9,7 +10,6 @@ import {
   scopeOrder,
   type WorkspaceId,
 } from "./configuration-model";
-import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "./configuration-placeholder";
 import {
   definedScope,
   diagnosticsOf,

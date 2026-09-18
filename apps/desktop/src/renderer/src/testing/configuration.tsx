@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { Configuration } from "../components/configuration-provider";
 import {
   Authority,
   type ConfigurationPicture,
@@ -8,7 +10,7 @@ import {
   McpReadiness,
   type Workspace,
   type WorkspaceId,
-} from "./configuration-model";
+} from "../features/configuration-model";
 
 const id = (value: string) => value as WorkspaceId;
 
@@ -439,4 +441,14 @@ export function workspaceById(workspaceId?: WorkspaceId) {
 
 export function contributionById(id: string): Contribution | undefined {
   return placeholderConfiguration.contributions.find((contribution) => contribution.id === id);
+}
+
+export function StaticConfigurationProvider({
+  picture,
+  children,
+}: {
+  picture: ConfigurationPicture;
+  children: ReactNode;
+}) {
+  return <Configuration.Provider picture={picture}>{children}</Configuration.Provider>;
 }
