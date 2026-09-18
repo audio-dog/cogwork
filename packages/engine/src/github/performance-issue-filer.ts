@@ -20,6 +20,7 @@ import { GitHubClient, type GitHubClientService, type GitHubRepoRef, repoRefFrom
 import { wireCodec } from "./markers";
 
 const originLabel = "origin:selfperf";
+type MarkerTrust = "authenticated-author" | "origin-label-only";
 
 const decodeWorkItemId = Schema.decodeSync(WorkItemId);
 const decodePerformanceIssueFingerprint = Schema.decodeUnknownOption(PerformanceIssueFingerprint);
@@ -66,17 +67,27 @@ const mergedFixFor = Effect.fn("github.mergedPerformanceIssueFix")(function* (
 export const performanceIssueHistory = Effect.fn("github.performanceIssueHistory")(function* (
   client: Pick<GitHubClientService, "authenticatedLogin" | "issuePullReferences" | "listIssues">,
   repo: GitHubRepoRef,
+  markerTrust: MarkerTrust = "authenticated-author",
 ) {
-  const [all, authenticatedLogin] = yield* Effect.all(
-    [client.listIssues(repo, { state: "all" }), client.authenticatedLogin(repo)],
-    { concurrency: "unbounded" },
-  );
-  const relevant = all.flatMap((issue) => {
-    if (issue.isPullRequest) return [];
-    const fingerprint = decodeSelfPerformanceFingerprint(issue.body);
-    const trustedAuthor = issue.authorLogin?.toLowerCase() === authenticatedLogin.toLowerCase();
-    if (!issue.labels.includes(originLabel) && !(trustedAuthor && fingerprint)) return [];
-    return [{ issue, fingerprint }];
+  const all = yield* client.listIssues(repo, { state: "all" });
+  const candidates = all
+    .filter((issue) => !issue.isPullRequest)
+    .map((issue) => ({ issue, fingerprint: decodeSelfPerformanceFingerprint(issue.body) }));
+  const shouldAuthenticateMarker =
+    markerTrust === "authenticated-author" &&
+    candidates.some(
+      ({ issue, fingerprint }) => !issue.labels.includes(originLabel) && fingerprint !== undefined,
+    );
+  const authenticatedLogin = yield* shouldAuthenticateMarker
+    ? client.authenticatedLogin(repo).pipe(Effect.map((login) => login.toLowerCase()))
+    : Effect.void;
+  const relevant = candidates.filter(({ issue, fingerprint }) => {
+    const hasOriginLabel = issue.labels.includes(originLabel);
+    const hasTrustedMarker =
+      authenticatedLogin !== undefined &&
+      fingerprint !== undefined &&
+      issue.authorLogin?.toLowerCase() === authenticatedLogin;
+    return hasOriginLabel || hasTrustedMarker;
   });
   const issues = yield* Effect.forEach(
     relevant,
@@ -145,8 +156,9 @@ const createdPerformanceIssue = Effect.fn("github.createdPerformanceIssue")(func
   repo: GitHubRepoRef,
   fingerprint: PerformanceIssueFingerprint,
   knownIssueIds: ReadonlySet<WorkItemId>,
+  markerTrust: MarkerTrust,
 ) {
-  const history = yield* performanceIssueHistory(client, repo);
+  const history = yield* performanceIssueHistory(client, repo, markerTrust);
   return history
     .filter((issue) => !knownIssueIds.has(issue.id) && issue.fingerprint === fingerprint)
     .toSorted((left, right) => right.createdAtMillis - left.createdAtMillis)
@@ -158,8 +170,9 @@ export const confirmPerformanceIssue = Effect.fn("github.confirmPerformanceIssue
   repo: GitHubRepoRef,
   fingerprint: PerformanceIssueFingerprint,
   knownIssueIds: ReadonlySet<WorkItemId> = new Set(),
+  markerTrust: MarkerTrust = "authenticated-author",
 ) {
-  const created = yield* createdPerformanceIssue(client, repo, fingerprint, knownIssueIds);
+  const created = yield* createdPerformanceIssue(client, repo, fingerprint, knownIssueIds, markerTrust);
   if (!created) return yield* pendingConfirmation("created performance issue is not visible yet");
   yield* ensurePerformanceIssueLabels(client, repo, created);
 });
@@ -200,6 +213,7 @@ const targetForRepository = (
   client: PerformanceIssueGitHubClient,
   targetRepo: GitHubRepoRef,
   pendingCreations: Ref.Ref<PendingCreations>,
+  markerTrust: MarkerTrust,
 ) => {
   const repositoryIdentity = targetIdentity(targetRepo);
   const clearPending = (fingerprint: PerformanceIssueFingerprint) =>
@@ -208,9 +222,13 @@ const targetForRepository = (
   const clearPendingOnPermanent = (fingerprint: PerformanceIssueFingerprint) => (error: IssueTrackerError) =>
     issueTrackerErrorIsPermanent(error) ? clearPending(fingerprint) : Effect.void;
   const confirmCreated = Effect.fn("github.confirmCreatedPerformanceIssue")((reservation: PendingCreation) =>
-    confirmPerformanceIssue(client, targetRepo, reservation.fingerprint, reservation.knownIssueIds).pipe(
-      Effect.andThen(clearPending(reservation.fingerprint)),
-    ),
+    confirmPerformanceIssue(
+      client,
+      targetRepo,
+      reservation.fingerprint,
+      reservation.knownIssueIds,
+      markerTrust,
+    ).pipe(Effect.andThen(clearPending(reservation.fingerprint))),
   );
   const confirmPending = Effect.fn("github.confirmPendingPerformanceIssue")(function* (
     issue: PerformanceIssue,
@@ -233,7 +251,7 @@ const targetForRepository = (
         Effect.tapError(clearPendingOnPermanent(input.fingerprint)),
       );
     }
-    const history = yield* performanceIssueHistory(client, targetRepo);
+    const history = yield* performanceIssueHistory(client, targetRepo, markerTrust);
     const knownIssueIds = new Set(
       history.filter((issue) => issue.fingerprint === input.fingerprint).map((issue) => issue.id),
     );
@@ -253,7 +271,7 @@ const targetForRepository = (
     yield* confirmCreated(nextReservation).pipe(Effect.tapError(clearPendingOnPermanent(input.fingerprint)));
   });
   return {
-    list: performanceIssueHistory(client, targetRepo).pipe(
+    list: performanceIssueHistory(client, targetRepo, markerTrust).pipe(
       Effect.tapError((error) => (issueTrackerErrorIsPermanent(error) ? clearAllPending : Effect.void)),
     ),
     pendingFingerprints: Ref.get(pendingCreations).pipe(
@@ -287,9 +305,10 @@ const targetForRepository = (
 export const makeTarget = Effect.fn("github.makePerformanceIssueTarget")(function* (
   client: PerformanceIssueGitHubClient,
   repo: GitHubRepoRef,
+  markerTrust: MarkerTrust = "authenticated-author",
 ) {
   const pendingCreations = yield* Ref.make<PendingCreations>(new Map());
-  return targetForRepository(client, repo, pendingCreations);
+  return targetForRepository(client, repo, pendingCreations, markerTrust);
 });
 
 const issueNumber = Effect.fn("github.performanceIssueNumber")(function* (id: WorkItemId) {
@@ -311,7 +330,7 @@ const host = (
   ({
     codec: wireCodec,
     target: resolvePerformanceIssueTarget(registry, workspaceName).pipe(
-      Effect.map((repo) => targetForRepository(client, repo, pendingCreations)),
+      Effect.map((repo) => targetForRepository(client, repo, pendingCreations, "authenticated-author")),
       Effect.tapError((error) =>
         issueTrackerErrorIsPermanent(error) ? Ref.set(pendingCreations, new Map()) : Effect.void,
       ),
