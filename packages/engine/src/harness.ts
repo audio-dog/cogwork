@@ -543,7 +543,14 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
       Effect.onExit((exit) => {
         const latestProbeFailed = Exit.isFailure(exit) && isLatestGeneration();
         if (!latestProbeFailed) return Effect.void;
-        return Effect.sync(() => catalogs.delete(harness));
+        const seed = seededCatalog(runner);
+        return Effect.sync(() => {
+          if (seed === null) {
+            catalogs.delete(harness);
+            return;
+          }
+          catalogs.set(harness, optionCatalog(runner, seed));
+        });
       }),
     );
     const current = optionCatalog(runner, resolved);

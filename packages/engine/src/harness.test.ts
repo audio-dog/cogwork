@@ -446,6 +446,38 @@ describe("Harness", () => {
       }),
     );
 
+    it.effect("restores the seeded catalog when the latest refresh is interrupted", () =>
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<void>();
+        const runner = {
+          ...controlledRunnerDefaults,
+          name,
+          sessionKind: "opaque-handle",
+          projectedMembers: [],
+          planMiddleware: [],
+          execution: fullHarnessExecution,
+          catalogSources: {
+            runtime: {
+              catalog: Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+            },
+            fallback: staticCatalogSource(
+              { models: [{ value: "seeded", label: "Seeded" }] },
+              { source: "cogwork-fallback", fallbackVersion: "1" },
+            ),
+          },
+          run: () => Stream.empty,
+        } satisfies HarnessRunner;
+        const harness = make([runner]);
+
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "seeded");
+        const refresh = yield* Effect.forkChild(harness.catalog(name));
+        yield* Deferred.await(started);
+        yield* Fiber.interrupt(refresh);
+
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "seeded");
+      }),
+    );
+
     it.effect("falls through unavailable sources and records native or fallback provenance", () =>
       Effect.gen(function* () {
         const nativeName = yield* Schema.decodeEffect(HarnessName)("native-controlled");
