@@ -30,6 +30,24 @@ const responseContent = async (sessionParams) => {
       url: server.url,
       authenticated: server.headers.some((header) => header.name === "Authorization"),
     })),
+    cursorConfigDir: process.env.CURSOR_CONFIG_DIR ?? null,
+    windowsEnvironment: {
+      USERPROFILE: process.env.USERPROFILE ?? null,
+      HOMEDRIVE: process.env.HOMEDRIVE ?? null,
+      HOMEPATH: process.env.HOMEPATH ?? null,
+      APPDATA: process.env.APPDATA ?? null,
+      SYSTEMROOT: process.env.SYSTEMROOT ?? null,
+      PATHEXT: process.env.PATHEXT ?? null,
+      COMSPEC: process.env.COMSPEC ?? null,
+    },
+    networkEnvironment: {
+      HTTP_PROXY: process.env.HTTP_PROXY ?? null,
+      HTTPS_PROXY: process.env.HTTPS_PROXY ?? null,
+      NO_PROXY: process.env.NO_PROXY ?? null,
+      NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY ?? null,
+      NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS ?? null,
+    },
+    hasCursorApiKey: process.env.CURSOR_API_KEY !== undefined,
   });
 };
 

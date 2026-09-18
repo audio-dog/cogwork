@@ -47,9 +47,79 @@ const decodeObservation = Schema.decodeUnknownSync(
           authenticated: Schema.Boolean,
         }),
       ),
+      cursorConfigDir: Schema.NullOr(Schema.String),
+      windowsEnvironment: Schema.Struct({
+        USERPROFILE: Schema.NullOr(Schema.String),
+        HOMEDRIVE: Schema.NullOr(Schema.String),
+        HOMEPATH: Schema.NullOr(Schema.String),
+        APPDATA: Schema.NullOr(Schema.String),
+        SYSTEMROOT: Schema.NullOr(Schema.String),
+        PATHEXT: Schema.NullOr(Schema.String),
+        COMSPEC: Schema.NullOr(Schema.String),
+      }),
+      networkEnvironment: Schema.Struct({
+        HTTP_PROXY: Schema.NullOr(Schema.String),
+        HTTPS_PROXY: Schema.NullOr(Schema.String),
+        NO_PROXY: Schema.NullOr(Schema.String),
+        NODE_USE_ENV_PROXY: Schema.NullOr(Schema.String),
+        NODE_EXTRA_CA_CERTS: Schema.NullOr(Schema.String),
+      }),
+      hasCursorApiKey: Schema.Boolean,
     }),
   ),
 );
+
+const restoreEnvironment = (name: string, value: string | undefined) =>
+  value === undefined ? Reflect.deleteProperty(process.env, name) : Reflect.set(process.env, name, value);
+
+const cursorEnvironmentProbe = {
+  CURSOR_CONFIG_DIR: "/tmp/cogwork-cursor-config",
+  CURSOR_API_KEY: "inherited-cursor-key",
+  USERPROFILE: "C:\\Users\\cogwork",
+  HOMEDRIVE: "C:",
+  HOMEPATH: "\\Users\\cogwork",
+  APPDATA: "C:\\Users\\cogwork\\AppData\\Roaming",
+  SYSTEMROOT: "C:\\Windows",
+  PATHEXT: ".COM;.EXE;.BAT;.CMD",
+  COMSPEC: "C:\\Windows\\System32\\cmd.exe",
+  HTTP_PROXY: "http://proxy.example.test:8080",
+  HTTPS_PROXY: "https://proxy.example.test:8443",
+  NO_PROXY: "localhost,127.0.0.1,.example.test",
+  NODE_USE_ENV_PROXY: "1",
+  NODE_EXTRA_CA_CERTS: "/tmp/cogwork-enterprise-ca.pem",
+};
+
+const cursorWindowsEnvironmentProbe = {
+  USERPROFILE: cursorEnvironmentProbe.USERPROFILE,
+  HOMEDRIVE: cursorEnvironmentProbe.HOMEDRIVE,
+  HOMEPATH: cursorEnvironmentProbe.HOMEPATH,
+  APPDATA: cursorEnvironmentProbe.APPDATA,
+  SYSTEMROOT: cursorEnvironmentProbe.SYSTEMROOT,
+  PATHEXT: cursorEnvironmentProbe.PATHEXT,
+  COMSPEC: cursorEnvironmentProbe.COMSPEC,
+};
+
+const cursorNetworkEnvironmentProbe = {
+  HTTP_PROXY: cursorEnvironmentProbe.HTTP_PROXY,
+  HTTPS_PROXY: cursorEnvironmentProbe.HTTPS_PROXY,
+  NO_PROXY: cursorEnvironmentProbe.NO_PROXY,
+  NODE_USE_ENV_PROXY: cursorEnvironmentProbe.NODE_USE_ENV_PROXY,
+  NODE_EXTRA_CA_CERTS: cursorEnvironmentProbe.NODE_EXTRA_CA_CERTS,
+};
+
+const withCursorEnvironment = <Value, Error, Requirements>(
+  effect: Effect.Effect<Value, Error, Requirements>,
+) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() =>
+      Object.fromEntries(
+        Object.keys(cursorEnvironmentProbe).map((name) => [name, Reflect.get(process.env, name)]),
+      ),
+    ),
+    () => Effect.sync(() => Object.assign(process.env, cursorEnvironmentProbe)).pipe(Effect.andThen(effect)),
+    (original) =>
+      Effect.sync(() => Object.entries(original).map(([name, value]) => restoreEnvironment(name, value))),
+  );
 
 const sessionStore: SessionStore.SessionStoreService = {
   persistence: memoryPersistence(),
@@ -205,9 +275,13 @@ describe("Cursor Harness registry", () => {
       const invalid = request("/missing-cursor-checkout");
       const runner = cursorRunner({ name: cursorName });
 
-      const error = yield* runner
-        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
-        .pipe(Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})), Effect.flip);
+      const error = yield* Harness.make([runner])
+        .run(invalid)
+        .pipe(
+          Stream.runDrain,
+          Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})),
+          Effect.flip,
+        );
 
       assert.strictEqual(error.reason, "workspace");
       assert.include(error.message, "/missing-cursor-checkout");
@@ -222,9 +296,9 @@ describe("Cursor Harness registry", () => {
         stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
       });
 
-      const error = yield* runner
-        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
-        .pipe(Effect.provideService(FileSystem.FileSystem, unreadable), Effect.flip);
+      const error = yield* Harness.make([runner])
+        .run(invalid)
+        .pipe(Stream.runDrain, Effect.provideService(FileSystem.FileSystem, unreadable), Effect.flip);
 
       assert.strictEqual(error.reason, "workspace");
       assert.include(error.message, "cannot read");
@@ -401,61 +475,67 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
   );
 
   it.effect("uses host login and the shared mandatory Workspace projection", () =>
-    Effect.gen(function* () {
-      const checkout = yield* Effect.acquireRelease(
-        Effect.promise(() => localProcessSandbox({}).create({})),
-        (sandbox) => Effect.promise(() => sandbox.destroy()),
-      );
-      const base = request(checkout.id);
-      const projectedRequest = {
-        ...base,
-        plan: new RunPlan({
-          ...base.plan,
-          harness: { ...base.plan.harness, effort: "high" },
-          instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
-          operatingInstructions: {
-            name: "triage-agent",
-            path: "/operating-instructions/triage-agent",
-            resources: [],
-          },
-          mcp: [
-            {
-              identity: "local:user/mcp-server/linear",
-              name: "linear",
-              projectedName: "linear",
-              endpoint: "https://mcp.example.test/readonly",
-              authenticated: true,
-              unavailableReason: null,
+    withCursorEnvironment(
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const base = request(checkout.id);
+        const projectedRequest = {
+          ...base,
+          plan: new RunPlan({
+            ...base.plan,
+            harness: { ...base.plan.harness, effort: "high" },
+            instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
+            operatingInstructions: {
+              name: "triage-agent",
+              path: "/operating-instructions/triage-agent",
+              resources: [],
             },
-          ],
-          structuredOutput: null,
-        }),
-        mcpCredentials: new Map([["local:user/mcp-server/linear", Redacted.make("cursor-mcp-secret")]]),
-      } satisfies Harness.HarnessRequest;
-      const runner = cursorRunner({
-        name: cursorName,
-        agentBin: `node ${fakeCursorAgent} --observe`,
-      });
+            mcp: [
+              {
+                identity: "local:user/mcp-server/linear",
+                name: "linear",
+                projectedName: "linear",
+                endpoint: "https://mcp.example.test/readonly",
+                authenticated: true,
+                unavailableReason: null,
+              },
+            ],
+            structuredOutput: null,
+          }),
+          mcpCredentials: new Map([["local:user/mcp-server/linear", Redacted.make("cursor-mcp-secret")]]),
+        } satisfies Harness.HarnessRequest;
+        const runner = cursorRunner({
+          name: cursorName,
+          agentBin: `node ${fakeCursorAgent} --observe`,
+        });
 
-      const events = yield* Stream.runCollect(runner.run(projectedRequest));
-      const output = Array.from(events)
-        .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
-        .map(({ delta }) => delta ?? "")
-        .join("");
-      const observation = decodeObservation(output);
+        const events = yield* Stream.runCollect(runner.run(projectedRequest));
+        const output = Array.from(events)
+          .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
+          .map(({ delta }) => delta ?? "")
+          .join("");
+        const observation = decodeObservation(output);
 
-      assert.include(observation.instructions, "Mandatory repository context.");
-      assert.include(observation.instructions, "/operating-instructions/triage-agent");
-      assert.strictEqual(observation.model, "auto[effort=high]");
-      assert.deepStrictEqual(observation.mcp, [
-        {
-          name: "linear",
-          url: "https://mcp.example.test/readonly",
-          authenticated: true,
-        },
-      ]);
-      assert.notInclude(output, "cursor-mcp-secret");
-    }),
+        assert.include(observation.instructions, "Mandatory repository context.");
+        assert.include(observation.instructions, "/operating-instructions/triage-agent");
+        assert.strictEqual(observation.model, "auto[effort=high]");
+        assert.deepStrictEqual(observation.mcp, [
+          {
+            name: "linear",
+            url: "https://mcp.example.test/readonly",
+            authenticated: true,
+          },
+        ]);
+        assert.strictEqual(observation.cursorConfigDir, cursorEnvironmentProbe.CURSOR_CONFIG_DIR);
+        assert.deepStrictEqual(observation.windowsEnvironment, cursorWindowsEnvironmentProbe);
+        assert.deepStrictEqual(observation.networkEnvironment, cursorNetworkEnvironmentProbe);
+        assert.isFalse(observation.hasCursorApiKey);
+        assert.notInclude(output, "cursor-mcp-secret");
+      }),
+    ),
   );
 
   it.effect("streams a fresh ACP session, parsed structured result, and estimated terminal usage", () =>

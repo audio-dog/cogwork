@@ -9,7 +9,6 @@ import {
   codexText,
 } from "@tanstack/ai-codex";
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
-import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
@@ -19,7 +18,6 @@ export type MakeCodexAdapter = (model: CodexModel, config: CodexTextConfig) => C
 
 export interface CodexRunnerOptions {
   readonly name: HarnessName;
-  readonly environment: NodeJS.ProcessEnv;
   readonly codexExecutable?: string;
   readonly makeAdapter?: MakeCodexAdapter;
 }
@@ -131,17 +129,6 @@ const readinessTimeout = (subject: string) =>
     `Codex CLI did not answer its readiness check for ${subject} within ${codexReadinessDeadline}`,
   );
 
-const createReadinessSandbox = Effect.fn("CodexRunner.createReadinessSandbox")(
-  (scrubEnv: ReadonlyArray<string>) =>
-    Effect.tryPromise({
-      try: () => localProcessSandbox({ dir: process.cwd(), scrubEnv: [...scrubEnv] }).create({}),
-      catch: codexLaunchDiagnostics,
-    }).pipe(
-      Effect.timeout(codexReadinessDeadline),
-      Effect.catchTag("TimeoutError", () => readinessTimeout("sandbox creation")),
-    ),
-);
-
 const codexCommand = Effect.fn("CodexRunner.command")(
   (sandbox: SandboxHandle, executable: string, argument: string) =>
     Effect.tryPromise({
@@ -153,25 +140,22 @@ const codexCommand = Effect.fn("CodexRunner.command")(
     ),
 );
 
-const codexPreflight = Effect.fn("CodexRunner.preflight")(
-  (executable: string, scrubEnv: ReadonlyArray<string>) =>
-    Effect.scoped(
-      Effect.acquireRelease(createReadinessSandbox(scrubEnv), (sandbox) =>
-        Effect.promise(() => sandbox.destroy()),
-      ).pipe(
-        Effect.flatMap((sandbox) =>
-          Effect.gen(function* () {
-            const version = yield* codexCommand(sandbox, executable, "--version").pipe(
-              Effect.flatMap((result) => requireCommandSuccess(result, launchError)),
-            );
-            yield* codexCommand(sandbox, executable, "login status").pipe(
-              Effect.flatMap((result) => requireCommandSuccess(result, credentialError)),
-            );
-            return version.stdout.trim() || version.stderr.trim();
-          }),
-        ),
-      ),
-    ).pipe(Effect.mapError(addRemediation)),
+const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>
+  ExternalHarnessRuntime.withLocalProcessSandbox(
+    process.cwd(),
+    ExternalHarnessRuntime.defaultInheritedEnvironment,
+    codexLaunchDiagnostics,
+    (sandbox) =>
+      Effect.gen(function* () {
+        const version = yield* codexCommand(sandbox, executable, "--version").pipe(
+          Effect.flatMap((result) => requireCommandSuccess(result, launchError)),
+        );
+        yield* codexCommand(sandbox, executable, "login status").pipe(
+          Effect.flatMap((result) => requireCommandSuccess(result, credentialError)),
+        );
+        return version.stdout.trim() || version.stderr.trim();
+      }),
+  ).pipe(Effect.mapError(addRemediation)),
 );
 
 const codexVersionCompatible = (version: string) => {
@@ -183,8 +167,8 @@ const codexVersionCompatible = (version: string) => {
   );
 };
 
-const codexReadiness = (executable: string, scrubEnv: ReadonlyArray<string>) =>
-  codexPreflight(executable, scrubEnv).pipe(
+const codexReadiness = (executable: string) =>
+  codexPreflight(executable).pipe(
     Effect.match({
       onFailure: (error) =>
         ({
@@ -238,27 +222,6 @@ const catalogOptions = {
   models: codexModels.map((model) => ({ value: model, label: model })),
   efforts: codexEfforts.map((effort) => ({ value: effort, label: effort })),
 };
-
-const inheritedCodexEnvironment = new Set([
-  "HOME",
-  "PATH",
-  "CODEX_HOME",
-  "XDG_CONFIG_HOME",
-  "XDG_DATA_HOME",
-  "XDG_STATE_HOME",
-  "USER",
-  "LOGNAME",
-  "SHELL",
-  "TMPDIR",
-  "TEMP",
-  "TMP",
-  "LANG",
-  "LC_ALL",
-  "LC_CTYPE",
-]);
-
-const scrubbedEnvironment = (environment: NodeJS.ProcessEnv) =>
-  Object.keys(environment).filter((name) => !inheritedCodexEnvironment.has(name));
 
 const hostAuthentication = () =>
   Effect.succeed({
@@ -316,7 +279,6 @@ const codexDescriptor = (
 ): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>> => {
   const makeAdapter = options.makeAdapter ?? codexText;
   const executable = options.codexExecutable ?? codexExecutableWithRepositoryHooks;
-  const scrubEnv = scrubbedEnvironment(options.environment);
   return {
     name: options.name,
     capabilities: {
@@ -343,8 +305,9 @@ const codexDescriptor = (
         fallbackVersion: `codex-${codexAdapterVersion}`,
       }),
     },
-    readiness: () => codexReadiness(executable, scrubEnv),
+    readiness: () => codexReadiness(executable),
     sharedGit: "required",
+    inheritedEnvironment: ExternalHarnessRuntime.defaultInheritedEnvironment,
     makeAdapter: ({ model, nativeAuthentication, request }) => {
       const mcp = codexMcpProjection(request.mcp);
       return makeAdapter(model, {
@@ -378,9 +341,7 @@ const codexDescriptor = (
 };
 
 export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner => {
-  const scrubEnv = scrubbedEnvironment(options.environment);
   return ExternalHarnessRuntime.externalHarnessRunner(codexDescriptor(options), {
     authentication: hostAuthentication,
-    sandboxProvider: ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({ scrubEnv }),
   });
 };

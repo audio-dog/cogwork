@@ -94,7 +94,7 @@ const replayName = Schema.decodeSync(HarnessName)("replay");
 const standardHarnessRunners = [
   cursorRunner({ name: cursorName }),
   claudeCodeRunner({ name: claudeName, authentication: { mode: "host" } }),
-  codexRunner({ name: codexName, environment: process.env }),
+  codexRunner({ name: codexName }),
   Provider.providerRunner({ name: providerName }),
 ];
 

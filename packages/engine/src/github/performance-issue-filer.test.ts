@@ -153,6 +153,71 @@ it.effect("decodes fingerprints once and keeps labeled markerless issues for cap
   }),
 );
 
+it.effect("does not require an authenticated login for origin-labeled history", () =>
+  Effect.gen(function* () {
+    const client = {
+      authenticatedLogin: unexpectedClientCall,
+      listIssues: () =>
+        Effect.succeed([{ ...issue(2, marker), labels: ["needs-triage", "origin:selfperf"] }]),
+      issuePullReferences: noPullReferences,
+    };
+
+    const history = yield* performanceIssueHistory(client, {
+      owner: "colonylabs",
+      name: "cogwork",
+      tokenEnv: "GITHUB_TOKEN",
+    });
+
+    assert.deepStrictEqual(
+      history.map(({ id }) => id),
+      ["#2"],
+    );
+  }),
+);
+
+it.effect("keeps marker-only login failures visible for authenticated targets", () =>
+  Effect.gen(function* () {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      retryable: true,
+      message: "authenticated login is temporarily unavailable",
+    });
+    const client = {
+      authenticatedLogin: () => Effect.fail(failure),
+      listIssues: () => Effect.succeed([issue(2, marker)]),
+      issuePullReferences: unexpectedClientCall,
+    };
+
+    const error = yield* Effect.flip(
+      performanceIssueHistory(client, {
+        owner: "colonylabs",
+        name: "cogwork",
+        tokenEnv: "GITHUB_TOKEN",
+      }),
+    );
+
+    assert.strictEqual(error, failure);
+  }),
+);
+
+it.effect("uses origin labels without actor lookup for installation-token targets", () =>
+  Effect.gen(function* () {
+    const client = {
+      authenticatedLogin: unexpectedClientCall,
+      listIssues: () => Effect.succeed([issue(2, marker)]),
+      issuePullReferences: unexpectedClientCall,
+    };
+
+    const history = yield* performanceIssueHistory(
+      client,
+      { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" },
+      "origin-label-only",
+    );
+
+    assert.deepStrictEqual(history, []);
+  }),
+);
+
 it.effect("recognizes merged pull requests with GitHub closing keywords", () =>
   Effect.gen(function* () {
     const references = new Map([

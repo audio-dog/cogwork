@@ -2,8 +2,11 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { contributionById, placeholderConfiguration } from "../features/configuration-placeholder";
-import { Configuration } from "./configuration-provider";
+import {
+  contributionById,
+  placeholderConfiguration,
+  StaticConfigurationProvider,
+} from "../testing/configuration";
 import { CustomizeFilterProvider } from "./customize-filter";
 import { CustomizePlaceMenu } from "./customize-place-menu";
 import { McpServerRow } from "./mcp-server-row";
@@ -15,11 +18,11 @@ import { McpServerRow } from "./mcp-server-row";
  */
 function render(node: ReactElement) {
   return renderToStaticMarkup(
-    <Configuration.StaticProvider picture={placeholderConfiguration}>
+    <StaticConfigurationProvider picture={placeholderConfiguration}>
       <TooltipProvider>
         <CustomizeFilterProvider>{node}</CustomizeFilterProvider>
       </TooltipProvider>
-    </Configuration.StaticProvider>,
+    </StaticConfigurationProvider>,
   );
 }
 

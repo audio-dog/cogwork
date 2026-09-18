@@ -1,0 +1,11 @@
+# `pnpm install` installs the shims named here. Adding a hook type needs another `pnpm install`.
+# The shim is shared by every worktree, so it is installed with `--allow-missing-config`: a worktree
+# on a branch from before this file must still be able to commit.
+default_install_hook_types: [commit-msg]
+
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]

@@ -2,8 +2,11 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { type Contribution, McpReadiness } from "../features/configuration-model";
-import { contributionById, placeholderConfiguration } from "../features/configuration-placeholder";
-import { Configuration } from "./configuration-provider";
+import {
+  contributionById,
+  placeholderConfiguration,
+  StaticConfigurationProvider,
+} from "../testing/configuration";
 import { McpServerRow } from "./mcp-server-row";
 
 function required(id: string) {
@@ -14,11 +17,11 @@ function required(id: string) {
 
 function renderContribution(contribution: Contribution) {
   return renderToStaticMarkup(
-    <Configuration.StaticProvider picture={placeholderConfiguration}>
+    <StaticConfigurationProvider picture={placeholderConfiguration}>
       <TooltipProvider>
         <McpServerRow contribution={contribution} />
       </TooltipProvider>
-    </Configuration.StaticProvider>,
+    </StaticConfigurationProvider>,
   );
 }
 
