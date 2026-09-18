@@ -268,18 +268,24 @@ const resolvedOptions = (model: HarnessManagedCatalogModel, selections: CursorMo
     ]),
   );
 
-const invalidSelection = (model: HarnessManagedCatalogModel, selections: CursorModelOptions) =>
-  Object.entries(selections).find(([id, value]) => {
-    const descriptor = model.options?.find((option) => option.id === id);
-    if (!descriptor) return true;
-    return HarnessModelOptionDescriptor.match(descriptor, {
-      boolean: () => typeof value !== "boolean",
-      select: ({ values }) => {
-        const isUnknownValue = typeof value !== "string" || !values.some((choice) => choice.value === value);
-        return isUnknownValue;
-      },
-    });
-  });
+const selectionError = (model: HarnessManagedCatalogModel, selections: CursorModelOptions) =>
+  Object.entries(selections)
+    .flatMap(([id, value]) => {
+      const descriptor = model.options?.find((option) => option.id === id);
+      if (!descriptor) return [`Cursor model ${model.value} does not declare option ${id}`];
+      const isValid = HarnessModelOptionDescriptor.match(descriptor, {
+        boolean: () => typeof value === "boolean",
+        select: ({ values }) => {
+          const isDeclaredValue =
+            typeof value === "string" && values.some((choice) => choice.value === value);
+          return isDeclaredValue;
+        },
+      });
+      return isValid
+        ? []
+        : [`Cursor model ${model.value} option ${id} does not allow ${JSON.stringify(value)}`];
+    })
+    .at(0);
 
 const nativeOptions = (
   model: HarnessManagedCatalogModel,
@@ -311,7 +317,7 @@ export const cursorNativeModelId = (
   selections: CursorModelOptions,
 ) => {
   const model = catalog.models.find(({ value }) => value === modelId);
-  const invalid = model ? invalidSelection(model, selections) : undefined;
+  const invalid = model ? selectionError(model, selections) : undefined;
   const options = model ? resolvedOptions(model, selections) : {};
   const nativeId = model
     ? catalog.rawModelIds.find((candidate) => {
@@ -328,9 +334,7 @@ export const cursorNativeModelId = (
     },
     {
       when: invalid !== undefined,
-      result: CursorNativeModelIdResult.Failure({
-        error: `Cursor model ${modelId} does not declare option ${invalid?.[0] ?? "unknown"}`,
-      }),
+      result: CursorNativeModelIdResult.Failure({ error: invalid ?? "Invalid Cursor model selection" }),
     },
     {
       when: nativeId === undefined,

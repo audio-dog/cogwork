@@ -158,6 +158,15 @@ describe("cursorNativeModelId", () => {
     );
   });
 
+  it("reports an invalid value for a declared option", () => {
+    const { catalog } = createCursorModelCatalog(sampleModelList, "2026.08.11-e8db854");
+
+    assert.deepStrictEqual(cursorNativeModelId(catalog, "claude-opus-5", { effort: "turbo" }), {
+      _tag: "Failure",
+      error: 'Cursor model claude-opus-5 option effort does not allow "turbo"',
+    });
+  });
+
   it("keeps label-derived context in the native option oracle", () => {
     const output = [
       "auto - Auto (default)",
