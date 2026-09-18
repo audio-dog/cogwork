@@ -20,6 +20,7 @@ import {
   RunId,
   type RunRecord,
   type RunStatus,
+  type SettingLevel,
   type TriageRole,
   WorkItemId,
   WorkspaceConfig,
@@ -386,7 +387,7 @@ interface ControlStoreStubOptions {
   readonly read?: Effect.Effect<ControlStorePicture, ControlStoreFailure>;
   readonly setDaemonLimit?: ControlStoreService["setDaemonLimit"];
   readonly updateContributionSetting?: ControlStoreService["updateContributionSetting"];
-  readonly updateOperationSetting?: ControlStoreService["updateOperationSetting"];
+  readonly updateOperationSettings?: ControlStoreService["updateOperationSettings"];
   readonly setHarnessEnabled?: ControlStoreService["setHarnessEnabled"];
 }
 
@@ -411,13 +412,15 @@ const controlStoreStub = ({
       contributionSettings: picture.contributionSettings,
       harnessSettings: picture.harnessSettings,
     }),
-  updateOperationSetting = (update) =>
+  updateOperationSettings = (updates) =>
     Effect.succeed({
       ...picture,
-      operationSettings: OperationSettingUpdate.match(update, {
-        Set: ({ row }) => [row],
-        Clear: () => [],
-      }),
+      operationSettings: updates.flatMap((update) =>
+        OperationSettingUpdate.match(update, {
+          Set: ({ row }) => [row],
+          Clear: () => [],
+        }),
+      ),
     }),
   updateContributionSetting = (update) =>
     Effect.succeed({
@@ -439,7 +442,7 @@ const controlStoreStub = ({
     revokeConnection: () => Effect.succeed(picture),
     removeConnection: () => Effect.succeed(picture),
     setHarnessEnabled,
-    updateOperationSetting,
+    updateOperationSettings,
     installPlugin: () => Effect.succeed(picture),
     uninstallPlugin: () => Effect.succeed(picture),
     updateContributionSetting,
@@ -1172,50 +1175,112 @@ describe("SetOperationSetting", () => {
     ],
   };
   const cursorSelectedStore = controlStoreStub({ seed: cursorSelected });
+  const staleEffortStore = controlStoreStub({
+    seed: {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        {
+          setting: "effort",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "retired-effort",
+        },
+      ],
+    },
+  });
+  const shadowedStaleModelStore = controlStoreStub({
+    seed: {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        {
+          setting: "model",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: "retired-model",
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "test",
+        },
+      ],
+    },
+  });
+  const staleModelStore = controlStoreStub({
+    seed: {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "retired-model",
+        },
+      ],
+    },
+  });
   const modelUpdate: OperationSettingUpdate = {
     _tag: "Set",
     row: {
       setting: "model",
       level: { _tag: "Operation", workflow: "coding", operation: "implement" },
       scope: { _tag: "SettingsProfile" },
-      value: "anthropic/claude-sonnet-4-5",
+      value: "test",
+    },
+  };
+  const effortUpdate: OperationSettingUpdate = {
+    _tag: "Clear",
+    cell: {
+      setting: "effort",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "SettingsProfile" },
     },
   };
 
-  it.effect("returns and publishes the same raw Operation setting rows", () =>
+  it.effect("persists and publishes one Operation setting batch", () =>
     Effect.gen(function* () {
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const returned = yield* client.SetOperationSetting({ update: modelUpdate });
-      const [published] = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.take(1),
+      yield* client.GetHarnesses();
+      const returned = yield* client.SetOperationSetting({ updates: [modelUpdate, effortUpdate] });
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil(DaemonEvent.guards.WorkspaceChanged),
         Stream.runCollect,
       );
+      const published = events[0];
 
       assert.strictEqual(published?._tag, "ControlStoreChanged");
       if (!published || !DaemonEvent.guards.ControlStoreChanged(published)) {
         return assert.fail("expected ControlStoreChanged");
       }
       assert.deepStrictEqual(published.controlStore, returned);
-      if (!OperationSettingUpdate.guards.Set(modelUpdate)) return assert.fail("expected set update");
+      if (!OperationSettingUpdate.guards.Set(modelUpdate)) return assert.fail("expected model update");
       assert.deepStrictEqual(returned.operationSettings, [modelUpdate.row]);
-    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+      assert.strictEqual(events[1]?._tag, "WorkspaceChanged");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
   );
 
   it.effect("persists a permission profile declared by the selected Harness", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.GetHarnesses();
       const returned = yield* client.SetOperationSetting({
-        update: {
-          _tag: "Set",
-          row: {
-            setting: "permission-profile",
-            level: { _tag: "Operation", workflow: "coding", operation: "triage" },
-            scope: { _tag: "SettingsProfile" },
-            value: "full",
+        updates: [
+          {
+            _tag: "Set",
+            row: {
+              setting: "permission-profile",
+              level: { _tag: "Operation", workflow: "coding", operation: "triage" },
+              scope: { _tag: "SettingsProfile" },
+              value: "full",
+            },
           },
-        },
+        ],
       });
 
       assert.strictEqual(returned.operationSettings[0]?.value, "full");
@@ -1225,17 +1290,20 @@ describe("SetOperationSetting", () => {
   it.effect("refuses a permission profile the selected Harness does not declare", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.GetHarnesses();
       const failure = yield* Effect.flip(
         client.SetOperationSetting({
-          update: {
-            _tag: "Set",
-            row: {
-              setting: "permission-profile",
-              level: { _tag: "Operation", workflow: "coding", operation: "triage" },
-              scope: { _tag: "SettingsProfile" },
-              value: "read-only",
+          updates: [
+            {
+              _tag: "Set",
+              row: {
+                setting: "permission-profile",
+                level: { _tag: "Operation", workflow: "coding", operation: "triage" },
+                scope: { _tag: "SettingsProfile" },
+                value: "read-only",
+              },
             },
-          },
+          ],
         }),
       );
 
@@ -1243,8 +1311,169 @@ describe("SetOperationSetting", () => {
       if (failure._tag !== "OperationSettingRefused")
         return assert.fail("expected Operation setting refusal");
       assert.strictEqual(failure.source, "Harness cursor");
-      assert.include(failure.reason, "does not declare read-only");
+      assert.include(failure.reason, "does not offer permission profile read-only");
     }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
+  );
+
+  it.effect("refuses a model absent from the current Harness catalog", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.GetHarnesses();
+      const failure = yield* Effect.flip(
+        client.SetOperationSetting({
+          updates: [
+            {
+              _tag: "Set",
+              row: {
+                setting: "model",
+                level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+                scope: { _tag: "SettingsProfile" },
+                value: "retired-model",
+              },
+            },
+          ],
+        }),
+      );
+
+      assert.strictEqual(failure._tag, "OperationSettingRefused");
+      if (failure._tag !== "OperationSettingRefused")
+        return assert.fail("expected Operation setting refusal");
+      assert.strictEqual(failure.setting, "model");
+      assert.include(failure.reason, "does not offer model retired-model");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
+  );
+
+  it.effect("refuses catalog-absent values at Default and Workflow levels", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.GetHarnesses();
+      const levels = [
+        { _tag: "Default" },
+        { _tag: "Workflow", workflow: "coding" },
+      ] satisfies ReadonlyArray<SettingLevel>;
+
+      const failures = yield* Effect.forEach(levels, (level) =>
+        Effect.flip(
+          client.SetOperationSetting({
+            updates: [
+              {
+                _tag: "Set",
+                row: {
+                  setting: "model",
+                  level,
+                  scope: { _tag: "SettingsProfile" },
+                  value: "retired-model",
+                },
+              },
+            ],
+          }),
+        ),
+      );
+      failures.forEach((failure) => {
+        assert.strictEqual(failure._tag, "OperationSettingRefused");
+        if (failure._tag !== "OperationSettingRefused") {
+          assert.fail("expected Operation setting refusal");
+        }
+        assert.include(failure.reason, "does not offer model retired-model");
+      });
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
+  );
+
+  it.effect("clears a selection without requiring a cached catalog", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({
+        updates: [
+          {
+            _tag: "Clear",
+            cell: {
+              setting: "model",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+            },
+          },
+        ],
+      });
+
+      assert.deepStrictEqual(returned.operationSettings, []);
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
+  );
+
+  it.effect("allows a valid selection write while an unrelated saved selection is stale", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.GetHarnesses();
+      const returned = yield* client.SetOperationSetting({
+        updates: [
+          {
+            _tag: "Set",
+            row: {
+              setting: "model",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+              value: "test",
+            },
+          },
+        ],
+      });
+
+      assert.strictEqual(returned.operationSettings[0]?.value, "test");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), staleEffortStore)), Effect.scoped),
+  );
+
+  it.effect("refuses a clear that would expose a catalog-absent inherited value", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.GetHarnesses();
+      const failure = yield* Effect.flip(
+        client.SetOperationSetting({
+          updates: [
+            {
+              _tag: "Clear",
+              cell: {
+                setting: "model",
+                level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+                scope: { _tag: "SettingsProfile" },
+              },
+            },
+          ],
+        }),
+      );
+
+      assert.strictEqual(failure._tag, "OperationSettingRefused");
+      if (failure._tag !== "OperationSettingRefused") {
+        return assert.fail("expected Operation setting refusal");
+      }
+      assert.include(failure.reason, "does not offer model retired-model");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), shadowedStaleModelStore)), Effect.scoped),
+  );
+
+  it.effect("refuses an explicit Set of an unchanged stale selection", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.GetHarnesses();
+      const failure = yield* Effect.flip(
+        client.SetOperationSetting({
+          updates: [
+            {
+              _tag: "Set",
+              row: {
+                setting: "model",
+                level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+                scope: { _tag: "SettingsProfile" },
+                value: "retired-model",
+              },
+            },
+          ],
+        }),
+      );
+
+      assert.strictEqual(failure._tag, "OperationSettingRefused");
+      if (failure._tag !== "OperationSettingRefused") {
+        return assert.fail("expected Operation setting refusal");
+      }
+      assert.include(failure.reason, "does not offer model retired-model");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), staleModelStore)), Effect.scoped),
   );
 });
 
