@@ -37,6 +37,8 @@ const responseContent = async (sessionParams) => {
       HOMEPATH: process.env.HOMEPATH ?? null,
       APPDATA: process.env.APPDATA ?? null,
       SYSTEMROOT: process.env.SYSTEMROOT ?? null,
+      PATHEXT: process.env.PATHEXT ?? null,
+      COMSPEC: process.env.COMSPEC ?? null,
     },
     hasCursorApiKey: process.env.CURSOR_API_KEY !== undefined,
   });

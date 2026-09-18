@@ -54,6 +54,8 @@ const decodeObservation = Schema.decodeUnknownSync(
         HOMEPATH: Schema.NullOr(Schema.String),
         APPDATA: Schema.NullOr(Schema.String),
         SYSTEMROOT: Schema.NullOr(Schema.String),
+        PATHEXT: Schema.NullOr(Schema.String),
+        COMSPEC: Schema.NullOr(Schema.String),
       }),
       hasCursorApiKey: Schema.Boolean,
     }),
@@ -71,6 +73,8 @@ const cursorEnvironmentProbe = {
   HOMEPATH: "\\Users\\cogwork",
   APPDATA: "C:\\Users\\cogwork\\AppData\\Roaming",
   SYSTEMROOT: "C:\\Windows",
+  PATHEXT: ".COM;.EXE;.BAT;.CMD",
+  COMSPEC: "C:\\Windows\\System32\\cmd.exe",
 };
 
 const cursorWindowsEnvironmentProbe = {
@@ -79,6 +83,8 @@ const cursorWindowsEnvironmentProbe = {
   HOMEPATH: cursorEnvironmentProbe.HOMEPATH,
   APPDATA: cursorEnvironmentProbe.APPDATA,
   SYSTEMROOT: cursorEnvironmentProbe.SYSTEMROOT,
+  PATHEXT: cursorEnvironmentProbe.PATHEXT,
+  COMSPEC: cursorEnvironmentProbe.COMSPEC,
 };
 
 const withCursorEnvironment = <Value, Error, Requirements>(
