@@ -592,7 +592,7 @@ const changeOperationSetting = Effect.fn("commands.changeOperationSetting")(
   ) {
     const client = yield* makeDaemonClient();
     const update = yield* makeOperationSettingUpdate(options, options.value);
-    const controlStore = yield* client.SetOperationSetting({ update });
+    const controlStore = yield* client.SetOperationSetting({ updates: [update] });
     yield* Console.log(formatOperationSettings(controlStore, yield* operationSettingContext(options)));
   },
   (effect, options) => overSocket(effect, options.socketPath),
