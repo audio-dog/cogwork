@@ -74,6 +74,7 @@ const capture = JSON.stringify({
   hasGithubToken: process.env.GITHUB_TOKEN !== undefined,
   hasGhToken: process.env.GH_TOKEN !== undefined,
   hasLinearApiKey: process.env.LINEAR_API_KEY !== undefined,
+  codexHome: process.env.CODEX_HOME ?? null,
 });
 const outputSchemaPath = () => {
   const index = process.argv.indexOf("--output-schema");

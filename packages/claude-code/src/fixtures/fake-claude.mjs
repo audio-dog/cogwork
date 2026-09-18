@@ -87,6 +87,24 @@ const capture = {
   authToken: process.env.ANTHROPIC_AUTH_TOKEN ?? null,
   githubToken: process.env.GITHUB_TOKEN ?? null,
   ghToken: process.env.GH_TOKEN ?? null,
+  claudeConfigDir: process.env.CLAUDE_CONFIG_DIR ?? null,
+  windowsEnvironment: {
+    USERPROFILE: process.env.USERPROFILE ?? null,
+    HOMEDRIVE: process.env.HOMEDRIVE ?? null,
+    HOMEPATH: process.env.HOMEPATH ?? null,
+    APPDATA: process.env.APPDATA ?? null,
+    SYSTEMROOT: process.env.SYSTEMROOT ?? null,
+    PATHEXT: process.env.PATHEXT ?? null,
+    COMSPEC: process.env.COMSPEC ?? null,
+  },
+  networkEnvironment: {
+    HTTP_PROXY: process.env.HTTP_PROXY ?? null,
+    HTTPS_PROXY: process.env.HTTPS_PROXY ?? null,
+    NO_PROXY: process.env.NO_PROXY ?? null,
+    http_proxy: process.env.http_proxy ?? null,
+    https_proxy: process.env.https_proxy ?? null,
+    NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS ?? null,
+  },
 };
 const sessionId = capture.resume ?? "fake-claude-session-1";
 const init = {

@@ -237,7 +237,7 @@ describe("codexRunner execution", () => {
               ),
             );
             assert.strictEqual(hookBaseline.exitCode, 0);
-            const harness = Harness.make([codexRunner({ name, environment: process.env })]);
+            const harness = Harness.make([codexRunner({ name })]);
             const events = yield* collectEvents(
               harness.run(
                 makeRequest({

@@ -8,6 +8,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { codexExecutableWithRepositoryHooks } from "./harness";
 import {
   authenticatedMcp,
@@ -28,6 +29,35 @@ import {
   sourceWrapperPath,
   structuredCapture,
 } from "./harness-fixtures";
+
+const inheritedEnvironmentProbe = {
+  CODEX_HOME: "/tmp/cogwork-codex-home",
+  GITHUB_TOKEN: "inherited-github-token",
+  GH_TOKEN: "inherited-gh-token",
+  LINEAR_API_KEY: "inherited-linear-key",
+  CODEX_API_KEY: "inherited-codex-key",
+  OPENAI_API_KEY: "inherited-openai-key",
+};
+
+const restoreEnvironment = (name: string, value: unknown) =>
+  typeof value === "string"
+    ? Reflect.set(process.env, name, value)
+    : Reflect.deleteProperty(process.env, name);
+
+const withInheritedEnvironmentProbe = <Value, Error, Requirements>(
+  effect: Effect.Effect<Value, Error, Requirements>,
+) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() =>
+      Object.fromEntries(
+        Object.keys(inheritedEnvironmentProbe).map((name) => [name, Reflect.get(process.env, name)]),
+      ),
+    ),
+    () =>
+      Effect.sync(() => Object.assign(process.env, inheritedEnvironmentProbe)).pipe(Effect.andThen(effect)),
+    (original) =>
+      Effect.sync(() => Object.entries(original).map(([name, value]) => restoreEnvironment(name, value))),
+  );
 
 describe("repository fixtures", () => {
   it.effect("keeps identity out of the repository config", () =>
@@ -92,43 +122,50 @@ describe("codexRunner configuration", () => {
     it.effect(
       "projects host authentication and native options, granting no Git path to a checkout that owns its Git directory",
       () =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            const handle = yield* createSandbox();
-            const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
-            const harness = Harness.make([
-              runner({
-                environment: {
-                  ...process.env,
-                  GITHUB_TOKEN: "inherited-github-token",
-                  GH_TOKEN: "inherited-gh-token",
-                  LINEAR_API_KEY: "inherited-linear-key",
-                  CODEX_API_KEY: "inherited-codex-key",
-                  OPENAI_API_KEY: "inherited-openai-key",
-                },
-                makeAdapter: (model, config) => {
-                  calls.push({ model, config });
-                  return codexText(model, config);
-                },
-              }),
-            ]);
-            const events = yield* runInRepository(harness, handle);
-            const capture = yield* structuredCapture(events);
-            const call = calls[0];
-            if (!call) return assert.fail("Codex adapter was not created");
-            assert.strictEqual(call.model, defaultModel);
-            assert.strictEqual(call.config.authMode, "host");
-            assert.isUndefined(call.config.additionalDirectories);
-            assert.isUndefined(call.config.config);
-            assert.isUndefined(call.config.env);
-            assert.include(capture.args, 'model_reasoning_effort="high"');
-            assert.isFalse(capture.hasCodexApiKey);
-            assert.isFalse(capture.hasOpenAiApiKey);
-            assert.isFalse(capture.hasGithubToken);
-            assert.isFalse(capture.hasGhToken);
-            assert.isFalse(capture.hasLinearApiKey);
-          }),
+        withInheritedEnvironmentProbe(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const handle = yield* createSandbox();
+              const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
+              const harness = Harness.make([
+                runner({
+                  makeAdapter: (model, config) => {
+                    calls.push({ model, config });
+                    return codexText(model, config);
+                  },
+                }),
+              ]);
+              const events = yield* runInRepository(harness, handle);
+              const capture = yield* structuredCapture(events);
+              const call = calls[0];
+              if (!call) return assert.fail("Codex adapter was not created");
+              assert.strictEqual(call.model, defaultModel);
+              assert.strictEqual(call.config.authMode, "host");
+              assert.isUndefined(call.config.additionalDirectories);
+              assert.isUndefined(call.config.config);
+              assert.isUndefined(call.config.env);
+              assert.include(capture.args, 'model_reasoning_effort="high"');
+              assert.isFalse(capture.hasCodexApiKey);
+              assert.isFalse(capture.hasOpenAiApiKey);
+              assert.isFalse(capture.hasGithubToken);
+              assert.isFalse(capture.hasGhToken);
+              assert.isFalse(capture.hasLinearApiKey);
+              assert.strictEqual(capture.codexHome, inheritedEnvironmentProbe.CODEX_HOME);
+            }),
+          ),
         ),
+    );
+
+    it.effect("rejects a missing checkout before Codex launch", () =>
+      Effect.gen(function* () {
+        const harness = Harness.make([runner({ codexExecutable: "/missing-codex-executable" })]);
+        const error = yield* harness
+          .run(makeRequest({ checkoutPath: "/missing-codex-checkout" }))
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "workspace");
+        assert.include(error.message, "/missing-codex-checkout");
+      }),
     );
 
     it.effect(

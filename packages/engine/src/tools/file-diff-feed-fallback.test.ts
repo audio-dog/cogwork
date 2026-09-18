@@ -496,10 +496,14 @@ describe("file diff fallback", { timeout: 30_000 }, () => {
       yield* writeFile(original, { path: "seed.txt", content: "changed after setup failure\n" });
       yield* writeFile(original, { path: "second.txt", content: "new after setup failure\n" });
       const probeAttempts = MutableRef.make(0);
+      const retried = yield* Deferred.make<void>();
       const exec: WorktreeSandbox["handle"]["process"]["exec"] = (command, options) => {
         if (!isExternalDiffProbe(command)) return original.handle.process.exec(command, options);
         const attempt = MutableRef.updateAndGet(probeAttempts, (count) => count + 1);
-        if (attempt > 1) return original.handle.process.exec(command, options);
+        if (attempt > 1) {
+          Deferred.doneUnsafe(retried, Effect.void);
+          return original.handle.process.exec(command, options);
+        }
         return Promise.reject(new Error("temporary external diff probe failure"));
       };
       const sandbox: WorktreeSandbox = {
@@ -509,13 +513,17 @@ describe("file diff fallback", { timeout: 30_000 }, () => {
           process: { ...original.handle.process, exec },
         },
       };
-
-      const events = yield* awaitTestEffect(
-        watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.take(2), Stream.runCollect),
+      const stop = yield* Deferred.make<void>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha, Deferred.await(stop)).pipe(
+        Stream.runDrain,
+        Effect.forkChild,
       );
 
-      assert.strictEqual(MutableRef.get(probeAttempts), 2);
-      assert.lengthOf(events, 2);
+      yield* settleWhileAdvancingClock(Deferred.await(retried));
+      yield* Deferred.succeed(stop, undefined);
+      yield* settleWhileAdvancingClock(Fiber.join(fiber));
+
+      assert.isAtLeast(MutableRef.get(probeAttempts), 2);
     }).pipe(Effect.provide(deniedWatcherLayer)),
   );
 

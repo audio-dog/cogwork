@@ -124,7 +124,7 @@ describe("Claude Code BYOK Harness", () => {
         const launchError = yield* runner
           .preflight(
             Harness.HarnessPreflightInput.Launch({
-              request: makeRequest("/missing-byok-checkout"),
+              request: makeRequest(process.cwd()),
             }),
           )
           .pipe(Effect.flip);

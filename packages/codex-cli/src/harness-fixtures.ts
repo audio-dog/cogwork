@@ -191,7 +191,6 @@ const makeTestAdapter: MakeCodexAdapter = (model, config) =>
 const runner = (options: Partial<CodexRunnerOptions> = {}) =>
   codexRunner({
     name,
-    environment: process.env,
     codexExecutable: fakeCodexExecutable(),
     makeAdapter: makeTestAdapter,
     ...options,
@@ -282,6 +281,7 @@ const Capture = Schema.fromJsonString(
     hasGithubToken: Schema.Boolean,
     hasGhToken: Schema.Boolean,
     hasLinearApiKey: Schema.Boolean,
+    codexHome: Schema.NullOr(Schema.String),
   }),
 );
 
