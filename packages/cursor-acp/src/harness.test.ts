@@ -57,6 +57,12 @@ const decodeObservation = Schema.decodeUnknownSync(
         PATHEXT: Schema.NullOr(Schema.String),
         COMSPEC: Schema.NullOr(Schema.String),
       }),
+      networkEnvironment: Schema.Struct({
+        HTTP_PROXY: Schema.NullOr(Schema.String),
+        HTTPS_PROXY: Schema.NullOr(Schema.String),
+        NODE_USE_ENV_PROXY: Schema.NullOr(Schema.String),
+        NODE_EXTRA_CA_CERTS: Schema.NullOr(Schema.String),
+      }),
       hasCursorApiKey: Schema.Boolean,
     }),
   ),
@@ -75,6 +81,10 @@ const cursorEnvironmentProbe = {
   SYSTEMROOT: "C:\\Windows",
   PATHEXT: ".COM;.EXE;.BAT;.CMD",
   COMSPEC: "C:\\Windows\\System32\\cmd.exe",
+  HTTP_PROXY: "http://proxy.example.test:8080",
+  HTTPS_PROXY: "https://proxy.example.test:8443",
+  NODE_USE_ENV_PROXY: "1",
+  NODE_EXTRA_CA_CERTS: "/tmp/cogwork-enterprise-ca.pem",
 };
 
 const cursorWindowsEnvironmentProbe = {
@@ -85,6 +95,13 @@ const cursorWindowsEnvironmentProbe = {
   SYSTEMROOT: cursorEnvironmentProbe.SYSTEMROOT,
   PATHEXT: cursorEnvironmentProbe.PATHEXT,
   COMSPEC: cursorEnvironmentProbe.COMSPEC,
+};
+
+const cursorNetworkEnvironmentProbe = {
+  HTTP_PROXY: cursorEnvironmentProbe.HTTP_PROXY,
+  HTTPS_PROXY: cursorEnvironmentProbe.HTTPS_PROXY,
+  NODE_USE_ENV_PROXY: cursorEnvironmentProbe.NODE_USE_ENV_PROXY,
+  NODE_EXTRA_CA_CERTS: cursorEnvironmentProbe.NODE_EXTRA_CA_CERTS,
 };
 
 const withCursorEnvironment = <Value, Error, Requirements>(
@@ -516,6 +533,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
         ]);
         assert.strictEqual(observation.cursorConfigDir, cursorEnvironmentProbe.CURSOR_CONFIG_DIR);
         assert.deepStrictEqual(observation.windowsEnvironment, cursorWindowsEnvironmentProbe);
+        assert.deepStrictEqual(observation.networkEnvironment, cursorNetworkEnvironmentProbe);
         assert.isFalse(observation.hasCursorApiKey);
         assert.notInclude(output, "cursor-mcp-secret");
       }),

@@ -40,6 +40,12 @@ const responseContent = async (sessionParams) => {
       PATHEXT: process.env.PATHEXT ?? null,
       COMSPEC: process.env.COMSPEC ?? null,
     },
+    networkEnvironment: {
+      HTTP_PROXY: process.env.HTTP_PROXY ?? null,
+      HTTPS_PROXY: process.env.HTTPS_PROXY ?? null,
+      NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY ?? null,
+      NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS ?? null,
+    },
     hasCursorApiKey: process.env.CURSOR_API_KEY !== undefined,
   });
 };

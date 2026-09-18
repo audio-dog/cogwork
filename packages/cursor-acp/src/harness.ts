@@ -36,7 +36,9 @@ const minimumCursorVersion = [2026, 8, 11] as const;
 const inheritedEnvironment = [
   ...ExternalHarnessRuntime.defaultInheritedEnvironment,
   ...ExternalHarnessRuntime.windowsInheritedEnvironment,
+  ...ExternalHarnessRuntime.nodeNetworkInheritedEnvironment,
   "CURSOR_CONFIG_DIR",
+  "NODE_USE_ENV_PROXY",
 ];
 
 const cursorVersionCompatible = (version: string) => {
