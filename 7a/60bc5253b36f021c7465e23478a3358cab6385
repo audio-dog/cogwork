@@ -1,0 +1,27 @@
+CODING_STANDARDS.md
+  s_d5ed8d0e563f08::t_18b09b29eef13c 37-44
+pnpm-lock.yaml
+  s_d5ed8d0e563f08::t_164a30c4a2a345 111-113,1577-1639,6575-6613
+package.json
+  s_d5ed8d0e563f08::t_dbf05372487a9b 25
+  s_d5ed8d0e563f08::t_230b77854d7158 12
+.pre-commit-config.yaml
+  s_d5ed8d0e563f08::t_7324a08e3c4395 1,4-12
+  s_d5ed8d0e563f08::t_7b820171147253 2-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7a60bc5253b36f021c7465e23478a3358cab6385",
+  "prompts": {},
+  "sessions": {
+    "s_d5ed8d0e563f08": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "06c09021-6436-49e9-b968-8817c0dbead5",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
