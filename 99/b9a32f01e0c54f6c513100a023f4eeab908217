@@ -1,0 +1,19 @@
+packages/engine/src/tools/file-diff-feed-fallback.test.ts
+  s_611559839ce469::t_7e6cd55b72f29e 513
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "99b9a32f01e0c54f6c513100a023f4eeab908217",
+  "prompts": {},
+  "sessions": {
+    "s_611559839ce469": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b50e-72ed-77a2-b069-86b1ad57c492",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
