@@ -9,7 +9,7 @@
     "format-and-lint:fix": "biome check . --write",
     "format-and-lint:unsafe": "biome check . --write --unsafe",
     "format-and-lint": "biome check .",
-    "prepare": "effect-tsgo patch && prek install --allow-missing-config",
+    "prepare": "effect-tsgo patch && node scripts/install-commit-hook.mjs",
     "dev": "turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
