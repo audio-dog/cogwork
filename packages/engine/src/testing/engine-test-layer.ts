@@ -1,4 +1,9 @@
-import { defaultControlStore, type HarnessName, type OperationSettingRow } from "@cogwork/contracts";
+import {
+  defaultControlStore,
+  type HarnessName,
+  type OperationSettingRow,
+  type RunPlanPolicyProfile,
+} from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -30,6 +35,7 @@ export interface EngineTestLayerOptions {
 export interface EngineOperationResolutionTestLayerOptions {
   readonly harness: HarnessName;
   readonly operationSettings: ReadonlyArray<OperationSettingRow>;
+  readonly policyProfiles?: ReadonlyArray<RunPlanPolicyProfile>;
   readonly context?: AssembledContext;
   readonly mcpSkills?: ReadonlyArray<ResolvedMcpSkill>;
 }
@@ -66,6 +72,7 @@ export const engineTestLayer = ({
 export const engineTestLayerWithOperationResolution = ({
   harness,
   operationSettings,
+  policyProfiles = ["read-only", "full"],
   context = {
     layers: [],
     operatingInstructionsPath: "/operations",
@@ -88,6 +95,12 @@ export const engineTestLayerWithOperationResolution = ({
   const harnessService = Layer.mock(Harness, {
     names: [harness],
     signIn: () => null,
+    catalog: () =>
+      Effect.succeed({
+        models: [],
+        policyProfiles,
+        provenance: { source: "cogwork-fallback", fallbackVersion: "test" },
+      }),
     preflight: () => Effect.void,
     sessionKind: () => "opaque-handle",
     capabilities: () => ({
