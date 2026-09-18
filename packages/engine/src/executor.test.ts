@@ -2777,7 +2777,6 @@ describe("Executor.execute", () => {
       assert.isFalse(log.some((call) => call.method === "note"));
       const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
       assert.strictEqual(run?.status, "declined");
-      assert.strictEqual(run?.claimDisposition, "release");
     }).pipe(
       Effect.provide(
         provide(

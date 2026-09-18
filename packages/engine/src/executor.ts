@@ -103,16 +103,6 @@ const emptyAccumulator: RunAccumulator = {
 
 export { meteredTotalTokens } from "./resume-policy";
 
-declare const emptyClaimDisposition: unique symbol;
-type EmptyClaimDisposition = { readonly [emptyClaimDisposition]?: never };
-
-type ClaimDisposition = Data.TaggedEnum<{
-  Release: EmptyClaimDisposition;
-  Hold: EmptyClaimDisposition;
-}>;
-
-const ClaimDisposition = Data.taggedEnum<ClaimDisposition>();
-
 class SessionRestarted extends Data.TaggedError("SessionRestarted")<Record<string, never>> {}
 
 const defaultFollowUp: FollowUpContext = {
@@ -494,7 +484,6 @@ export const make = Effect.gen(function* () {
         ),
       ),
       Effect.flatMap((update) => settleRun(runId, updateRun(update))),
-      Effect.map(() => ClaimDisposition.Release({})),
     );
 
   const settleReportedFailure = (runId: RunId, reported: Effect.Effect<RunUpdate, IssueTrackerError>) =>
@@ -610,7 +599,6 @@ export const make = Effect.gen(function* () {
       usage: acc.usage,
       endedAtMillis,
     });
-    return ClaimDisposition.Release({});
   });
 
   const retryableOperationDecision = (attempts: number) =>
@@ -640,7 +628,6 @@ export const make = Effect.gen(function* () {
         ...update,
         status: "declined",
         usage: acc.usage,
-        claimDisposition: "release",
       }),
     );
   });
@@ -851,7 +838,7 @@ export const make = Effect.gen(function* () {
 
     const settle = <A, R>(
       attempt: Effect.Effect<A, PrepareError | HarnessError, R>,
-      complete: (acc: A) => Effect.Effect<ClaimDisposition, IssueTrackerError | RunLedgerError>,
+      complete: (acc: A) => Effect.Effect<void, IssueTrackerError | RunLedgerError>,
     ) =>
       attempt.pipe(
         Effect.matchEffect({
@@ -875,7 +862,7 @@ export const make = Effect.gen(function* () {
 
     if (record.harness === "replay") {
       yield* settleRecorded(foldHarness(record, request, false));
-      return ClaimDisposition.Release({});
+      return;
     }
     return yield* settle(foldHarness(record, request, item.stage === "triage"), (acc) =>
       completeOperation(workspace, item, accepted, acc),
@@ -966,12 +953,7 @@ export const make = Effect.gen(function* () {
     const admission = yield* claimEnabledItem(workspace, item);
     if (!admission.claimed) return false;
     yield* runClaimed(workspace, item, checked.resolved, admission.startedAtMillis, observation).pipe(
-      Effect.tap(
-        ClaimDisposition.$match({
-          Hold: () => Effect.void,
-          Release: () => releaseClaim(workspace, item.id),
-        }),
-      ),
+      Effect.tap(() => releaseClaim(workspace, item.id)),
       Effect.onExit((exit) =>
         Exit.isSuccess(exit) || hasInterruptsOnly(exit) ? Effect.void : releaseClaim(workspace, item.id),
       ),
@@ -1014,7 +996,7 @@ export const make = Effect.gen(function* () {
     const settleAcceptedRun = Effect.fn("Executor.settleAcceptedRun")(function* (
       accepted: AcceptedRun | null,
     ) {
-      if (!accepted) return ClaimDisposition.Release({});
+      if (!accepted) return;
       return yield* settleOutcome(workspace, item, accepted);
     });
     const reportPreparationFailure = Effect.fn("Executor.reportPreparationFailure")(function* ({
