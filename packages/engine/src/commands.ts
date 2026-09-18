@@ -15,10 +15,12 @@ import {
   type ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   type DaemonLimitUpdate,
-  type HarnessName,
+  HarnessName,
   HarnessNotRegistered,
   IssueTrackerError,
+  OperationSettingRefused,
   type OperationSettingUpdate,
+  OperationSettingUpdate as OperationSettingUpdateSchema,
   type PluginFailure,
   type PluginId,
   type PluginMutationResult,
@@ -28,6 +30,7 @@ import {
   pluginRequiringConnection,
   type RunId,
   type RunStatus,
+  resolveOperationSetting,
   type TriageRole,
   type WorkItemId,
   WorkItemNotFound,
@@ -54,7 +57,7 @@ import { repoTargetFor as githubRepoTargetFor } from "./github/host";
 import { Harness } from "./harness";
 import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
 import { applyHandbackBarrier } from "./observe";
-import { operationSettingRefusal } from "./operation-policy";
+import { operationSettingRefusal, permissionProfileRefusal } from "./operation-policy";
 import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
@@ -326,12 +329,51 @@ const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutatio
   return published;
 });
 
+const permissionProfileRow = (update: OperationSettingUpdate) =>
+  OperationSettingUpdateSchema.match(update, {
+    Clear: () => null,
+    Set: ({ row }) => {
+      if (row.setting !== "permission-profile") return null;
+      if (row.level._tag !== "Operation") return null;
+      return { row, workflow: row.level.workflow, operation: row.level.operation };
+    },
+  });
+
+const validatePermissionProfileUpdate = Effect.fn("Daemon.validatePermissionProfileUpdate")(function* (
+  store: ControlStoreService,
+  update: OperationSettingUpdate,
+) {
+  const row = permissionProfileRow(update);
+  if (row === null) return;
+  const workspace = row.row.scope._tag === "PrivateWorkspaceOverlay" ? row.row.scope.workspace : null;
+  const picture = yield* store.picture;
+  const selectedHarness = resolveOperationSetting(picture.operationSettings, "harness", {
+    workflow: row.workflow,
+    operation: row.operation,
+    workspace,
+  });
+  if (!Schema.is(HarnessName)(selectedHarness)) return;
+  const harness = yield* Harness;
+  const catalog = yield* harness.catalog(selectedHarness).pipe(
+    Effect.mapError((error) =>
+      OperationSettingRefused.make({
+        setting: row.row.setting,
+        source: `Harness ${selectedHarness}`,
+        reason: error.message,
+      }),
+    ),
+  );
+  const refusal = permissionProfileRefusal(update, selectedHarness, catalog.policyProfiles);
+  if (refusal !== null) return yield* refusal;
+});
+
 export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(function* (payload: {
   readonly update: OperationSettingUpdate;
 }) {
   const refusal = operationSettingRefusal(payload.update);
   if (refusal !== null) return yield* refusal;
   const store = yield* ControlStore;
+  yield* validatePermissionProfileUpdate(store, payload.update);
   return yield* publishAvailabilityMutation(store, store.updateOperationSetting(payload.update));
 });
 

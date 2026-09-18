@@ -75,7 +75,7 @@ const commandHarnessRunner: HarnessRunner = {
   sessionKind: "opaque-handle",
   projectedMembers: [],
   planMiddleware: [],
-  execution: fullHarnessExecution,
+  execution: { ...fullHarnessExecution, profiles: ["full"] },
   capabilities: {
     authenticationModes: ["host"],
     session: { affinity: "runtime-host", fork: false, humanAttach: false },
@@ -473,11 +473,14 @@ const daemonLayer = (
     Layer.provideMerge(source),
   );
 
-const daemonLayerWithHarness = (source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>) =>
+const daemonLayerWithHarness = (
+  source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>,
+  controlStore = controlStoreStub(),
+) =>
   daemonLayer(
     source,
     schedulerStub(),
-    controlStoreStub(),
+    controlStore,
     registryServices,
     pluginManagerLayer,
     connectionStoreLayer,
@@ -1157,6 +1160,18 @@ describe("SetDaemonLimit", () => {
 });
 
 describe("SetOperationSetting", () => {
+  const cursorSelected = {
+    ...picture,
+    operationSettings: [
+      {
+        setting: "harness" as const,
+        level: { _tag: "Default" as const },
+        scope: { _tag: "SettingsProfile" as const },
+        value: "cursor",
+      },
+    ],
+  };
+  const cursorSelectedStore = controlStoreStub({ seed: cursorSelected });
   const modelUpdate: OperationSettingUpdate = {
     _tag: "Set",
     row: {
@@ -1188,7 +1203,26 @@ describe("SetOperationSetting", () => {
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 
-  it.effect("refuses a locked setting with its Operation Definition named", () =>
+  it.effect("persists a permission profile declared by the selected Harness", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({
+        update: {
+          _tag: "Set",
+          row: {
+            setting: "permission-profile",
+            level: { _tag: "Operation", workflow: "coding", operation: "triage" },
+            scope: { _tag: "SettingsProfile" },
+            value: "full",
+          },
+        },
+      });
+
+      assert.strictEqual(returned.operationSettings[0]?.value, "full");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
+  );
+
+  it.effect("refuses a permission profile the selected Harness does not declare", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const failure = yield* Effect.flip(
@@ -1199,7 +1233,7 @@ describe("SetOperationSetting", () => {
               setting: "permission-profile",
               level: { _tag: "Operation", workflow: "coding", operation: "triage" },
               scope: { _tag: "SettingsProfile" },
-              value: "full",
+              value: "read-only",
             },
           },
         }),
@@ -1208,8 +1242,9 @@ describe("SetOperationSetting", () => {
       assert.strictEqual(failure._tag, "OperationSettingRefused");
       if (failure._tag !== "OperationSettingRefused")
         return assert.fail("expected Operation setting refusal");
-      assert.strictEqual(failure.source, "triage Operation Definition");
-    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+      assert.strictEqual(failure.source, "Harness cursor");
+      assert.include(failure.reason, "does not declare read-only");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
   );
 });
 
