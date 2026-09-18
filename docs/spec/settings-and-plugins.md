@@ -298,7 +298,8 @@ Plugin ships this Hook; it failed to load; here is the file*. Uninstall removes 
 bytes become the reclaimer's — **uninstall does not free disk immediately**.
 
 Surviving trust decisions from #135, independent of where bytes come from: the **Engine ceiling**
-requires a non-interactive turn and the Operation's locked read/write posture. Read only also
+requires a non-interactive turn and the resolved read/write posture. The user chooses among the
+selected Harness's declared profiles; the Operation supplies only the default. Read only also
 requires worktree confinement. ADR 0025 permits Full to rely on a runner's declared native trust
 boundary. Finer enforcement may be coarse only with its actual fidelity recorded **and no client
 presenting it as exact**.

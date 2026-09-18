@@ -15,10 +15,10 @@ hooks, and ADR 0005 places the trust boundary at authentication, not payload con
 ## Decision
 
 Cursor declares exactly one Operation profile: **Full**. It makes no Read only claim it cannot keep.
-Because each Operation's permission profile is locked by its Operation Definition (Triage: Read
-only; Implement and Follow-up: Full), Cursor is selectable for Implement and Follow-up and never for
-Triage. The Operation picker becomes Operation-aware: it offers only Harnesses whose declared
-profiles include that Operation's locked profile.
+Permission profiles are a user choice constrained by the selected Harness's declared profiles.
+Operations supply canonical defaults — Triage uses Read only; Implement and Follow-up use Full —
+but do not restrict Provider selection. Cursor is selectable for every Operation. Because it
+declares only Full, that is the only permission choice for a Cursor Run, including Triage.
 
 ## Consequences
 
@@ -26,4 +26,4 @@ This reverses the refuse-everything posture previously documented in `packages/c
 — do not "fix" Cursor back to hidden. The Full declaration trusts Cursor's own permission mode the
 same way ADR 0023 trusts Codex's hooks. Revisit when TanStack AI / ACP gains an enforceable
 permission mapping or an isolated Sandbox provider lands; either can justify adding the Read only
-profile.
+profile without changing the Provider picker.
