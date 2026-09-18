@@ -2012,7 +2012,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([unsupported])));
   });
 
-  it.effect("refuses a saved Harness that cannot run the Operation's locked profile", () => {
+  it.effect("refuses a saved permission profile the Harness does not declare", () => {
     const readOnlyRunner = runner(implementEvents, {
       ...fullHarnessExecution,
       profiles: ["read-only"],
@@ -2021,7 +2021,7 @@ describe("Executor.execute", () => {
       setting: "permission-profile",
       level: { _tag: "Operation", workflow: "coding", operation: "implement" },
       scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
-      value: "read-only",
+      value: "full",
     };
 
     return Effect.gen(function* () {
