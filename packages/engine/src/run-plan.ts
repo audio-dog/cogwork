@@ -412,6 +412,14 @@ const engineCandidate = (operation: LifecycleStage, value: unknown) =>
     value: snapshotValue(value),
   });
 
+const harnessCandidate = (harness: HarnessName, value: unknown) =>
+  RunPlanResolutionCandidate.make({
+    scope: "Harness",
+    level: "Declared profiles",
+    source: `Harness ${harness}`,
+    value: snapshotValue(value),
+  });
+
 const winningRows = (winning: OperationSettingRow | readonly OperationSettingRow[] | null) => {
   if (winning === null) return [];
   return "setting" in winning ? [winning] : winning;
@@ -436,10 +444,15 @@ const resolutionTrace = (
   const winner = winners.at(-1);
   const contributors = setting === "bindings" ? winners.map(resolutionCandidate) : [];
   const effective = effectiveSettingValue(resolved, setting);
+  const usesHarnessProfileDefault =
+    setting === "permission-profile" && resolved.profile !== operationDefaultProfile(operation);
+  const defaultCandidate = usesHarnessProfileDefault
+    ? harnessCandidate(resolved.stage.harness, effective)
+    : engineCandidate(operation, effective);
   return RunPlanResolutionTrace.make({
     key: setting,
     operator: operatorForSetting(setting),
-    winner: winner ? resolutionCandidate(winner) : engineCandidate(operation, effective),
+    winner: winner ? resolutionCandidate(winner) : defaultCandidate,
     contributors,
     shadowed: resolution?.shadowed.map(resolutionCandidate) ?? [],
     dropped:

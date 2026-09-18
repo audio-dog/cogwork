@@ -311,6 +311,39 @@ describe("stage settings come from Operation settings", () => {
     assert.strictEqual(resolved?.profile, "full");
   });
 
+  it("attributes a Provider profile fallback to the Harness", () => {
+    const resolved = resolveRunPlanStage(
+      workspace.config,
+      "triage",
+      [stageEnabled, hostHarness],
+      [],
+      ["full"],
+    );
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId: Schema.decodeSync(RunId)("run-provider-profile-default"),
+      workspace,
+      item: { ...item, stage: "triage" },
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Triage #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: [],
+      middleware: [],
+      context,
+      contributions: [],
+      mcpServers: [],
+      provenanceStamps: [],
+    });
+
+    const trace = plan.provenance.resolution.find(({ key }) => key === "permission-profile");
+    assert.strictEqual(trace?.winner?.source, "Harness cursor");
+    assert.strictEqual(trace?.winner?.value, "full");
+  });
+
   it("carries model and effort from Operation settings", () => {
     const resolved = resolveRunPlanStage(bareConfig, "implement", [
       stageEnabled,
