@@ -193,11 +193,12 @@ _Avoid_: Harnesses (as the section's name — only as what it currently lists), 
 its tabs), Source control provider (a different noun in contracts)
 
 **Provider picker**:
-The per-Operation control that selects a Provider and its model. It is Operation-aware: it offers
-only Providers whose declared profiles include that Operation's locked permission profile (ADR
-0025). An unavailable Provider (not installed, not signed in, failed probe) stays visible with its
-state but cannot be newly picked; a saved selection survives unavailability and shows the state. A
-Provider whose readiness is still unknown stays pickable — the picker never waits on a probe.
+The per-Operation control that selects a Provider and its model. It offers every enabled Provider
+for every Operation. Permissions is a select constrained to the chosen Provider's declared
+profiles; the Operation supplies the default when the Provider declares it. An unavailable Provider
+(not installed, not signed in, failed probe) stays visible with its state but cannot be newly picked;
+a saved selection survives unavailability and shows the state. A Provider whose readiness is still
+unknown stays pickable — the picker never waits on a probe.
 _Avoid_: Harness rail (implementation detail), model dropdown, provider switcher
 
 **Traits**:
