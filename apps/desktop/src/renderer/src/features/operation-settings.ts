@@ -7,6 +7,7 @@ import {
   type HarnessOverview,
   harnessEnabled,
   LifecycleStage,
+  type OperationSettingBatch,
   type OperationSettingName,
   type OperationSettingRow,
   type OperationSettingUpdate,
@@ -96,24 +97,31 @@ export interface SettingCell {
   readonly stale: boolean;
 }
 
-type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindings">;
+export type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindings">;
+
+export interface OperationSettingChange {
+  readonly setting: DisplayedOperationSettingName;
+  readonly value: string | null;
+}
+
+export type OperationSettingChanges = readonly [
+  OperationSettingChange,
+  ...ReadonlyArray<OperationSettingChange>,
+];
 
 export const harnessSelectionUpdates = (
   currentHarness: string | null,
   harness: string | null,
   model: string | null,
 ) => {
-  const updates = [
-    { setting: "harness", value: harness, applies: true },
-    { setting: "model", value: model, applies: true },
-    { setting: "effort", value: null, applies: true },
-    { setting: "permission-profile", value: null, applies: currentHarness !== harness },
-  ] satisfies ReadonlyArray<{
-    readonly setting: DisplayedOperationSettingName;
-    readonly value: string | null;
-    readonly applies: boolean;
-  }>;
-  return updates.filter(({ applies }) => applies).map(({ setting, value }) => ({ setting, value }));
+  const profileReset: ReadonlyArray<OperationSettingChange> =
+    currentHarness === harness ? [] : [{ setting: "permission-profile", value: null }];
+  return [
+    { setting: "harness", value: harness },
+    { setting: "model", value: model },
+    { setting: "effort", value: null },
+    ...profileReset,
+  ] satisfies OperationSettingChanges;
 };
 
 const isOverride = (row: OperationSettingRow, operation: LifecycleStage, workspace: WorkspaceId) =>
@@ -275,3 +283,13 @@ export const operationSettingUpdate = (
       : { setting, level, scope, value };
   return { _tag: "Set", row } as OperationSettingUpdate;
 };
+
+export const operationSettingBatch = (
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+  [first, ...rest]: OperationSettingChanges,
+) =>
+  [
+    operationSettingUpdate(workspace, operation, first.setting, first.value),
+    ...rest.map(({ setting, value }) => operationSettingUpdate(workspace, operation, setting, value)),
+  ] satisfies OperationSettingBatch;
