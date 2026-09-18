@@ -1,0 +1,59 @@
+packages/cursor-acp/src/model.test.ts
+  s_0cedf0b08daf94::t_37f681da397743 138-139,156,190,194
+  s_0cedf0b08daf94::t_b53757e43c3d75 2-3,7-12,52-77,79-81,122-124,132-134,136-137,140-150,152-154,181-188,191-192,195
+  s_0cedf0b08daf94::t_2ae7d65489e6a8 5
+  s_0cedf0b08daf94::t_49540ce068c8bd 108-121
+  s_0cedf0b08daf94::t_86c16c4e3b8707 151,157-180
+  s_0cedf0b08daf94::t_3c6f3961b2a71e 82-107
+  s_0cedf0b08daf94::t_34ddc6a680827b 125-127,129-131
+  s_0cedf0b08daf94::t_b1641e2f2d0711 128
+  s_0cedf0b08daf94::t_4220f39779e4f7 135
+  s_0cedf0b08daf94::t_abbfd3a4a5e892 155,189,193
+  s_0cedf0b08daf94::t_bcb7f8ae14fa97 4
+  s_0cedf0b08daf94::t_fa89bf0fa71a67 78,196-198
+  s_0cedf0b08daf94::t_b6fe52cf1726ef 6
+packages/cursor-acp/src/model.ts
+  s_0cedf0b08daf94::t_8b840217e12c25 241,244
+  s_0cedf0b08daf94::t_b3c7a96412527c 290,293
+  s_0cedf0b08daf94::t_70ed164a9fe0c9 350-351,369-370
+  s_0cedf0b08daf94::t_a599a81ebb0cd7 8,12-23,25,28-30,34,60,62,68-69,72-74,77-78,80-84,86,88,92-93,98-104,128,130-131,138,141-142,144-145,154,163,165-176,183,185,187,190-192,199-200,202-203,205-206,212-216,218-223,225,240,255-257,260-274,282-283,288,291-292,297-299,307-313,347-349,376
+  s_0cedf0b08daf94::t_1a0ffd542a83c4 79,89
+  s_0cedf0b08daf94::t_2e23814b339a7d 148,153,207-211,275-276,281,314-317,321-345,352-368,371-374
+  s_0cedf0b08daf94::t_966fe054d29ff8 63-65,67,70-71
+  s_0cedf0b08daf94::t_675a03c0d062af 24,26-27,31-32,85,87,226
+  s_0cedf0b08daf94::t_46a65d62e73ba8 105-116,121-127,129,140,143,201,204,217
+  s_0cedf0b08daf94::t_3d5cae72b4755c 149-152
+  s_0cedf0b08daf94::t_d969df9a592588 155-161,181,189,197
+  s_0cedf0b08daf94::t_e8491d1a3697c6 277-280,302,304-305
+  s_0cedf0b08daf94::t_fc65a5d111d88e 2,7,33,254,259
+  s_0cedf0b08daf94::t_6cdaf7f827e590 318-320
+  s_0cedf0b08daf94::t_92269749ff132e 52,54-59
+  s_0cedf0b08daf94::t_c2e0a9dbeb9b63 242,245-251,258
+  s_0cedf0b08daf94::t_fa89bf0fa71a67 45,53,97,377
+  s_0cedf0b08daf94::t_b5f29b73d842b7 243,252-253,286,295
+  s_0cedf0b08daf94::t_775603f8ea7564 346,375
+  s_0cedf0b08daf94::t_a2683e05e7a4f7 94-96,117-120,134-137,162,164,228-229
+  s_0cedf0b08daf94::t_2a75be3dd6e991 132-133,139,146-147,177-180,182,193-196,198,227,230-235,237-239
+  s_0cedf0b08daf94::t_b66431ca8a7b46 284-285,287,289,294,296,300-301,303,306
+  s_0cedf0b08daf94::t_bfdcba9c69a3ad 1,3-6,35-44,46-51,66
+  s_0cedf0b08daf94::t_560e7a10148d49 90-91,184,186,188,224,236
+packages/cursor-acp/src/index.ts
+  s_0cedf0b08daf94::t_fa89bf0fa71a67 10
+  s_0cedf0b08daf94::t_c72540eb549b08 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "91225c77f0fbd073a77b1ff6672953b34c993c1f",
+  "prompts": {},
+  "sessions": {
+    "s_0cedf0b08daf94": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b581-dafb-76a0-bd90-2a7d2c507e41",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
