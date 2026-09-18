@@ -1922,7 +1922,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([failingRunner(error)])));
   });
 
-  it.effect("settles a silent harness run as a retryable failure after its stage budget", () => {
+  it.effect("settles a silent harness run as a retryable failure after its profile budget", () => {
     const silentRunner: TestRunner = {
       make: () => ({
         ...testRunnerDefaults,
@@ -1937,7 +1937,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
       const execution = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
-      yield* TestClock.adjust(defaultRunBudget("implement"));
+      yield* TestClock.adjust(defaultRunBudget("full"));
       assert.isTrue(yield* Fiber.join(execution));
 
       const ledger = yield* RunLedger.RunLedger;

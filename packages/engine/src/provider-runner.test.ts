@@ -452,15 +452,14 @@ describe("parseModelRef", () => {
 });
 
 describe("defaultLoopBudget", () => {
-  it("gives read-only stages fewer turns than writing stages", () => {
-    assert.isBelow(defaultLoopBudget("triage"), defaultLoopBudget("implement"));
+  it("gives read-only profiles fewer turns than full profiles", () => {
+    assert.isBelow(defaultLoopBudget("read-only"), defaultLoopBudget("full"));
   });
 });
 
 describe("defaultRunBudget", () => {
-  it("gives read-only stages less wall-clock time than writing stages", () => {
-    assert.strictEqual(defaultRunBudget("triage"), "15 minutes");
-    assert.strictEqual(defaultRunBudget("implement"), "2 hours");
-    assert.strictEqual(defaultRunBudget("follow-up"), "2 hours");
+  it("gives read-only profiles less wall-clock time than full profiles", () => {
+    assert.strictEqual(defaultRunBudget("read-only"), "15 minutes");
+    assert.strictEqual(defaultRunBudget("full"), "2 hours");
   });
 });

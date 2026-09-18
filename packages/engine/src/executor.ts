@@ -319,7 +319,7 @@ export const make = Effect.gen(function* () {
     initial: A,
     step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
   ) => {
-    const budget = defaultRunBudget(request.plan.operation);
+    const budget = defaultRunBudget(request.plan.harness.profile);
     return Stream.runFoldEffect(
       withFailureTerminal(harness.run(request)).pipe(Stream.provideContext(harnessRunnerContext)),
       () => initial,
