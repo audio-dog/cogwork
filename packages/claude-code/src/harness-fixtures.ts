@@ -201,7 +201,7 @@ const outputSchema = {
 
 const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => {
   const operation = overrides.operation ?? (overrides.profile === "read-only" ? "triage" : "implement");
-  const profile = overrides.profile ?? OperationPolicy.operationPolicyProfile(operation);
+  const profile = overrides.profile ?? OperationPolicy.operationDefaultProfile(operation);
   const mcp = mcpSelection(overrides.mcp);
   return {
     plan: Schema.decodeSync(RunPlan)({

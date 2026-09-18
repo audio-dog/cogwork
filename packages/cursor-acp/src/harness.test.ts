@@ -88,7 +88,7 @@ const harnessRunnerLayer = Layer.mergeAll(
 );
 
 const request = (checkoutPath: string, operation: LifecycleStage = "triage") => {
-  const profile = OperationPolicy.operationPolicyProfile(operation);
+  const profile = OperationPolicy.operationDefaultProfile(operation);
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-cursor-test",

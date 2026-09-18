@@ -24,7 +24,7 @@ import {
   selectionOfPreflightInput,
   staticCatalogSource,
 } from "./harness";
-import { operationPolicyProfile } from "./operation-policy";
+import { operationDefaultProfile } from "./operation-policy";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
@@ -78,7 +78,7 @@ export interface ProviderRunnerOptions {
   readonly runChat?: RunChat;
 }
 
-const usesReadOnlyProfile = (stage: LifecycleStage) => operationPolicyProfile(stage) === "read-only";
+const usesReadOnlyProfile = (stage: LifecycleStage) => operationDefaultProfile(stage) === "read-only";
 const readOnlyLoopBudget = 12;
 const writingLoopBudget = 40;
 const readOnlyRunBudget = "15 minutes";
