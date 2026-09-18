@@ -272,6 +272,7 @@ export interface HarnessService {
   readonly catalog: (
     harness: HarnessName,
   ) => Effect.Effect<HarnessOptionCatalog, HarnessError, HarnessRunnerEnv>;
+  readonly currentCatalog: (harness: HarnessName) => Effect.Effect<HarnessOptionCatalog | null>;
   readonly preflight: (
     harness: HarnessName,
     profile: OperationPolicyProfile,
@@ -497,6 +498,8 @@ const dispatch = (runner: HarnessRunner, request: HarnessRequest) =>
 
 export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
   const registry = new Map(runners.map((runner) => [runner.name, runner] as const));
+  const catalogs = new Map<HarnessName, HarnessOptionCatalog>();
+  const catalogGenerations = new Map<HarnessName, number>();
   const preflight = Effect.fn("Harness.preflight")(function* (
     harness: HarnessName,
     profile: OperationPolicyProfile,
@@ -512,12 +515,31 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
   });
   const catalog = Effect.fn("Harness.catalog")(function* (harness: HarnessName) {
     const runner = yield* runnerFor(registry, harness);
-    const resolved = yield* resolveCatalog(runner);
-    return {
+    const generation = yield* Effect.sync(() => {
+      const next = (catalogGenerations.get(harness) ?? 0) + 1;
+      catalogGenerations.set(harness, next);
+      return next;
+    });
+    const isLatestGeneration = () => catalogGenerations.get(harness) === generation;
+    const resolved = yield* resolveCatalog(runner).pipe(
+      Effect.onExit((exit) => {
+        const latestProbeFailed = Exit.isFailure(exit) && isLatestGeneration();
+        if (!latestProbeFailed) return Effect.void;
+        return Effect.sync(() => catalogs.delete(harness));
+      }),
+    );
+    const current = {
       ...resolved,
       policyProfiles: runner.execution.profiles,
     };
+    yield* Effect.sync(() => {
+      if (isLatestGeneration()) catalogs.set(harness, current);
+    });
+    return current;
   });
+  const currentCatalog = Effect.fn("Harness.currentCatalog")((harness: HarnessName) =>
+    Effect.sync(() => catalogs.get(harness) ?? null),
+  );
   const readiness = Effect.fn("Harness.readiness")(function* (harness: HarnessName) {
     return yield* (yield* runnerFor(registry, harness)).readiness();
   });
@@ -525,6 +547,7 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
     names: runners.map((runner) => runner.name),
     signIn: (harness) => registry.get(harness)?.signIn ?? null,
     catalog,
+    currentCatalog,
     preflight,
     run: (request) =>
       Stream.fromEffect(preflightRunner(registry, HarnessPreflightInput.Launch({ request }))).pipe(
