@@ -185,6 +185,8 @@ export const windowsInheritedEnvironment = Object.freeze([
   "HOMEPATH",
   "APPDATA",
   "SYSTEMROOT",
+  "PATHEXT",
+  "COMSPEC",
 ]);
 
 export const externalHarnessDeclaration = Object.freeze({

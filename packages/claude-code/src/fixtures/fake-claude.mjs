@@ -94,6 +94,8 @@ const capture = {
     HOMEPATH: process.env.HOMEPATH ?? null,
     APPDATA: process.env.APPDATA ?? null,
     SYSTEMROOT: process.env.SYSTEMROOT ?? null,
+    PATHEXT: process.env.PATHEXT ?? null,
+    COMSPEC: process.env.COMSPEC ?? null,
   },
 };
 const sessionId = capture.resume ?? "fake-claude-session-1";

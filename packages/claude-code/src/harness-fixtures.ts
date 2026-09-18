@@ -91,6 +91,8 @@ const inheritedEnvironment = {
   HOMEPATH: environmentValue("HOMEPATH"),
   APPDATA: environmentValue("APPDATA"),
   SYSTEMROOT: environmentValue("SYSTEMROOT"),
+  PATHEXT: environmentValue("PATHEXT"),
+  COMSPEC: environmentValue("COMSPEC"),
 };
 
 const windowsEnvironmentProbe = {
@@ -99,6 +101,8 @@ const windowsEnvironmentProbe = {
   HOMEPATH: "\\Users\\cogwork",
   APPDATA: "C:\\Users\\cogwork\\AppData\\Roaming",
   SYSTEMROOT: "C:\\Windows",
+  PATHEXT: ".COM;.EXE;.BAT;.CMD",
+  COMSPEC: "C:\\Windows\\System32\\cmd.exe",
 };
 
 const persistence = memoryPersistence();
@@ -349,6 +353,8 @@ const Capture = Schema.Struct({
     HOMEPATH: Schema.NullOr(Schema.String),
     APPDATA: Schema.NullOr(Schema.String),
     SYSTEMROOT: Schema.NullOr(Schema.String),
+    PATHEXT: Schema.NullOr(Schema.String),
+    COMSPEC: Schema.NullOr(Schema.String),
   }),
 });
 
