@@ -1,0 +1,26 @@
+CODING_STANDARDS.md
+  s_d5ed8d0e563f08::t_18b09b29eef13c 37-44
+package.json
+  s_d5ed8d0e563f08::t_dbf05372487a9b 25
+  s_d5ed8d0e563f08::t_371f43c5b04bd1 12
+.pre-commit-config.yaml
+  s_d5ed8d0e563f08::t_7324a08e3c4395 1-10
+pnpm-lock.yaml
+  s_d5ed8d0e563f08::t_164a30c4a2a345 111-113,1577-1639,6575-6613
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "306ad0d43e01f3a8e0b0a553880e644d23e35344",
+  "prompts": {},
+  "sessions": {
+    "s_d5ed8d0e563f08": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "06c09021-6436-49e9-b968-8817c0dbead5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
