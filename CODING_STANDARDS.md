@@ -34,6 +34,14 @@ Other documents hold the other rules:
 - `configs/lint/jsx.grit` shows the correct form. It gives the reason for its rule, and the command
   that makes its tables again after an upgrade.
 
+## Commit messages
+
+- Write the subject as a [Conventional Commit](https://www.conventionalcommits.org/en/v1.0.0/):
+  `type(scope): summary`. The scope is optional. Add `!` before the colon for a breaking change.
+- `pnpm install` installs a `commit-msg` hook that rejects a subject in another form. The hook reads
+  `.pre-commit-config.yaml` and runs in the main checkout and in each linked worktree.
+- Put the reason for the change in the body, under a blank line.
+
 ## Control flow
 
 - Return early from a function. Use a guard clause at the start, not an `else` block at the end.
