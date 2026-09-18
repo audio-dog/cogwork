@@ -80,13 +80,6 @@ const interruptedRun: RunRecord = {
 
 const interrupted: RunRecord = { ...interruptedRun, status: "interrupted", endedAtMillis: 2 };
 
-const heldRun: RunRecord = {
-  ...interruptedRun,
-  status: "failed",
-  endedAtMillis: 2,
-  claimDisposition: "hold",
-};
-
 const crashedRun = (idStr: string, startedAtMillis: number, status: RunRecord["status"]): RunRecord => ({
   ...interruptedRun,
   id: Schema.decodeSync(RunId)(idStr),
@@ -420,21 +413,6 @@ const recoveryLayerWithAttemptFailure = (options: RecoveryOptions, failure: Issu
   makeRecoveryLayer(options, (probe) => attemptFailureIssueTracker(probe, failure));
 
 describe("Recovery.recover", () => {
-  it.effect("recovers a legacy claim held by a declined pull request gate", () =>
-    Effect.gen(function* () {
-      const probe = yield* RecoveryProbe;
-      const recovery = yield* Recovery.Recovery;
-      yield* probe.ledger.insertRun(heldRun);
-      yield* recovery.recover();
-      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
-      assert.deepStrictEqual(
-        (yield* Ref.get(probe.attempts)).map(({ outcome }) => outcome.stage),
-        ["implement"],
-      );
-      assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
-    }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs] }))),
-  );
-
   it.effect("routes an interrupted implement claim through the current follow-up stage", () =>
     Effect.gen(function* () {
       const probe = yield* RecoveryProbe;
@@ -499,7 +477,7 @@ describe("Recovery.recover", () => {
     ),
   );
 
-  it.effect("ignores a held terminal run that predates the current claim", () =>
+  it.effect("ignores a terminal run that predates the current claim", () =>
     Effect.gen(function* () {
       const probe = yield* RecoveryProbe;
       const recovery = yield* Recovery.Recovery;
@@ -507,7 +485,6 @@ describe("Recovery.recover", () => {
         ...interrupted,
         stage: "follow-up",
         status: "failed",
-        claimDisposition: "hold",
       });
       yield* recovery.recover();
       assert.deepStrictEqual(
@@ -990,19 +967,6 @@ describe("Recovery.recoverWhenLive", () => {
         (yield* probe.ledger.listRuns(10)).map((run) => run.id),
         [prior.id],
       );
-    }).pipe(Effect.provide(recoveryLayer({ observed: [] }))),
-  );
-
-  it.effect("releases a newly observed legacy claim held by a declined pull request gate", () =>
-    Effect.gen(function* () {
-      const probe = yield* RecoveryProbe;
-      const recovery = yield* Recovery.Recovery;
-      yield* Ref.set(probe.snapshot, snapshotOf([]));
-      yield* probe.ledger.insertRun(heldRun);
-      yield* recovery.recoverWhenLive();
-      yield* Ref.set(probe.snapshot, { ...snapshotOf([claimedByUs]), generation: 2 });
-      yield* recovery.recoverWhenLive();
-      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
     }).pipe(Effect.provide(recoveryLayer({ observed: [] }))),
   );
 
