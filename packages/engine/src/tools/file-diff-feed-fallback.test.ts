@@ -510,7 +510,7 @@ describe("file diff fallback", { timeout: 30_000 }, () => {
         },
       };
 
-      const events = yield* awaitTestEffect(
+      const events = yield* settleWhileAdvancingClock(
         watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.take(2), Stream.runCollect),
       );
 
