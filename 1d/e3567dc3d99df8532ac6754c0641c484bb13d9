@@ -1,0 +1,43 @@
+packages/contracts/src/settings.ts
+  s_61f5c7d71d15d1::t_d1d86c58bb36c1 77-84
+  s_61f5c7d71d15d1::t_c151a14bf0d32c 71
+packages/claude-code/src/harness-fixtures.ts
+  s_61f5c7d71d15d1::t_d1d86c58bb36c1 204
+packages/engine/src/operation-policy.ts
+  s_61f5c7d71d15d1::t_c151a14bf0d32c 2,6,14,46,50-63
+  s_611559839ce469::t_bc422f8804158e 64-65
+packages/engine/src/provider-runner.ts
+  s_61f5c7d71d15d1::t_c151a14bf0d32c 27,81
+packages/cursor-acp/src/harness.test.ts
+  s_61f5c7d71d15d1::t_c151a14bf0d32c 91
+packages/engine/src/tools/policy.ts
+  s_61f5c7d71d15d1::t_c151a14bf0d32c 8,51
+packages/claude-code/src/harness-host.test.ts
+  s_61f5c7d71d15d1::t_d1d86c58bb36c1 162
+packages/codex-cli/src/harness-fixtures.ts
+  s_61f5c7d71d15d1::t_d1d86c58bb36c1 99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1de3567dc3d99df8532ac6754c0641c484bb13d9",
+  "prompts": {},
+  "sessions": {
+    "s_611559839ce469": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b50e-72ed-77a2-b069-86b1ad57c492",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_61f5c7d71d15d1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b140-40b9-70d0-b17a-7fe482e0774a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
