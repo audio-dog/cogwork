@@ -79,6 +79,7 @@ export type HarnessOptionCatalog = ContractHarnessOptionCatalog;
 
 export interface HarnessCatalogSource {
   readonly catalog: Effect.Effect<HarnessCatalogSourceResult | null, HarnessError, HarnessRunnerEnv>;
+  readonly seed?: HarnessCatalogSourceResult;
 }
 
 export interface HarnessCatalogSources {
@@ -169,10 +170,10 @@ const applyPreflightTable = <
   ...arguments_: Arguments
 ) => (table[input._tag] as HarnessPreflightTable<Value, Arguments>[Tag])(input, ...arguments_);
 
-export const staticCatalogSource = (
-  options: HarnessCatalogOptions,
-  provenance: HarnessCatalogProvenance,
-) => ({ catalog: Effect.succeed({ ...options, provenance }) });
+export const staticCatalogSource = (options: HarnessCatalogOptions, provenance: HarnessCatalogProvenance) => {
+  const seed = { ...options, provenance };
+  return { catalog: Effect.succeed(seed), seed };
+};
 
 const selectionByPreflightTag = {
   Static: ({ selection }) => selection,
@@ -306,8 +307,20 @@ const unavailableCatalog = (harness: HarnessName) =>
     message: `no option catalog is available for harness runner ${harness}`,
   });
 
-const hasCatalogOptions = (options: HarnessCatalogOptions | null): options is HarnessCatalogOptions =>
-  options !== null && options.models.length > 0;
+const hasCatalogOptions = (
+  options: HarnessCatalogSourceResult | null | undefined,
+): options is HarnessCatalogSourceResult =>
+  options !== null && options !== undefined && options.models.length > 0;
+
+const seededCatalog = (runner: HarnessRunner) =>
+  [runner.catalogSources.runtime, runner.catalogSources.native, runner.catalogSources.fallback]
+    .map((source) => source?.seed)
+    .find(hasCatalogOptions) ?? null;
+
+const optionCatalog = (runner: HarnessRunner, catalog: HarnessCatalogSourceResult) => ({
+  ...catalog,
+  policyProfiles: runner.execution.profiles,
+});
 
 const catalogFrom = Effect.fn("Harness.catalogFrom")(function* (source: HarnessCatalogSource | undefined) {
   if (!source) return null;
@@ -498,7 +511,12 @@ const dispatch = (runner: HarnessRunner, request: HarnessRequest) =>
 
 export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
   const registry = new Map(runners.map((runner) => [runner.name, runner] as const));
-  const catalogs = new Map<HarnessName, HarnessOptionCatalog>();
+  const catalogs = new Map<HarnessName, HarnessOptionCatalog>(
+    runners.flatMap((runner) => {
+      const catalog = seededCatalog(runner);
+      return catalog ? [[runner.name, optionCatalog(runner, catalog)] as const] : [];
+    }),
+  );
   const catalogGenerations = new Map<HarnessName, number>();
   const preflight = Effect.fn("Harness.preflight")(function* (
     harness: HarnessName,
@@ -528,10 +546,7 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
         return Effect.sync(() => catalogs.delete(harness));
       }),
     );
-    const current = {
-      ...resolved,
-      policyProfiles: runner.execution.profiles,
-    };
+    const current = optionCatalog(runner, resolved);
     yield* Effect.sync(() => {
       if (isLatestGeneration()) catalogs.set(harness, current);
     });

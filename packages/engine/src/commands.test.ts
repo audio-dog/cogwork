@@ -1246,7 +1246,6 @@ describe("SetOperationSetting", () => {
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
       const returned = yield* client.SetOperationSetting({ updates: [modelUpdate, effortUpdate] });
       const events = yield* Stream.fromSubscription(subscription).pipe(
         Stream.takeUntil(DaemonEvent.guards.WorkspaceChanged),
