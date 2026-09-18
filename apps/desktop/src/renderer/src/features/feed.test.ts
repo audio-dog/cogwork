@@ -46,7 +46,6 @@ describe("recentlyDone", () => {
         session: null,
         usage: null,
         status: "declined",
-        claimDisposition: "release",
         startedAtMillis: 1,
         endedAtMillis: 2,
         eventCount: 0,

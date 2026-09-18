@@ -32,7 +32,6 @@ export interface RunUpdate {
   readonly status: RunSummary["status"];
   readonly usage: TokenUsage | null;
   readonly endedAtMillis: number;
-  readonly claimDisposition?: RunRecord["claimDisposition"];
 }
 
 export const acceptRunOperation = "accept Run";
