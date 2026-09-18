@@ -33,9 +33,9 @@ _Avoid_: Work source adapter (unrelated), harness runner
 Cursor has no native structured-output contract in ACP. The shared runtime supplies the operation schema through prompt-and-parse, so Cursor declares lower structured-output reliability than native adapters.
 _Avoid_: Native structured output, guaranteed JSON mode
 
-**Unsupported policy posture**:
-Cursor ACP runs with explicit headless permissions and a fail-closed permission mode. ACP cannot prove worktree confinement or either Operation profile because Cursor decides which native actions request permission. The runner therefore rejects every current local-process Run before native launch. A future isolated Sandbox provider can supply confinement independently, but Cursor still needs an enforceable profile before it can run.
-_Avoid_: Permission prompt, bypassPermissions, silent downgrade
+**Declared policy posture**:
+Cursor declares exactly one Operation profile: Full (ADR 0025). ACP cannot prove worktree confinement or read-only enforcement because Cursor decides which native actions request permission, so no Read only claim is made; the Full declaration trusts Cursor's own permission mode the way ADR 0023 trusts Codex's ambient hooks. Triage, locked to Read only, can never select Cursor. An enforceable ACP permission mapping or an isolated Sandbox provider can add the Read only profile later.
+_Avoid_: Permission prompt, bypassPermissions, silent downgrade, read-only claim, refuse-everything posture (reversed by ADR 0025)
 
 **Runtime Host process**:
 The local-process provider sets the checkout working directory and scrubs environment variables. It is a trusted Runtime Host boundary, not a container, Sandbox, or worktree-confinement mechanism.

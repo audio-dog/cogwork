@@ -29,7 +29,6 @@
     "proper-lockfile": "4.1.2"
   },
   "devDependencies": {
-    "@catenarycloud/linteffect": "^0.0.7",
     "@cogwork/test-config": "workspace:*",
     "@effect/platform-node": "catalog:effect",
     "@effect/vitest": "catalog:effect",

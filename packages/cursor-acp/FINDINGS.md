@@ -28,7 +28,7 @@ Launch command the adapter builds: `agent --model <model> acp` (stdio JSON-RPC).
 
 ## Q1 — Session resume across two runs (`session/load` via `modelOptions.sessionId`): **YES**
 
-`run.ts` drove two *separate* `agent acp` processes (each a fresh `chat()` under
+The retired adapter probe drove two *separate* `agent acp` processes (each a fresh `chat()` under
 `localProcessSandbox`). Run 1 emitted `cursor.session-id = 927cfff4…` and planted a
 codeword; Run 2 passed `modelOptions: { sessionId: "927cfff4…" }`, re-emitted the
 **same** id, and correctly recalled the planted context. Cross-process resume works.
@@ -201,17 +201,10 @@ Things that cost time here and will bite again — the seam-level knowledge wort
    `attachCommand` handoff must account for this.
 8. **No `usage` on the ACP prompt response** — don't build anything that reads
    `RunResult.usage` / `usage.inputTokens` from the harness; it will always be undefined.
-9. **Run TS directly** with `node --env-file=.env --experimental-strip-types <file>.ts`
-   (Node 24 native type-stripping, no build step) — matches the daemon's node-native approach.
+9. **The probes ran directly under Node 24's native type stripping.** They needed no build step,
+   matching the daemon's node-native approach.
 
-## Reproduce
+## Archived evidence
 
-```bash
-pnpm install                            # from the repo root — spike is a workspace package
-cd packages/cursor-acp
-echo 'CURSOR_API_KEY=…' > .env          # optionally SPIKE_MODEL=…
-pnpm run                                # run.ts — two-invocation resume + AG-UI stream (Q1, Q2)
-pnpm probe                              # probe-acp.ts — raw ACP ground truth (Q1/Q2/Q3)
-SPIKE_MODE=plan SPIKE_PROMPT="Create a detailed multi-step plan…" pnpm probe   # triggers cursor/create_plan (Q3)
-SPIKE_EXT=hang SPIKE_MODE=plan pnpm probe                                       # never-answer → hang demo (Q3)
-```
+The spike scripts were retired after the adapter shipped. This document preserves their findings,
+but the original experiments are no longer runnable from this package.

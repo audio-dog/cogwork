@@ -380,6 +380,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../test
+      '@effect/vitest':
+        specifier: catalog:effect
+        version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -498,9 +501,6 @@ importers:
         specifier: catalog:effect
         version: 4.0.0-rc.112
     devDependencies:
-      '@catenarycloud/linteffect':
-        specifier: ^0.0.7
-        version: 0.0.7
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
@@ -611,9 +611,6 @@ importers:
         specifier: 4.1.2
         version: 4.1.2
     devDependencies:
-      '@catenarycloud/linteffect':
-        specifier: ^0.0.7
-        version: 0.0.7
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
@@ -1019,10 +1016,6 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
-
-  '@catenarycloud/linteffect@0.0.7':
-    resolution: {integrity: sha512-V5qMbu8zMb2aRgwTwbqSLNBiyAb1ZwUfkX3VltBfqJUzA+MTD9SJqLd2rLViJwQkfmom8pZV3xhEWqi7yNORQQ==}
-    hasBin: true
 
   '@dnd-kit/accessibility@3.1.1':
     resolution: {integrity: sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw==}
@@ -6058,10 +6051,6 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.5.11':
     optional: true
-
-  '@catenarycloud/linteffect@0.0.7':
-    dependencies:
-      '@biomejs/biome': 2.5.11
 
   '@dnd-kit/accessibility@3.1.1(react@19.2.8)':
     dependencies:

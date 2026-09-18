@@ -208,16 +208,6 @@ function ConfigurationProvider({
   return <ConfigurationContext value={value}>{children}</ConfigurationContext>;
 }
 
-export function StaticConfigurationProvider({
-  picture,
-  children,
-}: {
-  picture: ConfigurationPicture;
-  children: ReactNode;
-}) {
-  return <ConfigurationProvider picture={picture}>{children}</ConfigurationProvider>;
-}
-
 export function DaemonConfigurationProvider({ children }: { children: ReactNode }) {
   const boardResult = useBoard();
   const pluginQuery = useAtomValue(pluginsAtom);
@@ -272,5 +262,4 @@ export function DaemonConfigurationProvider({ children }: { children: ReactNode 
 
 export const Configuration = {
   Provider: ConfigurationProvider,
-  StaticProvider: StaticConfigurationProvider,
 };

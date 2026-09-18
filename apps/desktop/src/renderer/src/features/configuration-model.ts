@@ -21,10 +21,6 @@ export function scopeKey(scope: ScopeRef): string {
   return scope.workspaceId ? `${scope.kind}:${scope.workspaceId}` : scope.kind;
 }
 
-export function sameScope(a: ScopeRef, b: ScopeRef): boolean {
-  return a.kind === b.kind && a.workspaceId === b.workspaceId;
-}
-
 export const contributionKinds = ["mcp-server", "skill", "subagent", "rules", "command", "hook"] as const;
 
 export type ContributionKind = (typeof contributionKinds)[number];
@@ -118,8 +114,6 @@ export interface EnablementRow {
   readonly source: string;
   readonly diagnostic?: Diagnostic;
 }
-
-export type DraftCell = "on" | "off" | "unset";
 
 export type LoadState = Data.TaggedEnum<{
   loaded: EmptyVariant;
