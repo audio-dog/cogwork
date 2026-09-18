@@ -305,6 +305,12 @@ describe("stage settings come from Operation settings", () => {
     assert.strictEqual(resolved?.stage.harness, "cursor");
   });
 
+  it("uses a Harness profile when it does not declare the Operation default", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "triage", [stageEnabled, hostHarness], [], ["full"]);
+
+    assert.strictEqual(resolved?.profile, "full");
+  });
+
   it("carries model and effort from Operation settings", () => {
     const resolved = resolveRunPlanStage(bareConfig, "implement", [
       stageEnabled,
@@ -816,7 +822,7 @@ describe("Run Plan assembly", () => {
       },
     );
     assert.strictEqual(plan.harness.model, "private-model");
-    assert.strictEqual(plan.harness.profile, "full");
+    assert.strictEqual(plan.harness.profile, "read-only");
     assert.deepStrictEqual(
       plan.provenance.resolution.slice(0, operationSettingNames.length).map((entry) => entry.key),
       [...operationSettingNames],
@@ -824,15 +830,12 @@ describe("Run Plan assembly", () => {
     const modelTrace = plan.provenance.resolution.find((entry) => entry.key === "model");
     assert.strictEqual(modelTrace?.winner?.source, "Private workspace overlay workspace");
     const permissionTrace = plan.provenance.resolution.find((entry) => entry.key === "permission-profile");
-    assert.strictEqual(permissionTrace?.winner?.source, "implement Operation Definition");
-    assert.deepStrictEqual(permissionTrace?.shadowed, []);
+    assert.strictEqual(permissionTrace?.winner?.source, "Private workspace overlay workspace");
     assert.deepStrictEqual(
-      permissionTrace?.dropped.map(({ candidate, reason }) => ({ value: candidate.value, reason })),
-      [
-        { value: "read-only", reason: "Operation Definition locks this setting" },
-        { value: "full", reason: "Operation Definition locks this setting" },
-      ],
+      permissionTrace?.shadowed.map((candidate) => candidate.value),
+      ["full"],
     );
+    assert.deepStrictEqual(permissionTrace?.dropped, []);
     assert.deepStrictEqual(
       modelTrace?.shadowed.map((candidate) => candidate.value),
       ["profile-model", "default-model"],
