@@ -385,16 +385,11 @@ const selectionChangesForUpdate = (update: OperationSettingUpdate) => {
 
 const validateSelectionContext = Effect.fn("Daemon.validateSelectionContext")(function* (
   harness: HarnessService,
-  previousRows: ControlStorePicture["operationSettings"],
   rows: ControlStorePicture["operationSettings"],
   change: OperationSelectionChange,
 ) {
-  const previousValue = resolveOperationSetting(previousRows, change.setting, change);
+  if (change.requestedValue === null) return;
   const effectiveValue = resolveOperationSetting(rows, change.setting, change);
-  const unchangedClear = change.requestedValue === null && effectiveValue === previousValue;
-  const emptyClear = change.requestedValue === null && effectiveValue === null;
-  const validationUnneeded = unchangedClear || emptyClear;
-  if (validationUnneeded) return;
   const selectedValue = effectiveValue;
   if (typeof selectedValue !== "string") return;
   const selectedHarness =
@@ -436,7 +431,7 @@ const validateOperationSettingBatch = Effect.fn("Daemon.validateOperationSetting
   const rows = applyOperationSettingBatch(picture.operationSettings, updates);
   yield* Effect.forEach(
     updates.flatMap(selectionChangesForUpdate),
-    (change) => validateSelectionContext(harness, picture.operationSettings, rows, change),
+    (change) => validateSelectionContext(harness, rows, change),
     { discard: true },
   );
 });

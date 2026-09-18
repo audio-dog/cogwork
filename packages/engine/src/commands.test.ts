@@ -1200,22 +1200,22 @@ describe("SetOperationSetting", () => {
       ],
     },
   });
-  const shadowedStaleModelStore = controlStoreStub({
+  const staleInheritedEffortStore = controlStoreStub({
     seed: {
       ...cursorSelected,
       operationSettings: [
         ...cursorSelected.operationSettings,
         {
-          setting: "model",
+          setting: "effort",
           level: { _tag: "Default" },
           scope: { _tag: "SettingsProfile" },
-          value: "retired-model",
+          value: "retired-effort",
         },
         {
-          setting: "model",
+          setting: "effort",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "SettingsProfile" },
-          value: "test",
+          value: "old-effort",
         },
       ],
     },
@@ -1480,31 +1480,56 @@ describe("SetOperationSetting", () => {
     }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), staleEffortStore)), Effect.scoped),
   );
 
-  it.effect("refuses a clear that would expose a catalog-absent inherited value", () =>
+  it.effect("persists a Harness pick when its clear exposes a stale inherited value", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
-      const failure = yield* Effect.flip(
-        client.SetOperationSetting({
-          updates: [
-            {
-              _tag: "Clear",
-              cell: {
-                setting: "model",
-                level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-                scope: { _tag: "SettingsProfile" },
-              },
+      const returned = yield* client.SetOperationSetting({
+        updates: [
+          {
+            _tag: "Set",
+            row: {
+              setting: "harness",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+              value: "codex",
             },
-          ],
-        }),
-      );
+          },
+          {
+            _tag: "Set",
+            row: {
+              setting: "model",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+              value: "codex-model",
+            },
+          },
+          {
+            _tag: "Clear",
+            cell: {
+              setting: "effort",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+            },
+          },
+        ],
+      });
 
-      assert.strictEqual(failure._tag, "OperationSettingRefused");
-      if (failure._tag !== "OperationSettingRefused") {
-        return assert.fail("expected Operation setting refusal");
-      }
-      assert.include(failure.reason, "does not offer model retired-model");
-    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), shadowedStaleModelStore)), Effect.scoped),
+      assert.deepStrictEqual(
+        returned.operationSettings.map(({ setting, value }) => ({ setting, value })),
+        [
+          { setting: "harness", value: "codex" },
+          { setting: "model", value: "codex-model" },
+        ],
+      );
+    }).pipe(
+      Effect.provide(
+        daemonLayerWithHarness(trackerLayer({}), staleInheritedEffortStore, [
+          commandHarnessRunner,
+          alternateHarnessRunner,
+        ]),
+      ),
+      Effect.scoped,
+    ),
   );
 
   it.effect("refuses an explicit Set of an unchanged stale selection", () =>
