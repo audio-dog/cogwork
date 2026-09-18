@@ -39,6 +39,7 @@ const inheritedEnvironment = [
   ...ExternalHarnessRuntime.nodeNetworkInheritedEnvironment,
   "CURSOR_CONFIG_DIR",
   "NODE_USE_ENV_PROXY",
+  "NO_PROXY",
 ];
 
 const cursorVersionCompatible = (version: string) => {

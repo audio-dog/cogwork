@@ -60,6 +60,7 @@ const decodeObservation = Schema.decodeUnknownSync(
       networkEnvironment: Schema.Struct({
         HTTP_PROXY: Schema.NullOr(Schema.String),
         HTTPS_PROXY: Schema.NullOr(Schema.String),
+        NO_PROXY: Schema.NullOr(Schema.String),
         NODE_USE_ENV_PROXY: Schema.NullOr(Schema.String),
         NODE_EXTRA_CA_CERTS: Schema.NullOr(Schema.String),
       }),
@@ -83,6 +84,7 @@ const cursorEnvironmentProbe = {
   COMSPEC: "C:\\Windows\\System32\\cmd.exe",
   HTTP_PROXY: "http://proxy.example.test:8080",
   HTTPS_PROXY: "https://proxy.example.test:8443",
+  NO_PROXY: "localhost,127.0.0.1,.example.test",
   NODE_USE_ENV_PROXY: "1",
   NODE_EXTRA_CA_CERTS: "/tmp/cogwork-enterprise-ca.pem",
 };
@@ -100,6 +102,7 @@ const cursorWindowsEnvironmentProbe = {
 const cursorNetworkEnvironmentProbe = {
   HTTP_PROXY: cursorEnvironmentProbe.HTTP_PROXY,
   HTTPS_PROXY: cursorEnvironmentProbe.HTTPS_PROXY,
+  NO_PROXY: cursorEnvironmentProbe.NO_PROXY,
   NODE_USE_ENV_PROXY: cursorEnvironmentProbe.NODE_USE_ENV_PROXY,
   NODE_EXTRA_CA_CERTS: cursorEnvironmentProbe.NODE_EXTRA_CA_CERTS,
 };

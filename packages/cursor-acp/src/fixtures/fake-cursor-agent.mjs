@@ -43,6 +43,7 @@ const responseContent = async (sessionParams) => {
     networkEnvironment: {
       HTTP_PROXY: process.env.HTTP_PROXY ?? null,
       HTTPS_PROXY: process.env.HTTPS_PROXY ?? null,
+      NO_PROXY: process.env.NO_PROXY ?? null,
       NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY ?? null,
       NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS ?? null,
     },
