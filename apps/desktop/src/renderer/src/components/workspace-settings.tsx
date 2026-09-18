@@ -281,8 +281,7 @@ function LoadedOperationSettings({
         state: { catalogs, controlStore, workspace },
         actions: {
           write: (setting, operation, value) => {
-            const writer = writers[setting as (typeof writableSettings)[number]];
-            if (!writer) return;
+            const writer = writers[setting];
             writer[1]({
               payload: { update: operationSettingUpdate(workspace, operation, setting, value) },
             });

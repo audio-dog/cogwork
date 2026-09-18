@@ -17,7 +17,9 @@ import {
   catalogChoiceMatches,
   harnessCatalogLoad,
   harnessIsDisabled,
+  harnessSelectionUpdates,
   operationSettingUpdate,
+  policyProfileChoices,
   selectableHarnessCatalogs,
   settingCell,
   unavailableHarnessLabel,
@@ -88,6 +90,25 @@ describe("catalog choices", () => {
   });
 });
 
+describe("harnessSelectionUpdates", () => {
+  it("clears settings constrained by a newly selected Harness", () => {
+    expect(harnessSelectionUpdates("codex", "cursor", "cursor-auto")).toEqual([
+      { setting: "harness", value: "cursor" },
+      { setting: "model", value: "cursor-auto" },
+      { setting: "effort", value: null },
+      { setting: "permission-profile", value: null },
+    ]);
+  });
+
+  it("keeps Permissions when only the model changes", () => {
+    expect(harnessSelectionUpdates("codex", "codex", "gpt-5.6-sol")).toEqual([
+      { setting: "harness", value: "codex" },
+      { setting: "model", value: "gpt-5.6-sol" },
+      { setting: "effort", value: null },
+    ]);
+  });
+});
+
 describe("harnessCatalogLoad", () => {
   it("does not represent a pending or failed query as an empty catalog", () => {
     expect(harnessCatalogLoad(null, false)).toEqual({ status: "loading" });
@@ -116,6 +137,21 @@ describe("selectableHarnessCatalogs", () => {
     };
 
     expect(selectableHarnessCatalogs(controlStore, catalogs)).toEqual([]);
+  });
+
+  it("offers every enabled Harness for every Operation", () => {
+    const operationCatalogs = availableHarnessCatalogs(
+      HarnessOverview.make({
+        harnesses: [
+          harnessItem("codex", optionCatalog(["read-only", "full"])),
+          harnessItem("cursor", optionCatalog(["full"])),
+          harnessItem("reader", optionCatalog(["read-only"])),
+        ],
+        checkedAtMillis: 1,
+      }),
+    );
+
+    expect(selectableHarnessCatalogs(defaultControlStore, operationCatalogs)).toEqual(operationCatalogs);
   });
 
   it("identifies a disabled Harness without a published catalog", () => {
@@ -197,6 +233,61 @@ describe("settingCell", () => {
     ]);
     expect(settingCell(controlStore, catalogs, workspace, "triage", "model").stale).toBe(true);
     expect(settingCell(controlStore, catalogs, workspace, "implement", "model").stale).toBe(false);
+  });
+
+  it("uses the Operation default when the selected Harness declares it", () => {
+    const controlStore = store([profileDefault("harness", "codex")]);
+
+    expect(settingCell(controlStore, catalogs, workspace, "triage", "permission-profile")).toMatchObject({
+      inherited: "read-only",
+      effective: "read-only",
+      stale: false,
+    });
+    expect(settingCell(controlStore, catalogs, workspace, "implement", "permission-profile")).toMatchObject({
+      inherited: "full",
+      effective: "full",
+      stale: false,
+    });
+  });
+
+  it("uses the selected Harness profile when it does not declare the Operation default", () => {
+    const cursorCatalogs = availableHarnessCatalogs(
+      HarnessOverview.make({
+        harnesses: [harnessItem("cursor", optionCatalog(["full"]))],
+        checkedAtMillis: 1,
+      }),
+    );
+    const controlStore = store([profileDefault("harness", "cursor")]);
+
+    expect(
+      settingCell(controlStore, cursorCatalogs, workspace, "triage", "permission-profile"),
+    ).toMatchObject({ inherited: "full", effective: "full", stale: false });
+  });
+
+  it("marks a saved profile the selected Harness does not declare stale", () => {
+    const cursorCatalogs = availableHarnessCatalogs(
+      HarnessOverview.make({
+        harnesses: [harnessItem("cursor", optionCatalog(["full"]))],
+        checkedAtMillis: 1,
+      }),
+    );
+    const controlStore = store([
+      profileDefault("harness", "cursor"),
+      overlayOperation("permission-profile", "triage", "read-only"),
+    ]);
+
+    expect(
+      settingCell(controlStore, cursorCatalogs, workspace, "triage", "permission-profile"),
+    ).toMatchObject({ own: "read-only", effective: "read-only", stale: true });
+  });
+});
+
+describe("policyProfileChoices", () => {
+  it("offers exactly the selected Harness profiles", () => {
+    expect(policyProfileChoices(catalogs[0] ?? null)).toEqual([
+      { value: "read-only", label: "Read only" },
+      { value: "full", label: "Full" },
+    ]);
   });
 });
 
@@ -283,29 +374,11 @@ describe("an unset harness", () => {
     expect(cell.effective).toBeNull();
     expect(cell.stale).toBe(false);
     expect(settingCell(controlStore, catalogs, workspace, "triage", "model").stale).toBe(false);
-    expect(settingCell(controlStore, catalogs, workspace, "triage", "permission-profile").stale).toBe(false);
   });
 });
 
 describe("a policy profile the selected harness cannot enforce", () => {
-  it("is stale", () => {
-    const controlStore = store([
-      profileDefault("harness", "codex"),
-      profileDefault("permission-profile", "full"),
-    ]);
-    const readOnlyCatalogs = availableHarnessCatalogs(
-      HarnessOverview.make({
-        harnesses: [harnessItem("codex", optionCatalog(["read-only"]))],
-        checkedAtMillis: 1,
-      }),
-    );
-
-    expect(settingCell(controlStore, readOnlyCatalogs, workspace, "triage", "permission-profile").stale).toBe(
-      true,
-    );
-  });
-
-  it("checks the implicit stage default", () => {
+  it("does not make the Harness selection stale", () => {
     const controlStore = store([profileDefault("harness", "codex")]);
     const fullOnlyCatalogs = availableHarnessCatalogs(
       HarnessOverview.make({
@@ -314,9 +387,7 @@ describe("a policy profile the selected harness cannot enforce", () => {
       }),
     );
 
-    const cell = settingCell(controlStore, fullOnlyCatalogs, workspace, "triage", "permission-profile");
-    expect(cell.inherited).toBe("read-only");
-    expect(cell.effective).toBe("read-only");
-    expect(cell.stale).toBe(true);
+    expect(settingCell(controlStore, fullOnlyCatalogs, workspace, "triage", "harness").stale).toBe(false);
+    expect(settingCell(controlStore, fullOnlyCatalogs, workspace, "implement", "harness").stale).toBe(false);
   });
 });

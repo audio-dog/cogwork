@@ -696,6 +696,24 @@ describe("Harness", () => {
       }),
     );
 
+    it.effect("accepts a Full profile without a worktree-confinement claim", () =>
+      Effect.gen(function* () {
+        const harness = make([
+          {
+            ...controlledRunnerDefaults,
+            name,
+            sessionKind: "opaque-handle",
+            projectedMembers: [],
+            planMiddleware: [],
+            execution: { nonInteractive: true, worktreeConfined: false, profiles: ["full"] },
+            run: () => Stream.empty,
+          },
+        ]);
+
+        yield* harness.preflight(name, "full", null);
+      }),
+    );
+
     it.effect("uses runner services from the caller context", () => {
       const providedCredentialStore = { ...harnessServices.credentialStore };
       const harness = make([

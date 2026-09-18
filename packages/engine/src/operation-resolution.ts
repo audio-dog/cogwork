@@ -332,11 +332,26 @@ export const make = Effect.gen(function* () {
     operation: LifecycleStage,
   ) {
     const picture = controlStore.health === "available" ? yield* controlStore.picture : null;
+    const resolved = resolveRunPlanStage(
+      workspace.config,
+      operation,
+      picture?.operationSettings ?? [],
+      picture?.contributionSettings ?? [],
+    );
+    if (resolved === null) return null;
+    const declaredProfiles = yield* harness.catalog(resolved.stage.harness).pipe(
+      Effect.provide(harnessRunnerContext),
+      Effect.match({
+        onFailure: () => [],
+        onSuccess: (catalog) => catalog.policyProfiles,
+      }),
+    );
     return resolveRunPlanStage(
       workspace.config,
       operation,
       picture?.operationSettings ?? [],
       picture?.contributionSettings ?? [],
+      declaredProfiles,
     );
   });
 

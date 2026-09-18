@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@cogwork/ui/components/select";
 import { Switch } from "@cogwork/ui/components/switch";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import {
   RiAlertLine,
@@ -47,6 +47,7 @@ import {
   catalogFor,
   type HarnessCatalog,
   harnessIsDisabled,
+  harnessSelectionUpdates,
   operationLabels,
   operationSummaries,
   operationSummaryLine,
@@ -66,9 +67,14 @@ interface OperationSettingsState {
   readonly workspace: WorkspaceId;
 }
 
+type WritableOperationSettingName = Exclude<OperationSettingName, "bindings">;
+
 interface OperationSettingsActions {
-  /** Writes one setting, or clears it back onto the default when the value is null. */
-  readonly write: (setting: OperationSettingName, operation: LifecycleStage, value: string | null) => void;
+  readonly write: (
+    setting: WritableOperationSettingName,
+    operation: LifecycleStage,
+    value: string | null,
+  ) => void;
 }
 
 interface OperationSettingsMeta {
@@ -122,26 +128,28 @@ function HarnessRail({
   readonly onSelect: (harness: string) => void;
 }) {
   return (
-    <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-e border-border pe-1.5">
-      {catalogs.map((catalog) => (
-        <Tooltip key={catalog.harness}>
-          <TooltipTrigger
-            render={
-              <Button
-                size="icon-sm"
-                variant={catalog.harness === active ? "secondary" : "ghost"}
-                aria-label={providerLabel(catalog.harness)}
-                aria-pressed={catalog.harness === active}
-                onClick={() => onSelect(catalog.harness)}
-              />
-            }
-          >
-            <ProviderGlyphIcon glyph={providerGlyph(catalog.harness)} />
-          </TooltipTrigger>
-          <TooltipContent side="right">{providerLabel(catalog.harness)}</TooltipContent>
-        </Tooltip>
-      ))}
-    </div>
+    <TooltipProvider>
+      <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-e border-border pe-1.5">
+        {catalogs.map((catalog) => (
+          <Tooltip key={catalog.harness}>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant={catalog.harness === active ? "secondary" : "ghost"}
+                  aria-label={providerLabel(catalog.harness)}
+                  aria-pressed={catalog.harness === active}
+                  onClick={() => onSelect(catalog.harness)}
+                />
+              }
+            >
+              <ProviderGlyphIcon glyph={providerGlyph(catalog.harness)} />
+            </TooltipTrigger>
+            <TooltipContent side="left">{providerLabel(catalog.harness)}</TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -354,20 +362,19 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
     state: { catalogs, controlStore, workspace },
     actions: { write },
   } = useOperationSettings();
-  const cell = (setting: OperationSettingName) =>
+  const cell = (setting: WritableOperationSettingName) =>
     settingCell(controlStore, catalogs, workspace, operation, setting);
-  const catalog = catalogFor(catalogs, cell("harness").effective);
-  const selectableCatalogs = selectableHarnessCatalogs(controlStore, catalogs);
-  const set = (setting: OperationSettingName, value: string | null) => write(setting, operation, value);
-  // Harness, model and effort are chosen together, so they revert together — an effort left
-  // behind can outlive the catalog that offered it.
-  const resetHarnessAndModel = () => {
-    set("harness", null);
-    set("model", null);
-    set("effort", null);
-  };
-  const profileCell = cell("permission-profile");
   const harnessCell = cell("harness");
+  const catalog = catalogFor(catalogs, harnessCell.effective);
+  const selectableCatalogs = selectableHarnessCatalogs(controlStore, catalogs);
+  const set = (setting: WritableOperationSettingName, value: string | null) =>
+    write(setting, operation, value);
+  const applyHarnessSelection = (harness: string | null, model: string | null) => {
+    harnessSelectionUpdates(harnessCell.effective, harness, model).forEach(({ setting, value }) => {
+      set(setting, value);
+    });
+  };
+  const resetHarnessAndModel = () => applyHarnessSelection(null, null);
   const modelCell = cell("model");
   const pairOwn = modelCell.own ?? harnessCell.own;
   const profileSpec: ControlSpec | null = catalog
@@ -375,7 +382,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
         key: "permission-profile",
         label: "Permissions",
         options: policyProfileChoices(catalog),
-        cell: profileCell,
+        cell: cell("permission-profile"),
         select: (value) => set("permission-profile", value),
         reset: () => set("permission-profile", null),
       }
@@ -427,11 +434,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
           harnessSpec={harnessSpec}
           modelSpec={modelSpec}
           catalogs={selectableCatalogs}
-          onPick={(harness, model) => {
-            set("harness", harness);
-            set("model", model);
-            set("effort", null);
-          }}
+          onPick={applyHarnessSelection}
         />
       </div>
       {rest.map((spec) => (
@@ -462,7 +465,7 @@ function EnabledSwitch({ operation }: { readonly operation: LifecycleStage }) {
   );
 }
 
-const ownSettings: readonly OperationSettingName[] = ["harness", "model", "effort", "permission-profile"];
+const ownSettings = ["harness", "model", "effort", "permission-profile"] as const;
 
 function OperationRow({ operation }: { readonly operation: LifecycleStage }) {
   const {

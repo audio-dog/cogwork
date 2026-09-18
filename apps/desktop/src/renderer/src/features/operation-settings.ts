@@ -1,5 +1,6 @@
 import {
   type ControlStore,
+  defaultPermissionProfile,
   type HarnessCatalogChoice,
   type HarnessName,
   type HarnessOptionCatalog,
@@ -51,10 +52,10 @@ export const catalogFor = (catalogs: ReadonlyArray<HarnessCatalog>, harness: str
 export const selectableHarnessCatalogs = (
   controlStore: ControlStore | null,
   catalogs: ReadonlyArray<HarnessCatalog>,
-) => {
-  if (!controlStore) return catalogs;
-  return catalogs.filter((catalog) => harnessEnabled(controlStore.harnessSettings, catalog.harness));
-};
+) =>
+  catalogs.filter((catalog) =>
+    controlStore ? harnessEnabled(controlStore.harnessSettings, catalog.harness) : true,
+  );
 
 export const harnessIsDisabled = (controlStore: ControlStore | null, harness: string | null) => {
   if (!controlStore || !harness) return false;
@@ -67,14 +68,6 @@ export const unavailableHarnessLabel = (harness: string | null, disabled: boolea
   return `${harness} · no longer offered`;
 };
 
-const policyProfileLabels: Record<RunPlanPolicyProfile, string> = {
-  "read-only": "Read only",
-  full: "Full",
-};
-
-export const policyProfileChoices = (catalog: HarnessCatalog | null) =>
-  catalog?.policyProfiles.map((value) => ({ value, label: policyProfileLabels[value] })) ?? [];
-
 export const catalogChoiceLabel = (choices: ReadonlyArray<HarnessCatalogChoice>, value: string | null) =>
   value === null ? "Not set" : (choices.find((choice) => choice.value === value)?.label ?? value);
 
@@ -83,8 +76,13 @@ export const catalogChoiceMatches = (choice: HarnessCatalogChoice, query: string
   return choice.label.toLowerCase().includes(needle) || choice.value.toLowerCase().includes(needle);
 };
 
-export const defaultProfile = (operation: LifecycleStage) =>
-  operation === "implement" || operation === "follow-up" ? "full" : "read-only";
+const policyProfileLabels: Record<RunPlanPolicyProfile, string> = {
+  "read-only": "Read only",
+  full: "Full",
+};
+
+export const policyProfileChoices = (catalog: HarnessCatalog | null) =>
+  catalog?.policyProfiles.map((value) => ({ value, label: policyProfileLabels[value] })) ?? [];
 
 /**
  * One setting of one operation. `own` is what this page has set; `inherited` is what would
@@ -97,6 +95,26 @@ export interface SettingCell {
   readonly effective: string | null;
   readonly stale: boolean;
 }
+
+type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindings">;
+
+export const harnessSelectionUpdates = (
+  currentHarness: string | null,
+  harness: string | null,
+  model: string | null,
+) => {
+  const updates = [
+    { setting: "harness", value: harness, applies: true },
+    { setting: "model", value: model, applies: true },
+    { setting: "effort", value: null, applies: true },
+    { setting: "permission-profile", value: null, applies: currentHarness !== harness },
+  ] satisfies ReadonlyArray<{
+    readonly setting: DisplayedOperationSettingName;
+    readonly value: string | null;
+    readonly applies: boolean;
+  }>;
+  return updates.filter(({ applies }) => applies).map(({ setting, value }) => ({ setting, value }));
+};
 
 const isOverride = (row: OperationSettingRow, operation: LifecycleStage, workspace: WorkspaceId) =>
   row.level._tag === "Operation" &&
@@ -112,24 +130,21 @@ const asDisplayValue = (value: ReturnType<typeof resolveOperationSetting>) => {
   return value;
 };
 
-export const settingCell = (
+const resolvedSettingValues = (
   controlStore: ControlStore | null,
-  catalogs: ReadonlyArray<HarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
-  setting: OperationSettingName,
+  setting: DisplayedOperationSettingName,
 ) => {
   const rows = controlStore?.operationSettings ?? [];
   const context = { workflow: codingWorkflow, operation, workspace };
-  const resolvedInherited = asDisplayValue(
+  const inherited = asDisplayValue(
     resolveOperationSetting(
       rows.filter((row) => !isOverride(row, operation, workspace)),
       setting,
       context,
     ),
   );
-  const inherited =
-    resolvedInherited ?? (setting === "permission-profile" ? defaultProfile(operation) : null);
   const stored = rows.find((row) => row.setting === setting && isOverride(row, operation, workspace));
   const own = stored ? asDisplayValue(stored.value) : null;
   const effective = own ?? inherited;
@@ -137,32 +152,94 @@ export const settingCell = (
     own,
     inherited,
     effective,
-    stale: isStale(setting, effective, controlStore, catalogs, workspace, operation),
   };
 };
 
-/** A saved choice absent from the current catalog is stale drift, never free-form input. */
-const isStale = (
-  setting: OperationSettingName,
-  value: string | null,
+const permissionProfileDefault = (
   controlStore: ControlStore | null,
   catalogs: ReadonlyArray<HarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
 ) => {
-  if (value === null) return false;
-  if (setting === "harness") return catalogFor(catalogs, value) === null;
-  if (setting !== "model" && setting !== "effort" && setting !== "permission-profile") return false;
-  const harness = settingCell(controlStore, catalogs, workspace, operation, "harness").effective;
+  const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
+  const profiles = catalogFor(catalogs, harness)?.policyProfiles ?? [];
+  return defaultPermissionProfile(operation, profiles);
+};
+
+interface SettingDefaultContext {
+  controlStore: ControlStore | null;
+  catalogs: ReadonlyArray<HarnessCatalog>;
+  workspace: WorkspaceId;
+  operation: LifecycleStage;
+}
+
+const nullDefault = () => null;
+
+const settingDefaults = {
+  enabled: nullDefault,
+  harness: nullDefault,
+  model: nullDefault,
+  effort: nullDefault,
+  "permission-profile": ({ controlStore, catalogs, workspace, operation }: SettingDefaultContext) =>
+    permissionProfileDefault(controlStore, catalogs, workspace, operation),
+} satisfies Record<DisplayedOperationSettingName, (context: SettingDefaultContext) => string | null>;
+
+export const settingCell = (
+  controlStore: ControlStore | null,
+  catalogs: ReadonlyArray<HarnessCatalog>,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+  setting: DisplayedOperationSettingName,
+) => {
+  const resolved = resolvedSettingValues(controlStore, workspace, operation, setting);
+  const fallback = settingDefaults[setting]({ controlStore, catalogs, workspace, operation });
+  const values = {
+    own: resolved.own,
+    inherited: resolved.inherited ?? fallback,
+    effective: resolved.own ?? resolved.inherited ?? fallback,
+  };
+  return {
+    ...values,
+    stale: isStale(setting, values.effective, controlStore, catalogs, workspace, operation),
+  };
+};
+
+/** A saved choice absent from the current catalog is stale drift, never free-form input. */
+interface StaleSelection {
+  readonly value: string;
+  controlStore: ControlStore | null;
+  catalogs: ReadonlyArray<HarnessCatalog>;
+  workspace: WorkspaceId;
+  operation: LifecycleStage;
+}
+
+const catalogChoiceIsStale = (selection: StaleSelection, choices: "models" | "efforts") => {
+  const { value, controlStore, catalogs, workspace, operation } = selection;
+  const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
   if (harness === null) return false;
-  const catalog = catalogFor(catalogs, harness);
-  if (!catalog) return true;
-  if (setting === "permission-profile") {
-    return !catalog.policyProfiles.some((profile) => profile === value);
-  }
-  const options = setting === "model" ? catalog.models : (catalog.efforts ?? []);
+  const options = catalogFor(catalogs, harness)?.[choices] ?? [];
   return !options.some((option) => option.value === value);
 };
+
+const staleChecks = {
+  enabled: () => false,
+  harness: ({ value, catalogs }: StaleSelection) => catalogFor(catalogs, value) === null,
+  model: (selection: StaleSelection) => catalogChoiceIsStale(selection, "models"),
+  effort: (selection: StaleSelection) => catalogChoiceIsStale(selection, "efforts"),
+  "permission-profile": ({ value, controlStore, catalogs, workspace, operation }: StaleSelection) => {
+    const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
+    return !catalogFor(catalogs, harness)?.policyProfiles.some((profile) => profile === value);
+  },
+} satisfies Record<DisplayedOperationSettingName, (selection: StaleSelection) => boolean>;
+
+const isStale = (
+  setting: DisplayedOperationSettingName,
+  value: string | null,
+  controlStore: ControlStore | null,
+  catalogs: ReadonlyArray<HarnessCatalog>,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+) => (value === null ? false : staleChecks[setting]({ value, controlStore, catalogs, workspace, operation }));
 
 /** A one-line summary of an operation, for a collapsed row. */
 export const operationSummaryLine = (

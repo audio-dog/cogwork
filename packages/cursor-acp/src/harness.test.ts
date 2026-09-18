@@ -3,7 +3,7 @@ import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
   HarnessName,
-  LifecycleStage,
+  type LifecycleStage,
   RunPlan,
   SessionId,
   stageResultJsonSchema,
@@ -158,7 +158,7 @@ const harnessRunnerLayer = Layer.mergeAll(
 );
 
 const request = (checkoutPath: string, operation: LifecycleStage = "triage") => {
-  const profile = OperationPolicy.operationPolicyProfile(operation);
+  const profile = OperationPolicy.operationDefaultProfile(operation);
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-cursor-test",
@@ -460,22 +460,17 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
     assert.isFalse(runner.capabilities.takeover);
     assert.isTrue(runner.execution.nonInteractive);
     assert.isFalse(runner.execution.worktreeConfined);
-    assert.deepStrictEqual(runner.execution.profiles, []);
+    assert.deepStrictEqual(runner.execution.profiles, ["full"]);
   });
 
-  it.effect("rejects every Operation before launching a Cursor process", () =>
+  it.effect("accepts Full and rejects Read only before launching Cursor", () =>
     Effect.gen(function* () {
-      const harness = Harness.make([
-        cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-policy-test" }),
-      ]);
-      const errors = yield* Effect.forEach(LifecycleStage.literals, (operation) =>
-        harness.run(request("/tmp", operation)).pipe(Stream.runDrain, Effect.flip),
-      );
+      const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
+      const readOnly = yield* harness.preflight(cursorName, "read-only", "auto").pipe(Effect.flip);
 
-      for (const error of errors) {
-        assert.strictEqual(error.reason, "policy");
-        assert.include(error.message, "worktree confinement");
-      }
+      assert.strictEqual(readOnly.reason, "policy");
+      assert.include(readOnly.message, "read-only operation posture");
+      yield* harness.preflight(cursorName, "full", "auto");
     }),
   );
 

@@ -1976,7 +1976,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([failingRunner(error)])));
   });
 
-  it.effect("settles a silent harness run as a retryable failure after its stage budget", () => {
+  it.effect("settles a silent harness run as a retryable failure after its profile budget", () => {
     const silentRunner: TestRunner = {
       make: () => ({
         ...testRunnerDefaults,
@@ -1991,7 +1991,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
       const execution = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
-      yield* TestClock.adjust(defaultRunBudget("implement"));
+      yield* TestClock.adjust(defaultRunBudget("full"));
       assert.isTrue(yield* Fiber.join(execution));
 
       const ledger = yield* RunLedger.RunLedger;
@@ -2066,7 +2066,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([unsupported])));
   });
 
-  it.effect("preflights the resolved permission profile", () => {
+  it.effect("refuses a saved permission profile the Harness does not declare", () => {
     const readOnlyRunner = runner(implementEvents, {
       ...fullHarnessExecution,
       profiles: ["read-only"],
@@ -2075,12 +2075,16 @@ describe("Executor.execute", () => {
       setting: "permission-profile",
       level: { _tag: "Operation", workflow: "coding", operation: "implement" },
       scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
-      value: "read-only",
+      value: "full",
     };
 
     return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      const ledger = yield* RunLedger.RunLedger;
+      assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
     }).pipe(
       Effect.provide(
         provide([readOnlyRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), [

@@ -323,12 +323,27 @@ const resolveCatalog = Effect.fn("Harness.resolveCatalog")(function* (runner: Ha
   return yield* unavailableCatalog(runner.name);
 });
 
-const unsupportedPosture = (runner: HarnessRunner, profile: OperationPolicyProfile) => {
-  if (!runner.execution.nonInteractive) return "a non-interactive turn";
-  if (!runner.execution.worktreeConfined) return "worktree confinement";
-  if (!runner.execution.profiles.includes(profile)) return `${profile} operation posture`;
-  return null;
-};
+const lacksRequiredConfinement = (runner: HarnessRunner, profile: OperationPolicyProfile) =>
+  profile === "read-only" && !runner.execution.worktreeConfined;
+
+const unsupportedPostures = [
+  {
+    when: (runner: HarnessRunner) => !runner.execution.nonInteractive,
+    posture: () => "a non-interactive turn",
+  },
+  {
+    when: (runner: HarnessRunner, profile: OperationPolicyProfile) =>
+      !runner.execution.profiles.includes(profile),
+    posture: (profile: OperationPolicyProfile) => `${profile} operation posture`,
+  },
+  {
+    when: lacksRequiredConfinement,
+    posture: () => "worktree confinement",
+  },
+] as const;
+
+const unsupportedPosture = (runner: HarnessRunner, profile: OperationPolicyProfile) =>
+  unsupportedPostures.find(({ when }) => when(runner, profile))?.posture(profile) ?? null;
 
 const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolicyProfile, posture: string) =>
   new HarnessError({

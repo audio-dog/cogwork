@@ -159,7 +159,7 @@ describe("Claude Code host Harness", () => {
 
           for (const [operation, capture] of captures) {
             const settings = yield* Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings);
-            const readOnly = OperationPolicy.operationPolicyProfile(operation) === "read-only";
+            const readOnly = OperationPolicy.operationDefaultProfile(operation) === "read-only";
             const disallowed = capturedDisallowedTools(capture);
 
             assert.deepStrictEqual(settings.sandbox, {

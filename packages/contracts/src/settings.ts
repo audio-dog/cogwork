@@ -68,6 +68,20 @@ export const operationSettingNames = OperationSettingName.literals;
 export const RunPlanPolicyProfile = Schema.Literals(["read-only", "full"]);
 export type RunPlanPolicyProfile = typeof RunPlanPolicyProfile.Type;
 
+export const operationDefaultProfiles = {
+  triage: "read-only",
+  implement: "full",
+  "follow-up": "full",
+} as const satisfies Record<LifecycleStage, RunPlanPolicyProfile>;
+
+export const defaultPermissionProfile = (
+  operation: LifecycleStage,
+  declaredProfiles: ReadonlyArray<RunPlanPolicyProfile>,
+) =>
+  declaredProfiles.find((profile) => profile === operationDefaultProfiles[operation]) ??
+  declaredProfiles[0] ??
+  null;
+
 export const OperationBinding = Schema.Struct({
   need: TrimmedNonEmptyString,
   contribution: TrimmedNonEmptyString,

@@ -1,15 +1,17 @@
 import {
+  type HarnessName,
   LifecycleStage,
   OperationSettingRefused,
   OperationSettingUpdate,
+  operationDefaultProfiles,
+  type RunPlanPolicyProfile,
   SettingLevel,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 
-export type OperationPolicyProfile = "read-only" | "full";
+export type OperationPolicyProfile = RunPlanPolicyProfile;
 
-export const operationPolicyProfile = (stage: LifecycleStage): OperationPolicyProfile =>
-  stage === "triage" ? "read-only" : "full";
+export const operationDefaultProfile = (stage: LifecycleStage) => operationDefaultProfiles[stage];
 
 const isLifecycleStage = Schema.is(LifecycleStage);
 
@@ -41,12 +43,23 @@ export const operationSettingRefusal = (update: OperationSettingUpdate) => {
           source: "coding Workflow Definition",
           reason: `Unknown Operation ${operation}`,
         });
-      if (!OperationSettingUpdate.guards.Set(update) || cell.setting !== "permission-profile") return null;
-      return OperationSettingRefused.make({
-        setting: cell.setting,
-        source: `${operation} Operation Definition`,
-        reason: "The Operation Definition locks this setting",
-      });
+      return null;
     },
+  });
+};
+
+export const permissionProfileRefusal = (
+  update: OperationSettingUpdate,
+  harness: HarnessName,
+  profiles: ReadonlyArray<RunPlanPolicyProfile>,
+) => {
+  if (!OperationSettingUpdate.guards.Set(update)) return null;
+  const { row } = update;
+  if (row.setting !== "permission-profile") return null;
+  if (profiles.some((profile) => profile === row.value)) return null;
+  return OperationSettingRefused.make({
+    setting: row.setting,
+    source: `Harness ${harness}`,
+    reason: `${harness} does not declare ${row.value} as a permission profile`,
   });
 };

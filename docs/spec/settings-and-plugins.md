@@ -298,9 +298,11 @@ Plugin ships this Hook; it failed to load; here is the file*. Uninstall removes 
 bytes become the reclaimer's — **uninstall does not free disk immediately**.
 
 Surviving trust decisions from #135, independent of where bytes come from: the **Engine ceiling**
-is hard at three named postures — a non-interactive turn, worktree confinement, and the Operation
-read/write posture — a Harness that cannot provide one fails before launch; finer enforcement may
-be coarse only with its actual fidelity recorded **and no client presenting it as exact**.
+requires a non-interactive turn and the resolved read/write posture. The user chooses among the
+selected Harness's declared profiles; the Operation supplies only the default. Read only also
+requires worktree confinement. ADR 0025 permits Full to rely on a runner's declared native trust
+boundary. Finer enforcement may be coarse only with its actual fidelity recorded **and no client
+presenting it as exact**.
 **Nothing reaches a contributed Hook's or MCP server's `command`, and the asymmetry is
 principled**: the hard-deny list guards a fallible model, not an adversarial one, and a bundle may
 ship the very script its Hook invokes — so a `command` allowlist would be theater. Executable

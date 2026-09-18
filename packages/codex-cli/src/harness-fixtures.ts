@@ -96,7 +96,7 @@ const projectedMcpName = (name: string, index: number) =>
 
 const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   const stage = overrides.stage ?? "implement";
-  const profile = OperationPolicy.operationPolicyProfile(stage);
+  const profile = OperationPolicy.operationDefaultProfile(stage);
   const mcpSkills = overrides.mcpSkills ?? [];
   const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
     target: "draft-2020-12",
