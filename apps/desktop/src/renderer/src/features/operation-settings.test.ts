@@ -17,6 +17,7 @@ import {
   catalogChoiceMatches,
   harnessCatalogLoad,
   harnessIsDisabled,
+  harnessSelectionUpdates,
   operationSettingUpdate,
   policyProfileChoices,
   selectableHarnessCatalogs,
@@ -86,6 +87,17 @@ describe("catalog choices", () => {
   it("matches searches against labels and values", () => {
     expect(catalogChoiceMatches(choice, "model a")).toBe(true);
     expect(catalogChoiceMatches(choice, "model-a")).toBe(true);
+  });
+});
+
+describe("harnessSelectionUpdates", () => {
+  it("clears settings constrained by the selected Harness", () => {
+    expect(harnessSelectionUpdates("cursor", "cursor-auto")).toEqual([
+      { setting: "harness", value: "cursor" },
+      { setting: "model", value: "cursor-auto" },
+      { setting: "effort", value: null },
+      { setting: "permission-profile", value: null },
+    ]);
   });
 });
 

@@ -47,6 +47,7 @@ import {
   catalogFor,
   type HarnessCatalog,
   harnessIsDisabled,
+  harnessSelectionUpdates,
   operationLabels,
   operationSummaries,
   operationSummaryLine,
@@ -367,13 +368,12 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   const selectableCatalogs = selectableHarnessCatalogs(controlStore, catalogs);
   const set = (setting: WritableOperationSettingName, value: string | null) =>
     write(setting, operation, value);
-  // Harness, model and effort are chosen together, so they revert together — an effort left
-  // behind can outlive the catalog that offered it.
-  const resetHarnessAndModel = () => {
-    set("harness", null);
-    set("model", null);
-    set("effort", null);
+  const applyHarnessSelection = (harness: string | null, model: string | null) => {
+    harnessSelectionUpdates(harness, model).forEach(({ setting, value }) => {
+      set(setting, value);
+    });
   };
+  const resetHarnessAndModel = () => applyHarnessSelection(null, null);
   const harnessCell = cell("harness");
   const modelCell = cell("model");
   const pairOwn = modelCell.own ?? harnessCell.own;
@@ -434,11 +434,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
           harnessSpec={harnessSpec}
           modelSpec={modelSpec}
           catalogs={selectableCatalogs}
-          onPick={(harness, model) => {
-            set("harness", harness);
-            set("model", model);
-            set("effort", null);
-          }}
+          onPick={applyHarnessSelection}
         />
       </div>
       {rest.map((spec) => (

@@ -98,6 +98,17 @@ export interface SettingCell {
 
 type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindings">;
 
+export const harnessSelectionUpdates = (harness: string | null, model: string | null) =>
+  [
+    { setting: "harness", value: harness },
+    { setting: "model", value: model },
+    { setting: "effort", value: null },
+    { setting: "permission-profile", value: null },
+  ] satisfies ReadonlyArray<{
+    readonly setting: DisplayedOperationSettingName;
+    readonly value: string | null;
+  }>;
+
 const isOverride = (row: OperationSettingRow, operation: LifecycleStage, workspace: WorkspaceId) =>
   row.level._tag === "Operation" &&
   row.level.workflow === codingWorkflow &&
