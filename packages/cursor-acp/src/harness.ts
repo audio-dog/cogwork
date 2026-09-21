@@ -31,7 +31,6 @@ export interface CursorRunnerOptions {
 
 export type CursorModelOptions = {
   readonly sessionId?: string;
-  readonly effort?: string;
 };
 
 const cursorProbeDeadline = "5 seconds";
@@ -179,9 +178,8 @@ const cursorReadiness = Effect.fn("CursorRunner.readiness")((agentBin: string) =
 );
 
 // Cursor keeps conversation history server-side; the opaque handle is how you resume it.
-export const cursorModelOptions = (handle: string | null, effort: string | null) => ({
+export const cursorModelOptions = (handle: string | null) => ({
   ...(handle ? { sessionId: handle } : {}),
-  ...(effort ? { effort } : {}),
 });
 
 const launchCodes = new Set(["ENOENT", "EACCES"]);
@@ -300,7 +298,7 @@ export const interceptCursorTelemetry = (
 const openCursorTransport = (agentBin: string) =>
   FiberSet.makeRuntimePromise().pipe(
     Effect.map((runPromise) => (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
-      const flag = cursorModelFlag(ctx.model, ctx.modelOptions?.effort);
+      const flag = cursorModelFlag(ctx.model, null);
       return ctx.sandbox.process
         .spawn(`${agentBin} --model ${flag} acp`, {
           cwd: ctx.cwd,
@@ -409,8 +407,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
           permissions: "headless",
         })(model),
       projectModel: (request) => selectedCursorModel(request, defaultModel),
-      projectOptions: (request) =>
-        cursorModelOptions(request.identity.resumeHandle, request.selection.effort),
+      projectOptions: (request) => cursorModelOptions(request.identity.resumeHandle),
       transport: {},
       diagnostics: cursorDiagnostics,
       estimateUsage: cursorUsage,

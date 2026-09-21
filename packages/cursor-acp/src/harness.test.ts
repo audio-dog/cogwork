@@ -239,14 +239,12 @@ describe("Cursor Harness registry", () => {
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
-  it.effect("rejects saved composite model ids and stale effort selections before launch", () =>
+  it.effect("rejects saved composite model ids before launch", () =>
     Effect.gen(function* () {
       const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
       const staleModel = yield* harness.preflight(cursorName, "full", "gpt-5.6-luna-high").pipe(Effect.flip);
-      const staleEffort = yield* harness.preflight(cursorName, "full", "auto", "extreme").pipe(Effect.flip);
 
       assert.strictEqual(staleModel.reason, "stale-selection");
-      assert.strictEqual(staleEffort.reason, "stale-selection");
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -483,7 +481,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
           ...base,
           plan: new RunPlan({
             ...base.plan,
-            harness: { ...base.plan.harness, model: "gpt-5.6-luna", effort: null },
+            harness: { ...base.plan.harness, model: "gpt-5.6-luna", effort: "high" },
             instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
             operatingInstructions: {
               name: "triage-agent",
@@ -680,15 +678,11 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
 describe("cursorModelOptions", () => {
   it("turns a resolved handle into Cursor's resume sessionId", () => {
-    assert.deepStrictEqual(cursorModelOptions("cursor-abc", null), { sessionId: "cursor-abc" });
+    assert.deepStrictEqual(cursorModelOptions("cursor-abc"), { sessionId: "cursor-abc" });
   });
 
   it("omits sessionId when there is no handle to resume from", () => {
-    assert.deepStrictEqual(cursorModelOptions(null, "high"), { effort: "high" });
-  });
-
-  it("is empty when the run neither resumes nor sets an effort", () => {
-    assert.deepStrictEqual(cursorModelOptions(null, null), {});
+    assert.deepStrictEqual(cursorModelOptions(null), {});
   });
 });
 
