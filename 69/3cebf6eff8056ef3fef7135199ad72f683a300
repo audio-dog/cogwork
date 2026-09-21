@@ -1,0 +1,24 @@
+packages/engine/CONTEXT.md
+  s_e776a001f8d072::t_5be660f7e2596b 77
+packages/engine/src/replay-harness.ts
+  s_e776a001f8d072::t_521b95f134ee5a 349,401-416,438
+  s_e776a001f8d072::t_64b2f0fe41f8d0 350-353
+packages/engine/replay/README.md
+  s_e776a001f8d072::t_5be660f7e2596b 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "693cebf6eff8056ef3fef7135199ad72f683a300",
+  "prompts": {},
+  "sessions": {
+    "s_e776a001f8d072": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c4d7-366e-70f3-9e4e-27a006c23a2b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
