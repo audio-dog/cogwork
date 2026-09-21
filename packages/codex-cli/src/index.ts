@@ -1,2 +1,3 @@
 export type { CodexModel } from "@tanstack/ai-codex";
-export { type CodexEffort, codexRunner } from "./harness";
+export { codexRunner } from "./harness";
+export { type CodexEffort, codexCatalog } from "./models.generated";

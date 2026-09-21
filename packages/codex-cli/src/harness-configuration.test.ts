@@ -3,7 +3,7 @@ import { Harness } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
-import { CODEX_MODELS, type CodexTextConfig, codexText } from "@tanstack/ai-codex";
+import { type CodexTextConfig, codexText } from "@tanstack/ai-codex";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -29,6 +29,7 @@ import {
   sourceWrapperPath,
   structuredCapture,
 } from "./harness-fixtures";
+import { codexCatalog } from "./models.generated";
 
 const inheritedEnvironmentProbe = {
   CODEX_HOME: "/tmp/cogwork-codex-home",
@@ -83,23 +84,22 @@ describe("codexRunner configuration", () => {
   });
 
   it.layer(harnessLayer)((it) => {
-    it.effect("offers the host model catalog and honest native capabilities", () =>
+    it.effect("reads the checked-in managed catalog without launching Codex", () =>
       Effect.gen(function* () {
-        const codex = runner();
+        const codex = runner({ codexExecutable: "/must-not-launch-codex" });
         const harness = Harness.make([codex]);
         const catalog = yield* harness.catalog(name);
 
-        assert.deepStrictEqual(
-          catalog.models.map(({ value }) => value),
-          ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", ...CODEX_MODELS],
-        );
+        assert.deepStrictEqual(catalog.models, codexCatalog.models);
         assert.deepStrictEqual(
           catalog.efforts?.map(({ value }) => value),
           ["minimal", "low", "medium", "high"],
         );
+        assert.strictEqual(catalog.generatedAgainst, "0.154.0");
+        assert.deepStrictEqual(catalog.rawModelIds, codexCatalog.rawModelIds);
         assert.deepStrictEqual(catalog.provenance, {
           source: "cogwork-fallback",
-          fallbackVersion: "codex-0.5.4",
+          fallbackVersion: "codex-0.154.0",
         });
         assert.strictEqual(codex.sessionKind, "opaque-handle");
         assert.deepStrictEqual(codex.authentication, {
@@ -135,7 +135,7 @@ describe("codexRunner configuration", () => {
                   },
                 }),
               ]);
-              const events = yield* runInRepository(harness, handle);
+              const events = yield* runInRepository(harness, handle, { effort: "minimal" });
               const capture = yield* structuredCapture(events);
               const call = calls[0];
               if (!call) return assert.fail("Codex adapter was not created");
@@ -144,7 +144,7 @@ describe("codexRunner configuration", () => {
               assert.isUndefined(call.config.additionalDirectories);
               assert.isUndefined(call.config.config);
               assert.isUndefined(call.config.env);
-              assert.include(capture.args, 'model_reasoning_effort="high"');
+              assert.include(capture.args, 'model_reasoning_effort="minimal"');
               assert.isFalse(capture.hasCodexApiKey);
               assert.isFalse(capture.hasOpenAiApiKey);
               assert.isFalse(capture.hasGithubToken);
@@ -154,6 +154,18 @@ describe("codexRunner configuration", () => {
             }),
           ),
         ),
+    );
+
+    it.effect("dispatches an omitted effort with the model descriptor default", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const events = yield* runInRepository(Harness.make([runner()]), handle, { effort: null });
+          const capture = yield* structuredCapture(events);
+
+          assert.include(capture.args, 'model_reasoning_effort="high"');
+        }),
+      ),
     );
 
     it.effect("rejects a missing checkout before Codex launch", () =>
