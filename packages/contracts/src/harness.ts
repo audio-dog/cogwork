@@ -205,6 +205,10 @@ export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
   /** As the Harness reported it, so a non-semver release tag survives. */
   version: Schema.NullOr(TrimmedNonEmptyString),
   state: HarnessState,
+  diagnostics: Schema.Array(TrimmedNonEmptyString).pipe(
+    Schema.withConstructorDefault(Effect.succeed([])),
+    Schema.withDecodingDefaultKey(Effect.succeed([])),
+  ),
   models: Schema.Array(TrimmedNonEmptyString),
   catalog: Schema.NullOr(HarnessOptionCatalog).pipe(
     Schema.withConstructorDefault(Effect.succeed(null)),
