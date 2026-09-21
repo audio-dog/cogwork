@@ -16,6 +16,7 @@ import {
   IssueTrackerError,
   type LocalContribution,
   localOwnerId,
+  type ModelOptionSelections,
   OperationSettingUpdate,
   type PluginItem,
   type PluginOverview,
@@ -1667,6 +1668,37 @@ describe("SetOperationSetting", () => {
         return assert.fail("expected Operation setting refusal");
       assert.strictEqual(failure.setting, "model");
       assert.include(failure.reason, "does not offer model retired-model");
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
+  );
+
+  it.effect("reports permitted values when refusing model options", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      yield* client.GetHarnesses();
+      const selections: ReadonlyArray<ModelOptionSelections> = [{ effort: "low" }, { speed: true }];
+      const failures = yield* Effect.forEach(selections, (value) =>
+        Effect.flip(
+          client.SetOperationSetting({
+            updates: [
+              {
+                _tag: "Set",
+                row: {
+                  setting: "model-options",
+                  level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+                  scope: { _tag: "SettingsProfile" },
+                  value,
+                },
+              },
+            ],
+          }),
+        ),
+      );
+
+      failures.forEach((failure) => {
+        assert.strictEqual(failure._tag, "OperationSettingRefused");
+        if (failure._tag !== "OperationSettingRefused") assert.fail("expected Operation setting refusal");
+        assert.include(failure.reason, 'permitted model options: effort ("high")');
+      });
     }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
   );
 

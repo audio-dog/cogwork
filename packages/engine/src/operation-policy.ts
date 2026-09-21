@@ -1,4 +1,5 @@
 import {
+  HarnessModelOptionDescriptor,
   type HarnessName,
   type HarnessOptionCatalog,
   LifecycleStage,
@@ -65,6 +66,24 @@ const catalogValueNames = {
   "permission-profile": "permission profile",
 } satisfies Record<CatalogSetting, string>;
 
+const encodeModelOptionValue = Schema.encodeSync(
+  Schema.fromJsonString(Schema.Union([Schema.String, Schema.Boolean])),
+);
+
+const permittedModelOptionValues = (descriptor: HarnessModelOptionDescriptor) =>
+  HarnessModelOptionDescriptor.match(descriptor, {
+    boolean: () => [true, false],
+    select: ({ values }) => values.map(({ value }) => value),
+  });
+
+const formatModelOptionDescriptor = (descriptor: HarnessModelOptionDescriptor) =>
+  `${descriptor.id} (${permittedModelOptionValues(descriptor).map(encodeModelOptionValue).join(" | ")})`;
+
+const formatPermittedModelOptions = (model: ReturnType<typeof selectedHarnessCatalogModel>) => {
+  const descriptors = model?.options ?? [];
+  return descriptors.length === 0 ? "none" : descriptors.map(formatModelOptionDescriptor).join(", ");
+};
+
 export const catalogMembershipRefusal = (
   setting: CatalogSetting,
   value: string,
@@ -92,6 +111,6 @@ export const modelOptionsMembershipRefusal = (
   return OperationSettingRefused.make({
     setting: "model-options",
     source: `Harness ${harness}`,
-    reason: `${harness} does not offer model option ${id}=${JSON.stringify(value)} for ${model ?? "its default model"}`,
+    reason: `${harness} does not offer model option ${id}=${encodeModelOptionValue(value)} for ${model ?? "its default model"}; permitted model options: ${formatPermittedModelOptions(selectedModel)}`,
   });
 };
