@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 export class GitError extends Schema.TaggedError<GitError>()("GitError", {
   command: Schema.String,
   message: Schema.String,
+  missingBranches: Schema.optional(Schema.Array(Schema.String)),
   reason: Schema.optional(Schema.Literal("timeout")),
   retryable: Schema.Boolean,
 }) {}
@@ -38,8 +39,12 @@ export interface GitOperationInProgress {
   readonly unmergedPaths: ReadonlyArray<string>;
 }
 
+export interface FetchOptions {
+  readonly branches: readonly [string, ...ReadonlyArray<string>];
+}
+
 export interface GitService {
-  readonly fetch: (repoPath: string, remote: string) => Effect.Effect<void, GitError>;
+  readonly fetch: (repoPath: string, remote: string, options?: FetchOptions) => Effect.Effect<void, GitError>;
   readonly remoteBranchExists: (
     repoPath: string,
     remote: string,
