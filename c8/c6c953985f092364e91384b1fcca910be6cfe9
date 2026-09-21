@@ -1,0 +1,21 @@
+packages/codex-cli/src/harness-failures.test.ts
+  s_a2dd4d365a49a3::t_56974b841aeec6 144
+packages/codex-cli/src/harness.ts
+  s_a2dd4d365a49a3::t_56974b841aeec6 180-182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c8c6c953985f092364e91384b1fcca910be6cfe9",
+  "prompts": {},
+  "sessions": {
+    "s_a2dd4d365a49a3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c59b-5567-73e2-a322-42df32d330d4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
