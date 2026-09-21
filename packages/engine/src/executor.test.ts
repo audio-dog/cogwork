@@ -51,7 +51,7 @@ import { ControlStore, type ControlStoreService } from "./control-store";
 import * as CredentialStore from "./credential-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
-import { GitError } from "./git";
+import { Git, GitError, type GitService } from "./git";
 import {
   fullHarnessExecution,
   type HarnessCapabilityProfile,
@@ -80,11 +80,15 @@ import {
 import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   branchName,
+  make as makeWorktreeManager,
   PullRequestReadiness,
   WorktreeDivergedError,
   WorktreeManager,
   type WorktreeManagerService,
+  worktreePathFor,
+  worktreeRoot,
 } from "./worktree";
+import { WorktreeFs, type WorktreeFsService } from "./worktree-fs";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const codex = Schema.decodeSync(HarnessName)("codex");
@@ -826,6 +830,56 @@ const worktreeDouble = (make: (probe: WorktreeProbeState) => WorktreeManagerServ
 
 const worktreeStubLayer: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeDouble(() => worktreeStub);
 
+const preparedWorktreeRemovedLayer = Layer.effect(
+  Git,
+  Ref.make(0).pipe(
+    Effect.map(
+      (listCount) =>
+        ({
+          fetch: () => Effect.void,
+          remoteBranchExists: () => Effect.succeed(true),
+          addWorktree: () => Effect.die("unexpected addWorktree"),
+          removeWorktree: () => Effect.die("unexpected removeWorktree"),
+          listWorktrees: () =>
+            Ref.getAndUpdate(listCount, (count) => count + 1).pipe(
+              Effect.map((count) =>
+                count === 0
+                  ? [
+                      {
+                        path: worktreePathFor(
+                          worktreeRoot(implementWorkspace.config.checkoutPath),
+                          implementBranch,
+                        ),
+                        branch: implementBranch,
+                      },
+                    ]
+                  : [],
+              ),
+            ),
+          fastForward: () => Effect.void,
+          divergence: (_path, _remote, _base, head) =>
+            Effect.succeed(head?.remote ? { ahead: 1, behind: 0 } : { ahead: 0, behind: 0 }),
+          operationInProgress: () => Effect.succeed(null),
+          rebase: () => Effect.die("unexpected rebase"),
+          remoteUrl: () => Effect.die("unexpected remoteUrl"),
+        }) satisfies GitService,
+    ),
+  ),
+);
+
+const worktreeFsStub = Layer.succeed(WorktreeFs, {
+  linkFile: () => Effect.void,
+  runCommand: () => Effect.void,
+  stat: () => Effect.succeed(null),
+} satisfies WorktreeFsService);
+
+const preparedWorktreeRemoved = Layer.merge(
+  Layer.effect(WorktreeManager, makeWorktreeManager).pipe(
+    Layer.provide(Layer.merge(preparedWorktreeRemovedLayer, worktreeFsStub)),
+  ),
+  WorktreeProbe.layer,
+);
+
 const declinedPullRequestWorktree = (reason: string) =>
   worktreeDouble(() => ({
     ...worktreeStub,
@@ -1215,7 +1269,7 @@ const controlStoreLayer = (
     revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
     removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
     setHarnessEnabled: () => Effect.die(new Error("unexpected Harness enablement update")),
-    updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+    updateOperationSettings: () => Effect.die(new Error("unexpected operation setting update")),
     installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
     uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
     updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
@@ -1251,7 +1305,7 @@ function mutableHarnessControlStoreLayer(settings: Ref.Ref<ReadonlyArray<Harness
           harnessSettings,
         })),
       ),
-    updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+    updateOperationSettings: () => Effect.die(new Error("unexpected operation setting update")),
     installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
     uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
     updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
@@ -1292,7 +1346,7 @@ const changingControlStoreLayer = (
         revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
         removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
         setHarnessEnabled: () => Effect.die(new Error("unexpected Harness enablement update")),
-        updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+        updateOperationSettings: () => Effect.die(new Error("unexpected operation setting update")),
         installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
         uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
         updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
@@ -1371,7 +1425,7 @@ const observedWriteGateControlStoreLayer = (writeActive: Ref.Ref<boolean>) => {
     revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
     removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
     setHarnessEnabled: () => Effect.die(new Error("unexpected Harness enablement update")),
-    updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+    updateOperationSettings: () => Effect.die(new Error("unexpected operation setting update")),
     installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
     uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
     updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
@@ -1922,7 +1976,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([failingRunner(error)])));
   });
 
-  it.effect("settles a silent harness run as a retryable failure after its stage budget", () => {
+  it.effect("settles a silent harness run as a retryable failure after its profile budget", () => {
     const silentRunner: TestRunner = {
       make: () => ({
         ...testRunnerDefaults,
@@ -1937,7 +1991,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
       const execution = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
-      yield* TestClock.adjust(defaultRunBudget("implement"));
+      yield* TestClock.adjust(defaultRunBudget("full"));
       assert.isTrue(yield* Fiber.join(execution));
 
       const ledger = yield* RunLedger.RunLedger;
@@ -2012,7 +2066,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([unsupported])));
   });
 
-  it.effect("preflights the resolved permission profile", () => {
+  it.effect("refuses a saved permission profile the Harness does not declare", () => {
     const readOnlyRunner = runner(implementEvents, {
       ...fullHarnessExecution,
       profiles: ["read-only"],
@@ -2021,12 +2075,16 @@ describe("Executor.execute", () => {
       setting: "permission-profile",
       level: { _tag: "Operation", workflow: "coding", operation: "implement" },
       scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
-      value: "read-only",
+      value: "full",
     };
 
     return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      const ledger = yield* RunLedger.RunLedger;
+      assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
     }).pipe(
       Effect.provide(
         provide([readOnlyRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), [
@@ -2417,7 +2475,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
-  it.effect("opens the pull request and completes the work item when the engine gate passes", () =>
+  it.effect("opens the pull request after its prepared worktree disappears", () =>
     Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
       const calls = yield* TrackerCalls;
@@ -2440,7 +2498,7 @@ describe("Executor.execute", () => {
       assert.strictEqual(run?.status, "succeeded");
     }).pipe(
       Effect.provide(
-        provide([runner(readyForPrEvents)], worktreeStubLayer, pullRequestProvider()).pipe(
+        provide([runner(readyForPrEvents)], preparedWorktreeRemoved, pullRequestProvider()).pipe(
           Layer.provideMerge(PullRequestCalls.layer),
         ),
       ),
@@ -2703,7 +2761,7 @@ describe("Executor.execute", () => {
     );
   });
 
-  it.effect("declines when the worktree is on a different branch", () =>
+  it.effect("records and releases a pull request gate decline", () =>
     Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
       const calls = yield* TrackerCalls;
@@ -2711,21 +2769,23 @@ describe("Executor.execute", () => {
 
       yield* execute(executor, implementWorkspace, implementItem);
 
-      assert.strictEqual(yield* Ref.get(probe.observations), 0);
+      assert.strictEqual(yield* Ref.get(probe.observations), 1);
       assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "implemented"));
-      assert.isFalse(log.some((call) => call.method === "release"));
-      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.strictEqual(
+        log.find((call) => call.method === "attemptFailed")?.reason,
+        "head has not been pushed to origin",
+      );
       assert.isFalse(log.some((call) => call.method === "note"));
       const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
-      assert.strictEqual(run?.status, "failed");
-      assert.strictEqual(run?.claimDisposition, "hold");
+      assert.strictEqual(run?.status, "declined");
     }).pipe(
       Effect.provide(
         provide(
           [runner(readyForPrEvents)],
-          declinedPullRequestWorktree("worktree is on another branch"),
+          declinedPullRequestWorktree("head has not been pushed to origin"),
           pullRequestProvider(),
         ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
       ),
@@ -2740,13 +2800,18 @@ describe("Executor.execute", () => {
 
       yield* execute(executor, implementWorkspace, implementItem);
 
-      assert.strictEqual(yield* Ref.get(probe.observations), 0);
+      assert.strictEqual(yield* Ref.get(probe.observations), 1);
       assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "implemented"));
-      assert.isFalse(log.some((call) => call.method === "release"));
-      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.strictEqual(
+        log.find((call) => call.method === "attemptFailed")?.reason,
+        "head is not ahead of origin/main",
+      );
       assert.isFalse(log.some((call) => call.method === "note"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "declined");
     }).pipe(
       Effect.provide(
         provide(
@@ -2758,7 +2823,53 @@ describe("Executor.execute", () => {
     ),
   );
 
-  it.effect("declines when an open pull request already exists for the head", () =>
+  it.effect("settles the Run when recording a pull request gate decline fails", () => {
+    const failure = new IssueTrackerError({ reason: "unavailable", message: "tracker unavailable" });
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+
+      const error = yield* Effect.flip(execute(executor, implementWorkspace, implementItem));
+
+      assert.strictEqual(error, failure);
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          declinedPullRequestWorktree("head is not ahead of origin/main"),
+          pullRequestProvider(),
+          trackerRecorder(undefined, undefined, failure),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    );
+  });
+
+  it.effect("hands off a pull request gate decline after the retry budget is spent", () =>
+    Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, { ...implementItem, priorFailures: 2 });
+
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "attemptFailed"));
+      assert.isTrue(log.some((call) => call.method === "handOff"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "declined");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(readyForPrEvents)],
+          declinedPullRequestWorktree("head is not ahead of origin/main"),
+          pullRequestProvider(),
+        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+      ),
+    ),
+  );
+
+  it.effect("settles successfully when an open pull request already exists despite a gate decline", () =>
     Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
       const calls = yield* TrackerCalls;
@@ -2773,22 +2884,22 @@ describe("Executor.execute", () => {
       assert.strictEqual(yield* Ref.get(probe.observations), 1);
       assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
       const log = yield* Ref.get(calls);
-      assert.isFalse(log.some((call) => call.method === "implemented"));
-      assert.isFalse(log.some((call) => call.method === "release"));
+      assert.isTrue(log.some((call) => call.method === "implemented"));
+      assert.isTrue(log.some((call) => call.method === "release"));
       assert.isFalse(log.some((call) => call.method === "attemptFailed"));
       assert.isFalse(log.some((call) => call.method === "note"));
-      const gateLog = observation.logs.find(({ message }) =>
-        Array.isArray(message) ? message.includes("pull request gate declined") : false,
+      assert.isFalse(
+        observation.logs.some(({ message }) =>
+          Array.isArray(message) ? message.includes("pull request gate declined") : false,
+        ),
       );
-      assert.deepStrictEqual(gateLog?.message, [
-        "pull request gate declined",
-        { reason: `open pull request #22 already exists for ${implementBranch}` },
-      ]);
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "succeeded");
     }).pipe(
       Effect.provide(
         provide(
           [runner(readyForPrEvents)],
-          worktreeStubLayer,
+          declinedPullRequestWorktree("head has not been pushed to origin"),
           pullRequestProvider({ existingHead: implementBranch }),
         ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
       ),

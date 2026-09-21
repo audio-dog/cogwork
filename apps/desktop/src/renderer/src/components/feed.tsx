@@ -11,6 +11,7 @@ import type { FeedRun, QueuedItem } from "../features/feed";
 import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
 import type { RunActivityPreview } from "../features/run-activity";
+import { runStatusLabel } from "../features/run-status";
 import { useNow } from "../features/use-now";
 import { workspaceLabelById } from "../features/workspace-record";
 import type { ItemSelection } from "../store/chrome";
@@ -171,6 +172,7 @@ const runStateBadge: Record<
 > = {
   running: { variant: "secondary" },
   succeeded: { variant: "secondary", icon: RiCheckLine },
+  declined: { variant: "outline" },
   failed: { variant: "destructive" },
   crashed: { variant: "destructive" },
   interrupted: { variant: "outline" },
@@ -180,9 +182,9 @@ const runStateBadge: Record<
 function RunStateBadge({ status }: { status: FeedRun["run"]["status"] }) {
   const { variant, icon: Icon } = runStateBadge[status];
   return (
-    <Badge variant={variant} className="gap-1 font-normal capitalize">
+    <Badge variant={variant} className="gap-1 font-normal">
       {Icon && <Icon className="size-3" />}
-      {status}
+      {runStatusLabel[status]}
     </Badge>
   );
 }

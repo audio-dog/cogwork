@@ -85,6 +85,39 @@ const inheritedEnvironment = {
   ANTHROPIC_AUTH_TOKEN: environmentValue("ANTHROPIC_AUTH_TOKEN"),
   GITHUB_TOKEN: environmentValue("GITHUB_TOKEN"),
   GH_TOKEN: environmentValue("GH_TOKEN"),
+  CLAUDE_CONFIG_DIR: environmentValue("CLAUDE_CONFIG_DIR"),
+  USERPROFILE: environmentValue("USERPROFILE"),
+  HOMEDRIVE: environmentValue("HOMEDRIVE"),
+  HOMEPATH: environmentValue("HOMEPATH"),
+  APPDATA: environmentValue("APPDATA"),
+  SYSTEMROOT: environmentValue("SYSTEMROOT"),
+  PATHEXT: environmentValue("PATHEXT"),
+  COMSPEC: environmentValue("COMSPEC"),
+  HTTP_PROXY: environmentValue("HTTP_PROXY"),
+  HTTPS_PROXY: environmentValue("HTTPS_PROXY"),
+  NO_PROXY: environmentValue("NO_PROXY"),
+  http_proxy: environmentValue("http_proxy"),
+  https_proxy: environmentValue("https_proxy"),
+  NODE_EXTRA_CA_CERTS: environmentValue("NODE_EXTRA_CA_CERTS"),
+};
+
+const windowsEnvironmentProbe = {
+  USERPROFILE: "C:\\Users\\cogwork",
+  HOMEDRIVE: "C:",
+  HOMEPATH: "\\Users\\cogwork",
+  APPDATA: "C:\\Users\\cogwork\\AppData\\Roaming",
+  SYSTEMROOT: "C:\\Windows",
+  PATHEXT: ".COM;.EXE;.BAT;.CMD",
+  COMSPEC: "C:\\Windows\\System32\\cmd.exe",
+};
+
+const networkEnvironmentProbe = {
+  HTTP_PROXY: "http://proxy.example.test:8080",
+  HTTPS_PROXY: "https://proxy.example.test:8443",
+  NO_PROXY: "localhost,.example.test",
+  http_proxy: "http://lowercase-proxy.example.test:8080",
+  https_proxy: "https://lowercase-proxy.example.test:8443",
+  NODE_EXTRA_CA_CERTS: "/tmp/cogwork-enterprise-ca.pem",
 };
 
 const persistence = memoryPersistence();
@@ -201,7 +234,7 @@ const outputSchema = {
 
 const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => {
   const operation = overrides.operation ?? (overrides.profile === "read-only" ? "triage" : "implement");
-  const profile = overrides.profile ?? OperationPolicy.operationPolicyProfile(operation);
+  const profile = overrides.profile ?? OperationPolicy.operationDefaultProfile(operation);
   const mcp = mcpSelection(overrides.mcp);
   return {
     plan: Schema.decodeSync(RunPlan)({
@@ -328,6 +361,24 @@ const Capture = Schema.Struct({
   authToken: Schema.NullOr(Schema.String),
   githubToken: Schema.NullOr(Schema.String),
   ghToken: Schema.NullOr(Schema.String),
+  claudeConfigDir: Schema.NullOr(Schema.String),
+  windowsEnvironment: Schema.Struct({
+    USERPROFILE: Schema.NullOr(Schema.String),
+    HOMEDRIVE: Schema.NullOr(Schema.String),
+    HOMEPATH: Schema.NullOr(Schema.String),
+    APPDATA: Schema.NullOr(Schema.String),
+    SYSTEMROOT: Schema.NullOr(Schema.String),
+    PATHEXT: Schema.NullOr(Schema.String),
+    COMSPEC: Schema.NullOr(Schema.String),
+  }),
+  networkEnvironment: Schema.Struct({
+    HTTP_PROXY: Schema.NullOr(Schema.String),
+    HTTPS_PROXY: Schema.NullOr(Schema.String),
+    NO_PROXY: Schema.NullOr(Schema.String),
+    http_proxy: Schema.NullOr(Schema.String),
+    https_proxy: Schema.NullOr(Schema.String),
+    NODE_EXTRA_CA_CERTS: Schema.NullOr(Schema.String),
+  }),
 });
 
 const NativeSandboxSettings = Schema.fromJsonString(
@@ -400,6 +451,9 @@ const withInheritedCredentialEnvironment = <Value, Error, Requirements>(
       Reflect.set(process.env, "ANTHROPIC_AUTH_TOKEN", "inherited-auth-token");
       Reflect.set(process.env, "GITHUB_TOKEN", "inherited-github-token");
       Reflect.set(process.env, "GH_TOKEN", "inherited-gh-token");
+      Reflect.set(process.env, "CLAUDE_CONFIG_DIR", "/tmp/cogwork-claude-config");
+      Object.assign(process.env, windowsEnvironmentProbe);
+      Object.assign(process.env, networkEnvironmentProbe);
     }),
     () => effect,
     () =>
@@ -442,6 +496,7 @@ export {
   missingByokHarnessLayer,
   NativeSandboxSettings,
   name,
+  networkEnvironmentProbe,
   occurrences,
   outputSchema,
   persistence,
@@ -454,5 +509,6 @@ export {
   sessionStore,
   structuredObjects,
   testProcessDeadline,
+  windowsEnvironmentProbe,
   withInheritedCredentialEnvironment,
 };

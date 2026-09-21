@@ -68,6 +68,20 @@ export const operationSettingNames = OperationSettingName.literals;
 export const RunPlanPolicyProfile = Schema.Literals(["read-only", "full"]);
 export type RunPlanPolicyProfile = typeof RunPlanPolicyProfile.Type;
 
+export const operationDefaultProfiles = {
+  triage: "read-only",
+  implement: "full",
+  "follow-up": "full",
+} as const satisfies Record<LifecycleStage, RunPlanPolicyProfile>;
+
+export const defaultPermissionProfile = (
+  operation: LifecycleStage,
+  declaredProfiles: ReadonlyArray<RunPlanPolicyProfile>,
+) =>
+  declaredProfiles.find((profile) => profile === operationDefaultProfiles[operation]) ??
+  declaredProfiles[0] ??
+  null;
+
 export const OperationBinding = Schema.Struct({
   need: TrimmedNonEmptyString,
   contribution: TrimmedNonEmptyString,
@@ -133,6 +147,44 @@ export const OperationSettingUpdate = Schema.Union([
   Schema.TaggedStruct("Clear", { cell: OperationSettingCell }),
 ]).pipe(Schema.toTaggedUnion("_tag"));
 export type OperationSettingUpdate = typeof OperationSettingUpdate.Type;
+
+export const OperationSettingBatch = Schema.NonEmptyArray(OperationSettingUpdate).check(
+  Schema.isMaxLength(4),
+);
+export type OperationSettingBatch = typeof OperationSettingBatch.Type;
+
+const settingLevelKey = SettingLevel.match({
+  Default: () => "Default",
+  Workflow: ({ workflow }) => JSON.stringify(["Workflow", workflow]),
+  Operation: ({ workflow, operation }) => JSON.stringify(["Operation", workflow, operation]),
+});
+
+const operationSettingScopeKey = OperationSettingScope.match({
+  SettingsProfile: () => "SettingsProfile",
+  RuntimeHost: () => "RuntimeHost",
+  PrivateWorkspaceOverlay: ({ workspace }) => JSON.stringify(["PrivateWorkspaceOverlay", workspace]),
+});
+
+const sameOperationSettingCell = (left: OperationSettingCell, right: OperationSettingCell) =>
+  left.setting === right.setting &&
+  settingLevelKey(left.level) === settingLevelKey(right.level) &&
+  operationSettingScopeKey(left.scope) === operationSettingScopeKey(right.scope);
+
+export const applyOperationSettingBatch = (
+  rows: ReadonlyArray<OperationSettingRow>,
+  updates: OperationSettingBatch,
+) =>
+  updates.reduce<ReadonlyArray<OperationSettingRow>>(
+    (current, update) =>
+      OperationSettingUpdate.match(update, {
+        Clear: ({ cell }) => current.filter((row) => !sameOperationSettingCell(row, cell)),
+        Set: ({ row }) => [
+          ...current.filter((currentRow) => !sameOperationSettingCell(currentRow, row)),
+          row,
+        ],
+      }),
+    rows,
+  );
 
 export const ContributionSettingScope = Schema.Union([
   SettingsProfileScope,

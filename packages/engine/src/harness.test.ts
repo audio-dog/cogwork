@@ -1,10 +1,13 @@
 import { HarnessName, RunPlan } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { memoryPersistence } from "@tanstack/ai-persistence";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -13,6 +16,7 @@ import { CredentialStore } from "./credential-store";
 import {
   fullHarnessExecution,
   type HarnessCatalogSource,
+  type HarnessCatalogSourceResult,
   HarnessError,
   type HarnessExecution,
   type HarnessRunner,
@@ -347,6 +351,130 @@ describe("Harness", () => {
           source: "tanstack-runtime",
           packageVersion: "1.2.3",
         });
+      }),
+    );
+
+    it.effect("returns the current catalog without probing again", () =>
+      Effect.gen(function* () {
+        const runner = {
+          ...controlledRunnerDefaults,
+          name,
+          sessionKind: "opaque-handle",
+          projectedMembers: [],
+          planMiddleware: [],
+          execution: fullHarnessExecution,
+          catalogSources: {
+            fallback: {
+              catalog: Effect.succeed({
+                models: [{ value: "cached-model", label: "Cached model" }],
+                provenance: { source: "cogwork-fallback", fallbackVersion: "1" },
+              } satisfies HarnessCatalogSourceResult),
+            },
+          },
+          run: () => Stream.empty,
+        } satisfies HarnessRunner;
+        const harness = make([runner]);
+
+        assert.isNull(yield* harness.currentCatalog(name));
+        yield* harness.catalog(name);
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "cached-model");
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "cached-model");
+      }),
+    );
+
+    it.effect("keeps the current catalog during refresh and ignores stale probe results", () =>
+      Effect.gen(function* () {
+        const slowStarted = yield* Deferred.make<void>();
+        const releaseSlow = yield* Deferred.make<void>();
+        const interruptedStarted = yield* Deferred.make<void>();
+        const calls = yield* Ref.make(0);
+        const initial = {
+          models: [{ value: "initial", label: "Initial" }],
+          provenance: { source: "cogwork-fallback", fallbackVersion: "1" },
+        } satisfies HarnessCatalogSourceResult;
+        const stale = {
+          models: [{ value: "stale", label: "Stale" }],
+          provenance: { source: "cogwork-fallback", fallbackVersion: "2" },
+        } satisfies HarnessCatalogSourceResult;
+        const fresh = {
+          models: [{ value: "fresh", label: "Fresh" }],
+          provenance: { source: "cogwork-fallback", fallbackVersion: "3" },
+        } satisfies HarnessCatalogSourceResult;
+        const results = [
+          Effect.succeed(initial),
+          Deferred.succeed(slowStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseSlow)),
+            Effect.map(() => stale),
+          ),
+          Effect.succeed(fresh),
+          Deferred.succeed(interruptedStarted, undefined).pipe(Effect.andThen(Effect.never)),
+        ];
+        const runner = {
+          ...controlledRunnerDefaults,
+          name,
+          sessionKind: "opaque-handle",
+          projectedMembers: [],
+          planMiddleware: [],
+          execution: fullHarnessExecution,
+          catalogSources: {
+            fallback: {
+              catalog: Ref.getAndUpdate(calls, (count) => count + 1).pipe(
+                Effect.flatMap((index) => results[index] ?? Effect.succeed(fresh)),
+              ),
+            },
+          },
+          run: () => Stream.empty,
+        } satisfies HarnessRunner;
+        const harness = make([runner]);
+
+        yield* harness.catalog(name);
+        const slowRefresh = yield* Effect.forkChild(harness.catalog(name));
+        yield* Deferred.await(slowStarted);
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "initial");
+
+        yield* harness.catalog(name);
+        yield* Deferred.succeed(releaseSlow, undefined);
+        yield* Fiber.join(slowRefresh);
+
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "fresh");
+
+        const interruptedRefresh = yield* Effect.forkChild(harness.catalog(name));
+        yield* Deferred.await(interruptedStarted);
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "fresh");
+        yield* Fiber.interrupt(interruptedRefresh);
+        assert.isNull(yield* harness.currentCatalog(name));
+      }),
+    );
+
+    it.effect("restores the seeded catalog when the latest refresh is interrupted", () =>
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<void>();
+        const runner = {
+          ...controlledRunnerDefaults,
+          name,
+          sessionKind: "opaque-handle",
+          projectedMembers: [],
+          planMiddleware: [],
+          execution: fullHarnessExecution,
+          catalogSources: {
+            runtime: {
+              catalog: Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+            },
+            fallback: staticCatalogSource(
+              { models: [{ value: "seeded", label: "Seeded" }] },
+              { source: "cogwork-fallback", fallbackVersion: "1" },
+            ),
+          },
+          run: () => Stream.empty,
+        } satisfies HarnessRunner;
+        const harness = make([runner]);
+
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "seeded");
+        const refresh = yield* Effect.forkChild(harness.catalog(name));
+        yield* Deferred.await(started);
+        yield* Fiber.interrupt(refresh);
+
+        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "seeded");
       }),
     );
 
@@ -693,6 +821,24 @@ describe("Harness", () => {
           assert.match(error.message, new RegExp(`unsupported.*${posture.expected}`));
           assert.strictEqual(error.reason, "policy");
         }
+      }),
+    );
+
+    it.effect("accepts a Full profile without a worktree-confinement claim", () =>
+      Effect.gen(function* () {
+        const harness = make([
+          {
+            ...controlledRunnerDefaults,
+            name,
+            sessionKind: "opaque-handle",
+            projectedMembers: [],
+            planMiddleware: [],
+            execution: { nonInteractive: true, worktreeConfined: false, profiles: ["full"] },
+            run: () => Stream.empty,
+          },
+        ]);
+
+        yield* harness.preflight(name, "full", null);
       }),
     );
 

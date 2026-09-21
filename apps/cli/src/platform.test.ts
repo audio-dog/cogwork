@@ -377,6 +377,37 @@ describe("git configuration scope", () => {
   );
 });
 
+describe("git divergence", () => {
+  it.effect("compares a remote head with a remote base from the repository checkout", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+
+      assert.deepStrictEqual(
+        yield* git.divergence("/repo", "origin", "main", {
+          branch: "696-fix-the-gate",
+          remote: "origin",
+        }),
+        { ahead: 2, behind: 1 },
+      );
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git rev-list --left-right --count origin/main...origin/696-fix-the-gate",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer(() => exitedProcess(0, "1\t2\n")),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+});
+
 describe("worktree setup commands", () => {
   it.layer(setupEnvironmentLayer)((it) => {
     it.effect("marks the command as CI while retaining the host environment", () =>
@@ -879,7 +910,7 @@ describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, (
       const git = yield* Git.Git;
       const { worktree, branch } = yield* fixture("474-ready-for-pr");
 
-      assert.deepStrictEqual(yield* git.divergence(worktree, "origin", "main", branch), {
+      assert.deepStrictEqual(yield* git.divergence(worktree, "origin", "main", { branch }), {
         ahead: 1,
         behind: 0,
       });

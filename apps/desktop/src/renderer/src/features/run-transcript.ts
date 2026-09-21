@@ -260,6 +260,7 @@ export const transcriptRows = (entries: Iterable<TranscriptEntry>, runComplete: 
 
 const terminalLine: Partial<Record<RunStatus, string>> = {
   succeeded: "Run finished.",
+  declined: "Pull request creation declined.",
   failed: "Run failed.",
   crashed: "Run failed.",
   exhausted: "Run failed.",

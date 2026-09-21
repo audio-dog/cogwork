@@ -1,4 +1,5 @@
 import {
+  applyOperationSettingBatch,
   CancelRunError,
   CancelRunResult,
   type ClassifiedItem,
@@ -15,10 +16,15 @@ import {
   type ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   type DaemonLimitUpdate,
-  type HarnessName,
+  HarnessName,
   HarnessNotRegistered,
   IssueTrackerError,
-  type OperationSettingUpdate,
+  LifecycleStage,
+  type OperationSettingBatch,
+  type OperationSettingName,
+  OperationSettingRefused,
+  OperationSettingScope,
+  OperationSettingUpdate,
   type PluginFailure,
   type PluginId,
   type PluginMutationResult,
@@ -28,6 +34,8 @@ import {
   pluginRequiringConnection,
   type RunId,
   type RunStatus,
+  resolveOperationSetting,
+  SettingLevel,
   type TriageRole,
   type WorkItemId,
   WorkItemNotFound,
@@ -51,10 +59,10 @@ import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { GitHubClient } from "./github/client";
 import { repoTargetFor as githubRepoTargetFor } from "./github/host";
-import { Harness } from "./harness";
+import { Harness, type HarnessService } from "./harness";
 import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
 import { applyHandbackBarrier } from "./observe";
-import { operationSettingRefusal } from "./operation-policy";
+import { catalogMembershipRefusal, operationSettingRefusal } from "./operation-policy";
 import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
@@ -313,26 +321,133 @@ export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payl
   );
 });
 
-const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutation")(function* (
+const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutation")(function* <E, R>(
   store: ControlStoreService,
-  update: Effect.Effect<ControlStorePicture, ControlStoreFailure>,
+  update: Effect.Effect<ControlStorePicture, ControlStoreFailure | E, R>,
 ) {
   const publisher = yield* DaemonEventPublisher;
   const worker = yield* ReconcileWorker;
-  const controlStore = yield* store.withWrite(update.pipe(Effect.tap(() => worker.invalidateAvailability())));
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  const published = yield* publisher.publishControlStore(controlStore);
-  yield* publisher.publishWorkspaces();
+  const published = yield* store.withWrite(
+    update.pipe(
+      Effect.tap(() => worker.invalidateAvailability()),
+      Effect.flatMap(publisher.publishControlStore),
+    ),
+  );
+  yield* publisher.requestAvailabilityRefresh();
   return published;
 });
 
-export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(function* (payload: {
-  readonly update: OperationSettingUpdate;
-}) {
-  const refusal = operationSettingRefusal(payload.update);
+type CatalogSettingName = Extract<OperationSettingName, "model" | "effort" | "permission-profile">;
+
+const catalogSettingNames = [
+  "model",
+  "effort",
+  "permission-profile",
+] satisfies ReadonlyArray<CatalogSettingName>;
+
+const isCatalogSettingName = (setting: OperationSettingName): setting is CatalogSettingName =>
+  catalogSettingNames.some((candidate) => candidate === setting);
+
+interface OperationSelectionChange {
+  readonly workflow: string;
+  readonly operation: LifecycleStage;
+  readonly workspace: WorkspaceId | null;
+  readonly setting: "harness" | CatalogSettingName;
+  readonly requestedValue: string | null;
+}
+
+const selectionChangesForUpdate = (update: OperationSettingUpdate) => {
+  const candidate = OperationSettingUpdate.match(update, {
+    Clear: ({ cell }) => ({ cell, requestedValue: null }),
+    Set: ({ row }) => ({
+      cell: row,
+      requestedValue: typeof row.value === "string" ? row.value : null,
+    }),
+  });
+  const { cell, requestedValue } = candidate;
+  const setting = cell.setting;
+  const selectionSetting = setting === "harness" || isCatalogSettingName(setting);
+  if (!selectionSetting) return [];
+  const workspace = OperationSettingScope.match(cell.scope, {
+    SettingsProfile: () => null,
+    RuntimeHost: () => null,
+    PrivateWorkspaceOverlay: ({ workspace }) => workspace,
+  });
+  const contexts = SettingLevel.match(cell.level, {
+    Default: () => LifecycleStage.literals.map((operation) => ({ workflow: "coding", operation })),
+    Workflow: ({ workflow }) => LifecycleStage.literals.map((operation) => ({ workflow, operation })),
+    Operation: ({ workflow, operation }) => [{ workflow, operation }],
+  });
+  return contexts.map(
+    (context) => ({ ...context, workspace, setting, requestedValue }) satisfies OperationSelectionChange,
+  );
+};
+
+const validateSelectionContext = Effect.fn("Daemon.validateSelectionContext")(function* (
+  harness: HarnessService,
+  rows: ControlStorePicture["operationSettings"],
+  change: OperationSelectionChange,
+) {
+  if (change.requestedValue === null) return;
+  const effectiveValue = resolveOperationSetting(rows, change.setting, change);
+  const selectedValue = effectiveValue;
+  if (typeof selectedValue !== "string") return;
+  const selectedHarness =
+    change.setting === "harness" ? selectedValue : resolveOperationSetting(rows, "harness", change);
+  if (selectedHarness === null) {
+    return yield* OperationSettingRefused.make({
+      setting: change.setting,
+      source: "Harness selection",
+      reason: "No Harness is selected for this setting",
+    });
+  }
+  const unknownHarness = !Schema.is(HarnessName)(selectedHarness) || !harness.names.includes(selectedHarness);
+  if (unknownHarness) {
+    return yield* OperationSettingRefused.make({
+      setting: "harness",
+      source: "Harness registry",
+      reason: `Unknown Harness ${selectedHarness}`,
+    });
+  }
+  const catalog = yield* harness.currentCatalog(selectedHarness);
+  if (catalog === null) {
+    return yield* OperationSettingRefused.make({
+      setting: "harness",
+      source: `Harness ${selectedHarness}`,
+      reason: `No current option catalog is available for ${selectedHarness}`,
+    });
+  }
+  if (change.setting === "harness") return;
+  const refusal = catalogMembershipRefusal(change.setting, selectedValue, selectedHarness, catalog);
   if (refusal !== null) return yield* refusal;
+});
+
+const validateOperationSettingBatch = Effect.fn("Daemon.validateOperationSettingBatch")(function* (
+  store: ControlStoreService,
+  updates: OperationSettingBatch,
+) {
+  const picture = yield* store.picture;
+  const harness = yield* Harness;
+  const rows = applyOperationSettingBatch(picture.operationSettings, updates);
+  yield* Effect.forEach(
+    updates.flatMap(selectionChangesForUpdate),
+    (change) => validateSelectionContext(harness, rows, change),
+    { discard: true },
+  );
+});
+
+export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(function* (payload: {
+  readonly updates: OperationSettingBatch;
+}) {
+  const refusal = payload.updates.map(operationSettingRefusal).find((candidate) => candidate !== null);
+  if (refusal !== undefined) return yield* refusal;
   const store = yield* ControlStore;
-  return yield* publishAvailabilityMutation(store, store.updateOperationSetting(payload.update));
+  return yield* publishAvailabilityMutation(
+    store,
+    validateOperationSettingBatch(store, payload.updates).pipe(
+      Effect.andThen(store.updateOperationSettings(payload.updates)),
+    ),
+  );
 });
 
 export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function* (payload: {

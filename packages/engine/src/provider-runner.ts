@@ -1,4 +1,4 @@
-import type { AgUiEvent, HarnessName, LifecycleStage, RunId, RunPlan } from "@cogwork/contracts";
+import type { AgUiEvent, HarnessName, RunId, RunPlan, RunPlanPolicyProfile } from "@cogwork/contracts";
 import {
   type AgentLoopStrategy,
   type AnyTool,
@@ -11,6 +11,7 @@ import {
 } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { withPersistence } from "@tanstack/ai-persistence";
+import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
@@ -24,7 +25,6 @@ import {
   selectionOfPreflightInput,
   staticCatalogSource,
 } from "./harness";
-import { operationPolicyProfile } from "./operation-policy";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
@@ -78,17 +78,19 @@ export interface ProviderRunnerOptions {
   readonly runChat?: RunChat;
 }
 
-const usesReadOnlyProfile = (stage: LifecycleStage) => operationPolicyProfile(stage) === "read-only";
-const readOnlyLoopBudget = 12;
-const writingLoopBudget = 40;
-const readOnlyRunBudget = "15 minutes";
-const writingRunBudget = "2 hours";
+const loopBudgets = {
+  "read-only": 12,
+  full: 40,
+} satisfies Record<RunPlanPolicyProfile, number>;
 
-export const defaultLoopBudget = (stage: LifecycleStage) =>
-  usesReadOnlyProfile(stage) ? readOnlyLoopBudget : writingLoopBudget;
+const runBudgets = {
+  "read-only": "15 minutes",
+  full: "2 hours",
+} satisfies Record<RunPlanPolicyProfile, Duration.Input>;
 
-export const defaultRunBudget = (stage: LifecycleStage) =>
-  usesReadOnlyProfile(stage) ? readOnlyRunBudget : writingRunBudget;
+export const defaultLoopBudget = (profile: RunPlanPolicyProfile) => loopBudgets[profile];
+
+export const defaultRunBudget = (profile: RunPlanPolicyProfile) => runBudgets[profile];
 
 const launchError = (retryable: boolean, message: string) =>
   new HarnessError({ reason: "launch", retryable, message });
@@ -243,7 +245,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             messages,
             tools,
             middleware,
-            agentLoopStrategy: maxIterations(defaultLoopBudget(plan.operation)),
+            agentLoopStrategy: maxIterations(defaultLoopBudget(plan.harness.profile)),
             abortController,
             runId: plan.id,
             threadId: session ?? undefined,

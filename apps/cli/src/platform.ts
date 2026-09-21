@@ -177,8 +177,9 @@ export const gitLayer = Layer.effect(
         ),
       fastForward: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["merge", "--ff-only", `${remote}/${branch}`]).pipe(Effect.asVoid),
-      divergence: (worktreePath, remote, baseBranch, headBranch = baseBranch) => {
-        const range = `${remote}/${baseBranch}...refs/heads/${headBranch}`;
+      divergence: (worktreePath, remote, baseBranch, head = { branch: baseBranch }) => {
+        const headRef = head.remote ? `${head.remote}/${head.branch}` : `refs/heads/${head.branch}`;
+        const range = `${remote}/${baseBranch}...${headRef}`;
         return runGit(worktreePath, ["rev-list", "--left-right", "--count", range]).pipe(
           Effect.flatMap((stdout) => {
             const parsed = parseDivergence(stdout);

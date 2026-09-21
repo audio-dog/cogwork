@@ -74,10 +74,14 @@ const item: EligibleWork = {
 
 const credential = Redacted.make("tracker-token");
 
-const testLayer = (settings = operationSettings) =>
+const testLayer = (
+  settings = operationSettings,
+  policyProfiles: ReadonlyArray<"read-only" | "full"> = ["read-only", "full"],
+) =>
   engineTestLayerWithOperationResolution({
     harness,
     operationSettings: settings,
+    policyProfiles,
     context: {
       layers: [
         { kind: "repo", source: "/repo/AGENTS.md", content: "repo rules" },
@@ -101,10 +105,13 @@ const testLayer = (settings = operationSettings) =>
     ],
   });
 
-const candidateFacts = (session: OperationResolution.CandidateSessionFacts["session"] = null) => ({
+const candidateFacts = (
+  session: OperationResolution.CandidateSessionFacts["session"] = null,
+  candidate: EligibleWork = item,
+) => ({
   runId,
   workspace,
-  item,
+  item: candidate,
   observation: { generation: 12, observedAtMillis: 1000 },
   checkoutPath: "/worktrees/491",
   continuationPrompt: "Continue implementation",
@@ -122,6 +129,18 @@ const candidateFacts = (session: OperationResolution.CandidateSessionFacts["sess
 });
 
 describe("OperationResolution", () => {
+  it.layer(testLayer(operationSettings, ["full"]))((it) => {
+    it.effect("runs Triage with Full when that is the selected Harness's only profile", () =>
+      Effect.gen(function* () {
+        const resolution = yield* OperationResolution.OperationResolution;
+        const triageItem = { ...item, stage: "triage" as const };
+        const accepted = yield* resolution.resolve(candidateFacts(null, triageItem));
+
+        assert.strictEqual(accepted.plan.harness.profile, "full");
+      }),
+    );
+  });
+
   it.layer(testLayer())((it) => {
     it.effect("accepts a candidate as a Run Plan with Harness-only MCP credentials", () =>
       Effect.gen(function* () {

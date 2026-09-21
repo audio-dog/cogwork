@@ -305,6 +305,45 @@ describe("stage settings come from Operation settings", () => {
     assert.strictEqual(resolved?.stage.harness, "cursor");
   });
 
+  it("uses a Harness profile when it does not declare the Operation default", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "triage", [stageEnabled, hostHarness], [], ["full"]);
+
+    assert.strictEqual(resolved?.profile, "full");
+  });
+
+  it("attributes a Provider profile fallback to the Harness", () => {
+    const resolved = resolveRunPlanStage(
+      workspace.config,
+      "triage",
+      [stageEnabled, hostHarness],
+      [],
+      ["full"],
+    );
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId: Schema.decodeSync(RunId)("run-provider-profile-default"),
+      workspace,
+      item: { ...item, stage: "triage" },
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Triage #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: [],
+      middleware: [],
+      context,
+      contributions: [],
+      mcpServers: [],
+      provenanceStamps: [],
+    });
+
+    const trace = plan.provenance.resolution.find(({ key }) => key === "permission-profile");
+    assert.strictEqual(trace?.winner?.source, "Harness cursor");
+    assert.strictEqual(trace?.winner?.value, "full");
+  });
+
   it("carries model and effort from Operation settings", () => {
     const resolved = resolveRunPlanStage(bareConfig, "implement", [
       stageEnabled,
@@ -758,6 +797,12 @@ describe("Run Plan assembly", () => {
         },
         {
           setting: "permission-profile",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: "full",
+        },
+        {
+          setting: "permission-profile",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
           value: "read-only",
@@ -817,6 +862,13 @@ describe("Run Plan assembly", () => {
     );
     const modelTrace = plan.provenance.resolution.find((entry) => entry.key === "model");
     assert.strictEqual(modelTrace?.winner?.source, "Private workspace overlay workspace");
+    const permissionTrace = plan.provenance.resolution.find((entry) => entry.key === "permission-profile");
+    assert.strictEqual(permissionTrace?.winner?.source, "Private workspace overlay workspace");
+    assert.deepStrictEqual(
+      permissionTrace?.shadowed.map((candidate) => candidate.value),
+      ["full"],
+    );
+    assert.deepStrictEqual(permissionTrace?.dropped, []);
     assert.deepStrictEqual(
       modelTrace?.shadowed.map((candidate) => candidate.value),
       ["profile-model", "default-model"],

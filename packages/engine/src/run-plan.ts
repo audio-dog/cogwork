@@ -18,6 +18,7 @@ import type {
 import {
   ContentRevision,
   ContributionSettingScope,
+  defaultPermissionProfile,
   HarnessName,
   type LifecycleStage,
   OperationBinding as OperationBindingSchema,
@@ -59,7 +60,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
-import { operationPolicyProfile } from "./operation-policy";
+import { operationDefaultProfile } from "./operation-policy";
 import { type OperationDefinition, resolveStage } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { ownedToolNames } from "./tools";
@@ -349,6 +350,7 @@ export const resolveRunPlanStage = (
   operation: LifecycleStage,
   rows: readonly OperationSettingRow[],
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
+  declaredProfiles: ReadonlyArray<RunPlanPolicyProfile> = [operationDefaultProfile(operation)],
 ) => {
   const base = resolveStage(config, operation);
   const context = { workflow: "coding", operation, workspace: config.name };
@@ -368,7 +370,10 @@ export const resolveRunPlanStage = (
       model: trimmedStringValue(settingValueOf("model"), null),
       effort: trimmedStringValue(settingValueOf("effort"), null),
     },
-    profile: policyProfileValue(settingValueOf("permission-profile"), operationPolicyProfile(operation)),
+    profile: policyProfileValue(
+      settingValueOf("permission-profile"),
+      defaultPermissionProfile(operation, declaredProfiles) ?? operationDefaultProfile(operation),
+    ),
     settings,
     contributionSettings,
   };
@@ -407,6 +412,14 @@ const engineCandidate = (operation: LifecycleStage, value: unknown) =>
     value: snapshotValue(value),
   });
 
+const harnessCandidate = (harness: HarnessName, value: unknown) =>
+  RunPlanResolutionCandidate.make({
+    scope: "Harness",
+    level: "Declared profiles",
+    source: `Harness ${harness}`,
+    value: snapshotValue(value),
+  });
+
 const winningRows = (winning: OperationSettingRow | readonly OperationSettingRow[] | null) => {
   if (winning === null) return [];
   return "setting" in winning ? [winning] : winning;
@@ -431,10 +444,15 @@ const resolutionTrace = (
   const winner = winners.at(-1);
   const contributors = setting === "bindings" ? winners.map(resolutionCandidate) : [];
   const effective = effectiveSettingValue(resolved, setting);
+  const usesHarnessProfileDefault =
+    setting === "permission-profile" && resolved.profile !== operationDefaultProfile(operation);
+  const defaultCandidate = usesHarnessProfileDefault
+    ? harnessCandidate(resolved.stage.harness, effective)
+    : engineCandidate(operation, effective);
   return RunPlanResolutionTrace.make({
     key: setting,
     operator: operatorForSetting(setting),
-    winner: winner ? resolutionCandidate(winner) : engineCandidate(operation, effective),
+    winner: winner ? resolutionCandidate(winner) : defaultCandidate,
     contributors,
     shadowed: resolution?.shadowed.map(resolutionCandidate) ?? [],
     dropped:

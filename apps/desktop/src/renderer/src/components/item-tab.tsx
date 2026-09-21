@@ -39,6 +39,7 @@ import {
   subTabs,
 } from "../features/item-tab";
 import { useRunTranscript } from "../features/run-activity";
+import { runStatusLabel } from "../features/run-status";
 import { statusLine } from "../features/run-transcript";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
@@ -550,13 +551,13 @@ function PreviousAttempts() {
                   <div className="flex items-center gap-2">
                     <span
                       className={cn(
-                        "font-medium capitalize",
+                        "font-medium",
                         tone === "succeeded" && "text-success",
                         tone === "failed" && "text-destructive",
                         tone === "abandoned" && "text-muted-foreground",
                       )}
                     >
-                      {attempt.status}
+                      {runStatusLabel[attempt.status]}
                     </span>
                     <span className="text-muted-foreground">{attempt.stage}</span>
                     <span aria-hidden className="text-muted-foreground">

@@ -96,7 +96,7 @@ const projectedMcpName = (name: string, index: number) =>
 
 const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   const stage = overrides.stage ?? "implement";
-  const profile = OperationPolicy.operationPolicyProfile(stage);
+  const profile = OperationPolicy.operationDefaultProfile(stage);
   const mcpSkills = overrides.mcpSkills ?? [];
   const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
     target: "draft-2020-12",
@@ -191,7 +191,6 @@ const makeTestAdapter: MakeCodexAdapter = (model, config) =>
 const runner = (options: Partial<CodexRunnerOptions> = {}) =>
   codexRunner({
     name,
-    environment: process.env,
     codexExecutable: fakeCodexExecutable(),
     makeAdapter: makeTestAdapter,
     ...options,
@@ -282,6 +281,7 @@ const Capture = Schema.fromJsonString(
     hasGithubToken: Schema.Boolean,
     hasGhToken: Schema.Boolean,
     hasLinearApiKey: Schema.Boolean,
+    codexHome: Schema.NullOr(Schema.String),
   }),
 );
 

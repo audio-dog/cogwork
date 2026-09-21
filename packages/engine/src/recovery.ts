@@ -223,7 +223,6 @@ export const make = Effect.gen(function* () {
   ) {
     const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
     const accountedRun = accountedRunFor(item, last);
-    if (accountedRun?.claimDisposition === "hold") return;
     const currentStage = observedStage(item);
     const work = currentStage ? eligibleWork(item, currentStage) : null;
     if (work && !isStalledFollowUp(work.stage, work.followUp)) {
@@ -274,7 +273,6 @@ export const make = Effect.gen(function* () {
   ) {
     if (yield* scheduler.isInFlight(workspace, item.id)) return;
     const latest = yield* ledger.latestRunForItem(workspace.config.name, item.id);
-    if (accountedRunFor(item, latest)?.claimDisposition === "hold") return;
     if (latest?.status === "running" || latest?.status === "interrupted") return;
     yield* releaseClaim(workspace, item.id);
   });

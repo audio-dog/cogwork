@@ -18,6 +18,7 @@ import {
   HarnessEnablement,
   type HarnessName,
   LifecycleStage,
+  type OperationSettingBatch,
   type OperationSettingCell,
   type OperationSettingRow,
   OperationSettingRow as OperationSettingRowSchema,
@@ -64,8 +65,8 @@ type ControlStoreMutators<Picture> = {
     harness: HarnessName,
     enabled: boolean,
   ) => Effect.Effect<Picture, ControlStoreFailure>;
-  readonly updateOperationSetting: (
-    update: OperationSettingUpdate,
+  readonly updateOperationSettings: (
+    updates: OperationSettingBatch,
   ) => Effect.Effect<Picture, ControlStoreFailure>;
   readonly installPlugin: (
     record: PluginInstall,
@@ -670,15 +671,20 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       }),
     );
   });
-  const updateOperationSetting = Effect.fn("ControlStore.updateOperationSetting")(function* (
-    update: OperationSettingUpdate,
+  const updateOperationSettings = Effect.fn("ControlStore.updateOperationSettings")(function* (
+    updates: OperationSettingBatch,
   ) {
     return yield* sql.withTransaction(
       Effect.gen(function* () {
-        yield* OperationSettingUpdate.match(update, {
-          Set: ({ row }) => setOperationSetting(sql, row),
-          Clear: ({ cell }) => clearOperationSetting(sql, cell),
-        });
+        yield* Effect.forEach(
+          updates,
+          (update) =>
+            OperationSettingUpdate.match(update, {
+              Set: ({ row }) => setOperationSetting(sql, row),
+              Clear: ({ cell }) => clearOperationSetting(sql, cell),
+            }),
+          { discard: true },
+        );
         return yield* readPicture(sql);
       }),
     );
@@ -744,8 +750,8 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       removeConnection(connectionId).pipe(Effect.mapError(storeFailure("remove Connection"))),
     setHarnessEnabled: (harness: HarnessName, enabled: boolean) =>
       setHarnessEnabled(harness, enabled).pipe(Effect.mapError(storeFailure("set Harness enablement"))),
-    updateOperationSetting: (update: OperationSettingUpdate) =>
-      updateOperationSetting(update).pipe(Effect.mapError(storeFailure("update Operation setting"))),
+    updateOperationSettings: (updates: OperationSettingBatch) =>
+      updateOperationSettings(updates).pipe(Effect.mapError(storeFailure("update Operation settings"))),
     installPlugin: (
       record: PluginInstall,
       contributionIds: ReadonlyArray<string>,
@@ -843,7 +849,7 @@ export const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(functio
             ON sessions.id = runs.session
             AND sessions.kind = 'opaque-handle'
           INNER JOIN run_events ON run_events.run_id = runs.id
-          WHERE runs.status IN ('succeeded', 'failed', 'exhausted', 'interrupted', 'crashed')
+          WHERE runs.status IN ('succeeded', 'declined', 'failed', 'exhausted', 'interrupted', 'crashed')
             AND runs.ended_at IS NOT NULL
           GROUP BY runs.id, runs.started_at, runs.ended_at
         ),
@@ -1068,7 +1074,7 @@ const unavailable = (message: string): ControlStoreService => {
     revokeConnection: () => Effect.fail(failure),
     removeConnection: () => Effect.fail(failure),
     setHarnessEnabled: () => Effect.fail(failure),
-    updateOperationSetting: () => Effect.fail(failure),
+    updateOperationSettings: () => Effect.fail(failure),
     installPlugin: () => Effect.fail(failure),
     uninstallPlugin: () => Effect.fail(failure),
     updateContributionSetting: () => Effect.fail(failure),

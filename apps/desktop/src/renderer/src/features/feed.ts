@@ -31,6 +31,7 @@ interface FeedItem {
 
 const terminalStatuses: ReadonlySet<RunSummary["status"]> = new Set([
   "succeeded",
+  "declined",
   "failed",
   "exhausted",
   "interrupted",

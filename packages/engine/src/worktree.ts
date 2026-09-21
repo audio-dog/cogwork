@@ -300,25 +300,16 @@ export const make = Effect.gen(function* () {
     const remote = remoteOf(config);
     const baseBranch = baseBranchOf(config);
     const headBranch = branchName(item);
-    const worktreePath = pathFor(repoPath, config, headBranch);
-    const entries = yield* git.listWorktrees(repoPath);
-    const actualBranch = entries.find((entry) => entry.path === worktreePath)?.branch ?? null;
-    if (actualBranch !== headBranch) {
-      return declinedPullRequestReadiness(
-        `worktree ${worktreePath} is on ${actualBranch ?? "no branch"}, expected ${headBranch}`,
-      );
-    }
 
     yield* git.fetch(repoPath, remote);
     const remoteHeadExists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
     if (!remoteHeadExists) {
       return declinedPullRequestReadiness(`head ${headBranch} has not been pushed to ${remote}`);
     }
-    const headDivergence = yield* git.divergence(worktreePath, remote, headBranch);
-    if (headDivergence.ahead > 0 || headDivergence.behind > 0) {
-      return declinedPullRequestReadiness(`local head ${headBranch} does not match ${remote}/${headBranch}`);
-    }
-    const divergence = yield* git.divergence(worktreePath, remote, baseBranch, headBranch);
+    const divergence = yield* git.divergence(repoPath, remote, baseBranch, {
+      branch: headBranch,
+      remote,
+    });
     if (divergence.ahead === 0) {
       return declinedPullRequestReadiness(`head ${headBranch} is not ahead of ${remote}/${baseBranch}`);
     }

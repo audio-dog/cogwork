@@ -5,7 +5,7 @@ import {
   type PolicyDecision,
   type SandboxPolicy,
 } from "@tanstack/ai-sandbox";
-import { type OperationPolicyProfile, operationPolicyProfile } from "../operation-policy";
+import { type OperationPolicyProfile, operationDefaultProfile } from "../operation-policy";
 
 export type OwnedToolName = "read" | "write" | "edit" | "bash" | "glob" | "grep" | "webfetch";
 
@@ -48,7 +48,7 @@ const profiles: Record<OperationPolicyProfile, SandboxPolicy> = {
 
 export const policyForProfile = (profile: OperationPolicyProfile) => profiles[profile];
 
-export const profileForStage = (stage: LifecycleStage) => policyForProfile(operationPolicyProfile(stage));
+export const profileForStage = (stage: LifecycleStage) => policyForProfile(operationDefaultProfile(stage));
 
 type Capability = "read" | "fileWrite" | "network" | "command";
 

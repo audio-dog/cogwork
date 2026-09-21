@@ -11,9 +11,11 @@ import {
   WorkspaceState,
   workspaceKey,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { ControlStore } from "./control-store";
@@ -123,6 +125,7 @@ export const make = Effect.gen(function* () {
   const lastItems = yield* Ref.make<ReadonlyMap<string, PublishedItem>>(new Map());
   const lastWorkspaces = yield* Ref.make<ReadonlyMap<string, PublishedWorkspace>>(new Map());
   const lastScheduler = yield* Ref.make<string | null>(null);
+  const availabilityRefreshes = yield* Queue.sliding<void>(1);
 
   const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
     picture: ControlStorePicture,
@@ -249,6 +252,28 @@ export const make = Effect.gen(function* () {
     return connections;
   });
 
+  yield* Queue.take(availabilityRefreshes).pipe(
+    Effect.flatMap(() =>
+      worker.submitAfterCurrent().pipe(
+        Effect.ignore,
+        Effect.andThen(publishItems()),
+        Effect.andThen(publishWorkspaces()),
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) => Effect.logError("availability refresh publication failed", { cause }),
+        ),
+      ),
+    ),
+    Effect.forever,
+    Effect.forkScoped,
+  );
+
+  const requestAvailabilityRefresh = Effect.fn("DaemonEventPublisher.requestAvailabilityRefresh")(
+    function* () {
+      yield* Queue.offer(availabilityRefreshes, undefined);
+    },
+  );
+
   return {
     publishItems,
     publishWorkspaces,
@@ -257,6 +282,7 @@ export const make = Effect.gen(function* () {
     publishControlStore,
     publishPlugins,
     publishConnections,
+    requestAvailabilityRefresh,
   } as const;
 });
 
