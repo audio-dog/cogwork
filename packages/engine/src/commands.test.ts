@@ -1,4 +1,5 @@
 import {
+  applyOperationSettingBatch,
   type CancelRunError,
   ClassifiedItem,
   Connection,
@@ -10,6 +11,7 @@ import {
   DaemonEvent,
   type DaemonLimitUpdate,
   DaemonRpcs,
+  type HarnessModelOptionDescriptor,
   HarnessName,
   IssueTrackerError,
   type LocalContribution,
@@ -20,6 +22,7 @@ import {
   RunId,
   type RunRecord,
   type RunStatus,
+  resolveOperationSetting,
   type SettingLevel,
   type TriageRole,
   WorkItemId,
@@ -71,6 +74,13 @@ const assertAlreadyFinishedCancelError = (error: CancelRunError, status: RunStat
   assert.strictEqual(error.reason, "already-finished");
   assert.strictEqual(error.status, status);
 };
+const effortOption: HarnessModelOptionDescriptor = {
+  type: "select",
+  id: "effort",
+  label: "Effort",
+  values: [{ value: "high", label: "High" }],
+  defaultValue: "high",
+};
 const commandHarnessRunner: HarnessRunner = {
   name: harness("cursor"),
   sessionKind: "opaque-handle",
@@ -91,7 +101,16 @@ const commandHarnessRunner: HarnessRunner = {
   authentication: { mode: "host", reference: "test" },
   catalogSources: {
     fallback: staticCatalogSource(
-      { models: [{ value: "test", label: "Test" }] },
+      {
+        models: [
+          {
+            value: "test",
+            label: "Test",
+            options: [effortOption],
+          },
+          { value: "test-next", label: "Test next", options: [effortOption] },
+        ],
+      },
       { source: "cogwork-fallback", fallbackVersion: "test" },
     ),
   },
@@ -111,7 +130,15 @@ const alternateHarnessRunner = {
   name: harness("codex"),
   catalogSources: {
     fallback: staticCatalogSource(
-      { models: [{ value: "codex-model", label: "Codex model" }] },
+      {
+        models: [
+          {
+            value: "codex-model",
+            label: "Codex model",
+            options: [effortOption],
+          },
+        ],
+      },
       { source: "cogwork-fallback", fallbackVersion: "test" },
     ),
   },
@@ -1186,36 +1213,36 @@ describe("SetOperationSetting", () => {
     ],
   };
   const cursorSelectedStore = controlStoreStub({ seed: cursorSelected });
-  const staleEffortStore = controlStoreStub({
+  const staleModelOptionsStore = controlStoreStub({
     seed: {
       ...cursorSelected,
       operationSettings: [
         ...cursorSelected.operationSettings,
         {
-          setting: "effort",
+          setting: "model-options",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "SettingsProfile" },
-          value: "retired-effort",
+          value: { effort: "retired-effort" },
         },
       ],
     },
   });
-  const staleInheritedEffortStore = controlStoreStub({
+  const staleInheritedModelOptionsStore = controlStoreStub({
     seed: {
       ...cursorSelected,
       operationSettings: [
         ...cursorSelected.operationSettings,
         {
-          setting: "effort",
+          setting: "model-options",
           level: { _tag: "Default" },
           scope: { _tag: "SettingsProfile" },
-          value: "retired-effort",
+          value: { effort: "retired-effort" },
         },
         {
-          setting: "effort",
+          setting: "model-options",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "SettingsProfile" },
-          value: "old-effort",
+          value: { effort: "old-effort" },
         },
       ],
     },
@@ -1263,21 +1290,98 @@ describe("SetOperationSetting", () => {
       value: "test",
     },
   };
-  const effortUpdate: OperationSettingUpdate = {
-    _tag: "Clear",
-    cell: {
-      setting: "effort",
-      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-      scope: { _tag: "SettingsProfile" },
-    },
-  };
 
-  it.effect("persists and publishes one Operation setting batch", () =>
+  it.effect("preserves model options when the model does not change", () => {
+    const configured: ControlStorePicture = {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        modelUpdate.row,
+        {
+          setting: "model-options",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: { effort: "high" },
+        },
+      ],
+    };
+    const store = controlStoreStub({
+      seed: configured,
+      updateOperationSettings: (updates) =>
+        Effect.succeed({
+          ...configured,
+          operationSettings: applyOperationSettingBatch(configured.operationSettings, updates),
+        }),
+    });
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({ updates: [modelUpdate] });
+
+      assert.deepStrictEqual(
+        returned.operationSettings.find(({ setting }) => setting === "model-options")?.value,
+        { effort: "high" },
+      );
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), store)), Effect.scoped);
+  });
+
+  it.effect("resets options for a changed model row even while that model is shadowed", () => {
+    const configured: ControlStorePicture = {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        {
+          setting: "model",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: "test",
+        },
+        {
+          setting: "model-options",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: { effort: "high" },
+        },
+        modelUpdate.row,
+      ],
+    };
+    const update: OperationSettingUpdate = {
+      _tag: "Set",
+      row: {
+        setting: "model",
+        level: { _tag: "Default" },
+        scope: { _tag: "SettingsProfile" },
+        value: "test-next",
+      },
+    };
+    const store = controlStoreStub({
+      seed: configured,
+      updateOperationSettings: (updates) =>
+        Effect.succeed({
+          ...configured,
+          operationSettings: applyOperationSettingBatch(configured.operationSettings, updates),
+        }),
+    });
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({ updates: [update] });
+
+      assert.deepStrictEqual(
+        resolveOperationSetting(returned.operationSettings, "model-options", {
+          workflow: "coding",
+          operation: "triage",
+          workspace: null,
+        }),
+        {},
+      );
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), store)), Effect.scoped);
+  });
+
+  it.effect("clears model options atomically when a model changes", () =>
     Effect.gen(function* () {
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const returned = yield* client.SetOperationSetting({ updates: [modelUpdate, effortUpdate] });
+      const returned = yield* client.SetOperationSetting({ updates: [modelUpdate] });
       const events = yield* Stream.fromSubscription(subscription).pipe(
         Stream.takeUntil(DaemonEvent.guards.WorkspaceChanged),
         Stream.runCollect,
@@ -1290,7 +1394,15 @@ describe("SetOperationSetting", () => {
       }
       assert.deepStrictEqual(published.controlStore, returned);
       if (!OperationSettingUpdate.guards.Set(modelUpdate)) return assert.fail("expected model update");
-      assert.deepStrictEqual(returned.operationSettings, [modelUpdate.row]);
+      assert.deepStrictEqual(returned.operationSettings, [
+        modelUpdate.row,
+        {
+          setting: "model-options",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: {},
+        },
+      ]);
       assert.strictEqual(events[1]?._tag, "WorkspaceChanged");
     }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), cursorSelectedStore)), Effect.scoped),
   );
@@ -1477,7 +1589,7 @@ describe("SetOperationSetting", () => {
       });
 
       assert.strictEqual(returned.operationSettings[0]?.value, "test");
-    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), staleEffortStore)), Effect.scoped),
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), staleModelOptionsStore)), Effect.scoped),
   );
 
   it.effect("persists a Harness pick when its clear exposes a stale inherited value", () =>
@@ -1506,7 +1618,7 @@ describe("SetOperationSetting", () => {
           {
             _tag: "Clear",
             cell: {
-              setting: "effort",
+              setting: "model-options",
               level: { _tag: "Operation", workflow: "coding", operation: "implement" },
               scope: { _tag: "SettingsProfile" },
             },
@@ -1523,7 +1635,7 @@ describe("SetOperationSetting", () => {
       );
     }).pipe(
       Effect.provide(
-        daemonLayerWithHarness(trackerLayer({}), staleInheritedEffortStore, [
+        daemonLayerWithHarness(trackerLayer({}), staleInheritedModelOptionsStore, [
           commandHarnessRunner,
           alternateHarnessRunner,
         ]),

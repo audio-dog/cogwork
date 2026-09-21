@@ -757,6 +757,15 @@ layer(NodeServices.layer)((it) => {
               value: "profile-operation",
             },
           },
+          {
+            _tag: "Set",
+            row: {
+              setting: "model-options",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+              value: { effort: "high", speed: true },
+            },
+          },
         ]),
       );
 
@@ -769,6 +778,14 @@ layer(NodeServices.layer)((it) => {
           workspace,
         }),
         "profile-operation",
+      );
+      assert.deepStrictEqual(
+        resolveOperationSetting(reloaded.operationSettings, "model-options", {
+          workflow: "coding",
+          operation: "implement",
+          workspace,
+        }),
+        { effort: "high", speed: true },
       );
 
       const cleared = yield* withStore(storePath, (store) =>
@@ -796,6 +813,36 @@ layer(NodeServices.layer)((it) => {
   );
 
   it.layer(ControlStoreLogProbe.layer)((it) => {
+    it.effect("ignores a stored retired effort setting without dropping valid settings", () =>
+      Effect.gen(function* () {
+        const { storePath } = yield* temporaryStore();
+        const logProbe = yield* ControlStoreLogProbe;
+        assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+        yield* poke(
+          storePath,
+          `INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
+           VALUES
+             ('model', 'operation', 'coding', 'implement', 'settings-profile', '', '"openai/gpt-5"'),
+             ('effort', 'operation', 'coding', 'implement', 'settings-profile', '', '"high"');`,
+        );
+
+        const reloaded = yield* readControlStore(storePath).pipe(Effect.withLogger(logProbe.logger));
+
+        assert.strictEqual(reloaded.operationSettings.length, 1);
+        assert.strictEqual(reloaded.operationSettings[0]?.setting, "model");
+        const entries = yield* logProbe.entries;
+        const isRetiredSettingWarning = (entry: (typeof entries)[number]) => {
+          const matches =
+            entry.level === "WARN" &&
+            Array.isArray(entry.message) &&
+            entry.message.includes("ignored stored retired or unknown Operation setting");
+          return matches;
+        };
+        const warnings = entries.filter(isRetiredSettingWarning);
+        assert.strictEqual(warnings.length, 1);
+      }),
+    );
+
     it.effect("ignores one stored setting for an unknown Operation without dropping valid settings", () =>
       Effect.gen(function* () {
         const { storePath } = yield* temporaryStore();
