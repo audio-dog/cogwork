@@ -13,6 +13,7 @@ import {
   ReadyToMergeItem,
   SchedulerStats,
 } from "./daemon";
+import { HarnessOverview } from "./harness";
 import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
 import { WorkspaceRegistration } from "./workspace";
@@ -65,6 +66,7 @@ export const DaemonEvent = Schema.TaggedUnion({
     connections: ConnectionOverview,
     danglingWorkspaces: Schema.Array(WorkspaceId),
   },
+  HarnessesChanged: { emittedAtMillis: Schema.Finite, overview: HarnessOverview },
   SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },
 });
 export type DaemonEvent = typeof DaemonEvent.Type;
