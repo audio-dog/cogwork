@@ -1,0 +1,34 @@
+packages/claude-code/src/harness-host.test.ts
+  s_5439ef13279cb1::t_153bd6c8c52411 92-102,104-108,112-116,118-119
+  s_5439ef13279cb1::t_acd1695f985261 90,109-110
+  s_5439ef13279cb1::t_23bfec576abd23 111,117
+  s_5439ef13279cb1::t_07c802118497e5 66,68-74,79,82-83,85-86
+  s_5439ef13279cb1::t_e0d375eba15be9 32
+packages/claude-code/src/harness.ts
+  s_5439ef13279cb1::t_f8f17ee5f48bcf 15-16
+  s_5439ef13279cb1::t_760c08e7d30587 292,297,421
+  s_5439ef13279cb1::t_c0abfef85307e1 285-290,293-295
+  s_5439ef13279cb1::t_7ade2651123cc3 342,347,365,376,390,394-395,397,425-427
+  s_5439ef13279cb1::t_ffa97e05f3b40e 391-393
+  s_5439ef13279cb1::t_153bd6c8c52411 210,212,215
+  s_5439ef13279cb1::t_23bfec576abd23 396
+  s_5439ef13279cb1::t_77938ffbe4241e 296,398
+packages/claude-code/src/harness-environment.test.ts
+  s_5439ef13279cb1::t_153bd6c8c52411 67-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5ec81ac5a2a7fa400f9f62bb8190dfcc2c6c069c",
+  "prompts": {},
+  "sessions": {
+    "s_5439ef13279cb1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c4d7-35dc-7870-b5fc-73acbd1f7634",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
