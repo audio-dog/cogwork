@@ -1,5 +1,6 @@
 import {
   type DaemonStatus,
+  OperationSettingRefused,
   type RunId,
   RunId as RunIdSchema,
   type WorkItemId,
@@ -21,6 +22,7 @@ import {
   daemonOrStore,
   daemonStatusPicture,
   formatDaemonLimits,
+  formatOperationSettingRefusal,
   formatOperationSettings,
   formatRunEvents,
   limitsCommand,
@@ -174,6 +176,34 @@ describe("limits", () => {
 });
 
 describe("operation settings", () => {
+  it("reports a refusal with the daemon's permitted option values", () => {
+    const refusal = OperationSettingRefused.make({
+      setting: "model-options",
+      source: "Harness cursor",
+      reason:
+        'cursor does not offer model option effort="medium" for cursor-model; permitted model options: effort ("low" | "high"), speed (true | false)',
+    });
+
+    assert.strictEqual(
+      formatOperationSettingRefusal(refusal),
+      'Harness cursor refused model-options: cursor does not offer model option effort="medium" for cursor-model; permitted model options: effort ("low" | "high"), speed (true | false)',
+    );
+  });
+
+  it("makes refusal diagnostics safe for terminal output", () => {
+    const refusal = OperationSettingRefused.make({
+      setting: "model-options",
+      source: "Harness cursor\u001b[2J",
+      reason: "invalid\nvalue",
+    });
+
+    const message = formatOperationSettingRefusal(refusal);
+
+    assert.strictEqual(message, "Harness cursor[2J refused model-options: invalid value");
+    assert.notInclude(message, "\u001b");
+    assert.notInclude(message, "\n");
+  });
+
   it("renders effective values from raw rows with level before Scope", () => {
     assert.strictEqual(
       formatOperationSettings(
