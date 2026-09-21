@@ -190,6 +190,8 @@ const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
 const worktreeFsLayerWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
   worktreeFsLayer.pipe(Layer.provide(platformDependenciesWithSpawner(spawner)));
 
+const worktreeFsTestLayer = worktreeFsLayer.pipe(Layer.provideMerge(NodeServices.layer));
+
 const setupEnvironmentLayer = worktreeFsLayerWithSpawner(
   ChildProcessSpawner.make((command) => {
     if (!ChildProcess.isStandardCommand(command)) return Effect.die("unsupported command");
@@ -238,6 +240,29 @@ const denied = (method: string, target: string) =>
     method,
     pathOrDescriptor: target,
   });
+
+const debrisInspectionFailureLayer: Layer.Layer<
+  WorktreeFs.WorktreeFs | FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
+> = worktreeFsLayer.pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(
+      Layer.effect(
+        FileSystem.FileSystem,
+        Effect.map(FileSystem.FileSystem, (fs) =>
+          FileSystem.FileSystem.of({
+            ...fs,
+            stat: (target) =>
+              String(target).includes(".cogwork-debris-")
+                ? Effect.fail(denied("stat", String(target)))
+                : fs.stat(target),
+          }),
+        ),
+      ).pipe(Layer.provide(NodeFileSystem.layer)),
+      NodePath.layer,
+      hangingSpawnerLayer,
+    ),
+  ),
+);
 
 const executeFixtureCommand = Effect.fn("test.executeFixtureCommand")(function* (
   cwd: string,
@@ -536,6 +561,92 @@ describe("worktree setup commands", () => {
         }),
     );
   });
+});
+
+describe("worktree debris removal", () => {
+  it.effect("removes a target containing only setup debris", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-debris-" });
+      const target = path.join(root, "worktree");
+      const store = path.join(target, ".pnpm-store");
+      yield* fs.makeDirectory(store, { recursive: true });
+      yield* fs.writeFileString(path.join(store, "cache"), "residue");
+
+      assert.isTrue(yield* worktreeFs.removeDebris(root, target));
+      assert.isFalse(yield* fs.exists(target));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), []);
+    }).pipe(Effect.scoped, Effect.provide(worktreeFsTestLayer)),
+  );
+
+  it.effect("removes a regular file left at the target path", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-file-debris-" });
+      const target = path.join(root, "worktree");
+      yield* fs.writeFileString(target, "residue");
+
+      assert.isTrue(yield* worktreeFs.removeDebris(root, target));
+      assert.isFalse(yield* fs.exists(target));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), []);
+    }).pipe(Effect.scoped, Effect.provide(worktreeFsTestLayer)),
+  );
+
+  it.effect("restores a target when a git entry appears before removal", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-detached-" });
+      const target = path.join(root, "worktree");
+      yield* fs.makeDirectory(target, { recursive: true });
+      yield* fs.writeFileString(path.join(target, ".git"), "gitdir: elsewhere");
+
+      assert.isFalse(yield* worktreeFs.removeDebris(root, target));
+      assert.isTrue(yield* fs.exists(path.join(target, ".git")));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), ["worktree"]);
+    }).pipe(Effect.scoped, Effect.provide(worktreeFsTestLayer)),
+  );
+
+  it.effect("restores a target when quarantine inspection fails", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-inspection-" });
+      const target = path.join(root, "worktree");
+      yield* fs.makeDirectory(target);
+      yield* fs.writeFileString(path.join(target, "keep"), "user data");
+
+      yield* Effect.flip(worktreeFs.removeDebris(root, target));
+
+      assert.isTrue(yield* fs.exists(path.join(target, "keep")));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), ["worktree"]);
+    }).pipe(Effect.scoped, Effect.provide(debrisInspectionFailureLayer)),
+  );
+
+  it.effect("refuses debris reached through a symlink outside the worktree root", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-root-" });
+      const outside = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-outside-" });
+      const target = path.join(outside, "victim");
+      yield* fs.makeDirectory(target);
+      yield* fs.writeFileString(path.join(target, "keep"), "user data");
+      yield* fs.symlink(outside, path.join(root, "escaped"));
+
+      const error = yield* Effect.flip(worktreeFs.removeDebris(root, path.join(root, "escaped", "victim")));
+
+      assert.isFalse(error.retryable);
+      assert.isTrue(yield* fs.exists(path.join(target, "keep")));
+    }).pipe(Effect.scoped, Effect.provide(worktreeFsTestLayer)),
+  );
 });
 
 describe("platform read failures", () => {

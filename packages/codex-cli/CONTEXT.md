@@ -17,6 +17,13 @@ coarse policy fidelity, and required shared-Git access. The shared runtime owns 
 Sandbox, stream, cancellation, event, and structured-output plumbing.
 _Avoid_: Provider runner, OpenAI runner
 
+**Managed Codex catalog**:
+The checked-in Codex model list. Every model declares the native `effort` choices and its default,
+and the catalog records the Codex CLI version it was generated against. Catalog reads are pure data
+reads; only readiness starts Codex. Run dispatch projects the selected effort, or its descriptor
+default, onto Codex's native reasoning-effort field.
+_Avoid_: Runtime model probe, adapter model list
+
 **Durable-run capability**:
 The Codex adapter supports journaled output and takeover attachment. The runner declares that fact, but the shared runtime does not supply durability stores or flags, so Codex Runs remain nondurable and locally cancelled.
 _Avoid_: Enabled takeover, safe detachment

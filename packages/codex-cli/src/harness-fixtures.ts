@@ -36,9 +36,9 @@ import {
   type CodexRunnerOptions,
   codexExecutableWithRepositoryHooks,
   codexRunner,
-  defaultCodexModel,
   type MakeCodexAdapter,
 } from "./harness";
+import { defaultCodexModel } from "./models.generated";
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const freshSession = Schema.decodeSync(SessionId)("session-codex-fresh");
@@ -85,6 +85,7 @@ const harnessLayer = Layer.mergeAll(
 
 interface RequestOverrides {
   readonly checkoutPath: string;
+  readonly effort?: string | null;
   readonly session?: Harness.HarnessRequest["session"];
   readonly stage?: LifecycleStage;
   readonly prompt?: string;
@@ -113,7 +114,12 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
     plan: RunPlan.make({
       id: runId,
       operation: stage,
-      harness: { name, model: defaultModel, effort: "high", profile },
+      harness: {
+        name,
+        model: defaultModel,
+        effort: overrides.effort === undefined ? "high" : overrides.effort,
+        profile,
+      },
       instructions,
       operatingInstructions: {
         name: `${stage}-agent`,

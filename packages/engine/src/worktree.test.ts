@@ -64,20 +64,22 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
       }>
     >([]),
     linked: yield* Ref.make<ReadonlyArray<{ readonly target: string; readonly linkPath: string }>>([]),
+    removedPaths: yield* Ref.make<ReadonlyArray<string>>([]),
+    registeredWorktrees: yield* Ref.make<ReadonlyArray<WorktreeEntry>>([]),
     commands: yield* Ref.make<ReadonlyArray<{ readonly cwd: string; readonly command: string }>>([]),
   };
 });
 
 type Recorder = Effect.Success<ReturnType<typeof makeRecorder>>;
 
-class ReadinessRecorder extends Context.Service<ReadinessRecorder, Recorder>()(
-  "@cogwork/engine/worktree.test/ReadinessRecorder",
+class WorktreeRecorder extends Context.Service<WorktreeRecorder, Recorder>()(
+  "@cogwork/engine/worktree.test/WorktreeRecorder",
 ) {
-  static readonly layer = Layer.effect(ReadinessRecorder, makeRecorder());
+  static readonly layer = Layer.effect(WorktreeRecorder, makeRecorder());
 }
 
-class ReadinessWorktree extends Context.Service<ReadinessWorktree, Worktree.WorktreeManagerService>()(
-  "@cogwork/engine/worktree.test/ReadinessWorktree",
+class LayeredWorktree extends Context.Service<LayeredWorktree, Worktree.WorktreeManagerService>()(
+  "@cogwork/engine/worktree.test/LayeredWorktree",
 ) {}
 
 const inSync: BranchDivergence = { ahead: 0, behind: 0 };
@@ -91,11 +93,13 @@ const fakeGit = (
     readonly divergenceByBase?: Readonly<Record<string, BranchDivergence>>;
     readonly operation?: GitOperationInProgress;
     readonly addFailure?: GitError;
+    readonly addAfterRemoval?: string;
     readonly fetchFailure?: GitError;
     readonly rebaseFailure?: GitError;
   },
 ) => {
   const remotes = new Set(options.remoteBranches ?? []);
+  const requiredRemoval = options.addAfterRemoval;
   return {
     fetch: (_repoPath: string, remote: string, fetchOptions?: FetchOptions) =>
       Ref.update(recorder.fetched, (log) => [
@@ -106,11 +110,28 @@ const fakeGit = (
       Effect.succeed(remotes.has(branch)),
     addWorktree: (args: AddWorktreeArgs) => {
       if (options.addFailure) return Effect.fail(options.addFailure);
-      return Ref.update(recorder.added, (log) => [...log, args]);
+      const add = Ref.update(recorder.added, (log) => [...log, args]);
+      if (!requiredRemoval) return add;
+      return Ref.get(recorder.removedPaths).pipe(
+        Effect.flatMap((removed) =>
+          removed.includes(requiredRemoval)
+            ? add
+            : Effect.fail(
+                new GitError({
+                  command: `worktree add ${args.worktreePath}`,
+                  message: `${args.worktreePath} already exists`,
+                  retryable: true,
+                }),
+              ),
+        ),
+      );
     },
     removeWorktree: (_repoPath: string, worktreePath: string, force: boolean) =>
       Ref.update(recorder.removed, (log) => [...log, { path: worktreePath, force }]),
-    listWorktrees: (_repoPath: string) => Effect.succeed(options.worktrees ?? []),
+    listWorktrees: (_repoPath: string) =>
+      Ref.get(recorder.registeredWorktrees).pipe(
+        Effect.map((registered) => [...(options.worktrees ?? []), ...registered]),
+      ),
     fastForward: (worktreePath: string, _remote: string, _branch: string) =>
       Ref.update(recorder.fastForwarded, (log) => [...log, worktreePath]),
     divergence: (path: string, remote: string, branch: string, head?: DivergenceHead) =>
@@ -129,10 +150,28 @@ const fakeGit = (
   } satisfies GitService;
 };
 
-const fakeFs = (recorder: Recorder, stats: Readonly<Record<string, FileStat>>) =>
+const fakeFs = (
+  recorder: Recorder,
+  stats: Readonly<Record<string, FileStat>>,
+  registerOnRemove?: WorktreeEntry,
+) =>
   ({
     linkFile: (target: string, linkPath: string) =>
       Ref.update(recorder.linked, (log) => [...log, { target, linkPath }]),
+    removeDebris: (_root: string, target: string) => {
+      const registersWorktree = registerOnRemove?.path === target;
+      const preservesTarget = registersWorktree || stats[`${target}/.git`] !== undefined;
+      const register = registersWorktree
+        ? Ref.update(recorder.registeredWorktrees, (entries) => [...entries, registerOnRemove])
+        : Effect.void;
+      return register.pipe(
+        Effect.andThen(
+          preservesTarget
+            ? Effect.succeed(false)
+            : Ref.update(recorder.removedPaths, (paths) => [...paths, target]).pipe(Effect.map(() => true)),
+        ),
+      );
+    },
     runCommand: (cwd: string, command: string) =>
       Ref.update(recorder.commands, (log) => [...log, { cwd, command }]),
     stat: (target: string) => Effect.succeed(stats[target] ?? null),
@@ -141,20 +180,24 @@ const fakeFs = (recorder: Recorder, stats: Readonly<Record<string, FileStat>>) =
 const provide = (git: GitService, fs: WorktreeFsService) =>
   Layer.mergeAll(Layer.succeed(Git, git), Layer.succeed(WorktreeFs, fs));
 
-const readinessLayer = (options: Parameters<typeof fakeGit>[1]) => {
+const worktreeLayer = (
+  options: Parameters<typeof fakeGit>[1],
+  stats: Readonly<Record<string, FileStat>> = {},
+  registerOnRemove?: WorktreeEntry,
+) => {
   const dependencies = Layer.merge(
     Layer.effect(
       Git,
-      Effect.map(ReadinessRecorder, (recorder) => fakeGit(recorder, options)),
+      Effect.map(WorktreeRecorder, (recorder) => fakeGit(recorder, options)),
     ),
     Layer.effect(
       WorktreeFs,
-      Effect.map(ReadinessRecorder, (recorder) => fakeFs(recorder, {})),
+      Effect.map(WorktreeRecorder, (recorder) => fakeFs(recorder, stats, registerOnRemove)),
     ),
   );
-  return Layer.effect(ReadinessWorktree, Worktree.make).pipe(
+  return Layer.effect(LayeredWorktree, Worktree.make).pipe(
     Layer.provide(dependencies),
-    Layer.provideMerge(ReadinessRecorder.layer),
+    Layer.provideMerge(WorktreeRecorder.layer),
   );
 };
 
@@ -181,6 +224,100 @@ describe("Worktree.ensure", () => {
         { cwd: "/repo.worktrees/13-worktree-lifecycle", command: "pnpm install" },
       ]);
     }),
+  );
+
+  it.effect("clears a target containing only .pnpm-store before creating the worktree", () =>
+    Effect.gen(function* () {
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
+      const target = worktreePath();
+
+      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item);
+
+      assert.strictEqual(result.created, true);
+      assert.deepStrictEqual(yield* Ref.get(recorder.removedPaths), [target]);
+      assert.strictEqual((yield* Ref.get(recorder.added)).length, 1);
+      assert.deepStrictEqual(yield* Ref.get(recorder.commands), [{ cwd: target, command: "pnpm install" }]);
+    }).pipe(
+      Effect.provide(
+        worktreeLayer(
+          { addAfterRemoval: worktreePath() },
+          {
+            [worktreePath()]: { mtimeMillis: 1 },
+            [`${worktreePath()}/.pnpm-store`]: { mtimeMillis: 1 },
+          },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("refuses a detached worktree without removing it", () =>
+    Effect.gen(function* () {
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
+      const target = worktreePath();
+
+      const failure = yield* Effect.flip(manager.ensure(workspaceWith(), item));
+
+      if (failure._tag !== "WorktreeError")
+        return yield* Effect.die(`expected WorktreeError, got ${failure._tag}`);
+      assert.strictEqual(failure.reason, "detached");
+      assert.strictEqual(failure.path, target);
+      assert.isFalse(failure.retryable);
+      assert.include(failure.message, target);
+      assert.deepStrictEqual(yield* Ref.get(recorder.removedPaths), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.added), []);
+    }).pipe(
+      Effect.provide(
+        worktreeLayer(
+          {},
+          {
+            [worktreePath()]: { mtimeMillis: 1 },
+            [`${worktreePath()}/.git`]: { mtimeMillis: 1 },
+          },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("reuses a worktree registered while debris recovery is in progress", () =>
+    Effect.gen(function* () {
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
+
+      const result = yield* manager.ensure(workspaceWith(), item);
+
+      assert.strictEqual(result.created, false);
+      assert.deepStrictEqual(yield* Ref.get(recorder.removedPaths), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.added), []);
+    }).pipe(
+      Effect.provide(
+        worktreeLayer(
+          {},
+          { [worktreePath()]: { mtimeMillis: 1 } },
+          { path: worktreePath(), branch: Worktree.branchName(item) },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("refuses a branch that escapes the worktree root", () =>
+    Effect.gen(function* () {
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
+
+      const failure = yield* Effect.flip(
+        manager.ensure(workspaceWith(), item, { branch: decodeBranchName("../../victim") }),
+      );
+
+      if (failure._tag !== "WorktreeError")
+        return yield* Effect.die(`expected WorktreeError, got ${failure._tag}`);
+      assert.strictEqual(failure.reason, "unsafe-branch");
+      assert.isFalse(failure.retryable);
+      assert.deepStrictEqual(yield* Ref.get(recorder.fetched), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.removedPaths), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.added), []);
+    }).pipe(Effect.provide(worktreeLayer({}))),
   );
 
   it.effect("removes a newly created worktree when setup is interrupted", () =>
@@ -322,6 +459,7 @@ describe("Worktree.ensure", () => {
       assert.deepStrictEqual(fastForwarded, [worktreePath()]);
       const added = yield* Ref.get(recorder.added);
       assert.strictEqual(added.length, 0);
+      assert.deepStrictEqual(yield* Ref.get(recorder.removedPaths), []);
     }),
   );
 
@@ -337,7 +475,9 @@ describe("Worktree.ensure", () => {
 
       const failure = yield* Effect.flip(manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item));
 
-      assert.strictEqual(failure._tag, "WorktreeOperationInProgressError");
+      if (failure._tag !== "WorktreeError")
+        return yield* Effect.die(`expected WorktreeError, got ${failure._tag}`);
+      assert.strictEqual(failure.reason, "operation-in-progress");
       assert.isFalse(failure.retryable);
       assert.include(failure.message, "branch 13-worktree-lifecycle");
       assert.include(failure.message, "merge");
@@ -395,12 +535,14 @@ describe("Worktree.ensure", () => {
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
       const failure = yield* Effect.flip(manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item));
-      assert.strictEqual(failure?._tag, "WorktreeDivergedError");
-      assert.isFalse(failure?.retryable);
-      assert.include(failure?.message ?? "", "2 local commits");
-      assert.include(failure?.message ?? "", "5 remote commits");
-      assert.include(failure?.message ?? "", "Merge conflict");
-      assert.include(failure?.message ?? "", "no local commits were discarded");
+      if (failure._tag !== "WorktreeError")
+        return yield* Effect.die(`expected WorktreeError, got ${failure._tag}`);
+      assert.strictEqual(failure.reason, "diverged");
+      assert.isFalse(failure.retryable);
+      assert.include(failure.message, "2 local commits");
+      assert.include(failure.message, "5 remote commits");
+      assert.include(failure.message, "Merge conflict");
+      assert.include(failure.message, "no local commits were discarded");
       assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
     }),
@@ -512,7 +654,8 @@ describe("Worktree.pullRequestReadiness", () => {
       retryable: true,
     });
     return Effect.gen(function* () {
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
       const logs = yield* LogProbe;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
@@ -522,7 +665,6 @@ describe("Worktree.pullRequestReadiness", () => {
         headBranch: Worktree.branchName(item),
         baseBranch: "main",
       });
-      const recorder = yield* ReadinessRecorder;
       assert.deepStrictEqual(yield* Ref.get(recorder.fetched), [
         {
           remote: "origin",
@@ -541,7 +683,7 @@ describe("Worktree.pullRequestReadiness", () => {
     }).pipe(
       Effect.provide(
         Layer.merge(
-          readinessLayer({
+          worktreeLayer({
             worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
             fetchFailure: failure,
             remoteBranches: [Worktree.branchName(item)],
@@ -555,8 +697,8 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("uses the pushed head when the expected worktree is on another branch", () =>
     Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -575,7 +717,7 @@ describe("Worktree.pullRequestReadiness", () => {
       ]);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeLayer({
           worktrees: [{ path: worktreePath(), branch: "another-branch" }],
           remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: { main: { ahead: 2, behind: 0 } },
@@ -586,7 +728,7 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("uses the pushed head when the expected worktree is missing", () =>
     Effect.gen(function* () {
-      const manager = yield* ReadinessWorktree;
+      const manager = yield* LayeredWorktree;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -597,7 +739,7 @@ describe("Worktree.pullRequestReadiness", () => {
       });
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeLayer({
           remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: { main: { ahead: 1, behind: 0 } },
         }),
@@ -607,8 +749,8 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("declines when the head is not ahead of the base", () =>
     Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith({ baseBranch: "trunk" }), item);
 
@@ -626,7 +768,7 @@ describe("Worktree.pullRequestReadiness", () => {
       ]);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
           fetchFailure: new GitError({
             command: "fetch origin",
@@ -644,8 +786,8 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("declines when the local head has not been pushed", () =>
     Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -656,7 +798,7 @@ describe("Worktree.pullRequestReadiness", () => {
       assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), []);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
         }),
       ),
@@ -666,8 +808,8 @@ describe("Worktree.pullRequestReadiness", () => {
   it.effect("declines when refresh confirms the cached head was deleted", () => {
     const headBranch = Worktree.branchName(item);
     return Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -678,7 +820,7 @@ describe("Worktree.pullRequestReadiness", () => {
       assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), []);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeLayer({
           fetchFailure: new GitError({
             command: "fetch origin",
             message: "cannot lock ref refs/remotes/origin/main",
@@ -694,8 +836,8 @@ describe("Worktree.pullRequestReadiness", () => {
   it.effect("declines when refresh confirms the cached base was deleted", () => {
     const headBranch = Worktree.branchName(item);
     return Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -706,7 +848,7 @@ describe("Worktree.pullRequestReadiness", () => {
       assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), []);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeLayer({
           fetchFailure: new GitError({
             command: "fetch origin",
             message: "cannot lock ref refs/remotes/origin/main",
@@ -721,8 +863,8 @@ describe("Worktree.pullRequestReadiness", () => {
 
   it.effect("returns the engine-owned head and base when the gate passes", () =>
     Effect.gen(function* () {
-      const recorder = yield* ReadinessRecorder;
-      const manager = yield* ReadinessWorktree;
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
 
       const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
@@ -739,7 +881,7 @@ describe("Worktree.pullRequestReadiness", () => {
       ]);
     }).pipe(
       Effect.provide(
-        readinessLayer({
+        worktreeLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
           remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: {

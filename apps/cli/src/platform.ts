@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { ContextFs, Git, Worktree, WorktreeFs } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -285,6 +286,11 @@ export const worktreeFsLayer = Layer.effect(
     const fail = (operation: string) => (cause: unknown) =>
       new WorktreeFs.WorktreeFsError({ operation, message: describe(cause), retryable: true });
 
+    const isWithinRoot = (root: string, target: string) => {
+      const relative = path.relative(root, target);
+      return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    };
+
     return {
       linkFile: (target, linkPath) =>
         fs
@@ -294,6 +300,46 @@ export const worktreeFsLayer = Layer.effect(
             Effect.andThen(fs.symlink(target, linkPath)),
             Effect.mapError(fail(`link ${linkPath}`)),
           ),
+      removeDebris: (root, target) =>
+        Effect.all([fs.realPath(root), fs.realPath(path.dirname(target))]).pipe(
+          Effect.mapError(fail(`resolve ${target}`)),
+          Effect.flatMap(([realRoot, realParent]) => {
+            if (!isWithinRoot(realRoot, realParent)) {
+              return new WorktreeFs.WorktreeFsError({
+                operation: `remove debris ${target}`,
+                message: `${target} resolves outside worktree root ${root}`,
+                retryable: false,
+              });
+            }
+
+            const resolvedTarget = path.join(realParent, path.basename(target));
+            const quarantine = `${resolvedTarget}.cogwork-debris-${randomUUID()}`;
+            const gitEntry = path.join(quarantine, ".git");
+            return Effect.uninterruptible(
+              fs.rename(resolvedTarget, quarantine).pipe(
+                Effect.andThen(
+                  fs.stat(quarantine).pipe(
+                    Effect.flatMap((info) =>
+                      info.type === "Directory"
+                        ? fs.stat(gitEntry).pipe(
+                            Effect.map(() => true),
+                            Effect.catch(recoverNotFound(false, fail(`stat ${gitEntry}`))),
+                          )
+                        : Effect.succeed(false),
+                    ),
+                    Effect.onError(() => fs.rename(quarantine, resolvedTarget).pipe(Effect.ignore)),
+                  ),
+                ),
+                Effect.flatMap((containsGitEntry) =>
+                  containsGitEntry
+                    ? fs.rename(quarantine, resolvedTarget).pipe(Effect.map(() => false))
+                    : fs.remove(quarantine, { recursive: true }).pipe(Effect.map(() => true)),
+                ),
+                Effect.mapError(fail(`remove debris ${target}`)),
+              ),
+            );
+          }),
+        ),
       runCommand: (cwd, command) =>
         capture(
           ChildProcess.make(command, {
