@@ -1,0 +1,19 @@
+packages/engine/src/harness.ts
+  s_05b3b5899eb1c4::t_11777afd4151d2 67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bd712f60ff8ffa2c7ed8bddddcafddf039082e28",
+  "prompts": {},
+  "sessions": {
+    "s_05b3b5899eb1c4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c4d7-506c-7e83-98db-2c20591b1e69",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
