@@ -27,7 +27,7 @@ import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { cursorModelOptions, cursorRunner, estimatedUsage, interceptCursorTelemetry } from "./harness";
-import { cursorModels } from "./models.generated";
+import { cursorCatalog } from "./models.generated";
 
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
@@ -210,16 +210,15 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
 describe("Cursor Harness registry", () => {
-  it.effect("uses the generated model tuple for the catalog and every supported effort", () =>
+  it.effect("serves the checked-in managed catalog", () =>
     Effect.gen(function* () {
       const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
       const catalog = yield* Harness.make([runner]).catalog(cursorName);
 
-      assert.deepStrictEqual(
-        catalog.models.map(({ value }) => value),
-        Array.from(cursorModels),
-      );
-      assert.isTrue(catalog.efforts?.some(({ value }) => value === "none"));
+      assert.deepStrictEqual(catalog.models, cursorCatalog.models);
+      assert.strictEqual(catalog.generatedAgainst, cursorCatalog.generatedAgainst);
+      assert.deepStrictEqual(catalog.rawModelIds, cursorCatalog.rawModelIds);
+      assert.isUndefined(catalog.efforts);
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -240,12 +239,10 @@ describe("Cursor Harness registry", () => {
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
-  it.effect("rejects stale model and effort selections before launch", () =>
+  it.effect("rejects saved composite model ids and stale effort selections before launch", () =>
     Effect.gen(function* () {
       const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
-      const staleModel = yield* harness
-        .preflight(cursorName, "full", "retired-cursor-model", "high")
-        .pipe(Effect.flip);
+      const staleModel = yield* harness.preflight(cursorName, "full", "gpt-5.6-luna-high").pipe(Effect.flip);
       const staleEffort = yield* harness.preflight(cursorName, "full", "auto", "extreme").pipe(Effect.flip);
 
       assert.strictEqual(staleModel.reason, "stale-selection");
@@ -486,7 +483,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
           ...base,
           plan: new RunPlan({
             ...base.plan,
-            harness: { ...base.plan.harness, effort: "high" },
+            harness: { ...base.plan.harness, model: "gpt-5.6-luna", effort: null },
             instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
             operatingInstructions: {
               name: "triage-agent",
@@ -521,7 +518,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
         assert.include(observation.instructions, "Mandatory repository context.");
         assert.include(observation.instructions, "/operating-instructions/triage-agent");
-        assert.strictEqual(observation.model, "auto[effort=high]");
+        assert.strictEqual(observation.model, "gpt-5.6-luna-medium");
         assert.deepStrictEqual(observation.mcp, [
           {
             name: "linear",

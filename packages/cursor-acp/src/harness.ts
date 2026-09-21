@@ -15,8 +15,13 @@ import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import { cursorEfforts, cursorModelFlag, parseCursorModelList } from "./model";
-import { type CursorModel, cursorModels } from "./models.generated";
+import {
+  CursorNativeModelIdResult,
+  cursorModelFlag,
+  cursorNativeModelId,
+  parseCursorModelList,
+} from "./model";
+import { type CursorModel, cursorCatalog, cursorModels } from "./models.generated";
 
 export interface CursorRunnerOptions {
   readonly name: HarnessName;
@@ -319,15 +324,30 @@ type CursorAdapter = AcpCompatibleTextAdapter<CursorModel, CursorModelOptions>;
 
 const generatedCatalog = Harness.staticCatalogSource(
   {
-    models: cursorModels.map((model) => ({ value: model, label: model })),
-    efforts: cursorEfforts.map((effort) => ({ value: effort, label: effort })),
+    models: cursorCatalog.models,
+    generatedAgainst: cursorCatalog.generatedAgainst,
+    rawModelIds: cursorCatalog.rawModelIds,
   },
-  { source: "cogwork-fallback", fallbackVersion: "cursor-models-generated-1" },
+  { source: "cogwork-fallback", fallbackVersion: cursorCatalog.generatedAgainst },
 );
 const selectedCursorModel = (
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
   fallback: CursorModel,
-) => cursorModels.find((model) => model === (request.selection.model ?? fallback)) ?? fallback;
+) => {
+  const selected = request.selection.model;
+  if (!selected) return fallback;
+  const result = cursorNativeModelId(cursorCatalog, selected, {});
+  return CursorNativeModelIdResult.$match({
+    Failure: ({ error }) => {
+      throw new Error(error);
+    },
+    Success: ({ value }) => {
+      const model = cursorModels.find((candidate) => candidate === value);
+      if (!model) throw new Error(`Cursor catalog translated ${selected} to unknown native id ${value}`);
+      return model;
+    },
+  })(result);
+};
 
 const promptCharacters = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
   request.prompt.reduce((total, message) => total + message.content.length, 0);
