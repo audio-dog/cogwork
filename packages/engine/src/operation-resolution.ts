@@ -201,7 +201,12 @@ const selectedHarnessDisablement = (picture: ControlStorePicture, harnessName: H
   harnessName ? currentHarnessDisablement(picture, harnessName) : null;
 
 const harnessProbeKey = (resolved: ResolvedOperation) =>
-  JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort]);
+  JSON.stringify([
+    resolved.stage.harness,
+    resolved.profile,
+    resolved.stage.model,
+    resolved.stage.modelOptions,
+  ]);
 
 const sessionAffinity = (
   session: Session | null,
@@ -374,7 +379,7 @@ export const make = Effect.gen(function* () {
     const disablement = currentHarnessDisablement(picture, resolved.stage.harness);
     if (disablement) return disablement;
     return yield* harness
-      .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort)
+      .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.modelOptions)
       .pipe(
         Effect.provide(harnessRunnerContext),
         Effect.match({

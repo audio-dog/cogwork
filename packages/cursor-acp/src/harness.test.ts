@@ -166,7 +166,7 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
       harness: {
         name: cursorName,
         model: "auto",
-        effort: null,
+        options: {},
         profile,
       },
       instructions: [],
@@ -210,15 +210,15 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
 describe("Cursor Harness registry", () => {
-  it.effect("serves the checked-in managed catalog", () =>
+  it.effect("serves generated base models and option descriptors", () =>
     Effect.gen(function* () {
       const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
       const catalog = yield* Harness.make([runner]).catalog(cursorName);
 
       assert.deepStrictEqual(catalog.models, cursorCatalog.models);
+      assert.isTrue(catalog.models.some(({ options }) => options?.some(({ id }) => id === "effort")));
       assert.strictEqual(catalog.generatedAgainst, cursorCatalog.generatedAgainst);
       assert.deepStrictEqual(catalog.rawModelIds, cursorCatalog.rawModelIds);
-      assert.isUndefined(catalog.efforts);
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -239,12 +239,22 @@ describe("Cursor Harness registry", () => {
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
-  it.effect("rejects saved composite model ids before launch", () =>
+  it.effect("rejects stale model and model option selections before launch", () =>
     Effect.gen(function* () {
       const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
-      const staleModel = yield* harness.preflight(cursorName, "full", "gpt-5.6-luna-high").pipe(Effect.flip);
+      const staleModel = yield* harness
+        .preflight(cursorName, "full", "retired-cursor-model", { effort: "high" })
+        .pipe(Effect.flip);
+      const staleOption = yield* harness
+        .preflight(cursorName, "full", "gpt-5.6-sol", { effort: "extreme" })
+        .pipe(Effect.flip);
+      const staleComposite = yield* harness
+        .preflight(cursorName, "full", "gpt-5.6-luna-high")
+        .pipe(Effect.flip);
 
       assert.strictEqual(staleModel.reason, "stale-selection");
+      assert.strictEqual(staleOption.reason, "stale-selection");
+      assert.strictEqual(staleComposite.reason, "stale-selection");
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -481,7 +491,11 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
           ...base,
           plan: new RunPlan({
             ...base.plan,
-            harness: { ...base.plan.harness, model: "gpt-5.6-luna", effort: "high" },
+            harness: {
+              ...base.plan.harness,
+              model: "gpt-5.6-sol",
+              options: { effort: "high" },
+            },
             instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
             operatingInstructions: {
               name: "triage-agent",
@@ -516,7 +530,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
         assert.include(observation.instructions, "Mandatory repository context.");
         assert.include(observation.instructions, "/operating-instructions/triage-agent");
-        assert.strictEqual(observation.model, "gpt-5.6-luna-medium");
+        assert.strictEqual(observation.model, "gpt-5.6-sol-high");
         assert.deepStrictEqual(observation.mcp, [
           {
             name: "linear",
@@ -531,6 +545,32 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
         assert.notInclude(output, "cursor-mcp-secret");
       }),
     ),
+  );
+
+  it.effect("refuses a stale model at dispatch", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const base = request(checkout.id);
+      const staleRequest = {
+        ...base,
+        plan: new RunPlan({
+          ...base.plan,
+          harness: {
+            ...base.plan.harness,
+            model: "retired-cursor-model",
+          },
+        }),
+      } satisfies Harness.HarnessRequest;
+      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+
+      const failure = yield* Stream.runDrain(runner.run(staleRequest)).pipe(Effect.flip);
+
+      assert.strictEqual(failure.reason, "stale-selection");
+      assert.include(failure.message, "retired-cursor-model");
+    }),
   );
 
   it.effect("streams a fresh ACP session, parsed structured result, and estimated terminal usage", () =>

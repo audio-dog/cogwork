@@ -182,12 +182,11 @@ describe("harnessOverview", () => {
     }).pipe(Effect.provide(probeLayer([runner("codex"), runner("cursor")]))),
   );
 
-  it.effect("publishes runtime and native provenance and omits unsupported effort", () =>
+  it.effect("publishes runtime and native provenance", () =>
     Effect.gen(function* () {
       const overview = yield* harnessOverview();
       assert.deepStrictEqual(encodeCatalog(overview.harnesses[0]?.catalog), {
         models: [{ value: "runtime", label: "Runtime" }],
-        efforts: [{ value: "high", label: "High" }],
         policyProfiles: ["full"],
         provenance: { source: "tanstack-runtime", packageVersion: "2.0.0" },
       });
@@ -200,7 +199,6 @@ describe("harnessOverview", () => {
           harnessVersion: "3.0.0",
         },
       });
-      assert.isUndefined(overview.harnesses[1]?.catalog?.efforts);
     }).pipe(
       Effect.provide(
         probeLayer([
@@ -210,7 +208,6 @@ describe("harnessOverview", () => {
               runtime: staticCatalogSource(
                 {
                   models: [{ value: "runtime", label: "Runtime" }],
-                  efforts: [{ value: "high", label: "High" }],
                 },
                 { source: "tanstack-runtime", packageVersion: "2.0.0" },
               ),

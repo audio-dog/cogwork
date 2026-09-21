@@ -20,7 +20,9 @@ import {
   HarnessNotRegistered,
   IssueTrackerError,
   LifecycleStage,
+  ModelOptionSelections,
   type OperationSettingBatch,
+  type OperationSettingCell,
   type OperationSettingName,
   OperationSettingRefused,
   OperationSettingScope,
@@ -62,7 +64,11 @@ import { repoTargetFor as githubRepoTargetFor } from "./github/host";
 import { Harness, type HarnessService } from "./harness";
 import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
 import { applyHandbackBarrier } from "./observe";
-import { catalogMembershipRefusal, operationSettingRefusal } from "./operation-policy";
+import {
+  catalogMembershipRefusal,
+  modelOptionsMembershipRefusal,
+  operationSettingRefusal,
+} from "./operation-policy";
 import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
@@ -337,11 +343,11 @@ const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutatio
   return published;
 });
 
-type CatalogSettingName = Extract<OperationSettingName, "model" | "effort" | "permission-profile">;
+type CatalogSettingName = Extract<OperationSettingName, "model" | "model-options" | "permission-profile">;
 
 const catalogSettingNames = [
   "model",
-  "effort",
+  "model-options",
   "permission-profile",
 ] satisfies ReadonlyArray<CatalogSettingName>;
 
@@ -353,18 +359,15 @@ interface OperationSelectionChange {
   readonly operation: LifecycleStage;
   readonly workspace: WorkspaceId | null;
   readonly setting: "harness" | CatalogSettingName;
-  readonly requestedValue: string | null;
+  readonly requestedSet: boolean;
 }
 
 const selectionChangesForUpdate = (update: OperationSettingUpdate) => {
   const candidate = OperationSettingUpdate.match(update, {
-    Clear: ({ cell }) => ({ cell, requestedValue: null }),
-    Set: ({ row }) => ({
-      cell: row,
-      requestedValue: typeof row.value === "string" ? row.value : null,
-    }),
+    Clear: ({ cell }) => ({ cell, requestedSet: false }),
+    Set: ({ row }) => ({ cell: row, requestedSet: true }),
   });
-  const { cell, requestedValue } = candidate;
+  const { cell, requestedSet } = candidate;
   const setting = cell.setting;
   const selectionSetting = setting === "harness" || isCatalogSettingName(setting);
   if (!selectionSetting) return [];
@@ -379,21 +382,110 @@ const selectionChangesForUpdate = (update: OperationSettingUpdate) => {
     Operation: ({ workflow, operation }) => [{ workflow, operation }],
   });
   return contexts.map(
-    (context) => ({ ...context, workspace, setting, requestedValue }) satisfies OperationSelectionChange,
+    (context) => ({ ...context, workspace, setting, requestedSet }) satisfies OperationSelectionChange,
   );
 };
+
+const operationSettingPositionKey = (cell: OperationSettingCell) => JSON.stringify([cell.level, cell.scope]);
+
+const operationSettingCellOf = (update: OperationSettingUpdate) =>
+  OperationSettingUpdate.match(update, {
+    Clear: ({ cell }) => cell,
+    Set: ({ row }) => row,
+  });
+
+const selectionAtPosition = (rows: ControlStorePicture["operationSettings"], cell: OperationSettingCell) => {
+  const position = operationSettingPositionKey(cell);
+  const selectionMatchesPosition = (row: ControlStorePicture["operationSettings"][number]) => {
+    const matches = row.setting === cell.setting && operationSettingPositionKey(row) === position;
+    return matches;
+  };
+  return rows.find(selectionMatchesPosition)?.value ?? null;
+};
+
+const modelOptionResetScopes = (
+  rows: ControlStorePicture["operationSettings"],
+  scope: OperationSettingCell["scope"],
+) => {
+  const privateScopes = rows
+    .filter(({ setting }) => setting === "model-options")
+    .flatMap((row) =>
+      OperationSettingScope.match(row.scope, {
+        SettingsProfile: () => [],
+        RuntimeHost: () => [],
+        PrivateWorkspaceOverlay: (privateScope) => [privateScope],
+      }),
+    )
+    .filter(
+      (privateScope, index, scopes) =>
+        scopes.findIndex(({ workspace }) => workspace === privateScope.workspace) === index,
+    );
+  return OperationSettingScope.match(scope, {
+    SettingsProfile: (profileScope) => [profileScope],
+    RuntimeHost: () => [
+      { _tag: "SettingsProfile" } satisfies OperationSettingCell["scope"],
+      ...privateScopes,
+    ],
+    PrivateWorkspaceOverlay: (privateScope) => [privateScope],
+  });
+};
+
+const withModelContextOptionResets = (
+  rows: ControlStorePicture["operationSettings"],
+  updates: OperationSettingBatch,
+) => {
+  const explicitModelOptionCells = new Set(
+    updates
+      .map(operationSettingCellOf)
+      .filter(({ setting }) => setting === "model-options")
+      .map(operationSettingPositionKey),
+  );
+  const updatedRows = applyOperationSettingBatch(rows, updates);
+  return updates.flatMap((update) => {
+    const cell = operationSettingCellOf(update);
+    const changesModelContext = cell.setting === "harness" || cell.setting === "model";
+    if (!changesModelContext) return [update];
+    const keepsOptions = selectionAtPosition(rows, cell) === selectionAtPosition(updatedRows, cell);
+    if (keepsOptions) return [update];
+    const resetCells = modelOptionResetScopes(rows, cell.scope)
+      .map(
+        (scope) =>
+          ({
+            level: cell.level,
+            setting: "model-options",
+            scope,
+          }) satisfies OperationSettingCell,
+      )
+      .filter((optionCell) => !explicitModelOptionCells.has(operationSettingPositionKey(optionCell)));
+    const resets = resetCells.map((optionCell) =>
+      OperationSettingUpdate.match(update, {
+        Clear: () =>
+          ({
+            _tag: "Clear",
+            cell: optionCell,
+          }) satisfies OperationSettingUpdate,
+        Set: () =>
+          ({
+            _tag: "Set",
+            row: { ...optionCell, value: {} },
+          }) satisfies OperationSettingUpdate,
+      }),
+    );
+    return [update, ...resets];
+  });
+};
+
+const isModelOptionSelections = Schema.is(ModelOptionSelections);
 
 const validateSelectionContext = Effect.fn("Daemon.validateSelectionContext")(function* (
   harness: HarnessService,
   rows: ControlStorePicture["operationSettings"],
   change: OperationSelectionChange,
 ) {
-  if (change.requestedValue === null) return;
+  if (!change.requestedSet) return;
   const effectiveValue = resolveOperationSetting(rows, change.setting, change);
-  const selectedValue = effectiveValue;
-  if (typeof selectedValue !== "string") return;
   const selectedHarness =
-    change.setting === "harness" ? selectedValue : resolveOperationSetting(rows, "harness", change);
+    change.setting === "harness" ? effectiveValue : resolveOperationSetting(rows, "harness", change);
   if (selectedHarness === null) {
     return yield* OperationSettingRefused.make({
       setting: change.setting,
@@ -418,22 +510,35 @@ const validateSelectionContext = Effect.fn("Daemon.validateSelectionContext")(fu
     });
   }
   if (change.setting === "harness") return;
+  const selectedValue = effectiveValue;
+  const effectiveModel = resolveOperationSetting(rows, "model", change);
+  const selectedModel = typeof effectiveModel === "string" ? effectiveModel : null;
+  const hasModelOptionsSelection =
+    change.setting === "model-options" && isModelOptionSelections(selectedValue);
+  const modelOptionsRefusal = hasModelOptionsSelection
+    ? modelOptionsMembershipRefusal(selectedValue, selectedModel, selectedHarness, catalog)
+    : null;
+  if (modelOptionsRefusal !== null) return yield* modelOptionsRefusal;
+  const skipsCatalogMembership = change.setting === "model-options" || typeof selectedValue !== "string";
+  if (skipsCatalogMembership) return;
   const refusal = catalogMembershipRefusal(change.setting, selectedValue, selectedHarness, catalog);
   if (refusal !== null) return yield* refusal;
 });
 
 const validateOperationSettingBatch = Effect.fn("Daemon.validateOperationSettingBatch")(function* (
   store: ControlStoreService,
-  updates: OperationSettingBatch,
+  requestedUpdates: OperationSettingBatch,
 ) {
   const picture = yield* store.picture;
   const harness = yield* Harness;
+  const updates = withModelContextOptionResets(picture.operationSettings, requestedUpdates);
   const rows = applyOperationSettingBatch(picture.operationSettings, updates);
   yield* Effect.forEach(
-    updates.flatMap(selectionChangesForUpdate),
+    requestedUpdates.flatMap(selectionChangesForUpdate),
     (change) => validateSelectionContext(harness, rows, change),
     { discard: true },
   );
+  return updates;
 });
 
 export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(function* (payload: {
@@ -445,7 +550,7 @@ export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(funct
   return yield* publishAvailabilityMutation(
     store,
     validateOperationSettingBatch(store, payload.updates).pipe(
-      Effect.andThen(store.updateOperationSettings(payload.updates)),
+      Effect.flatMap((updates) => store.updateOperationSettings(updates)),
     ),
   );
 });

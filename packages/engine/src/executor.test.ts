@@ -629,12 +629,38 @@ const testRunnerDefaults = {
     fallback: staticCatalogSource(
       {
         models: [
-          { value: "test", label: "Test" },
-          { value: "refreshed-model", label: "Refreshed model" },
-        ],
-        efforts: [
-          { value: "low", label: "Low" },
-          { value: "high", label: "High" },
+          {
+            value: "test",
+            label: "Test",
+            options: [
+              {
+                type: "select",
+                id: "effort",
+                label: "Effort",
+                values: [
+                  { value: "low", label: "Low" },
+                  { value: "high", label: "High" },
+                ],
+                defaultValue: "high",
+              },
+            ],
+          },
+          {
+            value: "refreshed-model",
+            label: "Refreshed model",
+            options: [
+              {
+                type: "select",
+                id: "effort",
+                label: "Effort",
+                values: [
+                  { value: "low", label: "Low" },
+                  { value: "high", label: "High" },
+                ],
+                defaultValue: "high",
+              },
+            ],
+          },
         ],
       },
       { source: "cogwork-fallback", fallbackVersion: "test-1" },
@@ -1517,16 +1543,16 @@ describe("Executor.execute", () => {
       const operationSettings: ReadonlyArray<OperationSettingRow> = [
         ...runnableStages,
         {
-          setting: "effort",
+          setting: "model-options",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "SettingsProfile" },
-          value: "high",
+          value: { effort: "high" },
         },
         {
-          setting: "effort",
+          setting: "model-options",
           level: { _tag: "Operation", workflow: "coding", operation: "follow-up" },
           scope: { _tag: "SettingsProfile" },
-          value: "low",
+          value: { effort: "low" },
         },
       ];
       const probeRunner: TestRunner = {

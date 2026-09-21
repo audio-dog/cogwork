@@ -1,7 +1,7 @@
 import {
   HarnessManagedCatalog,
   type HarnessManagedCatalogModel,
-  HarnessModelOptionDescriptor,
+  harnessModelOptionAccepts,
 } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 import * as Schema from "effect/Schema";
@@ -273,14 +273,7 @@ const selectionError = (model: HarnessManagedCatalogModel, selections: CursorMod
     .flatMap(([id, value]) => {
       const descriptor = model.options?.find((option) => option.id === id);
       if (!descriptor) return [`Cursor model ${model.value} does not declare option ${id}`];
-      const isValid = HarnessModelOptionDescriptor.match(descriptor, {
-        boolean: () => typeof value === "boolean",
-        select: ({ values }) => {
-          const isDeclaredValue =
-            typeof value === "string" && values.some((choice) => choice.value === value);
-          return isDeclaredValue;
-        },
-      });
+      const isValid = harnessModelOptionAccepts(descriptor, value);
       return isValid
         ? []
         : [`Cursor model ${model.value} option ${id} does not allow ${JSON.stringify(value)}`];
@@ -381,18 +374,4 @@ export const cursorModelSelectionFromNativeId = (catalog: HarnessManagedCatalog,
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 
-export const applyCursorEffort = (model: string, effort: string | null | undefined) => {
-  if (!effort) return model;
-  const match = model.match(/^([^[\]]+)\[(.*)\]$/);
-  const base = match?.[1];
-  const inner = match?.[2];
-  if (!base || inner === undefined) return `${model}[effort=${effort}]`;
-  const params = inner
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part && !part.startsWith("effort="));
-  return `${base}[${[...params, `effort=${effort}`].join(",")}]`;
-};
-
-export const cursorModelFlag = (model: string, effort: string | null | undefined) =>
-  shellQuote(applyCursorEffort(model, effort));
+export const cursorModelFlag = (model: string) => shellQuote(model);

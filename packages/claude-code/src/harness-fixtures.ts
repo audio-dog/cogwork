@@ -244,8 +244,8 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
       operation,
       harness: {
         name,
-        model: overrides.model ?? null,
-        effort: overrides.effort ?? null,
+        model: overrides.model ?? "sonnet",
+        options: typeof overrides.effort === "string" ? { effort: overrides.effort } : {},
         profile,
       },
       instructions: [

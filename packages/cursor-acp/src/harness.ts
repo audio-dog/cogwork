@@ -1,5 +1,5 @@
 import { ndJsonStream, RequestError } from "@agentclientprotocol/sdk";
-import { AgUiEvent, type HarnessName } from "@cogwork/contracts";
+import { AgUiEvent, type HarnessName, type ModelOptionSelections } from "@cogwork/contracts";
 import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
   type AcpCompatibleTextAdapter,
@@ -13,6 +13,7 @@ import { createSecrets } from "@tanstack/ai-sandbox";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
+import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import {
@@ -26,7 +27,6 @@ import { type CursorModel, cursorCatalog, cursorModels } from "./models.generate
 export interface CursorRunnerOptions {
   readonly name: HarnessName;
   readonly agentBin?: string;
-  readonly defaultModel?: CursorModel;
 }
 
 export type CursorModelOptions = {
@@ -298,7 +298,7 @@ export const interceptCursorTelemetry = (
 const openCursorTransport = (agentBin: string) =>
   FiberSet.makeRuntimePromise().pipe(
     Effect.map((runPromise) => (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
-      const flag = cursorModelFlag(ctx.model, null);
+      const flag = cursorModelFlag(ctx.model);
       return ctx.sandbox.process
         .spawn(`${agentBin} --model ${flag} acp`, {
           cwd: ctx.cwd,
@@ -328,23 +328,29 @@ const generatedCatalog = Harness.staticCatalogSource(
   },
   { source: "cogwork-fallback", fallbackVersion: cursorCatalog.generatedAgainst },
 );
-const selectedCursorModel = (
-  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
-  fallback: CursorModel,
-) => {
-  const selected = request.selection.model;
-  if (!selected) return fallback;
-  const result = cursorNativeModelId(cursorCatalog, selected, {});
-  return CursorNativeModelIdResult.$match({
-    Failure: ({ error }) => {
-      throw new Error(error);
-    },
-    Success: ({ value }) => {
-      const model = cursorModels.find((candidate) => candidate === value);
-      if (!model) throw new Error(`Cursor catalog translated ${selected} to unknown native id ${value}`);
-      return model;
-    },
-  })(result);
+const cursorNativeSelection = (model: string | null, options: ModelOptionSelections) => {
+  const defaultModel = cursorCatalog.models.find(({ default: isDefault }) => isDefault)?.value ?? "auto";
+  return cursorNativeModelId(cursorCatalog, model ?? defaultModel, options);
+};
+
+const CursorModelSchema = Schema.Literals(cursorModels);
+const staleSelection = (message: string) =>
+  new Harness.HarnessError({
+    reason: "stale-selection",
+    retryable: false,
+    message,
+  });
+
+const resolveCursorModel = (input: Harness.HarnessPreflightInput) => {
+  const selection = Harness.selectionOfPreflightInput(input);
+  const translated = cursorNativeSelection(selection.model, selection.options);
+  return CursorNativeModelIdResult.$match(translated, {
+    Failure: ({ error }) => Effect.fail(staleSelection(error)),
+    Success: ({ value }) =>
+      Schema.decodeUnknownEffect(CursorModelSchema)(value).pipe(
+        Effect.mapError(() => staleSelection(`Cursor catalog does not include native model ${value}`)),
+      ),
+  });
 };
 
 const promptCharacters = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
@@ -361,7 +367,6 @@ const hostAuthentication = () =>
 
 export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunner => {
   const agentBin = options.agentBin ?? "agent";
-  const defaultModel = options.defaultModel ?? "auto";
   const capabilities = {
     execution: {
       nonInteractive: true,
@@ -386,7 +391,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   };
   const catalogSources = { fallback: generatedCatalog };
   const readiness = () => cursorReadiness(agentBin);
-  const makeRunner = (openTransport: CursorOpenTransport) => {
+  const makeRunner = (openTransport: CursorOpenTransport, model: CursorModel) => {
     const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter> = {
       name: options.name,
       capabilities,
@@ -406,7 +411,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
           permissionMode: "default",
           permissions: "headless",
         })(model),
-      projectModel: (request) => selectedCursorModel(request, defaultModel),
+      projectModel: () => model,
       projectOptions: (request) => cursorModelOptions(request.identity.resumeHandle),
       transport: {},
       diagnostics: cursorDiagnostics,
@@ -427,15 +432,23 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     validateLaunch: (request) =>
       Harness.validateCheckoutDirectory(options.name, request.plan.sandbox.workspace),
     preflight: (input) =>
-      Effect.scoped(
-        openCursorTransport(agentBin).pipe(
-          Effect.flatMap((openTransport) => makeRunner(openTransport).preflight(input)),
+      resolveCursorModel(input).pipe(
+        Effect.flatMap((model) =>
+          Effect.scoped(
+            openCursorTransport(agentBin).pipe(
+              Effect.flatMap((openTransport) => makeRunner(openTransport, model).preflight(input)),
+            ),
+          ),
         ),
       ),
     run: (request) =>
       Stream.unwrap(
-        openCursorTransport(agentBin).pipe(
-          Effect.map((openTransport) => makeRunner(openTransport).run(request)),
+        resolveCursorModel(Harness.HarnessPreflightInput.Launch({ request })).pipe(
+          Effect.flatMap((model) =>
+            openCursorTransport(agentBin).pipe(
+              Effect.map((openTransport) => makeRunner(openTransport, model).run(request)),
+            ),
+          ),
         ),
       ),
   };

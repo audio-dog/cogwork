@@ -117,7 +117,7 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
       harness: {
         name,
         model: defaultModel,
-        effort: overrides.effort === undefined ? "high" : overrides.effort,
+        options: typeof overrides.effort === "string" ? { effort: overrides.effort } : {},
         profile,
       },
       instructions,

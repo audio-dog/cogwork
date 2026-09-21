@@ -165,7 +165,7 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-provider-test",
       operation: stage,
-      harness: { name: harnessName, model: overrides.model ?? "openai/gpt-4o", effort: null, profile },
+      harness: { name: harnessName, model: overrides.model ?? "openai/gpt-4o", options: {}, profile },
       instructions: [{ ...sampleLayer, kind: "repo" }],
       operatingInstructions: {
         name: "implement-agent",
