@@ -144,6 +144,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
     ControlStoreChanged: () => null,
     PluginsChanged: () => null,
     ConnectionsChanged: () => null,
+    HarnessesChanged: () => null,
     ItemChanged: ({ item, workspace }) => {
       const state = classifiedState(item);
       return {
