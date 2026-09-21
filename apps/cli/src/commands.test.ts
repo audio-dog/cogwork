@@ -205,7 +205,7 @@ describe("operation settings", () => {
         },
         { workflow: "coding", operation: "implement", workspace: null },
       ),
-      "enabled: unset\nharness: unset\nmodel: operation-model\neffort: unset\npermission-profile: unset\nbindings: unset",
+      "enabled: unset\nharness: unset\nmodel: operation-model\nmodel-options: unset\npermission-profile: unset\nbindings: unset",
     );
     assert.isDefined(operationSettingsCommand);
   });
@@ -231,6 +231,32 @@ describe("operation settings", () => {
           scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId("example") },
           level: { _tag: "Workflow", workflow: "coding" },
           value: false,
+        },
+      });
+    }),
+  );
+
+  it.effect("decodes model options from JSON", () =>
+    Effect.gen(function* () {
+      const update = yield* makeOperationSettingUpdate(
+        {
+          setting: "model-options",
+          scope: "profile",
+          level: "operation",
+          workflow: "coding",
+          operation: "implement",
+          workspace: Option.none(),
+        },
+        Option.some('{"effort":"high","speed":true}'),
+      );
+
+      assert.deepStrictEqual(update, {
+        _tag: "Set",
+        row: {
+          setting: "model-options",
+          scope: { _tag: "SettingsProfile" },
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          value: { effort: "high", speed: true },
         },
       });
     }),
