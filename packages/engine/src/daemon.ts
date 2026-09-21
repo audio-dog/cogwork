@@ -478,11 +478,13 @@ const canonicalWorktreeRoot = Effect.fn("Daemon.canonicalWorktreeRoot")(function
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const normalized = path.resolve(worktreeRoot(workspace.config.checkoutPath, workspace.config.worktrees));
-  return yield* fs.realPath(normalized).pipe(
+  const configuredPath = path.resolve(
+    worktreeRoot(workspace.config.checkoutPath, workspace.config.worktrees),
+  );
+  return yield* fs.realPath(configuredPath).pipe(
     Effect.match({
-      onFailure: () => ({ path: normalized, resolved: false }),
-      onSuccess: (canonical) => ({ path: canonical, resolved: true }),
+      onFailure: () => ({ configuredPath, canonicalPath: configuredPath, resolved: false }),
+      onSuccess: (canonicalPath) => ({ configuredPath, canonicalPath, resolved: true }),
     }),
   );
 });
@@ -502,16 +504,19 @@ const reconcileWorkspaceWorktrees = Effect.fn("Daemon.reconcileWorkspaceWorktree
     owner: workspaceByName.get(record.workspace),
   }));
   const ownershipRoot = yield* canonicalWorktreeRoot(workspace);
+  const ownershipPaths = new Set([ownershipRoot.configuredPath, ownershipRoot.canonicalPath]);
   const retainedPaths = yield* Effect.forEach(retainedRuns, ({ branch, owner }) => {
     const missingOwnership = owner === undefined || branch === null;
-    if (missingOwnership) return Effect.succeed(null);
+    if (missingOwnership) return Effect.succeed([]);
     return Effect.map(canonicalWorktreeRoot(owner), (ownerRoot) => {
       const sharesOwnershipRoot =
-        !ownerRoot.resolved || !ownershipRoot.resolved || ownerRoot.path === ownershipRoot.path;
-      return sharesOwnershipRoot ? worktreePathFor(ownershipRoot.path, branch) : null;
+        !ownerRoot.resolved ||
+        !ownershipRoot.resolved ||
+        ownerRoot.canonicalPath === ownershipRoot.canonicalPath;
+      return sharesOwnershipRoot ? [...ownershipPaths].map((root) => worktreePathFor(root, branch)) : [];
     });
   });
-  const ownedWorktreePaths = retainedPaths.filter((retained): retained is string => retained !== null);
+  const ownedWorktreePaths = retainedPaths.flat();
   return yield* manager.reconcile(
     workspace,
     { activeTicketKeys: activeTicketKeys(state), ownedWorktreePaths },

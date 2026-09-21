@@ -23,6 +23,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
@@ -1076,6 +1077,7 @@ describe("daemon heartbeats", () => {
     workerLayer: Layer.Layer<Reconcile.ReconcileWorker | WorkerServices>,
     schedulerLayer: Layer.Layer<Scheduler.Scheduler | SchedulerServices>,
     worktrees: Layer.Layer<Worktree.WorktreeManager | WorktreeServices>,
+    fileSystem: Layer.Layer<FileSystem.FileSystem>,
   ) =>
     EventPublisher.layer.pipe(
       Layer.provideMerge(
@@ -1087,7 +1089,7 @@ describe("daemon heartbeats", () => {
           worktrees,
           runLedgerLayer,
           RunControl.layer,
-          NodeFileSystem.layer,
+          fileSystem,
           Path.layer,
           performanceRegressionSensorLayer,
           performanceHealthSourceLayer,
@@ -1157,12 +1159,19 @@ describe("daemon heartbeats", () => {
 
       assert.deepStrictEqual(yield* Ref.get(drained), [1234]);
     }).pipe(
-      Effect.provide(heartbeatLayer(emptyWorkerLayer, SchedulerDrainGraces.schedulerLayer, worktreeStub)),
+      Effect.provide(
+        heartbeatLayer(
+          emptyWorkerLayer,
+          SchedulerDrainGraces.schedulerLayer,
+          worktreeStub,
+          NodeFileSystem.layer,
+        ),
+      ),
       Effect.scoped,
     ),
   );
 
-  it.effect("retains a running ledger Run when an ok poll observes no items", () =>
+  it.effect("retains a running ledger Run when its configured root has a canonical alias", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
       const probe = yield* WorktreeMaintenanceProbe;
@@ -1196,6 +1205,18 @@ describe("daemon heartbeats", () => {
           emptyWorkerLayer,
           SchedulerTickCount.schedulerLayer,
           WorktreeMaintenanceProbe.managerLayer,
+          Layer.effect(
+            FileSystem.FileSystem,
+            Effect.map(FileSystem.FileSystem, (fs) =>
+              FileSystem.FileSystem.of({
+                ...fs,
+                realPath: (target) =>
+                  target === "/repos/example.worktrees"
+                    ? Effect.succeed("/private/repos/example.worktrees")
+                    : fs.realPath(target),
+              }),
+            ),
+          ).pipe(Layer.provide(NodeFileSystem.layer)),
         ),
       ),
       Effect.scoped,
@@ -1247,7 +1268,14 @@ describe("daemon heartbeats", () => {
       assert.isAtLeast(yield* Ref.get(observes), 2);
       assert.isAtLeast(yield* Ref.get(schedulerTicks), 2);
     }).pipe(
-      Effect.provide(heartbeatLayer(defectiveWorkerLayer, SchedulerTickCount.schedulerLayer, worktreeStub)),
+      Effect.provide(
+        heartbeatLayer(
+          defectiveWorkerLayer,
+          SchedulerTickCount.schedulerLayer,
+          worktreeStub,
+          NodeFileSystem.layer,
+        ),
+      ),
       Effect.scoped,
     ),
   );
