@@ -14,6 +14,7 @@ export interface FileStat {
 
 export interface WorktreeFsService {
   readonly linkFile: (target: string, linkPath: string) => Effect.Effect<void, WorktreeFsError>;
+  readonly removeDebris: (root: string, target: string) => Effect.Effect<boolean, WorktreeFsError>;
   readonly runCommand: (cwd: string, command: string) => Effect.Effect<void, WorktreeFsError>;
   readonly stat: (target: string) => Effect.Effect<FileStat | null, WorktreeFsError>;
 }

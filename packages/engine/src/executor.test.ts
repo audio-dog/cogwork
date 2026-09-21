@@ -869,6 +869,7 @@ const preparedWorktreeRemovedLayer = Layer.effect(
 
 const worktreeFsStub = Layer.succeed(WorktreeFs, {
   linkFile: () => Effect.void,
+  removeDebris: () => Effect.succeed(true),
   runCommand: () => Effect.void,
   stat: () => Effect.succeed(null),
 } satisfies WorktreeFsService);

@@ -57,6 +57,8 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
       }>
     >([]),
     linked: yield* Ref.make<ReadonlyArray<{ readonly target: string; readonly linkPath: string }>>([]),
+    removedPaths: yield* Ref.make<ReadonlyArray<string>>([]),
+    registeredWorktrees: yield* Ref.make<ReadonlyArray<WorktreeEntry>>([]),
     commands: yield* Ref.make<ReadonlyArray<{ readonly cwd: string; readonly command: string }>>([]),
   };
 });
@@ -121,10 +123,28 @@ const fakeGit = (
   } satisfies GitService;
 };
 
-const fakeFs = (recorder: Recorder, stats: Readonly<Record<string, FileStat>>) =>
+const fakeFs = (
+  recorder: Recorder,
+  stats: Readonly<Record<string, FileStat>>,
+  registerOnRemove?: WorktreeEntry,
+) =>
   ({
     linkFile: (target: string, linkPath: string) =>
       Ref.update(recorder.linked, (log) => [...log, { target, linkPath }]),
+    removeDebris: (_root: string, target: string) => {
+      const registersWorktree = registerOnRemove?.path === target;
+      const preservesTarget = registersWorktree || stats[`${target}/.git`] !== undefined;
+      const register = registersWorktree
+        ? Ref.update(recorder.registeredWorktrees, (entries) => [...entries, registerOnRemove])
+        : Effect.void;
+      return register.pipe(
+        Effect.andThen(
+          preservesTarget
+            ? Effect.succeed(false)
+            : Ref.update(recorder.removedPaths, (paths) => [...paths, target]).pipe(Effect.map(() => true)),
+        ),
+      );
+    },
     runCommand: (cwd: string, command: string) =>
       Ref.update(recorder.commands, (log) => [...log, { cwd, command }]),
     stat: (target: string) => Effect.succeed(stats[target] ?? null),
