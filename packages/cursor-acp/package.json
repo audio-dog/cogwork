@@ -10,8 +10,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "models:sync": "node --experimental-strip-types scripts/sync-models.ts",
-    "models:check": "node --experimental-strip-types scripts/sync-models.ts --check"
+    "models:sync": "tsx scripts/sync-models.ts",
+    "models:check": "tsx scripts/sync-models.ts --check"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.25.1",
