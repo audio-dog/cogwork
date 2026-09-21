@@ -210,6 +210,35 @@ describe("operation settings", () => {
     assert.isDefined(operationSettingsCommand);
   });
 
+  it("renders an empty model options override", () => {
+    assert.include(
+      formatOperationSettings(
+        {
+          daemonLimits: {
+            globalConcurrency: 4,
+            perWorkspaceConcurrency: 4,
+            dailyBudget: 50,
+            revision: 0,
+          },
+          operationSettings: [
+            {
+              setting: "model-options",
+              level: { _tag: "Default" },
+              scope: { _tag: "SettingsProfile" },
+              value: {},
+            },
+          ],
+          connections: [],
+          pluginInstalls: [],
+          harnessSettings: [],
+          contributionSettings: [],
+        },
+        { workflow: "coding", operation: "implement", workspace: null },
+      ),
+      "model-options: {}",
+    );
+  });
+
   it.effect("maps the set form to a typed Operation setting row", () =>
     Effect.gen(function* () {
       const update = yield* makeOperationSettingUpdate(

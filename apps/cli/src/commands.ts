@@ -141,18 +141,18 @@ export const daemonOrStore = <A, E, R, E2, R2>(
 
 type ResolvedOperationSettingValue = ReturnType<typeof resolveOperationSetting>;
 
+const isEmptyArray = (value: ResolvedOperationSettingValue) =>
+  Array.isArray(value) ? value.length === 0 : false;
+
 const operationSettingFormatRules: ReadonlyArray<{
   readonly when: (value: ResolvedOperationSettingValue) => boolean;
   readonly format: (value: ResolvedOperationSettingValue) => string;
 }> = [
   { when: (value) => value === null, format: () => "unset" },
+  { when: isEmptyArray, format: () => "unset" },
   {
     when: (value) => typeof value === "object",
-    format: (value) => {
-      const json = JSON.stringify(value);
-      const isEmpty = json === "{}" || json === "[]";
-      return isEmpty ? "unset" : json;
-    },
+    format: (value) => JSON.stringify(value),
   },
   { when: () => true, format: String },
 ];
