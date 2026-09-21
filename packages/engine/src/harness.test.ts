@@ -573,7 +573,7 @@ describe("Harness", () => {
       }),
     );
 
-    it.effect("rejects unsupported effort absent from the current catalog", () =>
+    it.effect("rejects saved model options when the current model omits the control", () =>
       Effect.gen(function* () {
         const launches: Array<true> = [];
         const runner = {

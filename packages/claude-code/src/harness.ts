@@ -1,7 +1,6 @@
 import type { HarnessName } from "@cogwork/contracts";
 import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
-  CLAUDE_CODE_MODELS,
   type ClaudeCodeModel,
   type ClaudeCodeTextAdapter,
   type ClaudeCodeTextConfig,
@@ -13,6 +12,8 @@ import { createSecrets, type SandboxHandle } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import { ClaudeNativeSelectionResult, claudeNativeSelection } from "./model";
+import { claudeModelCatalog } from "./models.generated";
 
 export interface ClaudeCodeRunnerOptions {
   readonly name: HarnessName;
@@ -26,8 +27,6 @@ interface ClaudeCommandResult {
   readonly stderr: string;
 }
 
-const adapterPackageVersion = "0.6.4";
-const fallbackVersion = "claude-code-1";
 const supportedClaudeMajor = 2;
 const minimumClaudeVersion: ReadonlyArray<number> = [2, 1, 83];
 const versionRequirement = `>=${minimumClaudeVersion.join(".")} <${supportedClaudeMajor + 1}.0.0`;
@@ -78,7 +77,6 @@ const authenticationProfiles = {
     failurePattern: rejectedApiKeyPattern,
   },
 } as const satisfies Record<ClaudeAuthenticationMode, unknown>;
-const modelPattern = /['"]((?:claude-[a-z0-9-]+)|opus|sonnet|haiku|fable)['"]/gi;
 
 const isMissingExecutableCause = (cause: unknown, seen: ReadonlySet<object> = new Set()): boolean => {
   if (typeof cause !== "object" || cause === null || seen.has(cause)) return false;
@@ -209,9 +207,12 @@ const readinessFromVersion = (
 ) => {
   const compatible = versionCompatible(version);
   const authenticated = authenticationError === null;
+  const catalogMatchesInstalled = version === claudeModelCatalog.generatedAgainst;
   const incompatibilityDiagnostic = `Claude Code ${version || "unknown"} is unsupported. Update Claude Code to ${versionRequirement}.`;
+  const catalogDriftDiagnostic = `Claude catalog was generated against ${claudeModelCatalog.generatedAgainst}, but this Runtime Host has ${version || "an unknown version"}.`;
   const diagnostics = [
     ...(compatible ? [] : [incompatibilityDiagnostic]),
+    ...(catalogMatchesInstalled ? [] : [catalogDriftDiagnostic]),
     ...(authenticated ? [] : [authenticationError.message]),
   ];
   return {
@@ -281,51 +282,18 @@ const claudeReadiness = Effect.fn("ClaudeCode.readinessResult")(
     ),
 );
 
-const modelLabel = (model: string) =>
-  model
-    .split("-")
-    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
+const managedCatalogOptions = {
+  models: claudeModelCatalog.models,
+  generatedAgainst: claudeModelCatalog.generatedAgainst,
+  rawModelIds: claudeModelCatalog.rawModelIds,
+};
 
-const modelChoices = (models: ReadonlyArray<ClaudeCodeModel>) =>
-  [...new Set(models)].map((model) => ({ value: model, label: modelLabel(model) }));
-
-const modelsFromHelp = (help: string) =>
-  [...help.matchAll(modelPattern)].map((match) => match[1]).filter((model) => model !== undefined);
-
-const nativeCatalog = Effect.fn("ClaudeCode.nativeCatalog")((executable: string) =>
-  withProbeSandbox((sandbox) =>
-    Effect.gen(function* () {
-      const version = yield* readVersion(sandbox, executable);
-      const help = yield* successfulCommandOutput(sandbox, executable, "--help", installationExitError);
-      const models = modelChoices(modelsFromHelp(help));
-      if (models.length === 0) return null;
-      return {
-        models,
-        provenance: {
-          source: "native-discovery",
-          runtimeHost: "local-process",
-          harnessVersion: version,
-        },
-      } satisfies Harness.HarnessCatalogSourceResult;
-    }),
-  ).pipe(Effect.orElseSucceed(() => null)),
-);
-
-export const claudeCodeCatalogSources = (
-  executable: string,
-  runtimeModels: ReadonlyArray<ClaudeCodeModel> = CLAUDE_CODE_MODELS,
-) => ({
-  runtime: Harness.staticCatalogSource(
-    { models: modelChoices(runtimeModels) },
-    { source: "tanstack-runtime", packageVersion: adapterPackageVersion },
-  ),
-  native: { catalog: nativeCatalog(executable) },
-  fallback: Harness.staticCatalogSource(
-    { models: modelChoices(["sonnet", "opus", "haiku"]) },
-    { source: "cogwork-fallback", fallbackVersion },
-  ),
-});
+const catalogSources = {
+  fallback: Harness.staticCatalogSource(managedCatalogOptions, {
+    source: "cogwork-fallback",
+    fallbackVersion: "claude-models-generated-1",
+  }),
+};
 
 const turnDiagnostics = (mode: ClaudeAuthenticationMode, cause: unknown) => {
   if (isHarnessError(cause)) return cause;
@@ -370,10 +338,12 @@ const nativeSandboxSettings = (policy: Harness.OperationPolicyProfile) =>
 const claudeExecutableFor = (
   executable: string,
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+  effort: string | undefined,
 ) => {
   const mcpConfig = inlineMcpConfig(request.mcp);
   return [
     executable,
+    ...(effort ? ["--effort", effort] : []),
     "--settings",
     inlineSettingsArgument(nativeSandboxSettings(request.policy)),
     ...(mcpConfig ? ["--mcp-config", mcpConfig] : []),
@@ -391,6 +361,7 @@ const disallowedToolsFor = (policy: Harness.OperationPolicyProfile) => [
 const adapterConfig = (
   executable: string,
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+  effort: string | undefined,
 ) => {
   return {
     authMode: nativeAuthenticationMode,
@@ -401,7 +372,7 @@ const adapterConfig = (
     // strings, so the post-run `git -C <cwd> diff` only sees the prepared
     // checkout when cwd already resolves there.
     cwd: ".",
-    claudeExecutable: claudeExecutableFor(executable, request),
+    claudeExecutable: claudeExecutableFor(executable, request, effort),
     disallowedTools: disallowedToolsFor(request.policy),
     ...(request.checkout.gitWritablePaths.length > 0
       ? { addDirs: [...request.checkout.gitWritablePaths] }
@@ -414,6 +385,16 @@ const providerOptions = (request: ExternalHarnessRuntime.ExternalHarnessResolved
     authMode: nativeAuthenticationMode,
     ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
   }) satisfies ClaudeCodeTextProviderOptions;
+
+const nativeSelection = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => {
+  const result = claudeNativeSelection(
+    claudeModelCatalog,
+    request.selection.model,
+    request.selection.options,
+  );
+  if (ClaudeNativeSelectionResult.$is("Success")(result)) return result;
+  throw harnessError("stale-selection", false, result.error);
+};
 
 const descriptor = (
   options: ClaudeCodeRunnerOptions,
@@ -437,12 +418,13 @@ const descriptor = (
     },
     authentication: authenticationProfiles[options.authentication.mode].binding,
     signIn: authenticationProfiles[options.authentication.mode].signIn,
-    catalogSources: claudeCodeCatalogSources(executable),
+    catalogSources,
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
     inheritedEnvironment,
-    makeAdapter: ({ model, request }) => claudeCodeText(model, adapterConfig(executable, request)),
-    projectModel: (request) => request.selection.model ?? "sonnet",
+    makeAdapter: ({ model, request }) =>
+      claudeCodeText(model, adapterConfig(executable, request, nativeSelection(request).effort)),
+    projectModel: (request) => nativeSelection(request).model,
     projectOptions: providerOptions,
     transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
     diagnostics: (cause) => turnDiagnostics(options.authentication.mode, cause),

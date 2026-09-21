@@ -22,7 +22,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { type ClaudeCodeRunnerOptions, claudeCodeCatalogSources, claudeCodeRunner } from "./harness";
+import { type ClaudeCodeRunnerOptions, claudeCodeRunner } from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("claude");
 const companionName = Schema.decodeSync(HarnessName)("companion");
@@ -208,6 +208,8 @@ interface RequestOverrides {
   readonly profile?: "read-only" | "full";
   readonly operation?: LifecycleStage;
   readonly mcp?: boolean;
+  readonly model?: string | null;
+  readonly effort?: string | null;
 }
 
 const mcpSelection = (enabled?: boolean) => {
@@ -240,7 +242,12 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
     plan: Schema.decodeSync(RunPlan)({
       id: "run-claude-test",
       operation,
-      harness: { name, model: "sonnet", options: {}, profile },
+      harness: {
+        name,
+        model: overrides.model ?? "sonnet",
+        options: typeof overrides.effort === "string" ? { effort: overrides.effort } : {},
+        profile,
+      },
       instructions: [
         { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
         { kind: "repo", source: "/repo/AGENTS.md", content: "repo rules" },
@@ -332,11 +339,6 @@ const structuredObjects = (events: ReadonlyArray<Harness.AgUiEvent>) =>
 
 const sessionHandles = (events: ReadonlyArray<Harness.AgUiEvent>) =>
   events.flatMap((event) => (agUiIsSessionHandleEvent(event) ? [event.value.sessionId] : []));
-
-const runnerWithoutRuntimeCatalog = (claudeExecutable: string) => ({
-  ...claudeCodeRunner({ name, authentication: hostAuthentication, claudeExecutable }),
-  catalogSources: claudeCodeCatalogSources(claudeExecutable, []),
-});
 
 const Capture = Schema.Struct({
   args: Schema.Array(Schema.String),
@@ -503,7 +505,6 @@ export {
   restoreEnvironment,
   resumedSession,
   rotatingByokHarnessLayer,
-  runnerWithoutRuntimeCatalog,
   runtimeLayer,
   sessionHandles,
   sessionStore,

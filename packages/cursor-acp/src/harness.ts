@@ -326,7 +326,7 @@ const generatedCatalog = Harness.staticCatalogSource(
     generatedAgainst: cursorCatalog.generatedAgainst,
     rawModelIds: cursorCatalog.rawModelIds,
   },
-  { source: "cogwork-fallback", fallbackVersion: "cursor-models-generated-1" },
+  { source: "cogwork-fallback", fallbackVersion: cursorCatalog.generatedAgainst },
 );
 const cursorNativeSelection = (model: string | null, options: ModelOptionSelections) => {
   const defaultModel = cursorCatalog.models.find(({ default: isDefault }) => isDefault)?.value ?? "auto";

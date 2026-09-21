@@ -11,15 +11,14 @@ import type { GitError } from "./git";
 import type { HarnessError } from "./harness";
 import type { RunLedgerError } from "./run-ledger";
 import type { RunPlanAssemblyError } from "./run-plan";
-import type { WorktreeDivergedError, WorktreeOperationInProgressError } from "./worktree";
+import type { WorktreeError } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
 export type PrepareError =
   | ControlStoreFailure
   | GitError
   | WorktreeFsError
-  | WorktreeDivergedError
-  | WorktreeOperationInProgressError
+  | WorktreeError
   | CredentialError
   | ContextFsError
   | ContextAssemblerError

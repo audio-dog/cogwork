@@ -210,16 +210,15 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
 describe("Cursor Harness registry", () => {
-  it.effect("uses the generated base models and option descriptors", () =>
+  it.effect("serves generated base models and option descriptors", () =>
     Effect.gen(function* () {
       const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
       const catalog = yield* Harness.make([runner]).catalog(cursorName);
 
-      assert.deepStrictEqual(
-        catalog.models.map(({ value }) => value),
-        cursorCatalog.models.map(({ value }) => value),
-      );
+      assert.deepStrictEqual(catalog.models, cursorCatalog.models);
       assert.isTrue(catalog.models.some(({ options }) => options?.some(({ id }) => id === "effort")));
+      assert.strictEqual(catalog.generatedAgainst, cursorCatalog.generatedAgainst);
+      assert.deepStrictEqual(catalog.rawModelIds, cursorCatalog.rawModelIds);
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -249,9 +248,13 @@ describe("Cursor Harness registry", () => {
       const staleOption = yield* harness
         .preflight(cursorName, "full", "gpt-5.6-sol", { effort: "extreme" })
         .pipe(Effect.flip);
+      const staleComposite = yield* harness
+        .preflight(cursorName, "full", "gpt-5.6-luna-high")
+        .pipe(Effect.flip);
 
       assert.strictEqual(staleModel.reason, "stale-selection");
       assert.strictEqual(staleOption.reason, "stale-selection");
+      assert.strictEqual(staleComposite.reason, "stale-selection");
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
