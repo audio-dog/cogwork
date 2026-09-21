@@ -80,6 +80,10 @@ export const checkoutPathFor = (
 };
 
 const safeBranch = (branch: string) => /^[a-z0-9][a-z0-9-]*$/.test(branch);
+const safeWorktreeBranch = (branch: string) =>
+  !branch.startsWith("/") &&
+  !branch.includes("\\") &&
+  branch.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 
 const remoteOf = (config?: WorktreeSettings) => config?.remote ?? "origin";
 const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main";
@@ -183,6 +187,37 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  const registeredOrDetached = Effect.fn("Worktree.registeredOrDetached")(function* (
+    repoPath: string,
+    branch: string,
+    worktreePath: string,
+  ) {
+    const entries = yield* git.listWorktrees(repoPath);
+    const registered = entries.some((entry) => entry.path === worktreePath);
+    if (registered) return "registered";
+    return yield* new WorktreeError({
+      reason: "detached",
+      branch,
+      path: worktreePath,
+      message: `worktree path ${worktreePath} contains a .git entry but git does not register it; it was left untouched because it may contain uncommitted work`,
+      retryable: false,
+    });
+  });
+
+  const recoverUnregisteredPath = Effect.fn("Worktree.recoverUnregisteredPath")(function* (
+    repoPath: string,
+    root: string,
+    branch: string,
+    worktreePath: string,
+  ) {
+    const target = yield* fs.stat(worktreePath);
+    if (!target) return "vacant";
+
+    const removed = yield* fs.removeDebris(root, worktreePath);
+    if (removed) return "vacant";
+    return yield* registeredOrDetached(repoPath, branch, worktreePath);
+  });
+
   const managed = Effect.fn("Worktree.managed")(function* (repoPath: string, config?: WorktreeSettings) {
     const entries = yield* git.listWorktrees(repoPath);
     const prefix = `${worktreeRoot(repoPath, config)}/`;
@@ -251,20 +286,34 @@ export const make = Effect.gen(function* () {
     const repoPath = workspace.config.checkoutPath;
     const remote = remoteOf(config);
     const branch = options?.branch ?? branchName(item);
-    const worktreePath = pathFor(repoPath, config, branch);
+    if (!safeWorktreeBranch(branch)) {
+      return yield* new WorktreeError({
+        reason: "unsafe-branch",
+        branch,
+        message: `refusing worktree branch "${branch}" because it does not resolve below the worktree root`,
+        retryable: false,
+      });
+    }
+    const root = worktreeRoot(repoPath, config);
+    const worktreePath = worktreePathFor(root, branch);
 
     yield* git.fetch(repoPath, remote);
     const entries = yield* git.listWorktrees(repoPath);
-    const exists = entries.some((entry) => entry.path === worktreePath);
+    const initiallyRegistered = entries.some((entry) => entry.path === worktreePath);
+    const targetState = initiallyRegistered
+      ? "registered"
+      : yield* recoverUnregisteredPath(repoPath, root, branch, worktreePath);
+    const registered = targetState === "registered";
+    const resumesRegisteredWorktree = registered && options?.resume;
 
-    if (exists && options?.resume) {
+    if (resumesRegisteredWorktree) {
       return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
     }
 
-    if (exists) yield* refuseOperationInProgress(worktreePath, branch);
+    if (registered) yield* refuseOperationInProgress(worktreePath, branch);
 
     const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
-    if (!exists) {
+    if (!registered) {
       const startPoint = hasRemoteBranch ? `${remote}/${branch}` : `${remote}/${baseBranchOf(config)}`;
       yield* Effect.acquireUseRelease(
         git.addWorktree({ repoPath, worktreePath, branch, startPoint }),
