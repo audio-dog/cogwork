@@ -9,6 +9,7 @@ export const IpcChannel = {
   getEngineStatus: "cogwork:get-engine-status",
   setEngineEnabled: "cogwork:set-engine-enabled",
   engineStatusChanged: "cogwork:engine-status-changed",
+  systemResumed: "cogwork:system-resumed",
   getWindowPreferences: "cogwork:get-window-preferences",
   getMainProcessHealth: "cogwork:get-main-process-health",
   setWindowPreferences: "cogwork:set-window-preferences",
@@ -61,6 +62,7 @@ export interface CogworkBridge {
   readonly getEngineStatus: () => Promise<EngineStatus>;
   readonly setEngineEnabled: (enabled: boolean) => Promise<EngineStatus>;
   readonly onEngineStatus: (listener: (status: EngineStatus) => void) => () => void;
+  readonly onSystemResume: (listener: () => void) => () => void;
   readonly getWindowPreferences: () => Promise<WindowPreferences>;
   readonly getProcessHealth: () => Promise<ReadonlyArray<DesktopProcessHealthSample>>;
   readonly setWindowPreferences: (preferences: Partial<WindowPreferences>) => Promise<WindowPreferences>;

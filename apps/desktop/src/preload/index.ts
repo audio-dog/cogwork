@@ -15,6 +15,7 @@ const bridge: CogworkBridge = {
   getEngineStatus: () => ipcRenderer.invoke(IpcChannel.getEngineStatus),
   setEngineEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.setEngineEnabled, enabled),
   onEngineStatus: (listener) => subscribe(IpcChannel.engineStatusChanged, listener),
+  onSystemResume: (listener) => subscribe(IpcChannel.systemResumed, listener),
   getWindowPreferences: () => ipcRenderer.invoke(IpcChannel.getWindowPreferences),
   getProcessHealth: async () => {
     const [main, memory] = await Promise.all([

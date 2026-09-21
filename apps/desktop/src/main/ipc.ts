@@ -261,3 +261,9 @@ export const registerIpc = (deps: IpcDeps) => {
 export const broadcastEngineStatus = (windows: readonly BrowserWindow[], status: EngineStatus) => {
   for (const window of windows) safeSend(window.webContents, IpcChannel.engineStatusChanged, status);
 };
+
+export const broadcastSystemResume = (windows: readonly BrowserWindow[]) => {
+  windows.forEach((window) => {
+    safeSend(window.webContents, IpcChannel.systemResumed, undefined);
+  });
+};
