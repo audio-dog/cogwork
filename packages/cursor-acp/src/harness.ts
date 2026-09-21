@@ -13,6 +13,7 @@ import { createSecrets } from "@tanstack/ai-sandbox";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
+import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import {
@@ -332,23 +333,24 @@ const cursorNativeSelection = (model: string | null, options: ModelOptionSelecti
   return cursorNativeModelId(cursorCatalog, model ?? defaultModel, options);
 };
 
-const selectedCursorModel = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => {
-  const translated = cursorNativeSelection(request.selection.model, request.selection.options);
-  if (!CursorNativeModelIdResult.$is("Success")(translated)) return "auto";
-  return cursorModels.find((model) => model === translated.value) ?? "auto";
-};
+const CursorModelSchema = Schema.Literals(cursorModels);
+const staleSelection = (message: string) =>
+  new Harness.HarnessError({
+    reason: "stale-selection",
+    retryable: false,
+    message,
+  });
 
-const validateCursorSelection = (input: Harness.HarnessPreflightInput) => {
+const resolveCursorModel = (input: Harness.HarnessPreflightInput) => {
   const selection = Harness.selectionOfPreflightInput(input);
   const translated = cursorNativeSelection(selection.model, selection.options);
-  if (CursorNativeModelIdResult.$is("Success")(translated)) return Effect.void;
-  return Effect.fail(
-    new Harness.HarnessError({
-      reason: "stale-selection",
-      retryable: false,
-      message: translated.error,
-    }),
-  );
+  return CursorNativeModelIdResult.$match(translated, {
+    Failure: ({ error }) => Effect.fail(staleSelection(error)),
+    Success: ({ value }) =>
+      Schema.decodeUnknownEffect(CursorModelSchema)(value).pipe(
+        Effect.mapError(() => staleSelection(`Cursor catalog does not include native model ${value}`)),
+      ),
+  });
 };
 
 const promptCharacters = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
@@ -389,7 +391,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   };
   const catalogSources = { fallback: generatedCatalog };
   const readiness = () => cursorReadiness(agentBin);
-  const makeRunner = (openTransport: CursorOpenTransport) => {
+  const makeRunner = (openTransport: CursorOpenTransport, model: CursorModel) => {
     const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter> = {
       name: options.name,
       capabilities,
@@ -409,7 +411,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
           permissionMode: "default",
           permissions: "headless",
         })(model),
-      projectModel: selectedCursorModel,
+      projectModel: () => model,
       projectOptions: (request) => cursorModelOptions(request.identity.resumeHandle),
       transport: {},
       diagnostics: cursorDiagnostics,
@@ -430,19 +432,23 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     validateLaunch: (request) =>
       Harness.validateCheckoutDirectory(options.name, request.plan.sandbox.workspace),
     preflight: (input) =>
-      validateCursorSelection(input).pipe(
-        Effect.andThen(
+      resolveCursorModel(input).pipe(
+        Effect.flatMap((model) =>
           Effect.scoped(
             openCursorTransport(agentBin).pipe(
-              Effect.flatMap((openTransport) => makeRunner(openTransport).preflight(input)),
+              Effect.flatMap((openTransport) => makeRunner(openTransport, model).preflight(input)),
             ),
           ),
         ),
       ),
     run: (request) =>
       Stream.unwrap(
-        openCursorTransport(agentBin).pipe(
-          Effect.map((openTransport) => makeRunner(openTransport).run(request)),
+        resolveCursorModel(Harness.HarnessPreflightInput.Launch({ request })).pipe(
+          Effect.flatMap((model) =>
+            openCursorTransport(agentBin).pipe(
+              Effect.map((openTransport) => makeRunner(openTransport, model).run(request)),
+            ),
+          ),
         ),
       ),
   };

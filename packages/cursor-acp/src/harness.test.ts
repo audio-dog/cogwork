@@ -544,6 +544,32 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
     ),
   );
 
+  it.effect("refuses a stale model at dispatch", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const base = request(checkout.id);
+      const staleRequest = {
+        ...base,
+        plan: new RunPlan({
+          ...base.plan,
+          harness: {
+            ...base.plan.harness,
+            model: "retired-cursor-model",
+          },
+        }),
+      } satisfies Harness.HarnessRequest;
+      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+
+      const failure = yield* Stream.runDrain(runner.run(staleRequest)).pipe(Effect.flip);
+
+      assert.strictEqual(failure.reason, "stale-selection");
+      assert.include(failure.message, "retired-cursor-model");
+    }),
+  );
+
   it.effect("streams a fresh ACP session, parsed structured result, and estimated terminal usage", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
