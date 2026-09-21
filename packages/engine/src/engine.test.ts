@@ -1,4 +1,5 @@
 import {
+  BranchName,
   Connection,
   type ConnectionId,
   type ConnectionReadiness,
@@ -6,12 +7,15 @@ import {
   DaemonEvent,
   DaemonRpcs,
   defaultControlStore,
+  HarnessName,
   PollState,
+  RunId,
   WorkItemId,
   WorkspaceConfig,
   WorkspaceId,
   WorkspaceRegistrationError,
 } from "@cogwork/contracts";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -24,6 +28,7 @@ import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
@@ -36,6 +41,7 @@ import { ControlStore } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as EventPublisher from "./event-publisher";
+import { Git, type GitService } from "./git";
 import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import { observeWorkspace } from "./observe";
@@ -46,11 +52,13 @@ import * as Reconcile from "./reconcile";
 import * as Recovery from "./recovery";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
+import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
-import { WorktreeManager } from "./worktree";
+import * as Worktree from "./worktree";
+import { WorktreeFs } from "./worktree-fs";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const interruptionGate = Latch.makeUnsafe();
@@ -72,6 +80,7 @@ const registeredWorkspace: Registry.RegisteredWorkspace = {
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
+    worktrees: {},
   }),
   workspaceLimit: 1001,
 };
@@ -990,19 +999,71 @@ class BootstrapRecoveryCalls extends Context.Service<BootstrapRecoveryCalls, Ref
 }
 
 describe("daemon heartbeats", () => {
+  const runningBranch = Schema.decodeSync(BranchName)("705-in-flight");
+  const runningRunId = Schema.decodeSync(RunId)("run-705");
+  const codexHarness = Schema.decodeSync(HarnessName)("codex");
+  class WorktreeMaintenanceProbe extends Context.Service<
+    WorktreeMaintenanceProbe,
+    {
+      readonly removals: Ref.Ref<ReadonlyArray<string>>;
+      readonly listed: Deferred.Deferred<void>;
+    }
+  >()("@cogwork/engine/engine.test/WorktreeMaintenanceProbe") {
+    static readonly layer = Layer.effect(
+      WorktreeMaintenanceProbe,
+      Effect.all({ removals: Ref.make<ReadonlyArray<string>>([]), listed: Deferred.make<void>() }),
+    );
+    static readonly worktreeLayer = Layer.effect(
+      Git,
+      Effect.map(
+        WorktreeMaintenanceProbe,
+        (probe) =>
+          ({
+            fetch: () => Effect.die("unused"),
+            remoteBranchExists: () => Effect.die("unused"),
+            addWorktree: () => Effect.die("unused"),
+            removeWorktree: (_repoPath, path) => Ref.update(probe.removals, (current) => [...current, path]),
+            listWorktrees: () =>
+              Deferred.succeed(probe.listed, undefined).pipe(
+                Effect.map(() => [
+                  { path: `/repos/example.worktrees/${runningBranch}`, branch: "renamed-during-run" },
+                ]),
+              ),
+            fastForward: () => Effect.die("unused"),
+            divergence: () => Effect.die("unused"),
+            operationInProgress: () => Effect.die("unused"),
+            rebase: () => Effect.die("unused"),
+            remoteUrl: () => Effect.die("unused"),
+          }) satisfies GitService,
+      ),
+    ).pipe(Layer.provideMerge(WorktreeMaintenanceProbe.layer));
+    static readonly fsLayer = Layer.succeed(WorktreeFs, {
+      linkFile: () => Effect.die("unused"),
+      runCommand: () => Effect.die("unused"),
+      stat: () => Effect.die("unused"),
+    });
+    static readonly managerLayer = Worktree.managerLayer.pipe(
+      Layer.provide(Layer.merge(WorktreeMaintenanceProbe.worktreeLayer, WorktreeMaintenanceProbe.fsLayer)),
+      Layer.provideMerge(WorktreeMaintenanceProbe.layer),
+    );
+  }
+
   const performanceRegressionSensorLayer = Layer.succeed(PerformanceRegressionSensor, {
     observe: () => Effect.void,
   });
   const performanceHealthSourceLayer = Layer.succeed(PerformanceHealthSource, {
     snapshot: Effect.succeed({ sampledAtMillis: 0 }),
   });
-  const worktreeStub = Layer.succeed(WorktreeManager, {
+  const worktreeStub = Layer.succeed(Worktree.WorktreeManager, {
+    withRunOwnershipLock: (effect) => effect,
+    withMaintenanceLock: (effect) => effect,
     ensure: () => Effect.die("unused"),
     pullRequestReadiness: () => Effect.die("unused"),
     list: () => Effect.succeed([]),
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
   });
+  const runLedgerLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
   const emptyWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
   );
@@ -1010,9 +1071,10 @@ describe("daemon heartbeats", () => {
     Layer.provide(Layer.mergeAll(registeredSample, defectOnceThenObserve)),
     Layer.provideMerge(ReconcileObserveCount.layer),
   );
-  const heartbeatLayer = <WorkerServices, SchedulerServices>(
+  const heartbeatLayer = <WorkerServices, SchedulerServices, WorktreeServices>(
     workerLayer: Layer.Layer<Reconcile.ReconcileWorker | WorkerServices>,
     schedulerLayer: Layer.Layer<Scheduler.Scheduler | SchedulerServices>,
+    worktrees: Layer.Layer<Worktree.WorktreeManager | WorktreeServices>,
   ) =>
     EventPublisher.layer.pipe(
       Layer.provideMerge(
@@ -1021,8 +1083,11 @@ describe("daemon heartbeats", () => {
           registeredSample,
           schedulerLayer,
           availableControlStore,
-          worktreeStub,
-          DaemonEventBus.layer,
+          worktrees,
+          runLedgerLayer,
+          RunControl.layer,
+          NodeFileSystem.layer,
+          Path.layer,
           performanceRegressionSensorLayer,
           performanceHealthSourceLayer,
           Layer.succeed(Recovery.Recovery, {
@@ -1062,7 +1127,10 @@ describe("daemon heartbeats", () => {
         SchedulerTickCount.schedulerLayer,
         availableControlStore,
         worktreeStub,
-        DaemonEventBus.layer,
+        runLedgerLayer,
+        RunControl.layer,
+        NodeFileSystem.layer,
+        Path.layer,
         performanceRegressionSensorLayer,
         performanceHealthSourceLayer,
         Layer.succeed(Recovery.Recovery, {
@@ -1088,7 +1156,47 @@ describe("daemon heartbeats", () => {
 
       assert.deepStrictEqual(yield* Ref.get(drained), [1234]);
     }).pipe(
-      Effect.provide(heartbeatLayer(emptyWorkerLayer, SchedulerDrainGraces.schedulerLayer)),
+      Effect.provide(heartbeatLayer(emptyWorkerLayer, SchedulerDrainGraces.schedulerLayer, worktreeStub)),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("retains a running ledger Run when an ok poll observes no items", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      const probe = yield* WorktreeMaintenanceProbe;
+      yield* ledger.insertRun({
+        id: runningRunId,
+        workspace: registeredWorkspace.config.name,
+        workItem: id("705"),
+        stage: "implement",
+        harness: codexHarness,
+        branch: runningBranch,
+        session: null,
+        usage: null,
+        status: "running",
+        startedAtMillis: 0,
+        endedAtMillis: null,
+      });
+      const beats = yield* Effect.forkChild(
+        Daemon.heartbeats({
+          pollIntervalMillis: 60_000,
+          drain: { graceMillis: 0, abort: Effect.void },
+        }),
+      );
+      yield* TestClock.adjust("1 second");
+      yield* Deferred.await(probe.listed);
+      yield* Fiber.interrupt(beats);
+
+      assert.deepStrictEqual(yield* Ref.get(probe.removals), []);
+    }).pipe(
+      Effect.provide(
+        heartbeatLayer(
+          emptyWorkerLayer,
+          SchedulerTickCount.schedulerLayer,
+          WorktreeMaintenanceProbe.managerLayer,
+        ),
+      ),
       Effect.scoped,
     ),
   );
@@ -1138,7 +1246,7 @@ describe("daemon heartbeats", () => {
       assert.isAtLeast(yield* Ref.get(observes), 2);
       assert.isAtLeast(yield* Ref.get(schedulerTicks), 2);
     }).pipe(
-      Effect.provide(heartbeatLayer(defectiveWorkerLayer, SchedulerTickCount.schedulerLayer)),
+      Effect.provide(heartbeatLayer(defectiveWorkerLayer, SchedulerTickCount.schedulerLayer, worktreeStub)),
       Effect.scoped,
     ),
   );

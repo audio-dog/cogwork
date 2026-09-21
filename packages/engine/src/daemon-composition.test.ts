@@ -50,6 +50,8 @@ const healthSourceLayer = (snapshot: Effect.Effect<{ readonly sampledAtMillis: n
 const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
+  withRunOwnershipLock: (effect) => effect,
+  withMaintenanceLock: (effect) => effect,
   ensure: () => Effect.die("unused"),
   pullRequestReadiness: () => Effect.die("unused"),
   list: () => Effect.succeed([]),
