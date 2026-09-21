@@ -1,0 +1,28 @@
+packages/codex-cli/src/harness-fixtures.ts
+  s_e776a001f8d072::t_fd1febb96b1d9a 116
+packages/codex-cli/src/harness.ts
+  s_e776a001f8d072::t_15d2fea743e6f1 1,221-228,234
+  s_e776a001f8d072::t_ecedf8fa1a9201 214-215,230-233,235,342
+packages/codex-cli/src/harness-configuration.test.ts
+  s_e776a001f8d072::t_b526ba49b7118e 96-104
+packages/claude-code/src/harness-fixtures.ts
+  s_e776a001f8d072::t_fd1febb96b1d9a 243
+packages/codex-cli/CONTEXT.md
+  s_e776a001f8d072::t_5be660f7e2596b 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "02ae7aba609aff3839a5279e62b3eeb76770e5a8",
+  "prompts": {},
+  "sessions": {
+    "s_e776a001f8d072": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c4d7-366e-70f3-9e4e-27a006c23a2b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
