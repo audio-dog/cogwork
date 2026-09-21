@@ -1,0 +1,29 @@
+packages/engine/src/worktree.ts
+  s_3f2e5bc643efaf::t_e9926c8cb2086e 17-26,207-208,236-237
+packages/engine/src/run-preparation.test.ts
+  s_3f2e5bc643efaf::t_ce948b9b520f4b 30,151,264-265
+packages/engine/docs/adr/0002-diverged-worktree-branches-rebase-then-hand-off.md
+  s_3f2e5bc643efaf::t_13a65131331340 5
+packages/engine/src/retry-policy.ts
+  s_3f2e5bc643efaf::t_73d6036d417850 14,21
+packages/engine/src/executor.test.ts
+  s_3f2e5bc643efaf::t_ce948b9b520f4b 85,899-900,923-924
+packages/engine/src/worktree.test.ts
+  s_3f2e5bc643efaf::t_de55a8b7b3d620 332-334,392-399
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "030e57f03357ab1a5fa1c68d9213613c55ec16ac",
+  "prompts": {},
+  "sessions": {
+    "s_3f2e5bc643efaf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c513-2b1d-7222-97e3-c5edd3a96057",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
