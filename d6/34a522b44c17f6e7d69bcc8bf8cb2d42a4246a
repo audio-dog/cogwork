@@ -1,0 +1,21 @@
+packages/claude-code/src/harness-fixtures.ts
+  s_5439ef13279cb1::t_acd1695f985261 211-212,245-246,248-250
+  s_5439ef13279cb1::t_23bfec576abd23 247
+  s_5439ef13279cb1::t_832b9a58b79ee2 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d634a522b44c17f6e7d69bcc8bf8cb2d42a4246a",
+  "prompts": {},
+  "sessions": {
+    "s_5439ef13279cb1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c4d7-35dc-7870-b5fc-73acbd1f7634",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
