@@ -508,7 +508,7 @@ const validateOperationSettingBatch = Effect.fn("Daemon.validateOperationSetting
   const updates = withModelContextOptionResets(picture.operationSettings, requestedUpdates);
   const rows = applyOperationSettingBatch(picture.operationSettings, updates);
   yield* Effect.forEach(
-    updates.flatMap(selectionChangesForUpdate),
+    requestedUpdates.flatMap(selectionChangesForUpdate),
     (change) => validateSelectionContext(harness, rows, change),
     { discard: true },
   );

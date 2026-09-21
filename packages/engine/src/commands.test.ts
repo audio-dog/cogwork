@@ -1668,6 +1668,35 @@ describe("SetOperationSetting", () => {
     ),
   );
 
+  it.effect("persists a broad model change while narrower model options are stale", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({
+        updates: [
+          {
+            _tag: "Set",
+            row: {
+              setting: "model",
+              level: { _tag: "Default" },
+              scope: { _tag: "SettingsProfile" },
+              value: "test-next",
+            },
+          },
+        ],
+      });
+
+      assert.strictEqual(
+        returned.operationSettings.find(
+          ({ setting, level }) => setting === "model" && level._tag === "Default",
+        )?.value,
+        "test-next",
+      );
+    }).pipe(
+      Effect.provide(daemonLayerWithHarness(trackerLayer({}), staleInheritedModelOptionsStore)),
+      Effect.scoped,
+    ),
+  );
+
   it.effect("clears a selection without requiring a cached catalog", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
