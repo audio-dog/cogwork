@@ -53,6 +53,8 @@ const pull = (over: Partial<RawPull>): RawPull => ({
   ...over,
 });
 
+const cursorBotAllowlist = (acceptsAnyComment = false) => new Map([["cursor[bot]", { acceptsAnyComment }]]);
+
 describe("baseDivergenceOf", () => {
   it("maps a dirty mergeable_state to a conflict", () => {
     assert.strictEqual(baseDivergenceOf("dirty"), "conflict");
@@ -187,7 +189,7 @@ describe("prReview", () => {
 
 describe("humanCommentSignal", () => {
   const bot = "cogwork[bot]";
-  const noBots = new Set<string>();
+  const noBots = new Map();
 
   it("counts a write-access human comment and reads its /fresh directive", () => {
     const signal = humanCommentSignal(
@@ -275,7 +277,7 @@ describe("humanCommentSignal", () => {
           createdAtMillis: 200,
         }),
       ],
-      new Set(["cursor[bot]"]),
+      cursorBotAllowlist(),
     );
     assert.isNull(signal.latestAtMillis);
     assert.isFalse(signal.fresh);
@@ -283,50 +285,99 @@ describe("humanCommentSignal", () => {
 });
 
 describe("botTriggerSignal", () => {
-  const cursor = new Set(["cursor[bot]"]);
+  const cursor = cursorBotAllowlist();
 
-  it("wakes on a listed bot's comment, ignoring association", () => {
-    const signal = botTriggerSignal(
-      [comment({ authorLogin: "cursor[bot]", authorAssociation: "NONE", createdAtMillis: 300 })],
-      cursor,
-    );
+  it("wakes on a listed bot's new diff thread, ignoring association", () => {
+    const reviewComments = [
+      comment({
+        authorLogin: "cursor[bot]",
+        authorAssociation: "NONE",
+        createdAtMillis: 300,
+        inReplyToId: null,
+        subjectType: "line",
+      }),
+    ];
+    const signal = botTriggerSignal(reviewComments, [], cursor);
     assert.strictEqual(signal.latestAtMillis, 300);
   });
 
   it("ignores an unlisted bot", () => {
-    const signal = botTriggerSignal(
-      [comment({ authorLogin: "dependabot[bot]", authorAssociation: "NONE", createdAtMillis: 300 })],
-      cursor,
-    );
+    const reviewComments = [
+      comment({
+        authorLogin: "dependabot[bot]",
+        authorAssociation: "NONE",
+        createdAtMillis: 300,
+        inReplyToId: null,
+        subjectType: "line",
+      }),
+    ];
+    const signal = botTriggerSignal(reviewComments, [], cursor);
     assert.isNull(signal.latestAtMillis);
   });
 
   it("ignores a cogwork-marked body even from a listed bot", () => {
-    const signal = botTriggerSignal(
-      [comment({ authorLogin: "cursor[bot]", body: `finding\n${ledgerMarker}`, createdAtMillis: 300 })],
-      cursor,
-    );
+    const reviewComments = [
+      comment({
+        authorLogin: "cursor[bot]",
+        body: `finding\n${ledgerMarker}`,
+        createdAtMillis: 300,
+        inReplyToId: null,
+        subjectType: "line",
+      }),
+    ];
+    const signal = botTriggerSignal(reviewComments, [], cursor);
     assert.isNull(signal.latestAtMillis);
   });
 
   it("stays silent when no bots are allowlisted", () => {
-    const signal = botTriggerSignal(
-      [comment({ authorLogin: "cursor[bot]", createdAtMillis: 300 })],
-      new Set<string>(),
-    );
+    const reviewComments = [
+      comment({ authorLogin: "cursor[bot]", createdAtMillis: 300, inReplyToId: null, subjectType: "line" }),
+    ];
+    const signal = botTriggerSignal(reviewComments, [], new Map());
     assert.isNull(signal.latestAtMillis);
   });
 
-  it("takes the newest listed-bot comment across a mixed list", () => {
-    const signal = botTriggerSignal(
-      [
-        comment({ authorLogin: "cursor[bot]", body: "older", createdAtMillis: 10 }),
-        comment({ authorLogin: "cursor[bot]", body: "newer", createdAtMillis: 30 }),
-        comment({ authorLogin: "dependabot[bot]", body: "ignored", createdAtMillis: 99 }),
-      ],
-      cursor,
-    );
+  it("takes the newest listed-bot finding across a mixed list", () => {
+    const reviewComments = [
+      comment({
+        authorLogin: "cursor[bot]",
+        body: "older",
+        createdAtMillis: 10,
+        inReplyToId: null,
+        subjectType: "line",
+      }),
+      comment({
+        authorLogin: "cursor[bot]",
+        body: "newer",
+        createdAtMillis: 30,
+        inReplyToId: null,
+        subjectType: "line",
+      }),
+      comment({ authorLogin: "cursor[bot]", body: "reply", createdAtMillis: 80, inReplyToId: 1 }),
+      comment({
+        authorLogin: "dependabot[bot]",
+        body: "ignored",
+        createdAtMillis: 99,
+        inReplyToId: null,
+        subjectType: "line",
+      }),
+    ];
+    const signal = botTriggerSignal(reviewComments, [], cursor);
     assert.strictEqual(signal.latestAtMillis, 30);
+  });
+
+  it("ignores a strict bot's file-level comment", () => {
+    const reviewComments = [
+      comment({ authorLogin: "cursor[bot]", createdAtMillis: 300, inReplyToId: null, subjectType: "file" }),
+    ];
+    const signal = botTriggerSignal(reviewComments, [], cursor);
+    assert.isNull(signal.latestAtMillis);
+  });
+
+  it("lets an :any entry wake on PR-level feedback", () => {
+    const feedback = [comment({ authorLogin: "cursor[bot]", body: "summary", createdAtMillis: 300 })];
+    const signal = botTriggerSignal([], feedback, cursorBotAllowlist(true));
+    assert.strictEqual(signal.latestAtMillis, 300);
   });
 });
 

@@ -68,6 +68,8 @@ interface SeedComment {
   readonly body: string;
   readonly authorAssociation?: string;
   readonly createdAtMillis?: number;
+  readonly inReplyToId?: number | null;
+  readonly subjectType?: "line" | "file";
 }
 
 interface SeedReview {
@@ -122,6 +124,8 @@ const seedComments = (comments: ReadonlyArray<SeedComment>) =>
       authorAssociation: comment.authorAssociation ?? "NONE",
       body: comment.body,
       createdAtMillis: comment.createdAtMillis ?? 0,
+      inReplyToId: comment.inReplyToId,
+      subjectType: comment.subjectType,
     } satisfies RawComment;
     return new Map(byIssue).set(comment.issue, [...(byIssue.get(comment.issue) ?? []), entry]);
   }, new Map<number, ReadonlyArray<RawComment>>());
@@ -265,20 +269,24 @@ const missingTargetWorkspace: RegisteredWorkspace = {
   }),
 };
 
-const trustsCursorBot: RegisteredWorkspace = {
+const botWorkspace = (name: string, botAllowlist: ReadonlyArray<string>): RegisteredWorkspace => ({
   source: "gh.workspace.ts",
   repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "gh-bots",
+    name,
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github" },
     sourceControl: {
       type: "github",
-      botAllowlist: ["cursor[bot]"],
+      botAllowlist,
     },
   }),
-};
+});
+
+const trustsCursorBot = botWorkspace("gh-bots", ["cursor[bot]"]);
+const trustsEveryCursorBotComment = botWorkspace("gh-bots-any", ["cursor[bot]:any"]);
+const trustsColonBot = botWorkspace("gh-colon-bot", ["cursor:preview[bot]"]);
 
 const prioritizedWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
@@ -415,6 +423,44 @@ describe("GitHub adapters", () => {
 
     assert.strictEqual(target?.connectionId, "github/acme");
   });
+
+  it.effect("keeps the review thread parent and subject when decoding comments", () => {
+    const response = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    const rawComment = (id: number, inReplyToId?: number | null, subjectType?: "line" | "file") => ({
+      id,
+      body: `comment ${id}`,
+      user: { login: "cursor[bot]" },
+      created_at: "2026-09-21T12:00:00Z",
+      author_association: "NONE",
+      ...(inReplyToId === undefined ? {} : { in_reply_to_id: inReplyToId }),
+      ...(subjectType === undefined ? {} : { subject_type: subjectType }),
+    });
+    const fetch: typeof globalThis.fetch = (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.includes("/pulls/")) {
+        assert.strictEqual(url.searchParams.get("sort"), "created");
+        assert.strictEqual(url.searchParams.get("direction"), "desc");
+      }
+      const body = url.pathname.includes("/pulls/")
+        ? [rawComment(1, null, "line"), rawComment(2, 1, "line"), rawComment(3, null, "file")]
+        : [rawComment(4)];
+      return Promise.resolve(response(body));
+    };
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const reviewComments = yield* client.listReviewComments(repo, 100);
+      const issueComments = yield* client.listComments(repo, 100);
+      assert.strictEqual(reviewComments[0]?.inReplyToId, null);
+      assert.strictEqual(reviewComments[1]?.inReplyToId, 1);
+      assert.strictEqual(reviewComments[0]?.subjectType, "line");
+      assert.strictEqual(reviewComments[2]?.subjectType, "file");
+      assert.isUndefined(issueComments[0]?.inReplyToId);
+      assert.isUndefined(issueComments[0]?.subjectType);
+    }).pipe(Effect.provide(withFetchClient(fetch)));
+  });
+
   it.effect("derives the actionable set from labels and bot-PR state", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
@@ -1599,13 +1645,13 @@ describe("GitHub adapters", () => {
 });
 
 describe("trusted review-bot follow-up (botAllowlist)", () => {
-  const botCommentPr = (comment: SeedComment): Seed => ({
+  const botCommentPr = (feedback: Pick<Seed, "comments" | "reviewComments" | "reviews">): Seed => ({
     issues: [
       { number: 5, title: "in review", labels: ["ready-for-agent"] },
       { number: 100, title: "bot pr", labels: [], isPullRequest: true },
     ],
     pulls: [pull({ number: 100, headRef: "5-in-review" })],
-    comments: [comment],
+    ...feedback,
   });
 
   const cursorComment = (over: Partial<SeedComment> = {}): SeedComment => ({
@@ -1614,45 +1660,160 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
     authorAssociation: "NONE",
     body: "Medium severity: this looks like a bug.",
     createdAtMillis: 300,
+    subjectType: "line",
     ...over,
   });
 
-  it.effect("does not wake a follow-up when no botAllowlist is set", () =>
-    Effect.gen(function* () {
-      const items = yield* observeItems(workspace);
-      const observed = items.find((item) => item.id === "#5");
-      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
-      const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
-      assert.isUndefined(eligible);
-    }).pipe(Effect.provide(withClient(botCommentPr(cursorComment())))),
-  );
+  const botTrigger = (workspace: RegisteredWorkspace) =>
+    observeItems(workspace).pipe(
+      Effect.map((items) => ({
+        observed: items.find((item) => item.id === "#5"),
+        eligible: classify(items).eligible.find((entry) => entry.id === "#5"),
+      })),
+    );
 
-  it.effect("wakes a follow-up on a listed bot's new comment without setting fresh", () =>
-    Effect.gen(function* () {
-      const items = yield* observeItems(trustsCursorBot);
-      const observed = items.find((item) => item.id === "#5");
+  it.effect("does not wake a follow-up when no bot allowlist is set", () => {
+    const seed = botCommentPr({ reviewComments: [cursorComment({ inReplyToId: null })] });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(workspace);
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
+      assert.isUndefined(eligible);
+    }).pipe(Effect.provide(withClient(seed)));
+  });
+
+  it.effect("ignores a listed bot's PR Summary issue comment", () => {
+    const seed = botCommentPr({
+      comments: [cursorComment({ body: "## PR Summary\n<!-- CURSOR_SUMMARY -->" })],
+    });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsCursorBot);
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
+      assert.isUndefined(eligible);
+    }).pipe(Effect.provide(withClient(seed)));
+  });
+
+  it.effect("ignores a listed bot's review narration", () => {
+    const seed = botCommentPr({
+      reviews: [
+        {
+          pull: 100,
+          authorLogin: "cursor[bot]",
+          authorAssociation: "NONE",
+          body: "Found 2 potential issues.\n<!-- BUGBOT_REVIEW -->",
+          submittedAtMillis: 300,
+        },
+        {
+          pull: 100,
+          authorLogin: "cursor[bot]",
+          authorAssociation: "NONE",
+          body: "Left a non-blocking comment.\n<!-- CURSOR_AUTOMATION_ID -->",
+          submittedAtMillis: 400,
+        },
+      ],
+    });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsCursorBot);
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
+      assert.isUndefined(eligible);
+    }).pipe(Effect.provide(withClient(seed)));
+  });
+
+  it.effect("wakes a follow-up on a listed bot's new diff thread without setting fresh", () => {
+    const seed = botCommentPr({
+      reviewComments: [cursorComment({ body: "please /fresh and fix this", inReplyToId: null })],
+    });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsCursorBot);
       assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, 300);
-      const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
       assert.strictEqual(eligible?.stage, "follow-up");
       assert.isFalse(eligible?.followUp?.fresh);
-    }).pipe(Effect.provide(withClient(botCommentPr(cursorComment({ body: "please /fresh and fix this" }))))),
-  );
+    }).pipe(Effect.provide(withClient(seed)));
+  });
 
-  it.effect("ignores an unlisted bot's comment", () =>
-    Effect.gen(function* () {
-      const items = yield* observeItems(trustsCursorBot);
-      const observed = items.find((item) => item.id === "#5");
+  it.effect("ignores a listed bot's reply inside an existing diff thread", () => {
+    const seed = botCommentPr({ reviewComments: [cursorComment({ inReplyToId: 99 })] });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsCursorBot);
       assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
-      const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
       assert.isUndefined(eligible);
-    }).pipe(Effect.provide(withClient(botCommentPr(cursorComment({ authorLogin: "dependabot[bot]" }))))),
-  );
+    }).pipe(Effect.provide(withClient(seed)));
+  });
 
-  it.effect("ignores a cogwork-marked body even from a listed bot", () =>
-    Effect.gen(function* () {
-      const items = yield* observeItems(trustsCursorBot);
-      const observed = items.find((item) => item.id === "#5");
+  it.effect("ignores a listed bot's file-level review comment", () => {
+    const seed = botCommentPr({
+      reviewComments: [cursorComment({ inReplyToId: null, subjectType: "file" })],
+    });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsCursorBot);
       assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
-    }).pipe(Effect.provide(withClient(botCommentPr(cursorComment({ body: coordinationBody([]) }))))),
-  );
+      assert.isUndefined(eligible);
+    }).pipe(Effect.provide(withClient(seed)));
+  });
+
+  it.effect("ignores an unlisted bot's diff thread", () => {
+    const seed = botCommentPr({
+      reviewComments: [cursorComment({ authorLogin: "dependabot[bot]", inReplyToId: null })],
+    });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsCursorBot);
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
+      assert.isUndefined(eligible);
+    }).pipe(Effect.provide(withClient(seed)));
+  });
+
+  it.effect("ignores a cogwork-marked diff thread from a listed bot", () => {
+    const seed = botCommentPr({
+      reviewComments: [cursorComment({ body: coordinationBody([]), inReplyToId: null })],
+    });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsCursorBot);
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
+      assert.isUndefined(eligible);
+    }).pipe(Effect.provide(withClient(seed)));
+  });
+
+  it.effect("lets an :any entry wake on every bot comment shape except cogwork-marked bodies", () => {
+    const seed = botCommentPr({
+      comments: [cursorComment({ body: "## PR Summary\n<!-- CURSOR_SUMMARY -->", createdAtMillis: 300 })],
+      reviews: [
+        {
+          pull: 100,
+          authorLogin: "cursor[bot]",
+          authorAssociation: "NONE",
+          body: "Found 2 potential issues.\n<!-- BUGBOT_REVIEW -->",
+          submittedAtMillis: 400,
+        },
+      ],
+      reviewComments: [
+        cursorComment({ body: "reply", createdAtMillis: 500, inReplyToId: 99 }),
+        cursorComment({ body: coordinationBody([]), createdAtMillis: 600, inReplyToId: null }),
+      ],
+    });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsEveryCursorBotComment);
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, 500);
+      assert.strictEqual(eligible?.stage, "follow-up");
+      assert.isFalse(eligible?.followUp?.fresh);
+    }).pipe(Effect.provide(withClient(seed)));
+  });
+
+  it.effect("treats a colon elsewhere in a login as a strict entry", () => {
+    const seed = botCommentPr({
+      comments: [
+        cursorComment({
+          authorLogin: "cursor:preview[bot]",
+          body: "## PR Summary",
+          createdAtMillis: 400,
+        }),
+      ],
+      reviewComments: [
+        cursorComment({ authorLogin: "cursor:preview[bot]", createdAtMillis: 300, inReplyToId: null }),
+      ],
+    });
+    return Effect.gen(function* () {
+      const { observed, eligible } = yield* botTrigger(trustsColonBot);
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, 300);
+      assert.strictEqual(eligible?.stage, "follow-up");
+    }).pipe(Effect.provide(withClient(seed)));
+  });
 });
