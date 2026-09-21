@@ -24,7 +24,7 @@ The process responsible for booting the server layer and keeping the daemon aliv
 _Avoid_: Treating the CLI as the product's always-on host; embedding the long-lived engine inside a UI renderer
 
 **Server layer**:
-The full composition of engine layers a daemon host boots. It now lives in the engine (`Daemon.serverLayer`), not here — the CLI is one **host adapter**: it builds the file credential store, the SQLite ledger, the git/worktree platform, the provider, Claude Code, Codex, Cursor, and replay Harness runners, and the socket-server transport, then hands them to the engine. The workspace registry is engine-owned and loaded from the Control store. The desktop app is the second host.
+The full composition of engine layers a daemon host boots. It now lives in the engine (`Daemon.serverLayer`), not here — the CLI is one **host adapter**: it builds the file credential store, the SQLite ledger, the git/worktree platform, the Claude Code, Codex, Cursor, and configured replay Harness runners, and the socket-server transport, then hands them to the engine. The workspace registry is engine-owned and loaded from the Control store. The desktop app is the second host.
 _Avoid_: Daemon (the running process is the daemon; this is how it's assembled), owning the composition here (it moved to the engine)
 
 **Stop signal**:
@@ -46,10 +46,6 @@ _Avoid_: Putting an API key in argv, editing the Control store directly
 **login linear**:
 The browser OAuth flow for Linear. It stores the grant, establishes the matching Connection through the daemon, and therefore installs the requiring Linear Plugin in the same act.
 _Avoid_: A Workspace-owned OAuth app or a separate establish step
-
-**models**:
-The `models` subcommand: lists the model catalog for the providers a key resolves for. It asks the engine which providers are configured (stored key or env var), then prints the models.dev catalog entries for exactly those. With nothing configured it points the user at `login key` or the env var instead of erroring.
-_Avoid_: A picker UI (that's the desktop's job; this is the read-only list), listing every provider regardless of credentials
 
 **workspace**:
 The daemon-backed management group. `register` admits a checkout and mints its `WorkspaceId`; `update` replaces its mutable non-path record from schema-decoded JSON; `re-bind` changes that identity's checkout path; `deregister` removes the registration and private tree without erasing Run history. All four require a running daemon.

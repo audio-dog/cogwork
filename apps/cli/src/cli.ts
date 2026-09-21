@@ -15,7 +15,6 @@ import { connectionCommand } from "./connection-commands";
 import { handBackCommand } from "./hand-back-command";
 import { harnessCommand } from "./harness-commands";
 import { loginCommand } from "./login-commands";
-import { modelsCommand } from "./models-commands";
 import { pluginCommand } from "./plugin-commands";
 import { replayCommand } from "./replay-commands";
 import { workspaceCommand } from "./workspace-commands";
@@ -37,7 +36,6 @@ export const cli = Command.make("cogwork").pipe(
     worktreeCommand,
     workspaceCommand,
     loginCommand,
-    modelsCommand,
     pluginCommand,
     connectionCommand,
     harnessCommand,

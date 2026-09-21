@@ -573,7 +573,7 @@ describe("Harness", () => {
       }),
     );
 
-    it.effect("rejects unsupported effort absent from the current catalog", () =>
+    it.effect("ignores saved effort when the current catalog omits the control", () =>
       Effect.gen(function* () {
         const launches: Array<true> = [];
         const runner = {
@@ -602,11 +602,9 @@ describe("Harness", () => {
             harness: { ...request.plan.harness, model: "runtime-model", effort: "high" },
           }),
         };
-        const error = yield* harness.run(configured).pipe(Stream.runDrain, Effect.flip);
+        yield* harness.run(configured).pipe(Stream.runDrain);
 
-        assert.strictEqual(error.reason, "stale-selection");
-        assert.include(error.message, "effort high");
-        assert.deepStrictEqual(launches, []);
+        assert.deepStrictEqual(launches, [true]);
       }),
     );
 

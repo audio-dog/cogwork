@@ -27,7 +27,7 @@ import { engineTestLayerWithOperationResolution } from "./testing/engine-test-la
 import {
   branchName,
   PullRequestReadiness,
-  WorktreeDivergedError,
+  WorktreeError,
   WorktreeManager,
   type WorktreeManagerService,
 } from "./worktree";
@@ -148,7 +148,7 @@ class WorktreeCalls extends Context.Service<WorktreeCalls, Ref.Ref<ReadonlyArray
 
 interface WorktreeDoubleConfig {
   readonly created?: boolean;
-  readonly failure?: WorktreeDivergedError;
+  readonly failure?: WorktreeError;
 }
 
 const worktreeLayer = ({
@@ -263,7 +263,8 @@ const prepare = Effect.fn("RunPreparationTest.prepare")(function* (
   });
 });
 
-const divergedWorktree = new WorktreeDivergedError({
+const divergedWorktree = new WorktreeError({
+  reason: "diverged",
   remote: "origin",
   branch: branchName(implementItem(111)),
   message: "branch diverged",

@@ -64,10 +64,7 @@ export interface HarnessExecution {
 
 export type HarnessCatalogChoice = ContractHarnessCatalogChoice;
 
-export interface HarnessCatalogOptions {
-  readonly models: ReadonlyArray<HarnessCatalogChoice>;
-  readonly efforts?: ReadonlyArray<HarnessCatalogChoice>;
-}
+export type HarnessCatalogOptions = Omit<ContractHarnessOptionCatalog, "policyProfiles" | "provenance">;
 
 export type HarnessCatalogProvenance = ContractHarnessCatalogProvenance;
 
@@ -384,7 +381,8 @@ const validateSelectionValue = (
   choices: ReadonlyArray<HarnessCatalogChoice> | undefined,
   value: string | null,
 ) => {
-  if (!value || catalogHas(choices, value)) return Effect.void;
+  const isSelectable = !value || choices === undefined || catalogHas(choices, value);
+  if (isSelectable) return Effect.void;
   return Effect.fail(staleSelection(runner, option, value));
 };
 

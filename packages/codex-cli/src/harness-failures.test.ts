@@ -135,6 +135,7 @@ describe("codexRunner failures", () => {
         const loggedOut = yield* runner({
           codexExecutable: fakeCodexExecutable(" --fake-login-failure"),
         }).readiness();
+        const drifted = yield* runner().readiness();
 
         assert.strictEqual(missing.installation.status, "missing");
         assert.include(missing.diagnostics[0] ?? "", "Install Codex CLI");
@@ -142,6 +143,7 @@ describe("codexRunner failures", () => {
         assert.include(outdated.diagnostics[0] ?? "", "Update Codex");
         assert.strictEqual(loggedOut.authentication.status, "unavailable");
         assert.include(loggedOut.authentication.diagnostic, "codex login");
+        assert.include(drifted.diagnostics[0] ?? "", "catalog was generated against Codex 0.154.0");
       }),
     );
   });

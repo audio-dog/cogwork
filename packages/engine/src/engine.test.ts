@@ -1039,6 +1039,7 @@ describe("daemon heartbeats", () => {
     ).pipe(Layer.provideMerge(WorktreeMaintenanceProbe.layer));
     static readonly fsLayer = Layer.succeed(WorktreeFs, {
       linkFile: () => Effect.die("unused"),
+      removeDebris: () => Effect.die("unused"),
       runCommand: () => Effect.die("unused"),
       stat: () => Effect.die("unused"),
     });
