@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_0b35db7d9f4279::t_643f8650696b26 401-403,501-503
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e61e9c1428786836758974616d99f372c16e1ad5",
+  "prompts": {},
+  "sessions": {
+    "s_0b35db7d9f4279": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c5e1-8082-75b2-a448-4da060a0e896",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
