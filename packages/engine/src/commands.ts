@@ -394,16 +394,16 @@ const operationSettingCellOf = (update: OperationSettingUpdate) =>
     Set: ({ row }) => row,
   });
 
-const modelAtPosition = (rows: ControlStorePicture["operationSettings"], cell: OperationSettingCell) => {
+const selectionAtPosition = (rows: ControlStorePicture["operationSettings"], cell: OperationSettingCell) => {
   const position = operationSettingPositionKey(cell);
-  const modelMatchesPosition = (row: ControlStorePicture["operationSettings"][number]) => {
-    const matches = row.setting === "model" && operationSettingPositionKey(row) === position;
+  const selectionMatchesPosition = (row: ControlStorePicture["operationSettings"][number]) => {
+    const matches = row.setting === cell.setting && operationSettingPositionKey(row) === position;
     return matches;
   };
-  return rows.find(modelMatchesPosition)?.value ?? null;
+  return rows.find(selectionMatchesPosition)?.value ?? null;
 };
 
-const withModelOptionClears = (
+const withModelContextOptionResets = (
   rows: ControlStorePicture["operationSettings"],
   updates: OperationSettingBatch,
 ) => {
@@ -416,15 +416,35 @@ const withModelOptionClears = (
   const updatedRows = applyOperationSettingBatch(rows, updates);
   return updates.flatMap((update) => {
     const cell = operationSettingCellOf(update);
+    const modelOptionScope = OperationSettingScope.match(cell.scope, {
+      SettingsProfile: (scope) => scope,
+      RuntimeHost: () => null,
+      PrivateWorkspaceOverlay: (scope) => scope,
+    });
+    if (modelOptionScope === null) return [update];
+    const changesModelContext = cell.setting === "harness" || cell.setting === "model";
+    if (!changesModelContext) return [update];
     const keepsOptions =
-      cell.setting !== "model" ||
-      modelAtPosition(rows, cell) === modelAtPosition(updatedRows, cell) ||
+      selectionAtPosition(rows, cell) === selectionAtPosition(updatedRows, cell) ||
       explicitModelOptionCells.has(operationSettingPositionKey(cell));
     if (keepsOptions) return [update];
-    const reset = {
-      _tag: "Set",
-      row: { ...cell, setting: "model-options", value: {} },
-    } satisfies OperationSettingUpdate;
+    const optionCell = {
+      level: cell.level,
+      setting: "model-options",
+      scope: modelOptionScope,
+    } satisfies OperationSettingCell;
+    const reset = OperationSettingUpdate.match(update, {
+      Clear: () =>
+        ({
+          _tag: "Clear",
+          cell: optionCell,
+        }) satisfies OperationSettingUpdate,
+      Set: () =>
+        ({
+          _tag: "Set",
+          row: { ...optionCell, value: {} },
+        }) satisfies OperationSettingUpdate,
+    });
     return [update, reset];
   });
 };
@@ -485,7 +505,7 @@ const validateOperationSettingBatch = Effect.fn("Daemon.validateOperationSetting
 ) {
   const picture = yield* store.picture;
   const harness = yield* Harness;
-  const updates = withModelOptionClears(picture.operationSettings, requestedUpdates);
+  const updates = withModelContextOptionResets(picture.operationSettings, requestedUpdates);
   const rows = applyOperationSettingBatch(picture.operationSettings, updates);
   yield* Effect.forEach(
     updates.flatMap(selectionChangesForUpdate),

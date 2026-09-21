@@ -1291,6 +1291,59 @@ describe("SetOperationSetting", () => {
     },
   };
 
+  it.effect("resets model options when the Harness changes", () => {
+    const configured: ControlStorePicture = {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        {
+          setting: "model-options",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: { effort: "high" },
+        },
+      ],
+    };
+    const store = controlStoreStub({
+      seed: configured,
+      updateOperationSettings: (updates) =>
+        Effect.succeed({
+          ...configured,
+          operationSettings: applyOperationSettingBatch(configured.operationSettings, updates),
+        }),
+    });
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({
+        updates: [
+          {
+            _tag: "Set",
+            row: {
+              setting: "harness",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+              value: "codex",
+            },
+          },
+        ],
+      });
+
+      assert.deepStrictEqual(
+        resolveOperationSetting(returned.operationSettings, "model-options", {
+          workflow: "coding",
+          operation: "implement",
+          workspace: null,
+        }),
+        {},
+      );
+    }).pipe(
+      Effect.provide(
+        daemonLayerWithHarness(trackerLayer({}), store, [commandHarnessRunner, alternateHarnessRunner]),
+      ),
+      Effect.scoped,
+    );
+  });
+
   it.effect("preserves model options when the model does not change", () => {
     const configured: ControlStorePicture = {
       ...cursorSelected,
@@ -1372,6 +1425,71 @@ describe("SetOperationSetting", () => {
           workspace: null,
         }),
         {},
+      );
+    }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), store)), Effect.scoped);
+  });
+
+  it.effect("restores inherited model options when a model override is cleared", () => {
+    const configured: ControlStorePicture = {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        {
+          setting: "model",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: "test",
+        },
+        {
+          setting: "model-options",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: { effort: "high" },
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "test-next",
+        },
+        {
+          setting: "model-options",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: {},
+        },
+      ],
+    };
+    const store = controlStoreStub({
+      seed: configured,
+      updateOperationSettings: (updates) =>
+        Effect.succeed({
+          ...configured,
+          operationSettings: applyOperationSettingBatch(configured.operationSettings, updates),
+        }),
+    });
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({
+        updates: [
+          {
+            _tag: "Clear",
+            cell: {
+              setting: "model",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+            },
+          },
+        ],
+      });
+
+      assert.deepStrictEqual(
+        resolveOperationSetting(returned.operationSettings, "model-options", {
+          workflow: "coding",
+          operation: "implement",
+          workspace: null,
+        }),
+        { effort: "high" },
       );
     }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}), store)), Effect.scoped);
   });
