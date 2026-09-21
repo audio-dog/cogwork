@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/traits-menu.tsx
+  s_67f0af25725de2::t_aea15cfcd1e967 60-64,68,77,111-113,143
+apps/desktop/src/renderer/src/components/traits-menu.test.tsx
+  s_67f0af25725de2::t_9cd3613342ac2e 56-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "be84f369c295e90cb54984d869fb8e7ab14f1732",
+  "prompts": {},
+  "sessions": {
+    "s_67f0af25725de2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c5e6-c802-7213-9e01-d588d978fa32",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
