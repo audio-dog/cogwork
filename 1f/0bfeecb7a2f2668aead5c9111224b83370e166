@@ -1,0 +1,100 @@
+packages/claude-code/src/harness-fixtures.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 25,211-212,245-250
+apps/cli/src/platform.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 1,224-228,238-277
+packages/contracts/CONTEXT.md
+  s_aad17b177c1174::t_15bc8556ffe26c 41-44
+packages/engine/src/run-preparation.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 30,151,266-267
+packages/claude-code/src/harness-host.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 32,66,68-74,79,82-83,85-86,90,92-102,104-119
+apps/cli/src/external-harness.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 3-4,43-52,54-56,58-80
+packages/engine/src/harness.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 576,605,607
+packages/claude-code/src/harness-environment.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 67-69
+packages/cursor-acp/src/harness.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 30,213,218-221,242,245,484,519,681,685
+packages/codex-cli/src/model.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 1-11
+packages/engine/src/executor.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 85,874,902-903,926-927
+packages/codex-cli/src/harness-fixtures.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 41,88,117-122
+packages/claude-code/src/harness.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 15-16,210,212,215,285-290,292-297,342,347,365,376,390-398,421,425-427
+packages/engine/src/harness.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 67,384-385
+packages/engine/src/retry-policy.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 14,21
+packages/cursor-acp/src/harness.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 18-24,181,301,325-327,329,334-348,410
+packages/codex-cli/src/index.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 2-3
+packages/engine/docs/adr/0002-diverged-worktree-branches-rebase-then-hand-off.md
+  s_aad17b177c1174::t_15bc8556ffe26c 5
+apps/cli/src/rpc.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 9,99-106
+packages/claude-code/src/model.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 1-88
+packages/engine/src/worktree-fs.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 17
+apps/cli/CONTEXT.md
+  s_aad17b177c1174::t_15bc8556ffe26c 27
+packages/claude-code/scripts/sync-models.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 1-121
+packages/codex-cli/src/model.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 1-42
+packages/codex-cli/src/harness-configuration.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 6,32,87,89,93,98-99,102,138,147,159-168
+  s_aad17b177c1174::t_a8000d649a8ea6 169-170
+packages/claude-code/package.json
+  s_aad17b177c1174::t_15bc8556ffe26c 13-15
+apps/cli/src/cli.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 1-18
+docs/spec/trusted-bot-wake-signal.md
+  s_aad17b177c1174::t_15bc8556ffe26c 1-159
+apps/cli/src/platform.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 179-180,230-252,460-543
+  s_aad17b177c1174::t_869417b99f749f 544-545
+packages/claude-code/src/model.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 1-102
+packages/engine/src/engine.test.ts
+  s_aad17b177c1174::t_bf3f7f21dcad8b 1042
+packages/codex-cli/src/harness.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 3,7-14,150,152-181,207-210,223-227,234,236-237,319,341-342,345-348
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 395,398
+packages/claude-code/src/index.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 2-3
+packages/codex-cli/CONTEXT.md
+  s_aad17b177c1174::t_15bc8556ffe26c 20-26
+packages/codex-cli/src/harness-failures.test.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 138,146
+packages/engine/src/worktree.test.ts
+  s_aad17b177c1174::t_3ae7d823aa1175 904-905,919,931,954
+  s_aad17b177c1174::t_15bc8556ffe26c 60-61,68-69,71,74-75,89,95,105-119,123-126,145-149,153-166,175,178,183,187,190,192,221-314,454,470-472,530-537,650,657,667-668,687,698,709,719-720,738,751-752,763,772-773,785
+packages/engine/src/worktree.ts
+  s_aad17b177c1174::t_15bc8556ffe26c 18-27,84-87,203-233,255-256,284-285,302-311,315-322,326,329
+packages/claude-code/src/models.generated.ts
+  s_aad17b177c1174::t_05753b633aad64 1-71
+packages/codex-cli/src/models.generated.ts
+  s_aad17b177c1174::t_f99ea055c6ab51 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1f0bfeecb7a2f2668aead5c9111224b83370e166",
+  "prompts": {},
+  "sessions": {
+    "s_aad17b177c1174": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c511-ca63-7272-adc1-9efd05809646",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
