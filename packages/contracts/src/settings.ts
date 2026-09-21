@@ -148,6 +148,44 @@ export const OperationSettingUpdate = Schema.Union([
 ]).pipe(Schema.toTaggedUnion("_tag"));
 export type OperationSettingUpdate = typeof OperationSettingUpdate.Type;
 
+export const OperationSettingBatch = Schema.NonEmptyArray(OperationSettingUpdate).check(
+  Schema.isMaxLength(4),
+);
+export type OperationSettingBatch = typeof OperationSettingBatch.Type;
+
+const settingLevelKey = SettingLevel.match({
+  Default: () => "Default",
+  Workflow: ({ workflow }) => JSON.stringify(["Workflow", workflow]),
+  Operation: ({ workflow, operation }) => JSON.stringify(["Operation", workflow, operation]),
+});
+
+const operationSettingScopeKey = OperationSettingScope.match({
+  SettingsProfile: () => "SettingsProfile",
+  RuntimeHost: () => "RuntimeHost",
+  PrivateWorkspaceOverlay: ({ workspace }) => JSON.stringify(["PrivateWorkspaceOverlay", workspace]),
+});
+
+const sameOperationSettingCell = (left: OperationSettingCell, right: OperationSettingCell) =>
+  left.setting === right.setting &&
+  settingLevelKey(left.level) === settingLevelKey(right.level) &&
+  operationSettingScopeKey(left.scope) === operationSettingScopeKey(right.scope);
+
+export const applyOperationSettingBatch = (
+  rows: ReadonlyArray<OperationSettingRow>,
+  updates: OperationSettingBatch,
+) =>
+  updates.reduce<ReadonlyArray<OperationSettingRow>>(
+    (current, update) =>
+      OperationSettingUpdate.match(update, {
+        Clear: ({ cell }) => current.filter((row) => !sameOperationSettingCell(row, cell)),
+        Set: ({ row }) => [
+          ...current.filter((currentRow) => !sameOperationSettingCell(currentRow, row)),
+          row,
+        ],
+      }),
+    rows,
+  );
+
 export const ContributionSettingScope = Schema.Union([
   SettingsProfileScope,
   PrivateWorkspaceOverlayScope,

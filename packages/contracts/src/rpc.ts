@@ -29,8 +29,8 @@ import { RunActivity, RunHistory, RunId, RunStatus, RunSummary } from "./run";
 import {
   ContributionSettingRefused,
   ContributionSettingUpdate,
+  OperationSettingBatch,
   OperationSettingRefused,
-  OperationSettingUpdate,
 } from "./settings";
 import { TriageRole } from "./triage";
 import {
@@ -171,7 +171,7 @@ export const SetDaemonLimit = Rpc.make("SetDaemonLimit", {
 });
 
 export const SetOperationSetting = Rpc.make("SetOperationSetting", {
-  payload: { update: OperationSettingUpdate },
+  payload: { updates: OperationSettingBatch },
   success: ControlStore,
   error: Schema.Union([ControlStoreFailure, OperationSettingRefused]),
 });

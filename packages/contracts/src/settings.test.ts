@@ -2,12 +2,16 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
   admissibleSettingScope,
+  applyOperationSettingBatch,
   ContributionSettingUpdate,
   defaultContributionEnabled,
+  OperationSettingBatch,
+  type OperationSettingLevel,
   OperationSettingUpdate,
   resolveContributionEnabled,
   resolveContributionUnion,
   resolveOperationSetting,
+  type SettingsProfileScope,
   settingResolutionCases,
   settingScopeDirection,
 } from "./settings";
@@ -93,5 +97,52 @@ describe("OperationSettingUpdate", () => {
         },
       }),
     );
+  });
+
+  it("requires a non-empty batch", () => {
+    assert.isFalse(Schema.is(OperationSettingBatch)([]));
+    assert.isTrue(
+      Schema.is(OperationSettingBatch)([
+        {
+          _tag: "Clear",
+          cell: {
+            setting: "effort",
+            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+            scope: { _tag: "SettingsProfile" },
+          },
+        },
+      ]),
+    );
+    assert.isFalse(
+      Schema.is(OperationSettingBatch)(
+        Array.from({ length: 5 }, () => ({
+          _tag: "Clear",
+          cell: {
+            setting: "effort",
+            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+            scope: { _tag: "SettingsProfile" },
+          },
+        })),
+      ),
+    );
+  });
+
+  it("applies every update in order", () => {
+    const level = {
+      _tag: "Operation",
+      workflow: "coding",
+      operation: "implement",
+    } satisfies OperationSettingLevel;
+    const scope = { _tag: "SettingsProfile" } satisfies SettingsProfileScope;
+    const rows = applyOperationSettingBatch(
+      [{ setting: "model", level, scope, value: "old" }],
+      [
+        { _tag: "Set", row: { setting: "model", level, scope, value: "new" } },
+        { _tag: "Set", row: { setting: "effort", level, scope, value: "high" } },
+        { _tag: "Clear", cell: { setting: "effort", level, scope } },
+      ],
+    );
+
+    assert.deepStrictEqual(rows, [{ setting: "model", level, scope, value: "new" }]);
   });
 });

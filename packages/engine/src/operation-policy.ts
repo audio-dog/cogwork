@@ -1,6 +1,8 @@
 import {
   type HarnessName,
+  type HarnessOptionCatalog,
   LifecycleStage,
+  type OperationSettingName,
   OperationSettingRefused,
   OperationSettingUpdate,
   operationDefaultProfiles,
@@ -48,18 +50,30 @@ export const operationSettingRefusal = (update: OperationSettingUpdate) => {
   });
 };
 
-export const permissionProfileRefusal = (
-  update: OperationSettingUpdate,
+type CatalogSetting = Extract<OperationSettingName, "model" | "effort" | "permission-profile">;
+
+const catalogValues: Record<CatalogSetting, (catalog: HarnessOptionCatalog) => ReadonlyArray<string>> = {
+  model: (catalog: HarnessOptionCatalog) => catalog.models.map(({ value }) => value),
+  effort: (catalog: HarnessOptionCatalog) => catalog.efforts?.map(({ value }) => value) ?? [],
+  "permission-profile": (catalog: HarnessOptionCatalog) => catalog.policyProfiles,
+};
+
+const catalogValueNames = {
+  model: "model",
+  effort: "effort",
+  "permission-profile": "permission profile",
+} satisfies Record<CatalogSetting, string>;
+
+export const catalogMembershipRefusal = (
+  setting: CatalogSetting,
+  value: string,
   harness: HarnessName,
-  profiles: ReadonlyArray<RunPlanPolicyProfile>,
+  catalog: HarnessOptionCatalog,
 ) => {
-  if (!OperationSettingUpdate.guards.Set(update)) return null;
-  const { row } = update;
-  if (row.setting !== "permission-profile") return null;
-  if (profiles.some((profile) => profile === row.value)) return null;
+  if (catalogValues[setting](catalog).includes(value)) return null;
   return OperationSettingRefused.make({
-    setting: row.setting,
+    setting,
     source: `Harness ${harness}`,
-    reason: `${harness} does not declare ${row.value} as a permission profile`,
+    reason: `${harness} does not offer ${catalogValueNames[setting]} ${value}`,
   });
 };

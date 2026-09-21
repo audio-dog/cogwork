@@ -10,7 +10,6 @@ import {
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { operationSettingAtomKey } from "../daemon/atoms";
 import {
   availableHarnessCatalogs,
   catalogChoiceLabel,
@@ -18,6 +17,7 @@ import {
   harnessCatalogLoad,
   harnessIsDisabled,
   harnessSelectionUpdates,
+  operationSettingBatch,
   operationSettingUpdate,
   policyProfileChoices,
   selectableHarnessCatalogs,
@@ -304,6 +304,51 @@ describe("operationSettingUpdate", () => {
     });
   });
 
+  it("builds one batch for one Provider and model pick", () => {
+    expect(
+      operationSettingBatch(
+        workspace,
+        "implement",
+        harnessSelectionUpdates("codex", "cursor", "cursor-auto"),
+      ),
+    ).toEqual([
+      {
+        _tag: "Set",
+        row: {
+          setting: "harness",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+          value: "cursor",
+        },
+      },
+      {
+        _tag: "Set",
+        row: {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+          value: "cursor-auto",
+        },
+      },
+      {
+        _tag: "Clear",
+        cell: {
+          setting: "effort",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+        },
+      },
+      {
+        _tag: "Clear",
+        cell: {
+          setting: "permission-profile",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+        },
+      },
+    ]);
+  });
+
   it("clears the cell when the value is null, which puts it back on the default", () => {
     expect(operationSettingUpdate(workspace, "follow-up", "effort", null)).toEqual({
       _tag: "Clear",
@@ -355,15 +400,6 @@ describe("an unknown harness", () => {
     ]);
     expect(settingCell(controlStore, catalogs, workspace, "triage", "harness").stale).toBe(true);
     expect(settingCell(controlStore, catalogs, workspace, "triage", "model").stale).toBe(true);
-  });
-});
-
-describe("operationSettingAtomKey", () => {
-  it("separates two workspaces writing the same setting", () => {
-    expect(operationSettingAtomKey(workspace, "model")).not.toBe(operationSettingAtomKey(other, "model"));
-    expect(operationSettingAtomKey(workspace, "model")).not.toBe(
-      operationSettingAtomKey(workspace, "harness"),
-    );
   });
 });
 

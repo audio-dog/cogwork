@@ -1,10 +1,4 @@
-import type {
-  ControlStore,
-  HarnessCatalogChoice,
-  LifecycleStage,
-  OperationSettingName,
-  WorkspaceId,
-} from "@cogwork/contracts";
+import type { ControlStore, HarnessCatalogChoice, LifecycleStage, WorkspaceId } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Collapsible, CollapsibleContent } from "@cogwork/ui/components/collapsible";
@@ -45,9 +39,11 @@ import {
   catalogChoiceLabel,
   catalogChoiceMatches,
   catalogFor,
+  type DisplayedOperationSettingName,
   type HarnessCatalog,
   harnessIsDisabled,
   harnessSelectionUpdates,
+  type OperationSettingChanges,
   operationLabels,
   operationSummaries,
   operationSummaryLine,
@@ -67,18 +63,11 @@ interface OperationSettingsState {
   readonly workspace: WorkspaceId;
 }
 
-type WritableOperationSettingName = Exclude<OperationSettingName, "bindings">;
-
 interface OperationSettingsActions {
-  readonly write: (
-    setting: WritableOperationSettingName,
-    operation: LifecycleStage,
-    value: string | null,
-  ) => void;
+  readonly write: (operation: LifecycleStage, updates: OperationSettingChanges) => void;
 }
 
 interface OperationSettingsMeta {
-  /** True while an act is in flight, so a second change cannot race it. */
   readonly disabled: boolean;
 }
 
@@ -107,7 +96,7 @@ function OperationSettingsProvider({
 }
 
 interface ControlSpec {
-  readonly key: OperationSettingName;
+  readonly key: DisplayedOperationSettingName;
   readonly label: string;
   readonly options: ReadonlyArray<HarnessCatalogChoice>;
   readonly cell: SettingCell;
@@ -253,8 +242,6 @@ function HarnessModelPicker({
                         variant="ghost"
                         className="h-auto justify-start gap-2 px-2 py-1.5 text-start"
                         onClick={() => {
-                          // One pick writes harness, model and effort; a second would
-                          // interrupt all three, so the list closes with the choice.
                           setOpen(false);
                           onPick(rail, model.value);
                         }}
@@ -362,17 +349,15 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
     state: { catalogs, controlStore, workspace },
     actions: { write },
   } = useOperationSettings();
-  const cell = (setting: WritableOperationSettingName) =>
+  const cell = (setting: DisplayedOperationSettingName) =>
     settingCell(controlStore, catalogs, workspace, operation, setting);
   const harnessCell = cell("harness");
   const catalog = catalogFor(catalogs, harnessCell.effective);
   const selectableCatalogs = selectableHarnessCatalogs(controlStore, catalogs);
-  const set = (setting: WritableOperationSettingName, value: string | null) =>
-    write(setting, operation, value);
+  const set = (setting: DisplayedOperationSettingName, value: string | null) =>
+    write(operation, [{ setting, value }]);
   const applyHarnessSelection = (harness: string | null, model: string | null) => {
-    harnessSelectionUpdates(harnessCell.effective, harness, model).forEach(({ setting, value }) => {
-      set(setting, value);
-    });
+    write(operation, harnessSelectionUpdates(harnessCell.effective, harness, model));
   };
   const resetHarnessAndModel = () => applyHarnessSelection(null, null);
   const modelCell = cell("model");
@@ -460,7 +445,7 @@ function EnabledSwitch({ operation }: { readonly operation: LifecycleStage }) {
       aria-label={`Run ${operationLabels[operation]}`}
       checked={on}
       disabled={disabled}
-      onCheckedChange={(next) => write("enabled", operation, next ? "true" : "false")}
+      onCheckedChange={(next) => write(operation, [{ setting: "enabled", value: next ? "true" : "false" }])}
     />
   );
 }

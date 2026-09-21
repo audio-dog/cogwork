@@ -1,10 +1,4 @@
-import {
-  type Connection,
-  type ControlStore,
-  type OperationSettingName,
-  type WorkspaceId,
-  WorkspaceState,
-} from "@cogwork/contracts";
+import { type Connection, type ControlStore, type WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
   AlertDialog,
@@ -27,13 +21,13 @@ import { useAtom, useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { harnessesAtom, operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
+import { harnessesAtom, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { workspaceConnectionChoices } from "../features/connections-view";
 import {
   type HarnessCatalog,
   harnessCatalogLoad,
-  operationSettingUpdate,
+  operationSettingBatch,
 } from "../features/operation-settings";
 import {
   changedFieldCount,
@@ -194,18 +188,6 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
   };
 }
 
-const writableSettings = [
-  "enabled",
-  "harness",
-  "model",
-  "effort",
-  "permission-profile",
-] as const satisfies readonly OperationSettingName[];
-
-/**
- * Each setting writes through its own mutation atom. `Atom.fn` is non-concurrent, so a
- * shared atom would let the model write interrupt the harness write that precedes it.
- */
 function LiveOperationSettings({
   controlStore,
   workspace,
@@ -263,39 +245,25 @@ function LoadedOperationSettings({
   readonly catalogs: ReadonlyArray<HarnessCatalog>;
   readonly disabled: boolean;
 }) {
-  const key = (setting: OperationSettingName) =>
-    setOperationSettingAtom(operationSettingAtomKey(workspace, setting));
-  const enabled = useAtom(key("enabled"));
-  const harness = useAtom(key("harness"));
-  const model = useAtom(key("model"));
-  const effort = useAtom(key("effort"));
-  const permission = useAtom(key("permission-profile"));
-  const writers = { enabled, harness, model, effort, "permission-profile": permission };
-  const failure = writableSettings
-    .map((setting) => writers[setting][0])
-    .find((result) => result._tag === "Failure");
+  const [writeResult, write] = useAtom(setOperationSettingAtom(workspace));
 
   return (
     <OperationSettings.Provider
       value={{
         state: { catalogs, controlStore, workspace },
         actions: {
-          write: (setting, operation, value) => {
-            const writer = writers[setting];
-            writer[1]({
-              payload: { update: operationSettingUpdate(workspace, operation, setting, value) },
-            });
-          },
+          write: (operation, updates) =>
+            write({ payload: { updates: operationSettingBatch(workspace, operation, updates) } }),
         },
-        meta: { disabled: disabled || writableSettings.some((setting) => writers[setting][0].waiting) },
+        meta: { disabled },
       }}
     >
       <OperationSettings.Rows />
-      {failure?._tag === "Failure" && failure.cause ? (
+      {writeResult._tag === "Failure" && writeResult.cause ? (
         <Alert variant="destructive">
           <RiAlertLine />
           <AlertTitle>Could not save that setting</AlertTitle>
-          <AlertDescription>{Cause.pretty(failure.cause)}</AlertDescription>
+          <AlertDescription>{Cause.pretty(writeResult.cause)}</AlertDescription>
         </Alert>
       ) : null}
     </OperationSettings.Provider>

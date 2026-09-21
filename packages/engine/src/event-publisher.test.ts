@@ -66,7 +66,7 @@ const controlStoreService = {
   revokeConnection: () => Effect.succeed(defaultControlStore),
   removeConnection: () => Effect.succeed(defaultControlStore),
   setHarnessEnabled: () => Effect.succeed(defaultControlStore),
-  updateOperationSetting: () => Effect.succeed(defaultControlStore),
+  updateOperationSettings: () => Effect.succeed(defaultControlStore),
   installPlugin: () => Effect.succeed(defaultControlStore),
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
   updateContributionSetting: () => Effect.succeed(defaultControlStore),
@@ -346,6 +346,25 @@ const publisherTestLayer = (items: ReadonlyArray<TrackerItem> = [], globalInFlig
   publisherLayer().pipe(Layer.provideMerge(EventPublisherProbe.layer(items, globalInFlight)));
 
 describe("DaemonEventPublisher", () => {
+  it.effect("reconciles and publishes Workspace changes after a background refresh request", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const publisher = yield* DaemonEventPublisher;
+      const worker = yield* Reconcile.ReconcileWorker;
+      const subscription = yield* bus.subscribe();
+
+      yield* publisher.requestAvailabilityRefresh();
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.filter(DaemonEvent.guards.WorkspaceChanged),
+        Stream.take(1),
+        Stream.runCollect,
+      );
+
+      assert.strictEqual(published?._tag, "WorkspaceChanged");
+      assert.strictEqual((yield* worker.snapshot).generation, 1);
+    }).pipe(Effect.provide(publisherTestLayer()), Effect.scoped),
+  );
+
   it.layer(
     publisherLayer(
       registryLayer,
@@ -366,7 +385,7 @@ describe("DaemonEventPublisher", () => {
             revokeConnection: () => Ref.get(probe.current),
             removeConnection: () => Ref.get(probe.current),
             setHarnessEnabled: () => Ref.get(probe.current),
-            updateOperationSetting: () => Ref.get(probe.current),
+            updateOperationSettings: () => Ref.get(probe.current),
             installPlugin: () => Ref.get(probe.current),
             uninstallPlugin: () => Ref.get(probe.current),
             updateContributionSetting: () => Ref.get(probe.current),
