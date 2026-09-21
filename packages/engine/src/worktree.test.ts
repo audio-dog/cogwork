@@ -894,6 +894,10 @@ describe("Worktree.pullRequestReadiness", () => {
 });
 
 describe("Worktree.reconcile", () => {
+  const retention = (
+    activeTicketKeys: ReadonlyArray<string>,
+    ownedWorktreePaths: ReadonlyArray<string> = [],
+  ) => ({ activeTicketKeys, ownedWorktreePaths });
   const entries: ReadonlyArray<WorktreeEntry> = [
     { path: "/repo", branch: "main" },
     { path: "/repo.worktrees/active", branch: "active" },
@@ -915,7 +919,7 @@ describe("Worktree.reconcile", () => {
       );
       const outcome = yield* manager.reconcile(
         workspaceWith({ reapAfterMillis: 1000 }),
-        ["active", "idle"],
+        retention(["active", "idle"]),
         10_000,
       );
       assert.deepStrictEqual(outcome.tornDown, ["gone"]);
@@ -936,7 +940,7 @@ describe("Worktree.reconcile", () => {
         Worktree.make,
         provide(fakeGit(recorder, { worktrees: entries }), fs),
       );
-      const outcome = yield* manager.reconcile(workspaceWith(), ["active", "idle"], 10_000);
+      const outcome = yield* manager.reconcile(workspaceWith(), retention(["active", "idle"]), 10_000);
       assert.deepStrictEqual(outcome.reaped, []);
       assert.deepStrictEqual(outcome.tornDown, ["gone"]);
       const removed = yield* Ref.get(recorder.removed);
@@ -954,7 +958,7 @@ describe("Worktree.reconcile", () => {
         Worktree.make,
         provide(fakeGit(recorder, { worktrees: renamed }), fakeFs(recorder, {})),
       );
-      const outcome = yield* manager.reconcile(workspaceWith(), ["13"], 10_000);
+      const outcome = yield* manager.reconcile(workspaceWith(), retention(["13"]), 10_000);
       assert.deepStrictEqual(outcome.tornDown, []);
       const removed = yield* Ref.get(recorder.removed);
       assert.deepStrictEqual(removed, []);
@@ -972,7 +976,7 @@ describe("Worktree.reconcile", () => {
           fakeFs(recorder, {}),
         ),
       );
-      const outcome = yield* manager.reconcile(workspaceWith(), ["u"], 10_000);
+      const outcome = yield* manager.reconcile(workspaceWith(), retention(["u"]), 10_000);
       assert.deepStrictEqual(outcome.tornDown, [branch]);
     }),
   );
@@ -988,10 +992,65 @@ describe("Worktree.reconcile", () => {
           fakeFs(recorder, {}),
         ),
       );
-      const outcome = yield* manager.reconcile(workspaceWith(), ["13", branch], 10_000);
+      const outcome = yield* manager.reconcile(workspaceWith(), retention(["13", branch]), 10_000);
       assert.deepStrictEqual(outcome.tornDown, []);
       assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
     }),
+  );
+
+  it.effect("never removes an in-flight Run's worktree after its branch changes", () =>
+    Effect.gen(function* () {
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
+      const branch = decodeBranchName("705-in-flight");
+      const path = `/repo.worktrees/${branch}`;
+
+      const outcome = yield* manager.reconcile(
+        workspaceWith({ reapAfterMillis: 1000 }),
+        retention([], [path]),
+        10_000,
+      );
+
+      assert.deepStrictEqual(outcome, { tornDown: [], reaped: [] });
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
+    }).pipe(
+      Effect.provide(
+        worktreeLayer(
+          { worktrees: [{ path: "/repo.worktrees/705-in-flight", branch: "renamed" }] },
+          { "/repo.worktrees/705-in-flight": { mtimeMillis: 0 } },
+        ),
+      ),
+    ),
+  );
+});
+
+describe("Worktree retention locks", () => {
+  it.effect("allows parallel Run ownership and excludes maintenance", () =>
+    Effect.gen(function* () {
+      const manager = yield* LayeredWorktree;
+      const entered = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const parallelPreparationEntered = yield* Ref.make(false);
+      const maintenanceEntered = yield* Ref.make(false);
+      const first = yield* manager
+        .withRunOwnershipLock(
+          Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release))),
+        )
+        .pipe(Effect.forkChild);
+      yield* Deferred.await(entered);
+      yield* manager.withRunOwnershipLock(Ref.set(parallelPreparationEntered, true));
+      const maintenance = yield* manager
+        .withMaintenanceLock(Ref.set(maintenanceEntered, true))
+        .pipe(Effect.forkChild);
+
+      yield* Effect.yieldNow;
+      assert.isTrue(yield* Ref.get(parallelPreparationEntered));
+      assert.isFalse(yield* Ref.get(maintenanceEntered));
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(first);
+      yield* Fiber.join(maintenance);
+      assert.isTrue(yield* Ref.get(maintenanceEntered));
+    }).pipe(Effect.provide(worktreeLayer({}))),
   );
 });
 

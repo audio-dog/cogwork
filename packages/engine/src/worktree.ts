@@ -6,6 +6,7 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Schema from "effect/Schema";
+import * as TxReentrantLock from "effect/TxReentrantLock";
 import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
 import type { RegisteredWorkspace } from "./projector";
 import { WorktreeFs } from "./worktree-fs";
@@ -106,6 +107,11 @@ export interface ReconcileOutcome {
   readonly reaped: ReadonlyArray<string>;
 }
 
+export interface ReconcileRetention {
+  readonly activeTicketKeys: ReadonlyArray<string>;
+  readonly ownedWorktreePaths: ReadonlyArray<string>;
+}
+
 export type PullRequestReadiness = Data.TaggedEnum<{
   Ready: {
     readonly headBranch: string;
@@ -159,6 +165,13 @@ const operationMessage = (branch: string, operation: GitOperationInProgress) => 
 export const make = Effect.gen(function* () {
   const git = yield* Git;
   const fs = yield* WorktreeFs;
+  const retentionLock = yield* TxReentrantLock.make();
+
+  const withRunOwnershipLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    TxReentrantLock.withReadLock(retentionLock, effect);
+
+  const withMaintenanceLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    TxReentrantLock.withWriteLock(retentionLock, effect);
 
   const pathFor = (repoPath: string, config: WorktreeSettings | undefined, branch: string) =>
     worktreePathFor(worktreeRoot(repoPath, config), branch);
@@ -416,22 +429,28 @@ export const make = Effect.gen(function* () {
 
   const reconcile = Effect.fn("Worktree.reconcile")(function* (
     workspace: RegisteredWorkspace,
-    activeTicketKeys: ReadonlyArray<string>,
+    retention: ReconcileRetention,
     now: number,
   ) {
     const config = workspace.config.worktrees;
     const repoPath = workspace.config.checkoutPath;
     const entries = yield* managed(repoPath, config);
+    const ownedWorktreePaths = new Set(retention.ownedWorktreePaths);
     const belongsToActiveTicket = (branch: string) =>
-      activeTicketKeys.some((key) => branchBelongsToTicketSlug(branch, key));
+      retention.activeTicketKeys.some((key) => branchBelongsToTicketSlug(branch, key));
+    const isOwnedWorktree = (entry: WorktreeEntry) => ownedWorktreePaths.has(entry.path);
+    const isActiveWorktree = (entry: WorktreeEntry) =>
+      entry.branch === null || belongsToActiveTicket(entry.branch);
+    const isOrphaned = (entry: WorktreeEntry) => !isOwnedWorktree(entry) && !isActiveWorktree(entry);
+    const isReapCandidate = (entry: WorktreeEntry) => !isOwnedWorktree(entry) && isActiveWorktree(entry);
 
-    const orphaned = entries.filter((entry) => entry.branch !== null && !belongsToActiveTicket(entry.branch));
-    const retained = entries.filter((entry) => entry.branch === null || belongsToActiveTicket(entry.branch));
+    const orphaned = entries.filter(isOrphaned);
+    const reapCandidates = entries.filter(isReapCandidate);
     const reapAfterMillis = config?.reapAfterMillis;
     const idle =
       reapAfterMillis === undefined
         ? []
-        : yield* Effect.filter(retained, (entry) => isIdle(entry, reapAfterMillis, now));
+        : yield* Effect.filter(reapCandidates, (entry) => isIdle(entry, reapAfterMillis, now));
 
     const tornDown = yield* Effect.forEach(orphaned, (entry) => attemptRemoval(repoPath, entry, true));
     const reaped = yield* Effect.forEach(idle, (entry) => attemptRemoval(repoPath, entry, false));
@@ -442,7 +461,15 @@ export const make = Effect.gen(function* () {
     } satisfies ReconcileOutcome;
   });
 
-  return { ensure, pullRequestReadiness, list, remove, reconcile } as const;
+  return {
+    ensure,
+    pullRequestReadiness,
+    list,
+    remove,
+    reconcile,
+    withRunOwnershipLock,
+    withMaintenanceLock,
+  };
 });
 
 export type WorktreeManagerService = Effect.Success<typeof make>;

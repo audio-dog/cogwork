@@ -7,6 +7,7 @@ import {
   type DaemonEvent,
   type DaemonStatus,
   initialBoard,
+  ModelOptionSelections,
   type OperationSettingContext,
   type OperationSettingName,
   OperationSettingUpdate,
@@ -111,7 +112,7 @@ const operationSettingArgument = Argument.choice("setting", [
   "enabled",
   "harness",
   "model",
-  "effort",
+  "model-options",
   "permission-profile",
   "bindings",
 ]);
@@ -138,11 +139,26 @@ export const daemonOrStore = <A, E, R, E2, R2>(
 ): Effect.Effect<A, E | E2 | RpcClientError, R | R2> =>
   Effect.catchIf(daemon, isUnavailableDaemonError, () => store);
 
-const formatOperationSettingValue = (value: ReturnType<typeof resolveOperationSetting>) => {
-  if (value === null) return "unset";
-  if (Array.isArray(value)) return value.length === 0 ? "unset" : JSON.stringify(value);
-  return String(value);
-};
+type ResolvedOperationSettingValue = ReturnType<typeof resolveOperationSetting>;
+
+const isEmptyArray = (value: ResolvedOperationSettingValue) =>
+  Array.isArray(value) ? value.length === 0 : false;
+
+const operationSettingFormatRules: ReadonlyArray<{
+  readonly when: (value: ResolvedOperationSettingValue) => boolean;
+  readonly format: (value: ResolvedOperationSettingValue) => string;
+}> = [
+  { when: (value) => value === null, format: () => "unset" },
+  { when: isEmptyArray, format: () => "unset" },
+  {
+    when: (value) => typeof value === "object",
+    format: (value) => JSON.stringify(value),
+  },
+  { when: () => true, format: String },
+];
+
+const formatOperationSettingValue = (value: ResolvedOperationSettingValue) =>
+  operationSettingFormatRules.find(({ when }) => when(value))?.format(value) ?? "unset";
 
 export const formatOperationSettings = (controlStore: ControlStore, context: OperationSettingContext) =>
   operationSettingNames
@@ -166,6 +182,7 @@ class ContributionSettingInputError extends Data.TaggedError("ContributionSettin
 
 const decodeContributionSettingUpdateInput = Schema.decodeUnknownEffect(ContributionSettingUpdate);
 const decodeOperationSettingUpdateInput = Schema.decodeUnknownEffect(OperationSettingUpdate);
+const decodeModelOptionSelections = Schema.decodeUnknownEffect(Schema.fromJsonString(ModelOptionSelections));
 
 interface ContributionSettingOptions {
   readonly contribution: string;
@@ -237,14 +254,28 @@ const bindingValue = (value: string) =>
     return { need, contribution: contribution.join("=") };
   });
 
-const operationSettingValue = (setting: OperationSettingName, value: string) => {
-  if (setting === "enabled") {
-    if (value === "on") return true;
-    if (value === "off") return false;
-  }
-  if (setting === "bindings") return bindingValue(value);
-  return value;
+const enabledValues = new Map<string, string | boolean>([
+  ["on", true],
+  ["off", false],
+]);
+
+const operationSettingValueParsers: Record<
+  OperationSettingName,
+  (value: string) => Effect.Effect<unknown, OperationSettingInputError>
+> = {
+  enabled: (value: string) => Effect.succeed(enabledValues.get(value) ?? value),
+  harness: Effect.succeed,
+  model: Effect.succeed,
+  "model-options": (value: string) =>
+    decodeModelOptionSelections(value).pipe(
+      Effect.mapError((error) => new OperationSettingInputError({ message: error.message })),
+    ),
+  "permission-profile": Effect.succeed,
+  bindings: (value: string) => Effect.succeed(bindingValue(value)),
 };
+
+const operationSettingValue = (setting: OperationSettingName, value: string) =>
+  operationSettingValueParsers[setting](value);
 
 const decodeOperationSettingUpdate = (input: unknown) =>
   decodeOperationSettingUpdateInput(input).pipe(
@@ -268,10 +299,14 @@ export const makeOperationSettingUpdate = (
 ) => {
   const cell = operationSettingCell(options);
   if (Option.isNone(value)) return decodeOperationSettingUpdate({ _tag: "Clear", cell });
-  return decodeOperationSettingUpdate({
-    _tag: "Set",
-    row: { ...cell, value: operationSettingValue(options.setting, value.value) },
-  });
+  return operationSettingValue(options.setting, value.value).pipe(
+    Effect.flatMap((settingValue) =>
+      decodeOperationSettingUpdate({
+        _tag: "Set",
+        row: { ...cell, value: settingValue },
+      }),
+    ),
+  );
 };
 
 export const schedulingActions = {

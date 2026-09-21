@@ -2,12 +2,15 @@ import {
   type HarnessName,
   type HarnessOptionCatalog,
   LifecycleStage,
+  type ModelOptionSelections,
   type OperationSettingName,
   OperationSettingRefused,
   OperationSettingUpdate,
   operationDefaultProfiles,
   type RunPlanPolicyProfile,
   SettingLevel,
+  selectedHarnessCatalogModel,
+  unsupportedHarnessModelOption,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 
@@ -50,17 +53,15 @@ export const operationSettingRefusal = (update: OperationSettingUpdate) => {
   });
 };
 
-type CatalogSetting = Extract<OperationSettingName, "model" | "effort" | "permission-profile">;
+type CatalogSetting = Extract<OperationSettingName, "model" | "permission-profile">;
 
 const catalogValues: Record<CatalogSetting, (catalog: HarnessOptionCatalog) => ReadonlyArray<string>> = {
   model: (catalog: HarnessOptionCatalog) => catalog.models.map(({ value }) => value),
-  effort: (catalog: HarnessOptionCatalog) => catalog.efforts?.map(({ value }) => value) ?? [],
   "permission-profile": (catalog: HarnessOptionCatalog) => catalog.policyProfiles,
 };
 
 const catalogValueNames = {
   model: "model",
-  effort: "effort",
   "permission-profile": "permission profile",
 } satisfies Record<CatalogSetting, string>;
 
@@ -75,5 +76,22 @@ export const catalogMembershipRefusal = (
     setting,
     source: `Harness ${harness}`,
     reason: `${harness} does not offer ${catalogValueNames[setting]} ${value}`,
+  });
+};
+
+export const modelOptionsMembershipRefusal = (
+  options: ModelOptionSelections,
+  model: string | null,
+  harness: HarnessName,
+  catalog: HarnessOptionCatalog,
+) => {
+  const selectedModel = selectedHarnessCatalogModel(catalog.models, model);
+  const stale = unsupportedHarnessModelOption(selectedModel, options);
+  if (!stale) return null;
+  const [id, value] = stale;
+  return OperationSettingRefused.make({
+    setting: "model-options",
+    source: `Harness ${harness}`,
+    reason: `${harness} does not offer model option ${id}=${JSON.stringify(value)} for ${model ?? "its default model"}`,
   });
 };

@@ -91,11 +91,7 @@ describe("codexRunner configuration", () => {
         const catalog = yield* harness.catalog(name);
 
         assert.deepStrictEqual(catalog.models, codexCatalog.models);
-        assert.deepStrictEqual(
-          catalog.efforts?.map(({ value }) => value),
-          ["minimal", "low", "medium", "high"],
-        );
-        assert.strictEqual(catalog.generatedAgainst, "0.154.0");
+        assert.strictEqual(catalog.generatedAgainst, codexCatalog.generatedAgainst);
         assert.deepStrictEqual(catalog.rawModelIds, codexCatalog.rawModelIds);
         assert.deepStrictEqual(catalog.provenance, {
           source: "cogwork-fallback",
@@ -275,8 +271,10 @@ describe("codexRunner configuration", () => {
         Effect.gen(function* () {
           const executable = yield* fakeCodexWithRepositoryHooks();
           const harness = Harness.make([runner({ codexExecutable: executable })]);
-          const captures = yield* Effect.forEach(LifecycleStage.literals, (stage) =>
-            runOperation(harness, stage),
+          const captures = yield* Effect.forEach(
+            LifecycleStage.literals,
+            (stage) => runOperation(harness, stage),
+            { concurrency: "unbounded" },
           );
 
           for (const [, capture] of captures) {

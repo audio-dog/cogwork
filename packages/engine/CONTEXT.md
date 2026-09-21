@@ -74,7 +74,7 @@ The place sessions are minted and the read model a runner pulls a session's hist
 _Avoid_: Message store (that's the persistence library's term for the one piece of the adapter), transcript database, second store
 
 **Harness request**:
-The projection the executor hands the harness for one accepted Run Plan, plus secret MCP credentials and a `session` reference — the `SessionId` this run continues, or null for a fresh start. The harness consumes the Plan's frozen Messages, Instructions, model, effort, and policy. It references a session rather than shipping one; no frozen transcript crosses the seam, so compaction can live inside the runner's loop where context actually grows.
+The projection the executor hands the harness for one accepted Run Plan, plus secret MCP credentials and a `session` reference — the `SessionId` this run continues, or null for a fresh start. The harness consumes the Plan's frozen Messages, Instructions, model, model options, and policy. It references a session rather than shipping one; no frozen transcript crosses the seam, so compaction can live inside the runner's loop where context actually grows.
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:

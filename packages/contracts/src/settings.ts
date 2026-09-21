@@ -58,7 +58,7 @@ export const OperationSettingName = Schema.Literals([
   "enabled",
   "harness",
   "model",
-  "effort",
+  "model-options",
   "permission-profile",
   "bindings",
 ]);
@@ -88,6 +88,12 @@ export const OperationBinding = Schema.Struct({
 });
 export type OperationBinding = typeof OperationBinding.Type;
 
+export const ModelOptionSelections = Schema.Record(
+  TrimmedNonEmptyString,
+  Schema.Union([TrimmedNonEmptyString, Schema.Boolean]),
+);
+export type ModelOptionSelections = typeof ModelOptionSelections.Type;
+
 const principalOperationScope = Schema.Union([SettingsProfileScope, PrivateWorkspaceOverlayScope]);
 const operationCellFields = { level: SettingLevel };
 
@@ -106,9 +112,9 @@ const modelCell = Schema.Struct({
   setting: Schema.Literal("model"),
   scope: principalOperationScope,
 });
-const effortCell = Schema.Struct({
+const modelOptionsCell = Schema.Struct({
   ...operationCellFields,
-  setting: Schema.Literal("effort"),
+  setting: Schema.Literal("model-options"),
   scope: principalOperationScope,
 });
 const permissionProfileCell = Schema.Struct({
@@ -126,7 +132,7 @@ export const OperationSettingCell = Schema.Union([
   enabledCell,
   harnessCell,
   modelCell,
-  effortCell,
+  modelOptionsCell,
   permissionProfileCell,
   bindingsCell,
 ]);
@@ -136,7 +142,7 @@ export const OperationSettingRow = Schema.Union([
   Schema.Struct({ ...enabledCell.fields, value: Schema.Boolean }),
   Schema.Struct({ ...harnessCell.fields, value: TrimmedNonEmptyString }),
   Schema.Struct({ ...modelCell.fields, value: TrimmedNonEmptyString }),
-  Schema.Struct({ ...effortCell.fields, value: TrimmedNonEmptyString }),
+  Schema.Struct({ ...modelOptionsCell.fields, value: ModelOptionSelections }),
   Schema.Struct({ ...permissionProfileCell.fields, value: TrimmedNonEmptyString }),
   Schema.Struct({ ...bindingsCell.fields, value: Schema.Array(OperationBinding) }),
 ]);
@@ -172,7 +178,7 @@ const sameOperationSettingCell = (left: OperationSettingCell, right: OperationSe
 
 export const applyOperationSettingBatch = (
   rows: ReadonlyArray<OperationSettingRow>,
-  updates: OperationSettingBatch,
+  updates: ReadonlyArray<OperationSettingUpdate>,
 ) =>
   updates.reduce<ReadonlyArray<OperationSettingRow>>(
     (current, update) =>
@@ -394,7 +400,7 @@ export type SettingResolutionCase =
       readonly setting: OperationSettingName;
       readonly operator: ResolutionOperator;
       readonly context: OperationSettingContext;
-      readonly expected: boolean | string | readonly OperationBinding[] | null;
+      readonly expected: boolean | string | ModelOptionSelections | readonly OperationBinding[] | null;
     };
 
 const profile: SettingsProfileScope = { _tag: "SettingsProfile" };

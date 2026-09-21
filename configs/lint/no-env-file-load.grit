@@ -1,0 +1,13 @@
+language js(typescript, jsx)
+
+// Cogwork resolves environment references only from the process environment the daemon was
+// started with. The CLI entry point once read a .env file under the daemon home into process.env
+// at startup; that made a file on disk a configuration source no Connection records, and it was
+// removed. This rule holds that removal at the place it would come back.
+//
+// A top-level call root lets Biome reject non-matching nodes by kind rather than re-walking every
+// file, the form iife.grit settled on. See issue #433.
+
+`process.loadEnvFile($args)` as $call where {
+  register_diagnostic(span=$call, message="Rule: do not load an environment file into process.env. Why: cogwork resolves environment references only from the process environment the daemon was started with, so a file read at startup is a configuration source no Connection records. Fix: read the value from the daemon process environment, or record it as a Connection.", severity="error")
+}

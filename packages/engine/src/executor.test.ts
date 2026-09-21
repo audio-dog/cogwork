@@ -14,6 +14,7 @@ import {
   localOwnerId,
   type OperationSettingRow,
   type PluginContribution,
+  type RunId,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -629,12 +630,38 @@ const testRunnerDefaults = {
     fallback: staticCatalogSource(
       {
         models: [
-          { value: "test", label: "Test" },
-          { value: "refreshed-model", label: "Refreshed model" },
-        ],
-        efforts: [
-          { value: "low", label: "Low" },
-          { value: "high", label: "High" },
+          {
+            value: "test",
+            label: "Test",
+            options: [
+              {
+                type: "select",
+                id: "effort",
+                label: "Effort",
+                values: [
+                  { value: "low", label: "Low" },
+                  { value: "high", label: "High" },
+                ],
+                defaultValue: "high",
+              },
+            ],
+          },
+          {
+            value: "refreshed-model",
+            label: "Refreshed model",
+            options: [
+              {
+                type: "select",
+                id: "effort",
+                label: "Effort",
+                values: [
+                  { value: "low", label: "Low" },
+                  { value: "high", label: "High" },
+                ],
+                defaultValue: "high",
+              },
+            ],
+          },
         ],
       },
       { source: "cogwork-fallback", fallbackVersion: "test-1" },
@@ -793,6 +820,8 @@ const resourceRunner: TestRunner = {
 };
 
 const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
+  withRunOwnershipLock: (effect) => effect,
+  withMaintenanceLock: (effect) => effect,
   ensure: (_workspace, item) =>
     Effect.succeed({ branch: branchName(item), path: `/wt/${branchName(item)}`, created }),
   pullRequestReadiness: (_workspace, item) =>
@@ -830,12 +859,88 @@ const worktreeDouble = (make: (probe: WorktreeProbeState) => WorktreeManagerServ
 
 const worktreeStubLayer: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeDouble(() => worktreeStub);
 
+const cancellationWhileWaitingForOwnership = () => {
+  const entered = Deferred.makeUnsafe<void>();
+  const release = Deferred.makeUnsafe<void>();
+  const runId = Deferred.makeUnsafe<RunId>();
+  const worktree = Layer.merge(
+    Layer.succeed(WorktreeManager, {
+      ...worktreeStub,
+      withRunOwnershipLock: (effect) =>
+        Deferred.succeed(entered, undefined).pipe(
+          Effect.andThen(Deferred.await(release)),
+          Effect.andThen(effect),
+        ),
+    } satisfies WorktreeManagerService),
+    WorktreeProbe.layer,
+  );
+  const runControl = Layer.effect(
+    RunControl.RunControl,
+    Effect.map(
+      RunControl.make,
+      (delegate) =>
+        ({
+          ...delegate,
+          run: (id, workspace, effect, onCancel) => {
+            Deferred.doneUnsafe(runId, Effect.succeed(id));
+            return delegate.run(id, workspace, effect, onCancel);
+          },
+        }) satisfies RunControl.RunControlService,
+    ),
+  );
+  return { entered, runId, worktree, runControl };
+};
+
+const preparedWorktreeRemovedLayer = Layer.effect(
+  Git,
+  Ref.make(0).pipe(
+    Effect.map(
+      (listCount) =>
+        ({
+          fetch: () => Effect.void,
+          remoteBranchExists: () => Effect.succeed(true),
+          addWorktree: () => Effect.die("unexpected addWorktree"),
+          removeWorktree: () => Effect.die("unexpected removeWorktree"),
+          listWorktrees: () =>
+            Ref.getAndUpdate(listCount, (count) => count + 1).pipe(
+              Effect.map((count) =>
+                count === 0
+                  ? [
+                      {
+                        path: worktreePathFor(
+                          worktreeRoot(implementWorkspace.config.checkoutPath),
+                          implementBranch,
+                        ),
+                        branch: implementBranch,
+                      },
+                    ]
+                  : [],
+              ),
+            ),
+          fastForward: () => Effect.void,
+          divergence: (_path, _remote, _base, head) =>
+            Effect.succeed(head?.remote ? { ahead: 1, behind: 0 } : { ahead: 0, behind: 0 }),
+          operationInProgress: () => Effect.succeed(null),
+          rebase: () => Effect.die("unexpected rebase"),
+          remoteUrl: () => Effect.die("unexpected remoteUrl"),
+        }) satisfies GitService,
+    ),
+  ),
+);
+
 const worktreeFsStub = Layer.succeed(WorktreeFs, {
   linkFile: () => Effect.void,
   removeDebris: () => Effect.succeed(true),
   runCommand: () => Effect.void,
   stat: () => Effect.succeed(null),
 } satisfies WorktreeFsService);
+
+const preparedWorktreeRemoved = Layer.merge(
+  Layer.effect(WorktreeManager, makeWorktreeManager).pipe(
+    Layer.provide(Layer.merge(preparedWorktreeRemovedLayer, worktreeFsStub)),
+  ),
+  WorktreeProbe.layer,
+);
 
 const readinessRefreshFailure = new GitError({
   command: "fetch origin main implement-branch",
@@ -1505,16 +1610,16 @@ describe("Executor.execute", () => {
       const operationSettings: ReadonlyArray<OperationSettingRow> = [
         ...runnableStages,
         {
-          setting: "effort",
+          setting: "model-options",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "SettingsProfile" },
-          value: "high",
+          value: { effort: "high" },
         },
         {
-          setting: "effort",
+          setting: "model-options",
           level: { _tag: "Operation", workflow: "coding", operation: "follow-up" },
           scope: { _tag: "SettingsProfile" },
-          value: "low",
+          value: { effort: "low" },
         },
       ];
       const probeRunner: TestRunner = {
@@ -2496,6 +2601,36 @@ describe("Executor.execute", () => {
     ),
   );
 
+  it.effect("opens the pull request after its prepared worktree disappears", () =>
+    Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), [
+        {
+          headBranch: implementBranch,
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #15",
+        },
+      ]);
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "implemented"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "succeeded");
+    }).pipe(
+      Effect.provide(
+        provide([runner(readyForPrEvents)], preparedWorktreeRemoved, pullRequestProvider()).pipe(
+          Layer.provideMerge(PullRequestCalls.layer),
+        ),
+      ),
+    ),
+  );
+
   it.effect("settles and releases the Run when pull request creation fails", () =>
     Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
@@ -3247,6 +3382,46 @@ describe("Executor.execute", () => {
           runLedgerIdentity,
           connectionStoreStub,
           RunControl.layer,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("keeps a Run cancellable while it waits for worktree ownership", () => {
+    const blocked = cancellationWhileWaitingForOwnership();
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      const control = yield* RunControl.RunControl;
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
+
+      yield* Deferred.await(blocked.entered);
+      const cancellation = yield* control.cancel(yield* Deferred.await(blocked.runId));
+
+      assert.strictEqual(cancellation._tag, "Interrupting");
+      if (cancellation._tag === "Interrupting") yield* cancellation.awaitTermination;
+      yield* Fiber.await(running);
+
+      assert.lengthOf(
+        (yield* Ref.get(calls)).filter((call) => call.method === "release"),
+        1,
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          blocked.worktree,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages, []),
+          runLedgerIdentity,
+          connectionStoreStub,
+          blocked.runControl,
         ),
       ),
       Effect.scoped,

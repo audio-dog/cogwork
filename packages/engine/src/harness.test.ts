@@ -98,7 +98,7 @@ const request = {
   plan: Schema.decodeSync(RunPlan)({
     id: "run-harness-test",
     operation: "triage",
-    harness: { name, model: null, effort: null, profile: "read-only" },
+    harness: { name, model: null, options: {}, profile: "read-only" },
     instructions: [],
     operatingInstructions: {
       name: "triage-agent",
@@ -141,11 +141,11 @@ const request = {
   mcpCredentials: new Map(),
 };
 
-const requestFor = (harness: typeof name, model: string | null = null, effort: string | null = null) => ({
+const requestFor = (harness: typeof name, model: string | null = null) => ({
   ...request,
   plan: new RunPlan({
     ...request.plan,
-    harness: { ...request.plan.harness, name: harness, model, effort },
+    harness: { ...request.plan.harness, name: harness, model },
   }),
 });
 
@@ -573,7 +573,7 @@ describe("Harness", () => {
       }),
     );
 
-    it.effect("ignores saved effort when the current catalog omits the control", () =>
+    it.effect("rejects saved model options when the current model omits the control", () =>
       Effect.gen(function* () {
         const launches: Array<true> = [];
         const runner = {
@@ -599,12 +599,14 @@ describe("Harness", () => {
           ...request,
           plan: new RunPlan({
             ...request.plan,
-            harness: { ...request.plan.harness, model: "runtime-model", effort: "high" },
+            harness: { ...request.plan.harness, model: "runtime-model", options: { effort: "high" } },
           }),
         };
-        yield* harness.run(configured).pipe(Stream.runDrain);
+        const error = yield* harness.run(configured).pipe(Stream.runDrain, Effect.flip);
 
-        assert.deepStrictEqual(launches, [true]);
+        assert.strictEqual(error.reason, "stale-selection");
+        assert.include(error.message, 'model option effort="high"');
+        assert.deepStrictEqual(launches, []);
       }),
     );
 

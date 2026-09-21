@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString } from "./base-schemas";
-import { RunPlanPolicyProfile } from "./settings";
+import { ModelOptionSelections, RunPlanPolicyProfile } from "./settings";
 
 export class HarnessEnablement extends Schema.Class<HarnessEnablement>("HarnessEnablement")({
   harness: HarnessName,
@@ -84,25 +84,52 @@ export const HarnessModelOptionDescriptor = Schema.Union([
 ]).pipe(Schema.toTaggedUnion("type"));
 export type HarnessModelOptionDescriptor = typeof HarnessModelOptionDescriptor.Type;
 
+export const harnessModelOptionAccepts = (
+  descriptor: HarnessModelOptionDescriptor,
+  value: string | boolean | undefined,
+) =>
+  HarnessModelOptionDescriptor.match(descriptor, {
+    boolean: () => typeof value === "boolean",
+    select: ({ values }) => {
+      const isAllowedSelectValue =
+        typeof value === "string" && values.some((choice) => choice.value === value);
+      return isAllowedSelectValue;
+    },
+  });
+
 const HarnessCatalogModelFields = {
   value: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
   options: Schema.optionalKey(Schema.Array(HarnessModelOptionDescriptor)),
 };
 
-const HarnessModelOptions = Schema.Record(
-  TrimmedNonEmptyString,
-  Schema.Union([TrimmedNonEmptyString, Schema.Boolean]),
-);
 const HarnessRawModelSelection = Schema.Struct({
   model: TrimmedNonEmptyString,
-  options: HarnessModelOptions,
+  options: ModelOptionSelections,
 });
 
 export class HarnessCatalogChoice extends Schema.Class<HarnessCatalogChoice>("HarnessCatalogChoice")({
   ...HarnessCatalogModelFields,
   default: Schema.optionalKey(Schema.Boolean),
 }) {}
+
+export const selectedHarnessCatalogModel = (
+  models: ReadonlyArray<HarnessCatalogChoice>,
+  selected: string | null,
+) =>
+  selected
+    ? models.find(({ value }) => value === selected)
+    : (models.find(({ default: isDefault }) => isDefault) ?? models[0]);
+
+export const unsupportedHarnessModelOption = (
+  model: HarnessCatalogChoice | undefined,
+  options: ModelOptionSelections,
+) =>
+  Object.entries(options).find(([id, value]) => {
+    const descriptor = model?.options?.find((candidate) => candidate.id === id);
+    const isUnsupported = descriptor === undefined || !harnessModelOptionAccepts(descriptor, value);
+    return isUnsupported;
+  });
 
 export class HarnessManagedCatalogModel extends Schema.Class<HarnessManagedCatalogModel>(
   "HarnessManagedCatalogModel",
@@ -145,17 +172,9 @@ const validManagedCatalog = Schema.makeFilter((catalog: ManagedCatalogShape) => 
     const hasExactOptions =
       optionIds.length === descriptors.length &&
       descriptors.every(({ id }) => Object.hasOwn(selection.options, id));
-    const hasValidValues = descriptors.every((descriptor) => {
-      const value = selection.options[descriptor.id];
-      return HarnessModelOptionDescriptor.match(descriptor, {
-        boolean: () => typeof value === "boolean",
-        select: ({ values }) => {
-          const isValidSelectValue =
-            typeof value === "string" && values.some((choice) => choice.value === value);
-          return isValidSelectValue;
-        },
-      });
-    });
+    const hasValidValues = descriptors.every((descriptor) =>
+      harnessModelOptionAccepts(descriptor, selection.options[descriptor.id]),
+    );
     const isValidSelection = hasExactOptions && hasValidValues;
     return isValidSelection;
   });
@@ -189,7 +208,6 @@ export class HarnessManagedCatalog extends Schema.Class<HarnessManagedCatalog>("
 
 export class HarnessOptionCatalog extends Schema.Class<HarnessOptionCatalog>("HarnessOptionCatalog")({
   models: Schema.Array(HarnessCatalogChoice),
-  efforts: Schema.optionalKey(Schema.Array(HarnessCatalogChoice)),
   generatedAgainst: Schema.optionalKey(TrimmedNonEmptyString),
   rawModelIds: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
   policyProfiles: Schema.Array(RunPlanPolicyProfile),

@@ -1,6 +1,5 @@
 export { type CursorRunnerOptions, cursorRunner } from "./harness";
 export {
-  applyCursorEffort,
   type CursorEffort,
   cursorEfforts,
   cursorModelFlag,

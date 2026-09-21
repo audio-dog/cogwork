@@ -21,6 +21,7 @@ import {
   defaultPermissionProfile,
   HarnessName,
   type LifecycleStage,
+  ModelOptionSelections,
   OperationBinding as OperationBindingSchema,
   operationSettingNames,
   type ProvenanceStamp,
@@ -233,9 +234,7 @@ const droppedReason = (row: OperationSettingRow, context: OperationSettingContex
 };
 
 const isBlankOptionalStringSetting = (row: OperationSettingRow) =>
-  (row.setting === "model" || row.setting === "effort") &&
-  typeof row.value === "string" &&
-  row.value.trim() === "";
+  row.setting === "model" && typeof row.value === "string" && row.value.trim() === "";
 
 const selectedOperationRows = (
   rows: readonly OperationSettingRow[],
@@ -328,7 +327,7 @@ export interface ResolvedStage extends OperationDefinition {
   readonly enabled: boolean;
   readonly harness: HarnessName;
   readonly model: string | null;
-  readonly effort: string | null;
+  readonly modelOptions: ModelOptionSelections;
 }
 
 export interface ResolvedOperation {
@@ -339,6 +338,7 @@ export interface ResolvedOperation {
 }
 
 const isOperationBindings = Schema.is(Schema.Array(OperationBindingSchema));
+const isModelOptionSelections = Schema.is(ModelOptionSelections);
 
 export const operationBindingsOf = (resolved: ResolvedOperation) => {
   const value = resolved.settings.get("bindings")?.value;
@@ -362,13 +362,14 @@ export const resolveRunPlanStage = (
   const settingValueOf = (setting: OperationSettingName) => settings.get(setting)?.value;
   const harness = harnessValue(settingValueOf("harness"));
   if (!harness) return null;
+  const modelOptions = settingValueOf("model-options");
   return {
     stage: {
       ...base,
       enabled: booleanValue(settingValueOf("enabled"), false),
       harness,
       model: trimmedStringValue(settingValueOf("model"), null),
-      effort: trimmedStringValue(settingValueOf("effort"), null),
+      modelOptions: isModelOptionSelections(modelOptions) ? modelOptions : {},
     },
     profile: policyProfileValue(
       settingValueOf("permission-profile"),
@@ -425,14 +426,17 @@ const winningRows = (winning: OperationSettingRow | readonly OperationSettingRow
   return "setting" in winning ? [winning] : winning;
 };
 
-const effectiveSettingValue = (resolved: ResolvedOperation, setting: OperationSettingName) => {
-  if (setting === "enabled") return resolved.stage.enabled;
-  if (setting === "harness") return resolved.stage.harness;
-  if (setting === "model") return resolved.stage.model;
-  if (setting === "effort") return resolved.stage.effort;
-  if (setting === "permission-profile") return resolved.profile;
-  return resolved.settings.get("bindings")?.value ?? [];
-};
+const effectiveSettingValues = {
+  enabled: (resolved: ResolvedOperation) => resolved.stage.enabled,
+  harness: (resolved: ResolvedOperation) => resolved.stage.harness,
+  model: (resolved: ResolvedOperation) => resolved.stage.model,
+  "model-options": (resolved: ResolvedOperation) => resolved.stage.modelOptions,
+  "permission-profile": (resolved: ResolvedOperation) => resolved.profile,
+  bindings: (resolved: ResolvedOperation) => resolved.settings.get("bindings")?.value ?? [],
+} satisfies Record<OperationSettingName, (resolved: ResolvedOperation) => unknown>;
+
+const effectiveSettingValue = (resolved: ResolvedOperation, setting: OperationSettingName) =>
+  effectiveSettingValues[setting](resolved);
 
 const resolutionTrace = (
   resolved: ResolvedOperation,
@@ -861,7 +865,7 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
     contentStamp("Engine Harness Adapter", {
       name: input.resolved.stage.harness,
       model: input.resolved.stage.model,
-      effort: input.resolved.stage.effort,
+      options: input.resolved.stage.modelOptions,
       profile: input.resolved.profile,
     }),
     contentStamp("Engine Messages", [{ role: "user", content: input.prompt }]),
@@ -880,7 +884,7 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
       harness: RunPlanHarness.make({
         name: input.resolved.stage.harness,
         model: input.resolved.stage.model,
-        effort: input.resolved.stage.effort,
+        options: input.resolved.stage.modelOptions,
         profile: input.resolved.profile,
       }),
       instructions: instructions(input.context),

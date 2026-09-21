@@ -85,6 +85,31 @@ describe("ContributionSettingUpdate", () => {
 });
 
 describe("OperationSettingUpdate", () => {
+  it("accepts model option selections and rejects the retired effort setting", () => {
+    assert.isTrue(
+      Schema.is(OperationSettingUpdate)({
+        _tag: "Set",
+        row: {
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          setting: "model-options",
+          value: { effort: "high", speed: true },
+        },
+      }),
+    );
+    assert.isFalse(
+      Schema.is(OperationSettingUpdate)({
+        _tag: "Set",
+        row: {
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          setting: "effort",
+          value: "high",
+        },
+      }),
+    );
+  });
+
   it("rejects an Operation level for an operation the build does not have", () => {
     assert.isFalse(
       Schema.is(OperationSettingUpdate)({
@@ -106,7 +131,7 @@ describe("OperationSettingUpdate", () => {
         {
           _tag: "Clear",
           cell: {
-            setting: "effort",
+            setting: "model-options",
             level: { _tag: "Operation", workflow: "coding", operation: "implement" },
             scope: { _tag: "SettingsProfile" },
           },
@@ -118,7 +143,7 @@ describe("OperationSettingUpdate", () => {
         Array.from({ length: 5 }, () => ({
           _tag: "Clear",
           cell: {
-            setting: "effort",
+            setting: "model-options",
             level: { _tag: "Operation", workflow: "coding", operation: "implement" },
             scope: { _tag: "SettingsProfile" },
           },
@@ -138,8 +163,11 @@ describe("OperationSettingUpdate", () => {
       [{ setting: "model", level, scope, value: "old" }],
       [
         { _tag: "Set", row: { setting: "model", level, scope, value: "new" } },
-        { _tag: "Set", row: { setting: "effort", level, scope, value: "high" } },
-        { _tag: "Clear", cell: { setting: "effort", level, scope } },
+        {
+          _tag: "Set",
+          row: { setting: "model-options", level, scope, value: { effort: "high" } },
+        },
+        { _tag: "Clear", cell: { setting: "model-options", level, scope } },
       ],
     );
 

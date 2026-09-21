@@ -346,11 +346,11 @@ const unavailable = (diagnostic: string, retryable = false) =>
 
 export const replaySpeeds: ReadonlyArray<ReplaySpeed> = ["1x", "2x", "4x", "6x", "8x", "unpaced"];
 
-const speedFrom = (effort: string | null) => {
-  if (effort === "unpaced") return Infinity;
-  const parsed = Number.parseInt(effort ?? "1x", 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 1;
-  return parsed;
+const speedFrom = (selection: string | boolean | undefined) => {
+  const namedSpeed = selection === "unpaced" ? Infinity : null;
+  const parsed = namedSpeed ?? Number.parseInt(typeof selection === "string" ? selection : "1x", 10);
+  const isValidSpeed = parsed === Infinity || (Number.isFinite(parsed) && parsed > 0);
+  return isValidSpeed ? parsed : 1;
 };
 
 const configuredFixture = Effect.fn("ReplayHarness.configuredFixture")(function* (
@@ -398,8 +398,22 @@ export const replayRunner = Effect.fn("ReplayHarness.runner")(function* (options
           catalogSources: {
             fallback: staticCatalogSource(
               {
-                models: [{ value: "fixture", label: "Exported fixture" }],
-                efforts: replaySpeeds.map((speed) => ({ value: speed, label: speed })),
+                models: [
+                  {
+                    value: "fixture",
+                    label: "Exported fixture",
+                    default: true,
+                    options: [
+                      {
+                        type: "select",
+                        id: "speed",
+                        label: "Speed",
+                        values: replaySpeeds.map((speed) => ({ value: speed, label: speed })),
+                        defaultValue: "1x",
+                      },
+                    ],
+                  },
+                ],
               },
               { source: "cogwork-fallback", fallbackVersion: "1" },
             ),
@@ -421,7 +435,7 @@ export const replayRunner = Effect.fn("ReplayHarness.runner")(function* (options
               fixture.pipe(
                 Effect.onExit(invalidateFailedFixture(invalidateFixture)),
                 Effect.map((loadedFixture) =>
-                  replayFixtureEvents(loadedFixture, speedFrom(request.plan.harness.effort)).pipe(
+                  replayFixtureEvents(loadedFixture, speedFrom(request.plan.harness.options.speed)).pipe(
                     Stream.mapError(() => fixtureFailure("replay fixture contains an invalid event")),
                   ),
                 ),
