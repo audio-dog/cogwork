@@ -1,0 +1,22 @@
+packages/engine/src/testing/git-invocation-counting.ts
+  s_85be2f389698e3::t_5c5a5b40063550 60
+packages/engine/src/git.ts
+  s_85be2f389698e3::t_361a1cfb4564d8 8
+  s_85be2f389698e3::t_e690f83771e47e 42-45,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "348e79525e06162368e4df27b486a859ae991f9f",
+  "prompts": {},
+  "sessions": {
+    "s_85be2f389698e3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c598-1913-7153-991f-dab992d87fd0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
