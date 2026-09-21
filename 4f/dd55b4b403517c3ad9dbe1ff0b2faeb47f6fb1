@@ -1,0 +1,21 @@
+docs/spec/trusted-bot-wake-signal.md
+  s_6d0496e7b6ae7d::t_629f7d197e1153 1-159
+packages/contracts/CONTEXT.md
+  s_6d0496e7b6ae7d::t_2b4c98cfb3fc1e 41-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4fdd55b4b403517c3ad9dbe1ff0b2faeb47f6fb1",
+  "prompts": {},
+  "sessions": {
+    "s_6d0496e7b6ae7d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3671a79b-52d9-4991-960f-84ef218a7cad",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
