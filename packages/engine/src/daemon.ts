@@ -66,7 +66,7 @@ import {
 import * as Executor from "./executor";
 import * as GitHub from "./github";
 import * as Harness from "./harness";
-import { harnessOverview } from "./harness-overview";
+import { HarnessReadinessCache, layer as harnessReadinessLayer } from "./harness-readiness";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
@@ -181,6 +181,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const controlStore = yield* ControlStore;
   const plugins = yield* PluginManager;
   const connections = yield* ConnectionStore;
+  const harnesses = yield* HarnessReadinessCache;
   const ledger = yield* RunLedger;
   const emittedAtMillis = yield* Clock.currentTimeMillis;
   const snapshot = yield* worker.snapshot;
@@ -212,6 +213,12 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
       onSuccess: (overview) => [connectionSeedEvent(overview)],
     }),
   );
+  const harnessEvent = {
+    _tag: "HarnessesChanged" as const,
+    overview: yield* harnesses.overview(
+      controlStore.health === "available" ? controlStore.seed.harnessSettings : [],
+    ),
+  };
   return [
     ...items,
     ...workspaces,
@@ -219,6 +226,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     ...controlStoreEvents,
     ...pluginEvents,
     ...connectionEvents,
+    harnessEvent,
     scheduling,
   ].map((event) => ({
     ...event,
@@ -286,9 +294,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetHarnesses: Effect.fn("Daemon.GetHarnesses")(function* () {
     const store = yield* ControlStore;
-    if (store.health === "unavailable") return yield* store.picture;
     const picture = yield* store.picture;
-    return yield* harnessOverview(picture.harnessSettings);
+    return yield* (yield* HarnessReadinessCache).overview(picture.harnessSettings);
   }),
   GetGitHubPriorityFields: getGitHubPriorityFields,
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
@@ -312,6 +319,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   SetScheduling: setScheduling,
   ReportProcessHealth: Effect.fn("Daemon.ReportProcessHealth")(function* ({ samples }) {
     yield* Effect.forEach(samples, recordProcessHealth, { discard: true });
+  }),
+  CheckHarnesses: Effect.fn("Daemon.CheckHarnesses")(function* () {
+    yield* (yield* HarnessReadinessCache).requestAll();
   }),
   SetDaemonLimit: setDaemonLimit,
   SetContributionSetting: setContributionSetting,
@@ -400,12 +410,21 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.effect(Path.Path, Path.Path),
     Layer.effect(HttpClient.HttpClient, HttpClient.HttpClient),
   );
+  const harness = Harness.layer(adapters.harnessRunners);
+  const harnessRuntime = Layer.mergeAll(
+    controlStore,
+    credentials,
+    runnerRequirements,
+    sessionStore,
+    adapters.contextAssembler,
+    harness,
+    daemonEventBusLayer,
+  );
+  const harnessReadiness = harnessReadinessLayer.pipe(Layer.provideMerge(harnessRuntime));
   const base = Layer.mergeAll(
     registry,
-    controlStore,
     plugins,
     connections,
-    credentials,
     githubClient,
     daemonInfoLayer,
     issueTracker,
@@ -413,12 +432,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     performanceIssueFiler,
     runLedger,
     runRecorder,
-    runnerRequirements,
-    sessionStore,
-    adapters.contextAssembler,
-    Harness.layer(adapters.harnessRunners),
+    harnessReadiness,
     McpSkill.layer.pipe(Layer.provide(credentials)),
-    daemonEventBusLayer,
     runControlLayer,
   );
   const availability = Availability.layer;
