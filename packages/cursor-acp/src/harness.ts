@@ -15,8 +15,13 @@ import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import { cursorEfforts, cursorModelFlag, parseCursorModelList } from "./model";
-import { type CursorModel, cursorModels } from "./models.generated";
+import {
+  CursorNativeModelIdResult,
+  cursorModelFlag,
+  cursorNativeModelId,
+  parseCursorModelList,
+} from "./model";
+import { type CursorModel, cursorCatalog, cursorModels } from "./models.generated";
 
 export interface CursorRunnerOptions {
   readonly name: HarnessName;
@@ -26,7 +31,6 @@ export interface CursorRunnerOptions {
 
 export type CursorModelOptions = {
   readonly sessionId?: string;
-  readonly effort?: string;
 };
 
 const cursorProbeDeadline = "5 seconds";
@@ -174,9 +178,8 @@ const cursorReadiness = Effect.fn("CursorRunner.readiness")((agentBin: string) =
 );
 
 // Cursor keeps conversation history server-side; the opaque handle is how you resume it.
-export const cursorModelOptions = (handle: string | null, effort: string | null) => ({
+export const cursorModelOptions = (handle: string | null) => ({
   ...(handle ? { sessionId: handle } : {}),
-  ...(effort ? { effort } : {}),
 });
 
 const launchCodes = new Set(["ENOENT", "EACCES"]);
@@ -295,7 +298,7 @@ export const interceptCursorTelemetry = (
 const openCursorTransport = (agentBin: string) =>
   FiberSet.makeRuntimePromise().pipe(
     Effect.map((runPromise) => (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
-      const flag = cursorModelFlag(ctx.model, ctx.modelOptions?.effort);
+      const flag = cursorModelFlag(ctx.model, null);
       return ctx.sandbox.process
         .spawn(`${agentBin} --model ${flag} acp`, {
           cwd: ctx.cwd,
@@ -319,15 +322,30 @@ type CursorAdapter = AcpCompatibleTextAdapter<CursorModel, CursorModelOptions>;
 
 const generatedCatalog = Harness.staticCatalogSource(
   {
-    models: cursorModels.map((model) => ({ value: model, label: model })),
-    efforts: cursorEfforts.map((effort) => ({ value: effort, label: effort })),
+    models: cursorCatalog.models,
+    generatedAgainst: cursorCatalog.generatedAgainst,
+    rawModelIds: cursorCatalog.rawModelIds,
   },
-  { source: "cogwork-fallback", fallbackVersion: "cursor-models-generated-1" },
+  { source: "cogwork-fallback", fallbackVersion: cursorCatalog.generatedAgainst },
 );
 const selectedCursorModel = (
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
   fallback: CursorModel,
-) => cursorModels.find((model) => model === (request.selection.model ?? fallback)) ?? fallback;
+) => {
+  const selected = request.selection.model;
+  if (!selected) return fallback;
+  const result = cursorNativeModelId(cursorCatalog, selected, {});
+  return CursorNativeModelIdResult.$match({
+    Failure: ({ error }) => {
+      throw new Error(error);
+    },
+    Success: ({ value }) => {
+      const model = cursorModels.find((candidate) => candidate === value);
+      if (!model) throw new Error(`Cursor catalog translated ${selected} to unknown native id ${value}`);
+      return model;
+    },
+  })(result);
+};
 
 const promptCharacters = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
   request.prompt.reduce((total, message) => total + message.content.length, 0);
@@ -389,8 +407,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
           permissions: "headless",
         })(model),
       projectModel: (request) => selectedCursorModel(request, defaultModel),
-      projectOptions: (request) =>
-        cursorModelOptions(request.identity.resumeHandle, request.selection.effort),
+      projectOptions: (request) => cursorModelOptions(request.identity.resumeHandle),
       transport: {},
       diagnostics: cursorDiagnostics,
       estimateUsage: cursorUsage,

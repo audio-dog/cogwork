@@ -64,6 +64,9 @@ describe("Claude Code inherited environment", () => {
         assert.strictEqual(loggedOut.authentication.status, "unavailable");
         assert.include(loggedOut.authentication.diagnostic, "claude auth login");
         assert.strictEqual(scrubbed.operational.status, "ready");
+        assert.isTrue(
+          scrubbed.diagnostics.some((diagnostic) => diagnostic.includes("catalog was generated against")),
+        );
       }),
     );
 
