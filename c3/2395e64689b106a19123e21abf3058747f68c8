@@ -1,0 +1,30 @@
+packages/engine/src/worktree.test.ts
+  s_3f2e5bc643efaf::t_a19a9008995a67 223-224,233-243,246,248-249,256,262-304,307-314,454
+  s_3f2e5bc643efaf::t_3b61656c2879bd 95,106,109,254-255,305-306
+  s_3f2e5bc643efaf::t_90e49f3fe7ce1b 68-69,71,74-75,89,105,107-108,110-119,123-126,175-179,183,187,190,192
+  s_3f2e5bc643efaf::t_14f9c94258763c 221-222,225-232,244-245,247,250-253,257-261
+  s_3f2e5bc643efaf::t_4a9984b5c2968b 650,657,667-668,687,698,709,719-720,738,751-752,763,772-773,785
+packages/engine/src/worktree.ts
+  s_3f2e5bc643efaf::t_c2201ad31de3a5 197,214,217
+  s_3f2e5bc643efaf::t_ab8e11bb8f2c50 209,297-298,305
+  s_3f2e5bc643efaf::t_a2d88f8181cff9 216
+  s_3f2e5bc643efaf::t_dd65848e09d65c 307,309
+  s_3f2e5bc643efaf::t_60760a23b9657e 207,211-213,215
+  s_3f2e5bc643efaf::t_e9926c8cb2086e 83-86,190-196,198-206,208,210,218-220,289-296,302-304,306,308,313,316
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c32395e64689b106a19123e21abf3058747f68c8",
+  "prompts": {},
+  "sessions": {
+    "s_3f2e5bc643efaf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c513-2b1d-7222-97e3-c5edd3a96057",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
