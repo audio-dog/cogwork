@@ -219,6 +219,7 @@ describe("Cursor Harness registry", () => {
       assert.isTrue(catalog.models.some(({ options }) => options?.some(({ id }) => id === "effort")));
       assert.strictEqual(catalog.generatedAgainst, cursorCatalog.generatedAgainst);
       assert.deepStrictEqual(catalog.rawModelIds, cursorCatalog.rawModelIds);
+      assert.deepStrictEqual(catalog.rawModelSelections, cursorCatalog.rawModelSelections);
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
