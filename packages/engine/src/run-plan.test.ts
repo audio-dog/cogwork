@@ -275,7 +275,11 @@ const hostHarness: OperationSettingRow = {
   value: "cursor",
 };
 const solModel: OperationSettingRow = { ...profileDefault, setting: "model", value: "gpt-5.6-sol" };
-const highEffort: OperationSettingRow = { ...profileDefault, setting: "effort", value: "high" };
+const highEffort: OperationSettingRow = {
+  ...profileDefault,
+  setting: "model-options",
+  value: { effort: "high" },
+};
 const invalidPlanRunId = Schema.decodeSync(RunId)("run-invalid-plan");
 
 describe("stage settings come from Operation settings", () => {
@@ -344,7 +348,7 @@ describe("stage settings come from Operation settings", () => {
     assert.strictEqual(trace?.winner?.value, "full");
   });
 
-  it("carries model and effort from Operation settings", () => {
+  it("carries model options from Operation settings", () => {
     const resolved = resolveRunPlanStage(bareConfig, "implement", [
       stageEnabled,
       codexHarness,
@@ -353,14 +357,14 @@ describe("stage settings come from Operation settings", () => {
     ]);
 
     assert.strictEqual(resolved?.stage.model, "gpt-5.6-sol");
-    assert.strictEqual(resolved?.stage.effort, "high");
+    assert.strictEqual(resolved?.stage.modelOptions.effort, "high");
   });
 
-  it("trims model and effort and treats blank values as unset", () => {
+  it("trims model and resolves model options", () => {
     const configured = resolveRunPlanStage(bareConfig, "implement", [
       codexHarness,
       { ...profileDefault, setting: "model", value: "  gpt-5.6-sol\n" },
-      { ...profileDefault, setting: "effort", value: "  high\t" },
+      { ...profileDefault, setting: "model-options", value: { effort: "high" } },
     ]);
     const blank = resolveRunPlanStage(bareConfig, "implement", [
       codexHarness,
@@ -372,18 +376,12 @@ describe("stage settings come from Operation settings", () => {
         setting: "model",
         value: "  ",
       },
-      {
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: { _tag: "SettingsProfile" },
-        setting: "effort",
-        value: "\n",
-      },
     ]);
 
     assert.strictEqual(configured?.stage.model, "gpt-5.6-sol");
-    assert.strictEqual(configured?.stage.effort, "high");
+    assert.strictEqual(configured?.stage.modelOptions.effort, "high");
     assert.strictEqual(blank?.stage.model, "gpt-5.6-sol");
-    assert.strictEqual(blank?.stage.effort, "high");
+    assert.strictEqual(blank?.stage.modelOptions.effort, "high");
     assert.deepStrictEqual(
       blank?.settings.get("model")?.dropped.map(({ reason }) => reason),
       ["blank value is unset"],

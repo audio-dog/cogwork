@@ -5,13 +5,7 @@ import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import { codexNativeEffort } from "./model";
-import {
-  type CodexModel,
-  codexCatalog,
-  codexEfforts,
-  codexModels,
-  defaultCodexModel,
-} from "./models.generated";
+import { type CodexModel, codexCatalog, codexModels, defaultCodexModel } from "./models.generated";
 
 export type MakeCodexAdapter = (model: CodexModel, config: CodexTextConfig) => CodexTextAdapter<CodexModel>;
 
@@ -233,9 +227,16 @@ const codexReadiness = (executable: string) =>
 
 const catalogOptions = {
   models: codexCatalog.models,
-  efforts: codexEfforts.map((effort) => ({ value: effort, label: effort })),
   generatedAgainst: codexCatalog.generatedAgainst,
   rawModelIds: codexCatalog.rawModelIds,
+};
+
+const codexSelectionEffort = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => {
+  const effort = request.selection.options.effort;
+  return codexNativeEffort(
+    request.selection.model ?? defaultCodexModel,
+    typeof effort === "string" ? effort : null,
+  );
 };
 
 const hostAuthentication = () =>
@@ -343,10 +344,7 @@ const codexDescriptor = (
       codexModels.find((model) => model === request.selection.model) ?? defaultCodexModel,
     projectOptions: (request) => ({
       ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
-      modelReasoningEffort: codexNativeEffort(
-        request.selection.model ?? defaultCodexModel,
-        request.selection.effort,
-      ),
+      modelReasoningEffort: codexSelectionEffort(request),
       authMode: "host",
     }),
     transport: {

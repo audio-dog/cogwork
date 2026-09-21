@@ -198,7 +198,7 @@ const hostAuthentication = () =>
 const request = Schema.decodeSync(RunPlan)({
   id: "run-external-test",
   operation: "implement",
-  harness: { name, model: "controlled", effort: "high", profile: "full" },
+  harness: { name, model: "controlled", options: {}, profile: "full" },
   instructions: [{ kind: "repo", source: "repo", content: "Follow repo rules." }],
   operatingInstructions: {
     name: "implement-agent",
@@ -266,7 +266,6 @@ const descriptor = (
     fallback: staticCatalogSource(
       {
         models: [{ value: "controlled", label: "Controlled" }],
-        efforts: [{ value: "high", label: "High" }],
       },
       { source: "cogwork-fallback", fallbackVersion: "controlled-1" },
     ),
@@ -294,11 +293,14 @@ const descriptor = (
     return new ControlledAdapter(() => toAsyncIterable(chunks), probe);
   },
   projectModel: () => "controlled",
-  projectOptions: (resolved) => ({
-    effort: resolved.selection.effort ?? "high",
-    authentication: resolved.authentication.mode,
-    sessionId: resolved.identity.resumeHandle,
-  }),
+  projectOptions: (resolved) => {
+    const effort = resolved.selection.options.effort;
+    return {
+      effort: typeof effort === "string" ? effort : "high",
+      authentication: resolved.authentication.mode,
+      sessionId: resolved.identity.resumeHandle,
+    };
+  },
   transport: { instructionProjection: "system-prompt" },
   diagnostics: (cause) =>
     new HarnessError({

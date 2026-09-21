@@ -13,7 +13,7 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import { ClaudeNativeSelectionResult, claudeNativeSelection } from "./model";
-import { claudeEfforts, claudeModelCatalog } from "./models.generated";
+import { claudeModelCatalog } from "./models.generated";
 
 export interface ClaudeCodeRunnerOptions {
   readonly name: HarnessName;
@@ -284,7 +284,6 @@ const claudeReadiness = Effect.fn("ClaudeCode.readinessResult")(
 
 const managedCatalogOptions = {
   models: claudeModelCatalog.models,
-  efforts: claudeEfforts.map((effort) => ({ value: effort, label: effort })),
   generatedAgainst: claudeModelCatalog.generatedAgainst,
   rawModelIds: claudeModelCatalog.rawModelIds,
 };
@@ -388,10 +387,11 @@ const providerOptions = (request: ExternalHarnessRuntime.ExternalHarnessResolved
   }) satisfies ClaudeCodeTextProviderOptions;
 
 const nativeSelection = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => {
-  const selections: Readonly<Record<string, string | boolean>> = request.selection.effort
-    ? { effort: request.selection.effort }
-    : {};
-  const result = claudeNativeSelection(claudeModelCatalog, request.selection.model, selections);
+  const result = claudeNativeSelection(
+    claudeModelCatalog,
+    request.selection.model,
+    request.selection.options,
+  );
   if (ClaudeNativeSelectionResult.$is("Success")(result)) return result;
   throw harnessError("stale-selection", false, result.error);
 };

@@ -44,6 +44,7 @@
     "./configs/lint/member-calls.grit",
     "./configs/lint/gated.grit",
     "./configs/lint/no-effect-ladder.grit",
+    "./configs/lint/no-env-file-load.grit",
     "./configs/lint/no-flatmap-ladder.grit",
     "./configs/lint/no-side-effect-in-state-updater.grit"
   ],

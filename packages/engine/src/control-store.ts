@@ -18,8 +18,8 @@ import {
   HarnessEnablement,
   type HarnessName,
   LifecycleStage,
-  type OperationSettingBatch,
   type OperationSettingCell,
+  OperationSettingName,
   type OperationSettingRow,
   OperationSettingRow as OperationSettingRowSchema,
   OperationSettingScope,
@@ -66,7 +66,7 @@ type ControlStoreMutators<Picture> = {
     enabled: boolean,
   ) => Effect.Effect<Picture, ControlStoreFailure>;
   readonly updateOperationSettings: (
-    updates: OperationSettingBatch,
+    updates: ReadonlyArray<OperationSettingUpdate>,
   ) => Effect.Effect<Picture, ControlStoreFailure>;
   readonly installPlugin: (
     record: PluginInstall,
@@ -352,6 +352,12 @@ const scopeOf = (row: StoredOperationSettingRow) => {
 const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOperationSettingRow")(function* (
   row: StoredOperationSettingRow,
 ) {
+  if (!Schema.is(OperationSettingName)(row.setting)) {
+    yield* Effect.logWarning("ignored stored retired or unknown Operation setting", {
+      setting: row.setting,
+    });
+    return null;
+  }
   if (row.level === "operation" && !Schema.is(LifecycleStage)(row.operation)) {
     yield* Effect.logWarning("ignored stored Operation setting for unknown Operation", {
       operation: row.operation,
@@ -672,7 +678,7 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
     );
   });
   const updateOperationSettings = Effect.fn("ControlStore.updateOperationSettings")(function* (
-    updates: OperationSettingBatch,
+    updates: ReadonlyArray<OperationSettingUpdate>,
   ) {
     return yield* sql.withTransaction(
       Effect.gen(function* () {
@@ -750,7 +756,7 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       removeConnection(connectionId).pipe(Effect.mapError(storeFailure("remove Connection"))),
     setHarnessEnabled: (harness: HarnessName, enabled: boolean) =>
       setHarnessEnabled(harness, enabled).pipe(Effect.mapError(storeFailure("set Harness enablement"))),
-    updateOperationSettings: (updates: OperationSettingBatch) =>
+    updateOperationSettings: (updates: ReadonlyArray<OperationSettingUpdate>) =>
       updateOperationSettings(updates).pipe(Effect.mapError(storeFailure("update Operation settings"))),
     installPlugin: (
       record: PluginInstall,
