@@ -1,0 +1,38 @@
+apps/cli/src/platform.test.ts
+  s_3f2e5bc643efaf::t_a2d88f8181cff9 478-492
+  s_3f2e5bc643efaf::t_a3798e153a67bb 233-251,507-523
+  s_3f2e5bc643efaf::t_20f3c82f5f84cb 472,503,506,524-541
+  s_3f2e5bc643efaf::t_19ac11305e9ad2 179-180,460-471,473-477,493-502,504-505,542-543
+  s_3f2e5bc643efaf::t_13316e66c6bb89 230-232
+  s_3f2e5bc643efaf::t_714f0e6062a99c 252,544-545
+packages/engine/src/executor.test.ts
+  s_3f2e5bc643efaf::t_9ee9b9fa1b7c3d 872
+apps/cli/src/platform.ts
+  s_3f2e5bc643efaf::t_9a9efa3e4cc6d4 255-267
+  s_3f2e5bc643efaf::t_3d86ebfcf08d07 224-228,238,249,274
+  s_3f2e5bc643efaf::t_b0807ca674f55f 239-248,250-254,268-273,275-277
+  s_3f2e5bc643efaf::t_9ee9b9fa1b7c3d 1
+packages/engine/src/worktree.test.ts
+  s_3f2e5bc643efaf::t_90e49f3fe7ce1b 61
+  s_3f2e5bc643efaf::t_14f9c94258763c 60
+  s_3f2e5bc643efaf::t_a2d88f8181cff9 126,128-130,134-141
+  s_3f2e5bc643efaf::t_242b06ace7cfa2 127,142-147
+packages/engine/src/worktree-fs.ts
+  s_3f2e5bc643efaf::t_3d86ebfcf08d07 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2598cabe1134f20f72620670678f2ab2069b71bb",
+  "prompts": {},
+  "sessions": {
+    "s_3f2e5bc643efaf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c513-2b1d-7222-97e3-c5edd3a96057",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
