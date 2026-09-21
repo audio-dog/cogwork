@@ -102,7 +102,7 @@ export type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindi
 
 export type OperationSettingChange =
   | { readonly setting: DisplayedOperationSettingName; readonly value: string | null }
-  | { readonly setting: "model-options"; readonly value: ModelOptionSelections };
+  | { readonly setting: "model-options"; readonly value: ModelOptionSelections | null };
 
 export type OperationSettingChanges = readonly [
   OperationSettingChange,
@@ -150,10 +150,11 @@ export const harnessSelectionUpdates = (
 ) => {
   const profileReset: ReadonlyArray<OperationSettingChange> =
     currentHarness === harness ? [] : [{ setting: "permission-profile", value: null }];
+  const restoresInheritedSelection = harness === null && model === null;
   return [
     { setting: "harness", value: harness },
     { setting: "model", value: model },
-    { setting: "model-options", value: {} },
+    { setting: "model-options", value: restoresInheritedSelection ? null : {} },
     ...profileReset,
   ] satisfies OperationSettingChanges;
 };

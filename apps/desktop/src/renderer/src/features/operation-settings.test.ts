@@ -102,6 +102,15 @@ describe("harnessSelectionUpdates", () => {
       { setting: "model-options", value: {} },
     ]);
   });
+
+  it("restores inherited model options when Harness and model overrides are reverted", () => {
+    expect(harnessSelectionUpdates("codex", null, null)).toEqual([
+      { setting: "harness", value: null },
+      { setting: "model", value: null },
+      { setting: "model-options", value: null },
+      { setting: "permission-profile", value: null },
+    ]);
+  });
 });
 
 describe("harnessCatalogLoad", () => {
