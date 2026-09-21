@@ -27,7 +27,7 @@ import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { cursorModelOptions, cursorRunner, estimatedUsage, interceptCursorTelemetry } from "./harness";
-import { cursorModels } from "./models.generated";
+import { cursorCatalog } from "./models.generated";
 
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
@@ -166,7 +166,7 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
       harness: {
         name: cursorName,
         model: "auto",
-        effort: null,
+        options: {},
         profile,
       },
       instructions: [],
@@ -210,16 +210,16 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
 describe("Cursor Harness registry", () => {
-  it.effect("uses the generated model tuple for the catalog and every supported effort", () =>
+  it.effect("uses the generated base models and option descriptors", () =>
     Effect.gen(function* () {
       const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
       const catalog = yield* Harness.make([runner]).catalog(cursorName);
 
       assert.deepStrictEqual(
         catalog.models.map(({ value }) => value),
-        Array.from(cursorModels),
+        cursorCatalog.models.map(({ value }) => value),
       );
-      assert.isTrue(catalog.efforts?.some(({ value }) => value === "none"));
+      assert.isTrue(catalog.models.some(({ options }) => options?.some(({ id }) => id === "effort")));
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -240,16 +240,18 @@ describe("Cursor Harness registry", () => {
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
-  it.effect("rejects stale model and effort selections before launch", () =>
+  it.effect("rejects stale model and model option selections before launch", () =>
     Effect.gen(function* () {
       const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
       const staleModel = yield* harness
-        .preflight(cursorName, "full", "retired-cursor-model", "high")
+        .preflight(cursorName, "full", "retired-cursor-model", { effort: "high" })
         .pipe(Effect.flip);
-      const staleEffort = yield* harness.preflight(cursorName, "full", "auto", "extreme").pipe(Effect.flip);
+      const staleOption = yield* harness
+        .preflight(cursorName, "full", "gpt-5.6-sol", { effort: "extreme" })
+        .pipe(Effect.flip);
 
       assert.strictEqual(staleModel.reason, "stale-selection");
-      assert.strictEqual(staleEffort.reason, "stale-selection");
+      assert.strictEqual(staleOption.reason, "stale-selection");
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -486,7 +488,11 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
           ...base,
           plan: new RunPlan({
             ...base.plan,
-            harness: { ...base.plan.harness, effort: "high" },
+            harness: {
+              ...base.plan.harness,
+              model: "gpt-5.6-sol",
+              options: { effort: "high" },
+            },
             instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
             operatingInstructions: {
               name: "triage-agent",
@@ -521,7 +527,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
         assert.include(observation.instructions, "Mandatory repository context.");
         assert.include(observation.instructions, "/operating-instructions/triage-agent");
-        assert.strictEqual(observation.model, "auto[effort=high]");
+        assert.strictEqual(observation.model, "gpt-5.6-sol-high");
         assert.deepStrictEqual(observation.mcp, [
           {
             name: "linear",
@@ -683,15 +689,11 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
 describe("cursorModelOptions", () => {
   it("turns a resolved handle into Cursor's resume sessionId", () => {
-    assert.deepStrictEqual(cursorModelOptions("cursor-abc", null), { sessionId: "cursor-abc" });
+    assert.deepStrictEqual(cursorModelOptions("cursor-abc"), { sessionId: "cursor-abc" });
   });
 
   it("omits sessionId when there is no handle to resume from", () => {
-    assert.deepStrictEqual(cursorModelOptions(null, "high"), { effort: "high" });
-  });
-
-  it("is empty when the run neither resumes nor sets an effort", () => {
-    assert.deepStrictEqual(cursorModelOptions(null, null), {});
+    assert.deepStrictEqual(cursorModelOptions(null), {});
   });
 });
 
