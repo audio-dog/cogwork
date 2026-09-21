@@ -15,7 +15,7 @@ import { Switch } from "@cogwork/ui/components/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cogwork/ui/components/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -24,7 +24,7 @@ import * as Exit from "effect/Exit";
 import { createContext, type ReactNode, use, useState } from "react";
 import { ProviderGlyphIcon } from "../../components/provider-glyph";
 import { useFocusFlash } from "../../components/settings-parts";
-import { harnessesAtom, setHarnessEnabledAtom } from "../../daemon/atoms";
+import { checkHarnessesAtom, setHarnessEnabledAtom } from "../../daemon/atoms";
 import { BoardResult, useBoard } from "../../features/activity-session";
 import { relativeTime } from "../../features/format";
 import {
@@ -55,7 +55,6 @@ interface ProvidersValue {
     readonly check: () => void;
     readonly setEnabled: (harness: HarnessName, enabled: boolean) => void;
   };
-  // A probe spawns every installed harness's CLI; stacking them up must stay impossible.
   readonly meta: { readonly checking: boolean; readonly changing: boolean };
 }
 
@@ -81,36 +80,38 @@ const checkLabel = (checking: boolean, checkedAtMillis: number | null, now: numb
 
 function Providers({ children }: { readonly children: ReactNode }) {
   const boardResult = useBoard();
-  const queried = useAtomValue(harnessesAtom);
-  const refresh = useAtomRefresh(harnessesAtom);
   const [chosen, setChosen] = useState<HarnessName | null>(null);
   const [enablementOverlay, setEnablementOverlay] = useState<HarnessEnablementOverlay | null>(null);
+  const checkHarnesses = useAtomSet(checkHarnessesAtom, { mode: "promiseExit" });
+  const checkResult = useAtomValue(checkHarnessesAtom);
   const setEnabled = useAtomSet(setHarnessEnabledAtom, { mode: "promiseExit" });
   const enablement = useAtomValue(setHarnessEnabledAtom);
 
-  const overview = queried._tag === "Success" ? queried.value : null;
-  const boardControlStore = BoardResult.$is("Success")(boardResult) ? boardResult.board.controlStore : null;
+  const board = BoardResult.$is("Success")(boardResult) ? boardResult.board : null;
+  const overview = board?.harnesses ?? null;
+  const boardControlStore = board?.controlStore ?? null;
   const { controlStore, settled } = harnessEnablementView(boardControlStore, enablementOverlay);
   if (settled) setEnablementOverlay(null);
   const providers = applyHarnessEnablement(overview?.harnesses ?? [], controlStore);
+  const mutationCause = [checkResult, enablement].find((result) => result._tag === "Failure")?.cause;
   const value: ProvidersValue = {
     state: {
       providers,
       selected: providers.find((item) => item.harness === chosen) ?? providers[0],
       checkedAtMillis: overview?.checkedAtMillis ?? null,
-      load: loadState(overview, queried._tag === "Failure"),
-      mutationFailure: enablement._tag === "Failure" ? Cause.pretty(enablement.cause) : null,
+      load: loadState(overview, BoardResult.$is("Failure")(boardResult)),
+      mutationFailure: mutationCause ? Cause.pretty(mutationCause) : null,
     },
     actions: {
       select: setChosen,
-      check: refresh,
+      check: () => checkHarnesses({ payload: undefined }),
       setEnabled: (harness, enabled) =>
         setEnabled({ payload: { harness, enabled } }).then((exit) => {
           if (!Exit.isSuccess(exit)) return;
           setEnablementOverlay({ base: boardControlStore, updated: exit.value });
         }),
     },
-    meta: { checking: queried.waiting, changing: enablement.waiting },
+    meta: { checking: checkResult.waiting, changing: enablement.waiting },
   };
   return <ProvidersContext value={value}>{children}</ProvidersContext>;
 }
@@ -263,6 +264,19 @@ function ConfigurationTab({ item }: { readonly item: HarnessItem }) {
         </div>
       </div>
       {summary.signIn ? <SignInCommand key={summary.signIn} command={summary.signIn} /> : null}
+      {item.diagnostics.length > 0 ? (
+        <Alert className="mx-4 w-auto">
+          <RiAlertLine />
+          <AlertTitle>Provider diagnostics</AlertTitle>
+          <AlertDescription>
+            <ul className="flex list-disc flex-col gap-1 ps-4">
+              {item.diagnostics.map((entry) => (
+                <li key={entry}>{entry}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   );
 }

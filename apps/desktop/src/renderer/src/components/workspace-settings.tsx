@@ -17,11 +17,11 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useAtom, useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useAtom } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { harnessesAtom, setOperationSettingAtom } from "../daemon/atoms";
+import { setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { workspaceConnectionChoices } from "../features/connections-view";
 import {
@@ -197,10 +197,9 @@ function LiveOperationSettings({
   readonly workspace: WorkspaceId;
   readonly disabled: boolean;
 }) {
-  const harnesses = useAtomValue(harnessesAtom);
-  const refreshHarnesses = useAtomRefresh(harnessesAtom);
-  const overview = harnesses._tag === "Success" ? harnesses.value : null;
-  const load = harnessCatalogLoad(overview, harnesses._tag === "Failure");
+  const boardResult = useBoard();
+  const overview = BoardResult.$is("Success")(boardResult) ? boardResult.board.harnesses : null;
+  const load = harnessCatalogLoad(overview, BoardResult.$is("Failure")(boardResult));
 
   if (load.status === "loading") {
     return (
@@ -217,9 +216,6 @@ function LiveOperationSettings({
         <RiAlertLine />
         <AlertTitle>Could not load Harness catalogs</AlertTitle>
         <AlertDescription>Workspace operation settings are unchanged.</AlertDescription>
-        <Button size="sm" variant="outline" onClick={refreshHarnesses}>
-          Try again
-        </Button>
       </Alert>
     );
   }
@@ -229,7 +225,7 @@ function LiveOperationSettings({
       controlStore={controlStore}
       workspace={workspace}
       catalogs={load.catalogs}
-      disabled={disabled || harnesses.waiting}
+      disabled={disabled}
     />
   );
 }

@@ -26,6 +26,7 @@ const item = (
     enabled,
     version,
     state,
+    diagnostics: [],
     models,
     catalog: null,
   });
