@@ -14,26 +14,16 @@ export const worktreeEnsureDuration = Metric.timer("cogwork_worktree_ensure_dura
   description: "Time to ensure a worktree is ready for a Run.",
 });
 
-export class WorktreeDivergedError extends Schema.TaggedError<WorktreeDivergedError>()(
-  "WorktreeDivergedError",
-  {
-    remote: Schema.String,
-    branch: Schema.String,
-    message: Schema.String,
-    retryable: Schema.Boolean,
-  },
-) {}
-
-export class WorktreeOperationInProgressError extends Schema.TaggedError<WorktreeOperationInProgressError>()(
-  "WorktreeOperationInProgressError",
-  {
-    branch: Schema.String,
-    operation: Schema.Literals(["merge", "rebase", "cherry-pick"]),
-    unmergedPaths: Schema.Array(Schema.String),
-    message: Schema.String,
-    retryable: Schema.Boolean,
-  },
-) {}
+export class WorktreeError extends Schema.TaggedError<WorktreeError>()("WorktreeError", {
+  reason: Schema.Literals(["detached", "diverged", "operation-in-progress", "unsafe-branch"]),
+  branch: Schema.String,
+  path: Schema.optional(Schema.String),
+  remote: Schema.optional(Schema.String),
+  operation: Schema.optional(Schema.Literals(["merge", "rebase", "cherry-pick"])),
+  unmergedPaths: Schema.optional(Schema.Array(Schema.String)),
+  message: Schema.String,
+  retryable: Schema.Boolean,
+}) {}
 
 export interface WorkItemRef {
   readonly id: string;
@@ -214,7 +204,8 @@ export const make = Effect.gen(function* () {
       Effect.catchIf(
         (error) => error.reason !== "timeout",
         (error) =>
-          new WorktreeDivergedError({
+          new WorktreeError({
+            reason: "diverged",
             remote,
             branch,
             message: unresolvableMessage(remote, branch, divergence, error.message),
@@ -242,7 +233,8 @@ export const make = Effect.gen(function* () {
   ) {
     const operation = yield* git.operationInProgress(worktreePath);
     if (!operation) return;
-    return yield* new WorktreeOperationInProgressError({
+    return yield* new WorktreeError({
+      reason: "operation-in-progress",
       branch,
       ...operation,
       message: operationMessage(branch, operation),

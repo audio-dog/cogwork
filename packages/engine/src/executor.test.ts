@@ -82,7 +82,7 @@ import {
   branchName,
   make as makeWorktreeManager,
   PullRequestReadiness,
-  WorktreeDivergedError,
+  WorktreeError,
   WorktreeManager,
   type WorktreeManagerService,
   worktreePathFor,
@@ -896,7 +896,8 @@ const divergedWorktree = worktreeDouble(() => ({
   ...worktreeStub,
   ensure: (_workspace, item) =>
     Effect.fail(
-      new WorktreeDivergedError({
+      new WorktreeError({
+        reason: "diverged",
         remote: "origin",
         branch: branchName(item),
         message: "branch has diverged from origin and replaying the local commits failed",
@@ -919,7 +920,8 @@ const divergedExternalFollowUpWorktree = worktreeDouble(() => ({
   ...worktreeStub,
   ensure: () =>
     Effect.fail(
-      new WorktreeDivergedError({
+      new WorktreeError({
+        reason: "diverged",
         remote: "origin",
         branch: externalFollowUpBranch,
         message: "branch has diverged from origin and replaying the local commits failed",

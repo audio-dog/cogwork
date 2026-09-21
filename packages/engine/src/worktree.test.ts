@@ -329,7 +329,9 @@ describe("Worktree.ensure", () => {
 
       const failure = yield* Effect.flip(manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item));
 
-      assert.strictEqual(failure._tag, "WorktreeOperationInProgressError");
+      if (failure._tag !== "WorktreeError")
+        return yield* Effect.die(`expected WorktreeError, got ${failure._tag}`);
+      assert.strictEqual(failure.reason, "operation-in-progress");
       assert.isFalse(failure.retryable);
       assert.include(failure.message, "branch 13-worktree-lifecycle");
       assert.include(failure.message, "merge");
@@ -387,12 +389,14 @@ describe("Worktree.ensure", () => {
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
       const failure = yield* Effect.flip(manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item));
-      assert.strictEqual(failure?._tag, "WorktreeDivergedError");
-      assert.isFalse(failure?.retryable);
-      assert.include(failure?.message ?? "", "2 local commits");
-      assert.include(failure?.message ?? "", "5 remote commits");
-      assert.include(failure?.message ?? "", "Merge conflict");
-      assert.include(failure?.message ?? "", "no local commits were discarded");
+      if (failure._tag !== "WorktreeError")
+        return yield* Effect.die(`expected WorktreeError, got ${failure._tag}`);
+      assert.strictEqual(failure.reason, "diverged");
+      assert.isFalse(failure.retryable);
+      assert.include(failure.message, "2 local commits");
+      assert.include(failure.message, "5 remote commits");
+      assert.include(failure.message, "Merge conflict");
+      assert.include(failure.message, "no local commits were discarded");
       assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
     }),
