@@ -35,7 +35,8 @@ import { ConnectionStore } from "./connection";
 import { ContextAssembler } from "./context-assembler";
 import { ControlStore } from "./control-store";
 import { CredentialStore } from "./credential-store";
-import { Harness, type HarnessCapabilityProfile, type HarnessRunnerEnv } from "./harness";
+import { Harness, type HarnessCapabilityProfile, type HarnessError, type HarnessRunnerEnv } from "./harness";
+import { HarnessReadinessCache } from "./harness-readiness";
 import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
 import { buildOperationPrompt } from "./playbook";
 import { PluginManager } from "./plugin";
@@ -69,6 +70,10 @@ interface AvailabilityFacts {
     ResolvedMcpSkill & { readonly identity: string; readonly unavailableReason: string | null }
   >;
 }
+
+type HarnessFailureObserver = (harness: HarnessName, error: HarnessError) => Effect.Effect<void>;
+
+const ignoreHarnessFailure: HarnessFailureObserver = () => Effect.void;
 
 export type CandidateSessionFacts = Omit<
   SessionChoiceInputs,
@@ -200,6 +205,27 @@ const currentHarnessDisablement = (picture: ControlStorePicture, harnessName: Ha
 const selectedHarnessDisablement = (picture: ControlStorePicture, harnessName: HarnessName | null) =>
   harnessName ? currentHarnessDisablement(picture, harnessName) : null;
 
+const preflightFailureCauseRules: ReadonlyArray<{
+  readonly when: (error: HarnessError) => boolean;
+  readonly cause: (harness: HarnessName, error: HarnessError) => AvailabilityCause | null;
+}> = [
+  { when: (error) => error.retryable, cause: () => null },
+  {
+    when: (error) => error.reason === "credential",
+    cause: (_harness, error) => hostFailure("credential", error.message),
+  },
+  {
+    when: (error) => error.reason === "policy",
+    cause: (harness, error) => policyRefusal(`Harness ${harness}`, error.message),
+  },
+];
+
+const preflightFailureCause = (harnessName: HarnessName, error: HarnessError) => {
+  const matched = preflightFailureCauseRules.find(({ when }) => when(error));
+  if (!matched) return hostFailure("harness", error.message);
+  return matched.cause(harnessName, error);
+};
+
 const harnessProbeKey = (resolved: ResolvedOperation) =>
   JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort]);
 
@@ -226,6 +252,7 @@ export const make = Effect.gen(function* () {
   const controlStore = yield* ControlStore;
   const fs = yield* FileSystem.FileSystem;
   const harness = yield* Harness;
+  const harnessReadiness = yield* HarnessReadinessCache;
   const plugins = yield* PluginManager;
   const sessionStore = yield* SessionStore;
   const harnessRunnerContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
@@ -369,6 +396,7 @@ export const make = Effect.gen(function* () {
 
   const readHarnessAvailability = Effect.fn("OperationResolution.readHarnessAvailability")(function* (
     resolved: ResolvedOperation,
+    observeFailure: HarnessFailureObserver,
   ) {
     const picture = yield* controlStore.picture;
     const disablement = currentHarnessDisablement(picture, resolved.stage.harness);
@@ -377,23 +405,23 @@ export const make = Effect.gen(function* () {
       .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort)
       .pipe(
         Effect.provide(harnessRunnerContext),
-        Effect.match({
+        Effect.matchEffect({
           onFailure: (error) => {
-            if (error.retryable) return null;
-            if (error.reason === "credential") return hostFailure("credential", error.message);
-            if (error.reason === "policy") {
-              return policyRefusal(`Harness ${resolved.stage.harness}`, error.message);
-            }
-            return hostFailure("harness", error.message);
+            const cause = preflightFailureCause(resolved.stage.harness, error);
+            const invalidatesReadiness = cause !== null && ["credential", "launch"].includes(error.reason);
+            const observe = invalidatesReadiness
+              ? observeFailure(resolved.stage.harness, error)
+              : Effect.void;
+            return observe.pipe(Effect.map(() => cause));
           },
-          onSuccess: () => null,
+          onSuccess: () => Effect.succeed(null),
         }),
       );
   });
 
   const harnessAvailability = Effect.fn("OperationResolution.harnessAvailability")(
-    (resolved: ResolvedOperation) =>
-      readHarnessAvailability(resolved).pipe(
+    (resolved: ResolvedOperation, observeFailure: HarnessFailureObserver) =>
+      readHarnessAvailability(resolved, observeFailure).pipe(
         Effect.catchTag("ControlStoreFailure", (error) =>
           Effect.succeed(unavailableHarnessCause(error.message)),
         ),
@@ -426,6 +454,7 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     resolvedOperations: ReadonlyArray<ResolvedOperation>,
     overview: PluginOverview,
+    observeFailure: HarnessFailureObserver,
   ) {
     const pluginContributions = installedContributions(overview);
     const enabledMcpIds = new Set(
@@ -452,7 +481,7 @@ export const make = Effect.gen(function* () {
     );
     const harnessCauses = new Map(
       yield* Effect.forEach(distinctHarnesses, (resolved) =>
-        harnessAvailability(resolved).pipe(
+        harnessAvailability(resolved, observeFailure).pipe(
           Effect.map(
             (cause) =>
               [harnessProbeKey(resolved), cause] satisfies readonly [string, AvailabilityCause | null],
@@ -527,13 +556,19 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  const evaluateAvailability = Effect.fn("OperationResolution.evaluateAvailability")(function* (
+  const evaluateAvailabilityWith = Effect.fn("OperationResolution.evaluateAvailabilityWith")(function* (
     workspace: RegisteredWorkspace,
     operation: LifecycleStage,
+    observeFailure: HarnessFailureObserver,
   ) {
     const overview = yield* loadPluginOverview();
     const resolved = yield* controlStore.withWrite(resolveStage(workspace, operation));
-    const facts = yield* loadAvailabilityFacts(workspace, resolved ? [resolved] : [], overview);
+    const facts = yield* loadAvailabilityFacts(
+      workspace,
+      resolved ? [resolved] : [],
+      overview,
+      observeFailure,
+    );
     return {
       ...(yield* evaluateResolvedAvailability(workspace, operation, resolved, facts)),
       facts,
@@ -541,11 +576,14 @@ export const make = Effect.gen(function* () {
     };
   });
 
+  const evaluateAvailability = (workspace: RegisteredWorkspace, operation: LifecycleStage) =>
+    evaluateAvailabilityWith(workspace, operation, ignoreHarnessFailure);
+
   const inspect = Effect.fn("OperationResolution.inspect")(
     (workspace: RegisteredWorkspace, operation: LifecycleStage) =>
-      evaluateAvailability(workspace, operation).pipe(
-        Effect.map(({ availability, resolved }) => ({ availability, resolved })),
-      ),
+      evaluateAvailabilityWith(workspace, operation, (name, error) =>
+        harnessReadiness.requestOne(name, error),
+      ).pipe(Effect.map(({ availability, resolved }) => ({ availability, resolved }))),
   );
 
   const availabilityOf = Effect.fn("OperationResolution.availabilityOf")(
@@ -581,6 +619,7 @@ export const make = Effect.gen(function* () {
       workspace,
       operations.flatMap(({ resolved }) => (resolved ? [resolved] : [])),
       overview,
+      ignoreHarnessFailure,
     );
     return yield* Effect.forEach(operations, ({ operation, resolved }) =>
       evaluateResolvedAvailability(workspace, operation, resolved, facts).pipe(
@@ -590,7 +629,9 @@ export const make = Effect.gen(function* () {
   });
 
   const resolve = Effect.fn("OperationResolution.resolve")(function* (facts: CandidateFacts) {
-    const evaluated = yield* evaluateAvailability(facts.workspace, facts.item.stage);
+    const evaluated = yield* evaluateAvailabilityWith(facts.workspace, facts.item.stage, (name, error) =>
+      harnessReadiness.requestOne(name, error),
+    );
     if (!evaluated.availability.available || !evaluated.resolved) {
       return yield* new OperationUnavailable({ availability: evaluated.availability });
     }
