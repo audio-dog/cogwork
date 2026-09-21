@@ -240,7 +240,7 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
     plan: Schema.decodeSync(RunPlan)({
       id: "run-claude-test",
       operation,
-      harness: { name, model: "sonnet", effort: null, profile },
+      harness: { name, model: "sonnet", options: {}, profile },
       instructions: [
         { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
         { kind: "repo", source: "/repo/AGENTS.md", content: "repo rules" },

@@ -78,7 +78,6 @@ describe("Claude Code host Harness", () => {
           source: "tanstack-runtime",
           packageVersion: "0.6.4",
         });
-        assert.isUndefined(catalog.efforts);
       }),
     );
 

@@ -93,10 +93,15 @@ describe("codexRunner configuration", () => {
           catalog.models.map(({ value }) => value),
           ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", ...CODEX_MODELS],
         );
-        assert.deepStrictEqual(
-          catalog.efforts?.map(({ value }) => value),
-          ["minimal", "low", "medium", "high"],
-        );
+        assert.deepStrictEqual(catalog.models[0]?.options, [
+          {
+            type: "select",
+            id: "effort",
+            label: "Effort",
+            values: ["minimal", "low", "medium", "high"].map((value) => ({ value, label: value })),
+            defaultValue: "high",
+          },
+        ]);
         assert.deepStrictEqual(catalog.provenance, {
           source: "cogwork-fallback",
           fallbackVersion: "codex-0.5.4",

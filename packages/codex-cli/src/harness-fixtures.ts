@@ -113,7 +113,7 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
     plan: RunPlan.make({
       id: runId,
       operation: stage,
-      harness: { name, model: defaultModel, effort: "high", profile },
+      harness: { name, model: defaultModel, options: { effort: "high" }, profile },
       instructions,
       operatingInstructions: {
         name: `${stage}-agent`,

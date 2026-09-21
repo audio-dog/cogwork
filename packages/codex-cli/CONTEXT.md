@@ -12,7 +12,7 @@ AG-UI event stream.
 
 **codexRunner**:
 The factory that produces the Codex descriptor-backed harness runner. The descriptor declares an
-opaque Session, native model/effort/authentication projection, readiness and error refinements,
+opaque Session, native model-option/authentication projection, readiness and error refinements,
 coarse policy fidelity, and required shared-Git access. The shared runtime owns Workspace,
 Sandbox, stream, cancellation, event, and structured-output plumbing.
 _Avoid_: Provider runner, OpenAI runner

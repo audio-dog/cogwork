@@ -1,4 +1,4 @@
-import type { HarnessName } from "@cogwork/contracts";
+import type { HarnessModelOptionDescriptor, HarnessName } from "@cogwork/contracts";
 import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
   CODEX_MODELS,
@@ -211,16 +211,28 @@ const codexReadiness = (executable: string) =>
     }),
   );
 
-const selectedEffort = (effort: string | null) => {
-  const selected = effort ?? defaultCodexEffort;
+const selectedEffort = (effort: string | boolean | undefined) => {
+  const selected = typeof effort === "string" ? effort : defaultCodexEffort;
   const supported = codexEfforts.find((candidate) => candidate === selected);
   if (supported) return supported;
   throw new Error(`unsupported Codex reasoning effort: ${selected}`);
 };
 
+const codexEffortOption = {
+  type: "select",
+  id: "effort",
+  label: "Effort",
+  values: codexEfforts.map((effort) => ({ value: effort, label: effort })),
+  defaultValue: defaultCodexEffort,
+} satisfies HarnessModelOptionDescriptor;
+
 const catalogOptions = {
-  models: codexModels.map((model) => ({ value: model, label: model })),
-  efforts: codexEfforts.map((effort) => ({ value: effort, label: effort })),
+  models: codexModels.map((model) => ({
+    value: model,
+    label: model,
+    default: model === defaultCodexModel,
+    options: [codexEffortOption],
+  })),
 };
 
 const hostAuthentication = () =>
@@ -327,7 +339,7 @@ const codexDescriptor = (
     projectModel: (request) => request.selection.model ?? defaultCodexModel,
     projectOptions: (request) => ({
       ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
-      modelReasoningEffort: selectedEffort(request.selection.effort),
+      modelReasoningEffort: selectedEffort(request.selection.options.effort),
       authMode: "host",
     }),
     transport: {
