@@ -341,14 +341,14 @@ describe("model options", () => {
     ]);
   });
 
-  it("marks stale selections as descriptor defaults", () => {
+  it("surfaces stale selections beside their descriptor defaults", () => {
     const states = modelOptionStates(optionModel, {
       own: { effort: "missing" },
       inherited: null,
       effective: { effort: "missing" },
     });
 
-    expect(states[0]).toMatchObject({ value: "high", source: "default" });
+    expect(states[0]).toMatchObject({ value: "high", source: "stale", staleValue: "missing" });
   });
 
   it("resolves each available choice to a valid managed selection", () => {

@@ -48,7 +48,8 @@ export interface ModelOptionsCell {
 export interface ModelOptionState {
   readonly descriptor: NonNullable<HarnessCatalogChoice["options"]>[number];
   readonly value: string | boolean;
-  readonly source: "own" | "inherited" | "default";
+  readonly source: "own" | "inherited" | "default" | "stale";
+  readonly staleValue?: string | boolean;
 }
 
 export const availableHarnessCatalogs = (overview: HarnessOverview | null) =>
@@ -288,14 +289,29 @@ const modelOptionSources = [
   { source: "own", selections: (cell: ModelOptionsCell) => cell.own },
   { source: "inherited", selections: (cell: ModelOptionsCell) => cell.inherited },
 ] satisfies ReadonlyArray<{
-  readonly source: Exclude<ModelOptionState["source"], "default">;
+  readonly source: Exclude<ModelOptionState["source"], "default" | "stale">;
   readonly selections: (cell: ModelOptionsCell) => ModelOptionSelections | null;
 }>;
+
+const modelOptionSource = (
+  isStale: boolean,
+  storedSource: Exclude<ModelOptionState["source"], "default" | "stale"> | undefined,
+  usesStoredSelection: boolean,
+) => {
+  const sources = [
+    { matches: isStale, value: "stale" },
+    { matches: usesStoredSelection, value: storedSource ?? "default" },
+    { matches: true, value: "default" },
+  ] satisfies ReadonlyArray<{ readonly matches: boolean; readonly value: ModelOptionState["source"] }>;
+  return sources.find(({ matches }) => matches)?.value ?? "default";
+};
 
 export const modelOptionStates = (model: HarnessCatalogChoice, cell: ModelOptionsCell) =>
   (model.options ?? []).map((descriptor) => {
     const selected = cell.effective[descriptor.id];
     const isSelected = harnessModelOptionAccepts(descriptor, selected);
+    const hasEffectiveSelection = Object.hasOwn(cell.effective, descriptor.id);
+    const isStale = hasEffectiveSelection && !isSelected;
     const source = modelOptionSources.find(({ selections }) => selections(cell) !== null);
     const storedSelections = source?.selections(cell);
     const hasStoredSelection = storedSelections ? Object.hasOwn(storedSelections, descriptor.id) : false;
@@ -303,7 +319,8 @@ export const modelOptionStates = (model: HarnessCatalogChoice, cell: ModelOption
     return {
       descriptor,
       value: isSelected ? selected : descriptor.defaultValue,
-      source: usesStoredSelection ? source.source : "default",
+      source: modelOptionSource(isStale, source?.source, usesStoredSelection),
+      ...(isStale ? { staleValue: selected } : {}),
     } satisfies ModelOptionState;
   });
 
