@@ -1,0 +1,59 @@
+packages/engine/src/operation-policy.ts
+  s_e776a001f8d072::t_3e3a3ccd3ebd37 96-97
+  s_e776a001f8d072::t_a8a77a72ff891e 56,81-87,90-95
+  s_e776a001f8d072::t_603b8dfb4578e2 13,88-89
+  s_e776a001f8d072::t_8d38ad68a18e64 5,12
+packages/engine/src/operation-resolution.ts
+  s_e776a001f8d072::t_e6dbe15456d386 204-209
+  s_e776a001f8d072::t_9cd160bb95101d 382
+packages/engine/src/run-plan.test.ts
+  s_e776a001f8d072::t_15b98d45026e3a 363,367
+  s_e776a001f8d072::t_fd1febb96b1d9a 278-282,360,382,384
+  s_e776a001f8d072::t_5be660f7e2596b 351
+packages/engine/src/commands.ts
+  s_e776a001f8d072::t_4801abed48d1fe 405-409,416,484,488,495,507
+  s_e776a001f8d072::t_21803fc84b184f 23,67-71,350,362,367-368,370,385-388,390,429,432-433,439,442,467,474-475
+  s_e776a001f8d072::t_9b1d44997baa17 389,414,419-426,428
+  s_e776a001f8d072::t_8f981c258bcc2d 397-404,470-472,476-477
+  s_e776a001f8d072::t_046092bf656cea 391-396,410-413,417-418
+  s_e776a001f8d072::t_d81fe20b11fb0c 25,346,427,468-469,473
+packages/engine/src/commands.test.ts
+  s_e776a001f8d072::t_71e41350cffde5 25,1323-1374
+  s_e776a001f8d072::t_2baf7005b23d22 1401-1402
+  s_e776a001f8d072::t_9d9ed290a884a5 14,77-78,1295,1301-1303
+  s_e776a001f8d072::t_fd1febb96b1d9a 1222,1236,1242,1621
+  s_e776a001f8d072::t_5a8f631577a259 79-83,109,111,138
+  s_e776a001f8d072::t_b70008a18bf113 1397-1400,1403-1405
+  s_e776a001f8d072::t_5be660f7e2596b 1216,1230,1379,1384,1592,1638
+  s_e776a001f8d072::t_15b98d45026e3a 104-108,110,112-113,133-137,139-141,1225,1239,1245
+  s_e776a001f8d072::t_4801abed48d1fe 2,1294,1296-1300,1304-1322,1375-1377
+  s_e776a001f8d072::t_7b3cc3df09af60 1378
+packages/engine/src/run-plan.ts
+  s_e776a001f8d072::t_df8d7f414fc366 429-439
+  s_e776a001f8d072::t_54c33a13cb670d 365,372
+  s_e776a001f8d072::t_e6dbe15456d386 237,330,341,868,887
+  s_e776a001f8d072::t_24f8cef8a3bfee 24
+packages/engine/src/control-store.test.ts
+  s_e776a001f8d072::t_5be660f7e2596b 760-768,782-789,816-832,836-837,842-845
+  s_e776a001f8d072::t_24442c6966a6b4 833-834,841
+  s_e776a001f8d072::t_454eceff1c1ca7 835,838-840
+packages/engine/src/control-store.ts
+  s_e776a001f8d072::t_a8a77a72ff891e 69,681,759
+  s_e776a001f8d072::t_512f95c91af7c4 22,355-360
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e223e80412f6fdd04ad8a7830716a7b1795018c8",
+  "prompts": {},
+  "sessions": {
+    "s_e776a001f8d072": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c4d7-366e-70f3-9e4e-27a006c23a2b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
