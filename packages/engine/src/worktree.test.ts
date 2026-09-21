@@ -13,12 +13,14 @@ import {
   type AddWorktreeArgs,
   type BranchDivergence,
   type DivergenceHead,
+  type FetchOptions,
   Git,
   GitError,
   type GitOperationInProgress,
   type GitService,
   type WorktreeEntry,
 } from "./git";
+import { LogProbe } from "./testing/log-probe";
 import * as Worktree from "./worktree";
 import { type FileStat, WorktreeFs, type WorktreeFsService } from "./worktree-fs";
 
@@ -42,7 +44,12 @@ const workspaceWith = (worktrees?: Worktree.WorktreeSettings) => ({
 
 const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
   return {
-    fetched: yield* Ref.make<ReadonlyArray<string>>([]),
+    fetched: yield* Ref.make<
+      ReadonlyArray<{
+        readonly remote: string;
+        readonly branches: ReadonlyArray<string> | null;
+      }>
+    >([]),
     added: yield* Ref.make<ReadonlyArray<AddWorktreeArgs>>([]),
     removed: yield* Ref.make<ReadonlyArray<{ readonly path: string; readonly force: boolean }>>([]),
     fastForwarded: yield* Ref.make<ReadonlyArray<string>>([]),
@@ -90,10 +97,11 @@ const fakeGit = (
 ) => {
   const remotes = new Set(options.remoteBranches ?? []);
   return {
-    fetch: (_repoPath: string, remote: string) =>
-      options.fetchFailure
-        ? Effect.fail(options.fetchFailure)
-        : Ref.update(recorder.fetched, (log) => [...log, remote]),
+    fetch: (_repoPath: string, remote: string, fetchOptions?: FetchOptions) =>
+      Ref.update(recorder.fetched, (log) => [
+        ...log,
+        { remote, branches: fetchOptions?.branches ?? null },
+      ]).pipe(Effect.andThen(options.fetchFailure ? Effect.fail(options.fetchFailure) : Effect.void)),
     remoteBranchExists: (_repoPath: string, _remote: string, branch: string) =>
       Effect.succeed(remotes.has(branch)),
     addWorktree: (args: AddWorktreeArgs) => {
@@ -167,7 +175,7 @@ describe("Worktree.ensure", () => {
       const added = yield* Ref.get(recorder.added);
       assert.strictEqual(added[0]?.startPoint, "origin/main");
       const fetched = yield* Ref.get(recorder.fetched);
-      assert.deepStrictEqual(fetched, ["origin"]);
+      assert.deepStrictEqual(fetched, [{ remote: "origin", branches: null }]);
       const commands = yield* Ref.get(recorder.commands);
       assert.deepStrictEqual(commands, [
         { cwd: "/repo.worktrees/13-worktree-lifecycle", command: "pnpm install" },
@@ -497,25 +505,50 @@ describe("Worktree.ensure", () => {
 });
 
 describe("Worktree.pullRequestReadiness", () => {
-  it.effect("propagates git failures instead of declining the gate", () => {
+  it.effect("uses cached refs when the refresh fails", () => {
     const failure = new GitError({
       command: "fetch origin",
-      message: "git fetch origin timed out",
-      reason: "timeout",
+      message: "cannot lock ref refs/remotes/origin/main",
       retryable: true,
     });
     return Effect.gen(function* () {
       const manager = yield* ReadinessWorktree;
+      const logs = yield* LogProbe;
 
-      const error = yield* Effect.flip(manager.pullRequestReadiness(workspaceWith(), item));
+      const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
 
-      assert.strictEqual(error, failure);
+      assert.deepStrictEqual(result, {
+        _tag: "Ready",
+        headBranch: Worktree.branchName(item),
+        baseBranch: "main",
+      });
+      const recorder = yield* ReadinessRecorder;
+      assert.deepStrictEqual(yield* Ref.get(recorder.fetched), [
+        {
+          remote: "origin",
+          branches: ["main", Worktree.branchName(item)],
+        },
+      ]);
+      assert.deepStrictEqual(
+        (yield* logs.entries).map(({ message }) => message),
+        [
+          [
+            "failed to refresh pull request refs; continuing with cached refs",
+            { command: failure.command, message: failure.message },
+          ],
+        ],
+      );
     }).pipe(
       Effect.provide(
-        readinessLayer({
-          worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
-          fetchFailure: failure,
-        }),
+        Layer.merge(
+          readinessLayer({
+            worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
+            fetchFailure: failure,
+            remoteBranches: [Worktree.branchName(item)],
+            divergenceByBase: { main: { ahead: 1, behind: 0 } },
+          }),
+          LogProbe.captureLayer,
+        ),
       ),
     );
   });
@@ -595,6 +628,11 @@ describe("Worktree.pullRequestReadiness", () => {
       Effect.provide(
         readinessLayer({
           worktrees: [{ path: worktreePath(), branch: Worktree.branchName(item) }],
+          fetchFailure: new GitError({
+            command: "fetch origin",
+            message: "cannot lock ref refs/remotes/origin/trunk",
+            retryable: true,
+          }),
           remoteBranches: [Worktree.branchName(item)],
           divergenceByBase: {
             trunk: { ahead: 0, behind: 0 },
@@ -625,6 +663,62 @@ describe("Worktree.pullRequestReadiness", () => {
     ),
   );
 
+  it.effect("declines when refresh confirms the cached head was deleted", () => {
+    const headBranch = Worktree.branchName(item);
+    return Effect.gen(function* () {
+      const recorder = yield* ReadinessRecorder;
+      const manager = yield* ReadinessWorktree;
+
+      const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
+
+      if (!Worktree.PullRequestReadiness.$is("Declined")(result)) {
+        return assert.fail("expected the gate to decline");
+      }
+      assert.include(result.reason, "has not been pushed to origin");
+      assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), []);
+    }).pipe(
+      Effect.provide(
+        readinessLayer({
+          fetchFailure: new GitError({
+            command: "fetch origin",
+            message: "cannot lock ref refs/remotes/origin/main",
+            missingBranches: [headBranch],
+            retryable: true,
+          }),
+          remoteBranches: [headBranch],
+        }),
+      ),
+    );
+  });
+
+  it.effect("declines when refresh confirms the cached base was deleted", () => {
+    const headBranch = Worktree.branchName(item);
+    return Effect.gen(function* () {
+      const recorder = yield* ReadinessRecorder;
+      const manager = yield* ReadinessWorktree;
+
+      const result = yield* manager.pullRequestReadiness(workspaceWith(), item);
+
+      if (!Worktree.PullRequestReadiness.$is("Declined")(result)) {
+        return assert.fail("expected the gate to decline");
+      }
+      assert.include(result.reason, "base main does not exist on origin");
+      assert.deepStrictEqual(yield* Ref.get(recorder.divergenceChecks), []);
+    }).pipe(
+      Effect.provide(
+        readinessLayer({
+          fetchFailure: new GitError({
+            command: "fetch origin",
+            message: "cannot lock ref refs/remotes/origin/main",
+            missingBranches: ["main"],
+            retryable: true,
+          }),
+          remoteBranches: [headBranch],
+        }),
+      ),
+    );
+  });
+
   it.effect("returns the engine-owned head and base when the gate passes", () =>
     Effect.gen(function* () {
       const recorder = yield* ReadinessRecorder;
@@ -637,7 +731,12 @@ describe("Worktree.pullRequestReadiness", () => {
         headBranch: Worktree.branchName(item),
         baseBranch: "main",
       });
-      assert.deepStrictEqual(yield* Ref.get(recorder.fetched), ["origin"]);
+      assert.deepStrictEqual(yield* Ref.get(recorder.fetched), [
+        {
+          remote: "origin",
+          branches: ["main", Worktree.branchName(item)],
+        },
+      ]);
     }).pipe(
       Effect.provide(
         readinessLayer({
