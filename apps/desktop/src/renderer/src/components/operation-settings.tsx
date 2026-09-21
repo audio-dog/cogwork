@@ -393,20 +393,6 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
       select: (value) => set("model", value),
       reset: resetHarnessAndModel,
     },
-    // Effort is absent from a harness that has none, so the control disappears rather than
-    // sitting disabled — an unsupported option is absent, never accepted and ignored.
-    ...(catalog?.efforts
-      ? [
-          {
-            key: "effort" as const,
-            label: "Effort",
-            options: catalog.efforts,
-            cell: cell("effort"),
-            select: (value: string) => set("effort", value),
-            reset: () => set("effort", null),
-          },
-        ]
-      : []),
     ...(profileSpec ? [profileSpec] : []),
   ];
 
@@ -450,7 +436,7 @@ function EnabledSwitch({ operation }: { readonly operation: LifecycleStage }) {
   );
 }
 
-const ownSettings = ["harness", "model", "effort", "permission-profile"] as const;
+const ownSettings = ["harness", "model", "permission-profile"] as const;
 
 function OperationRow({ operation }: { readonly operation: LifecycleStage }) {
   const {

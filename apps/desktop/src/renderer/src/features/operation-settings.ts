@@ -7,10 +7,11 @@ import {
   type HarnessOverview,
   harnessEnabled,
   LifecycleStage,
+  type ModelOptionSelections,
   type OperationSettingBatch,
   type OperationSettingName,
   type OperationSettingRow,
-  type OperationSettingUpdate,
+  OperationSettingUpdate,
   type RunPlanPolicyProfile,
   resolveOperationSetting,
   type WorkspaceId,
@@ -97,17 +98,50 @@ export interface SettingCell {
   readonly stale: boolean;
 }
 
-export type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindings">;
+export type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindings" | "model-options">;
 
-export interface OperationSettingChange {
-  readonly setting: DisplayedOperationSettingName;
-  readonly value: string | null;
-}
+export type OperationSettingChange =
+  | { readonly setting: DisplayedOperationSettingName; readonly value: string | null }
+  | { readonly setting: "model-options"; readonly value: ModelOptionSelections };
 
 export type OperationSettingChanges = readonly [
   OperationSettingChange,
   ...ReadonlyArray<OperationSettingChange>,
 ];
+
+type OperationSettingWriteName = OperationSettingChange["setting"];
+type OperationSettingWriteValue = string | ModelOptionSelections;
+type OperationSettingRowBase = Pick<
+  Extract<OperationSettingRow, { readonly setting: "model" }>,
+  "level" | "scope"
+>;
+
+const operationSettingRowProducers: Record<
+  OperationSettingWriteName,
+  (base: OperationSettingRowBase, value: OperationSettingWriteValue) => OperationSettingRow
+> = {
+  enabled: (base, value) => ({ ...base, setting: "enabled", value: value === "true" }),
+  harness: (base, value) => ({
+    ...base,
+    setting: "harness",
+    value: typeof value === "string" ? value : "",
+  }),
+  model: (base, value) => ({
+    ...base,
+    setting: "model",
+    value: typeof value === "string" ? value : "",
+  }),
+  "model-options": (base, value) => ({
+    ...base,
+    setting: "model-options",
+    value: typeof value === "object" ? value : {},
+  }),
+  "permission-profile": (base, value) => ({
+    ...base,
+    setting: "permission-profile",
+    value: typeof value === "string" ? value : "",
+  }),
+};
 
 export const harnessSelectionUpdates = (
   currentHarness: string | null,
@@ -119,7 +153,7 @@ export const harnessSelectionUpdates = (
   return [
     { setting: "harness", value: harness },
     { setting: "model", value: model },
-    { setting: "effort", value: null },
+    { setting: "model-options", value: {} },
     ...profileReset,
   ] satisfies OperationSettingChanges;
 };
@@ -187,7 +221,6 @@ const settingDefaults = {
   enabled: nullDefault,
   harness: nullDefault,
   model: nullDefault,
-  effort: nullDefault,
   "permission-profile": ({ controlStore, catalogs, workspace, operation }: SettingDefaultContext) =>
     permissionProfileDefault(controlStore, catalogs, workspace, operation),
 } satisfies Record<DisplayedOperationSettingName, (context: SettingDefaultContext) => string | null>;
@@ -221,19 +254,18 @@ interface StaleSelection {
   operation: LifecycleStage;
 }
 
-const catalogChoiceIsStale = (selection: StaleSelection, choices: "models" | "efforts") => {
+const catalogChoiceIsStale = (selection: StaleSelection) => {
   const { value, controlStore, catalogs, workspace, operation } = selection;
   const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
   if (harness === null) return false;
-  const options = catalogFor(catalogs, harness)?.[choices] ?? [];
+  const options = catalogFor(catalogs, harness)?.models ?? [];
   return !options.some((option) => option.value === value);
 };
 
 const staleChecks = {
   enabled: () => false,
   harness: ({ value, catalogs }: StaleSelection) => catalogFor(catalogs, value) === null,
-  model: (selection: StaleSelection) => catalogChoiceIsStale(selection, "models"),
-  effort: (selection: StaleSelection) => catalogChoiceIsStale(selection, "efforts"),
+  model: catalogChoiceIsStale,
   "permission-profile": ({ value, controlStore, catalogs, workspace, operation }: StaleSelection) => {
     const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
     return !catalogFor(catalogs, harness)?.policyProfiles.some((profile) => profile === value);
@@ -258,9 +290,8 @@ export const operationSummaryLine = (
 ) => {
   const harness = settingCell(controlStore, catalogs, workspace, operation, "harness").effective;
   const model = settingCell(controlStore, catalogs, workspace, operation, "model").effective;
-  const effort = settingCell(controlStore, catalogs, workspace, operation, "effort").effective;
   const harnessLabel = harness && catalogFor(catalogs, harness) ? providerLabel(harness) : harness;
-  const parts = [harnessLabel, model, effort].filter(
+  const parts = [harnessLabel, model].filter(
     (part): part is string => typeof part === "string" && part.length > 0,
   );
   return parts.length === 0 ? "Inherited" : parts.join(" · ");
@@ -270,18 +301,14 @@ export const operationSummaryLine = (
 export const operationSettingUpdate = (
   workspace: WorkspaceId,
   operation: LifecycleStage,
-  setting: OperationSettingName,
-  value: string | null,
+  setting: OperationSettingChange["setting"],
+  value: string | ModelOptionSelections | null,
 ) => {
   const level = { _tag: "Operation" as const, workflow: codingWorkflow, operation };
   const scope = { _tag: "PrivateWorkspaceOverlay" as const, workspace };
-  if (value === null) return { _tag: "Clear", cell: { setting, level, scope } } as OperationSettingUpdate;
-  // `enabled` is the one boolean in the family; every other setting is a string.
-  const row =
-    setting === "enabled"
-      ? { setting, level, scope, value: value === "true" }
-      : { setting, level, scope, value };
-  return { _tag: "Set", row } as OperationSettingUpdate;
+  if (value === null) return OperationSettingUpdate.cases.Clear.make({ cell: { setting, level, scope } });
+  const row = operationSettingRowProducers[setting]({ level, scope }, value);
+  return OperationSettingUpdate.cases.Set.make({ row });
 };
 
 export const operationSettingBatch = (

@@ -38,22 +38,18 @@ const harnessItem = (harness: string, catalog: HarnessOptionCatalog | null) =>
     catalog,
   });
 
-const optionCatalog = (
-  policyProfiles: ReadonlyArray<"read-only" | "full">,
-  efforts?: ReadonlyArray<{ readonly value: string; readonly label: string }>,
-) =>
+const optionCatalog = (policyProfiles: ReadonlyArray<"read-only" | "full">) =>
   HarnessOptionCatalog.make({
     models: [
       { value: "model-a", label: "Model A" },
       { value: "gpt-5.6-sol", label: "GPT 5.6 Sol" },
     ],
-    ...(efforts ? { efforts } : {}),
     policyProfiles,
     provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
   });
 
 describe("availableHarnessCatalogs", () => {
-  it("keeps published labels and absence of effort while excluding unusable harnesses", () => {
+  it("keeps published labels while excluding unusable harnesses", () => {
     const overview = HarnessOverview.make({
       harnesses: [
         harnessItem("codex", optionCatalog(["read-only", "full"])),
@@ -69,7 +65,6 @@ describe("availableHarnessCatalogs", () => {
     expect(catalogs.map(({ harness }) => harness)).toEqual(["codex", "provider"]);
     expect(catalogs[0]?.models[0]?.label).toBe("Model A");
     expect(catalogs[0]?.policyProfiles).toEqual(["read-only", "full"]);
-    expect(catalogs[1]?.efforts).toBeUndefined();
     expect(catalogs[0]?.provenance).toEqual({
       source: "cogwork-fallback",
       fallbackVersion: "test-1",
@@ -95,7 +90,7 @@ describe("harnessSelectionUpdates", () => {
     expect(harnessSelectionUpdates("codex", "cursor", "cursor-auto")).toEqual([
       { setting: "harness", value: "cursor" },
       { setting: "model", value: "cursor-auto" },
-      { setting: "effort", value: null },
+      { setting: "model-options", value: {} },
       { setting: "permission-profile", value: null },
     ]);
   });
@@ -104,7 +99,7 @@ describe("harnessSelectionUpdates", () => {
     expect(harnessSelectionUpdates("codex", "codex", "gpt-5.6-sol")).toEqual([
       { setting: "harness", value: "codex" },
       { setting: "model", value: "gpt-5.6-sol" },
-      { setting: "effort", value: null },
+      { setting: "model-options", value: {} },
     ]);
   });
 });
@@ -331,11 +326,12 @@ describe("operationSettingUpdate", () => {
         },
       },
       {
-        _tag: "Clear",
-        cell: {
-          setting: "effort",
+        _tag: "Set",
+        row: {
+          setting: "model-options",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+          value: {},
         },
       },
       {
@@ -350,10 +346,10 @@ describe("operationSettingUpdate", () => {
   });
 
   it("clears the cell when the value is null, which puts it back on the default", () => {
-    expect(operationSettingUpdate(workspace, "follow-up", "effort", null)).toEqual({
+    expect(operationSettingUpdate(workspace, "follow-up", "model-options", null)).toEqual({
       _tag: "Clear",
       cell: {
-        setting: "effort",
+        setting: "model-options",
         level: { _tag: "Operation", workflow: "coding", operation: "follow-up" },
         scope: { _tag: "PrivateWorkspaceOverlay", workspace },
       },
