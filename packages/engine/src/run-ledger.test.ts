@@ -82,7 +82,7 @@ const runPlan = (id: string) =>
   Schema.decodeSync(RunPlan)({
     id: runId(id),
     operation: "triage",
-    harness: { name: harness, model: null, effort: null, profile: "read-only" },
+    harness: { name: harness, model: null, options: {}, profile: "read-only" },
     instructions: [],
     operatingInstructions: {
       name: "triage-agent",

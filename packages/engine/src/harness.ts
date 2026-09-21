@@ -4,13 +4,16 @@ import {
   type HarnessCatalogProvenance as ContractHarnessCatalogProvenance,
   type HarnessOptionCatalog as ContractHarnessOptionCatalog,
   type HarnessName,
+  type ModelOptionSelections,
   type RunPlan,
   type RunPlanMember,
   type RunPlanMiddlewareName,
   type SessionId,
   type SessionKind,
   type StageResultJsonSchema,
+  selectedHarnessCatalogModel,
   stageResultJsonSchema,
+  unsupportedHarnessModelOption,
 } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -66,7 +69,8 @@ export type HarnessCatalogChoice = ContractHarnessCatalogChoice;
 
 export interface HarnessCatalogOptions {
   readonly models: ReadonlyArray<HarnessCatalogChoice>;
-  readonly efforts?: ReadonlyArray<HarnessCatalogChoice>;
+  readonly generatedAgainst?: string;
+  readonly rawModelIds?: ReadonlyArray<string>;
 }
 
 export type HarnessCatalogProvenance = ContractHarnessCatalogProvenance;
@@ -137,7 +141,7 @@ export interface HarnessReadiness {
 export interface HarnessSelection {
   readonly name: HarnessName;
   readonly model: string | null;
-  readonly effort: string | null;
+  readonly options: ModelOptionSelections;
   readonly profile: OperationPolicyProfile;
 }
 
@@ -278,7 +282,7 @@ export interface HarnessService {
     harness: HarnessName,
     profile: OperationPolicyProfile,
     model: string | null,
-    effort?: string | null,
+    options?: ModelOptionSelections,
   ) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
@@ -366,13 +370,11 @@ const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolic
     message: `harness runner ${runner.name} cannot enforce ${posture} for the ${profile} profile`,
   });
 
-type HarnessSelectionOption = "model" | "effort";
-
-const staleSelection = (runner: HarnessRunner, option: HarnessSelectionOption, value: string) =>
+const staleSelection = (runner: HarnessRunner, selection: string) =>
   new HarnessError({
     reason: "stale-selection",
     retryable: false,
-    message: `harness runner ${runner.name} no longer offers ${option} ${value} on this Runtime Host`,
+    message: `harness runner ${runner.name} no longer offers ${selection} on this Runtime Host`,
   });
 
 const catalogHas = (choices: ReadonlyArray<HarnessCatalogChoice> | undefined, value: string) =>
@@ -380,12 +382,24 @@ const catalogHas = (choices: ReadonlyArray<HarnessCatalogChoice> | undefined, va
 
 const validateSelectionValue = (
   runner: HarnessRunner,
-  option: "model" | "effort",
+  option: "model",
   choices: ReadonlyArray<HarnessCatalogChoice> | undefined,
   value: string | null,
 ) => {
   if (!value || catalogHas(choices, value)) return Effect.void;
-  return Effect.fail(staleSelection(runner, option, value));
+  return Effect.fail(staleSelection(runner, `${option} ${value}`));
+};
+
+const validateModelOptions = (
+  runner: HarnessRunner,
+  catalog: HarnessCatalogSourceResult,
+  selection: HarnessSelection,
+) => {
+  const model = selectedHarnessCatalogModel(catalog.models, selection.model);
+  const stale = unsupportedHarnessModelOption(model, selection.options);
+  if (!stale) return Effect.void;
+  const [id, value] = stale;
+  return Effect.fail(staleSelection(runner, `model option ${id}=${JSON.stringify(value)}`));
 };
 
 const validateSelection = (
@@ -394,7 +408,7 @@ const validateSelection = (
   selection: HarnessSelection,
 ) =>
   validateSelectionValue(runner, "model", catalog.models, selection.model).pipe(
-    Effect.andThen(validateSelectionValue(runner, "effort", catalog.efforts, selection.effort)),
+    Effect.andThen(validateModelOptions(runner, catalog, selection)),
   );
 
 const validateAuthenticationMode = (runner: HarnessRunner) => {
@@ -522,12 +536,12 @@ export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
     harness: HarnessName,
     profile: OperationPolicyProfile,
     model: string | null,
-    effort: string | null = null,
+    options: ModelOptionSelections = {},
   ) {
     yield* preflightRunner(
       registry,
       HarnessPreflightInput.Static({
-        selection: { name: harness, profile, model, effort },
+        selection: { name: harness, profile, model, options },
       }),
     );
   });
