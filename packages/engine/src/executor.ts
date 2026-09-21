@@ -1016,10 +1016,10 @@ export const make = Effect.gen(function* () {
       );
       return null;
     });
-    return yield* worktrees.withRunOwnershipLock(
-      runControl.run(
-        runId,
-        workspace,
+    return yield* runControl.run(
+      runId,
+      workspace,
+      worktrees.withRunOwnershipLock(
         runPreparation
           .prepare({
             runId,
@@ -1040,8 +1040,8 @@ export const make = Effect.gen(function* () {
             Effect.annotateLogs(correlation),
             Effect.annotateSpans(correlation),
           ),
-        releaseClaim(workspace, item.id),
       ),
+      releaseClaim(workspace, item.id),
     );
   });
 

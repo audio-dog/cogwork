@@ -14,6 +14,7 @@ import {
   localOwnerId,
   type OperationSettingRow,
   type PluginContribution,
+  type RunId,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -831,6 +832,38 @@ const worktreeDouble = (make: (probe: WorktreeProbeState) => WorktreeManagerServ
   );
 
 const worktreeStubLayer: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeDouble(() => worktreeStub);
+
+const cancellationWhileWaitingForOwnership = () => {
+  const entered = Deferred.makeUnsafe<void>();
+  const release = Deferred.makeUnsafe<void>();
+  const runId = Deferred.makeUnsafe<RunId>();
+  const worktree = Layer.merge(
+    Layer.succeed(WorktreeManager, {
+      ...worktreeStub,
+      withRunOwnershipLock: (effect) =>
+        Deferred.succeed(entered, undefined).pipe(
+          Effect.andThen(Deferred.await(release)),
+          Effect.andThen(effect),
+        ),
+    } satisfies WorktreeManagerService),
+    WorktreeProbe.layer,
+  );
+  const runControl = Layer.effect(
+    RunControl.RunControl,
+    Effect.map(
+      RunControl.make,
+      (delegate) =>
+        ({
+          ...delegate,
+          run: (id, workspace, effect, onCancel) => {
+            Deferred.doneUnsafe(runId, Effect.succeed(id));
+            return delegate.run(id, workspace, effect, onCancel);
+          },
+        }) satisfies RunControl.RunControlService,
+    ),
+  );
+  return { entered, runId, worktree, runControl };
+};
 
 const preparedWorktreeRemovedLayer = Layer.effect(
   Git,
@@ -3263,6 +3296,46 @@ describe("Executor.execute", () => {
           runLedgerIdentity,
           connectionStoreStub,
           RunControl.layer,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("keeps a Run cancellable while it waits for worktree ownership", () => {
+    const blocked = cancellationWhileWaitingForOwnership();
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      const control = yield* RunControl.RunControl;
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
+
+      yield* Deferred.await(blocked.entered);
+      const cancellation = yield* control.cancel(yield* Deferred.await(blocked.runId));
+
+      assert.strictEqual(cancellation._tag, "Interrupting");
+      if (cancellation._tag === "Interrupting") yield* cancellation.awaitTermination;
+      yield* Fiber.await(running);
+
+      assert.lengthOf(
+        (yield* Ref.get(calls)).filter((call) => call.method === "release"),
+        1,
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          blocked.worktree,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages, []),
+          runLedgerIdentity,
+          connectionStoreStub,
+          blocked.runControl,
         ),
       ),
       Effect.scoped,
