@@ -1,0 +1,43 @@
+packages/engine/src/external-harness-runtime.test.ts
+  s_e776a001f8d072::t_68021afdae768e 201
+  s_e776a001f8d072::t_96169c202748bd 296-303
+packages/engine/src/harness.test.ts
+  s_e776a001f8d072::t_fd1febb96b1d9a 101,602
+  s_e776a001f8d072::t_7733746aabf518 144,148,608
+packages/engine/src/executor.test.ts
+  s_e776a001f8d072::t_07a0c01220b3c0 632-663
+  s_e776a001f8d072::t_fd1febb96b1d9a 1543,1549
+  s_e776a001f8d072::t_15b98d45026e3a 1546,1552
+packages/engine/src/external-harness-runtime.ts
+  s_e776a001f8d072::t_1ae10016c3c127 84
+  s_e776a001f8d072::t_5e84eeae23ca09 7
+  s_e776a001f8d072::t_e6dbe15456d386 487
+packages/engine/src/provider-runner.test.ts
+  s_e776a001f8d072::t_fd1febb96b1d9a 168
+packages/engine/src/harness.ts
+  s_e776a001f8d072::t_7493911953f140 7,144,285,373,377,390-397,400-402,411,539,544
+  s_e776a001f8d072::t_603b8dfb4578e2 16,398-399
+  s_e776a001f8d072::t_1ae10016c3c127 385
+  s_e776a001f8d072::t_96169c202748bd 72-73
+  s_e776a001f8d072::t_38d4c8fbf95758 14
+packages/engine/src/run-ledger.test.ts
+  s_e776a001f8d072::t_fd1febb96b1d9a 85
+packages/engine/src/harness-overview.test.ts
+  s_e776a001f8d072::t_4df72707fe0ec3 185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ab41b59778a308570ef63114eaac2bd38c473851",
+  "prompts": {},
+  "sessions": {
+    "s_e776a001f8d072": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c4d7-366e-70f3-9e4e-27a006c23a2b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
