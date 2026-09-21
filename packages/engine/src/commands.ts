@@ -403,6 +403,33 @@ const selectionAtPosition = (rows: ControlStorePicture["operationSettings"], cel
   return rows.find(selectionMatchesPosition)?.value ?? null;
 };
 
+const modelOptionResetScopes = (
+  rows: ControlStorePicture["operationSettings"],
+  scope: OperationSettingCell["scope"],
+) => {
+  const privateScopes = rows
+    .filter(({ setting }) => setting === "model-options")
+    .flatMap((row) =>
+      OperationSettingScope.match(row.scope, {
+        SettingsProfile: () => [],
+        RuntimeHost: () => [],
+        PrivateWorkspaceOverlay: (privateScope) => [privateScope],
+      }),
+    )
+    .filter(
+      (privateScope, index, scopes) =>
+        scopes.findIndex(({ workspace }) => workspace === privateScope.workspace) === index,
+    );
+  return OperationSettingScope.match(scope, {
+    SettingsProfile: (profileScope) => [profileScope],
+    RuntimeHost: () => [
+      { _tag: "SettingsProfile" } satisfies OperationSettingCell["scope"],
+      ...privateScopes,
+    ],
+    PrivateWorkspaceOverlay: (privateScope) => [privateScope],
+  });
+};
+
 const withModelContextOptionResets = (
   rows: ControlStorePicture["operationSettings"],
   updates: OperationSettingBatch,
@@ -416,36 +443,35 @@ const withModelContextOptionResets = (
   const updatedRows = applyOperationSettingBatch(rows, updates);
   return updates.flatMap((update) => {
     const cell = operationSettingCellOf(update);
-    const modelOptionScope = OperationSettingScope.match(cell.scope, {
-      SettingsProfile: (scope) => scope,
-      RuntimeHost: () => null,
-      PrivateWorkspaceOverlay: (scope) => scope,
-    });
-    if (modelOptionScope === null) return [update];
     const changesModelContext = cell.setting === "harness" || cell.setting === "model";
     if (!changesModelContext) return [update];
-    const keepsOptions =
-      selectionAtPosition(rows, cell) === selectionAtPosition(updatedRows, cell) ||
-      explicitModelOptionCells.has(operationSettingPositionKey(cell));
+    const keepsOptions = selectionAtPosition(rows, cell) === selectionAtPosition(updatedRows, cell);
     if (keepsOptions) return [update];
-    const optionCell = {
-      level: cell.level,
-      setting: "model-options",
-      scope: modelOptionScope,
-    } satisfies OperationSettingCell;
-    const reset = OperationSettingUpdate.match(update, {
-      Clear: () =>
-        ({
-          _tag: "Clear",
-          cell: optionCell,
-        }) satisfies OperationSettingUpdate,
-      Set: () =>
-        ({
-          _tag: "Set",
-          row: { ...optionCell, value: {} },
-        }) satisfies OperationSettingUpdate,
-    });
-    return [update, reset];
+    const resetCells = modelOptionResetScopes(rows, cell.scope)
+      .map(
+        (scope) =>
+          ({
+            level: cell.level,
+            setting: "model-options",
+            scope,
+          }) satisfies OperationSettingCell,
+      )
+      .filter((optionCell) => !explicitModelOptionCells.has(operationSettingPositionKey(optionCell)));
+    const resets = resetCells.map((optionCell) =>
+      OperationSettingUpdate.match(update, {
+        Clear: () =>
+          ({
+            _tag: "Clear",
+            cell: optionCell,
+          }) satisfies OperationSettingUpdate,
+        Set: () =>
+          ({
+            _tag: "Set",
+            row: { ...optionCell, value: {} },
+          }) satisfies OperationSettingUpdate,
+      }),
+    );
+    return [update, ...resets];
   });
 };
 

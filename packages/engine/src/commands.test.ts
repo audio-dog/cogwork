@@ -1344,6 +1344,73 @@ describe("SetOperationSetting", () => {
     );
   });
 
+  it.effect("resets profile and overlay model options when the Runtime host Harness changes", () => {
+    const configured: ControlStorePicture = {
+      ...cursorSelected,
+      operationSettings: [
+        ...cursorSelected.operationSettings,
+        {
+          setting: "harness",
+          level: { _tag: "Default" },
+          scope: { _tag: "RuntimeHost" },
+          value: "cursor",
+        },
+        {
+          setting: "model-options",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: { effort: "high" },
+        },
+        {
+          setting: "model-options",
+          level: { _tag: "Default" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: wsid("example") },
+          value: { effort: "high" },
+        },
+      ],
+    };
+    const store = controlStoreStub({
+      seed: configured,
+      updateOperationSettings: (updates) =>
+        Effect.succeed({
+          ...configured,
+          operationSettings: applyOperationSettingBatch(configured.operationSettings, updates),
+        }),
+    });
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({
+        updates: [
+          {
+            _tag: "Set",
+            row: {
+              setting: "harness",
+              level: { _tag: "Default" },
+              scope: { _tag: "RuntimeHost" },
+              value: "codex",
+            },
+          },
+        ],
+      });
+
+      const contexts = [
+        { workflow: "coding", operation: "implement", workspace: null },
+        { workflow: "coding", operation: "implement", workspace: wsid("example") },
+      ];
+      assert.deepStrictEqual(
+        contexts.map((context) =>
+          resolveOperationSetting(returned.operationSettings, "model-options", context),
+        ),
+        [{}, {}],
+      );
+    }).pipe(
+      Effect.provide(
+        daemonLayerWithHarness(trackerLayer({}), store, [commandHarnessRunner, alternateHarnessRunner]),
+      ),
+      Effect.scoped,
+    );
+  });
+
   it.effect("preserves model options when the model does not change", () => {
     const configured: ControlStorePicture = {
       ...cursorSelected,
