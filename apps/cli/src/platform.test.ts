@@ -98,6 +98,20 @@ const exitedProcess = (exitCode: number, stdout = "", stderr = "") =>
     stderr ? textOutput(stderr) : Stream.empty,
   );
 
+const failedTargetedFetchResponses: Record<
+  string,
+  (oldObjectId: string) => ReturnType<typeof exitedProcess>
+> = {
+  fetch: () => exitedProcess(1, "", "fetch failed"),
+  "for-each-ref": (oldObjectId) => exitedProcess(0, `${oldObjectId}\trefs/remotes/origin/707-fix\n`),
+  "ls-remote": () => exitedProcess(0, `${"2".repeat(40)}\trefs/heads/main\n`),
+  "update-ref": () => exitedProcess(1, "", "ref changed"),
+};
+
+const failedTargetedFetchProcess = (oldObjectId: string, command: string) =>
+  failedTargetedFetchResponses[command.split(" ")[1] ?? ""]?.(oldObjectId) ??
+  exitedProcess(1, "", "unexpected command");
+
 const hangingSpawnerLayer = Layer.succeed(
   ChildProcessSpawner.ChildProcessSpawner,
   ChildProcessSpawner.make(() =>
@@ -349,6 +363,98 @@ describe("subprocess deadlines", () => {
 
       assert.deepStrictEqual(yield* Ref.get(commands), ["git rebase origin/main main", "git rebase --abort"]);
     }).pipe(Effect.provide(interruptedGitLayer())),
+  );
+});
+
+describe("git fetch", () => {
+  it.effect("fetches only selected remote branches", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const commands = yield* GitCommands;
+
+      yield* git.fetch("/repo", "origin", { branches: ["main", "707-fix"] });
+
+      assert.deepStrictEqual(yield* Ref.get(commands), [
+        "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/heads/707-fix:refs/remotes/origin/707-fix",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer(() => exitedProcess(0)),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("reports a missing branch when compare-and-swap cleanup loses a race", () => {
+    const oldObjectId = "1".repeat(40);
+    return Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const commands = yield* GitCommands;
+
+      const error = yield* Effect.flip(git.fetch("/repo", "origin", { branches: ["main", "707-fix"] }));
+
+      assert.deepStrictEqual(error.missingBranches, ["707-fix"]);
+      assert.deepStrictEqual(yield* Ref.get(commands), [
+        "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/heads/707-fix:refs/remotes/origin/707-fix",
+        "git for-each-ref --format=%(objectname)%09%(refname) refs/remotes/origin/main refs/remotes/origin/707-fix",
+        "git ls-remote --heads origin refs/heads/main refs/heads/707-fix",
+        `git update-ref -d refs/remotes/origin/707-fix ${oldObjectId}`,
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer((command) => failedTargetedFetchProcess(oldObjectId, command)),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+
+  it.effect("does not update tracking refs when every selected branch exists", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const commands = yield* GitCommands;
+
+      const error = yield* Effect.flip(git.fetch("/repo", "origin", { branches: ["main", "707-fix"] }));
+
+      assert.strictEqual(error.missingBranches, undefined);
+      assert.deepStrictEqual(yield* Ref.get(commands), [
+        "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/heads/707-fix:refs/remotes/origin/707-fix",
+        "git for-each-ref --format=%(objectname)%09%(refname) refs/remotes/origin/main refs/remotes/origin/707-fix",
+        "git ls-remote --heads origin refs/heads/main refs/heads/707-fix",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer((command) =>
+                command.startsWith("git fetch")
+                  ? exitedProcess(1, "", "fetch failed")
+                  : exitedProcess(
+                      0,
+                      `${"1".repeat(40)}\trefs/heads/main\n${"2".repeat(40)}\trefs/heads/707-fix\n`,
+                    ),
+              ),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 });
 
@@ -873,6 +979,20 @@ describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, (
       assert.isTrue(yield* git.remoteBranchExists(checkout, "origin", branch));
 
       yield* git.fetch(checkout, "origin");
+
+      assert.isFalse(yield* git.remoteBranchExists(checkout, "origin", branch));
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+
+  it.effect("clears a confirmed missing branch after a targeted fetch fails", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const { root, checkout, peer, branch } = yield* fixture("707-targeted-fetch-delete");
+
+      yield* shell(root, peer, `git push -q origin --delete ${branch}`);
+      assert.isTrue(yield* git.remoteBranchExists(checkout, "origin", branch));
+
+      yield* Effect.flip(git.fetch(checkout, "origin", { branches: ["main", branch] }));
 
       assert.isFalse(yield* git.remoteBranchExists(checkout, "origin", branch));
     }).pipe(Effect.scoped, Effect.provide(testLayer)),
