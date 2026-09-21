@@ -235,6 +235,11 @@ describe("Cursor Harness registry", () => {
 
       assert.strictEqual(outdatedReadiness.compatibility.status, "incompatible");
       assert.strictEqual(outdatedReadiness.compatibility.requirement, ">=2026.08.11");
+      assert.isTrue(
+        outdatedReadiness.diagnostics.some((diagnostic) =>
+          diagnostic.includes("catalog was generated against"),
+        ),
+      );
       assert.strictEqual(missingReadiness.installation.status, "missing");
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
