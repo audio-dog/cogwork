@@ -1,0 +1,35 @@
+apps/cli/src/cli.test.ts
+  s_e7a7656cd90983::t_2b859e142d23b0 1,12,36-58
+  s_e7a7656cd90983::t_fd7e331e943be6 9-10,59-73
+  s_e7a7656cd90983::t_6ea8f002446e3c 74-75
+  s_e7a7656cd90983::t_3d1d77f1654a74 31-35
+  s_e7a7656cd90983::t_c8d490e1959091 22-24,28
+  s_e7a7656cd90983::t_da4276cbe0de05 25-27,29-30
+apps/cli/src/commands.test.ts
+  s_e7a7656cd90983::t_c8d490e1959091 3,25,187,190,205-206
+  s_e7a7656cd90983::t_0b44ccb14d83a3 180-182,185-186,191-199,201-204
+  s_e7a7656cd90983::t_5fe4edac9eec0b 179,183-184,188-189,200
+apps/cli/src/commands.ts
+  s_e7a7656cd90983::t_b8abc2b7094aa9 13,303,644,648
+  s_e7a7656cd90983::t_d5d0a2243d1140 645,647
+  s_e7a7656cd90983::t_0b44ccb14d83a3 50
+  s_e7a7656cd90983::t_4c7df57d8fdf15 39,189-190,269,276,287,304-306,396,398-400,405,646
+  s_e7a7656cd90983::t_fd7e331e943be6 139-142,397
+  s_e7a7656cd90983::t_46ad440c81eb02 301-302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7e38105e27182de65c820f6b44775074beebd4aa",
+  "prompts": {},
+  "sessions": {
+    "s_e7a7656cd90983": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c5e6-22c5-7f93-ab9e-6cfe48d6ff9c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
