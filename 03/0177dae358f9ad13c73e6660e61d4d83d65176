@@ -1,0 +1,19 @@
+configs/test/base.ts
+  s_3e89338e0608a3::t_8b72fa20890c7e 8-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "030177dae358f9ad13c73e6660e61d4d83d65176",
+  "prompts": {},
+  "sessions": {
+    "s_3e89338e0608a3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "59fe70cb-4b19-4eda-8fae-1acdcfdd1dbf",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
