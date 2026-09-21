@@ -104,7 +104,7 @@ import {
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
-import { ticketSlug, WorktreeManager } from "./worktree";
+import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
   "@cogwork/engine/daemon/DaemonInfo",
@@ -473,6 +473,57 @@ interface ReconcilableWorkspace {
 const activeTicketKeys = (state: WorkspaceReconcileState) =>
   state.observed.flatMap((item) => [ticketSlug(item.id), ...(item.pr?.followable ? [item.pr.headRef] : [])]);
 
+const canonicalWorktreeRoot = Effect.fn("Daemon.canonicalWorktreeRoot")(function* (
+  workspace: RegisteredWorkspace,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const configuredPath = path.resolve(
+    worktreeRoot(workspace.config.checkoutPath, workspace.config.worktrees),
+  );
+  return yield* fs.realPath(configuredPath).pipe(
+    Effect.match({
+      onFailure: () => ({ configuredPath, canonicalPath: configuredPath, resolved: false }),
+      onSuccess: (canonicalPath) => ({ configuredPath, canonicalPath, resolved: true }),
+    }),
+  );
+});
+
+const reconcileWorkspaceWorktrees = Effect.fn("Daemon.reconcileWorkspaceWorktrees")(function* (
+  workspace: RegisteredWorkspace,
+  workspaces: ReadonlyArray<RegisteredWorkspace>,
+  state: WorkspaceReconcileState,
+  now: number,
+) {
+  const manager = yield* WorktreeManager;
+  const ledger = yield* RunLedger;
+  const running = yield* ledger.runningRuns;
+  const workspaceByName = new Map(workspaces.map((candidate) => [candidate.config.name, candidate]));
+  const retainedRuns = running.map((record) => ({
+    branch: record.branch,
+    owner: workspaceByName.get(record.workspace),
+  }));
+  const ownershipRoot = yield* canonicalWorktreeRoot(workspace);
+  const ownershipPaths = new Set([ownershipRoot.configuredPath, ownershipRoot.canonicalPath]);
+  const retainedPaths = yield* Effect.forEach(retainedRuns, ({ branch, owner }) => {
+    const missingOwnership = owner === undefined || branch === null;
+    if (missingOwnership) return Effect.succeed([]);
+    return Effect.map(canonicalWorktreeRoot(owner), (ownerRoot) => {
+      const sharesOwnershipRoot =
+        !ownerRoot.resolved ||
+        !ownershipRoot.resolved ||
+        ownerRoot.canonicalPath === ownershipRoot.canonicalPath;
+      return sharesOwnershipRoot ? [...ownershipPaths].map((root) => worktreePathFor(root, branch)) : [];
+    });
+  });
+  const ownedWorktreePaths = retainedPaths.flat();
+  return yield* manager.reconcile(
+    workspace,
+    { activeTicketKeys: activeTicketKeys(state), ownedWorktreePaths },
+    now,
+  );
+});
+
 const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   const manager = yield* WorktreeManager;
   const worker = yield* ReconcileWorker;
@@ -492,16 +543,18 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
     reconcilable,
     ({ workspace, state }) => {
       const correlation = { workspace: workspace.config.name };
-      return manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
-        Effect.tap((outcome) => Effect.logInfo("worktree maintenance", outcome)),
-        Effect.catchTag("GitError", (error) =>
-          Effect.logWarning("worktree maintenance failed", {
-            message: error.message,
-          }),
-        ),
-        Effect.annotateLogs(correlation),
-        Effect.annotateSpans(correlation),
-      );
+      return manager
+        .withMaintenanceLock(reconcileWorkspaceWorktrees(workspace, registry.workspaces, state, now))
+        .pipe(
+          Effect.tap((outcome) => Effect.logInfo("worktree maintenance", outcome)),
+          Effect.catchTag("GitError", (error) =>
+            Effect.logWarning("worktree maintenance failed", {
+              message: error.message,
+            }),
+          ),
+          Effect.annotateLogs(correlation),
+          Effect.annotateSpans(correlation),
+        );
     },
     { discard: true },
   );
