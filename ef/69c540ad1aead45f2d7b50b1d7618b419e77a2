@@ -1,0 +1,31 @@
+configs/lint/no-env-file-load.grit
+  s_3e89338e0608a3::t_bdc57e0cc47408 1-3,7-9,12-13
+  s_3e89338e0608a3::t_fcbc37772fa3c7 11
+  s_3e89338e0608a3::t_a45c2848d3e582 4-6
+  s_3e89338e0608a3::t_141d21057beb45 10
+configs/lint/tests/fixtures/no-env-file-load/valid-example.ts
+  s_3e89338e0608a3::t_647dbfed23b559 1
+configs/lint/tests/rules.test.mjs
+  s_3e89338e0608a3::t_198f869f8ca93f 53-56
+  s_3e89338e0608a3::t_a157217f281a8f 51-52
+configs/lint/tests/fixtures/no-env-file-load/invalid-example.ts
+  s_3e89338e0608a3::t_587898c0e64122 1-5
+biome.json
+  s_3e89338e0608a3::t_0d790cbcb33f40 47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ef69c540ad1aead45f2d7b50b1d7618b419e77a2",
+  "prompts": {},
+  "sessions": {
+    "s_3e89338e0608a3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "59fe70cb-4b19-4eda-8fae-1acdcfdd1dbf",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
