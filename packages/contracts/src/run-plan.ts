@@ -5,13 +5,16 @@ import { Claim } from "./coordination";
 import { PrSummary } from "./daemon";
 import { ProvenanceStamp } from "./provenance";
 import { RunId, SessionKind } from "./run";
-import { ResolutionOperator, RunPlanPolicyProfile } from "./settings";
+import { ModelOptionSelections, ResolutionOperator, RunPlanPolicyProfile } from "./settings";
 import { LifecycleStage, Priority, TriageRole } from "./triage";
 
 export class RunPlanHarness extends Schema.Class<RunPlanHarness>("RunPlanHarness")({
   name: HarnessName,
   model: Schema.NullOr(TrimmedNonEmptyString),
-  effort: Schema.NullOr(TrimmedNonEmptyString),
+  options: ModelOptionSelections.pipe(
+    Schema.withConstructorDefault(Effect.succeed({})),
+    Schema.withDecodingDefaultKey(Effect.succeed({})),
+  ),
   profile: RunPlanPolicyProfile,
 }) {}
 
