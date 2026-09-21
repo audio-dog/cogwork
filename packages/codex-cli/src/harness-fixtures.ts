@@ -329,9 +329,16 @@ const runInRepository = (
     );
   });
 
+// Callers run the stages concurrently against one shared session store, so each needs its own
+// session id. A shared one interleaves their threads and returns another stage's structured result.
 const runOperation = (harness: Harness.HarnessService, stage: LifecycleStage) =>
   createSandbox().pipe(
-    Effect.flatMap((handle) => runInRepository(harness, handle, { stage })),
+    Effect.flatMap((handle) =>
+      runInRepository(harness, handle, {
+        stage,
+        session: Schema.decodeSync(SessionId)(`session-codex-${stage}`),
+      }),
+    ),
     Effect.flatMap((events) => operationCapture(stage, events)),
     Effect.map((capture) => [stage, capture] satisfies [LifecycleStage, typeof Capture.Type]),
   );
