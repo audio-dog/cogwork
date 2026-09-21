@@ -271,8 +271,10 @@ describe("codexRunner configuration", () => {
         Effect.gen(function* () {
           const executable = yield* fakeCodexWithRepositoryHooks();
           const harness = Harness.make([runner({ codexExecutable: executable })]);
-          const captures = yield* Effect.forEach(LifecycleStage.literals, (stage) =>
-            runOperation(harness, stage),
+          const captures = yield* Effect.forEach(
+            LifecycleStage.literals,
+            (stage) => runOperation(harness, stage),
+            { concurrency: "unbounded" },
           );
 
           for (const [, capture] of captures) {

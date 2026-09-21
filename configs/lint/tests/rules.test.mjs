@@ -50,6 +50,12 @@ const ruleCases = [
   },
   {
     message:
+      "Rule: do not load an environment file into process.env. Why: cogwork resolves environment references only from the process environment the daemon was started with, so a file read at startup is a configuration source no Connection records. Fix: read the value from the daemon process environment, or record it as a Connection.",
+    plugin: "no-env-file-load",
+    name: "no-env-file-load",
+  },
+  {
+    message:
       "Rule: avoid Effect.orElse around sequencing chains. Why: it hides error handling and splits the flow. Fix: move error handling to a single terminal decision after the pipeline.",
     plugin: "effect-calls",
     name: "no-effect-orElse-ladder",
