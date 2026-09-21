@@ -27,7 +27,7 @@ pnpm --filter @cogwork/cli start -- operation-settings set \
 pnpm --filter @cogwork/cli start -- operation-settings set \
   --setting model --value fixture
 pnpm --filter @cogwork/cli start -- operation-settings set \
-  --setting effort --value 8x
+  --setting model-options --value '{"speed":"8x"}'
 ```
 
 Available speeds are `1x`, `2x`, `4x`, `6x`, `8x`, and `unpaced`. Run 6-8 independent work items to reproduce the target concurrency. Events enter through the normal harness seam, so the recorder, Run ledger, daemon event bus, NDJSON transport, desktop IPC relay, and renderer receive the same traffic as a real Run.
