@@ -53,6 +53,28 @@ describe("TraitsMenu", () => {
     expect(markup).toContain("italic");
   });
 
+  it("surfaces a stale selection instead of presenting its fallback as selected", () => {
+    const staleOptions = [
+      {
+        descriptor: model.options[0],
+        value: "high",
+        source: "stale",
+        staleValue: "retired",
+      },
+    ] satisfies ReadonlyArray<ModelOptionState>;
+    const markup = renderToStaticMarkup(
+      <TraitsMenu
+        state={{ catalog, model, options: staleOptions }}
+        actions={{ select: vi.fn() }}
+        meta={{ disabled: false }}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="Traits: Effort: retired (stale)"');
+    expect(markup).toContain('data-source="stale"');
+    expect(markup).toContain("text-destructive");
+  });
+
   it("renders nothing for a model without descriptors", () => {
     const markup = renderToStaticMarkup(
       <TraitsMenu

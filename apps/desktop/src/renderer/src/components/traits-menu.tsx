@@ -57,11 +57,15 @@ const traitChoices = (descriptor: ModelOptionState["descriptor"]) =>
       })),
   });
 
-const traitLabel = (option: ModelOptionState) =>
-  HarnessModelOptionDescriptor.match(option.descriptor, {
+const traitLabel = (option: ModelOptionState) => {
+  if (option.staleValue !== undefined) {
+    return `${option.descriptor.label}: ${String(option.staleValue)}`;
+  }
+  return HarnessModelOptionDescriptor.match(option.descriptor, {
     boolean: ({ label }) => (option.value === true ? label : `${label} Off`),
     select: ({ values }) => values.find(({ value }) => value === option.value)?.label ?? String(option.value),
   });
+};
 
 const selectedOptions = (options: ReadonlyArray<ModelOptionState>) =>
   Object.fromEntries(options.map(({ descriptor, value }) => [descriptor.id, value]));
@@ -70,6 +74,7 @@ const traitSourceLabels: Record<ModelOptionState["source"], string> = {
   own: "custom",
   inherited: "inherited",
   default: "default",
+  stale: "stale",
 };
 
 export function TraitsMenu({ state, actions, meta }: TraitsMenuProps) {
@@ -103,8 +108,9 @@ export function TraitsMenu({ state, actions, meta }: TraitsMenuProps) {
                   <span
                     data-source={source}
                     className={cn(
-                      source !== "own" && "text-muted-foreground",
-                      source === "default" && "italic",
+                      source === "inherited" && "text-muted-foreground",
+                      source === "default" && "text-muted-foreground italic",
+                      source === "stale" && "text-destructive",
                     )}
                   >
                     {label}
@@ -134,7 +140,7 @@ export function TraitsMenu({ state, actions, meta }: TraitsMenuProps) {
               <DropdownMenuGroup>
                 <DropdownMenuLabel>{option.descriptor.label}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
-                  value={String(option.value)}
+                  value={option.staleValue === undefined ? String(option.value) : undefined}
                   onValueChange={(value) => {
                     const choice = choices.find((candidate) => candidate.radioValue === value);
                     if (!choice?.selection) return;
