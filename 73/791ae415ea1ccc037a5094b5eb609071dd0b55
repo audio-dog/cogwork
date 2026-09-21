@@ -1,0 +1,135 @@
+biome.json
+  s_85be2f389698e3::t_0cc3ae20d6259f 47
+packages/engine/src/external-harness-runtime.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 7,84,487
+packages/cursor-acp/src/harness.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 2,16,301,331-353,394,414,435-441,446-451
+packages/engine/src/harness.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 7,14,16,140,281,369,373,381,385-398,407,535,540
+packages/claude-code/src/harness-fixtures.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 247-248
+packages/engine/src/commands.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 2,14,25,77-83,104-113,133-141,1216,1222,1225,1230,1236,1239,1242,1245,1294-1564,1569,1582-1590,1738-1766,1806,1835,1852
+packages/engine/src/replay-harness.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 349-353,401-416,438
+packages/codex-cli/src/harness-fixtures.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 120,332-333,336-341
+packages/engine/src/commands.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 23,25,67-71,346,350,362,367-368,370,385,389-479,485,488,513-523,530,534,537,541,553
+packages/engine/src/engine.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 2,10,12,18,26,32,45,56,61-62,84,1003-1052,1059-1061,1068,1076,1079-1080,1089-1093,1133-1136,1162-1221,1271-1278
+configs/lint/tests/rules.test.mjs
+  s_85be2f389698e3::t_0cc3ae20d6259f 53-56
+  s_85be2f389698e3::t_acfb9d78a51b3e 51-52
+packages/codex-cli/src/harness-configuration.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 94,274-277
+packages/engine/src/run-plan.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 278-282,351,360,363,367,382,384
+apps/cli/src/ledger.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 120
+packages/claude-code/src/harness.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 16,390-394
+configs/lint/tests/fixtures/no-env-file-load/valid-example.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 1
+packages/engine/src/daemon-composition.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 53-54
+packages/engine/src/worktree.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 9,110-114,168-174,432,438,440-448,453,464-472
+packages/cursor-acp/src/model.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 14-15
+packages/cursor-acp/src/model.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 4,276,377
+packages/engine/replay/README.md
+  s_85be2f389698e3::t_0cc3ae20d6259f 30
+packages/engine/src/control-store.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 760-768,782-789,816-845
+packages/engine/src/control-store.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 22,69,355-360,681,759
+packages/engine/src/executor.test.ts
+  s_85be2f389698e3::t_6e8fa3ab580a25 938-944,2604-2627
+  s_85be2f389698e3::t_0cc3ae20d6259f 17,633-664,823-824,862-929,1613,1616,1619,1622,2629,2631-2632,3391-3425
+  s_0b35db7d9f4279::t_46e90e7f1dadf5 930,2628,2630,2633,3426-3430
+packages/engine/CONTEXT.md
+  s_85be2f389698e3::t_0cc3ae20d6259f 77
+packages/engine/src/operation-policy.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 5,12-13,56,81-95
+  s_85be2f389698e3::t_6bf8c59b65f57f 96-97
+packages/engine/src/run-preparation.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 163-164
+packages/codex-cli/src/harness.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 8,233-240,346
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_85be2f389698e3::t_0cc3ae20d6259f 439
+packages/engine/src/provider-runner.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 168
+configs/lint/tests/fixtures/no-env-file-load/invalid-example.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 1-5
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 41,52,93,102-111,338-340,343,358,361
+packages/engine/src/executor.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 1022-1043
+packages/contracts/CONTEXT.md
+  s_85be2f389698e3::t_0cc3ae20d6259f 167,211,322
+packages/engine/src/harness-overview.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 185
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 10,14,101,103-105,112-145,153,157,258,262,269,295,305-306,310-312
+packages/contracts/src/settings.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 88-112,134,146,166-170
+configs/lint/no-env-file-load.grit
+  s_85be2f389698e3::t_0cc3ae20d6259f 1-13
+apps/cli/src/commands.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 208,213-241,268-289
+  s_85be2f389698e3::t_676004a8cdf9c4 290-293
+apps/cli/src/commands.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 10,115,142-161,185,257-274,277-279,302-309
+packages/contracts/src/settings.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 61,91-96,115,117,135,145,181,403
+packages/engine/src/external-harness-runtime.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 201,296-303
+packages/engine/src/harness.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 101,144,148,576,602,605,607-609
+packages/engine/src/worktree.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 897-900,922,943,961,979,995,1000-1054
+packages/codex-cli/CONTEXT.md
+  s_85be2f389698e3::t_0cc3ae20d6259f 15
+packages/engine/src/daemon.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 107,476-526,546-557
+packages/contracts/src/run-plan.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 8,14-17
+packages/engine/src/operation-resolution.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 204-209,382
+packages/engine/src/run-ledger.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 85
+packages/engine/src/run-plan.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 24,237,330,341,365,372,429-439,868,887
+packages/contracts/src/harness.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 4,87-99,108,116-133,175-177
+packages/cursor-acp/src/harness.test.ts
+  s_85be2f389698e3::t_0cc3ae20d6259f 169,213,219,242,245-253,256-257,494-498,533,550-573
+  s_85be2f389698e3::t_de79ab2d4d1fea 574-575
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "73791ae415ea1ccc037a5094b5eb609071dd0b55",
+  "prompts": {},
+  "sessions": {
+    "s_0b35db7d9f4279": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c5e1-8082-75b2-a448-4da060a0e896",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_85be2f389698e3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c598-1913-7153-991f-dab992d87fd0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
