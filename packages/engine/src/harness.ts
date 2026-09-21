@@ -64,10 +64,7 @@ export interface HarnessExecution {
 
 export type HarnessCatalogChoice = ContractHarnessCatalogChoice;
 
-export interface HarnessCatalogOptions {
-  readonly models: ReadonlyArray<HarnessCatalogChoice>;
-  readonly efforts?: ReadonlyArray<HarnessCatalogChoice>;
-}
+export type HarnessCatalogOptions = Omit<ContractHarnessOptionCatalog, "policyProfiles" | "provenance">;
 
 export type HarnessCatalogProvenance = ContractHarnessCatalogProvenance;
 
