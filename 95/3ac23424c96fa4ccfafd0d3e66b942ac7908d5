@@ -1,0 +1,22 @@
+packages/codex-cli/src/harness-fixtures.ts
+  s_3e89338e0608a3::t_bc7cc5b1a06fed 336-341
+  s_3e89338e0608a3::t_e0ff6f15cc3d8d 332-333
+packages/codex-cli/src/harness-configuration.test.ts
+  s_3e89338e0608a3::t_fe3310e15ddae9 274-277
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "953ac23424c96fa4ccfafd0d3e66b942ac7908d5",
+  "prompts": {},
+  "sessions": {
+    "s_3e89338e0608a3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "59fe70cb-4b19-4eda-8fae-1acdcfdd1dbf",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
