@@ -1,0 +1,25 @@
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_a433e46d914cb6::t_fe03864f94d4aa 99
+  s_a433e46d914cb6::t_19ba749c9a5b29 111
+packages/engine/src/playbook.test.ts
+  s_a433e46d914cb6::t_fe03864f94d4aa 297
+  s_a433e46d914cb6::t_f71dfd7b5bbd8b 287-296,298-300
+  s_a433e46d914cb6::t_98aae45aabee98 87-98
+  s_a433e46d914cb6::t_b1a02959c4e429 301-302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "97cc9e208b44ab5ce21cc3d0a5c798f685d96c9e",
+  "prompts": {},
+  "sessions": {
+    "s_a433e46d914cb6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ca80-23b4-7f42-a5a1-005968377f84",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
