@@ -1,13 +1,10 @@
 import { HarnessName, RunPlan } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { memoryPersistence } from "@tanstack/ai-persistence";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -15,14 +12,11 @@ import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
   fullHarnessExecution,
-  type HarnessCatalogSource,
-  type HarnessCatalogSourceResult,
   HarnessError,
   type HarnessExecution,
   type HarnessRunner,
   make,
   stageResultSchema,
-  staticCatalogSource,
 } from "./harness";
 import { SessionStore } from "./session-store";
 import { LogProbe } from "./testing/log-probe";
@@ -74,11 +68,8 @@ const controlledRunnerDefaults = {
     takeover: false,
   },
   authentication: { mode: "host", reference: "controlled login" },
-  catalogSources: {
-    fallback: staticCatalogSource(
-      { models: [{ value: "controlled", label: "Controlled" }] },
-      { source: "cogwork-fallback", fallbackVersion: "1" },
-    ),
+  catalog: {
+    models: [{ value: "controlled", label: "Controlled" }],
   },
   readiness: () =>
     Effect.succeed({
@@ -89,10 +80,7 @@ const controlledRunnerDefaults = {
       diagnostics: [],
     }),
   preflight: () => Effect.void,
-} satisfies Pick<
-  HarnessRunner,
-  "authentication" | "capabilities" | "catalogSources" | "preflight" | "readiness"
->;
+} satisfies Pick<HarnessRunner, "authentication" | "capabilities" | "catalog" | "preflight" | "readiness">;
 
 const request = {
   plan: Schema.decodeSync(RunPlan)({
@@ -148,10 +136,6 @@ const requestFor = (harness: typeof name, model: string | null = null) => ({
     harness: { ...request.plan.harness, name: harness, model },
   }),
 });
-
-const unavailableCatalogSource = {
-  catalog: Effect.succeed(null),
-} satisfies HarnessCatalogSource;
 
 describe("stageResultSchema", () => {
   it.effect("prepares the triage result as a validating Standard JSON Schema", () =>
@@ -315,263 +299,26 @@ describe("Harness", () => {
   });
 
   it.layer(harnessRunnerLayer)((it) => {
-    it.effect("uses runtime metadata before native discovery and fallback", () =>
-      Effect.gen(function* () {
-        const runner = {
-          ...controlledRunnerDefaults,
-          name,
-          sessionKind: "opaque-handle",
-          projectedMembers: [],
-          planMiddleware: [],
-          execution: fullHarnessExecution,
-          catalogSources: {
-            runtime: staticCatalogSource(
-              { models: [{ value: "runtime-model", label: "Runtime model" }] },
-              { source: "tanstack-runtime", packageVersion: "1.2.3" },
-            ),
-            native: staticCatalogSource(
-              { models: [{ value: "native-model", label: "Native model" }] },
-              {
-                source: "native-discovery",
-                runtimeHost: "host-149",
-                harnessVersion: "4.5.6",
-              },
-            ),
-            fallback: staticCatalogSource(
-              { models: [{ value: "fallback-model", label: "Fallback model" }] },
-              { source: "cogwork-fallback", fallbackVersion: "7" },
-            ),
-          },
-          run: () => Stream.empty,
-        } satisfies HarnessRunner;
-        const catalog = yield* make([runner]).catalog(name);
+    it("serves the managed catalog with one provenance shape", () => {
+      const runner = {
+        ...controlledRunnerDefaults,
+        name,
+        sessionKind: "opaque-handle",
+        projectedMembers: [],
+        planMiddleware: [],
+        execution: fullHarnessExecution,
+        catalog: {
+          models: [{ value: "managed-model", label: "Managed model" }],
+        },
+        run: () => Stream.empty,
+      } satisfies HarnessRunner;
+      const catalog = make([runner]).catalogs.get(name);
 
-        assert.deepStrictEqual(catalog.models, [{ value: "runtime-model", label: "Runtime model" }]);
-        assert.deepStrictEqual(catalog.provenance, {
-          source: "tanstack-runtime",
-          packageVersion: "1.2.3",
-        });
-      }),
-    );
-
-    it.effect("returns the current catalog without probing again", () =>
-      Effect.gen(function* () {
-        const runner = {
-          ...controlledRunnerDefaults,
-          name,
-          sessionKind: "opaque-handle",
-          projectedMembers: [],
-          planMiddleware: [],
-          execution: fullHarnessExecution,
-          catalogSources: {
-            fallback: {
-              catalog: Effect.succeed({
-                models: [{ value: "cached-model", label: "Cached model" }],
-                provenance: { source: "cogwork-fallback", fallbackVersion: "1" },
-              } satisfies HarnessCatalogSourceResult),
-            },
-          },
-          run: () => Stream.empty,
-        } satisfies HarnessRunner;
-        const harness = make([runner]);
-
-        assert.isNull(yield* harness.currentCatalog(name));
-        yield* harness.catalog(name);
-        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "cached-model");
-        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "cached-model");
-      }),
-    );
-
-    it.effect("keeps the current catalog during refresh and ignores stale probe results", () =>
-      Effect.gen(function* () {
-        const slowStarted = yield* Deferred.make<void>();
-        const releaseSlow = yield* Deferred.make<void>();
-        const interruptedStarted = yield* Deferred.make<void>();
-        const calls = yield* Ref.make(0);
-        const initial = {
-          models: [{ value: "initial", label: "Initial" }],
-          provenance: { source: "cogwork-fallback", fallbackVersion: "1" },
-        } satisfies HarnessCatalogSourceResult;
-        const stale = {
-          models: [{ value: "stale", label: "Stale" }],
-          provenance: { source: "cogwork-fallback", fallbackVersion: "2" },
-        } satisfies HarnessCatalogSourceResult;
-        const fresh = {
-          models: [{ value: "fresh", label: "Fresh" }],
-          provenance: { source: "cogwork-fallback", fallbackVersion: "3" },
-        } satisfies HarnessCatalogSourceResult;
-        const results = [
-          Effect.succeed(initial),
-          Deferred.succeed(slowStarted, undefined).pipe(
-            Effect.andThen(Deferred.await(releaseSlow)),
-            Effect.map(() => stale),
-          ),
-          Effect.succeed(fresh),
-          Deferred.succeed(interruptedStarted, undefined).pipe(Effect.andThen(Effect.never)),
-        ];
-        const runner = {
-          ...controlledRunnerDefaults,
-          name,
-          sessionKind: "opaque-handle",
-          projectedMembers: [],
-          planMiddleware: [],
-          execution: fullHarnessExecution,
-          catalogSources: {
-            fallback: {
-              catalog: Ref.getAndUpdate(calls, (count) => count + 1).pipe(
-                Effect.flatMap((index) => results[index] ?? Effect.succeed(fresh)),
-              ),
-            },
-          },
-          run: () => Stream.empty,
-        } satisfies HarnessRunner;
-        const harness = make([runner]);
-
-        yield* harness.catalog(name);
-        const slowRefresh = yield* Effect.forkChild(harness.catalog(name));
-        yield* Deferred.await(slowStarted);
-        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "initial");
-
-        yield* harness.catalog(name);
-        yield* Deferred.succeed(releaseSlow, undefined);
-        yield* Fiber.join(slowRefresh);
-
-        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "fresh");
-
-        const interruptedRefresh = yield* Effect.forkChild(harness.catalog(name));
-        yield* Deferred.await(interruptedStarted);
-        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "fresh");
-        yield* Fiber.interrupt(interruptedRefresh);
-        assert.isNull(yield* harness.currentCatalog(name));
-      }),
-    );
-
-    it.effect("restores the seeded catalog when the latest refresh is interrupted", () =>
-      Effect.gen(function* () {
-        const started = yield* Deferred.make<void>();
-        const runner = {
-          ...controlledRunnerDefaults,
-          name,
-          sessionKind: "opaque-handle",
-          projectedMembers: [],
-          planMiddleware: [],
-          execution: fullHarnessExecution,
-          catalogSources: {
-            runtime: {
-              catalog: Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
-            },
-            fallback: staticCatalogSource(
-              { models: [{ value: "seeded", label: "Seeded" }] },
-              { source: "cogwork-fallback", fallbackVersion: "1" },
-            ),
-          },
-          run: () => Stream.empty,
-        } satisfies HarnessRunner;
-        const harness = make([runner]);
-
-        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "seeded");
-        const refresh = yield* Effect.forkChild(harness.catalog(name));
-        yield* Deferred.await(started);
-        yield* Fiber.interrupt(refresh);
-
-        assert.strictEqual((yield* harness.currentCatalog(name))?.models[0]?.value, "seeded");
-      }),
-    );
-
-    it.effect("falls through unavailable sources and records native or fallback provenance", () =>
-      Effect.gen(function* () {
-        const nativeName = yield* Schema.decodeEffect(HarnessName)("native-controlled");
-        const fallbackName = yield* Schema.decodeEffect(HarnessName)("fallback-controlled");
-        const runners = [
-          {
-            ...controlledRunnerDefaults,
-            name: nativeName,
-            sessionKind: "opaque-handle",
-            projectedMembers: [],
-            planMiddleware: [],
-            execution: fullHarnessExecution,
-            catalogSources: {
-              runtime: unavailableCatalogSource,
-              native: staticCatalogSource(
-                { models: [{ value: "native", label: "Native" }] },
-                {
-                  source: "native-discovery",
-                  runtimeHost: "host-149",
-                  harnessVersion: "2",
-                },
-              ),
-              fallback: controlledRunnerDefaults.catalogSources.fallback,
-            },
-            run: () => Stream.empty,
-          },
-          {
-            ...controlledRunnerDefaults,
-            name: fallbackName,
-            sessionKind: "opaque-handle",
-            projectedMembers: [],
-            planMiddleware: [],
-            execution: fullHarnessExecution,
-            catalogSources: {
-              runtime: unavailableCatalogSource,
-              native: unavailableCatalogSource,
-              fallback: controlledRunnerDefaults.catalogSources.fallback,
-            },
-            run: () => Stream.empty,
-          },
-        ] satisfies ReadonlyArray<HarnessRunner>;
-        const harness = make(runners);
-        const native = yield* harness.catalog(nativeName);
-        const fallback = yield* harness.catalog(fallbackName);
-
-        assert.strictEqual(native.models[0]?.value, "native");
-        assert.strictEqual(native.provenance.source, "native-discovery");
-        assert.strictEqual(fallback.models[0]?.value, "controlled");
-        assert.strictEqual(fallback.provenance.source, "cogwork-fallback");
-      }),
-    );
-
-    it.effect("preserves retryable native catalog failures", () =>
-      Effect.gen(function* () {
-        const launches: Array<true> = [];
-        const runner = {
-          ...controlledRunnerDefaults,
-          name,
-          sessionKind: "opaque-handle",
-          projectedMembers: [],
-          planMiddleware: [],
-          execution: fullHarnessExecution,
-          catalogSources: {
-            native: {
-              catalog: Effect.fail(
-                new HarnessError({
-                  reason: "launch",
-                  retryable: true,
-                  message: "native catalog timed out",
-                }),
-              ),
-            },
-            fallback: controlledRunnerDefaults.catalogSources.fallback,
-          },
-          run: () => {
-            launches.push(true);
-            return Stream.empty;
-          },
-        } satisfies HarnessRunner;
-        const configured = {
-          ...request,
-          plan: new RunPlan({
-            ...request.plan,
-            harness: { ...request.plan.harness, model: "native-only" },
-          }),
-        };
-        const error = yield* make([runner]).run(configured).pipe(Stream.runDrain, Effect.flip);
-
-        assert.strictEqual(error.reason, "launch");
-        assert.isTrue(error.retryable);
-        assert.strictEqual(error.message, "native catalog timed out");
-        assert.deepStrictEqual(launches, []);
-      }),
-    );
+      assert.isNotNull(catalog);
+      if (!catalog) return;
+      assert.deepStrictEqual(catalog.models, [{ value: "managed-model", label: "Managed model" }]);
+      assert.deepStrictEqual(catalog.provenance, { source: "managed" });
+    });
 
     it.effect("rejects saved model options when the current model omits the control", () =>
       Effect.gen(function* () {
@@ -583,11 +330,8 @@ describe("Harness", () => {
           projectedMembers: [],
           planMiddleware: [],
           execution: fullHarnessExecution,
-          catalogSources: {
-            fallback: staticCatalogSource(
-              { models: [{ value: "runtime-model", label: "Runtime model" }] },
-              { source: "cogwork-fallback", fallbackVersion: "1" },
-            ),
+          catalog: {
+            models: [{ value: "managed-model", label: "Managed model" }],
           },
           run: () => {
             launches.push(true);
@@ -599,7 +343,7 @@ describe("Harness", () => {
           ...request,
           plan: new RunPlan({
             ...request.plan,
-            harness: { ...request.plan.harness, model: "runtime-model", options: { effort: "high" } },
+            harness: { ...request.plan.harness, model: "managed-model", options: { effort: "high" } },
           }),
         };
         const error = yield* harness.run(configured).pipe(Stream.runDrain, Effect.flip);
