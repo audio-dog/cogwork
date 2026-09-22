@@ -50,6 +50,14 @@ When your output names a domain concept (in an issue title, a refactor proposal,
 
 If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 
+## Write the ADR, don't offer it
+
+The `/domain-modeling` skill tells you to *offer* an ADR when it is hard to reverse, surprising
+without context, and the result of a real trade-off. In this repo, apply the three tests and then
+**write it** — don't stop to ask. Recording decisions is the point of the docs pass, and the
+question costs a round trip to reach an answer that is always yes. If the three tests don't all
+hold, skip the ADR silently, as before.
+
 ## Flag ADR conflicts
 
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
