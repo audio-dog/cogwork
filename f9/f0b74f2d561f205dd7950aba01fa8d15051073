@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_9e058db2997479::t_5dc0fcad06d0bf 103,105
+  s_9e058db2997479::t_8d45b6d6746056 102,104
+apps/desktop/src/renderer/src/daemon/atom-registry.test.ts
+  s_9e058db2997479::t_15e4ecc0b19e77 2
+  s_9e058db2997479::t_8d45b6d6746056 1,6,9-16,18-28
+  s_9e058db2997479::t_5dc0fcad06d0bf 4-5,7-8,17,29
+  s_9e058db2997479::t_14ed0abd34146d 3
+apps/desktop/src/renderer/src/daemon/atom-registry.ts
+  s_9e058db2997479::t_5dc0fcad06d0bf 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f9f0b74f2d561f205dd7950aba01fa8d15051073",
+  "prompts": {},
+  "sessions": {
+    "s_9e058db2997479": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ca80-1abf-76d2-ae07-2b9c0ae69429",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

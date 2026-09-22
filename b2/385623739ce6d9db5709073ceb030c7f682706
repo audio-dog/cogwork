@@ -1,0 +1,20 @@
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_9e058db2997479::t_137342825cb6aa 1,28-33,39,42,93,96-98,132-133,144-146,150-151,158-159,166
+  s_9e058db2997479::t_36d4700f5f760a 94-95,99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b2385623739ce6d9db5709073ceb030c7f682706",
+  "prompts": {},
+  "sessions": {
+    "s_9e058db2997479": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ca80-1abf-76d2-ae07-2b9c0ae69429",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_9e058db2997479::t_39b15cf765aa70 72,125,163
+  s_9e058db2997479::t_f277de061d5ce8 45
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  s_9e058db2997479::t_067874a887166c 3,36,71-75,77,79-82,133-134,138,151-154
+  s_9e058db2997479::t_7b7a363343370a 155,262,271,491
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_9e058db2997479::t_36d4700f5f760a 70,75
+  s_9e058db2997479::t_f1e54773e6ccd6 231,242,259,372,399,407
+  s_9e058db2997479::t_8d45b6d6746056 4,40,55,62-63,69,74,79,84,114
+  s_9e058db2997479::t_a2612c398cd682 56,60-61,64-68,71-73,76-77
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_9e058db2997479::t_a2612c398cd682 20,24,200-202
+  s_9e058db2997479::t_39b15cf765aa70 28,241
+apps/desktop/src/renderer/src/components/traits-menu.test.tsx
+  s_9e058db2997479::t_39b15cf765aa70 5,33
+apps/desktop/src/renderer/src/components/traits-menu.tsx
+  s_9e058db2997479::t_39b15cf765aa70 18,25-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "11f3a15141f3405371c7deaab3d257e635d2c5d7",
+  "prompts": {},
+  "sessions": {
+    "s_9e058db2997479": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ca80-1abf-76d2-ae07-2b9c0ae69429",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
