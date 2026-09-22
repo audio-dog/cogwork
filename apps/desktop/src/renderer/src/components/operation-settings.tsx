@@ -42,11 +42,11 @@ import {
 } from "@remixicon/react";
 import { createContext, type ReactNode, use, useState } from "react";
 import {
+  type AvailableHarnessCatalog,
   catalogChoiceLabel,
   catalogChoiceMatches,
   catalogFor,
   type DisplayedOperationSettingName,
-  type HarnessCatalog,
   harnessIsDisabled,
   harnessSelectionUpdates,
   modelOptionStates,
@@ -69,7 +69,7 @@ import { TraitsMenu } from "./traits-menu";
 
 interface OperationSettingsState {
   readonly controlStore: ControlStore | null;
-  readonly catalogs: ReadonlyArray<HarnessCatalog>;
+  readonly catalogs: ReadonlyArray<AvailableHarnessCatalog>;
   readonly workspace: WorkspaceId;
 }
 
@@ -122,7 +122,7 @@ function HarnessRail({
   active,
   onSelect,
 }: {
-  readonly catalogs: readonly HarnessCatalog[];
+  readonly catalogs: readonly AvailableHarnessCatalog[];
   readonly active: string;
   readonly onSelect: (harness: string) => void;
 }) {
@@ -160,7 +160,7 @@ function HarnessModelPicker({
 }: {
   readonly harnessSpec: ControlSpec;
   readonly modelSpec: ControlSpec;
-  readonly catalogs: readonly HarnessCatalog[];
+  readonly catalogs: readonly AvailableHarnessCatalog[];
   readonly onPick: (harness: string, model: string) => void;
 }) {
   const {

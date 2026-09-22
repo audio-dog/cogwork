@@ -3,10 +3,10 @@ import * as Schema from "effect/Schema";
 import { HarnessName } from "./base-schemas";
 import {
   HarnessEnablement,
-  HarnessItem,
   HarnessManagedCatalog,
   HarnessModelOptionDescriptor,
   HarnessOptionCatalog,
+  HarnessReadinessItem,
   harnessEnabled,
 } from "./harness";
 
@@ -25,11 +25,10 @@ describe("Harness enablement", () => {
   });
 
   it("decodes older Harness reports as enabled", () => {
-    const item = Schema.decodeSync(HarnessItem)({
+    const item = Schema.decodeSync(HarnessReadinessItem)({
       harness: "codex",
       version: null,
       state: { _tag: "Ready" },
-      catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
     });
 
     assert.isTrue(item.enabled);

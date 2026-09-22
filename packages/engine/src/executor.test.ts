@@ -1265,14 +1265,14 @@ const runControlStub = Layer.succeed(RunControl.RunControl, {
 });
 
 const harnessReadinessStub = Layer.mock(HarnessReadinessCache, {
-  overview: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
+  readiness: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
   requestAll: () => Effect.void,
   requestOne: () => Effect.void,
 });
 const harnessReadinessRecorder = Layer.effect(
   HarnessReadinessCache,
   Effect.map(HarnessReadinessRequests, (requests) => ({
-    overview: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
+    readiness: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
     requestAll: () => Effect.void,
     requestOne: (name: HarnessName) => Ref.update(requests, (names) => [...names, name]),
   })),

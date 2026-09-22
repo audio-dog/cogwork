@@ -1,4 +1,4 @@
-import type { HarnessItem, HarnessName } from "@cogwork/contracts";
+import type { HarnessName } from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
@@ -25,14 +25,21 @@ import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import { ProviderGlyphIcon } from "../../components/provider-glyph";
 import { useFocusFlash } from "../../components/settings-parts";
-import { checkHarnessesAtom, setHarnessEnabledAtom } from "../../daemon/atoms";
+import {
+  checkHarnessesAtom,
+  harnessCatalogsAtom,
+  harnessReadinessAtom,
+  setHarnessEnabledAtom,
+} from "../../daemon/atoms";
 import { BoardResult, useBoard } from "../../features/activity-session";
 import { relativeTime } from "../../features/format";
 import {
   applyHarnessEnablement,
   type HarnessEnablementOverlay,
+  type HarnessItem,
   type HarnessSummary,
   harnessEnablementView,
+  harnessItems,
   harnessSummary,
   installedVersion,
   versionLabel,
@@ -83,11 +90,13 @@ const useProviders = () => {
   return value;
 };
 
-const loadState = (overview: unknown, failed: boolean): ProvidersValue["state"]["load"] => {
-  if (overview) return "ready";
-  if (failed) return "failed";
-  return "loading";
-};
+const providerLoadRules = [
+  { when: (loaded: boolean, _failed: boolean) => loaded, value: "ready" },
+  { when: (_loaded: boolean, failed: boolean) => failed, value: "failed" },
+] as const;
+
+const loadState = (loaded: boolean, failed: boolean): ProvidersValue["state"]["load"] =>
+  providerLoadRules.find(({ when }) => when(loaded, failed))?.value ?? "loading";
 
 const checkLabel = (checking: boolean, checkedAtMillis: number | null, now: number) => {
   if (checking) return "Checking…";
@@ -120,6 +129,8 @@ export const providerMutationFailure = (
 
 function Providers({ children }: { readonly children: ReactNode }) {
   const boardResult = useBoard();
+  const catalogResult = useAtomValue(harnessCatalogsAtom);
+  const readinessResult = useAtomValue(harnessReadinessAtom);
   const [chosen, setChosen] = useState<HarnessName | null>(null);
   const [enablementOverlay, setEnablementOverlay] = useState<HarnessEnablementOverlay | null>(null);
   const checkHarnesses = useAtomSet(checkHarnessesAtom, { mode: "promiseExit" });
@@ -130,27 +141,29 @@ function Providers({ children }: { readonly children: ReactNode }) {
   const [mutationSubmission, setMutationSubmission] = useState<ProviderMutationSubmission | null>(null);
 
   const board = BoardResult.$is("Success")(boardResult) ? boardResult.board : null;
-  const overview = board?.harnesses ?? null;
+  const queriedReadiness = readinessResult._tag === "Success" ? readinessResult.value : null;
+  const readiness = board?.harnesses ?? queriedReadiness;
+  const catalogs = catalogResult._tag === "Success" ? catalogResult.value : null;
   const boardControlStore = board?.controlStore ?? null;
   const { controlStore, settled } = harnessEnablementView(boardControlStore, enablementOverlay);
   if (settled) setEnablementOverlay(null);
-  const providers = applyHarnessEnablement(overview?.harnesses ?? [], controlStore);
-  const checkState = harnessCheckState(overview?.checkedAtMillis ?? null, checkResult, checkSubmission);
+  const providers = applyHarnessEnablement(harnessItems(readiness, catalogs), controlStore);
+  const checkState = harnessCheckState(readiness?.checkedAtMillis ?? null, checkResult, checkSubmission);
   if (checkState.settled) setCheckSubmission(null);
   const mutationResult = mutationSubmission?.kind === "check" ? checkResult : enablement;
   const value: ProvidersValue = {
     state: {
       providers,
       selected: providers.find((item) => item.harness === chosen) ?? providers[0],
-      checkedAtMillis: overview?.checkedAtMillis ?? null,
-      load: loadState(overview, BoardResult.$is("Failure")(boardResult)),
+      checkedAtMillis: readiness?.checkedAtMillis ?? null,
+      load: loadState(catalogs !== null, catalogResult._tag === "Failure"),
       mutationFailure: providerMutationFailure(mutationResult, mutationSubmission),
     },
     actions: {
       select: setChosen,
       check: () => {
         setCheckSubmission({
-          baselineCheckedAtMillis: overview?.checkedAtMillis ?? null,
+          baselineCheckedAtMillis: readiness?.checkedAtMillis ?? null,
           previousResult: checkResult,
         });
         setMutationSubmission({

@@ -1,4 +1,30 @@
-import { type ControlStore, type HarnessItem, HarnessState, harnessEnabled } from "@cogwork/contracts";
+import {
+  type ControlStore,
+  type HarnessCatalog,
+  type HarnessOptionCatalog,
+  type HarnessReadiness,
+  HarnessReadinessItem,
+  HarnessState,
+  harnessEnabled,
+} from "@cogwork/contracts";
+
+export type HarnessItem = HarnessReadinessItem & { readonly catalog: HarnessOptionCatalog };
+
+const pendingReadiness = (harness: HarnessReadinessItem["harness"]) =>
+  HarnessReadinessItem.make({
+    harness,
+    version: null,
+    state: HarnessState.cases.Unknown.make({ diagnostic: "Readiness check pending" }),
+  });
+
+export const harnessItems = (
+  readiness: HarnessReadiness | null,
+  catalogs: ReadonlyArray<HarnessCatalog> | null,
+) =>
+  catalogs?.map(({ harness, catalog }) => ({
+    ...(readiness?.harnesses.find((item) => item.harness === harness) ?? pendingReadiness(harness)),
+    catalog,
+  })) ?? [];
 
 export const applyHarnessEnablement = (
   items: ReadonlyArray<HarnessItem>,

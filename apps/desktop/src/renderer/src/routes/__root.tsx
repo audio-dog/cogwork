@@ -6,6 +6,8 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { CSSProperties } from "react";
 import { RightPanelWidthProvider } from "../components/right-panel-resize";
 import { useSidebarWidth } from "../components/sidebar-resize";
+import { daemonAtomRegistry, primeRootAtoms } from "../daemon/atom-registry";
+import { harnessCatalogsAtom, harnessReadinessAtom } from "../daemon/atoms";
 import { ActivitySessionProvider } from "../features/activity-session";
 
 const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
@@ -45,4 +47,7 @@ function RootLayout() {
   );
 }
 
-export const Route = createRootRoute({ component: RootLayout });
+export const Route = createRootRoute({
+  component: RootLayout,
+  loader: () => primeRootAtoms(daemonAtomRegistry, harnessCatalogsAtom, harnessReadinessAtom),
+});

@@ -56,7 +56,7 @@ export const engineTestLayer = ({
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   return Layer.mergeAll(
     Layer.mock(HarnessReadinessCache, {
-      overview: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
+      readiness: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
       requestAll: () => Effect.void,
       requestOne: () => Effect.void,
     }),

@@ -198,7 +198,12 @@ export class HarnessOptionCatalog extends Schema.Class<HarnessOptionCatalog>("Ha
   provenance: Schema.Struct({ source: Schema.Literal("managed") }),
 }) {}
 
-export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
+export class HarnessCatalog extends Schema.Class<HarnessCatalog>("HarnessCatalog")({
+  harness: HarnessName,
+  catalog: HarnessOptionCatalog,
+}) {}
+
+export class HarnessReadinessItem extends Schema.Class<HarnessReadinessItem>("HarnessReadinessItem")({
   harness: HarnessName,
   enabled: Schema.Boolean.pipe(
     Schema.withConstructorDefault(Effect.succeed(true)),
@@ -211,10 +216,9 @@ export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
     Schema.withConstructorDefault(Effect.succeed([])),
     Schema.withDecodingDefaultKey(Effect.succeed([])),
   ),
-  catalog: HarnessOptionCatalog,
 }) {}
 
-export class HarnessOverview extends Schema.Class<HarnessOverview>("HarnessOverview")({
-  harnesses: Schema.Array(HarnessItem),
+export class HarnessReadiness extends Schema.Class<HarnessReadiness>("HarnessReadiness")({
+  harnesses: Schema.Array(HarnessReadinessItem),
   checkedAtMillis: Schema.Natural,
 }) {}

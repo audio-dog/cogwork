@@ -99,6 +99,10 @@ export const pluginsAtom = DaemonAtomRpc.query("GetPlugins", undefined);
 
 export const connectionsAtom = DaemonAtomRpc.query("GetConnections", undefined);
 
+export const harnessCatalogsAtom = Atom.keepAlive(DaemonAtomRpc.query("GetHarnessCatalogs", undefined));
+
+export const harnessReadinessAtom = Atom.keepAlive(DaemonAtomRpc.query("GetHarnessReadiness", undefined));
+
 export const checkHarnessesAtom = DaemonAtomRpc.mutation("CheckHarnesses");
 
 const githubPriorityFieldsForWorkspaceAtom = Atom.family((workspace: WorkspaceId) =>

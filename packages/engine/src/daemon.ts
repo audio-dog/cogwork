@@ -5,6 +5,7 @@ import {
   type DaemonEvent,
   DaemonRpcs,
   defaultControlStore,
+  HarnessCatalog,
   localOwner,
   PollState,
   Principal,
@@ -216,7 +217,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   );
   const harnessEvent = {
     _tag: "HarnessesChanged" as const,
-    overview: yield* harnesses.overview(
+    readiness: yield* harnesses.readiness(
       controlStore.health === "available" ? controlStore.seed.harnessSettings : [],
     ),
   };
@@ -293,10 +294,14 @@ export const handlersLayer = DaemonRpcs.toLayer({
   GetConnections: Effect.fn("Daemon.GetConnections")(function* () {
     return yield* (yield* ConnectionStore).overview;
   }),
-  GetHarnesses: Effect.fn("Daemon.GetHarnesses")(function* () {
+  GetHarnessCatalogs: Effect.fn("Daemon.GetHarnessCatalogs")(function* () {
+    const harnesses = yield* Harness.Harness;
+    return [...harnesses.catalogs].map(([harness, catalog]) => HarnessCatalog.make({ harness, catalog }));
+  }),
+  GetHarnessReadiness: Effect.fn("Daemon.GetHarnessReadiness")(function* () {
     const store = yield* ControlStore;
     const picture = yield* store.picture;
-    return yield* (yield* HarnessReadinessCache).overview(picture.harnessSettings);
+    return yield* (yield* HarnessReadinessCache).readiness(picture.harnessSettings);
   }),
   GetGitHubPriorityFields: getGitHubPriorityFields,
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {

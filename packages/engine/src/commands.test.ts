@@ -1588,7 +1588,6 @@ describe("SetOperationSetting", () => {
   it.effect("persists a permission profile declared by the selected Harness", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
       const returned = yield* client.SetOperationSetting({
         updates: [
           {
@@ -1610,7 +1609,6 @@ describe("SetOperationSetting", () => {
   it.effect("refuses a permission profile the selected Harness does not declare", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
       const failure = yield* Effect.flip(
         client.SetOperationSetting({
           updates: [
@@ -1638,7 +1636,6 @@ describe("SetOperationSetting", () => {
   it.effect("refuses a model absent from the current Harness catalog", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
       const failure = yield* Effect.flip(
         client.SetOperationSetting({
           updates: [
@@ -1666,7 +1663,6 @@ describe("SetOperationSetting", () => {
   it.effect("reports permitted values when refusing model options", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
       const selections: ReadonlyArray<ModelOptionSelections> = [{ effort: "low" }, { speed: true }];
       const failures = yield* Effect.forEach(selections, (value) =>
         Effect.flip(
@@ -1697,7 +1693,6 @@ describe("SetOperationSetting", () => {
   it.effect("refuses catalog-absent values at Default and Workflow levels", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
       const levels = [
         { _tag: "Default" },
         { _tag: "Workflow", workflow: "coding" },
@@ -1811,7 +1806,6 @@ describe("SetOperationSetting", () => {
   it.effect("allows a valid selection write while an unrelated saved selection is stale", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
       const returned = yield* client.SetOperationSetting({
         updates: [
           {
@@ -1885,7 +1879,6 @@ describe("SetOperationSetting", () => {
   it.effect("refuses an explicit Set of an unchanged stale selection", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client.GetHarnesses();
       const failure = yield* Effect.flip(
         client.SetOperationSetting({
           updates: [
@@ -1915,9 +1908,15 @@ describe("Harness management", () => {
   it.effect("reports the registered Harness through RPC", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const overview = yield* client.GetHarnesses();
-      const item = overview.harnesses[0];
+      const catalogs = yield* client.GetHarnessCatalogs();
+      const readiness = yield* client.GetHarnessReadiness();
+      const item = readiness.harnesses[0];
 
+      assert.strictEqual(catalogs[0]?.harness, "cursor");
+      assert.deepStrictEqual(
+        catalogs[0]?.catalog.models.map(({ value }) => value),
+        ["test", "test-next"],
+      );
       assert.strictEqual(item?.harness, "cursor");
       assert.isTrue(item?.enabled);
     }).pipe(Effect.provide(daemonLayerWithHarness(trackerLayer({}))), Effect.scoped),

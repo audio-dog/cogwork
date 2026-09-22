@@ -1,4 +1,4 @@
-import { type ControlStore, HarnessName, type HarnessOverview } from "@cogwork/contracts";
+import { type ControlStore, HarnessName, type HarnessReadiness } from "@cogwork/contracts";
 import { readControlStore } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -23,8 +23,8 @@ const decodeHarness = Schema.decodeUnknownEffect(HarnessName);
 const enablementLabel = (enabled: boolean) => (enabled ? "enabled" : "disabled");
 const provideClient = (socket: string) => Effect.provide(clientLayer(socket));
 
-export const formatHarnesses = (overview: HarnessOverview) =>
-  overview.harnesses
+export const formatHarnesses = (readiness: HarnessReadiness) =>
+  readiness.harnesses
     .map((item) => `${item.harness}\t${enablementLabel(item.enabled)}\t${item.state._tag}`)
     .join("\n");
 
@@ -42,7 +42,7 @@ const listHarnesses = Effect.fn("harness.list")(function* (options: {
   const output = yield* daemonOrStore(
     Effect.gen(function* () {
       const client = yield* makeDaemonClient();
-      return formatHarnesses(yield* client.GetHarnesses());
+      return formatHarnesses(yield* client.GetHarnessReadiness());
     }).pipe(Effect.scoped, provideClient(options.socket)),
     readControlStore(options.controlStore).pipe(Effect.map(formatOfflineHarnesses)),
   );

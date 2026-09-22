@@ -17,15 +17,15 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useAtom } from "@effect/atom-react";
+import { useAtom, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { setOperationSettingAtom } from "../daemon/atoms";
+import { harnessCatalogsAtom, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { workspaceConnectionChoices } from "../features/connections-view";
 import {
-  type HarnessCatalog,
+  type AvailableHarnessCatalog,
   harnessCatalogLoad,
   operationSettingBatch,
 } from "../features/operation-settings";
@@ -197,9 +197,9 @@ function LiveOperationSettings({
   readonly workspace: WorkspaceId;
   readonly disabled: boolean;
 }) {
-  const boardResult = useBoard();
-  const overview = BoardResult.$is("Success")(boardResult) ? boardResult.board.harnesses : null;
-  const load = harnessCatalogLoad(overview, BoardResult.$is("Failure")(boardResult));
+  const catalogResult = useAtomValue(harnessCatalogsAtom);
+  const catalogs = catalogResult._tag === "Success" ? catalogResult.value : null;
+  const load = harnessCatalogLoad(catalogs, catalogResult._tag === "Failure");
 
   if (load.status === "loading") {
     return (
@@ -238,7 +238,7 @@ function LoadedOperationSettings({
 }: {
   readonly controlStore: ControlStore | null;
   readonly workspace: WorkspaceId;
-  readonly catalogs: ReadonlyArray<HarnessCatalog>;
+  readonly catalogs: ReadonlyArray<AvailableHarnessCatalog>;
   readonly disabled: boolean;
 }) {
   const [writeResult, write] = useAtom(setOperationSettingAtom(workspace));
