@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as TxReentrantLock from "effect/TxReentrantLock";
 import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
@@ -172,6 +173,21 @@ export const make = Effect.gen(function* () {
 
   const withMaintenanceLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     TxReentrantLock.withWriteLock(retentionLock, effect);
+
+  const tryWithMaintenanceLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.acquireUseRelease(
+      Effect.tx(
+        TxReentrantLock.locked(retentionLock).pipe(
+          Effect.flatMap((locked) =>
+            locked
+              ? Effect.succeed(false)
+              : TxReentrantLock.acquireWrite(retentionLock).pipe(Effect.map(() => true)),
+          ),
+        ),
+      ),
+      (acquired) => (acquired ? Effect.asSome(effect) : Effect.succeed(Option.none<A>())),
+      (acquired) => (acquired ? TxReentrantLock.releaseWrite(retentionLock) : Effect.void),
+    );
 
   const pathFor = (repoPath: string, config: WorktreeSettings | undefined, branch: string) =>
     worktreePathFor(worktreeRoot(repoPath, config), branch);
@@ -469,6 +485,7 @@ export const make = Effect.gen(function* () {
     reconcile,
     withRunOwnershipLock,
     withMaintenanceLock,
+    tryWithMaintenanceLock,
   };
 });
 

@@ -7,6 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import {
@@ -917,11 +918,11 @@ describe("Worktree.reconcile", () => {
         Worktree.make,
         provide(fakeGit(recorder, { worktrees: entries }), fs),
       );
-      const outcome = yield* manager.reconcile(
-        workspaceWith({ reapAfterMillis: 1000 }),
-        retention(["active", "idle"]),
-        10_000,
+      const maintenance = yield* manager.tryWithMaintenanceLock(
+        manager.reconcile(workspaceWith({ reapAfterMillis: 1000 }), retention(["active", "idle"]), 10_000),
       );
+      if (Option.isNone(maintenance)) return assert.fail("expected maintenance to run");
+      const outcome = maintenance.value;
       assert.deepStrictEqual(outcome.tornDown, ["gone"]);
       assert.deepStrictEqual(outcome.reaped, ["idle"]);
       const removed = yield* Ref.get(recorder.removed);
@@ -1025,7 +1026,7 @@ describe("Worktree.reconcile", () => {
 });
 
 describe("Worktree retention locks", () => {
-  it.effect("allows parallel Run ownership and excludes maintenance", () =>
+  it.effect("allows parallel Run ownership and skips maintenance", () =>
     Effect.gen(function* () {
       const manager = yield* LayeredWorktree;
       const entered = yield* Deferred.make<void>();
@@ -1039,16 +1040,16 @@ describe("Worktree retention locks", () => {
         .pipe(Effect.forkChild);
       yield* Deferred.await(entered);
       yield* manager.withRunOwnershipLock(Ref.set(parallelPreparationEntered, true));
-      const maintenance = yield* manager
-        .withMaintenanceLock(Ref.set(maintenanceEntered, true))
-        .pipe(Effect.forkChild);
+      const maintenance = yield* manager.tryWithMaintenanceLock(Ref.set(maintenanceEntered, true));
 
-      yield* Effect.yieldNow;
       assert.isTrue(yield* Ref.get(parallelPreparationEntered));
       assert.isFalse(yield* Ref.get(maintenanceEntered));
+      assert.isTrue(Option.isNone(maintenance));
       yield* Deferred.succeed(release, undefined);
       yield* Fiber.join(first);
-      yield* Fiber.join(maintenance);
+
+      const completed = yield* manager.tryWithMaintenanceLock(Ref.set(maintenanceEntered, true));
+      assert.isTrue(Option.isSome(completed));
       assert.isTrue(yield* Ref.get(maintenanceEntered));
     }).pipe(Effect.provide(worktreeLayer({}))),
   );
