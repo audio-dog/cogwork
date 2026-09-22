@@ -355,7 +355,27 @@ export const make = Effect.gen(function* () {
     const baseBranch = baseBranchOf(config);
     const headBranch = branchName(item);
 
-    yield* git.fetch(repoPath, remote);
+    const refreshFailure = yield* git
+      .fetch(repoPath, remote, {
+        branches: [baseBranch, headBranch],
+      })
+      .pipe(
+        Effect.match({
+          onFailure: (error) => error,
+          onSuccess: () => null,
+        }),
+      );
+    if (refreshFailure) {
+      yield* Effect.logWarning("failed to refresh pull request refs; continuing with cached refs", {
+        command: refreshFailure.command,
+        message: refreshFailure.message,
+      });
+    }
+    const confirmedMissing = [
+      { branch: baseBranch, reason: `base ${baseBranch} does not exist on ${remote}` },
+      { branch: headBranch, reason: `head ${headBranch} has not been pushed to ${remote}` },
+    ].find(({ branch }) => refreshFailure?.missingBranches?.includes(branch));
+    if (confirmedMissing) return declinedPullRequestReadiness(confirmedMissing.reason);
     const remoteHeadExists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
     if (!remoteHeadExists) {
       return declinedPullRequestReadiness(`head ${headBranch} has not been pushed to ${remote}`);

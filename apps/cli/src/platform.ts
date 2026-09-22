@@ -71,6 +71,16 @@ const parseDivergence = (stdout: string) => {
   return { ahead, behind } satisfies Git.BranchDivergence;
 };
 
+const parseRefObjects = (output: string) =>
+  new Map(
+    output.split("\n").flatMap((line) => {
+      const [objectId, ref] = line.split("\t");
+      const missingRefPart = !objectId || !ref;
+      if (missingRefPart) return [];
+      return [[ref, objectId] as const];
+    }),
+  );
+
 const gitCommandDeadline = "5 minutes";
 
 interface GitOperationState {
@@ -148,8 +158,63 @@ export const gitLayer = Layer.effect(
       return { operation: found.value[0], unmergedPaths } satisfies Git.GitOperationInProgress;
     });
 
+    const reconcileConfirmedMissingBranches = Effect.fn("Git.reconcileConfirmedMissingBranches")(function* (
+      repoPath: string,
+      remote: string,
+      branches: readonly [string, ...ReadonlyArray<string>],
+    ) {
+      const branchRefs = branches.map((branch) => `refs/heads/${branch}`);
+      const trackingRefs = branches.map((branch) => `refs/remotes/${remote}/${branch}`);
+      const trackingObjects = yield* runGit(repoPath, [
+        "for-each-ref",
+        "--format=%(objectname)%09%(refname)",
+        ...trackingRefs,
+      ]).pipe(
+        Effect.map(parseRefObjects),
+        Effect.orElseSucceed(() => new Map<string, string>()),
+      );
+      const advertisedOutput = yield* runGit(repoPath, ["ls-remote", "--heads", remote, ...branchRefs]);
+      const advertisedRefs = new Set(parseRefObjects(advertisedOutput).keys());
+      const missingBranches = branches.filter((branch) => !advertisedRefs.has(`refs/heads/${branch}`));
+      const missingTrackingRefs = missingBranches.flatMap((branch) => {
+        const trackingRef = `refs/remotes/${remote}/${branch}`;
+        const objectId = trackingObjects.get(trackingRef);
+        return objectId ? [[trackingRef, objectId] as const] : [];
+      });
+      yield* Effect.forEach(
+        missingTrackingRefs,
+        ([trackingRef, objectId]) => runGit(repoPath, ["update-ref", "-d", trackingRef, objectId]),
+        { discard: true },
+      ).pipe(Effect.ignore);
+      return missingBranches;
+    });
+
     return Git.withTransitionLogging({
-      fetch: (repoPath, remote) => runGit(repoPath, ["fetch", "--prune", remote]).pipe(Effect.asVoid),
+      fetch: Effect.fn("Git.fetch")(function* (repoPath, remote, options) {
+        if (!options) return yield* runGit(repoPath, ["fetch", "--prune", remote]);
+        const refspecs = options.branches.map(
+          (branch) => `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
+        );
+        return yield* runGit(repoPath, ["fetch", "--no-tags", remote, ...refspecs]).pipe(
+          Effect.catch((failure) =>
+            reconcileConfirmedMissingBranches(repoPath, remote, options.branches).pipe(
+              Effect.matchEffect({
+                onFailure: () => Effect.fail(failure),
+                onSuccess: (missingBranches) =>
+                  Effect.fail(
+                    new Git.GitError({
+                      command: failure.command,
+                      message: failure.message,
+                      retryable: failure.retryable,
+                      ...(failure.reason ? { reason: failure.reason } : {}),
+                      ...(missingBranches.length > 0 ? { missingBranches } : {}),
+                    }),
+                  ),
+              }),
+            ),
+          ),
+        );
+      }),
       remoteBranchExists: (repoPath, remote, branch) =>
         runGit(repoPath, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`]).pipe(
           Effect.map(() => true),

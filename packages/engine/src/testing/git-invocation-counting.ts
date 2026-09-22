@@ -57,7 +57,7 @@ export const countingLayer = Layer.effect(
     const counter = yield* GitInvocationCounter;
 
     const countedGit = {
-      fetch: (repoPath, remote) => counter.track("fetch", git.fetch(repoPath, remote)),
+      fetch: (repoPath, remote, options) => counter.track("fetch", git.fetch(repoPath, remote, options)),
       remoteBranchExists: (repoPath, remote, branch) =>
         counter.track("remoteBranchExists", git.remoteBranchExists(repoPath, remote, branch)),
       addWorktree: (args) => counter.track("addWorktree", git.addWorktree(args)),

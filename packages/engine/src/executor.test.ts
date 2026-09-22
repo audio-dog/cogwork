@@ -942,6 +942,38 @@ const preparedWorktreeRemoved = Layer.merge(
   WorktreeProbe.layer,
 );
 
+const readinessRefreshFailure = new GitError({
+  command: "fetch origin main implement-branch",
+  message: "cannot lock ref refs/remotes/origin/main",
+  retryable: true,
+});
+
+const refreshFailureWorktree = (readinessAhead: number) => {
+  const git = Layer.succeed(Git, {
+    fetch: (_repoPath, _remote, options) => (options ? Effect.fail(readinessRefreshFailure) : Effect.void),
+    remoteBranchExists: () => Effect.succeed(true),
+    addWorktree: () => Effect.die("unexpected addWorktree"),
+    removeWorktree: () => Effect.die("unexpected removeWorktree"),
+    listWorktrees: () =>
+      Effect.succeed([
+        {
+          path: worktreePathFor(worktreeRoot(implementWorkspace.config.checkoutPath), implementBranch),
+          branch: implementBranch,
+        },
+      ]),
+    fastForward: () => Effect.void,
+    divergence: (_path, _remote, _base, head) =>
+      Effect.succeed(head?.remote ? { ahead: readinessAhead, behind: 0 } : { ahead: 0, behind: 0 }),
+    operationInProgress: () => Effect.succeed(null),
+    rebase: () => Effect.die("unexpected rebase"),
+    remoteUrl: () => Effect.die("unexpected remoteUrl"),
+  } satisfies GitService);
+  return Layer.merge(
+    Layer.effect(WorktreeManager, makeWorktreeManager).pipe(Layer.provide(Layer.merge(git, worktreeFsStub))),
+    WorktreeProbe.layer,
+  );
+};
+
 const declinedPullRequestWorktree = (reason: string) =>
   worktreeDouble(() => ({
     ...worktreeStub,
@@ -2539,6 +2571,36 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
+  it.effect("opens the pull request when its ref refresh fails", () =>
+    Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), [
+        {
+          headBranch: implementBranch,
+          baseBranch: "main",
+          title: "Open pull requests from the engine",
+          body: "Closes #15",
+        },
+      ]);
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "implemented"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "succeeded");
+    }).pipe(
+      Effect.provide(
+        provide([runner(readyForPrEvents)], refreshFailureWorktree(1), pullRequestProvider()).pipe(
+          Layer.provideMerge(PullRequestCalls.layer),
+        ),
+      ),
+    ),
+  );
+
   it.effect("opens the pull request after its prepared worktree disappears", () =>
     Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
@@ -2856,7 +2918,7 @@ describe("Executor.execute", () => {
     ),
   );
 
-  it.effect("declines when the head is not ahead of the base", () =>
+  it.effect("declines when the cached head is not ahead after its ref refresh fails", () =>
     Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
       const calls = yield* TrackerCalls;
@@ -2871,18 +2933,16 @@ describe("Executor.execute", () => {
       assert.isTrue(log.some((call) => call.method === "release"));
       assert.strictEqual(
         log.find((call) => call.method === "attemptFailed")?.reason,
-        "head is not ahead of origin/main",
+        `head ${implementBranch} is not ahead of origin/main`,
       );
       assert.isFalse(log.some((call) => call.method === "note"));
       const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
       assert.strictEqual(run?.status, "declined");
     }).pipe(
       Effect.provide(
-        provide(
-          [runner(readyForPrEvents)],
-          declinedPullRequestWorktree("head is not ahead of origin/main"),
-          pullRequestProvider(),
-        ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
+        provide([runner(readyForPrEvents)], refreshFailureWorktree(0), pullRequestProvider()).pipe(
+          Layer.provideMerge(PullRequestCalls.layer),
+        ),
       ),
     ),
   );
