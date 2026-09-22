@@ -1,0 +1,21 @@
+packages/engine/src/playbook.test.ts
+  s_4b58eae8cfec51::t_4cfe04a34d69d6 297
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_4b58eae8cfec51::t_6b39f673b32760 99,111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c10e630410264a7275e831dd164c7865f898e445",
+  "prompts": {},
+  "sessions": {
+    "s_4b58eae8cfec51": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cae4-bb4a-7c92-aafe-bc5365b376d3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
