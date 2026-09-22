@@ -1,0 +1,19 @@
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_63e75efa02ed38::t_9e512cfe543246 10,39,109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a5febcfdf33f85619a443a62a7236fb0e969d5e7",
+  "prompts": {},
+  "sessions": {
+    "s_63e75efa02ed38": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ca80-2985-74e0-b555-293d308b1513",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
