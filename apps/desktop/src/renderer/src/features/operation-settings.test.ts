@@ -5,6 +5,10 @@ import {
   HarnessEnablement,
   HarnessName,
   HarnessOptionCatalog,
+  HarnessReadiness,
+  HarnessReadinessItem,
+  HarnessSignIn,
+  HarnessState,
   WorkspaceId,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
@@ -18,11 +22,13 @@ import {
   harnessSelectionUpdates,
   modelOptionChoice,
   modelOptionStates,
+  modelOptionSummary,
   modelOptionsCell,
   modelOptionUpdates,
   operationSettingBatch,
   operationSettingUpdate,
   policyProfileChoices,
+  providerPickerCatalogs,
   selectableHarnessCatalogs,
   settingCell,
   unavailableHarnessLabel,
@@ -67,7 +73,7 @@ const optionModel = {
 } satisfies HarnessCatalogChoice;
 
 describe("availableHarnessCatalogs", () => {
-  it("keeps published labels while excluding unusable harnesses", () => {
+  it("keeps every Provider independent of its declared permission profiles", () => {
     const catalogs = [
       harnessItem("codex", optionCatalog(["read-only", "full"])),
       harnessItem("provider", optionCatalog(["full"])),
@@ -76,7 +82,7 @@ describe("availableHarnessCatalogs", () => {
 
     const available = availableHarnessCatalogs(catalogs);
 
-    expect(available.map(({ harness }) => harness)).toEqual(["codex", "provider"]);
+    expect(available.map(({ harness }) => harness)).toEqual(["codex", "provider", "cursor"]);
     expect(available[0]?.models[0]?.label).toBe("Model A");
     expect(available[0]?.policyProfiles).toEqual(["read-only", "full"]);
     expect(available[0]?.provenance).toEqual({ source: "managed" });
@@ -93,6 +99,91 @@ describe("catalog choices", () => {
   it("matches searches against labels and values", () => {
     expect(catalogChoiceMatches(choice, "model a")).toBe(true);
     expect(catalogChoiceMatches(choice, "model-a")).toBe(true);
+  });
+});
+
+describe("providerPickerCatalogs", () => {
+  const pickerCatalogs = availableHarnessCatalogs([
+    harnessItem("codex", optionCatalog(["read-only", "full"])),
+    harnessItem("cursor", optionCatalog(["full"])),
+  ]);
+
+  it("keeps readiness-pending Providers pickable", () => {
+    const readiness = HarnessReadiness.make({
+      checkedAtMillis: 0,
+      harnesses: [
+        HarnessReadinessItem.make({
+          harness: harness("codex"),
+          version: null,
+          state: HarnessState.cases.Unknown.make({
+            diagnostic: "Harness readiness has not been checked yet",
+          }),
+        }),
+      ],
+    });
+    const providers = providerPickerCatalogs(pickerCatalogs, readiness);
+
+    expect(providers.map(({ availability }) => availability)).toEqual([
+      { pickable: true, stateLabel: "Not checked yet", reason: "Readiness check pending" },
+      { pickable: true, stateLabel: "Not checked yet", reason: "Readiness check pending" },
+    ]);
+  });
+
+  it("refuses a Provider when a completed readiness check reached no conclusion", () => {
+    const readiness = HarnessReadiness.make({
+      checkedAtMillis: 1,
+      harnesses: [
+        HarnessReadinessItem.make({
+          harness: harness("codex"),
+          version: null,
+          state: HarnessState.cases.Unknown.make({ diagnostic: "probe timed out" }),
+        }),
+      ],
+    });
+
+    expect(providerPickerCatalogs(pickerCatalogs, readiness)[0]?.availability).toEqual({
+      pickable: false,
+      stateLabel: "Readiness unknown",
+      reason: "probe timed out",
+    });
+  });
+
+  it("keeps unavailable Providers visible with their reason but not pickable", () => {
+    const readiness = HarnessReadiness.make({
+      checkedAtMillis: 1,
+      harnesses: [
+        HarnessReadinessItem.make({
+          harness: harness("codex"),
+          version: null,
+          state: HarnessState.cases.NotInstalled.make({ diagnostic: "codex is not on PATH" }),
+        }),
+        HarnessReadinessItem.make({
+          harness: harness("cursor"),
+          version: null,
+          state: HarnessState.cases.NotSignedIn.make({
+            signIn: HarnessSignIn.make({ command: "cursor agent login" }),
+          }),
+        }),
+      ],
+    });
+
+    expect(providerPickerCatalogs(pickerCatalogs, readiness).map(({ availability }) => availability)).toEqual(
+      [
+        { pickable: false, stateLabel: "Not installed", reason: "codex is not on PATH" },
+        { pickable: false, stateLabel: "Not signed in", reason: "Run cursor agent login" },
+      ],
+    );
+  });
+});
+
+describe("modelOptionSummary", () => {
+  it("summarizes effective option labels for the Provider picker trigger", () => {
+    expect(
+      modelOptionSummary([
+        { descriptor: optionModel.options[0], value: "high", source: "inherited" },
+        { descriptor: optionModel.options[1], value: false, source: "default" },
+      ]),
+    ).toBe("High · Speed Off");
   });
 });
 
