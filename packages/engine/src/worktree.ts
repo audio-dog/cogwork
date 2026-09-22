@@ -171,9 +171,6 @@ export const make = Effect.gen(function* () {
   const withRunOwnershipLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     TxReentrantLock.withReadLock(retentionLock, effect);
 
-  const withMaintenanceLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    TxReentrantLock.withWriteLock(retentionLock, effect);
-
   const tryWithMaintenanceLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.acquireUseRelease(
       Effect.tx(
@@ -484,7 +481,6 @@ export const make = Effect.gen(function* () {
     remove,
     reconcile,
     withRunOwnershipLock,
-    withMaintenanceLock,
     tryWithMaintenanceLock,
   };
 });

@@ -51,7 +51,6 @@ const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   withRunOwnershipLock: (effect) => effect,
-  withMaintenanceLock: (effect) => effect,
   tryWithMaintenanceLock: Effect.asSome,
   ensure: () => Effect.die("unused"),
   pullRequestReadiness: () => Effect.die("unused"),

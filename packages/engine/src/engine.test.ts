@@ -1059,7 +1059,6 @@ describe("daemon heartbeats", () => {
   });
   const worktreeStub = Layer.succeed(Worktree.WorktreeManager, {
     withRunOwnershipLock: (effect) => effect,
-    withMaintenanceLock: (effect) => effect,
     tryWithMaintenanceLock: Effect.asSome,
     ensure: () => Effect.die("unused"),
     pullRequestReadiness: () => Effect.die("unused"),
