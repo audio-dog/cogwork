@@ -84,7 +84,18 @@ describe("operation outcome tables", () => {
   };
 
   const followUpResult = (outcome: FollowUpResultOutcome) =>
-    Schema.decodeSync(FollowUpStageResult)({ _tag: "follow-up", outcome, summary: `Result: ${outcome}.` });
+    outcome === "noop"
+      ? Schema.decodeSync(FollowUpStageResult)({
+          _tag: "follow-up",
+          outcome,
+          summary: `Result: ${outcome}.`,
+          speak: false,
+        })
+      : Schema.decodeSync(FollowUpStageResult)({
+          _tag: "follow-up",
+          outcome,
+          summary: `Result: ${outcome}.`,
+        });
 
   const triageCases = [
     {
@@ -271,6 +282,22 @@ describe("buildFollowUpPrompt", () => {
     const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" }, true);
     assert.include(prompt, "Linear history for this repository is required.");
   });
+});
+
+describe("follow-up Operating Instructions", () => {
+  it.effect("makes the speaking decision agent-owned and posting engine-owned", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const instructions = yield* fs.readFileString(
+        decodeURIComponent(
+          new URL("../operating-instructions/follow-up-agent/INSTRUCTIONS.md", import.meta.url).pathname,
+        ),
+      );
+
+      assert.include(instructions, "choose whether to speak");
+      assert.include(instructions, "Do not post it as a PR comment yourself");
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
 });
 
 describe("buildImplementPrompt", () => {
