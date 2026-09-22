@@ -3,6 +3,7 @@ import type { WorkspaceId } from "./base-schemas";
 import type { ConnectionOverview } from "./connection";
 import type { ControlStore, SchedulerStats, WorkspaceFailureInfo, WorkspaceInfo } from "./daemon";
 import { type ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
+import type { HarnessOverview } from "./harness";
 import type { PluginOverview } from "./plugin";
 import type { RunSummary } from "./run";
 
@@ -21,6 +22,7 @@ export interface Board {
   readonly pluginNotices: readonly string[];
   readonly connections: ConnectionOverview | null;
   readonly connectionNotices: readonly WorkspaceId[];
+  readonly harnesses: HarnessOverview | null;
 }
 
 export const initialBoard: Board = {
@@ -33,6 +35,7 @@ export const initialBoard: Board = {
   pluginNotices: [],
   connections: null,
   connectionNotices: [],
+  harnesses: null,
 };
 
 export const settledRunLimit = 20;
@@ -117,6 +120,7 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
       connections,
       connectionNotices: danglingWorkspaces,
     }),
+    HarnessesChanged: ({ overview }) => ({ ...board, harnesses: overview }),
     SchedulerChanged: ({ scheduler }) => ({ ...board, scheduler }),
   });
 

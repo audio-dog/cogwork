@@ -171,8 +171,9 @@ const codexReadinessDiagnosticRules = [
 ] as const;
 
 const codexReadinessDiagnostics = (input: CodexReadinessDiagnosticInput) => {
-  const diagnostic = codexReadinessDiagnosticRules.find(({ when }) => when(input))?.diagnostic(input);
-  return diagnostic ? [diagnostic] : [];
+  return codexReadinessDiagnosticRules
+    .filter(({ when }) => when(input))
+    .map(({ diagnostic }) => diagnostic(input));
 };
 
 const codexReadiness = (executable: string) =>

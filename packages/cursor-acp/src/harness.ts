@@ -55,6 +55,16 @@ const cursorVersionCompatible = (version: string) => {
   );
 };
 
+const cursorReadinessDiagnostics = (version: string, compatible: boolean) =>
+  [
+    compatible
+      ? null
+      : `Cursor ${version || "unknown"} is unsupported. Update Cursor to ${cursorVersionRequirement}.`,
+    version === cursorCatalog.generatedAgainst
+      ? null
+      : `Cursor ${version || "unknown"} differs from the version this catalog was generated against (${cursorCatalog.generatedAgainst}).`,
+  ].filter((message) => message !== null);
+
 const cursorProbeError = (cause: unknown) => {
   const message = String(cause);
   return new Harness.HarnessError({
@@ -166,11 +176,7 @@ const cursorReadiness = Effect.fn("CursorRunner.readiness")((agentBin: string) =
             status: "unknown",
             diagnostic: "Cursor host login is verified by the native launch",
           },
-          diagnostics: compatible
-            ? []
-            : [
-                `Cursor ${version || "unknown"} is unsupported. Update Cursor to ${cursorVersionRequirement}.`,
-              ],
+          diagnostics: cursorReadinessDiagnostics(version, compatible),
         } satisfies Harness.HarnessReadiness;
       },
     }),

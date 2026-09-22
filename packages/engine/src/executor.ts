@@ -47,6 +47,7 @@ import { CredentialStore } from "./credential-store";
 import { isExhausted } from "./exhaustion";
 import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
 import { Harness, HarnessError, type HarnessRequest, type HarnessRunnerEnv } from "./harness";
+import { HarnessReadinessCache } from "./harness-readiness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import * as OperationResolution from "./operation-resolution";
 import { OperationOutcome, type OperationOutcomeTable } from "./playbook";
@@ -167,6 +168,7 @@ const admitHarness = <A, E, R>(
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const harness = yield* Harness;
+  const harnessReadiness = yield* HarnessReadinessCache;
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
   const worktrees = yield* WorktreeManager;
@@ -825,11 +827,18 @@ export const make = Effect.gen(function* () {
       return recorder.record(record, failedTerminal);
     };
 
-    const settleFailure = (error: PrepareError | HarnessError) =>
-      recordEncodingFailureTerminal(error).pipe(
+    const settleFailure = (error: PrepareError | HarnessError) => {
+      const readinessFailure =
+        error._tag === "HarnessError" && ["credential", "launch"].includes(error.reason) ? error : null;
+      const refreshReadiness = readinessFailure
+        ? harnessReadiness.requestOne(record.harness, readinessFailure)
+        : Effect.void;
+      return refreshReadiness.pipe(
+        Effect.andThen(recordEncodingFailureTerminal(error)),
         Effect.andThen(handleOf(ledger, record.session)),
         Effect.flatMap((handle) => applyFailure(workspace, item, accepted, error, handle)),
       );
+    };
 
     const settleCompletionFailure = (error: RunLedgerError) => {
       if (error.operation === encodeRunEventOperation) return settleFailure(error);

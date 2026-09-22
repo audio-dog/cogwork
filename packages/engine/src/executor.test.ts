@@ -43,6 +43,7 @@ import * as Stream from "effect/Stream";
 import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { vi } from "vitest";
 import * as Availability from "./availability";
 import type { EligibleWork } from "./classify";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
@@ -64,6 +65,7 @@ import {
   resolvedMcpSkills,
   staticCatalogSource,
 } from "./harness";
+import { HarnessReadinessCache } from "./harness-readiness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import * as OperationResolution from "./operation-resolution";
@@ -498,6 +500,16 @@ class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<C
 ) {
   static readonly layer = Layer.effect(TrackerCalls, Ref.make<ReadonlyArray<Call>>([]));
 }
+
+class HarnessReadinessRequests extends Context.Service<
+  HarnessReadinessRequests,
+  Ref.Ref<ReadonlyArray<HarnessName>>
+>()("@cogwork/engine/executor.test/HarnessReadinessRequests") {}
+
+const harnessReadinessRequestsLayer = Layer.effect(
+  HarnessReadinessRequests,
+  Ref.make<ReadonlyArray<HarnessName>>([]),
+);
 
 const record = (calls: Ref.Ref<ReadonlyArray<Call>>, entry: Call) =>
   Ref.update(calls, (xs) => [...xs, entry]);
@@ -1070,6 +1082,38 @@ const failingRunner = (error: HarnessError): TestRunner => ({
   }),
 });
 
+const preflightFailingRunner = (error: HarnessError): TestRunner => ({
+  make: () => ({
+    ...testRunnerDefaults,
+    name: cursor,
+    sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
+    execution: fullHarnessExecution,
+    preflight: () => Effect.fail(error),
+    run: () => Stream.die(new Error("unexpected Run after failed preflight")),
+  }),
+});
+
+const delayedPreflightFailureRunner = (error: HarnessError): TestRunner => {
+  const preflight = vi
+    .fn<() => Effect.Effect<void, HarnessError>>()
+    .mockReturnValueOnce(Effect.void)
+    .mockReturnValue(Effect.fail(error));
+  return {
+    make: () => ({
+      ...testRunnerDefaults,
+      name: cursor,
+      sessionKind: "opaque-handle",
+      projectedMembers: [],
+      planMiddleware: [],
+      execution: fullHarnessExecution,
+      preflight,
+      run: () => Stream.die(new Error("unexpected Run after failed preflight")),
+    }),
+  };
+};
+
 const ownedTranscriptRunner = (events: ReadonlyArray<AgUiEvent>): TestRunner => ({
   make: () => ({
     ...testRunnerDefaults,
@@ -1205,6 +1249,20 @@ const runControlStub = Layer.succeed(RunControl.RunControl, {
   run: (_runId, _workspace, effect) => effect,
   cancel: () => Effect.succeed(RunControl.RunCancellation.NotFound({})),
 });
+
+const harnessReadinessStub = Layer.mock(HarnessReadinessCache, {
+  overview: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
+  requestAll: () => Effect.void,
+  requestOne: () => Effect.void,
+});
+const harnessReadinessRecorder = Layer.effect(
+  HarnessReadinessCache,
+  Effect.map(HarnessReadinessRequests, (requests) => ({
+    overview: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
+    requestAll: () => Effect.void,
+    requestOne: (name: HarnessName) => Ref.update(requests, (names) => [...names, name]),
+  })),
+);
 const pluginManagerStub = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
@@ -1554,6 +1612,7 @@ function provide<SourceControlRequirements = never>(
   ) => Layer.Layer<RunLedger.RunLedger> = runLedgerIdentity,
   connections = connectionStoreStub,
   runControl: Layer.Layer<RunControl.RunControl> = runControlStub,
+  harnessReadiness: Layer.Layer<HarnessReadinessCache> = harnessReadinessStub,
 ) {
   const engineServices = engineTestLayer({ transformRunLedger });
   const operationResolution = OperationResolution.layer;
@@ -1583,6 +1642,7 @@ function provide<SourceControlRequirements = never>(
         plugins,
         FileSystem.layerNoop({ exists: () => Effect.succeed(true) }),
         connections,
+        harnessReadiness,
       ),
     ),
   );
@@ -1590,6 +1650,26 @@ function provide<SourceControlRequirements = never>(
 
 const provideReplay = (runners: ReadonlyArray<TestRunner>) =>
   provide(runners, worktreeStubLayer, noopProviderLayer, trackerRecorder(), runnableReplayStages);
+
+const provideWithHarnessReadiness = (runners: ReadonlyArray<TestRunner>) => {
+  const requests = harnessReadinessRequestsLayer;
+  const harnessReadiness = harnessReadinessRecorder.pipe(Layer.provide(requests));
+  return provide(
+    runners,
+    worktreeStubLayer,
+    noopProviderLayer,
+    trackerRecorder(),
+    runnableStages,
+    ContextCleanupCalls.contextAssemblerLayer,
+    pluginManagerStub,
+    [],
+    controlStoreLayer(runnableStages),
+    runLedgerIdentity,
+    connectionStoreStub,
+    runControlStub,
+    harnessReadiness,
+  ).pipe(Layer.provideMerge(requests));
+};
 
 describe("Executor.execute", () => {
   it.effect("projects availability only for executable Operations", () => {
@@ -2050,6 +2130,42 @@ describe("Executor.execute", () => {
       const runs = yield* ledger.listRuns(10);
       assert.strictEqual(runs[0]?.status, "exhausted");
     }).pipe(Effect.provide(provide([failingRunner(error)])));
+  });
+
+  it.effect("requests a readiness refresh after a Harness launch failure", () => {
+    const error = new HarnessError({ reason: "launch", retryable: false, message: "no cli" });
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessReadinessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      assert.deepStrictEqual(yield* Ref.get(requests), [cursor]);
+    }).pipe(Effect.provide(provideWithHarnessReadiness([failingRunner(error)])));
+  });
+
+  it.effect("requests a readiness refresh when Run admission finds expired credentials", () => {
+    const error = new HarnessError({ reason: "credential", retryable: false, message: "sign in expired" });
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessReadinessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      assert.deepStrictEqual(yield* Ref.get(requests), [cursor]);
+    }).pipe(Effect.provide(provideWithHarnessReadiness([preflightFailingRunner(error)])));
+  });
+
+  it.effect("requests a readiness refresh when credentials expire during Run preparation", () => {
+    const error = new HarnessError({ reason: "credential", retryable: false, message: "sign in expired" });
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessReadinessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      assert.deepStrictEqual(yield* Ref.get(requests), [cursor]);
+    }).pipe(Effect.provide(provideWithHarnessReadiness([delayedPreflightFailureRunner(error)])));
   });
 
   it.effect("records a retryable failure as an attempt without a handoff note", () => {

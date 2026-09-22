@@ -6,7 +6,9 @@ import {
   type WorkItemId,
   type WorkspaceId,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import * as AtomRpc from "effect/unstable/reactivity/AtomRpc";
@@ -20,6 +22,22 @@ export class DaemonAtomRpc extends AtomRpc.Service<DaemonAtomRpc>()("DaemonAtomR
   protocol: layerProtocolIpc(electronDaemonBridge),
   makeEffect: Effect.gen(function* () {
     const client = yield* RpcClient.make(DaemonRpcs, { flatten: true });
+    const runPromise = yield* FiberSet.makeRuntimePromise();
+    yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        window.cogwork.onSystemResume(() =>
+          runPromise(
+            client("CheckHarnesses", undefined).pipe(
+              Effect.catchCauseIf(
+                (cause) => !Cause.hasInterruptsOnly(cause),
+                (cause) => Effect.logError("Harness readiness wake check failed", { cause }),
+              ),
+            ),
+          ),
+        ),
+      ),
+      (unsubscribe) => Effect.sync(unsubscribe),
+    );
     yield* reportDesktopProcessHealth(
       () => window.cogwork.getProcessHealth(),
       (samples) => client("ReportProcessHealth", { samples }),
@@ -81,8 +99,7 @@ export const pluginsAtom = DaemonAtomRpc.query("GetPlugins", undefined);
 
 export const connectionsAtom = DaemonAtomRpc.query("GetConnections", undefined);
 
-// Reading this spawns every installed harness's CLI. Never put it on a timer.
-export const harnessesAtom = Atom.keepAlive(DaemonAtomRpc.query("GetHarnesses", undefined));
+export const checkHarnessesAtom = DaemonAtomRpc.mutation("CheckHarnesses");
 
 const githubPriorityFieldsForWorkspaceAtom = Atom.family((workspace: WorkspaceId) =>
   Atom.family((connection: ConnectionBindingId) =>

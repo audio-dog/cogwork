@@ -7,12 +7,12 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
-import { app, BrowserWindow, crashReporter } from "electron";
+import { app, BrowserWindow, crashReporter, powerMonitor } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveDesktopEnvironment } from "./desktop-environment";
 import { resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
 import { EngineSupervisor, layer as engineSupervisorLayer } from "./engine-supervisor";
-import { broadcastEngineStatus, registerIpc } from "./ipc";
+import { broadcastEngineStatus, broadcastSystemResume, registerIpc } from "./ipc";
 import { engineLoggerLayer, mainLogger } from "./logger";
 import { installShutdownBeforeQuit } from "./quit";
 import { isDaemonListening } from "./socket-probe";
@@ -90,6 +90,17 @@ const engineStatusPublisherLayer = Layer.effectDiscard(
   }),
 );
 
+const systemResumePublisherLayer = Layer.effectDiscard(
+  Effect.acquireRelease(
+    Effect.sync(() => {
+      const publish = () => broadcastSystemResume(BrowserWindow.getAllWindows());
+      powerMonitor.on("resume", publish);
+      return publish;
+    }),
+    (publish) => Effect.sync(() => powerMonitor.off("resume", publish)),
+  ),
+);
+
 const childProcessSpawnerLayer = NodeChildProcessSpawner.layer.pipe(
   Layer.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer)),
 );
@@ -100,7 +111,7 @@ const makeRuntimeLayer = (environment: NodeJS.ProcessEnv) => {
     Layer.provide(supervisor),
     Layer.provide(engineLoggerLayer),
   );
-  return Layer.mergeAll(supervisor, publisher, engineLoggerLayer);
+  return Layer.mergeAll(supervisor, publisher, systemResumePublisherLayer, engineLoggerLayer);
 };
 
 const mainLayer = Layer.unwrap(

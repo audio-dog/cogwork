@@ -52,6 +52,7 @@ import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
+import { layer as harnessReadinessLayer } from "./harness-readiness";
 import type { HandBackOutcome, HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import { PluginManager } from "./plugin";
@@ -498,6 +499,7 @@ const daemonLayer = (
   reconcile = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source))),
 ) =>
   Daemon.handlersLayer.pipe(
+    Layer.provideMerge(harnessReadinessLayer),
     Layer.provideMerge(harnessProbeTestLayer(harnessRunners)),
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
     Layer.provideMerge(Daemon.daemonInfoLayer),

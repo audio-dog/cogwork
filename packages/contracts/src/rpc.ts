@@ -164,6 +164,8 @@ export const ReportProcessHealth = Rpc.make("ReportProcessHealth", {
   success: Schema.Void,
 });
 
+export const CheckHarnesses = Rpc.make("CheckHarnesses", { success: Schema.Void });
+
 export const SetDaemonLimit = Rpc.make("SetDaemonLimit", {
   payload: { update: DaemonLimitUpdate },
   success: ControlStore,
@@ -248,6 +250,7 @@ export const DaemonCommands = RpcGroup.make(
   Reclassify,
   SetScheduling,
   ReportProcessHealth,
+  CheckHarnesses,
   SetDaemonLimit,
   SetContributionSetting,
   SetHarnessEnabled,

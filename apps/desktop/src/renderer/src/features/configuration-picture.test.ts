@@ -67,6 +67,7 @@ const board: Board = {
   pluginNotices: [],
   connections: null,
   connectionNotices: [],
+  harnesses: null,
 };
 
 describe("configurationPicture", () => {
