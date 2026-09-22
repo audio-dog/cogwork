@@ -294,6 +294,7 @@ describe("follow-up Operating Instructions", () => {
         ),
       );
 
+      assert.include(instructions, "answer a question, do not narrate a state");
       assert.include(instructions, "choose whether to speak");
       assert.include(instructions, "Do not post it as a PR comment yourself");
     }).pipe(Effect.provide(NodeFileSystem.layer)),
