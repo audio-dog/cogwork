@@ -84,36 +84,33 @@ describe("codexRunner configuration", () => {
   });
 
   it.layer(harnessLayer)((it) => {
-    it.effect("reads the checked-in managed catalog without launching Codex", () =>
-      Effect.gen(function* () {
-        const codex = runner({ codexExecutable: "/must-not-launch-codex" });
-        const harness = Harness.make([codex]);
-        const catalog = yield* harness.catalog(name);
+    it("reads the checked-in managed catalog without launching Codex", () => {
+      const codex = runner({ codexExecutable: "/must-not-launch-codex" });
+      const harness = Harness.make([codex]);
+      const catalog = harness.catalogs.get(name);
 
-        assert.deepStrictEqual(catalog.models, codexCatalog.models);
-        assert.strictEqual(catalog.generatedAgainst, codexCatalog.generatedAgainst);
-        assert.deepStrictEqual(catalog.rawModelIds, codexCatalog.rawModelIds);
-        assert.deepStrictEqual(catalog.provenance, {
-          source: "cogwork-fallback",
-          fallbackVersion: "codex-0.154.0",
-        });
-        assert.strictEqual(codex.sessionKind, "opaque-handle");
-        assert.deepStrictEqual(codex.authentication, {
-          mode: "host",
-          reference: "Codex host login",
-        });
-        assert.deepNestedInclude(codex.capabilities, {
-          authenticationModes: ["host"],
-          session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
-          structuredOutput: "native",
-          policyFidelity: "none",
-          fileEventFidelity: "best-effort",
-          usageQuality: "metered",
-          journal: true,
-          takeover: true,
-        });
-      }),
-    );
+      assert.isNotNull(catalog);
+      if (!catalog) return;
+      assert.deepStrictEqual(catalog.models, codexCatalog.models);
+      assert.strictEqual(catalog.generatedAgainst, codexCatalog.generatedAgainst);
+      assert.deepStrictEqual(catalog.rawModelIds, codexCatalog.rawModelIds);
+      assert.deepStrictEqual(catalog.provenance, { source: "managed" });
+      assert.strictEqual(codex.sessionKind, "opaque-handle");
+      assert.deepStrictEqual(codex.authentication, {
+        mode: "host",
+        reference: "Codex host login",
+      });
+      assert.deepNestedInclude(codex.capabilities, {
+        authenticationModes: ["host"],
+        session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
+        structuredOutput: "native",
+        policyFidelity: "none",
+        fileEventFidelity: "best-effort",
+        usageQuality: "metered",
+        journal: true,
+        takeover: true,
+      });
+    });
 
     it.effect(
       "projects host authentication and native options, granting no Git path to a checkout that owns its Git directory",
