@@ -31,7 +31,12 @@ import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import { ContextAssembler, type ContextAssemblerService, type InstructionLayer } from "./context-assembler";
 import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
 import type { HarnessRequest } from "./harness";
-import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
+import {
+  defaultModelAdapterFactory,
+  type ModelAdapterFactory,
+  parseModelRef,
+  providerModelRefs,
+} from "./provider-adapter";
 import {
   defaultLoopBudget,
   defaultRunBudget,
@@ -233,6 +238,13 @@ describe("providerRunner", () => {
 
   it("declares the owned-transcript session kind", () => {
     assert.strictEqual(providerRunner({ name: harnessName }).sessionKind, "owned-transcript");
+  });
+
+  it("serves every managed provider model", () => {
+    assert.deepStrictEqual(
+      providerRunner({ name: harnessName }).catalog.models.map(({ value }) => value),
+      providerModelRefs,
+    );
   });
 
   it.live(

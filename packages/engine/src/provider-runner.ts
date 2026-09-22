@@ -23,7 +23,6 @@ import {
   type HarnessPreflightInput,
   type HarnessRunner,
   selectionOfPreflightInput,
-  staticCatalogSource,
 } from "./harness";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
@@ -158,20 +157,8 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
     },
     authentication: { mode: "byok", reference: "Cogwork provider key" },
     signIn: "cogwork login key --provider anthropic",
-    catalogSources: {
-      runtime: staticCatalogSource(
-        {
-          models: providerModelRefs.map((model) => ({ value: model, label: model })),
-        },
-        {
-          source: "tanstack-runtime",
-          packageVersion: "ai-anthropic@0.18.5+ai-gemini@0.29.1+ai-openai@0.22.5",
-        },
-      ),
-      fallback: staticCatalogSource(
-        { models: [{ value: defaultModel, label: defaultModel }] },
-        { source: "cogwork-fallback", fallbackVersion: "provider-1" },
-      ),
+    catalog: {
+      models: providerModelRefs.map((model) => ({ value: model, label: model })),
     },
     readiness: Effect.fn("ProviderRunner.readiness")(() =>
       Effect.succeed({
