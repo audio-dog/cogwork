@@ -89,6 +89,8 @@ export interface RawComment {
   readonly authorAssociation: string;
   readonly body: string;
   readonly createdAtMillis: number;
+  readonly inReplyToId?: number | null;
+  readonly subjectType?: "line" | "file";
 }
 
 export interface RawReview {
@@ -178,6 +180,8 @@ const CommentSchema = Schema.Struct({
   user: Schema.Struct({ login: Schema.String }),
   created_at: Schema.String,
   author_association: Schema.optional(Schema.String),
+  in_reply_to_id: Schema.optional(Schema.NullOr(Schema.Finite)),
+  subject_type: Schema.optional(Schema.Union([Schema.Literal("line"), Schema.Literal("file")])),
 });
 
 const toRawComment = (comment: typeof CommentSchema.Type) =>
@@ -189,6 +193,8 @@ const toRawComment = (comment: typeof CommentSchema.Type) =>
           authorAssociation: comment.author_association ?? "NONE",
           body: comment.body,
           createdAtMillis: commentMillis(comment.created_at),
+          ...(comment.in_reply_to_id === undefined ? {} : { inReplyToId: comment.in_reply_to_id }),
+          ...(comment.subject_type === undefined ? {} : { subjectType: comment.subject_type }),
         },
       ]
     : [];
@@ -905,7 +911,10 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     repo: GitHubRepoRef,
     pullNumber: number,
   ) {
-    const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}/comments?per_page=100`));
+    const json = yield* fetchJson(
+      repo,
+      repoPath(repo, `/pulls/${pullNumber}/comments?per_page=100&sort=created&direction=desc`),
+    );
     const comments = yield* Effect.mapError(decodeComments(json), toUnavailable);
     return comments.flatMap(toRawComment);
   });

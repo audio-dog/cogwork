@@ -398,7 +398,9 @@ function TriageRows() {
       <Field orientation="responsive">
         <FieldContent>
           <FieldTitle>Bot allowlist</FieldTitle>
-          <FieldDescription>Comma-separated bot logins whose comments may wake follow-up.</FieldDescription>
+          <FieldDescription>
+            Comma-separated bot logins. Add :any to accept comments outside new diff threads.
+          </FieldDescription>
         </FieldContent>
         <DraftInput field="trackerBotAllowlist" label="Tracker bot allowlist" />
       </Field>
@@ -496,7 +498,9 @@ function SourceControlRows() {
           <Field orientation="responsive">
             <FieldContent>
               <FieldTitle>Bot allowlist</FieldTitle>
-              <FieldDescription>Comma-separated bots allowed to wake follow-up.</FieldDescription>
+              <FieldDescription>
+                Comma-separated bot logins. Add :any to accept comments outside new diff threads.
+              </FieldDescription>
             </FieldContent>
             <DraftInput field="sourceControlBotAllowlist" label="Source control bot allowlist" />
           </Field>

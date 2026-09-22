@@ -20,13 +20,25 @@ import {
 } from "./client";
 import { agentNoteMarker, hasCogworkMarker } from "./markers";
 
+interface BotWakeMode {
+  readonly acceptsAnyComment: boolean;
+}
+
+type BotAllowlist = ReadonlyMap<string, BotWakeMode>;
+
 interface GitHubTargetConfig extends GitHubRepoRef {
-  readonly botAllowlist: ReadonlySet<string>;
+  readonly botAllowlist: BotAllowlist;
 }
 
 interface GitHubTarget extends GitHubTargetConfig {
   readonly actorLogin: string;
 }
+
+const botAllowlistEntry = (entry: string): readonly [string, BotWakeMode] => {
+  const acceptsAnyComment = entry.endsWith(":any");
+  const login = acceptsAnyComment ? entry.slice(0, -4) : entry;
+  return [login, { acceptsAnyComment }];
+};
 
 const targetFromRepo = (
   repo: string,
@@ -39,7 +51,7 @@ const targetFromRepo = (
   return {
     ...repository,
     ...(boundConnectionId ? { connectionId: boundConnectionId } : {}),
-    botAllowlist: new Set(botAllowlist ?? []),
+    botAllowlist: new Map((botAllowlist ?? []).map(botAllowlistEntry)),
   };
 };
 
@@ -86,16 +98,19 @@ const numericIssue = /^#(\d+)$/;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-type Feedback = Pick<RawComment, "authorLogin" | "authorAssociation" | "body" | "createdAtMillis">;
+type Feedback = Pick<
+  RawComment,
+  "authorLogin" | "authorAssociation" | "body" | "createdAtMillis" | "inReplyToId" | "subjectType"
+>;
 
 // An allowlisted login is always the trusted-bot path, never the human one, even if it reports write
 // access — that keeps a bot from ever setting `/fresh` or resetting the no-progress counter.
-const isHumanFeedback = (feedback: Feedback, botAllowlist: ReadonlySet<string>) =>
+const isHumanFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
   writeAccess.has(feedback.authorAssociation) &&
   !botAllowlist.has(feedback.authorLogin) &&
   !hasCogworkMarker(feedback.body);
 
-const isTrustedBotFeedback = (feedback: Feedback, botAllowlist: ReadonlySet<string>) =>
+const isTrustedBotFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
   botAllowlist.has(feedback.authorLogin) && !hasCogworkMarker(feedback.body);
 
 export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
@@ -123,7 +138,7 @@ const newestOf = (feedback: ReadonlyArray<Feedback>) =>
     null,
   );
 
-export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botAllowlist: ReadonlySet<string>) => {
+export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botAllowlist: BotAllowlist) => {
   const newest = newestOf(feedback.filter((item) => isHumanFeedback(item, botAllowlist)));
   return {
     latestAtMillis: newest?.createdAtMillis ?? null,
@@ -132,8 +147,23 @@ export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botAllowli
 };
 
 // Returns no `fresh` flag: `/fresh` restarts stay human-only, so a bot can never trigger one.
-export const botTriggerSignal = (feedback: ReadonlyArray<Feedback>, botAllowlist: ReadonlySet<string>) => {
-  const newest = newestOf(feedback.filter((item) => isTrustedBotFeedback(item, botAllowlist)));
+export const botTriggerSignal = (
+  reviewComments: ReadonlyArray<RawComment>,
+  pullRequestFeedback: ReadonlyArray<Feedback>,
+  botAllowlist: BotAllowlist,
+) => {
+  // Bot-specific HTML markers are private strings; GitHub's comment and thread shape is the stable boundary.
+  const isTrustedDiffFinding = (item: RawComment) =>
+    botAllowlist.get(item.authorLogin)?.acceptsAnyComment === false &&
+    item.inReplyToId === null &&
+    item.subjectType === "line" &&
+    isTrustedBotFeedback(item, botAllowlist);
+  const isTrustedAnyComment = (item: Feedback) =>
+    botAllowlist.get(item.authorLogin)?.acceptsAnyComment === true &&
+    isTrustedBotFeedback(item, botAllowlist);
+  const findings = reviewComments.filter(isTrustedDiffFinding);
+  const unrestricted = [...reviewComments, ...pullRequestFeedback].filter(isTrustedAnyComment);
+  const newest = newestOf([...findings, ...unrestricted]);
   return { latestAtMillis: newest?.createdAtMillis ?? null };
 };
 
@@ -158,9 +188,10 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
         .filter((review) => writeAccess.has(review.authorAssociation))
         .map((review) => ({ login: review.authorLogin, state: review.state })),
     );
-    const feedback = [...comments, ...reviewComments, ...reviewFeedback(reviews)];
+    const pullRequestFeedback = [...comments, ...reviewFeedback(reviews)];
+    const feedback = [...pullRequestFeedback, ...reviewComments];
     const human = humanCommentSignal(feedback, target.botAllowlist);
-    const bot = botTriggerSignal(feedback, target.botAllowlist);
+    const bot = botTriggerSignal(reviewComments, pullRequestFeedback, target.botAllowlist);
     return {
       number: pull.number,
       url: pull.url,
