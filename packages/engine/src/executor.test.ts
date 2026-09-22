@@ -824,7 +824,7 @@ const resourceRunner: TestRunner = {
 
 const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
   withRunOwnershipLock: (effect) => effect,
-  withMaintenanceLock: (effect) => effect,
+  tryWithMaintenanceLock: Effect.asSome,
   ensure: (_workspace, item) =>
     Effect.succeed({ branch: branchName(item), path: `/wt/${branchName(item)}`, created }),
   pullRequestReadiness: (_workspace, item) =>

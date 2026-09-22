@@ -161,7 +161,7 @@ const worktreeLayer = ({
       WorktreeCalls,
       (calls): WorktreeManagerService => ({
         withRunOwnershipLock: (effect) => effect,
-        withMaintenanceLock: (effect) => effect,
+        tryWithMaintenanceLock: Effect.asSome,
         ensure: (_workspace, item, options) =>
           Ref.update(calls, (current) => [...current, { item: item.id, options }]).pipe(
             Effect.andThen(
