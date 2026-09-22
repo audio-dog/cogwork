@@ -1,4 +1,10 @@
-import { type Connection, type ControlStore, type WorkspaceId, WorkspaceState } from "@cogwork/contracts";
+import {
+  type Connection,
+  type ControlStore,
+  type HarnessReadiness,
+  type WorkspaceId,
+  WorkspaceState,
+} from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
   AlertDialog,
@@ -21,7 +27,7 @@ import { useAtom, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { harnessCatalogsAtom, setOperationSettingAtom } from "../daemon/atoms";
+import { harnessCatalogsAtom, harnessReadinessAtom, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { workspaceConnectionChoices } from "../features/connections-view";
 import {
@@ -197,8 +203,13 @@ function LiveOperationSettings({
   readonly workspace: WorkspaceId;
   readonly disabled: boolean;
 }) {
+  const boardResult = useBoard();
   const catalogResult = useAtomValue(harnessCatalogsAtom);
+  const readinessResult = useAtomValue(harnessReadinessAtom);
   const catalogs = catalogResult._tag === "Success" ? catalogResult.value : null;
+  const board = BoardResult.$is("Success")(boardResult) ? boardResult.board : null;
+  const queriedReadiness = readinessResult._tag === "Success" ? readinessResult.value : null;
+  const readiness = board?.harnesses ?? queriedReadiness;
   const load = harnessCatalogLoad(catalogs, catalogResult._tag === "Failure");
 
   if (load.status === "loading") {
@@ -225,6 +236,7 @@ function LiveOperationSettings({
       controlStore={controlStore}
       workspace={workspace}
       catalogs={load.catalogs}
+      readiness={readiness}
       disabled={disabled}
     />
   );
@@ -234,11 +246,13 @@ function LoadedOperationSettings({
   controlStore,
   workspace,
   catalogs,
+  readiness,
   disabled,
 }: {
   readonly controlStore: ControlStore | null;
   readonly workspace: WorkspaceId;
   readonly catalogs: ReadonlyArray<AvailableHarnessCatalog>;
+  readonly readiness: HarnessReadiness | null;
   readonly disabled: boolean;
 }) {
   const [writeResult, write] = useAtom(setOperationSettingAtom(workspace));
@@ -246,7 +260,7 @@ function LoadedOperationSettings({
   return (
     <OperationSettings.Provider
       value={{
-        state: { catalogs, controlStore, workspace },
+        state: { catalogs, controlStore, readiness, workspace },
         actions: {
           write: (operation, updates) =>
             write({ payload: { updates: operationSettingBatch(workspace, operation, updates) } }),
