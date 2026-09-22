@@ -34,12 +34,11 @@ const workspace = Schema.decodeSync(WorkspaceId)("w");
 const other = Schema.decodeSync(WorkspaceId)("other");
 const harness = Schema.decodeSync(HarnessName);
 
-const harnessItem = (harness: string, catalog: HarnessOptionCatalog | null) =>
+const harnessItem = (harness: string, catalog: HarnessOptionCatalog) =>
   HarnessItem.make({
     harness: Schema.decodeSync(HarnessName)(harness),
     version: null,
     state: HarnessState.cases.Ready.make({}),
-    models: catalog?.models.map(({ value }) => value) ?? [],
     catalog,
   });
 
@@ -50,7 +49,7 @@ const optionCatalog = (policyProfiles: ReadonlyArray<"read-only" | "full">) =>
       { value: "gpt-5.6-sol", label: "GPT 5.6 Sol" },
     ],
     policyProfiles,
-    provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
+    provenance: { source: "managed" },
   });
 
 const optionModel = {
@@ -78,7 +77,6 @@ describe("availableHarnessCatalogs", () => {
         harnessItem("codex", optionCatalog(["read-only", "full"])),
         harnessItem("provider", optionCatalog(["full"])),
         harnessItem("cursor", optionCatalog([])),
-        harnessItem("broken", null),
       ],
       checkedAtMillis: 1,
     });
@@ -88,10 +86,7 @@ describe("availableHarnessCatalogs", () => {
     expect(catalogs.map(({ harness }) => harness)).toEqual(["codex", "provider"]);
     expect(catalogs[0]?.models[0]?.label).toBe("Model A");
     expect(catalogs[0]?.policyProfiles).toEqual(["read-only", "full"]);
-    expect(catalogs[0]?.provenance).toEqual({
-      source: "cogwork-fallback",
-      fallbackVersion: "test-1",
-    });
+    expect(catalogs[0]?.provenance).toEqual({ source: "managed" });
   });
 });
 

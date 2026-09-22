@@ -54,7 +54,7 @@ export interface ModelOptionState {
 
 export const availableHarnessCatalogs = (overview: HarnessOverview | null) =>
   overview?.harnesses.flatMap(({ harness, catalog }) =>
-    catalog && catalog.policyProfiles.length > 0 ? [{ harness, ...catalog }] : [],
+    catalog.policyProfiles.length > 0 ? [{ harness, ...catalog }] : [],
   ) ?? [];
 
 export const harnessCatalogLoad = (overview: HarnessOverview | null, failed: boolean) => {
