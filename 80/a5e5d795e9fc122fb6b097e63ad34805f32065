@@ -1,0 +1,20 @@
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_76d55505f46a92::t_6adf591074662e 81
+  s_76d55505f46a92::t_66698ad93ec380 57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "80a5e5d795e9fc122fb6b097e63ad34805f32065",
+  "prompts": {},
+  "sessions": {
+    "s_76d55505f46a92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "deab492f-365e-46ab-92cc-b7917b5260ec",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
