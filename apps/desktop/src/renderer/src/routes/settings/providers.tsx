@@ -343,7 +343,8 @@ function ConfigurationTab({ item }: { readonly item: HarnessItem }) {
 }
 
 function ModelsTab({ item }: { readonly item: HarnessItem }) {
-  if (item.models.length === 0) {
+  const models = item.catalog.models.map(({ value }) => value);
+  if (models.length === 0) {
     return (
       <Empty className="py-10">
         <EmptyHeader>
@@ -358,9 +359,9 @@ function ModelsTab({ item }: { readonly item: HarnessItem }) {
   }
   return (
     <div className="flex flex-col gap-2 py-4">
-      <p className="px-4 text-sm">{item.models.length} models available.</p>
+      <p className="px-4 text-sm">{models.length} models available.</p>
       <div className="flex flex-col px-1">
-        {item.models.map((model) => (
+        {models.map((model) => (
           <Item key={model} size="xs">
             <ItemContent>
               <ItemTitle className="font-mono text-xs font-normal">{model}</ItemTitle>
