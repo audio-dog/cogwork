@@ -1,10 +1,10 @@
 import {
   type ControlStore,
   defaultPermissionProfile,
+  type HarnessCatalog,
   type HarnessCatalogChoice,
   type HarnessName,
   type HarnessOptionCatalog,
-  type HarnessOverview,
   harnessEnabled,
   harnessModelOptionAccepts,
   LifecycleStage,
@@ -37,7 +37,7 @@ export const operationSummaries: Record<LifecycleStage, string> = {
   "follow-up": "Answers failing checks and review comments on its own pull request.",
 };
 
-export type HarnessCatalog = HarnessOptionCatalog & { readonly harness: HarnessName };
+export type AvailableHarnessCatalog = HarnessOptionCatalog & { readonly harness: HarnessName };
 
 export interface ModelOptionsCell {
   readonly own: ModelOptionSelections | null;
@@ -52,23 +52,36 @@ export interface ModelOptionState {
   readonly staleValue?: string | boolean;
 }
 
-export const availableHarnessCatalogs = (overview: HarnessOverview | null) =>
-  overview?.harnesses.flatMap(({ harness, catalog }) =>
+export const availableHarnessCatalogs = (catalogs: ReadonlyArray<HarnessCatalog> | null) =>
+  catalogs?.flatMap(({ harness, catalog }) =>
     catalog.policyProfiles.length > 0 ? [{ harness, ...catalog }] : [],
   ) ?? [];
 
-export const harnessCatalogLoad = (overview: HarnessOverview | null, failed: boolean) => {
-  if (overview) return { status: "ready" as const, catalogs: availableHarnessCatalogs(overview) };
-  if (failed) return { status: "failed" as const };
-  return { status: "loading" as const };
-};
+const catalogLoadRules = [
+  {
+    when: (catalogs: ReadonlyArray<HarnessCatalog> | null, _failed: boolean) => catalogs !== null,
+    produce: (catalogs: ReadonlyArray<HarnessCatalog> | null) => ({
+      status: "ready" as const,
+      catalogs: availableHarnessCatalogs(catalogs),
+    }),
+  },
+  {
+    when: (_catalogs: ReadonlyArray<HarnessCatalog> | null, failed: boolean) => failed,
+    produce: () => ({ status: "failed" as const }),
+  },
+] as const;
 
-export const catalogFor = (catalogs: ReadonlyArray<HarnessCatalog>, harness: string | null) =>
+export const harnessCatalogLoad = (catalogs: ReadonlyArray<HarnessCatalog> | null, failed: boolean) =>
+  catalogLoadRules.find(({ when }) => when(catalogs, failed))?.produce(catalogs) ?? {
+    status: "loading" as const,
+  };
+
+export const catalogFor = (catalogs: ReadonlyArray<AvailableHarnessCatalog>, harness: string | null) =>
   catalogs.find((candidate) => candidate.harness === harness) ?? null;
 
 export const selectableHarnessCatalogs = (
   controlStore: ControlStore | null,
-  catalogs: ReadonlyArray<HarnessCatalog>,
+  catalogs: ReadonlyArray<AvailableHarnessCatalog>,
 ) =>
   catalogs.filter((catalog) =>
     controlStore ? harnessEnabled(controlStore.harnessSettings, catalog.harness) : true,
@@ -98,7 +111,7 @@ const policyProfileLabels: Record<RunPlanPolicyProfile, string> = {
   full: "Full",
 };
 
-export const policyProfileChoices = (catalog: HarnessCatalog | null) =>
+export const policyProfileChoices = (catalog: AvailableHarnessCatalog | null) =>
   catalog?.policyProfiles.map((value) => ({ value, label: policyProfileLabels[value] })) ?? [];
 
 /**
@@ -215,7 +228,7 @@ const resolvedSettingValues = (
 
 const permissionProfileDefault = (
   controlStore: ControlStore | null,
-  catalogs: ReadonlyArray<HarnessCatalog>,
+  catalogs: ReadonlyArray<AvailableHarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
 ) => {
@@ -226,7 +239,7 @@ const permissionProfileDefault = (
 
 interface SettingDefaultContext {
   controlStore: ControlStore | null;
-  catalogs: ReadonlyArray<HarnessCatalog>;
+  catalogs: ReadonlyArray<AvailableHarnessCatalog>;
   workspace: WorkspaceId;
   operation: LifecycleStage;
 }
@@ -243,7 +256,7 @@ const settingDefaults = {
 
 export const settingCell = (
   controlStore: ControlStore | null,
-  catalogs: ReadonlyArray<HarnessCatalog>,
+  catalogs: ReadonlyArray<AvailableHarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
   setting: DisplayedOperationSettingName,
@@ -356,7 +369,7 @@ export const modelOptionUpdates = (model: HarnessCatalogChoice, options: ModelOp
 interface StaleSelection {
   readonly value: string;
   controlStore: ControlStore | null;
-  catalogs: ReadonlyArray<HarnessCatalog>;
+  catalogs: ReadonlyArray<AvailableHarnessCatalog>;
   workspace: WorkspaceId;
   operation: LifecycleStage;
 }
@@ -383,7 +396,7 @@ const isStale = (
   setting: DisplayedOperationSettingName,
   value: string | null,
   controlStore: ControlStore | null,
-  catalogs: ReadonlyArray<HarnessCatalog>,
+  catalogs: ReadonlyArray<AvailableHarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
 ) => (value === null ? false : staleChecks[setting]({ value, controlStore, catalogs, workspace, operation }));
@@ -391,7 +404,7 @@ const isStale = (
 /** A one-line summary of an operation, for a collapsed row. */
 export const operationSummaryLine = (
   controlStore: ControlStore | null,
-  catalogs: ReadonlyArray<HarnessCatalog>,
+  catalogs: ReadonlyArray<AvailableHarnessCatalog>,
   workspace: WorkspaceId,
   operation: LifecycleStage,
 ) => {

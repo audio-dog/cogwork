@@ -2,7 +2,7 @@ import { type HarnessCatalogChoice, HarnessName, HarnessOptionCatalog } from "@c
 import * as Schema from "effect/Schema";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { HarnessCatalog, ModelOptionState } from "../features/operation-settings";
+import type { AvailableHarnessCatalog, ModelOptionState } from "../features/operation-settings";
 import { TraitsMenu } from "./traits-menu";
 
 const model = {
@@ -30,7 +30,7 @@ const catalog = {
     provenance: { source: "managed" },
   }),
   harness: Schema.decodeSync(HarnessName)("cursor"),
-} satisfies HarnessCatalog;
+} satisfies AvailableHarnessCatalog;
 
 const options = [
   { descriptor: model.options[0], value: "high", source: "inherited" },

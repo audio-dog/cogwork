@@ -15,15 +15,15 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { RiArrowDownSLine } from "@remixicon/react";
 import { Fragment } from "react";
 import {
-  type HarnessCatalog,
+  type AvailableHarnessCatalog,
   type ModelOptionState,
   modelOptionChoice,
 } from "../features/operation-settings";
 
 interface TraitsMenuProps {
   readonly state: {
-    readonly catalog: HarnessCatalog;
-    readonly model: HarnessCatalog["models"][number];
+    readonly catalog: AvailableHarnessCatalog;
+    readonly model: AvailableHarnessCatalog["models"][number];
     readonly options: ReadonlyArray<ModelOptionState>;
   };
   readonly actions: {
