@@ -22,6 +22,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as References from "effect/References";
@@ -559,9 +560,14 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
     ({ workspace, state }) => {
       const correlation = { workspace: workspace.config.name };
       return manager
-        .withMaintenanceLock(reconcileWorkspaceWorktrees(workspace, registry.workspaces, state, now))
+        .tryWithMaintenanceLock(reconcileWorkspaceWorktrees(workspace, registry.workspaces, state, now))
         .pipe(
-          Effect.tap((outcome) => Effect.logInfo("worktree maintenance", outcome)),
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.logInfo("worktree maintenance skipped; Run owns a worktree"),
+              onSome: (outcome) => Effect.logInfo("worktree maintenance", outcome),
+            }),
+          ),
           Effect.catchTag("GitError", (error) =>
             Effect.logWarning("worktree maintenance failed", {
               message: error.message,

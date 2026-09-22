@@ -29,6 +29,7 @@ import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
@@ -1219,6 +1220,71 @@ describe("daemon heartbeats", () => {
             ),
           ).pipe(Layer.provide(NodeFileSystem.layer)),
         ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("keeps reconciling while a Run owns a worktree", () =>
+    Effect.gen(function* () {
+      const manager = yield* Worktree.WorktreeManager;
+      const observes = yield* ReconcileObserveCount;
+      const maintenance = yield* WorktreeMaintenanceProbe;
+      const messages = yield* LogMessages;
+      const runStarted = yield* Deferred.make<void>();
+      const releaseRun = yield* Deferred.make<void>();
+      const run = yield* manager
+        .withRunOwnershipLock(
+          Deferred.succeed(runStarted, undefined).pipe(Effect.andThen(Deferred.await(releaseRun))),
+        )
+        .pipe(Effect.forkChild);
+      yield* Deferred.await(runStarted);
+
+      const beats = yield* Effect.forkChild(
+        Daemon.heartbeats({
+          pollIntervalMillis: 1_000,
+          drain: { graceMillis: 0, abort: Effect.void },
+        }),
+      );
+      yield* TestClock.adjust("3 seconds");
+      yield* Fiber.interrupt(beats);
+
+      assert.isAtLeast(yield* Ref.get(observes), 3);
+      assert.deepStrictEqual(yield* Ref.get(maintenance.removals), []);
+      assert.isTrue(Option.isNone(yield* Deferred.poll(maintenance.listed)));
+      const logMessages = MutableRef.get(messages);
+      assert.isTrue(
+        logMessages.some((line) => line.includes("worktree maintenance skipped; Run owns a worktree")),
+      );
+      assert.isFalse(logMessages.some((line) => line.includes("worktree maintenance failed")));
+
+      yield* Deferred.succeed(releaseRun, undefined);
+      yield* Fiber.join(run);
+    }).pipe(
+      Effect.provide(
+        heartbeatLayer(
+          reconcileLayer.pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                registeredSample,
+                sources(
+                  Layer.effect(
+                    IssueTracker.IssueTracker,
+                    Effect.map(ReconcileObserveCount, (observes) =>
+                      stub({
+                        observe: () => Ref.update(observes, (count) => count + 1).pipe(Effect.map(() => [])),
+                      }),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Layer.provideMerge(ReconcileObserveCount.layer),
+          ),
+          SchedulerTickCount.schedulerLayer,
+          WorktreeMaintenanceProbe.managerLayer,
+          NodeFileSystem.layer,
+        ).pipe(Layer.provideMerge(LogMessages.captureLayer)),
       ),
       Effect.scoped,
     ),
