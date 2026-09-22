@@ -1,0 +1,20 @@
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_59950f86ab85f3::t_e3379911cb1c73 36-37
+  s_59950f86ab85f3::t_330cb58b26b477 1-35,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8bbb2ec373ff2fb4128e38a3799b590137c5831f",
+  "prompts": {},
+  "sessions": {
+    "s_59950f86ab85f3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d361b8aa-b066-4cca-8e2d-cb2e4c744812",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
