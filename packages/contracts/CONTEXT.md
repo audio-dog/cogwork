@@ -373,6 +373,7 @@ _Avoid_: Provider key, Cogwork login, harness fallback
 **Harness option catalog**:
 The controlled model and option choices one Harness offers: checked-in managed data shipped by that Harness's package, never a runtime observation (ADR 0024). Generated catalogs record the CLI version they were generated against; manually managed catalogs need no invented generator version. Provenance has one value, `managed`. An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input.
 Composite native model ids also publish their normalized selections as the validity oracle for clients that must disable sparse option combinations.
+Clients read every registered Harness's catalog through `GetHarnessCatalogs`. That query reads managed data only and never waits on Harness readiness.
 _Avoid_: Model catalog, settings, arbitrary option, probed catalog
 
 **Option descriptor**:
@@ -389,6 +390,7 @@ _Avoid_: Effort setting (retired), model suffix, traits (the desktop menu, not t
 
 **Harness readiness**:
 An observation of one Harness's installation, compatible version, and selected authentication binding on the current Runtime host. It can block a Run when negative but never guarantees that a later launch will succeed, and it never selects a fallback Harness or authentication mode.
+`GetHarnessReadiness` reads the daemon's cached observations. Probe completion publishes the replacement cache through `HarnessesChanged`; neither read path runs a probe.
 _Avoid_: Health check, launch guarantee, availability fallback
 
 **Harness state**:
