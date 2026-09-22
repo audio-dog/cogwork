@@ -7,13 +7,7 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import {
-  fullHarnessExecution,
-  HarnessError,
-  type HarnessReadiness,
-  type HarnessRunner,
-  staticCatalogSource,
-} from "./harness";
+import { fullHarnessExecution, HarnessError, type HarnessReadiness, type HarnessRunner } from "./harness";
 import { decodeStoredRunEvent } from "./run-event-codec";
 
 const replaySampleMinimum = 10;
@@ -395,28 +389,23 @@ export const replayRunner = Effect.fn("ReplayHarness.runner")(function* (options
             takeover: false,
           },
           authentication: { mode: "host", reference: "fixture" },
-          catalogSources: {
-            fallback: staticCatalogSource(
+          catalog: {
+            models: [
               {
-                models: [
+                value: "fixture",
+                label: "Exported fixture",
+                default: true,
+                options: [
                   {
-                    value: "fixture",
-                    label: "Exported fixture",
-                    default: true,
-                    options: [
-                      {
-                        type: "select",
-                        id: "speed",
-                        label: "Speed",
-                        values: replaySpeeds.map((speed) => ({ value: speed, label: speed })),
-                        defaultValue: "1x",
-                      },
-                    ],
+                    type: "select",
+                    id: "speed",
+                    label: "Speed",
+                    values: replaySpeeds.map((speed) => ({ value: speed, label: speed })),
+                    defaultValue: "1x",
                   },
                 ],
               },
-              { source: "cogwork-fallback", fallbackVersion: "1" },
-            ),
+            ],
           },
           projectedMembers: [],
           planMiddleware: [],
