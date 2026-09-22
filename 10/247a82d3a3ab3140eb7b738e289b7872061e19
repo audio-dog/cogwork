@@ -1,0 +1,20 @@
+apps/desktop/src/renderer/src/components/provider-glyph.tsx
+  s_541b0d7056f409::t_a971fe33c2ea09 25,29
+  s_541b0d7056f409::t_a431660e7d6556 10-17,31-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "10247a82d3a3ab3140eb7b738e289b7872061e19",
+  "prompts": {},
+  "sessions": {
+    "s_541b0d7056f409": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cae4-bb54-7753-8411-1ff19becbeb1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
