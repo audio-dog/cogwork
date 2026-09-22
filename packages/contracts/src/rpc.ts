@@ -21,7 +21,7 @@ import {
   StaleControlStoreWrite,
 } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
-import { HarnessNotRegistered, HarnessOverview } from "./harness";
+import { HarnessCatalog, HarnessNotRegistered, HarnessReadiness } from "./harness";
 import { IssueTrackerError } from "./issue-tracker";
 import { PluginFailure, PluginId, PluginMutationResult, PluginOverview } from "./plugin";
 import { PrincipalMiddleware } from "./principal";
@@ -60,8 +60,12 @@ export const GetConnections = Rpc.make("GetConnections", {
   error: ConnectionFailure,
 });
 
-export const GetHarnesses = Rpc.make("GetHarnesses", {
-  success: HarnessOverview,
+export const GetHarnessCatalogs = Rpc.make("GetHarnessCatalogs", {
+  success: Schema.Array(HarnessCatalog),
+});
+
+export const GetHarnessReadiness = Rpc.make("GetHarnessReadiness", {
+  success: HarnessReadiness,
   error: ControlStoreFailure,
 });
 
@@ -100,7 +104,8 @@ export const DaemonQueries = RpcGroup.make(
   GetControlStore,
   GetPlugins,
   GetConnections,
-  GetHarnesses,
+  GetHarnessCatalogs,
+  GetHarnessReadiness,
   GetGitHubPriorityFields,
   ListRuns,
   GetRunEvents,

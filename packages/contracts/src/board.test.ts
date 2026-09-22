@@ -7,7 +7,7 @@ import { applyDaemonEvent, initialBoard, liveOnly, workspaceFailureState } from 
 import { LocalContribution } from "./contribution";
 import { ControlStore, SchedulerStats } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
-import { HarnessOverview } from "./harness";
+import { HarnessReadiness } from "./harness";
 import { RunSummary } from "./run";
 import { defaultControlStore } from "./scheduler-defaults";
 import type { LifecycleStage } from "./triage";
@@ -19,7 +19,7 @@ const schedulerStats = Schema.decodeSync(SchedulerStats);
 const controlStore = Schema.decodeSync(ControlStore);
 const workspaceState = Schema.decodeSync(WorkspaceState);
 const localContribution = Schema.decodeSync(LocalContribution);
-const harnessOverview = Schema.decodeSync(HarnessOverview);
+const harnessReadiness = Schema.decodeSync(HarnessReadiness);
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
 
@@ -334,8 +334,8 @@ describe("applyDaemonEvent", () => {
     assert.deepStrictEqual(board.pluginNotices, []);
   });
 
-  it("tracks the latest cached Harness overview", () => {
-    const overview = harnessOverview({
+  it("tracks the latest cached Harness readiness", () => {
+    const readiness = harnessReadiness({
       checkedAtMillis: 12,
       harnesses: [
         {
@@ -344,14 +344,13 @@ describe("applyDaemonEvent", () => {
           version: "0.154.0",
           state: { _tag: "Ready" },
           diagnostics: ["Codex 0.155.0 is available."],
-          catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
         },
       ],
     });
 
-    const board = fold([event({ _tag: "HarnessesChanged", overview })]);
+    const board = fold([event({ _tag: "HarnessesChanged", readiness })]);
 
-    assert.deepStrictEqual(board.harnesses, overview);
+    assert.deepStrictEqual(board.harnesses, readiness);
   });
 
   it("keeps running runs and only the recent settled run window", () => {
