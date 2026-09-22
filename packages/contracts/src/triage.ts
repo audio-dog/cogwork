@@ -90,8 +90,8 @@ export type ImplementStageResult = typeof ImplementStageResult.Type;
 export const FollowUpResultOutcome = Schema.Literals(["pushed", "noop", "stuck"]);
 export type FollowUpResultOutcome = typeof FollowUpResultOutcome.Type;
 
-export class FollowUpStageResult extends Schema.TaggedClass<FollowUpStageResult>()("follow-up", {
-  outcome: FollowUpResultOutcome,
+class PushedFollowUpResult extends Schema.TaggedClass<PushedFollowUpResult>()("follow-up", {
+  outcome: Schema.Literal("pushed"),
   summary: TrimmedNonEmptyString,
 }) {
   get resultKey() {
@@ -102,6 +102,40 @@ export class FollowUpStageResult extends Schema.TaggedClass<FollowUpStageResult>
     return this.summary;
   }
 }
+
+class NoopFollowUpResult extends Schema.TaggedClass<NoopFollowUpResult>()("follow-up", {
+  outcome: Schema.Literal("noop"),
+  summary: TrimmedNonEmptyString,
+  speak: Schema.Boolean,
+}) {
+  get resultKey() {
+    return this.outcome;
+  }
+
+  get detail() {
+    return this.summary;
+  }
+}
+
+class StuckFollowUpResult extends Schema.TaggedClass<StuckFollowUpResult>()("follow-up", {
+  outcome: Schema.Literal("stuck"),
+  summary: TrimmedNonEmptyString,
+}) {
+  get resultKey() {
+    return this.outcome;
+  }
+
+  get detail() {
+    return this.summary;
+  }
+}
+
+export const FollowUpStageResult = Schema.Union([
+  PushedFollowUpResult,
+  NoopFollowUpResult,
+  StuckFollowUpResult,
+]).pipe(Schema.toTaggedUnion("outcome"));
+export type FollowUpStageResult = typeof FollowUpStageResult.Type;
 
 export const StageResult = Schema.Union([TriageStageResult, ImplementStageResult, FollowUpStageResult]);
 export type StageResult = typeof StageResult.Type;
@@ -140,7 +174,20 @@ const implementStageResultSchema = standardSchema(
     }),
   ),
 );
-const followUpStageResultSchema = standardSchema(Schema.Struct(FollowUpStageResult.fields));
+const followUpStageResultInput = Schema.TaggedStruct("follow-up", {
+  outcome: FollowUpResultOutcome,
+  summary: TrimmedNonEmptyString,
+  speak: Schema.NullOr(Schema.Boolean),
+});
+const hasRequiredSpeakingDecision = (result: typeof followUpStageResultInput.Type) =>
+  result.outcome !== "noop" || result.speak !== null;
+const followUpStageResultSchema = standardSchema(
+  followUpStageResultInput.check(
+    Schema.makeFilter(hasRequiredSpeakingDecision, {
+      message: "noop requires a speaking decision",
+    }),
+  ),
+);
 
 export type StageResultJsonSchema =
   | typeof triageStageResultSchema
