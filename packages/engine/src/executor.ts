@@ -12,6 +12,7 @@ import {
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   decodeStageResultCompletion,
+  FollowUpStageResult,
   ImplementStageResult,
   issueTrackerErrorIsPermanent,
   type LifecycleStage,
@@ -577,14 +578,22 @@ export const make = Effect.gen(function* () {
   const applyFollowedUp = Effect.fn("Executor.applyFollowedUp")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    summary: string,
-    outcome: Extract<OperationOutcome, { readonly _tag: "FollowedUp" }>,
+    result: StageResult,
     atMillis: number,
   ) {
-    yield* postFollowUpSummary(workspace, item, summary);
+    if (!Schema.is(FollowUpStageResult)(result)) {
+      return yield* Effect.die(new Error("follow-up outcome did not carry a follow-up result"));
+    }
+    const shouldPost = FollowUpStageResult.match(result, {
+      pushed: () => true,
+      noop: ({ speak }) => speak,
+      stuck: () => false,
+    });
+    if (shouldPost) yield* postFollowUpSummary(workspace, item, result.summary);
     const context = item.followUp ?? defaultFollowUp;
     yield* issueTracker.followedUp(workspace, item.id, {
-      marker: followUpMarker(context, noProgressAfterRound(context, outcome.result)),
+      marker: followUpMarker(context, noProgressAfterRound(context, result.outcome)),
+      summary: result.summary,
       atMillis,
     });
   });
@@ -756,10 +765,8 @@ export const make = Effect.gen(function* () {
     const { record } = accepted;
     return yield* OperationOutcome.$match(outcome, {
       Failed: (outcome) => applyOperationFailure(workspace, item, accepted, acc, detail, outcome),
-      FollowedUp: (outcome) =>
-        applySuccessfulOutcome(record, acc, (atMillis) =>
-          applyFollowedUp(workspace, item, detail, outcome, atMillis),
-        ),
+      FollowedUp: () =>
+        applySuccessfulOutcome(record, acc, (atMillis) => applyFollowedUp(workspace, item, result, atMillis)),
       Implemented: () =>
         applySuccessfulOutcome(record, acc, (atMillis) => applyImplemented(workspace, item, atMillis)),
       PullRequestReady: () => openPullRequest(workspace, item, accepted, acc, result),

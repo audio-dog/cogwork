@@ -232,6 +232,7 @@ describe("stageResultSchema", () => {
             _tag: "follow-up",
             outcome: "pushed",
             summary: "Fixed the failing check and pushed.",
+            speak: null,
           }),
         ),
       );
@@ -243,6 +244,7 @@ describe("stageResultSchema", () => {
             _tag: "follow-up",
             outcome: "pushed",
             summary: " ",
+            speak: null,
           }),
         ),
       );
