@@ -141,8 +141,9 @@ const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(func
   const rpc = yield* RpcClient.make(DaemonRpcs);
   const runs = yield* rpc.ListRuns();
   const status = yield* rpc.GetStatus();
-  const harnesses = yield* Effect.result(rpc.GetHarnesses());
-  return { runs, status, reconciled, heartbeatsExit, harnesses };
+  const catalogs = yield* rpc.GetHarnessCatalogs();
+  const readiness = yield* Effect.result(rpc.GetHarnessReadiness());
+  return { runs, status, reconciled, heartbeatsExit, catalogs, readiness };
 });
 
 const connectedWorkspace: RegisteredWorkspace = {
@@ -315,10 +316,14 @@ describe("daemon server composition", () => {
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 
-  it.effect("does not report Harnesses as enabled when the Control store is unavailable", () =>
+  it.effect("serves catalogs without the Control store and fails readiness closed", () =>
     Effect.gen(function* () {
       const result = yield* inspectUnavailableDaemon();
-      assert.isTrue(Result.isFailure(result.harnesses));
+      assert.deepStrictEqual(
+        result.catalogs.map(({ harness }) => harness),
+        ["cursor"],
+      );
+      assert.isTrue(Result.isFailure(result.readiness));
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 });
