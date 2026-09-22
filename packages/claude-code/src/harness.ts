@@ -288,13 +288,6 @@ const managedCatalogOptions = {
   rawModelIds: claudeModelCatalog.rawModelIds,
 };
 
-const catalogSources = {
-  fallback: Harness.staticCatalogSource(managedCatalogOptions, {
-    source: "cogwork-fallback",
-    fallbackVersion: "claude-models-generated-1",
-  }),
-};
-
 const turnDiagnostics = (mode: ClaudeAuthenticationMode, cause: unknown) => {
   if (isHarnessError(cause)) return cause;
   const message = HarnessBridge.messageFromUnknown(cause);
@@ -418,7 +411,7 @@ const descriptor = (
     },
     authentication: authenticationProfiles[options.authentication.mode].binding,
     signIn: authenticationProfiles[options.authentication.mode].signIn,
-    catalogSources,
+    catalog: managedCatalogOptions,
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
     inheritedEnvironment,

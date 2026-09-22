@@ -52,11 +52,8 @@ const companionRunner = {
     takeover: false,
   },
   authentication: { mode: "host", reference: "companion login" },
-  catalogSources: {
-    fallback: Harness.staticCatalogSource(
-      { models: [{ value: "companion", label: "Companion" }] },
-      { source: "cogwork-fallback", fallbackVersion: "1" },
-    ),
+  catalog: {
+    models: [{ value: "companion", label: "Companion" }],
   },
   projectedMembers: [],
   planMiddleware: [],
