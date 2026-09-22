@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/features/harnesses-view.ts
+  s_9e058db2997479::t_137342825cb6aa 1-5,7-12,20-23
+  s_9e058db2997479::t_307bb9424a3bb3 6
+  s_9e058db2997479::t_9c26df0c8df439 13-19,24-27
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_9e058db2997479::t_ecd395fc80ce2c 22-23,33,104-105,110
+  s_9e058db2997479::t_4fd2d8102405c5 106-109,111
+  s_9e058db2997479::t_9c26df0c8df439 113-129
+  s_9e058db2997479::t_c6a8998447779e 3,5,16,102-103
+  s_9e058db2997479::t_137342825cb6aa 6,14,32,35
+  s_9e058db2997479::t_af034e6cc95b29 31,34,36,112,130-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7b8bd2725892937bf9be9869b503afa7cb3f944e",
+  "prompts": {},
+  "sessions": {
+    "s_9e058db2997479": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ca80-1abf-76d2-ae07-2b9c0ae69429",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
