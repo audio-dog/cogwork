@@ -31,15 +31,16 @@ describe("triggersFollowUp", () => {
     assert.isTrue(triggersFollowUp(pr({ checks: "failing" })));
   });
 
-  it("triggers on a changes-requested review", () => {
-    assert.isTrue(triggersFollowUp(pr({ review: "changes-requested" })));
+  it("does not trigger on a standing changes-requested review", () => {
+    assert.isFalse(triggersFollowUp(pr({ review: "changes-requested" })));
   });
 
-  it("triggers on a human comment newer than the last follow-up marker", () => {
-    assert.isTrue(triggersFollowUp(pr({ latestHumanCommentAtMillis: 10 })));
+  it("triggers once on a change request's feedback, then goes quiet", () => {
+    assert.isTrue(triggersFollowUp(pr({ review: "changes-requested", latestHumanCommentAtMillis: 10 })));
     assert.isFalse(
       triggersFollowUp(
         pr({
+          review: "changes-requested",
           latestHumanCommentAtMillis: 10,
           followUp: {
             checks: "passing",
