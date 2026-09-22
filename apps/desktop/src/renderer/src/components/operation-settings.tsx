@@ -1,4 +1,10 @@
-import type { ControlStore, HarnessCatalogChoice, LifecycleStage, WorkspaceId } from "@cogwork/contracts";
+import {
+  type ControlStore,
+  type HarnessCatalogChoice,
+  type LifecycleStage,
+  selectedHarnessCatalogModel,
+  type WorkspaceId,
+} from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Collapsible, CollapsibleContent } from "@cogwork/ui/components/collapsible";
@@ -43,6 +49,9 @@ import {
   type HarnessCatalog,
   harnessIsDisabled,
   harnessSelectionUpdates,
+  modelOptionStates,
+  modelOptionsCell,
+  modelOptionUpdates,
   type OperationSettingChanges,
   operationLabels,
   operationSummaries,
@@ -56,6 +65,7 @@ import {
 } from "../features/operation-settings";
 import { providerGlyph, providerLabel } from "../features/provider-presentation";
 import { ProviderGlyphIcon } from "./provider-glyph";
+import { TraitsMenu } from "./traits-menu";
 
 interface OperationSettingsState {
   readonly controlStore: ControlStore | null;
@@ -348,6 +358,7 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   const {
     state: { catalogs, controlStore, workspace },
     actions: { write },
+    meta: { disabled },
   } = useOperationSettings();
   const cell = (setting: DisplayedOperationSettingName) =>
     settingCell(controlStore, catalogs, workspace, operation, setting);
@@ -361,6 +372,9 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
   };
   const resetHarnessAndModel = () => applyHarnessSelection(null, null);
   const modelCell = cell("model");
+  const model = catalog ? selectedHarnessCatalogModel(catalog.models, modelCell.effective) : undefined;
+  const traits = model ? modelOptionStates(model, modelOptionsCell(controlStore, workspace, operation)) : [];
+  const hasTraits = catalog !== null && model !== undefined;
   const pairOwn = modelCell.own ?? harnessCell.own;
   const profileSpec: ControlSpec | null = catalog
     ? {
@@ -407,6 +421,13 @@ function OperationControls({ operation }: { readonly operation: LifecycleStage }
           catalogs={selectableCatalogs}
           onPick={applyHarnessSelection}
         />
+        {hasTraits ? (
+          <TraitsMenu
+            state={{ catalog, model, options: traits }}
+            actions={{ select: (options) => write(operation, modelOptionUpdates(model, options)) }}
+            meta={{ disabled }}
+          />
+        ) : null}
       </div>
       {rest.map((spec) => (
         <div key={spec.key} className="flex items-center gap-3">

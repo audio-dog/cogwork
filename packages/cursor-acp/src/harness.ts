@@ -325,6 +325,7 @@ const generatedCatalog = Harness.staticCatalogSource(
     models: cursorCatalog.models,
     generatedAgainst: cursorCatalog.generatedAgainst,
     rawModelIds: cursorCatalog.rawModelIds,
+    rawModelSelections: cursorCatalog.rawModelSelections,
   },
   { source: "cogwork-fallback", fallbackVersion: cursorCatalog.generatedAgainst },
 );

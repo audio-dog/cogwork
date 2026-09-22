@@ -1,5 +1,6 @@
 import {
   defaultControlStore,
+  type HarnessCatalogChoice,
   HarnessEnablement,
   HarnessItem,
   HarnessName,
@@ -17,6 +18,10 @@ import {
   harnessCatalogLoad,
   harnessIsDisabled,
   harnessSelectionUpdates,
+  modelOptionChoice,
+  modelOptionStates,
+  modelOptionsCell,
+  modelOptionUpdates,
   operationSettingBatch,
   operationSettingUpdate,
   policyProfileChoices,
@@ -47,6 +52,24 @@ const optionCatalog = (policyProfiles: ReadonlyArray<"read-only" | "full">) =>
     policyProfiles,
     provenance: { source: "cogwork-fallback", fallbackVersion: "test-1" },
   });
+
+const optionModel = {
+  value: "model-a",
+  label: "Model A",
+  options: [
+    {
+      type: "select",
+      id: "effort",
+      label: "Effort",
+      values: [
+        { value: "low", label: "Low" },
+        { value: "high", label: "High" },
+      ],
+      defaultValue: "high",
+    },
+    { type: "boolean", id: "speed", label: "Speed", defaultValue: false },
+  ],
+} satisfies HarnessCatalogChoice;
 
 describe("availableHarnessCatalogs", () => {
   it("keeps published labels while excluding unusable harnesses", () => {
@@ -181,14 +204,19 @@ describe("selectableHarnessCatalogs", () => {
 const store = (rows: ReadonlyArray<Record<string, unknown>>): Parameters<typeof settingCell>[0] =>
   ({ ...defaultControlStore, operationSettings: rows }) as Parameters<typeof settingCell>[0];
 
-const profileDefault = (setting: string, value: string) => ({
+const profileDefault = (setting: string, value: string | Record<string, string | boolean>) => ({
   setting,
   level: { _tag: "Default" },
   scope: { _tag: "SettingsProfile" },
   value,
 });
 
-const overlayOperation = (setting: string, operation: string, value: string, target = workspace) => ({
+const overlayOperation = (
+  setting: string,
+  operation: string,
+  value: string | Record<string, string | boolean>,
+  target = workspace,
+) => ({
   setting,
   level: { _tag: "Operation", workflow: "coding", operation },
   scope: { _tag: "PrivateWorkspaceOverlay", workspace: target },
@@ -283,6 +311,79 @@ describe("settingCell", () => {
     expect(
       settingCell(controlStore, cursorCatalogs, workspace, "triage", "permission-profile"),
     ).toMatchObject({ own: "read-only", effective: "read-only", stale: true });
+  });
+});
+
+describe("model options", () => {
+  it("distinguishes inherited selections from descriptor defaults", () => {
+    const controlStore = store([profileDefault("model-options", { effort: "low" })]);
+
+    const cell = modelOptionsCell(controlStore, workspace, "implement");
+
+    expect(cell).toEqual({ own: null, inherited: { effort: "low" }, effective: { effort: "low" } });
+    expect(modelOptionStates(optionModel, cell)).toEqual([
+      { descriptor: optionModel.options[0], value: "low", source: "inherited" },
+      { descriptor: optionModel.options[1], value: false, source: "default" },
+    ]);
+  });
+
+  it("treats an atomic override as replacing inherited selections", () => {
+    const controlStore = store([
+      profileDefault("model-options", { effort: "low", speed: true }),
+      overlayOperation("model-options", "implement", { effort: "high" }),
+    ]);
+
+    const states = modelOptionStates(optionModel, modelOptionsCell(controlStore, workspace, "implement"));
+
+    expect(states.map(({ value, source }) => ({ value, source }))).toEqual([
+      { value: "high", source: "own" },
+      { value: false, source: "default" },
+    ]);
+  });
+
+  it("surfaces stale selections beside their descriptor defaults", () => {
+    const states = modelOptionStates(optionModel, {
+      own: { effort: "missing" },
+      inherited: null,
+      effective: { effort: "missing" },
+    });
+
+    expect(states[0]).toMatchObject({ value: "high", source: "stale", staleValue: "missing" });
+  });
+
+  it("resolves each available choice to a valid managed selection", () => {
+    const catalog = {
+      ...optionCatalog(["full"]),
+      rawModelSelections: {
+        "model-high": { model: "model-a", options: { effort: "high", speed: false } },
+        "model-high-fast": { model: "model-a", options: { effort: "high", speed: true } },
+        "model-low": { model: "model-a", options: { effort: "low", speed: false } },
+      },
+    };
+
+    expect(modelOptionChoice(catalog, optionModel, { effort: "low", speed: false }, "speed", true)).toEqual({
+      effort: "high",
+      speed: true,
+    });
+    expect(modelOptionChoice(catalog, optionModel, { effort: "high", speed: true }, "effort", "low")).toEqual(
+      {
+        effort: "low",
+        speed: false,
+      },
+    );
+    expect(modelOptionChoice(optionCatalog(["full"]), optionModel, { effort: "low" }, "speed", true)).toEqual(
+      {
+        effort: "low",
+        speed: true,
+      },
+    );
+  });
+
+  it("writes the effective model and complete options in one batch", () => {
+    expect(modelOptionUpdates(optionModel, { effort: "low", speed: true })).toEqual([
+      { setting: "model", value: "model-a" },
+      { setting: "model-options", value: { effort: "low", speed: true } },
+    ]);
   });
 });
 

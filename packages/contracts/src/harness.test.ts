@@ -77,6 +77,11 @@ describe("Harness managed catalog", () => {
     const catalog = Schema.decodeSync(HarnessOptionCatalog)({
       generatedAgainst: "2026.08.11-e8db854",
       rawModelIds: ["auto", "model-high", "model-high-fast"],
+      rawModelSelections: {
+        auto: { model: "auto", options: {} },
+        "model-high": { model: "model", options: { effort: "high", speed: false } },
+        "model-high-fast": { model: "model", options: { effort: "high", speed: true } },
+      },
       models: [
         { value: "auto", label: "Auto", default: true },
         {
@@ -100,6 +105,10 @@ describe("Harness managed catalog", () => {
     assert.strictEqual(catalog.generatedAgainst, "2026.08.11-e8db854");
     assert.strictEqual(catalog.models[0]?.default, true);
     assert.deepStrictEqual(catalog.rawModelIds, ["auto", "model-high", "model-high-fast"]);
+    assert.deepStrictEqual(catalog.rawModelSelections?.["model-high-fast"], {
+      model: "model",
+      options: { effort: "high", speed: true },
+    });
   });
 
   it("rejects ambiguous model and option identities", () => {

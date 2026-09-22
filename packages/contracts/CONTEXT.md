@@ -362,6 +362,7 @@ _Avoid_: Provider key, Cogwork login, harness fallback
 
 **Harness option catalog**:
 The controlled model and option choices one Harness offers: checked-in generated data shipped by that Harness's package, stamped with the package version and the CLI version it was generated against — never a runtime observation (ADR 0024). An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input.
+Composite native model ids also publish their normalized selections as the validity oracle for clients that must disable sparse option combinations.
 _Avoid_: Model catalog, settings, arbitrary option, probed catalog
 
 **Option descriptor**:

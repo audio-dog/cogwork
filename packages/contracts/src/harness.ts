@@ -210,6 +210,7 @@ export class HarnessOptionCatalog extends Schema.Class<HarnessOptionCatalog>("Ha
   models: Schema.Array(HarnessCatalogChoice),
   generatedAgainst: Schema.optionalKey(TrimmedNonEmptyString),
   rawModelIds: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
+  rawModelSelections: Schema.optionalKey(Schema.Record(TrimmedNonEmptyString, HarnessRawModelSelection)),
   policyProfiles: Schema.Array(RunPlanPolicyProfile),
   provenance: HarnessCatalogProvenance,
 }) {}

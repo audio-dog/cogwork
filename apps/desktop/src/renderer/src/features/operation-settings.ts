@@ -6,8 +6,9 @@ import {
   type HarnessOptionCatalog,
   type HarnessOverview,
   harnessEnabled,
+  harnessModelOptionAccepts,
   LifecycleStage,
-  type ModelOptionSelections,
+  ModelOptionSelections,
   type OperationSettingBatch,
   type OperationSettingName,
   type OperationSettingRow,
@@ -16,6 +17,7 @@ import {
   resolveOperationSetting,
   type WorkspaceId,
 } from "@cogwork/contracts";
+import * as Schema from "effect/Schema";
 import { providerLabel } from "./provider-presentation";
 
 /** `operationSettingRefusal` refuses any workflow but this one, so it is fixed today. */
@@ -36,6 +38,19 @@ export const operationSummaries: Record<LifecycleStage, string> = {
 };
 
 export type HarnessCatalog = HarnessOptionCatalog & { readonly harness: HarnessName };
+
+export interface ModelOptionsCell {
+  readonly own: ModelOptionSelections | null;
+  readonly inherited: ModelOptionSelections | null;
+  readonly effective: ModelOptionSelections;
+}
+
+export interface ModelOptionState {
+  readonly descriptor: NonNullable<HarnessCatalogChoice["options"]>[number];
+  readonly value: string | boolean;
+  readonly source: "own" | "inherited" | "default" | "stale";
+  readonly staleValue?: string | boolean;
+}
 
 export const availableHarnessCatalogs = (overview: HarnessOverview | null) =>
   overview?.harnesses.flatMap(({ harness, catalog }) =>
@@ -245,6 +260,97 @@ export const settingCell = (
     stale: isStale(setting, values.effective, controlStore, catalogs, workspace, operation),
   };
 };
+
+const asModelOptionSelections = (value: ReturnType<typeof resolveOperationSetting>) =>
+  Schema.is(ModelOptionSelections)(value) ? value : null;
+
+export const modelOptionsCell = (
+  controlStore: ControlStore | null,
+  workspace: WorkspaceId,
+  operation: LifecycleStage,
+) => {
+  const rows = controlStore?.operationSettings ?? [];
+  const context = { workflow: codingWorkflow, operation, workspace };
+  const inherited = asModelOptionSelections(
+    resolveOperationSetting(
+      rows.filter((row) => !isOverride(row, operation, workspace)),
+      "model-options",
+      context,
+    ),
+  );
+  const isStoredModelOptionsOverride = (row: OperationSettingRow) =>
+    row.setting === "model-options" && isOverride(row, operation, workspace);
+  const stored = rows.find(isStoredModelOptionsOverride);
+  const own = stored?.setting === "model-options" ? stored.value : null;
+  return { own, inherited, effective: own ?? inherited ?? {} } satisfies ModelOptionsCell;
+};
+
+const modelOptionSources = [
+  { source: "own", selections: (cell: ModelOptionsCell) => cell.own },
+  { source: "inherited", selections: (cell: ModelOptionsCell) => cell.inherited },
+] satisfies ReadonlyArray<{
+  readonly source: Exclude<ModelOptionState["source"], "default" | "stale">;
+  readonly selections: (cell: ModelOptionsCell) => ModelOptionSelections | null;
+}>;
+
+const modelOptionSource = (
+  isStale: boolean,
+  storedSource: Exclude<ModelOptionState["source"], "default" | "stale"> | undefined,
+  usesStoredSelection: boolean,
+) => {
+  const sources = [
+    { matches: isStale, value: "stale" },
+    { matches: usesStoredSelection, value: storedSource ?? "default" },
+    { matches: true, value: "default" },
+  ] satisfies ReadonlyArray<{ readonly matches: boolean; readonly value: ModelOptionState["source"] }>;
+  return sources.find(({ matches }) => matches)?.value ?? "default";
+};
+
+export const modelOptionStates = (model: HarnessCatalogChoice, cell: ModelOptionsCell) =>
+  (model.options ?? []).map((descriptor) => {
+    const selected = cell.effective[descriptor.id];
+    const isSelected = harnessModelOptionAccepts(descriptor, selected);
+    const hasEffectiveSelection = Object.hasOwn(cell.effective, descriptor.id);
+    const isStale = hasEffectiveSelection && !isSelected;
+    const source = modelOptionSources.find(({ selections }) => selections(cell) !== null);
+    const storedSelections = source?.selections(cell);
+    const hasStoredSelection = storedSelections ? Object.hasOwn(storedSelections, descriptor.id) : false;
+    const usesStoredSelection = isSelected && source !== undefined && hasStoredSelection;
+    return {
+      descriptor,
+      value: isSelected ? selected : descriptor.defaultValue,
+      source: modelOptionSource(isStale, source?.source, usesStoredSelection),
+      ...(isStale ? { staleValue: selected } : {}),
+    } satisfies ModelOptionState;
+  });
+
+const matchingOptionCount = (candidate: ModelOptionSelections, current: ModelOptionSelections) =>
+  Object.entries(current).filter(([id, value]) => candidate[id] === value).length;
+
+export const modelOptionChoice = (
+  catalog: HarnessOptionCatalog,
+  model: HarnessCatalogChoice,
+  current: ModelOptionSelections,
+  id: string,
+  value: string | boolean,
+) => {
+  const requested = { ...current, [id]: value };
+  if (!catalog.rawModelSelections) return requested;
+  const matchesChoice = (selection: (typeof catalog.rawModelSelections)[string]) =>
+    selection.model === model.value && selection.options[id] === value;
+  return Object.values(catalog.rawModelSelections)
+    .filter(matchesChoice)
+    .toSorted(
+      (left, right) =>
+        matchingOptionCount(right.options, requested) - matchingOptionCount(left.options, requested),
+    )[0]?.options;
+};
+
+export const modelOptionUpdates = (model: HarnessCatalogChoice, options: ModelOptionSelections) =>
+  [
+    { setting: "model", value: model.value },
+    { setting: "model-options", value: options },
+  ] satisfies OperationSettingChanges;
 
 /** A saved choice absent from the current catalog is stale drift, never free-form input. */
 interface StaleSelection {
