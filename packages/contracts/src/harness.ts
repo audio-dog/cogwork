@@ -33,23 +33,6 @@ export const HarnessState = Schema.TaggedUnion({
 });
 export type HarnessState = typeof HarnessState.Type;
 
-export const HarnessCatalogProvenance = Schema.Union([
-  Schema.Struct({
-    source: Schema.Literal("tanstack-runtime"),
-    packageVersion: TrimmedNonEmptyString,
-  }),
-  Schema.Struct({
-    source: Schema.Literal("native-discovery"),
-    runtimeHost: TrimmedNonEmptyString,
-    harnessVersion: TrimmedNonEmptyString,
-  }),
-  Schema.Struct({
-    source: Schema.Literal("cogwork-fallback"),
-    fallbackVersion: TrimmedNonEmptyString,
-  }),
-]).pipe(Schema.toTaggedUnion("source"));
-export type HarnessCatalogProvenance = typeof HarnessCatalogProvenance.Type;
-
 const HarnessModelOptionValue = Schema.Struct({
   value: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
@@ -212,7 +195,7 @@ export class HarnessOptionCatalog extends Schema.Class<HarnessOptionCatalog>("Ha
   rawModelIds: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
   rawModelSelections: Schema.optionalKey(Schema.Record(TrimmedNonEmptyString, HarnessRawModelSelection)),
   policyProfiles: Schema.Array(RunPlanPolicyProfile),
-  provenance: HarnessCatalogProvenance,
+  provenance: Schema.Struct({ source: Schema.Literal("managed") }),
 }) {}
 
 export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
@@ -228,11 +211,7 @@ export class HarnessItem extends Schema.Class<HarnessItem>("HarnessItem")({
     Schema.withConstructorDefault(Effect.succeed([])),
     Schema.withDecodingDefaultKey(Effect.succeed([])),
   ),
-  models: Schema.Array(TrimmedNonEmptyString),
-  catalog: Schema.NullOr(HarnessOptionCatalog).pipe(
-    Schema.withConstructorDefault(Effect.succeed(null)),
-    Schema.withDecodingDefaultKey(Effect.succeed(null)),
-  ),
+  catalog: HarnessOptionCatalog,
 }) {}
 
 export class HarnessOverview extends Schema.Class<HarnessOverview>("HarnessOverview")({
