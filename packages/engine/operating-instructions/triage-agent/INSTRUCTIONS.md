@@ -54,6 +54,8 @@ The states, and when each is right:
 - `needs-info` — underspecified; you can't propose against it until the reporter answers.
 - `wontfix` — recommendation only, routed through `ready-for-human` (see the [authority boundary](#authority-boundary)).
 
+**Rate readiness, not timing.** Sequencing is the engine's business, not yours: a `ready-for-agent` item the Issue tracker reports open blockers on is held in the *blocked* bucket and scheduled the moment the last one closes. `ready-for-human` instead parks it in *needs-human*, where it stays until a person relabels it by hand. So judge the work item as of the moment implementation starts, with every blocker landed, and let the findings name what it waits on. A work item that lists its own prerequisites is naming dependencies, not lowering your confidence.
+
 ## 1. Gather context
 
 Read the work item body, comments, labels, author, and dates. Parse any prior triage proposal or notes so you build on them instead of re-proposing settled ground. Establish the category and the resolved intent per [Brief precedence](#brief-precedence).
@@ -76,7 +78,7 @@ Where it's cheap, check that the claim holds up rather than taking it at face va
 Decide the disposition:
 
 - Can't propose against it yet → `needs-info`.
-- Otherwise, rate your **confidence** that the work item is ready for an unattended agent, and let it gate the hand-off: **High → `ready-for-agent`**, **Medium or Low → `ready-for-human`**. When you're on the line between two ratings, round down — the cost of a wrong `ready-for-agent` (an agent building the wrong thing) is higher than a human glancing at a `ready-for-human`.
+- Otherwise, rate your **confidence** that an unattended agent could build the work item correctly, and let it gate the hand-off: **High → `ready-for-agent`**, **Medium or Low → `ready-for-human`**. When you're on the line between two ratings, round down — the cost of a wrong `ready-for-agent` (an agent building the wrong thing) is higher than a human glancing at a `ready-for-human`.
 
 Then write the proposal for the structured result's `proposal` field — it becomes the published comment body, so write it that way. Put the chosen state in the result's `role` field. **Do not add the AI disclaimer**; the engine prepends it. Draft the Agent Brief per [AGENT-BRIEF.md](AGENT-BRIEF.md) whenever you dispose `ready-for-agent`.
 
