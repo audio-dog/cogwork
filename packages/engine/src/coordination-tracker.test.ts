@@ -82,7 +82,10 @@ const toFakeItem = (seed: SeedItem): readonly [number, FakeItem] => [
 
 const numberOf = (id: WorkItemId) => Number.parseInt(id.replace(/^#/, ""), 10);
 
-const makeFakeHost = Effect.fn("fakeHost")(function* (seed: ReadonlyArray<SeedItem>) {
+const makeFakeHost = Effect.fn("fakeHost")(function* (
+  seed: ReadonlyArray<SeedItem>,
+  failedRoleRemoval?: TriageRole,
+) {
   const items = yield* Ref.make(new Map<number, FakeItem>(seed.map(toFakeItem)));
   const nextCommentId = yield* Ref.make(1000);
   const roleLog = yield* Ref.make<ReadonlyArray<{ readonly number: number; readonly changes: RoleChanges }>>(
@@ -141,7 +144,10 @@ const makeFakeHost = Effect.fn("fakeHost")(function* (seed: ReadonlyArray<SeedIt
     addClaim: (number) => patch(number, withLabel(claimLabel)),
     removeClaim: (number) => patch(number, withoutLabel(claimLabel)),
     addRole: (number, role) => patch(number, withLabel(role)),
-    removeRole: (number, role) => patch(number, withoutLabel(role)),
+    removeRole: (number, role) =>
+      role === failedRoleRemoval
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: `cannot remove ${role}` }))
+        : patch(number, withoutLabel(role)),
     afterRoleChange: (number, changes) => Ref.update(roleLog, (log) => [...log, { number, changes }]),
   };
 
@@ -399,9 +405,17 @@ describe("coordination outcomes", () => {
     Effect.gen(function* () {
       const { host, itemAt } = yield* makeFakeHost([{ number: 12, labels: ["ready-for-agent"] }]);
       const tracker = makeCoordinationTracker(host);
-      yield* tracker.followedUp(workspace, decodeId("#12"), { marker, atMillis: 13 });
+      yield* tracker.followedUp(workspace, decodeId("#12"), {
+        marker,
+        summary: "The requested change was already correct.",
+        atMillis: 13,
+      });
       const stored = yield* itemAt(12);
       assert.include(ledgerBody(stored?.comments ?? []), "follow-up completed.");
+      assert.strictEqual(
+        Coordination.coordinationDetail(codec, ledgerBody(stored?.comments ?? [])),
+        "The requested change was already correct.",
+      );
       const item = yield* observed(tracker, "#12");
       assert.deepStrictEqual(item?.followUp, marker);
       assert.deepStrictEqual(item?.attempts, [{ stage: "follow-up", outcome: "succeeded", atMillis: 13 }]);
@@ -516,8 +530,26 @@ describe("coordination outcomes", () => {
         "Follow-up made no progress. Handing this to a human.",
       );
       const item = yield* observed(tracker, "#15");
-      assert.include([...(item?.roles ?? [])], "ready-for-human");
+      assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-human"]);
       assert.deepStrictEqual(item?.attempts, [{ stage: "follow-up", outcome: "abandoned", atMillis: 16 }]);
+    }),
+  );
+
+  it.effect("stalled restores the prior role when its role swap fails", () =>
+    Effect.gen(function* () {
+      const { host } = yield* makeFakeHost([{ number: 15, labels: ["ready-for-agent"] }], "ready-for-agent");
+      const tracker = makeCoordinationTracker(host);
+      const error = yield* Effect.flip(
+        tracker.stalled(workspace, decodeId("#15"), {
+          marker,
+          atMillis: 16,
+          detail: "Follow-up made no progress. Handing this to a human.",
+        }),
+      );
+
+      assert.strictEqual(error._tag, "IssueTrackerError");
+      const item = yield* observed(tracker, "#15");
+      assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-agent"]);
     }),
   );
 
@@ -541,9 +573,6 @@ describe("handoffRoleFor", () => {
   it("maps each staged role back to the role a hand-off clears", () => {
     assert.strictEqual(handoffRoleFor("implement"), "ready-for-agent");
     assert.strictEqual(handoffRoleFor("triage"), "needs-triage");
-  });
-
-  it("clears no role for stages that carry none", () => {
-    assert.isNull(handoffRoleFor("follow-up"));
+    assert.strictEqual(handoffRoleFor("follow-up"), "ready-for-agent");
   });
 });

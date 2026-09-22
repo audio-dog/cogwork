@@ -116,12 +116,32 @@ describe("StageResult", () => {
         _tag: "follow-up",
         outcome: "noop",
         summary: "  Checks already green.  ",
+        speak: true,
       });
 
-      assert.isTrue(Schema.is(FollowUpStageResult)(result));
-      if (result._tag !== "follow-up") return assert.fail("expected a follow-up result");
-      assert.strictEqual(result.outcome, "noop");
-      assert.strictEqual(result.summary, "Checks already green.");
+      if (!Schema.is(FollowUpStageResult)(result)) return assert.fail("expected a follow-up result");
+      FollowUpStageResult.match(result, {
+        pushed: () => assert.fail("expected a noop follow-up result"),
+        noop: (noop) => {
+          assert.strictEqual(noop.summary, "Checks already green.");
+          assert.isTrue(noop.speak);
+        },
+        stuck: () => assert.fail("expected a noop follow-up result"),
+      });
+    }),
+  );
+
+  it.effect("rejects a noop follow-up result without a speaking decision", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        Schema.decodeUnknownEffect(StageResult)({
+          _tag: "follow-up",
+          outcome: "noop",
+          summary: "Checks already green.",
+        }),
+      );
+
+      assert.strictEqual(error._tag, "SchemaError");
     }),
   );
 
@@ -175,6 +195,38 @@ describe("StageResult", () => {
             summary: "Implementation complete.",
             title: null,
             body: null,
+          }),
+        ),
+      );
+
+      assert.isDefined(result.issues);
+    }),
+  );
+
+  it("projects follow-up results as a structured-output-compatible root object", () => {
+    const schema = stageResultJsonSchema("follow-up")["~standard"].jsonSchema.input({
+      target: "draft-2020-12",
+    });
+    assert.strictEqual(schema.type, "object");
+    assert.notProperty(schema, "anyOf");
+    assert.sameMembers(Array.isArray(schema.required) ? schema.required : [], [
+      "_tag",
+      "outcome",
+      "summary",
+      "speak",
+    ]);
+  });
+
+  it.effect("rejects a null speaking decision for noop through the structured-output schema", () =>
+    Effect.gen(function* () {
+      const schema = stageResultJsonSchema("follow-up");
+      const result = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "follow-up",
+            outcome: "noop",
+            summary: "Checks already green.",
+            speak: null,
           }),
         ),
       );

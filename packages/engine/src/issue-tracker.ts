@@ -64,6 +64,7 @@ export interface ImplementedOutcome {
 
 export interface FollowedUpOutcome {
   readonly marker: FollowUpMarker;
+  readonly summary: string;
   readonly atMillis: number;
 }
 

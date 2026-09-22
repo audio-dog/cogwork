@@ -436,8 +436,29 @@ const noopFollowUpEvents: ReadonlyArray<AgUiEvent> = [
   sessionEvent("sess-42"),
   text("The PR is green and the comment needed no code change."),
   structuredComplete(
-    { _tag: "follow-up", outcome: "noop", summary: "The PR is green and needs no code change." },
-    '{"_tag":"follow-up","outcome":"noop","summary":"The PR is green and needs no code change."}',
+    {
+      _tag: "follow-up",
+      outcome: "noop",
+      summary: "The PR is green and needs no code change.",
+      speak: false,
+    },
+    '{"_tag":"follow-up","outcome":"noop","summary":"The PR is green and needs no code change.","speak":false}',
+  ),
+  finished,
+];
+
+const speakingNoopFollowUpEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  sessionEvent("sess-42"),
+  text("The reported issue is expected behavior."),
+  structuredComplete(
+    {
+      _tag: "follow-up",
+      outcome: "noop",
+      summary: "The reported issue is expected behavior.",
+      speak: true,
+    },
+    '{"_tag":"follow-up","outcome":"noop","summary":"The reported issue is expected behavior.","speak":true}',
   ),
   finished,
 ];
@@ -491,6 +512,7 @@ interface Call {
   readonly note?: string;
   readonly checks?: string;
   readonly detail?: string;
+  readonly summary?: string;
   readonly noProgress?: number;
 }
 
@@ -556,6 +578,7 @@ function trackerRecorder(
             item: itemId,
             checks: outcome.marker.checks,
             noProgress: outcome.marker.noProgress,
+            summary: outcome.summary,
           }),
         attemptFailed: (_workspace, itemId, outcome) => {
           const recorded = record(calls, {
@@ -3925,6 +3948,29 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([runner(followUpEvents)], existingWorktree, recordingProvider)));
   });
 
+  it.effect("posts a noop summary when the round chooses to speak", () => {
+    return Effect.gen(function* () {
+      const posted = yield* PostedComments;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, followUpItem);
+
+      const [comment] = yield* Ref.get(posted);
+      assert.include(comment?.body ?? "", "reported issue is expected behavior");
+    }).pipe(
+      Effect.provide(provide([runner(speakingNoopFollowUpEvents)], existingWorktree, recordingProvider)),
+    );
+  });
+
+  it.effect("keeps a noop round silent when it has nothing to answer", () => {
+    return Effect.gen(function* () {
+      const posted = yield* PostedComments;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, followUpItem);
+
+      assert.isEmpty(yield* Ref.get(posted));
+    }).pipe(Effect.provide(provide([runner(noopFollowUpEvents)], existingWorktree, recordingProvider)));
+  });
+
   it.effect("settles a successful follow-up when posting its pull request summary fails", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -3963,6 +4009,7 @@ describe("Executor.execute", () => {
         const log = yield* Ref.get(calls);
         const followedUp = log.find((c) => c.method === "followedUp");
         assert.strictEqual(followedUp?.checks, "failing");
+        assert.strictEqual(followedUp?.summary, "The PR is green and needs no code change.");
         assert.isFalse(log.some((c) => c.method === "attemptFailed"));
         assert.isFalse(log.some((c) => c.method === "handOff"));
         assert.isTrue(log.some((c) => c.method === "release"));

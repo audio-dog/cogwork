@@ -27,11 +27,13 @@ import type {
 } from "./issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
-export const handoffRoleFor = (stage: LifecycleStage): TriageRole | null => {
-  if (stage === "implement") return "ready-for-agent";
-  if (stage === "triage") return "needs-triage";
-  return null;
-};
+const handoffRoles = {
+  triage: "needs-triage",
+  implement: "ready-for-agent",
+  "follow-up": "ready-for-agent",
+} satisfies Record<LifecycleStage, TriageRole>;
+
+export const handoffRoleFor = (stage: LifecycleStage) => handoffRoles[stage];
 
 export interface ListedItem<CommentId> {
   readonly id: WorkItemId;
@@ -93,8 +95,16 @@ export const makeCoordinationTracker = <Ref, CommentId>(
   const { codec } = host;
 
   const applyRoles = Effect.fn("coordinationTracker.applyRoles")(function* (ref: Ref, changes: RoleChanges) {
-    yield* Effect.forEach(changes.remove, (role) => host.removeRole(ref, role));
     yield* Effect.forEach(changes.add, (role) => host.addRole(ref, role));
+    yield* Effect.forEach(changes.remove, (role) => host.removeRole(ref, role)).pipe(
+      Effect.tapError(() =>
+        Effect.forEach(changes.add, (role) => host.removeRole(ref, role)).pipe(
+          Effect.catchTag("IssueTrackerError", (error) =>
+            Effect.logWarning("role transition rollback failed", { message: error.message }),
+          ),
+        ),
+      ),
+    );
     yield* host.afterRoleChange(ref, changes);
   });
 
@@ -171,7 +181,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: FollowedUpOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* writeFollowUp(ref, outcome.marker);
+      yield* writeFollowUp(ref, outcome.marker, outcome.summary);
       yield* writeAttempt(ref, { stage: "follow-up", outcome: "succeeded", atMillis: outcome.atMillis });
     }),
     attemptFailed: Effect.fn("coordinationTracker.attemptFailed")(function* (
@@ -192,8 +202,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: HandOffOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      const cleared = handoffRoleFor(outcome.stage);
-      yield* applyRoles(ref, { remove: cleared ? [cleared] : [], add: ["ready-for-human"] });
+      yield* applyRoles(ref, { remove: [handoffRoleFor(outcome.stage)], add: ["ready-for-human"] });
       if (outcome.note !== undefined) yield* writeNote(ref, outcome.note);
     }),
     handBack: Effect.fn("coordinationTracker.handBack")(function* (
@@ -215,7 +224,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ) {
       const ref = yield* host.resolve(workspace, id);
       yield* writeFollowUp(ref, outcome.marker, outcome.detail);
-      yield* applyRoles(ref, { remove: [], add: ["ready-for-human"] });
+      yield* applyRoles(ref, { remove: [handoffRoleFor("follow-up")], add: ["ready-for-human"] });
       yield* writeAttempt(ref, { stage: "follow-up", outcome: "abandoned", atMillis: outcome.atMillis });
     }),
     reclassify: Effect.fn("coordinationTracker.reclassify")(function* (
