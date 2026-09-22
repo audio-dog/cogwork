@@ -769,6 +769,16 @@ describe("GitHub client", () => {
     transientWrite(503, (client) => client.removeLabel(repo, 287, "cogwork:claimed")),
   );
 
+  it.effect("accepts removal when the issue no longer has the label", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, 404)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      yield* client.removeLabel(repo, 287, "ready-for-agent");
+      assert.strictEqual(fetch.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("does not replay a transient issue creation failure", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, 503)));
 

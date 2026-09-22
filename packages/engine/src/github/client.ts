@@ -757,7 +757,8 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         }),
       );
     }
-    if (response.status >= 400) {
+    const idempotentDelete = request.method === "DELETE" && response.status === 404;
+    if (response.status >= 400 && !idempotentDelete) {
       return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`, false));
     }
     return yield* withTransientAttemptDeadline(consume(response));
