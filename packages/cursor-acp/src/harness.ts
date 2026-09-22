@@ -326,15 +326,12 @@ type CursorOpenTransport = Effect.Success<ReturnType<typeof openCursorTransport>
 
 type CursorAdapter = AcpCompatibleTextAdapter<CursorModel, CursorModelOptions>;
 
-const generatedCatalog = Harness.staticCatalogSource(
-  {
-    models: cursorCatalog.models,
-    generatedAgainst: cursorCatalog.generatedAgainst,
-    rawModelIds: cursorCatalog.rawModelIds,
-    rawModelSelections: cursorCatalog.rawModelSelections,
-  },
-  { source: "cogwork-fallback", fallbackVersion: cursorCatalog.generatedAgainst },
-);
+const generatedCatalog = {
+  models: cursorCatalog.models,
+  generatedAgainst: cursorCatalog.generatedAgainst,
+  rawModelIds: cursorCatalog.rawModelIds,
+  rawModelSelections: cursorCatalog.rawModelSelections,
+};
 const cursorNativeSelection = (model: string | null, options: ModelOptionSelections) => {
   const defaultModel = cursorCatalog.models.find(({ default: isDefault }) => isDefault)?.value ?? "auto";
   return cursorNativeModelId(cursorCatalog, model ?? defaultModel, options);
@@ -396,14 +393,13 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     mode: "host",
     reference: "Cursor host login",
   };
-  const catalogSources = { fallback: generatedCatalog };
   const readiness = () => cursorReadiness(agentBin);
   const makeRunner = (openTransport: CursorOpenTransport, model: CursorModel) => {
     const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter> = {
       name: options.name,
       capabilities,
       authentication,
-      catalogSources,
+      catalog: generatedCatalog,
       readiness,
       sharedGit: "none",
       inheritedEnvironment,
@@ -434,7 +430,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     execution: capabilities.execution,
     capabilities: capabilities.profile,
     authentication,
-    catalogSources,
+    catalog: generatedCatalog,
     readiness,
     validateLaunch: (request) =>
       Harness.validateCheckoutDirectory(options.name, request.plan.sandbox.workspace),
