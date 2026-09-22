@@ -15,20 +15,14 @@ import {
   versionLabel,
 } from "./harnesses-view";
 
-const item = (
-  state: HarnessState,
-  version: string | null,
-  models: ReadonlyArray<string> = [],
-  enabled = true,
-) =>
+const item = (state: HarnessState, version: string | null, enabled = true) =>
   HarnessItem.make({
     harness: Schema.decodeSync(HarnessName)("codex"),
     enabled,
     version,
     state,
     diagnostics: [],
-    models,
-    catalog: null,
+    catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
   });
 
 describe("versionLabel", () => {
@@ -79,7 +73,7 @@ describe("harnessSummary", () => {
   });
 
   it("puts disabled ahead of readiness", () => {
-    const summary = harnessSummary(item(HarnessState.cases.Ready.make({}), null, [], false));
+    const summary = harnessSummary(item(HarnessState.cases.Ready.make({}), null, false));
     expect(summary).toEqual({ headline: "Disabled", detail: null, attention: "muted", signIn: null });
   });
 });

@@ -1,6 +1,7 @@
 import {
   defaultControlStore,
   type HarnessName,
+  type HarnessOptionCatalog,
   type OperationSettingRow,
   type RunPlanPolicyProfile,
 } from "@cogwork/contracts";
@@ -99,14 +100,17 @@ export const engineTestLayerWithOperationResolution = ({
     assemble: () => Effect.succeed(context),
   });
   const harnessService = Layer.mock(Harness, {
-    names: [harness],
     signIn: () => null,
-    catalog: () =>
-      Effect.succeed({
-        models: [],
-        policyProfiles,
-        provenance: { source: "cogwork-fallback", fallbackVersion: "test" },
-      }),
+    catalogs: new Map<HarnessName, HarnessOptionCatalog>([
+      [
+        harness,
+        {
+          models: [],
+          policyProfiles,
+          provenance: { source: "managed" },
+        },
+      ],
+    ]),
     preflight: () => Effect.void,
     sessionKind: () => "opaque-handle",
     capabilities: () => ({

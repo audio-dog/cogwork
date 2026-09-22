@@ -210,18 +210,19 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
 describe("Cursor Harness registry", () => {
-  it.effect("serves generated base models and option descriptors", () =>
-    Effect.gen(function* () {
-      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
-      const catalog = yield* Harness.make([runner]).catalog(cursorName);
+  it("serves generated base models and option descriptors", () => {
+    const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+    const catalog = Harness.make([runner]).catalogs.get(cursorName);
 
-      assert.deepStrictEqual(catalog.models, cursorCatalog.models);
-      assert.isTrue(catalog.models.some(({ options }) => options?.some(({ id }) => id === "effort")));
-      assert.strictEqual(catalog.generatedAgainst, cursorCatalog.generatedAgainst);
-      assert.deepStrictEqual(catalog.rawModelIds, cursorCatalog.rawModelIds);
-      assert.deepStrictEqual(catalog.rawModelSelections, cursorCatalog.rawModelSelections);
-    }).pipe(Effect.provide(harnessRunnerLayer)),
-  );
+    assert.isNotNull(catalog);
+    if (!catalog) return;
+    assert.deepStrictEqual(catalog.models, cursorCatalog.models);
+    assert.isTrue(catalog.models.some(({ options }) => options?.some(({ id }) => id === "effort")));
+    assert.strictEqual(catalog.generatedAgainst, cursorCatalog.generatedAgainst);
+    assert.deepStrictEqual(catalog.rawModelIds, cursorCatalog.rawModelIds);
+    assert.deepStrictEqual(catalog.rawModelSelections, cursorCatalog.rawModelSelections);
+    assert.deepStrictEqual(catalog.provenance, { source: "managed" });
+  });
 
   it.effect("reports outdated and missing native Harnesses", () =>
     Effect.gen(function* () {

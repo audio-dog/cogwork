@@ -17,7 +17,6 @@ import {
   type HarnessReadiness,
   type HarnessRunner,
   make as makeHarness,
-  staticCatalogSource,
 } from "./harness";
 import { HarnessReadinessCache, layer as harnessReadinessLayer } from "./harness-readiness";
 import { engineTestLayer } from "./testing/engine-test-layer";
@@ -72,11 +71,9 @@ const runner = (probe: ReadinessProbeService): HarnessRunner => ({
     takeover: false,
   },
   authentication: { mode: "host", reference: "test login" },
-  catalogSources: {
-    fallback: staticCatalogSource(
-      { models: [{ value: "model-a", label: "Model A" }], generatedAgainst: "1.2.3" },
-      { source: "cogwork-fallback", fallbackVersion: "1.2.3" },
-    ),
+  catalog: {
+    models: [{ value: "model-a", label: "Model A" }],
+    generatedAgainst: "1.2.3",
   },
   readiness: () =>
     Deferred.succeed(probe.started, undefined).pipe(
@@ -104,6 +101,12 @@ describe("HarnessReadinessCache", () => {
       const subscription = yield* bus.subscribe();
       const initial = yield* cache.overview([]);
       assert.isTrue(HarnessState.guards.Unknown(initial.harnesses[0]?.state));
+      assert.deepStrictEqual(
+        initial.harnesses[0]?.catalog.models.map(({ value }) => value),
+        ["model-a"],
+      );
+      assert.deepStrictEqual(initial.harnesses[0]?.catalog?.provenance, { source: "managed" });
+      assert.strictEqual(initial.harnesses[0]?.catalog?.generatedAgainst, "1.2.3");
       assert.strictEqual(initial.checkedAtMillis, 0);
       yield* cache.requestAll();
       yield* Deferred.await(probe.started);
@@ -112,6 +115,10 @@ describe("HarnessReadinessCache", () => {
       assert.isTrue(DaemonEvent.guards.HarnessesChanged(event));
       if (!DaemonEvent.guards.HarnessesChanged(event)) return;
       assert.strictEqual(event.overview.harnesses[0]?.version, "1.2.3");
+      assert.deepStrictEqual(
+        event.overview.harnesses[0]?.catalog.models.map(({ value }) => value),
+        ["model-a"],
+      );
       assert.deepStrictEqual(event.overview.harnesses[0]?.diagnostics, [
         "Codex 1.2.3 differs from the version this catalog was generated against (1.2.2).",
       ]);

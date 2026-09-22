@@ -46,7 +46,7 @@ import {
   type HarnessAuthenticationBinding,
   type HarnessAuthenticationMode,
   type HarnessCapabilityProfile,
-  type HarnessCatalogSources,
+  type HarnessCatalogOptions,
   HarnessError,
   type HarnessExecution,
   HarnessPreflightInput,
@@ -139,7 +139,7 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter> {
   readonly capabilities: ExternalHarnessCapabilities;
   readonly authentication: HarnessAuthenticationBinding;
   readonly signIn?: string;
-  readonly catalogSources: HarnessCatalogSources;
+  readonly catalog: HarnessCatalogOptions;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly sharedGit: "none" | "required";
   readonly inheritedEnvironment: ReadonlyArray<string>;
@@ -692,7 +692,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
     capabilities: descriptor.capabilities.profile,
     authentication: descriptor.authentication,
     ...(descriptor.signIn ? { signIn: descriptor.signIn } : {}),
-    catalogSources: descriptor.catalogSources,
+    catalog: descriptor.catalog,
     readiness: descriptor.readiness,
     validateLaunch: (request) => validateCheckoutDirectory(descriptor.name, request.plan.sandbox.workspace),
     preflight,

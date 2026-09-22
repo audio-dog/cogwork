@@ -63,7 +63,6 @@ import {
   type HarnessRunner,
   layer as harnessLayer,
   resolvedMcpSkills,
-  staticCatalogSource,
 } from "./harness";
 import { HarnessReadinessCache } from "./harness-readiness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
@@ -638,46 +637,41 @@ const testRunnerDefaults = {
     takeover: false,
   },
   authentication: { mode: "host", reference: "test login" },
-  catalogSources: {
-    fallback: staticCatalogSource(
+  catalog: {
+    models: [
       {
-        models: [
+        value: "test",
+        label: "Test",
+        options: [
           {
-            value: "test",
-            label: "Test",
-            options: [
-              {
-                type: "select",
-                id: "effort",
-                label: "Effort",
-                values: [
-                  { value: "low", label: "Low" },
-                  { value: "high", label: "High" },
-                ],
-                defaultValue: "high",
-              },
+            type: "select",
+            id: "effort",
+            label: "Effort",
+            values: [
+              { value: "low", label: "Low" },
+              { value: "high", label: "High" },
             ],
-          },
-          {
-            value: "refreshed-model",
-            label: "Refreshed model",
-            options: [
-              {
-                type: "select",
-                id: "effort",
-                label: "Effort",
-                values: [
-                  { value: "low", label: "Low" },
-                  { value: "high", label: "High" },
-                ],
-                defaultValue: "high",
-              },
-            ],
+            defaultValue: "high",
           },
         ],
       },
-      { source: "cogwork-fallback", fallbackVersion: "test-1" },
-    ),
+      {
+        value: "refreshed-model",
+        label: "Refreshed model",
+        options: [
+          {
+            type: "select",
+            id: "effort",
+            label: "Effort",
+            values: [
+              { value: "low", label: "Low" },
+              { value: "high", label: "High" },
+            ],
+            defaultValue: "high",
+          },
+        ],
+      },
+    ],
   },
   readiness: () =>
     Effect.succeed({
@@ -688,10 +682,7 @@ const testRunnerDefaults = {
       diagnostics: [],
     }),
   preflight: () => Effect.void,
-} satisfies Pick<
-  HarnessRunner,
-  "authentication" | "capabilities" | "catalogSources" | "preflight" | "readiness"
->;
+} satisfies Pick<HarnessRunner, "authentication" | "capabilities" | "catalog" | "preflight" | "readiness">;
 
 const runner = (
   events: ReadonlyArray<AgUiEvent>,

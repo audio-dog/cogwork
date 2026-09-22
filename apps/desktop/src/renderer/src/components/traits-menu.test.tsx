@@ -27,7 +27,7 @@ const catalog = {
   ...HarnessOptionCatalog.make({
     models: [model],
     policyProfiles: ["full"],
-    provenance: { source: "cogwork-fallback", fallbackVersion: "test" },
+    provenance: { source: "managed" },
   }),
   harness: Schema.decodeSync(HarnessName)("cursor"),
 } satisfies HarnessCatalog;

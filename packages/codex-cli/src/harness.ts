@@ -313,14 +313,7 @@ const codexDescriptor = (
     },
     authentication: { mode: "host", reference: "Codex host login" },
     signIn: "codex login",
-    catalogSources: {
-      // No runtime source: nothing here reads the Runtime host, so claiming `tanstack-runtime`
-      // provenance made a stale pin out of every model the shipped package had not heard of.
-      fallback: Harness.staticCatalogSource(catalogOptions, {
-        source: "cogwork-fallback",
-        fallbackVersion: `codex-${codexCatalog.generatedAgainst}`,
-      }),
-    },
+    catalog: catalogOptions,
     readiness: () => codexReadiness(executable),
     sharedGit: "required",
     inheritedEnvironment: ExternalHarnessRuntime.defaultInheritedEnvironment,

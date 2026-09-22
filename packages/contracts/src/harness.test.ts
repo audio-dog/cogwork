@@ -29,7 +29,7 @@ describe("Harness enablement", () => {
       harness: "codex",
       version: null,
       state: { _tag: "Ready" },
-      models: [],
+      catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
     });
 
     assert.isTrue(item.enabled);
@@ -99,7 +99,7 @@ describe("Harness managed catalog", () => {
         },
       ],
       policyProfiles: ["full"],
-      provenance: { source: "cogwork-fallback", fallbackVersion: "fixture" },
+      provenance: { source: "managed" },
     });
 
     assert.strictEqual(catalog.generatedAgainst, "2026.08.11-e8db854");

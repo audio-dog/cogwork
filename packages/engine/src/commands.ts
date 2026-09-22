@@ -493,22 +493,17 @@ const validateSelectionContext = Effect.fn("Daemon.validateSelectionContext")(fu
       reason: "No Harness is selected for this setting",
     });
   }
-  const unknownHarness = !Schema.is(HarnessName)(selectedHarness) || !harness.names.includes(selectedHarness);
-  if (unknownHarness) {
+  const registeredHarness = Schema.is(HarnessName)(selectedHarness)
+    ? { name: selectedHarness, catalog: harness.catalogs.get(selectedHarness) }
+    : null;
+  if (!registeredHarness?.catalog) {
     return yield* OperationSettingRefused.make({
       setting: "harness",
       source: "Harness registry",
       reason: `Unknown Harness ${selectedHarness}`,
     });
   }
-  const catalog = yield* harness.currentCatalog(selectedHarness);
-  if (catalog === null) {
-    return yield* OperationSettingRefused.make({
-      setting: "harness",
-      source: `Harness ${selectedHarness}`,
-      reason: `No current option catalog is available for ${selectedHarness}`,
-    });
-  }
+  const { name, catalog } = registeredHarness;
   if (change.setting === "harness") return;
   const selectedValue = effectiveValue;
   const effectiveModel = resolveOperationSetting(rows, "model", change);
@@ -516,12 +511,12 @@ const validateSelectionContext = Effect.fn("Daemon.validateSelectionContext")(fu
   const hasModelOptionsSelection =
     change.setting === "model-options" && isModelOptionSelections(selectedValue);
   const modelOptionsRefusal = hasModelOptionsSelection
-    ? modelOptionsMembershipRefusal(selectedValue, selectedModel, selectedHarness, catalog)
+    ? modelOptionsMembershipRefusal(selectedValue, selectedModel, name, catalog)
     : null;
   if (modelOptionsRefusal !== null) return yield* modelOptionsRefusal;
   const skipsCatalogMembership = change.setting === "model-options" || typeof selectedValue !== "string";
   if (skipsCatalogMembership) return;
-  const refusal = catalogMembershipRefusal(change.setting, selectedValue, selectedHarness, catalog);
+  const refusal = catalogMembershipRefusal(change.setting, selectedValue, name, catalog);
   if (refusal !== null) return yield* refusal;
 });
 
@@ -560,7 +555,7 @@ export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function*
   readonly enabled: boolean;
 }) {
   const harness = yield* Harness;
-  if (!harness.names.includes(payload.harness)) {
+  if (!harness.catalogs.has(payload.harness)) {
     return yield* HarnessNotRegistered.make({ harness: payload.harness });
   }
   const store = yield* ControlStore;

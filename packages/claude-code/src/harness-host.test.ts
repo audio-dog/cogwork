@@ -63,29 +63,26 @@ describe("Claude Code host Harness", () => {
       }),
     );
 
-    it.effect("reads the managed catalog without starting Claude", () =>
-      Effect.gen(function* () {
-        const harness = Harness.make([
-          claudeCodeRunner({
-            name,
-            authentication: hostAuthentication,
-            claudeExecutable: "missing-claude-code-catalog-probe",
-          }),
-        ]);
-        const catalog = yield* harness.catalog(name);
+    it("reads the managed catalog without starting Claude", () => {
+      const harness = Harness.make([
+        claudeCodeRunner({
+          name,
+          authentication: hostAuthentication,
+          claudeExecutable: "missing-claude-code-catalog-probe",
+        }),
+      ]);
+      const catalog = harness.catalogs.get(name);
 
-        assert.deepStrictEqual(
-          catalog.models.map(({ value }) => value),
-          claudeModelCatalog.models.map(({ value }) => value),
-        );
-        assert.deepStrictEqual(catalog.provenance, {
-          source: "cogwork-fallback",
-          fallbackVersion: "claude-models-generated-1",
-        });
-        assert.strictEqual(catalog.generatedAgainst, claudeModelCatalog.generatedAgainst);
-        assert.deepStrictEqual(catalog.rawModelIds, claudeModelCatalog.rawModelIds);
-      }),
-    );
+      assert.isNotNull(catalog);
+      if (!catalog) return;
+      assert.deepStrictEqual(
+        catalog.models.map(({ value }) => value),
+        claudeModelCatalog.models.map(({ value }) => value),
+      );
+      assert.deepStrictEqual(catalog.provenance, { source: "managed" });
+      assert.strictEqual(catalog.generatedAgainst, claudeModelCatalog.generatedAgainst);
+      assert.deepStrictEqual(catalog.rawModelIds, claudeModelCatalog.rawModelIds);
+    });
 
     it.effect("dispatches catalog defaults and selected effort in Claude native form", () =>
       Effect.gen(function* () {

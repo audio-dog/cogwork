@@ -26,7 +26,7 @@ import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
 import { Git, type GitService } from "./git";
-import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
+import { fullHarnessExecution, type HarnessRunner } from "./harness";
 import { IssueTracker } from "./issue-tracker";
 import { PerformanceHealthSource } from "./performance-health-source";
 import type { RegisteredWorkspace } from "./projector";
@@ -90,11 +90,8 @@ const stubRunner: HarnessRunner = {
     takeover: false,
   },
   authentication: { mode: "host", reference: "test login" },
-  catalogSources: {
-    fallback: staticCatalogSource(
-      { models: [{ value: "test", label: "Test" }] },
-      { source: "cogwork-fallback", fallbackVersion: "test-1" },
-    ),
+  catalog: {
+    models: [{ value: "test", label: "Test" }],
   },
   readiness: () =>
     Effect.succeed({

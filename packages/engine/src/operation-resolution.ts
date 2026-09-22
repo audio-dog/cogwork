@@ -371,13 +371,7 @@ export const make = Effect.gen(function* () {
       picture?.contributionSettings ?? [],
     );
     if (resolved === null) return null;
-    const declaredProfiles = yield* harness.catalog(resolved.stage.harness).pipe(
-      Effect.provide(harnessRunnerContext),
-      Effect.match({
-        onFailure: () => [],
-        onSuccess: (catalog) => catalog.policyProfiles,
-      }),
-    );
+    const declaredProfiles = harness.catalogs.get(resolved.stage.harness)?.policyProfiles ?? [];
     return resolveRunPlanStage(
       workspace.config,
       operation,

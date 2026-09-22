@@ -50,7 +50,7 @@ import {
   mergeCheckoutFileDiffs,
   withLocalProcessSandbox,
 } from "./external-harness-runtime";
-import { fullHarnessExecution, HarnessError, make, staticCatalogSource } from "./harness";
+import { fullHarnessExecution, HarnessError, make } from "./harness";
 import { messageFromUnknown } from "./provider-bridge";
 import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
@@ -262,13 +262,8 @@ const descriptor = (
     },
   },
   authentication: { mode: "host", reference: "controlled host login" },
-  catalogSources: {
-    fallback: staticCatalogSource(
-      {
-        models: [{ value: "controlled", label: "Controlled" }],
-      },
-      { source: "cogwork-fallback", fallbackVersion: "controlled-1" },
-    ),
+  catalog: {
+    models: [{ value: "controlled", label: "Controlled" }],
   },
   readiness: () =>
     Effect.succeed({

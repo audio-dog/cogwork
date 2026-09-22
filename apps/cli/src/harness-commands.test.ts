@@ -16,7 +16,7 @@ const item = (name: string, enabled: boolean) =>
     enabled,
     version: null,
     state: HarnessState.cases.Ready.make({}),
-    models: [],
+    catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
   });
 
 describe("Harness commands", () => {

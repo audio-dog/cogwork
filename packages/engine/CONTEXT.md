@@ -82,7 +82,7 @@ The engine's registry and dispatcher for Harness runners. It exposes each runner
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
-A pluggable implementation of one agent backend. Beside dispatch it declares its Session kind, operational facts, explicit authentication binding, catalog sources, observational readiness, and authoritative preflight; unavailable runners remain registered without preventing unrelated Harnesses from running.
+A pluggable implementation of one agent backend. Beside dispatch it declares its Session kind, operational facts, explicit authentication binding, managed option catalog, observational readiness, and authoritative preflight; unavailable runners remain registered without preventing unrelated Harnesses from running.
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **Harness capability profile**:

@@ -52,7 +52,7 @@ import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
-import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
+import { fullHarnessExecution, type HarnessRunner } from "./harness";
 import { layer as harnessReadinessLayer } from "./harness-readiness";
 import type { HandBackOutcome, HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
@@ -101,20 +101,15 @@ const commandHarnessRunner: HarnessRunner = {
     takeover: false,
   },
   authentication: { mode: "host", reference: "test" },
-  catalogSources: {
-    fallback: staticCatalogSource(
+  catalog: {
+    models: [
       {
-        models: [
-          {
-            value: "test",
-            label: "Test",
-            options: [effortOption],
-          },
-          { value: "test-next", label: "Test next", options: [effortOption] },
-        ],
+        value: "test",
+        label: "Test",
+        options: [effortOption],
       },
-      { source: "cogwork-fallback", fallbackVersion: "test" },
-    ),
+      { value: "test-next", label: "Test next", options: [effortOption] },
+    ],
   },
   readiness: () =>
     Effect.succeed({
@@ -130,19 +125,14 @@ const commandHarnessRunner: HarnessRunner = {
 const alternateHarnessRunner = {
   ...commandHarnessRunner,
   name: harness("codex"),
-  catalogSources: {
-    fallback: staticCatalogSource(
+  catalog: {
+    models: [
       {
-        models: [
-          {
-            value: "codex-model",
-            label: "Codex model",
-            options: [effortOption],
-          },
-        ],
+        value: "codex-model",
+        label: "Codex model",
+        options: [effortOption],
       },
-      { source: "cogwork-fallback", fallbackVersion: "test" },
-    ),
+    ],
   },
 } satisfies HarnessRunner;
 const reconcileStubLayer = Layer.succeed(Reconcile.ReconcileWorker, {

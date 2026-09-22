@@ -344,8 +344,7 @@ describe("applyDaemonEvent", () => {
           version: "0.154.0",
           state: { _tag: "Ready" },
           diagnostics: ["Codex 0.155.0 is available."],
-          models: [],
-          catalog: null,
+          catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
         },
       ],
     });
