@@ -99,14 +99,8 @@ describe("HarnessReadinessCache", () => {
       const cache = yield* HarnessReadinessCache;
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
-      const initial = yield* cache.overview([]);
+      const initial = yield* cache.readiness([]);
       assert.isTrue(HarnessState.guards.Unknown(initial.harnesses[0]?.state));
-      assert.deepStrictEqual(
-        initial.harnesses[0]?.catalog.models.map(({ value }) => value),
-        ["model-a"],
-      );
-      assert.deepStrictEqual(initial.harnesses[0]?.catalog?.provenance, { source: "managed" });
-      assert.strictEqual(initial.harnesses[0]?.catalog?.generatedAgainst, "1.2.3");
       assert.strictEqual(initial.checkedAtMillis, 0);
       yield* cache.requestAll();
       yield* Deferred.await(probe.started);
@@ -114,12 +108,8 @@ describe("HarnessReadinessCache", () => {
       const event = yield* PubSub.take(subscription);
       assert.isTrue(DaemonEvent.guards.HarnessesChanged(event));
       if (!DaemonEvent.guards.HarnessesChanged(event)) return;
-      assert.strictEqual(event.overview.harnesses[0]?.version, "1.2.3");
-      assert.deepStrictEqual(
-        event.overview.harnesses[0]?.catalog.models.map(({ value }) => value),
-        ["model-a"],
-      );
-      assert.deepStrictEqual(event.overview.harnesses[0]?.diagnostics, [
+      assert.strictEqual(event.readiness.harnesses[0]?.version, "1.2.3");
+      assert.deepStrictEqual(event.readiness.harnesses[0]?.diagnostics, [
         "Codex 1.2.3 differs from the version this catalog was generated against (1.2.2).",
       ]);
       assert.strictEqual(yield* Ref.get(probe.calls), 1);
@@ -130,12 +120,12 @@ describe("HarnessReadinessCache", () => {
       const credentialEvent = yield* PubSub.take(subscription);
       assert.isTrue(DaemonEvent.guards.HarnessesChanged(credentialEvent));
       if (!DaemonEvent.guards.HarnessesChanged(credentialEvent)) return;
-      assert.isTrue(HarnessState.guards.NotSignedIn(credentialEvent.overview.harnesses[0]?.state));
-      assert.deepStrictEqual(credentialEvent.overview.harnesses[0]?.diagnostics, [
+      assert.isTrue(HarnessState.guards.NotSignedIn(credentialEvent.readiness.harnesses[0]?.state));
+      assert.deepStrictEqual(credentialEvent.readiness.harnesses[0]?.diagnostics, [
         "Codex 1.2.3 differs from the version this catalog was generated against (1.2.2).",
         "sign in expired",
       ]);
-      assert.strictEqual(credentialEvent.overview.checkedAtMillis, event.overview.checkedAtMillis);
+      assert.strictEqual(credentialEvent.readiness.checkedAtMillis, event.readiness.checkedAtMillis);
       assert.strictEqual(yield* Ref.get(probe.calls), 2);
     }).pipe(
       Effect.provide(
