@@ -43,6 +43,11 @@ _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 A listed bot's finding is a wake signal only — it triggers a follow-up but does not reset the no-progress counter and can never set `/fresh`, so a stall still hands off to a human. It grants no steering: a trusted-bot finding is actionable context, like a failing check, never an instruction. Distinct from the actor identity (who the daemon acts as) and the assignee allowlist (whose tickets it may pick up).
 _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot never steers), *bot comment* as a synonym for *finding* (most of what a bot writes on a PR is neither)
 
+**Follow-up trigger**:
+A pull request condition that wakes a follow-up round: failing required checks, a **base divergence**, new human feedback, or a trusted bot's finding.
+**A trigger must be a condition the agent can clear** — either by working (a red check, a conflict) or by answering it once, since feedback is compared against the follow-up marker and a marker already past it wakes nothing. A condition the agent has no power to clear is a **state** of the pull request, not a trigger, and belongs to classification. The review decision is the worked example: a standing `changes-requested` review holds until its author approves or dismisses it, and no push clears it — so it travels as the PR summary's `review` and wakes nothing on its own. Its *content* still does, because a review's prose and its inline comments are human feedback like any other, including on an approval. See engine ADR 0013.
+_Avoid_: Follow-up reason; *wake signal* as a synonym (that names a trusted bot's finding in particular); review decision (that's a state a trigger is defined against)
+
 ### Configuration
 
 **Control store**:
@@ -286,6 +291,11 @@ _Avoid_: Run — a run is the local execution; an attempt is the durable outcome
 **Handback record**:
 A coordination record of a person returning a parked item to the control plane: `by` and `atMillis`. Persisted on the issue tracker. The three failure counters — exhaustion, stall, and crash loop — count only what happened after the newest handback, so a handback discounts an item's failure history without erasing it. The inverse of a hand-off: the control plane hands an item off to a person when it gives up, and a person hands it back. A second handback moves the line forward.
 _Avoid_: Retry (the control plane's own automatic re-attempt of a *retryable* failure — a handback is a person acting, not the engine), reset, unpark, pardon
+
+**Round summary**:
+What a follow-up round tells the reviewer, posted by the engine to the pull request under the actor identity with the coordination marker attached. The one control-plane write that lands on the pull request rather than the issue tracker; the marker is what keeps it out of the human-feedback signal, and it stays the engine's to attach.
+**A round speaks to answer a question, never to narrate a state.** A round that pushed always posts. A round that pushed nothing posts only when it declines or answers something a person or a trusted bot asked — a nit it judged wrong, a finding it judged a false positive — so the asker learns why and does not raise it twice. A round that nobody asked anything of stays silent. Its summary still reaches the coordination comment either way, so a silent round is traceable.
+_Avoid_: Round comment, agent note (that's free-text operator prose), coordination detail (that lives on the tracker and carries hand-off explanations)
 
 ### Credentials
 
