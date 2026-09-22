@@ -397,20 +397,34 @@ describe("reviewFeedback", () => {
     ]);
   });
 
-  it("ignores an approving review's body so approval routes to verify, not follow-up", () => {
+  it("keeps an approving review's body as feedback", () => {
     assert.deepStrictEqual(
       reviewFeedback([rawReview({ state: "APPROVED", body: "lgtm, nice work", submittedAtMillis: 5 })]),
-      [],
+      [
+        {
+          authorLogin: "maintainer",
+          authorAssociation: "COLLABORATOR",
+          body: "lgtm, nice work",
+          createdAtMillis: 5,
+        },
+      ],
     );
   });
 
-  it("drops a change-request body once a later approval supersedes it", () => {
+  it("keeps a change-request body after a later approval", () => {
     assert.deepStrictEqual(
       reviewFeedback([
         rawReview({ state: "CHANGES_REQUESTED", body: "please fix", submittedAtMillis: 100 }),
         rawReview({ state: "APPROVED", body: "", submittedAtMillis: 300 }),
       ]),
-      [],
+      [
+        {
+          authorLogin: "maintainer",
+          authorAssociation: "COLLABORATOR",
+          body: "please fix",
+          createdAtMillis: 100,
+        },
+      ],
     );
   });
 
