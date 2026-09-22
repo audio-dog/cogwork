@@ -1,0 +1,25 @@
+packages/engine/src/harness-readiness.test.ts
+  s_ec35c277614efe::t_9d763723c22074 108-109
+  s_ec35c277614efe::t_2c9bdb229ff1ce 74-76
+  s_ec35c277614efe::t_a6a75a0e9df454 104-107,118-121
+packages/engine/src/harness-readiness.ts
+  s_ec35c277614efe::t_d1d9e446a9ab09 118-126
+  s_ec35c277614efe::t_7be38122394650 47,56,63,93,117,132,152-153,155,157-158
+  s_ec35c277614efe::t_7357f567269b9d 148-151,154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9634acbe59dc5862ddd492fe28c09fbd76213821",
+  "prompts": {},
+  "sessions": {
+    "s_ec35c277614efe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c9d6-b969-7160-bd1d-8789f2622e23",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
