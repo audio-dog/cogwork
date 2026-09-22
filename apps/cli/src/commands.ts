@@ -10,6 +10,7 @@ import {
   ModelOptionSelections,
   type OperationSettingContext,
   type OperationSettingName,
+  type OperationSettingRefused,
   OperationSettingUpdate,
   operationSettingNames,
   type RunActivity,
@@ -35,6 +36,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Argument from "effect/unstable/cli/Argument";
+import * as CliError from "effect/unstable/cli/CliError";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
@@ -45,6 +47,7 @@ import { clientLayer, type DaemonOptions, type DaemonRpcTimeout, makeDaemonClien
 import { formatDaemonLimits, formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
 import { secondStopSignal } from "./stop-signal";
 import { telemetryLayer } from "./telemetry";
+import { terminalLine } from "./terminal-text";
 import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
 
 const defaultPollInterval = Duration.minutes(1);
@@ -133,6 +136,10 @@ const isUnavailableDaemonError = (error: unknown) =>
   Schema.is(SocketOpenError)(error) ||
   (Schema.is(RpcClientError)(error) && Schema.is(SocketOpenError)(error.reason));
 
+const isDaemonTransportError = (error: unknown) =>
+  Schema.is(SocketErrorReason)(error) ||
+  (Schema.is(RpcClientError)(error) && Schema.is(SocketErrorReason)(error.reason));
+
 export const daemonOrStore = <A, E, R, E2, R2>(
   daemon: Effect.Effect<A, E | RpcClientError, R>,
   store: Effect.Effect<A, E2, R2>,
@@ -172,10 +179,6 @@ export const formatOperationSettings = (controlStore: ControlStore, context: Ope
     )
     .join("\n");
 
-class OperationSettingInputError extends Data.TaggedError("OperationSettingInputError")<{
-  readonly message: string;
-}> {}
-
 class ContributionSettingInputError extends Data.TaggedError("ContributionSettingInputError")<{
   readonly message: string;
 }> {}
@@ -183,6 +186,8 @@ class ContributionSettingInputError extends Data.TaggedError("ContributionSettin
 const decodeContributionSettingUpdateInput = Schema.decodeUnknownEffect(ContributionSettingUpdate);
 const decodeOperationSettingUpdateInput = Schema.decodeUnknownEffect(OperationSettingUpdate);
 const decodeModelOptionSelections = Schema.decodeUnknownEffect(Schema.fromJsonString(ModelOptionSelections));
+const operationSettingInputError = (message: string, cause: unknown) =>
+  new CliError.UserError({ cause, userMessage: terminalLine(message) });
 
 interface ContributionSettingOptions {
   readonly contribution: string;
@@ -261,14 +266,14 @@ const enabledValues = new Map<string, string | boolean>([
 
 const operationSettingValueParsers: Record<
   OperationSettingName,
-  (value: string) => Effect.Effect<unknown, OperationSettingInputError>
+  (value: string) => Effect.Effect<unknown, CliError.UserError>
 > = {
   enabled: (value: string) => Effect.succeed(enabledValues.get(value) ?? value),
   harness: Effect.succeed,
   model: Effect.succeed,
   "model-options": (value: string) =>
     decodeModelOptionSelections(value).pipe(
-      Effect.mapError((error) => new OperationSettingInputError({ message: error.message })),
+      Effect.mapError((error) => operationSettingInputError(error.message, error)),
     ),
   "permission-profile": Effect.succeed,
   bindings: (value: string) => Effect.succeed(bindingValue(value)),
@@ -279,7 +284,7 @@ const operationSettingValue = (setting: OperationSettingName, value: string) =>
 
 const decodeOperationSettingUpdate = (input: unknown) =>
   decodeOperationSettingUpdateInput(input).pipe(
-    Effect.mapError((error) => new OperationSettingInputError({ message: error.message })),
+    Effect.mapError((error) => operationSettingInputError(error.message, error)),
   );
 
 const operationSettingContext = Effect.fn("commands.operationSettingContext")(function* (options: {
@@ -292,6 +297,12 @@ const operationSettingContext = Effect.fn("commands.operationSettingContext")(fu
     : null;
   return { workflow: options.workflow, operation: options.operation, workspace };
 });
+
+export const formatOperationSettingRefusal = (refusal: OperationSettingRefused) =>
+  `${terminalLine(refusal.source)} refused ${refusal.setting}: ${terminalLine(refusal.reason)}`;
+
+export const operationSettingError = (refusal: OperationSettingRefused) =>
+  operationSettingInputError(formatOperationSettingRefusal(refusal), refusal);
 
 export const makeOperationSettingUpdate = (
   options: OperationSettingOptions,
@@ -382,13 +393,16 @@ export const formatRunEvents = (history: RunHistory) => {
     : history.events.map(formatEvent).join("\n");
 };
 
+export const reportDaemonTransportError = (socketPath: string, error: unknown) =>
+  isDaemonTransportError(error)
+    ? Console.error(`Could not reach cogwork daemon at ${socketPath}: ${String(error)}`)
+    : Effect.void;
+
 const overSocket = <E, R>(effect: Effect.Effect<void, E, R>, socketPath: string) =>
   effect.pipe(
     Effect.scoped,
     Effect.provide(clientLayer(socketPath)),
-    Effect.tapError((error) =>
-      Console.error(`Could not reach cogwork daemon at ${socketPath}: ${String(error)}`),
-    ),
+    Effect.tapError((error) => reportDaemonTransportError(socketPath, error)),
   );
 
 const runRuns = Effect.fn("commands.runRuns")(
@@ -627,8 +641,11 @@ const changeOperationSetting = Effect.fn("commands.changeOperationSetting")(
   ) {
     const client = yield* makeDaemonClient();
     const update = yield* makeOperationSettingUpdate(options, options.value);
-    const controlStore = yield* client.SetOperationSetting({ updates: [update] });
-    yield* Console.log(formatOperationSettings(controlStore, yield* operationSettingContext(options)));
+    const context = yield* operationSettingContext(options);
+    yield* client.SetOperationSetting({ updates: [update] }).pipe(
+      Effect.catchTag("OperationSettingRefused", (refusal) => Effect.fail(operationSettingError(refusal))),
+      Effect.flatMap((controlStore) => Console.log(formatOperationSettings(controlStore, context))),
+    );
   },
   (effect, options) => overSocket(effect, options.socketPath),
 );
