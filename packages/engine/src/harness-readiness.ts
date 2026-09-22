@@ -44,28 +44,23 @@ interface ItemObservation {
 
 const emptyPendingRefresh = (): PendingRefresh => ({ all: false, failures: new Map() });
 
-const observedItem = (
-  name: HarnessName,
-  catalog: HarnessOptionCatalog | null,
-  observation: ItemObservation,
-) =>
+const observedItem = (name: HarnessName, catalog: HarnessOptionCatalog, observation: ItemObservation) =>
   HarnessItem.make({
     harness: name,
     enabled: true,
     ...observation,
     diagnostics: readableDiagnostics(observation.diagnostics),
-    models: catalog?.models.map((choice) => choice.value) ?? [],
     catalog,
   });
 
-const unknownItem = (name: HarnessName, catalog: HarnessOptionCatalog | null) =>
+const unknownItem = (name: HarnessName, catalog: HarnessOptionCatalog) =>
   observedItem(name, catalog, {
     version: null,
     state: HarnessState.cases.Unknown.make({ diagnostic: notCheckedDiagnostic }),
     diagnostics: [],
   });
 
-const unreachableItem = (name: HarnessName, catalog: HarnessOptionCatalog | null, message: string) => {
+const unreachableItem = (name: HarnessName, catalog: HarnessOptionCatalog, message: string) => {
   const diagnostic = readableDiagnostic(message);
   return observedItem(name, catalog, {
     version: null,
@@ -95,7 +90,7 @@ const readinessAfterFailure = (readiness: HarnessReadiness, failure: HarnessErro
 const itemFromReadiness = (
   harness: HarnessService,
   name: HarnessName,
-  catalog: HarnessOptionCatalog | null,
+  catalog: HarnessOptionCatalog,
   readiness: HarnessReadiness,
 ) =>
   observedItem(name, catalog, {
@@ -119,27 +114,24 @@ export const make = Effect.gen(function* () {
     settings: ReadonlyArray<HarnessEnablement>,
   ) {
     const cached = yield* Ref.get(cache);
-    const harnesses = yield* Effect.forEach(harness.names, (name) =>
-      Effect.map(harness.currentCatalog(name), (catalog) => {
-        const observed = cached.items.get(name) ?? unknownItem(name, catalog);
-        return enabledItem(
-          settings,
-          HarnessItem.make({
-            ...observed,
-            models: catalog?.models.map((choice) => choice.value) ?? [],
-            catalog,
-          }),
-        );
-      }),
-    );
+    const harnesses = [...harness.catalogs].map(([name, catalog]) => {
+      const observed = cached.items.get(name) ?? unknownItem(name, catalog);
+      return enabledItem(
+        settings,
+        HarnessItem.make({
+          ...observed,
+          catalog,
+        }),
+      );
+    });
     return HarnessOverview.make({ harnesses, checkedAtMillis: cached.checkedAtMillis });
   });
 
   const probe = Effect.fn("HarnessReadinessCache.probe")(function* (
     name: HarnessName,
+    catalog: HarnessOptionCatalog,
     failure: HarnessError | null,
   ) {
-    const catalog = yield* harness.currentCatalog(name);
     return yield* harness.readiness(name).pipe(
       Effect.timeout(probeDeadline),
       Effect.map((readiness) => readinessAfterFailure(readiness, failure)),
@@ -153,11 +145,17 @@ export const make = Effect.gen(function* () {
   });
 
   const refresh = Effect.fn("HarnessReadinessCache.refresh")(function* (request: PendingRefresh) {
-    const names = request.all ? harness.names : [...request.failures.keys()];
-    if (names.length === 0) return;
+    const failedEntries = [...request.failures].flatMap(([name, failure]) => {
+      const catalog = harness.catalogs.get(name);
+      return catalog ? [{ name, catalog, failure }] : [];
+    });
+    const entries = request.all
+      ? [...harness.catalogs].map(([name, catalog]) => ({ name, catalog, failure: null }))
+      : failedEntries;
+    if (entries.length === 0) return;
     const refreshed = yield* Effect.forEach(
-      names,
-      (name) => probe(name, request.failures.get(name) ?? null),
+      entries,
+      ({ name, catalog, failure }) => probe(name, catalog, failure),
       { concurrency: "unbounded" },
     );
     const refreshedAtMillis = request.all
