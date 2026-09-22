@@ -406,7 +406,14 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
       createdAtMillis: 1,
     },
   ],
-  reviews: [{ pull: 202, state: "CHANGES_REQUESTED" }],
+  reviews: [
+    {
+      pull: 202,
+      state: "CHANGES_REQUESTED",
+      body: "Please revise this.",
+      submittedAtMillis: 1,
+    },
+  ],
   mergeable: [{ pull: 200, state: "dirty" }],
 });
 
@@ -499,7 +506,14 @@ describe("GitHub adapters", () => {
               ]),
             },
           ],
-          reviews: [{ pull: 100, state: "CHANGES_REQUESTED" }],
+          reviews: [
+            {
+              pull: 100,
+              state: "CHANGES_REQUESTED",
+              body: "Please fix this.",
+              submittedAtMillis: 2,
+            },
+          ],
         }),
       ),
     ),
@@ -1036,15 +1050,16 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("attaches write-access human-authored PRs with and without coordination comments", () =>
+  it.effect("keeps a standing change request as state without waking follow-up", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
       const coordinated = items.find((item) => item.id === "#20");
       const uncoordinated = items.find((item) => item.id === "#21");
       assert.strictEqual(coordinated?.pr?.review, "changes-requested");
       assert.strictEqual(uncoordinated?.pr?.review, "pending");
-      const { eligible } = classify(items);
-      assert.strictEqual(eligible.find((entry) => entry.id === "#20")?.stage, "follow-up");
+      const { eligible, readyToMerge } = classify(items);
+      assert.isUndefined(eligible.find((entry) => entry.id === "#20"));
+      assert.isUndefined(readyToMerge.find((entry) => entry.id === "#20"));
       assert.isUndefined(eligible.find((entry) => entry.id === "#21"));
     }).pipe(
       Effect.provide(
@@ -1084,7 +1099,7 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("routes every follow-up trigger from trusted PRs without coordination comments", () =>
+  it.effect("routes every clearable follow-up trigger from trusted PRs without coordination comments", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
       assert.deepStrictEqual(
@@ -1425,30 +1440,49 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("treats a COMMENTED review with a body as feedback but ignores an empty one", () =>
+  it.effect("routes review prose regardless of state and ignores empty bodies", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
       const withBody = items.find((item) => item.id === "#23");
       const empty = items.find((item) => item.id === "#24");
+      const beforeApproval = items.find((item) => item.id === "#25");
+      const approvalNits = items.find((item) => item.id === "#26");
+      const bareApproval = items.find((item) => item.id === "#27");
       assert.strictEqual(withBody?.pr?.latestHumanCommentAtMillis, 400);
       assert.isNull(empty?.pr?.latestHumanCommentAtMillis ?? null);
-      const { eligible } = classify(items);
+      assert.strictEqual(beforeApproval?.pr?.latestHumanCommentAtMillis, 300);
+      assert.strictEqual(approvalNits?.pr?.latestHumanCommentAtMillis, 500);
+      assert.isNull(bareApproval?.pr?.latestHumanCommentAtMillis ?? null);
+      const { eligible, readyToMerge } = classify(items);
       assert.strictEqual(eligible.find((entry) => entry.id === "#23")?.stage, "follow-up");
       assert.isUndefined(eligible.find((entry) => entry.id === "#24"));
+      assert.strictEqual(eligible.find((entry) => entry.id === "#25")?.stage, "follow-up");
+      assert.strictEqual(eligible.find((entry) => entry.id === "#26")?.stage, "follow-up");
+      assert.isUndefined(eligible.find((entry) => entry.id === "#27"));
+      assert.strictEqual(readyToMerge.find((entry) => entry.id === "#27")?.pr.review, "ready");
     }).pipe(
       Effect.provide(
         withClient({
           issues: [
             { number: 23, title: "review with body", labels: ["ready-for-agent"] },
             { number: 24, title: "empty review", labels: ["ready-for-agent"] },
+            { number: 25, title: "feedback before approval", labels: ["ready-for-agent"] },
+            { number: 26, title: "approval nits", labels: ["ready-for-agent"] },
+            { number: 27, title: "bare approval", labels: ["ready-for-agent"] },
             { number: 203, title: "human pr", labels: [], isPullRequest: true },
             { number: 204, title: "human pr", labels: [], isPullRequest: true },
+            { number: 205, title: "human pr", labels: [], isPullRequest: true },
+            { number: 206, title: "human pr", labels: [], isPullRequest: true },
+            { number: 207, title: "human pr", labels: [], isPullRequest: true },
           ],
           pulls: [
             pull({ number: 203, authorLogin: "taylorfsteele", headRef: "23-review-with-body" }),
             pull({ number: 204, authorLogin: "taylorfsteele", headRef: "24-empty-review" }),
+            pull({ number: 205, authorLogin: "taylorfsteele", headRef: "25-feedback-before-approval" }),
+            pull({ number: 206, authorLogin: "taylorfsteele", headRef: "26-approval-nits" }),
+            pull({ number: 207, authorLogin: "taylorfsteele", headRef: "27-bare-approval" }),
           ],
-          comments: [23, 24].map((issue) => ({
+          comments: [23, 24, 25, 26, 27].map((issue) => ({
             issue,
             authorLogin: bot.login,
             body: coordinationBody([
@@ -1458,6 +1492,10 @@ describe("GitHub adapters", () => {
           reviews: [
             { pull: 203, state: "COMMENTED", body: "please adjust", submittedAtMillis: 400 },
             { pull: 204, state: "COMMENTED", body: "", submittedAtMillis: 400 },
+            { pull: 205, state: "CHANGES_REQUESTED", body: "please fix", submittedAtMillis: 300 },
+            { pull: 205, state: "APPROVED", body: "", submittedAtMillis: 400 },
+            { pull: 206, state: "APPROVED", body: "one small nit", submittedAtMillis: 500 },
+            { pull: 207, state: "APPROVED", body: "", submittedAtMillis: 500 },
           ],
         }),
       ),

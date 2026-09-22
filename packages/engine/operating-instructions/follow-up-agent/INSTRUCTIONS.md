@@ -7,7 +7,7 @@ description: Headless Operating Instructions for moving a bot-authored pull requ
 
 The headless follow-up operation the daemon runs for a `follow-up` operation. There is **no human in the session** — the daemon's user message names these Operating Instructions and the work item. A pull request that resolves the work item already exists; your operation is to move it forward, not to open a new one.
 
-The engine triggers a follow-up when the bot PR has **failing required checks**, a **new human comment / changes-requested review**, or a **base that has diverged** — the branch and `main` both moved and now conflict, so the PR can no longer merge. It has already placed you in the **worktree on that PR's branch** and, when it was safe to, resumed the prior session so you keep the context you built while implementing. **The engine owns this branch — never create, rename, or switch branches;** build on the one you are on and push there.
+The engine triggers a follow-up when the bot PR has **failing required checks**, **new human feedback**, a **trusted bot finding**, or a **base that has diverged** — the branch and `main` both moved and now conflict, so the PR can no longer merge. Human feedback includes pull request comments, review prose in any review state, and inline review comments. It has already placed you in the **worktree on that PR's branch** and, when it was safe to, resumed the prior session so you keep the context you built while implementing. **The engine owns this branch — never create, rename, or switch branches;** build on the one you are on and push there.
 
 This matters as much on follow-up as on the first implement: the PR is linked to the work item by the branch's prefix — `ticketSlug(item.id)`, the stable head the engine cut — so renaming or replacing the branch strands the PR where the next reconcile can't find it. The engine enforces the naming with a branch-name guard, so an off-convention branch is a hard error rather than a silent orphan.
 
@@ -36,7 +36,7 @@ Establish what changed since the last push:
 
 - **Base divergence** — if the PR's mergeable state is `dirty`, its branch and `main` have both gained overlapping commits and it can no longer merge. This is a real conflict, not a branch merely *behind* its base. Integrating the base comes **first**, before any check work: a red CI run on a conflicted branch is noise until `main` is back in the branch (see [step 2](#2-integrate-the-base-when-diverged)).
 - **Failing checks** — read the logs of each failing required check and pin down the actual cause. A flaky, infra-only, or baseline failure ([step 4](#4-local-gate-hard)) is not a code defect; note it rather than inventing a change.
-- **Review feedback** — read new human comments and changes-requested reviews, and build a checklist of what they ask for.
+- **Review feedback** — read new pull request comments, review prose, and inline review comments, including feedback attached to an approval. Build a checklist of what they ask for.
 
 Completion: you can state, in one list, every concrete change this follow-up must make. Irreconcilable steering here → escalate now, before touching code.
 
@@ -106,7 +106,7 @@ Then end the turn. Do not sit polling CI — the engine picks up the next round 
 
 ## Nothing to do
 
-A follow-up wakes on any trigger — a failing check, a changes-requested review, a base conflict, or a plain human or bot comment. Not every trigger needs a code change. A comment can be a question you answer in a reply, or a remark that asks for nothing at all; a check can have gone green again on its own between the trigger and your turn.
+A follow-up wakes on any trigger — a failing check, a base conflict, new human feedback, or a trusted bot finding. Not every trigger needs a code change. Feedback can be a question you answer in a reply, or a remark that asks for nothing at all; a check can have gone green again on its own between the trigger and your turn.
 
 When you look and the PR is genuinely healthy — checks passing, no base conflict, and no review feedback that calls for a code change — there is nothing to push. Report that outcome in your final summary. The engine records it as a successful no-op and hands the PR back for review. Do not invent a change to look busy, and do not report a block — a healthy PR is not a block, and a block would park it under a human for no reason.
 

@@ -132,15 +132,12 @@ describe("classify", () => {
     assert.strictEqual(eligible[0]?.stage, "triage");
   });
 
-  it("routes a changes-requested bot PR to follow-up and an approved PR to ready-to-merge", () => {
+  it("drops a standing changes-requested PR and routes an approved PR to ready-to-merge", () => {
     const result = classify([
       item({ id: "1", roles: ["ready-for-agent"], pr: pr("changes-requested") }),
       item({ id: "2", roles: ["ready-for-agent"], pr: pr("ready") }),
     ]);
-    assert.deepStrictEqual(
-      result.eligible.map((entry) => entry.stage),
-      ["follow-up"],
-    );
+    assert.isEmpty(result.eligible);
     assert.deepStrictEqual(result.readyToMerge, [
       {
         id: id("2"),
@@ -264,7 +261,12 @@ describe("classify", () => {
   it("lets an open blocker hold implement without holding triage, follow-up, or ready-to-merge", () => {
     const { eligible, blocked, readyToMerge } = classify([
       item({ id: "1", roles: ["needs-triage"], openBlockers: 1 }),
-      item({ id: "2", roles: ["ready-for-agent"], openBlockers: 1, pr: pr("changes-requested") }),
+      item({
+        id: "2",
+        roles: ["ready-for-agent"],
+        openBlockers: 1,
+        pr: pr("changes-requested", { checks: "failing" }),
+      }),
       item({ id: "3", roles: ["ready-for-agent"], openBlockers: 1, pr: pr("ready") }),
     ]);
     assert.deepStrictEqual(
@@ -498,7 +500,11 @@ describe("classify", () => {
       waitingSinceMillis: 0,
     };
     const { eligible, claimed, needsHuman, readyToMerge } = classify([
-      item({ id: "e", roles: ["ready-for-agent"], pr: pr("changes-requested") }),
+      item({
+        id: "e",
+        roles: ["ready-for-agent"],
+        pr: pr("changes-requested", { latestHumanCommentAtMillis: 1 }),
+      }),
       item({ id: "c", roles: ["ready-for-agent"], claim, pr: pr("changes-requested") }),
       item({ id: "h", roles: ["ready-for-human"], pr: pr("changes-requested") }),
       item({ id: "bare", roles: ["ready-for-agent"] }),
@@ -546,7 +552,14 @@ describe("classify", () => {
 
   it("drops an allowlisted workspace's unassigned item with a follow-up trigger", () => {
     const { eligible, claimed, needsHuman } = classify(
-      [item({ id: "1", roles: ["ready-for-agent"], assignees: [], pr: pr("changes-requested") })],
+      [
+        item({
+          id: "1",
+          roles: ["ready-for-agent"],
+          assignees: [],
+          pr: pr("changes-requested", { checks: "failing" }),
+        }),
+      ],
       ["me"],
     );
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
@@ -562,7 +575,11 @@ describe("classify", () => {
       item({ id: "ready", roles: ["ready-for-agent"], pr: pr("ready") }),
       item({ id: "implement", roles: ["ready-for-agent"] }),
       item({ id: "triage", roles: ["needs-triage"] }),
-      item({ id: "follow-up", roles: ["ready-for-agent"], pr: pr("changes-requested") }),
+      item({
+        id: "follow-up",
+        roles: ["ready-for-agent"],
+        pr: pr("changes-requested", { checks: "failing" }),
+      }),
     ]);
     assert.deepStrictEqual(
       eligible.map((e) => e.stage),
@@ -590,7 +607,12 @@ describe("classify", () => {
   it("never lets priority jump a stage: a high implement stays behind a low follow-up", () => {
     const { eligible } = classify([
       item({ id: "impl", roles: ["ready-for-agent"], priority: "high" }),
-      item({ id: "fu", roles: ["ready-for-agent"], pr: pr("changes-requested"), priority: "low" }),
+      item({
+        id: "fu",
+        roles: ["ready-for-agent"],
+        pr: pr("changes-requested", { checks: "failing" }),
+        priority: "low",
+      }),
     ]);
     assert.deepStrictEqual(
       eligible.map((e) => [e.stage, e.priority]),

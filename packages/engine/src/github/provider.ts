@@ -113,13 +113,9 @@ const isHumanFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
 const isTrustedBotFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
   botAllowlist.has(feedback.authorLogin) && !hasCogworkMarker(feedback.body);
 
-export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
-  const latestApprovalMillis = reviews.reduce(
-    (latest, review) => (review.state === "APPROVED" ? Math.max(latest, review.submittedAtMillis) : latest),
-    Number.NEGATIVE_INFINITY,
-  );
-  return reviews.flatMap((review) =>
-    review.body && review.state !== "APPROVED" && review.submittedAtMillis > latestApprovalMillis
+export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) =>
+  reviews.flatMap((review) =>
+    review.body
       ? [
           {
             authorLogin: review.authorLogin,
@@ -130,7 +126,6 @@ export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
         ]
       : [],
   );
-};
 
 const newestOf = (feedback: ReadonlyArray<Feedback>) =>
   feedback.reduce<Feedback | null>(

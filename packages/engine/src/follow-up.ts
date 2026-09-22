@@ -62,7 +62,6 @@ const hasNewBotTrigger = (pr: ObservedPr) => botTriggerAt(pr) > (pr.followUp?.bo
 
 export const triggersFollowUp = (pr: ObservedPr) =>
   pr.checks === "failing" ||
-  pr.review === "changes-requested" ||
   pr.baseDivergence === "conflict" ||
   hasNewHumanComment(pr) ||
   hasNewBotTrigger(pr);
