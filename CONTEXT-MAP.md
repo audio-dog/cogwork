@@ -22,6 +22,10 @@ lives in a separate safekeep repo: [taylorfsteele/sync](https://github.com/taylo
 - [claude-code](./packages/claude-code/CONTEXT.md) — the Claude Code harness adapter: drives an installed, host-authenticated Claude Code CLI through the TanStack adapter.
 - [codex-cli](./packages/codex-cli/CONTEXT.md) — the Codex harness adapter: drives an installed, host-authenticated Codex CLI through the TanStack Codex adapter.
 
+### Self-correction (the sensing layer)
+
+- [sensor](./configs/sensor/CONTEXT.md) — the CI-resident sensors: seed runs, test-suite budgets, and the paired comparison tool that measure the app's own health and file work items on the issue tracker (ADRs 0021, 0022, 0026).
+
 ## Relationships
 
 ### Orchestration runtime flow

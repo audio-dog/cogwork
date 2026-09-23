@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-03
+- **Amended by:** [0026](./0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md) — the fortnightly schedule is replaced by a weekly read over per-merge seed runs; the comparison tool is re-scoped to on-demand bisection.
 
 ## Context
 
