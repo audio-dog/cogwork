@@ -36,9 +36,9 @@ Establish what changed since the last push:
 
 - **Base divergence** — if the PR's mergeable state is `dirty`, its branch and `main` have both gained overlapping commits and it can no longer merge. This is a real conflict, not a branch merely *behind* its base. Integrating the base comes **first**, before any check work: a red CI run on a conflicted branch is noise until `main` is back in the branch (see [step 2](#2-integrate-the-base-when-diverged)).
 - **Failing checks** — read the logs of each failing required check and pin down the actual cause. A flaky, infra-only, or baseline failure ([step 4](#4-local-gate-hard)) is not a code defect; note it rather than inventing a change.
-- **Review feedback** — read new pull request comments, review prose, and inline review comments, including feedback attached to an approval. Build a checklist of what they ask for.
+- **Review feedback** — read new pull request comments, review prose, and inline review comments. A review state is a **gate**, not a checklist: an approval, a comment-only review, and a changes-requested review all carry **asks**, and a maintainer who calls a point non-blocking is saying it does not gate the merge — the ask stands. Build the checklist from the asks, one entry each, wherever each was attached.
 
-Completion: you can state, in one list, every concrete change this follow-up must make. Irreconcilable steering here → escalate now, before touching code.
+Completion: you can state, in one list, every concrete change this follow-up must make, and every ask is accounted for — a change on that list, or a reply you owe it at [step 5](#5-push-and-summarize). Irreconcilable steering here → escalate now, before touching code.
 
 ## 2. Integrate the base (when diverged)
 
@@ -64,7 +64,7 @@ Address the checklist from [step 1](#1-read-the-state) against the existing diff
 - **Any change to a React component or a `.tsx` / `.jsx` file — new or existing — you MUST load `/react-composition-patterns` and `/react-no-use-effect` before you write the code, then follow them.** This is not optional, and it does not wait for your own judgment that the change is "structural": a touched component file is the trigger. Boolean behavior props, `renderX` render props for static UI, monolithic components, prop drilling, `forwardRef`, and `useContext` are defects here, not style choices. Before you push, re-read your React diff against `/react-composition-patterns` and fix any violation — a composition violation is a red gate, the same as a failing check.
 - Run the repo's typecheck and the relevant test files frequently as you go.
 
-Completion: every failing check has a fix and every review request is addressed in the diff.
+Completion: every failing check has a fix, and every ask is answered — in the diff, or in the reply you will write at [step 5](#5-push-and-summarize).
 
 ## 4. Local gate (hard)
 
@@ -100,7 +100,7 @@ Then write your round summary as your **final message**. Use one rule: **answer 
 
 This split is deliberate, and it's the whole point of this operation. The marker is what keeps the daemon's own writing out of the human-feedback signal — the engine reads a write-access comment with no `cogwork` marker as human feedback, and human feedback wakes another round. You used to write that marker yourself, and one wrong marker turned a summary into a trigger that woke round after round, a loop that never settled. So the marker is the engine's operation now, not yours. Write plain prose and let it own the marker.
 
-Make the summary self-contained, the way a reviewer could read it without re-deriving your reasoning: if you integrated the base, say whether you merged or rebased (and, for a rebase, that you force-pushed and why); which checks you fixed and how; and how you addressed each review request. Do not resolve the review threads yourself.
+Make the summary self-contained, the way a reviewer could read it without re-deriving your reasoning: if you integrated the base, say whether you merged or rebased (and, for a rebase, that you force-pushed and why); which checks you fixed and how; and how you answered each ask — the change you made, or, for an ask you are declining, the reason. Do not resolve the review threads yourself.
 
 Then end the turn. Do not sit polling CI — the engine picks up the next round if the checks are still red or a human responds again.
 
@@ -108,6 +108,6 @@ Then end the turn. Do not sit polling CI — the engine picks up the next round 
 
 A follow-up wakes on any trigger — a failing check, a base conflict, new human feedback, or a trusted bot finding. Not every trigger needs a code change. Feedback can be a question you answer in a reply, or a remark that asks for nothing at all; a check can have gone green again on its own between the trigger and your turn.
 
-When you look and the PR is genuinely healthy — checks passing, no base conflict, and no review feedback that calls for a code change — there is nothing to push. Report that outcome in your final summary. Apply the [speaking rule from step 5](#5-push-and-summarize). The engine records it as a successful no-op and hands the PR back for review. Do not invent a change to look busy, and do not report a block — a healthy PR is not a block, and a block would park it under a human for no reason.
+When you look and the PR is genuinely healthy — checks passing, no base conflict, and every ask already answered — there is nothing to push. Report that outcome in your final summary. Apply the [speaking rule from step 5](#5-push-and-summarize). The engine records it as a successful no-op and hands the PR back for review. Do not invent a change to look busy, and do not report a block — a healthy PR is not a block, and a block would park it under a human for no reason.
 
 Reserve `stuck` for a real block: feedback you cannot reconcile, or a gate that will not go green after a genuine effort.
