@@ -1,0 +1,46 @@
+packages/engine/src/linear/client.ts
+  s_c836cb0e1fdf4d::t_9707901478f2f6 437-440,442-445,447
+  s_c836cb0e1fdf4d::t_9f07238d22b389 479
+  s_c836cb0e1fdf4d::t_aba0bb67d89157 98-103,123,167-170,173,373-375,434,463,480,592-602,628-632,702-704
+  s_c836cb0e1fdf4d::t_a194f118256d7a 377,609,612-613,623,625,627,649-651
+  s_c836cb0e1fdf4d::t_963a4ef7d2ce18 290,431-433,435
+  s_c836cb0e1fdf4d::t_372b8851f4288f 105-108,608,610-611,614-615,621-622,635-636,638
+  s_c836cb0e1fdf4d::t_210fa3556d3150 255,270-277,639-645,647-648
+  s_c836cb0e1fdf4d::t_9b7deca61e4289 104,289,293-296,306,376,454
+  s_c836cb0e1fdf4d::t_3f3aee040d6ed6 603-607,616-620,624,626,637,652
+  s_c836cb0e1fdf4d::t_bc1a9a4cc90313 94-97,436,633-634,646
+  s_c836cb0e1fdf4d::t_800975b1b1ad80 378-380
+  s_c836cb0e1fdf4d::t_f781edfeaab419 441
+  s_c836cb0e1fdf4d::t_c6d9bdafb90980 446
+  s_c836cb0e1fdf4d::t_37a836e8132fa4 653
+packages/engine/src/linear/client.test.ts
+  s_c836cb0e1fdf4d::t_6c85d4ea36509d 464
+  s_c836cb0e1fdf4d::t_3652a3f0e859f0 216-221,224-230
+  s_c836cb0e1fdf4d::t_a74868c21b8fe8 471-479,501-502,525,527-534
+  s_c836cb0e1fdf4d::t_3c2876575510c2 526,560-563,565-566,572-575
+  s_c836cb0e1fdf4d::t_76591bee39e18a 41,68-70,542-545
+  s_c836cb0e1fdf4d::t_ac1801b0d5f9eb 564,567-570,576
+  s_c836cb0e1fdf4d::t_f65fdc9b10173a 36-37,42,64
+  s_c836cb0e1fdf4d::t_995f518d3b60f0 514-519,521-522,538,541,546-553,555-559
+  s_c836cb0e1fdf4d::t_a4c53e1cd60482 222-223,498,520,536-537,554,571
+  s_c836cb0e1fdf4d::t_0d220f31c638e0 189-215
+  s_c836cb0e1fdf4d::t_29c29ea4457919 496,499-500,503-513
+  s_c836cb0e1fdf4d::t_c5c0d2bbfb7cfd 524,535
+  s_c836cb0e1fdf4d::t_1530c91fad4e94 483
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0a35b8e78abe56a30c9af8c0799f9e298c0da087",
+  "prompts": {},
+  "sessions": {
+    "s_c836cb0e1fdf4d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cef6-6427-73a3-9220-6d18be89814f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
