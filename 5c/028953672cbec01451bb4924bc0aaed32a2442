@@ -1,0 +1,23 @@
+.github/workflows/test-suite-seed.yml
+  s_b194cb1b24a467::t_8e1572e4bb9821 44,47-48
+  s_b194cb1b24a467::t_42dff53c213088 19,22,27,70
+  s_b194cb1b24a467::t_48c64d75e3b627 1-18,20-21,23-26,28-36,38-40,42,45-46,49,51-52,56-57,59-62,64-65,68-69,71-75
+  s_b194cb1b24a467::t_ca578a0f606db2 37,63,66-67
+  s_b194cb1b24a467::t_471cba09bd4f38 41,43,50,53-55,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5c028953672cbec01451bb4924bc0aaed32a2442",
+  "prompts": {},
+  "sessions": {
+    "s_b194cb1b24a467": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cfc4-d420-7590-b737-dcfc8aba3680",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
