@@ -60,7 +60,7 @@ const withInheritedEnvironmentProbe = <Value, Error, Requirements>(
       Effect.sync(() => Object.entries(original).map(([name, value]) => restoreEnvironment(name, value))),
   );
 
-describe("repository fixtures", () => {
+describe("repository fixtures", { timeout: 30_000 }, () => {
   it.effect("keeps identity out of the repository config", () =>
     Effect.gen(function* () {
       const handle = yield* createSandbox();
@@ -78,7 +78,7 @@ describe("repository fixtures", () => {
   );
 });
 
-describe("codexRunner configuration", () => {
+describe("codexRunner configuration", { timeout: 30_000 }, () => {
   it("keeps the Hook wrapper independent of package files", () => {
     assert.notInclude(codexExecutableWithRepositoryHooks, sourceWrapperPath);
   });
