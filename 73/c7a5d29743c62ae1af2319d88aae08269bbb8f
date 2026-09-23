@@ -1,0 +1,23 @@
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  s_185e043a48788e::t_ed1ffe49ac758f 5
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  s_185e043a48788e::t_569abfe0218b10 5
+docs/adr/0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md
+  s_185e043a48788e::t_6c68181611d6d1 1-142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "73c7a5d29743c62ae1af2319d88aae08269bbb8f",
+  "prompts": {},
+  "sessions": {
+    "s_185e043a48788e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e0fbd957-0a4e-48d4-afbf-05d83f29298d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
