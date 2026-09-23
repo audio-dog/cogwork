@@ -4,9 +4,9 @@ import { branchName, ticketSlug } from "../worktree";
 import {
   type GitHubRepoRef,
   parseIssues,
-  type RawComment,
   type RawPull,
   type RawReview,
+  type RawReviewComment,
   reviewDecisionOf,
 } from "./client";
 import { ledgerMarker } from "./markers";
@@ -21,12 +21,14 @@ import {
 
 const review = (login: string, state: string) => ({ login, state });
 
-const comment = (over: Partial<RawComment>): RawComment => ({
+const comment = (over: Partial<RawReviewComment>): RawReviewComment => ({
   id: 1,
   authorLogin: "maintainer",
   authorAssociation: "COLLABORATOR",
   body: "",
   createdAtMillis: 0,
+  inReplyToId: null,
+  subjectType: "line",
   ...over,
 });
 

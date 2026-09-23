@@ -17,8 +17,8 @@ import type { WorkspaceIssueTrackerBinding } from "../projector";
 import {
   type GitHubClientService,
   type GitHubRepoRef,
-  type RawComment,
   type RawIssue,
+  type RawIssueComment,
   repoRefFromRepository,
 } from "./client";
 import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from "./markers";
@@ -48,7 +48,7 @@ const claimIdentity = (target: AuthenticatedGitHubTarget) => target.actorLogin;
 
 const toCoordinationComment =
   (actorLogin: string) =>
-  (comment: RawComment): CoordinationComment<number> => ({
+  (comment: RawIssueComment): CoordinationComment<number> => ({
     id: comment.id,
     body: comment.body,
     isBot: comment.authorLogin === actorLogin,
