@@ -57,6 +57,10 @@ _Avoid_: Tick (that picks new candidates under the caps), schedule, enqueue
 The monotonic counter the reconcile worker stamps on each snapshot it publishes. It is how the scheduler tells one observation of the issue tracker from the next, so it can act on each work item at most once per observation.
 _Avoid_: Version, revision, epoch
 
+**Snapshot refresh**:
+The coalescing signal a daemon mutation offers after its Control-store write commits, asking for one reconcile that starts after that write and re-publishes the snapshot's items and workspaces. A mutation acknowledges its durable write and never waits for a poll; a burst of mutations collapses into a single follow-up reconcile (engine ADR 0014).
+_Avoid_: Availability refresh (its old, narrower name), reconcile heartbeat (the scheduled tick), submit (the heartbeat's path — that may share a poll already in flight, this demands one that starts after the write)
+
 **Candidate**:
 A schedulable pairing of a registered workspace with one eligible work item, plus the reservation keys that keep it from being picked twice.
 _Avoid_: Job, task
