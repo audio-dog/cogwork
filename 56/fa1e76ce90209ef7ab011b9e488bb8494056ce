@@ -1,0 +1,29 @@
+docs/research/review-pipeline-design.md
+  s_5595811195d3ce::t_07e5d2c8c1a10b 1-531
+docs/research/harness-model-selection-and-run-speed.md
+  s_18d353cc5fe1da::t_edadfabdbb0275 1-398
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "56fa1e76ce90209ef7ab011b9e488bb8494056ce",
+  "prompts": {},
+  "sessions": {
+    "s_18d353cc5fe1da": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "24cb45a5-f4de-46dd-8237-7afdf289965f",
+        "model": "claude-fable-5-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_5595811195d3ce": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "13b7e49d-341e-4d5f-9b0d-d12ceae13b9e",
+        "model": "claude-fable-5-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
