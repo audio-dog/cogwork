@@ -1,0 +1,25 @@
+configs/lint/tests/test-count-reporter.test.mjs
+  s_1304ecf1db92fc::t_7c10b032eafcf2 10,21-22
+  s_1304ecf1db92fc::t_e455247eb60676 14
+  s_1304ecf1db92fc::t_e1ecf9575aeed1 23-30
+configs/lint/tests/test-count-reporter.mjs
+  s_1304ecf1db92fc::t_8f65b9fb92303b 19
+  s_1304ecf1db92fc::t_47ace92f9a4a1b 20
+  s_1304ecf1db92fc::t_e455247eb60676 1-8,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2a43fd1c5f264bf215d178669ce0b17a5ba098eb",
+  "prompts": {},
+  "sessions": {
+    "s_1304ecf1db92fc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cfb0-d3f2-73b0-a658-9715ccc338d2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
