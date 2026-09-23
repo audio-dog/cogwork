@@ -154,6 +154,52 @@ class ControlStoreProbe extends Context.Service<ControlStoreProbe, ControlStoreP
   );
 }
 
+interface WorkspacePublicationProbeService {
+  readonly current: Ref.Ref<Registry.RegistryState>;
+  readonly reads: Ref.Ref<number>;
+  readonly firstReadStarted: Deferred.Deferred<void>;
+  readonly releaseFirstRead: Deferred.Deferred<void>;
+}
+
+class WorkspacePublicationProbe extends Context.Service<
+  WorkspacePublicationProbe,
+  WorkspacePublicationProbeService
+>()("@cogwork/engine/event-publisher.test/WorkspacePublicationProbe") {
+  static readonly layer = Layer.effect(
+    WorkspacePublicationProbe,
+    Effect.gen(function* () {
+      return {
+        current: yield* Ref.make<Registry.RegistryState>({
+          workspaces: [registeredWorkspace],
+          failures: [],
+        }),
+        reads: yield* Ref.make(0),
+        firstReadStarted: yield* Deferred.make<void>(),
+        releaseFirstRead: yield* Deferred.make<void>(),
+      };
+    }),
+  );
+  static readonly registryLayer = Layer.effect(
+    Registry.WorkspaceRegistry,
+    Effect.map(WorkspacePublicationProbe, (probe) => ({
+      state: Effect.all({
+        read: Ref.getAndUpdate(probe.reads, (count) => count + 1),
+        state: Ref.get(probe.current),
+      }).pipe(
+        Effect.flatMap(({ read, state }) =>
+          read === 0
+            ? Deferred.succeed(probe.firstReadStarted, undefined).pipe(
+                Effect.andThen(Deferred.await(probe.releaseFirstRead)),
+                Effect.map(() => state),
+              )
+            : Effect.succeed(state),
+        ),
+      ),
+      refresh: Ref.get(probe.current),
+    })),
+  ).pipe(Layer.provideMerge(WorkspacePublicationProbe.layer));
+}
+
 class LogMessages extends Context.Service<LogMessages, MutableRef.MutableRef<ReadonlyArray<string>>>()(
   "@cogwork/engine/event-publisher.test/LogMessages",
 ) {
@@ -395,6 +441,82 @@ const publisherTestLayer = (items: ReadonlyArray<TrackerItem> = [], globalInFlig
 const snapshotRefreshPublisherLayer = publisherLayer(snapshotRefreshObserving);
 
 describe("DaemonEventPublisher", () => {
+  it.effect("keeps overlapping workspace publications in invocation order", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const publisher = yield* DaemonEventPublisher;
+      const probe = yield* WorkspacePublicationProbe;
+      const subscription = yield* bus.subscribe();
+      const first = yield* Effect.forkChild(publisher.publishWorkspaces());
+      yield* Deferred.await(probe.firstReadStarted);
+      yield* Ref.set(probe.current, {
+        workspaces: [
+          {
+            ...registeredWorkspace,
+            config: { ...registeredWorkspace.config, displayName: "Updated example" },
+          },
+        ],
+        failures: [],
+      });
+      const second = yield* Effect.forkChild(publisher.publishWorkspaces());
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(probe.releaseFirstRead, undefined);
+      yield* Fiber.join(first);
+      yield* Fiber.join(second);
+
+      const published = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.filter(DaemonEvent.guards.WorkspaceChanged),
+        Stream.take(2),
+        Stream.runCollect,
+      );
+      const latest = published.at(-1)?.workspace;
+      assert.strictEqual(
+        WorkspaceState.guards.Registered(latest) ? latest.displayName : null,
+        "Updated example",
+      );
+    }).pipe(
+      Effect.provide(
+        publisherLayer(observing, WorkspacePublicationProbe.registryLayer).pipe(
+          Layer.provideMerge(EventPublisherProbe.layer()),
+          Layer.provideMerge(WorkspacePublicationProbe.layer),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("keeps workspace removal after an older workspace publication", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const publisher = yield* DaemonEventPublisher;
+      const probe = yield* WorkspacePublicationProbe;
+      const subscription = yield* bus.subscribe();
+      const publishing = yield* Effect.forkChild(publisher.publishWorkspaces());
+      yield* Deferred.await(probe.firstReadStarted);
+      const removing = yield* Effect.forkChild(
+        publisher.publishWorkspaceRemoved(registeredWorkspace.config.name),
+      );
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(probe.releaseFirstRead, undefined);
+      yield* Fiber.join(publishing);
+      yield* Fiber.join(removing);
+
+      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect);
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["WorkspaceChanged", "ControlStoreChanged", "WorkspaceRemoved"],
+      );
+    }).pipe(
+      Effect.provide(
+        publisherLayer(observing, WorkspacePublicationProbe.registryLayer).pipe(
+          Layer.provideMerge(EventPublisherProbe.layer()),
+          Layer.provideMerge(WorkspacePublicationProbe.layer),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
   it.effect("reconciles and publishes Workspace changes after a background refresh request", () =>
     Effect.gen(function* () {
       const bus = yield* DaemonEventBus.DaemonEventBus;
