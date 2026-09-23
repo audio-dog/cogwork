@@ -11,9 +11,9 @@ import {
   GitHubClient,
   type GitHubClientService,
   type GitHubRepoRef,
-  type RawComment,
   type RawPull,
   type RawReview,
+  type RawReviewComment,
   type ReviewDecision,
   repoRefFromRepository,
   reviewDecisionOf,
@@ -98,10 +98,7 @@ const numericIssue = /^#(\d+)$/;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-type Feedback = Pick<
-  RawComment,
-  "authorLogin" | "authorAssociation" | "body" | "createdAtMillis" | "inReplyToId" | "subjectType"
->;
+type Feedback = Pick<RawReviewComment, "authorLogin" | "authorAssociation" | "body" | "createdAtMillis">;
 
 // An allowlisted login is always the trusted-bot path, never the human one, even if it reports write
 // access — that keeps a bot from ever setting `/fresh` or resetting the no-progress counter.
@@ -143,12 +140,12 @@ export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botAllowli
 
 // Returns no `fresh` flag: `/fresh` restarts stay human-only, so a bot can never trigger one.
 export const botTriggerSignal = (
-  reviewComments: ReadonlyArray<RawComment>,
+  reviewComments: ReadonlyArray<RawReviewComment>,
   pullRequestFeedback: ReadonlyArray<Feedback>,
   botAllowlist: BotAllowlist,
 ) => {
   // Bot-specific HTML markers are private strings; GitHub's comment and thread shape is the stable boundary.
-  const isTrustedDiffFinding = (item: RawComment) =>
+  const isTrustedDiffFinding = (item: RawReviewComment) =>
     botAllowlist.get(item.authorLogin)?.acceptsAnyComment === false &&
     item.inReplyToId === null &&
     item.subjectType === "line" &&

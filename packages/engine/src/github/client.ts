@@ -98,11 +98,6 @@ export type RawReviewComment = RawCommentFields & {
   readonly subjectType: "line" | "file";
 };
 
-export type RawComment = RawCommentFields & {
-  readonly inReplyToId?: number | null;
-  readonly subjectType?: "line" | "file";
-};
-
 export interface RawReview {
   readonly authorLogin: string;
   readonly authorAssociation: string;
