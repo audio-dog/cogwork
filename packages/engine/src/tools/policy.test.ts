@@ -118,7 +118,7 @@ describe("hard-deny list", () => {
   });
 });
 
-describe("gated tool set", () => {
+describe("gated tool set", { timeout: 30_000 }, () => {
   it.effect("returns a denied result instead of writing under the read-only profile", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();

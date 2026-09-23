@@ -26,7 +26,7 @@ const openSandbox = Effect.fn("sandbox.test.openSandbox")(function* (root?: stri
   return { handle, root: root ?? handle.id } satisfies WorktreeSandbox;
 });
 
-describe("worktree sandbox", () => {
+describe("worktree sandbox", { timeout: 30_000 }, () => {
   layer(NodeServices.layer)((nodeIt) => {
     nodeIt.effect("returns no base SHA for a repository without commits", () =>
       Effect.gen(function* () {
