@@ -16,15 +16,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@v7
 
       - name: Set up pnpm and Node.js
-        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2
+        uses: pnpm/setup@v2
         with:
           cache: true
 
       - name: Cache for Turbo
-        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9
+        uses: rharkor/caching-for-turbo@v2.5.0
 
       - name: Run uncached tests and seed the cache
         run: pnpm exec turbo run test --force
@@ -67,7 +67,7 @@ jobs:
           node configs/sensor/test-measure-summary.mjs "$MEASUREMENT_PATH" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test suite measurement
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@v7
         with:
           name: test-suite-seed-measurement
           path: test-suite-seed-measurement.json
