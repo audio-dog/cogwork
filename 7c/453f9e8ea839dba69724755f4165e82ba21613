@@ -1,0 +1,19 @@
+docs/adr/0028-subagent-model-choice-is-a-named-level-not-a-pinned-model.md
+  s_d3750bf659498d::t_aec99c68e9e37d 1-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7c453f9e8ea839dba69724755f4165e82ba21613",
+  "prompts": {},
+  "sessions": {
+    "s_d3750bf659498d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b7d3ed18-43b6-483d-b72a-19c0c84fa58a",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
