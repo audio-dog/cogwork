@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-08
+- **Amended by:** [0026](./0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md) — a budget may be a duration when it is per-test-normalized and aggregated over ~20 same-fleet uncached seed runs; counts remain the rule everywhere else.
 
 ## Context
 
