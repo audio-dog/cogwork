@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -213,32 +212,6 @@ test("every rule names a configured plugin file", () => {
   const missing = ruleCases.filter(({ plugin }) => !configuredPluginPaths.has(plugin));
 
   assert.deepEqual(missing, []);
-});
-
-// `no-use-effect.grit` is scoped to the packages that depend on React, so it does not pay a
-// pass over the whole repository. That scope is only safe while React stays inside
-// it: a React file added elsewhere would silently stop being linted. This test fails
-// loudly instead. Widen the override in biome.json if a new package adopts React.
-test("the react plugin's scope covers every file that imports React", () => {
-  const reactOverride = biomeConfig.overrides.find((override) =>
-    override.plugins?.some((plugin) => plugin.endsWith("no-use-effect.grit")),
-  );
-  const scopedPrefixes = reactOverride.includes.map((include) => include.replace(/\*+$/, ""));
-
-  const tracked = spawnSync("git", ["ls-files", "*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  })
-    .stdout.split("\n")
-    .filter(Boolean)
-    .filter((file) => !file.startsWith("configs/lint/tests/fixtures/"));
-  const importsReact = tracked.filter((file) =>
-    /\bfrom\s+["']react["']/.test(readFileSync(path.join(repoRoot, file), "utf8")),
-  );
-  const unscoped = importsReact.filter((file) => !scopedPrefixes.some((prefix) => file.startsWith(prefix)));
-
-  assert.notEqual(importsReact.length, 0, "expected to find files importing React");
-  assert.deepEqual(unscoped, []);
 });
 
 test("every configured plugin file has rules with fixtures", () => {

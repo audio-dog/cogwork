@@ -2,16 +2,8 @@
   "extends": ["//"],
   "tasks": {
     "test": {
-      "dependsOn": [],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/biome.json",
-        "$TURBO_ROOT$/apps/**/*.{cjs,js,jsx,mjs,ts,tsx}",
-        "$TURBO_ROOT$/configs/**/*.{cjs,js,jsx,mjs,ts,tsx}",
-        "$TURBO_ROOT$/packages/**/*.{cjs,js,jsx,mjs,ts,tsx}",
-        "$TURBO_ROOT$/scripts/**/*.{cjs,js,jsx,mjs,ts,tsx}",
-        "!$TURBO_ROOT$/**/{node_modules,out}/**"
-      ]
+      "cache": false,
+      "dependsOn": []
     }
   }
 }
