@@ -266,6 +266,14 @@ _Avoid_: Operation priority (that's the fixed operation order), severity, weight
 A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; operations drive execution.
 _Avoid_: Status, state, label (when you mean the role's meaning)
 
+**Requirements digest**:
+The requirement details triage resolves from a work item's linked artifacts — final copy, design node links, decisions made in chat threads — and inlines into its proposal, so the work item becomes a self-contained brief. Context acquisition is triage's job, done once; an implement Run consults an external system only where the digest points at it. See ADR 0029.
+_Avoid_: Brief (the whole item and thread — the digest is the part triage adds), work context (the engine-supplied facts, not tracker content), triage proposal (the digest rides in it)
+
+**Review requirements**:
+The judgment reviews a work item's shape demands, named by triage in its proposal and honored by the implement Run. Selection, never exemption: the security review runs on every diff regardless of what triage named. See ADRs 0027 and 0029.
+_Avoid_: Review policy, gate (the local gate is checks, not reviews), required needs (the Operation definition's contract, not per-item flags)
+
 **Blocked / blocker / blocking**:
 An item is *blocked* when its issue tracker reports one or more open **blockers** — upstream items that must close before it can be worked — and it is *blocking* the items downstream of it. Blocking is the issue tracker's own dependency relation (GitHub issue dependencies today; Linear blocking relations when its adapter reads them), read per adapter. A blocked item is held out of the implementation operation until its blockers close, then becomes eligible on its own — no human acts. Neither eligible, claimed, nor needs-human.
 _Avoid_: Depends-on (the inverse framing); needs-info / ready-for-human (those are needs-human — a person clears them); stuck / exhausted / stalled (failure outcomes, not dependencies).
@@ -387,6 +395,10 @@ _Avoid_: reasoningEffort, fastMode, per-Harness synonyms for a shared axis
 **Model options**:
 The saved option selections (`id` → value pairs) of one Operation, stored and cleared atomically with its model: options mean nothing apart from the model they modify. Each Harness translates them to its native form at dispatch. Replaces the retired standalone effort setting.
 _Avoid_: Effort setting (retired), model suffix, traits (the desktop menu, not the data)
+
+**Model level**:
+The named capability a role or operation asks of its model — `light`, `standard`, or `deep` — instead of a vendor model name. `light` is the cheapest capable model on whatever Harness runs it; `standard` is the Run's own model, expressed by omitting the model field; `deep` is the reasoning escalation, named and unused. The level is the only model vocabulary a role definition or instruction may use; the mapping to a Harness-native value lives with whoever projects the role (the sync toolkit today, the Harness adapter once Subagents project). See ADR 0028.
+_Avoid_: Tier, pinned model, vendor alias (`sonnet`, `haiku` — those are one Harness's native values), level (bare — that word belongs to where an Operation setting is written)
 
 **Harness readiness**:
 An observation of one Harness's installation, compatible version, and selected authentication binding on the current Runtime host. It can block a Run when negative but never guarantees that a later launch will succeed, and it never selects a fallback Harness or authentication mode.
