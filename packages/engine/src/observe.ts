@@ -1,8 +1,29 @@
 import { IssueTrackerError, type WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+import * as Metric from "effect/Metric";
 import type { IssueTrackerService, ObservedItem, TrackerItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import type { PrSignals, SourceControlProviderService } from "./source-control";
+
+export const reconcilePollPhaseDuration = Metric.timer("cogwork_reconcile_poll_phase_duration", {
+  description: "Time spent in one phase of a workspace reconcile poll.",
+});
+
+const implicitSourceControls: Readonly<Record<string, string>> = { github: "github" };
+
+export const reconcilePollAttributes = (workspace: RegisteredWorkspace) => ({
+  workspace: workspace.config.name,
+  issue_tracker: workspace.config.issueTracker.type,
+  source_control:
+    workspace.config.sourceControl?.type ??
+    implicitSourceControls[workspace.config.issueTracker.type] ??
+    "none",
+});
+
+export const reconcilePhaseDuration = (
+  workspace: RegisteredWorkspace,
+  phase: "tracker" | "source-control" | "availability",
+) => Metric.withAttributes(reconcilePollPhaseDuration, { ...reconcilePollAttributes(workspace), phase });
 
 export const applyHandbackBarrier = (item: ObservedItem) => {
   const handback = item.handback;
@@ -47,6 +68,7 @@ export const observeWorkspace = (tracker: IssueTrackerService, provider: SourceC
   Effect.fn("observeWorkspace")(function* (workspace: RegisteredWorkspace) {
     const trackerConnectionId = workspace.config.issueTracker.connectionId;
     const items = yield* tracker.observe(workspace).pipe(
+      Effect.trackDuration(reconcilePhaseDuration(workspace, "tracker")),
       Effect.mapError(
         (error) =>
           new IssueTrackerError({
@@ -64,6 +86,7 @@ export const observeWorkspace = (tracker: IssueTrackerService, provider: SourceC
         ? workspace.config.issueTracker.connectionId
         : undefined);
     const signals = yield* provider.observe(workspace, workItems).pipe(
+      Effect.trackDuration(reconcilePhaseDuration(workspace, "source-control")),
       Effect.mapError(
         (error) =>
           new IssueTrackerError({
