@@ -1,0 +1,61 @@
+packages/cursor-acp/src/harness.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 212,478-485,487-562,565-567,574,580,584,586,588-591,594-602,604-609,611-625,628-642,644-649,651-657,660-671,673-674,676-682,685-696,698,700-703,706-725,727-732,734-736,739-747,749,751-754
+packages/engine/src/tools/policy.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 121
+configs/test/package.json
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 14
+apps/cli/src/platform.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 309,943
+configs/test/base.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 1,5-6,11
+packages/claude-code/src/harness-environment.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 28
+packages/codex-cli/src/harness-configuration.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 63,81
+packages/engine/src/tools/owned-tools.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 189
+packages/engine/src/tools/sandbox.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 29
+packages/engine/src/provider-runner.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 231
+configs/test/src/test-count-reporter.test.ts
+  s_1304ecf1db92fc::t_f7ae66f2556260 2,19-21
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 22-27
+  s_00508f287914ac::t_98f8562abae23d 28
+packages/claude-code/src/harness-host.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 34
+packages/codex-cli/src/harness-execution.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 34
+packages/engine/src/external-harness-runtime.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 348
+packages/claude-code/src/harness-byok.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 21
+packages/codex-cli/src/harness-failures.test.ts
+  s_1304ecf1db92fc::t_2ee9dc2cb8353a 18
+pnpm-lock.yaml
+  s_1304ecf1db92fc::t_67b18e533efcbb 407-409
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "974092dced0934aa20edab6cb6121c755c5ef8a4",
+  "prompts": {},
+  "sessions": {
+    "s_00508f287914ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cf37-fe78-7ff3-b7eb-1bfea315d242",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_1304ecf1db92fc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cfb0-d3f2-73b0-a658-9715ccc338d2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
