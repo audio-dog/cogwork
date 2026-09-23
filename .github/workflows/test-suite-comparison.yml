@@ -37,6 +37,10 @@ jobs:
         shell: bash
         run: pnpm --silent --filter @cogwork/sensor test:compare "$BASE_REF" "$HEAD_REF" | tee test-suite-comparison.json
 
+      - name: Write test suite timing summary
+        shell: bash
+        run: node configs/sensor/test-measure-summary.mjs test-suite-comparison.json >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload test suite comparison
         uses: actions/upload-artifact@v7
         with:
