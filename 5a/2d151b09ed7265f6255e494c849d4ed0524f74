@@ -1,0 +1,28 @@
+configs/test/src/test-count-reporter.test.ts
+  s_6e4fa639b0da3e::t_a9e059b2c25ade 2,14-15
+  s_6e4fa639b0da3e::t_5446b9db113adf 13
+  s_6e4fa639b0da3e::t_bc8fad34341707 16-17
+configs/test/base.ts
+  s_6e4fa639b0da3e::t_eaa53fada1f8dc 11
+  s_6e4fa639b0da3e::t_a9e059b2c25ade 1,5-6
+configs/test/package.json
+  s_6e4fa639b0da3e::t_3ec4d6d6763c52 14
+pnpm-lock.yaml
+  s_6e4fa639b0da3e::t_645d24dbad713a 407-409
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5a2d151b09ed7265f6255e494c849d4ed0524f74",
+  "prompts": {},
+  "sessions": {
+    "s_6e4fa639b0da3e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cfa6-a7f9-7161-8307-8fbc79d5cd31",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
