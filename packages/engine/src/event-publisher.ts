@@ -125,7 +125,7 @@ export const make = Effect.gen(function* () {
   const lastItems = yield* Ref.make<ReadonlyMap<string, PublishedItem>>(new Map());
   const lastWorkspaces = yield* Ref.make<ReadonlyMap<string, PublishedWorkspace>>(new Map());
   const lastScheduler = yield* Ref.make<string | null>(null);
-  const availabilityRefreshes = yield* Queue.sliding<void>(1);
+  const snapshotRefreshes = yield* Queue.sliding<void>(1);
 
   const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
     picture: ControlStorePicture,
@@ -252,7 +252,7 @@ export const make = Effect.gen(function* () {
     return connections;
   });
 
-  yield* Queue.take(availabilityRefreshes).pipe(
+  yield* Queue.take(snapshotRefreshes).pipe(
     Effect.flatMap(() =>
       worker.submitAfterCurrent().pipe(
         Effect.ignore,
@@ -260,7 +260,7 @@ export const make = Effect.gen(function* () {
         Effect.andThen(publishWorkspaces()),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
-          (cause) => Effect.logError("availability refresh publication failed", { cause }),
+          (cause) => Effect.logError("snapshot refresh publication failed", { cause }),
         ),
       ),
     ),
@@ -268,11 +268,9 @@ export const make = Effect.gen(function* () {
     Effect.forkScoped,
   );
 
-  const requestAvailabilityRefresh = Effect.fn("DaemonEventPublisher.requestAvailabilityRefresh")(
-    function* () {
-      yield* Queue.offer(availabilityRefreshes, undefined);
-    },
-  );
+  const requestSnapshotRefresh = Effect.fn("DaemonEventPublisher.requestSnapshotRefresh")(function* () {
+    yield* Queue.offer(snapshotRefreshes, undefined);
+  });
 
   return {
     publishItems,
@@ -282,7 +280,7 @@ export const make = Effect.gen(function* () {
     publishControlStore,
     publishPlugins,
     publishConnections,
-    requestAvailabilityRefresh,
+    requestSnapshotRefresh,
   } as const;
 });
 

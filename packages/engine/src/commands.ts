@@ -327,7 +327,7 @@ export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payl
   );
 });
 
-const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutation")(function* <E, R>(
+const publishSnapshotMutation = Effect.fn("Daemon.publishSnapshotMutation")(function* <E, R>(
   store: ControlStoreService,
   update: Effect.Effect<ControlStorePicture, ControlStoreFailure | E, R>,
 ) {
@@ -339,7 +339,7 @@ const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutatio
       Effect.flatMap(publisher.publishControlStore),
     ),
   );
-  yield* publisher.requestAvailabilityRefresh();
+  yield* publisher.requestSnapshotRefresh();
   return published;
 });
 
@@ -542,7 +542,7 @@ export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(funct
   const refusal = payload.updates.map(operationSettingRefusal).find((candidate) => candidate !== null);
   if (refusal !== undefined) return yield* refusal;
   const store = yield* ControlStore;
-  return yield* publishAvailabilityMutation(
+  return yield* publishSnapshotMutation(
     store,
     validateOperationSettingBatch(store, payload.updates).pipe(
       Effect.flatMap((updates) => store.updateOperationSettings(updates)),
@@ -559,7 +559,7 @@ export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function*
     return yield* HarnessNotRegistered.make({ harness: payload.harness });
   }
   const store = yield* ControlStore;
-  return yield* publishAvailabilityMutation(store, store.setHarnessEnabled(payload.harness, payload.enabled));
+  return yield* publishSnapshotMutation(store, store.setHarnessEnabled(payload.harness, payload.enabled));
 });
 
 const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
