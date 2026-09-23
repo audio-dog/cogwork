@@ -1,0 +1,19 @@
+docs/adr/0029-triage-owns-context-acquisition.md
+  s_d3750bf659498d::t_ba5e214304d970 1-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "cb5e8f45639e88a99845905c0a616f24c860389e",
+  "prompts": {},
+  "sessions": {
+    "s_d3750bf659498d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b7d3ed18-43b6-483d-b72a-19c0c84fa58a",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
