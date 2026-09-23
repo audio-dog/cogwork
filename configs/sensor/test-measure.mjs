@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, globSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { globSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { testCountMarker } from "../test/test-count-reporter.ts";
+import { testCountMarker, testTimingMarker } from "../test/test-count-reporter.ts";
 
 const vitestCountPattern = new RegExp(`${testCountMarker}(\\d+)`, "g");
-const nodeTestCountPattern = /^# tests (\d+)$/m;
-const turboTaskCountPattern = /Tasks:\s+\d+ successful, (\d+) total/;
+const vitestTimingPattern = new RegExp(`${testTimingMarker}(\\{[^\\r\\n]*\\})`, "g");
+const turboTaskCountPattern = /Tasks:\s+\d+ successful, (\d+) total/g;
 const defaultWorkspaceRoot = resolve(import.meta.dirname, "../..");
+const measurementReporterPath = pathToFileURL(
+  join(import.meta.dirname, "legacy-test-count-reporter.ts"),
+).href;
+const nodeMeasurementReporterPath = join(import.meta.dirname, "../lint/tests/test-count-reporter.mjs");
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 const describe = (error) => (error instanceof Error ? error.message : String(error));
 
@@ -30,7 +34,7 @@ export const run = (file, args, workspaceRoot = defaultWorkspaceRoot) =>
   });
 
 const completedVitestRun = (output) => {
-  const taskCount = output.match(turboTaskCountPattern)?.[1];
+  const taskCount = [...output.matchAll(turboTaskCountPattern)].at(-1)?.[1];
   if (!taskCount) return false;
   return Number(taskCount) === [...output.matchAll(vitestCountPattern)].length;
 };
@@ -45,29 +49,33 @@ const requireSuccess = (result, label) => {
   throw new Error(`${label} failed`);
 };
 
-const nodeTestCount = (output) => {
-  const count = output.match(nodeTestCountPattern)?.[1];
-  if (!count) throw new Error("Node reported no test count");
-  return Number(count);
-};
-
 const legacyRootTestFiles = (workspaceRoot) => globSync("scripts/*.test.mjs", { cwd: workspaceRoot });
 
 const runLegacyRootTests = async (runTestCommand, workspaceRoot) => {
   const testFiles = legacyRootTestFiles(workspaceRoot);
-  if (testFiles.length === 0) return { failed: false, stdout: "# tests 0\n" };
+  if (testFiles.length === 0) return { failed: false, stdout: `${testCountMarker}0\n` };
   const result = await runTestCommand(
     process.execPath,
-    ["--test", "--test-reporter=tap", ...testFiles],
+    [
+      "--test",
+      "--test-reporter=spec",
+      `--test-reporter=${nodeMeasurementReporterPath}`,
+      "--test-reporter-destination=stdout",
+      "--test-reporter-destination=stdout",
+      ...testFiles,
+    ],
     workspaceRoot,
   );
-  if (nodeTestCountPattern.test(result.stdout)) return result;
+  const countReportCount = [...result.stdout.matchAll(vitestCountPattern)].length;
+  const timingReportCount = [...result.stdout.matchAll(vitestTimingPattern)].length;
+  const completedRootRun = countReportCount === 1 && timingReportCount === 1;
+  if (completedRootRun) return result;
   throw new Error("Node test run did not complete");
 };
 
-const vitestTestCount = (output) => {
+const reportedTestCount = (output) => {
   const counts = [...output.matchAll(vitestCountPattern)];
-  if (counts.length === 0) throw new Error("Vitest reported no test counts");
+  if (counts.length === 0) throw new Error("Test run reported no test counts");
   return counts.reduce((total, [, count]) => total + Number(count), 0);
 };
 
@@ -84,29 +92,130 @@ export const vitestTestArgs = (turboPath, reporterPath) =>
 export const configurationComparisonVitestTestArgs = (turboPath, reporterPath) =>
   withReporters([...turboTestArgs(turboPath), "--cache=local:,remote:", "--env-mode=loose"], reporterPath);
 
-const legacyReporterPath = (workspaceRoot) => {
-  const configuredReporter = join(workspaceRoot, "configs", "test", "test-count-reporter.ts");
-  if (existsSync(configuredReporter)) return undefined;
-  return pathToFileURL(join(import.meta.dirname, "legacy-test-count-reporter.ts")).href;
-};
-
 const runTests = async (runTestCommand, workspaceRoot, testArgsFor = vitestTestArgs) => {
   const turboPath = fileURLToPath(import.meta.resolve("turbo/bin/turbo"));
+  const startedAt = performance.now();
   const vitest = requireCompletedTestRun(
-    await runTestCommand(
-      process.execPath,
-      testArgsFor(turboPath, legacyReporterPath(workspaceRoot)),
-      workspaceRoot,
-    ),
+    await runTestCommand(process.execPath, testArgsFor(turboPath, measurementReporterPath), workspaceRoot),
   );
+  const durationMs = Math.round(performance.now() - startedAt);
+  const countReportCount = [...vitest.stdout.matchAll(vitestCountPattern)].length;
+  const timingReportCount = [...vitest.stdout.matchAll(vitestTimingPattern)].length;
+  const missingTimingReport = timingReportCount < countReportCount;
+  const supplementalTiming = missingTimingReport ? await runLintTiming(runTestCommand, workspaceRoot) : "";
   const legacy = await runLegacyRootTests(runTestCommand, workspaceRoot);
-  return { legacy, vitest };
+  return {
+    durationMs,
+    legacy,
+    vitest: {
+      failed: vitest.failed,
+      stdout: `${vitest.stdout}\n${supplementalTiming}`,
+    },
+  };
 };
 
-const buildMeasurement = (startedAt, { legacy, vitest }) => ({
-  durationMs: Math.round(performance.now() - startedAt),
-  testCount: vitestTestCount(vitest.stdout) + nodeTestCount(legacy.stdout),
-});
+const runLintTiming = async (runTestCommand, workspaceRoot) => {
+  const lintRoot = join(workspaceRoot, "configs/lint");
+  const lintFiles = globSync("tests/*.test.mjs", { cwd: lintRoot });
+  const result = await runTestCommand(
+    process.execPath,
+    [
+      "--test",
+      "--test-reporter=spec",
+      `--test-reporter=${nodeMeasurementReporterPath}`,
+      "--test-reporter-destination=stdout",
+      "--test-reporter-destination=stdout",
+      ...lintFiles,
+    ],
+    lintRoot,
+  );
+  const countReportCount = [...result.stdout.matchAll(vitestCountPattern)].length;
+  const timingReports = [...result.stdout.matchAll(vitestTimingPattern)];
+  const completedLintRun = countReportCount === 1 && timingReports.length === 1;
+  if (!completedLintRun) throw new Error("Node package test run did not complete");
+  return timingReports[0][0];
+};
+
+const slowestFirst = (left, right) =>
+  right.durationMs - left.durationMs || left.path.localeCompare(right.path);
+
+const parseTimingReport = (serialized) => {
+  const report = JSON.parse(serialized);
+  const validTestFiles =
+    Array.isArray(report?.testFiles) &&
+    report.testFiles.every(
+      (testFile) =>
+        typeof testFile?.path === "string" &&
+        Number.isFinite(testFile.durationMs) &&
+        testFile.durationMs >= 0 &&
+        Number.isInteger(testFile.testCount) &&
+        testFile.testCount >= 0,
+    );
+  const validReport =
+    typeof report?.packagePath === "string" &&
+    Number.isFinite(report.durationMs) &&
+    report.durationMs >= 0 &&
+    Number.isInteger(report.testCount) &&
+    report.testCount >= 0 &&
+    validTestFiles;
+  if (!validReport) throw new Error("Vitest reported invalid test timings");
+  return report;
+};
+
+const workspacePath = (workspaceRoot, absolutePath) => {
+  const path = relative(workspaceRoot, absolutePath);
+  const outsideWorkspace = path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path);
+  if (outsideWorkspace) throw new Error("Vitest reported timings outside the workspace");
+  return path || ".";
+};
+
+const vitestTimings = (output, workspaceRoot) => {
+  const packageReports = [...output.matchAll(vitestTimingPattern)].map(([, report]) =>
+    parseTimingReport(report),
+  );
+  const expectedReportCount = [...output.matchAll(vitestCountPattern)].length;
+  if (packageReports.length !== expectedReportCount) {
+    throw new Error("Package tests reported incomplete test timings");
+  }
+  const packages = packageReports.map((report) => ({
+    path: workspacePath(workspaceRoot, report.packagePath),
+    durationMs: report.durationMs,
+    testCount: report.testCount,
+  }));
+  const testFiles = packageReports.flatMap((report) => {
+    const packagePath = workspacePath(workspaceRoot, report.packagePath);
+    return report.testFiles.map((testFile) => ({
+      ...testFile,
+      path: join(packagePath, testFile.path),
+    }));
+  });
+  return {
+    packages: packages.toSorted(slowestFirst),
+    testFiles: testFiles.toSorted(slowestFirst),
+  };
+};
+
+const buildMeasurement = ({ durationMs, legacy, vitest }, workspaceRoot) => {
+  const vitestCount = reportedTestCount(vitest.stdout);
+  const legacyCount = reportedTestCount(legacy.stdout);
+  const vitestTiming = vitestTimings(vitest.stdout, workspaceRoot);
+  const legacyTiming =
+    legacyCount === 0 ? { packages: [], testFiles: [] } : vitestTimings(legacy.stdout, workspaceRoot);
+  const timings = {
+    packages: [...vitestTiming.packages, ...legacyTiming.packages].toSorted(slowestFirst),
+    testFiles: [...vitestTiming.testFiles, ...legacyTiming.testFiles].toSorted(slowestFirst),
+  };
+  const reportedCount = timings.packages.reduce((total, report) => total + report.testCount, 0);
+  const testCount = vitestCount + legacyCount;
+  if (reportedCount !== testCount) {
+    throw new Error("Test timing count disagrees with the test count");
+  }
+  return {
+    durationMs: durationMs + legacyTiming.packages.reduce((total, report) => total + report.durationMs, 0),
+    testCount,
+    ...timings,
+  };
+};
 
 const publishMeasurement = (measurement) => {
   console.log(JSON.stringify(measurement));
@@ -118,13 +227,11 @@ export const measureComparison = async (
   workspaceRoot = defaultWorkspaceRoot,
   testArgsFor = vitestTestArgs,
 ) => {
-  const startedAt = performance.now();
   const result = await runTests(runTestCommand, workspaceRoot, testArgsFor);
-  return publishMeasurement(buildMeasurement(startedAt, result));
+  return publishMeasurement(buildMeasurement(result, workspaceRoot));
 };
 
 export const measure = async (runTestCommand = run, workspaceRoot = defaultWorkspaceRoot) => {
-  const startedAt = performance.now();
   const results = await runTests(runTestCommand, workspaceRoot);
   const tsxPath = fileURLToPath(import.meta.resolve("tsx/cli"));
   const gitMeasurement = await runTestCommand(
@@ -133,7 +240,7 @@ export const measure = async (runTestCommand = run, workspaceRoot = defaultWorks
     workspaceRoot,
   );
   requireSuccess(gitMeasurement, "Git measurement");
-  const measurement = publishMeasurement(buildMeasurement(startedAt, results));
+  const measurement = publishMeasurement(buildMeasurement(results, workspaceRoot));
   if (results.vitest.failed || results.legacy.failed) process.exitCode = 1;
   return measurement;
 };
