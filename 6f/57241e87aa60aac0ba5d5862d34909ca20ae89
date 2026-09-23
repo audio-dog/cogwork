@@ -1,0 +1,26 @@
+configs/lint/package.json
+  s_e2e03bc71de983::t_b054749ba82f30 7
+  s_e2e03bc71de983::t_0219baa52a491b 8
+configs/lint/tests/react-lint-scope.test.mjs
+  s_e2e03bc71de983::t_732150df6d48f6 8-9
+  s_e2e03bc71de983::t_b054749ba82f30 1-7,10-31
+configs/lint/turbo.json
+  s_e2e03bc71de983::t_b1e5d9a33f485c 6
+  s_e2e03bc71de983::t_b054749ba82f30 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6f57241e87aa60aac0ba5d5862d34909ca20ae89",
+  "prompts": {},
+  "sessions": {
+    "s_e2e03bc71de983": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cfa6-9e68-7181-a48f-3e6f219f59d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
