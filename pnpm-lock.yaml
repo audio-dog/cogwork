@@ -404,6 +404,9 @@ importers:
 
   configs/test:
     dependencies:
+      effect:
+        specifier: catalog:effect
+        version: 4.0.0-rc.112
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))

@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import config from "../base";
+import config, { localWorkerLimit } from "../base";
 import { countMeasuredTestStates, TestCountReporter, testCountMarker } from "../test-count-reporter";
 
 afterEach(() => {
@@ -8,6 +8,11 @@ afterEach(() => {
 
 test("shared config installs the test-count reporter", () => {
   expect(config.test?.reporters).toEqual(["default", expect.any(TestCountReporter)]);
+});
+
+test("shared config bounds local workers without changing CI", () => {
+  expect(localWorkerLimit(false)).toBe(1);
+  expect(localWorkerLimit(true)).toBeUndefined();
 });
 
 test("test count includes passed and failed tests but excludes skipped and pending tests", () => {
