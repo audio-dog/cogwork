@@ -23,6 +23,7 @@ import {
   workspaceStateFromInfo,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -30,11 +31,13 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
+import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
@@ -107,6 +110,27 @@ class EventPublisherProbe extends Context.Service<EventPublisherProbe, EventPubl
         };
       }),
     );
+}
+
+interface SnapshotRefreshProbeService {
+  readonly reconciles: Ref.Ref<number>;
+  readonly starts: Queue.Queue<number>;
+  readonly releases: Queue.Queue<void>;
+}
+
+class SnapshotRefreshProbe extends Context.Service<SnapshotRefreshProbe, SnapshotRefreshProbeService>()(
+  "@cogwork/engine/event-publisher.test/SnapshotRefreshProbe",
+) {
+  static readonly layer = Layer.effect(
+    SnapshotRefreshProbe,
+    Effect.gen(function* () {
+      return {
+        reconciles: yield* Ref.make(0),
+        starts: yield* Queue.make<number>(),
+        releases: yield* Queue.make<void>(),
+      };
+    }),
+  );
 }
 
 interface ControlStoreProbeService {
@@ -246,12 +270,31 @@ const providerStub = Layer.succeed(SourceControlProvider, {
   openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 });
 
-const observing = Layer.mergeAll(
+const observationSources = <R>(issueTracker: Layer.Layer<IssueTracker, never, R>) =>
+  Layer.mergeAll(issueTracker, providerStub);
+
+const observing = observationSources(
   Layer.effect(
     IssueTracker,
     Effect.map(EventPublisherProbe, (probe) => trackerStub(() => Ref.get(probe.items))),
   ),
-  providerStub,
+);
+
+const snapshotRefreshObserving = observationSources(
+  Layer.effect(
+    IssueTracker,
+    Effect.gen(function* () {
+      const publisherProbe = yield* EventPublisherProbe;
+      const refreshProbe = yield* SnapshotRefreshProbe;
+      return trackerStub(() =>
+        Ref.updateAndGet(refreshProbe.reconciles, (current) => current + 1).pipe(
+          Effect.tap((sequence) => Queue.offer(refreshProbe.starts, sequence)),
+          Effect.andThen(Queue.take(refreshProbe.releases)),
+          Effect.andThen(Ref.get(publisherProbe.items)),
+        ),
+      );
+    }),
+  ),
 );
 
 const schedulerState = (global: number): Scheduler.SchedulerState => ({
@@ -329,11 +372,15 @@ const itemSentinelEvent = {
   item: classifiedItem({ _tag: "Eligible", id: "AUD-marker", title: "marker", url: null, stage: "triage" }),
 } as const;
 
-const publisherLayer = (workspaces = mutableRegistryLayer, store = controlStoreLayer) =>
+const publisherLayer = <TrackerRequirements>(
+  sources: Layer.Layer<IssueTracker | SourceControlProvider, never, TrackerRequirements>,
+  workspaces = mutableRegistryLayer,
+  store = controlStoreLayer,
+) =>
   eventPublisherLayer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        reconcileLayer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing))),
+        reconcileLayer.pipe(Layer.provide(Layer.mergeAll(workspaces, sources))),
         workspaces,
         schedulerStub,
         store,
@@ -343,7 +390,9 @@ const publisherLayer = (workspaces = mutableRegistryLayer, store = controlStoreL
   );
 
 const publisherTestLayer = (items: ReadonlyArray<TrackerItem> = [], globalInFlight = 0) =>
-  publisherLayer().pipe(Layer.provideMerge(EventPublisherProbe.layer(items, globalInFlight)));
+  publisherLayer(observing).pipe(Layer.provideMerge(EventPublisherProbe.layer(items, globalInFlight)));
+
+const snapshotRefreshPublisherLayer = publisherLayer(snapshotRefreshObserving);
 
 describe("DaemonEventPublisher", () => {
   it.effect("reconciles and publishes Workspace changes after a background refresh request", () =>
@@ -365,8 +414,66 @@ describe("DaemonEventPublisher", () => {
     }).pipe(Effect.provide(publisherTestLayer()), Effect.scoped),
   );
 
+  it.effect("coalesces a mutation burst into one follow-up snapshot refresh", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const publisher = yield* DaemonEventPublisher;
+      const publisherProbe = yield* EventPublisherProbe;
+      const refreshProbe = yield* SnapshotRefreshProbe;
+      const subscription = yield* bus.subscribe();
+      const publishedItems = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.filter(DaemonEvent.guards.ItemChanged),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* publisher.requestSnapshotRefresh();
+      assert.strictEqual(yield* Queue.take(refreshProbe.starts), 1);
+      yield* Effect.all(
+        [
+          publisher.requestSnapshotRefresh(),
+          publisher.requestSnapshotRefresh(),
+          publisher.requestSnapshotRefresh(),
+        ],
+        { concurrency: "unbounded", discard: true },
+      );
+      yield* Queue.offer(refreshProbe.releases, undefined);
+
+      assert.strictEqual(yield* Queue.take(refreshProbe.starts), 2);
+      const unexpectedThird = yield* Queue.take(refreshProbe.starts).pipe(
+        Effect.timeout("1 second"),
+        Effect.flip,
+        Effect.forkChild,
+      );
+      yield* Ref.set(publisherProbe.items, [eligibleItem("after burst")]);
+      yield* Queue.offer(refreshProbe.releases, undefined);
+
+      const published = [...(yield* Fiber.join(publishedItems))];
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+      const noThird = yield* Fiber.join(unexpectedThird);
+
+      assert.deepStrictEqual(
+        published.map((event) => event.item.title),
+        ["first", "after burst"],
+      );
+      assert.isTrue(Cause.isTimeoutError(noThird));
+      assert.strictEqual(yield* Ref.get(refreshProbe.reconciles), 2);
+    }).pipe(
+      Effect.provide(
+        snapshotRefreshPublisherLayer.pipe(
+          Layer.provideMerge(EventPublisherProbe.layer([eligibleItem("first")])),
+          Layer.provideMerge(SnapshotRefreshProbe.layer),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
   it.layer(
     publisherLayer(
+      observing,
       registryLayer,
       Layer.effect(
         ControlStore,
