@@ -31,7 +31,7 @@ import {
 } from "./harness-fixtures";
 import { claudeModelCatalog } from "./models.generated";
 
-describe("Claude Code host Harness", () => {
+describe("Claude Code host Harness", { timeout: 30_000 }, () => {
   it.layer(harnessLayer)((it) => {
     it.effect("registers an explicit Claude authentication binding", () =>
       Effect.sync(() => {

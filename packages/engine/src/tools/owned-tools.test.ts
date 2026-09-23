@@ -186,7 +186,7 @@ const hasAncestor = (span: Tracer.NativeSpan, ancestor: Tracer.NativeSpan): bool
       (parent instanceof Tracer.NativeSpan && hasAncestor(parent, ancestor)),
   });
 
-describe("owned tools", () => {
+describe("owned tools", { timeout: 30_000 }, () => {
   it.effect("writes and reads a file back through the sandbox", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();

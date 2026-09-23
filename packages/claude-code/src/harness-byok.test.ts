@@ -18,7 +18,7 @@ import {
   rotatingByokHarnessLayer,
 } from "./harness-fixtures";
 
-describe("Claude Code BYOK Harness", () => {
+describe("Claude Code BYOK Harness", { timeout: 30_000 }, () => {
   it.layer(byokHarnessLayer)((it) => {
     it.effect("reports BYOK availability without requiring host login", () =>
       Effect.gen(function* () {

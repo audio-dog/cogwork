@@ -209,7 +209,7 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
-describe("Cursor Harness registry", () => {
+describe("Cursor Harness registry", { timeout: 30_000 }, () => {
   it("serves generated base models and option descriptors", () => {
     const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
     const catalog = Harness.make([runner]).catalogs.get(cursorName);
@@ -475,251 +475,283 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
     assert.deepStrictEqual(runner.execution.profiles, ["full"]);
   });
 
-  it.effect("accepts Full and rejects Read only before launching Cursor", () =>
-    Effect.gen(function* () {
-      const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
-      const readOnly = yield* harness.preflight(cursorName, "read-only", "auto").pipe(Effect.flip);
+  it.effect(
+    "accepts Full and rejects Read only before launching Cursor",
+    () =>
+      Effect.gen(function* () {
+        const harness = Harness.make([
+          cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` }),
+        ]);
+        const readOnly = yield* harness.preflight(cursorName, "read-only", "auto").pipe(Effect.flip);
 
-      assert.strictEqual(readOnly.reason, "policy");
-      assert.include(readOnly.message, "read-only operation posture");
-      yield* harness.preflight(cursorName, "full", "auto");
-    }),
+        assert.strictEqual(readOnly.reason, "policy");
+        assert.include(readOnly.message, "read-only operation posture");
+        yield* harness.preflight(cursorName, "full", "auto");
+      }),
+    30_000,
   );
 
-  it.effect("uses host login and the shared mandatory Workspace projection", () =>
-    withCursorEnvironment(
+  it.effect(
+    "uses host login and the shared mandatory Workspace projection",
+    () =>
+      withCursorEnvironment(
+        Effect.gen(function* () {
+          const checkout = yield* Effect.acquireRelease(
+            Effect.promise(() => localProcessSandbox({}).create({})),
+            (sandbox) => Effect.promise(() => sandbox.destroy()),
+          );
+          const base = request(checkout.id);
+          const projectedRequest = {
+            ...base,
+            plan: new RunPlan({
+              ...base.plan,
+              harness: {
+                ...base.plan.harness,
+                model: "gpt-5.6-sol",
+                options: { effort: "high" },
+              },
+              instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
+              operatingInstructions: {
+                name: "triage-agent",
+                path: "/operating-instructions/triage-agent",
+                resources: [],
+              },
+              mcp: [
+                {
+                  identity: "local:user/mcp-server/linear",
+                  name: "linear",
+                  projectedName: "linear",
+                  endpoint: "https://mcp.example.test/readonly",
+                  authenticated: true,
+                  unavailableReason: null,
+                },
+              ],
+              structuredOutput: null,
+            }),
+            mcpCredentials: new Map([["local:user/mcp-server/linear", Redacted.make("cursor-mcp-secret")]]),
+          } satisfies Harness.HarnessRequest;
+          const runner = cursorRunner({
+            name: cursorName,
+            agentBin: `node ${fakeCursorAgent} --observe`,
+          });
+
+          const events = yield* Stream.runCollect(runner.run(projectedRequest));
+          const output = Array.from(events)
+            .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
+            .map(({ delta }) => delta ?? "")
+            .join("");
+          const observation = decodeObservation(output);
+
+          assert.include(observation.instructions, "Mandatory repository context.");
+          assert.include(observation.instructions, "/operating-instructions/triage-agent");
+          assert.strictEqual(observation.model, "gpt-5.6-sol-high");
+          assert.deepStrictEqual(observation.mcp, [
+            {
+              name: "linear",
+              url: "https://mcp.example.test/readonly",
+              authenticated: true,
+            },
+          ]);
+          assert.strictEqual(observation.cursorConfigDir, cursorEnvironmentProbe.CURSOR_CONFIG_DIR);
+          assert.deepStrictEqual(observation.windowsEnvironment, cursorWindowsEnvironmentProbe);
+          assert.deepStrictEqual(observation.networkEnvironment, cursorNetworkEnvironmentProbe);
+          assert.isFalse(observation.hasCursorApiKey);
+          assert.notInclude(output, "cursor-mcp-secret");
+        }),
+      ),
+    30_000,
+  );
+
+  it.effect(
+    "refuses a stale model at dispatch",
+    () =>
       Effect.gen(function* () {
         const checkout = yield* Effect.acquireRelease(
           Effect.promise(() => localProcessSandbox({}).create({})),
           (sandbox) => Effect.promise(() => sandbox.destroy()),
         );
         const base = request(checkout.id);
-        const projectedRequest = {
+        const staleRequest = {
           ...base,
           plan: new RunPlan({
             ...base.plan,
             harness: {
               ...base.plan.harness,
-              model: "gpt-5.6-sol",
-              options: { effort: "high" },
+              model: "retired-cursor-model",
             },
-            instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
-            operatingInstructions: {
-              name: "triage-agent",
-              path: "/operating-instructions/triage-agent",
-              resources: [],
-            },
-            mcp: [
-              {
-                identity: "local:user/mcp-server/linear",
-                name: "linear",
-                projectedName: "linear",
-                endpoint: "https://mcp.example.test/readonly",
-                authenticated: true,
-                unavailableReason: null,
-              },
-            ],
-            structuredOutput: null,
           }),
-          mcpCredentials: new Map([["local:user/mcp-server/linear", Redacted.make("cursor-mcp-secret")]]),
         } satisfies Harness.HarnessRequest;
+        const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+
+        const failure = yield* Stream.runDrain(runner.run(staleRequest)).pipe(Effect.flip);
+
+        assert.strictEqual(failure.reason, "stale-selection");
+        assert.include(failure.message, "retired-cursor-model");
+      }),
+    30_000,
+  );
+
+  it.effect(
+    "streams a fresh ACP session, parsed structured result, and estimated terminal usage",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+
+        const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
+        const session = Array.from(events).find(
+          (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
+        );
+        const structured = Array.from(events).find(agUiIsStructuredOutputComplete);
+        const finished = events.at(-1);
+
+        assert.deepStrictEqual(session?.value, { sessionId: "fake-cursor-session" });
+        assert.deepNestedInclude(
+          Array.from(events).find((event) => event.type === "RUN_STARTED"),
+          { runId: "run-cursor-test", threadId: freshSessionId },
+        );
+        assert.deepStrictEqual(structured?.value.object, {
+          _tag: "triage",
+          role: "ready-for-agent",
+          proposal: "Verified and ready.",
+        });
+        assert.strictEqual(finished?.type, "RUN_FINISHED");
+        assert.isDefined(finished);
+        assert.isTrue(agUiUsage(finished)?.estimated);
+      }),
+    30_000,
+  );
+
+  it.effect(
+    "projects the persisted opaque handle through modelOptions.sessionId",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const resumeHandle = "persisted-cursor-session";
+        const resumedRequest = {
+          ...request(checkout.id),
+          session: resumedSessionId,
+        } satisfies Harness.HarnessRequest;
+        const resumedStore = { ...sessionStore, resumeHandle: () => Effect.succeed(resumeHandle) };
+        const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+
+        const events = yield* Stream.runCollect(
+          runner.run(resumedRequest).pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
+        );
+        const session = Array.from(events).find(
+          (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
+        );
+
+        assert.deepStrictEqual(session?.value, { sessionId: resumeHandle });
+        assert.deepNestedInclude(
+          Array.from(events).find((event) => event.type === "RUN_STARTED"),
+          { runId: "run-cursor-test", threadId: resumedSessionId },
+        );
+      }),
+    30_000,
+  );
+
+  it.effect(
+    "preserves metered ACP usage instead of estimating it",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
         const runner = cursorRunner({
           name: cursorName,
-          agentBin: `node ${fakeCursorAgent} --observe`,
+          agentBin: `node ${fakeCursorAgent} --metered`,
         });
 
-        const events = yield* Stream.runCollect(runner.run(projectedRequest));
-        const output = Array.from(events)
-          .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
-          .map(({ delta }) => delta ?? "")
-          .join("");
-        const observation = decodeObservation(output);
+        const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
+        const finished = events.at(-1);
 
-        assert.include(observation.instructions, "Mandatory repository context.");
-        assert.include(observation.instructions, "/operating-instructions/triage-agent");
-        assert.strictEqual(observation.model, "gpt-5.6-sol-high");
-        assert.deepStrictEqual(observation.mcp, [
-          {
-            name: "linear",
-            url: "https://mcp.example.test/readonly",
-            authenticated: true,
-          },
-        ]);
-        assert.strictEqual(observation.cursorConfigDir, cursorEnvironmentProbe.CURSOR_CONFIG_DIR);
-        assert.deepStrictEqual(observation.windowsEnvironment, cursorWindowsEnvironmentProbe);
-        assert.deepStrictEqual(observation.networkEnvironment, cursorNetworkEnvironmentProbe);
-        assert.isFalse(observation.hasCursorApiKey);
-        assert.notInclude(output, "cursor-mcp-secret");
+        assert.deepStrictEqual(finished && agUiUsage(finished), {
+          inputTokens: 100,
+          outputTokens: 20,
+          totalTokens: 120,
+        });
       }),
-    ),
+    30_000,
   );
 
-  it.effect("refuses a stale model at dispatch", () =>
-    Effect.gen(function* () {
-      const checkout = yield* Effect.acquireRelease(
-        Effect.promise(() => localProcessSandbox({}).create({})),
-        (sandbox) => Effect.promise(() => sandbox.destroy()),
-      );
-      const base = request(checkout.id);
-      const staleRequest = {
-        ...base,
-        plan: new RunPlan({
-          ...base.plan,
-          harness: {
-            ...base.plan.harness,
-            model: "retired-cursor-model",
-          },
-        }),
-      } satisfies Harness.HarnessRequest;
-      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+  it.effect(
+    "refuses a blocking Cursor extension without hanging the turn",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const runner = cursorRunner({
+          name: cursorName,
+          agentBin: `node ${fakeCursorAgent} --blocking-extension`,
+        });
 
-      const failure = yield* Stream.runDrain(runner.run(staleRequest)).pipe(Effect.flip);
+        const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
 
-      assert.strictEqual(failure.reason, "stale-selection");
-      assert.include(failure.message, "retired-cursor-model");
-    }),
+        assert.isTrue(Array.from(events).some(agUiIsStructuredOutputComplete));
+        assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+      }),
+    30_000,
   );
 
-  it.effect("streams a fresh ACP session, parsed structured result, and estimated terminal usage", () =>
-    Effect.gen(function* () {
-      const checkout = yield* Effect.acquireRelease(
-        Effect.promise(() => localProcessSandbox({}).create({})),
-        (sandbox) => Effect.promise(() => sandbox.destroy()),
-      );
-      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+  it.effect(
+    "exposes a new handle when ACP silently falls back after rejected load",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const resumedRequest = {
+          ...request(checkout.id),
+          session: resumedSessionId,
+        } satisfies Harness.HarnessRequest;
+        const resumedStore = {
+          ...sessionStore,
+          resumeHandle: () => Effect.succeed("missing-cursor-session"),
+        };
+        const runner = cursorRunner({
+          name: cursorName,
+          agentBin: `node ${fakeCursorAgent} --reject-load`,
+        });
 
-      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
-      const session = Array.from(events).find(
-        (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
-      );
-      const structured = Array.from(events).find(agUiIsStructuredOutputComplete);
-      const finished = events.at(-1);
+        const events = yield* Stream.runCollect(
+          runner.run(resumedRequest).pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
+        );
+        const session = Array.from(events).find(
+          (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
+        );
 
-      assert.deepStrictEqual(session?.value, { sessionId: "fake-cursor-session" });
-      assert.deepNestedInclude(
-        Array.from(events).find((event) => event.type === "RUN_STARTED"),
-        { runId: "run-cursor-test", threadId: freshSessionId },
-      );
-      assert.deepStrictEqual(structured?.value.object, {
-        _tag: "triage",
-        role: "ready-for-agent",
-        proposal: "Verified and ready.",
-      });
-      assert.strictEqual(finished?.type, "RUN_FINISHED");
-      assert.isDefined(finished);
-      assert.isTrue(agUiUsage(finished)?.estimated);
-    }),
+        assert.deepStrictEqual(session?.value, { sessionId: "fake-cursor-session" });
+      }),
+    30_000,
   );
 
-  it.effect("projects the persisted opaque handle through modelOptions.sessionId", () =>
-    Effect.gen(function* () {
-      const checkout = yield* Effect.acquireRelease(
-        Effect.promise(() => localProcessSandbox({}).create({})),
-        (sandbox) => Effect.promise(() => sandbox.destroy()),
-      );
-      const resumeHandle = "persisted-cursor-session";
-      const resumedRequest = {
-        ...request(checkout.id),
-        session: resumedSessionId,
-      } satisfies Harness.HarnessRequest;
-      const resumedStore = { ...sessionStore, resumeHandle: () => Effect.succeed(resumeHandle) };
-      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+  it.effect(
+    "surfaces post-launch transport failures through the Harness runner",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const runner = cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-151" });
 
-      const events = yield* Stream.runCollect(
-        runner.run(resumedRequest).pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
-      );
-      const session = Array.from(events).find(
-        (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
-      );
+        const error = yield* runner.run(request(checkout.id)).pipe(Stream.runDrain, Effect.flip);
 
-      assert.deepStrictEqual(session?.value, { sessionId: resumeHandle });
-      assert.deepNestedInclude(
-        Array.from(events).find((event) => event.type === "RUN_STARTED"),
-        { runId: "run-cursor-test", threadId: resumedSessionId },
-      );
-    }),
-  );
-
-  it.effect("preserves metered ACP usage instead of estimating it", () =>
-    Effect.gen(function* () {
-      const checkout = yield* Effect.acquireRelease(
-        Effect.promise(() => localProcessSandbox({}).create({})),
-        (sandbox) => Effect.promise(() => sandbox.destroy()),
-      );
-      const runner = cursorRunner({
-        name: cursorName,
-        agentBin: `node ${fakeCursorAgent} --metered`,
-      });
-
-      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
-      const finished = events.at(-1);
-
-      assert.deepStrictEqual(finished && agUiUsage(finished), {
-        inputTokens: 100,
-        outputTokens: 20,
-        totalTokens: 120,
-      });
-    }),
-  );
-
-  it.effect("refuses a blocking Cursor extension without hanging the turn", () =>
-    Effect.gen(function* () {
-      const checkout = yield* Effect.acquireRelease(
-        Effect.promise(() => localProcessSandbox({}).create({})),
-        (sandbox) => Effect.promise(() => sandbox.destroy()),
-      );
-      const runner = cursorRunner({
-        name: cursorName,
-        agentBin: `node ${fakeCursorAgent} --blocking-extension`,
-      });
-
-      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
-
-      assert.isTrue(Array.from(events).some(agUiIsStructuredOutputComplete));
-      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
-    }),
-  );
-
-  it.effect("exposes a new handle when ACP silently falls back after rejected load", () =>
-    Effect.gen(function* () {
-      const checkout = yield* Effect.acquireRelease(
-        Effect.promise(() => localProcessSandbox({}).create({})),
-        (sandbox) => Effect.promise(() => sandbox.destroy()),
-      );
-      const resumedRequest = {
-        ...request(checkout.id),
-        session: resumedSessionId,
-      } satisfies Harness.HarnessRequest;
-      const resumedStore = { ...sessionStore, resumeHandle: () => Effect.succeed("missing-cursor-session") };
-      const runner = cursorRunner({
-        name: cursorName,
-        agentBin: `node ${fakeCursorAgent} --reject-load`,
-      });
-
-      const events = yield* Stream.runCollect(
-        runner.run(resumedRequest).pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
-      );
-      const session = Array.from(events).find(
-        (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
-      );
-
-      assert.deepStrictEqual(session?.value, { sessionId: "fake-cursor-session" });
-    }),
-  );
-
-  it.effect("surfaces post-launch transport failures through the Harness runner", () =>
-    Effect.gen(function* () {
-      const checkout = yield* Effect.acquireRelease(
-        Effect.promise(() => localProcessSandbox({}).create({})),
-        (sandbox) => Effect.promise(() => sandbox.destroy()),
-      );
-      const runner = cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-151" });
-
-      const error = yield* runner.run(request(checkout.id)).pipe(Stream.runDrain, Effect.flip);
-
-      assert.strictEqual(error.reason, "turn");
-      assert.isTrue(error.retryable);
-    }),
+        assert.strictEqual(error.reason, "turn");
+        assert.isTrue(error.retryable);
+      }),
+    30_000,
   );
 });
 

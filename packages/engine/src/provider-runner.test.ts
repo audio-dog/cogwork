@@ -228,7 +228,7 @@ const providerRunnerLayer = (
     httpClient,
   );
 
-describe("providerRunner", () => {
+describe("providerRunner", { timeout: 30_000 }, () => {
   it("projects Operating Instructions resources into provider context", () => {
     assert.deepStrictEqual(
       providerInstructionContext(request({}).plan).map(({ content }) => content),

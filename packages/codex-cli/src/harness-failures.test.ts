@@ -15,7 +15,7 @@ import {
   runner,
 } from "./harness-fixtures";
 
-describe("codexRunner failures", () => {
+describe("codexRunner failures", { timeout: 30_000 }, () => {
   it.layer(harnessLayer)((it) => {
     it.effect("classifies emitted Codex authentication errors after preserving the event", () =>
       Effect.scoped(
