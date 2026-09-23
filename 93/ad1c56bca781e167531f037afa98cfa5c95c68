@@ -1,0 +1,23 @@
+packages/claude-code/src/harness-host.test.ts
+  s_6e4fa639b0da3e::t_e8769d8474893e 34
+packages/claude-code/src/harness-environment.test.ts
+  s_6e4fa639b0da3e::t_e8769d8474893e 28
+packages/claude-code/src/harness-byok.test.ts
+  s_6e4fa639b0da3e::t_e8769d8474893e 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "93ad1c56bca781e167531f037afa98cfa5c95c68",
+  "prompts": {},
+  "sessions": {
+    "s_6e4fa639b0da3e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cfa6-a7f9-7161-8307-8fbc79d5cd31",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
