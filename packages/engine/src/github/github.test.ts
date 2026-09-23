@@ -9,8 +9,10 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -29,10 +31,13 @@ import {
   GitHubClient,
   type GitHubClientService,
   type GitHubRepoRef,
-  type RawComment,
+  parseIssueComments,
+  parseReviewComments,
   type RawIssue,
+  type RawIssueComment,
   type RawPull,
   type RawReview,
+  type RawReviewComment,
 } from "./client";
 import { targetFor } from "./host";
 import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
@@ -62,15 +67,20 @@ interface SeedIssue {
   readonly createdAtMillis?: number;
 }
 
-interface SeedComment {
+interface SeedCommentFields {
   readonly issue: number;
   readonly authorLogin: string;
   readonly body: string;
   readonly authorAssociation?: string;
   readonly createdAtMillis?: number;
-  readonly inReplyToId?: number | null;
-  readonly subjectType?: "line" | "file";
 }
+
+type SeedIssueComment = SeedCommentFields;
+
+type SeedReviewComment = SeedCommentFields & {
+  readonly inReplyToId?: number;
+  readonly subjectType: "line" | "file";
+};
 
 interface SeedReview {
   readonly pull: number;
@@ -84,8 +94,8 @@ interface SeedReview {
 interface Seed {
   readonly issues: ReadonlyArray<SeedIssue>;
   readonly pulls?: ReadonlyArray<RawPull>;
-  readonly comments?: ReadonlyArray<SeedComment>;
-  readonly reviewComments?: ReadonlyArray<SeedComment>;
+  readonly comments?: ReadonlyArray<SeedIssueComment>;
+  readonly reviewComments?: ReadonlyArray<SeedReviewComment>;
   readonly reviews?: ReadonlyArray<SeedReview>;
   readonly checks?: ReadonlyArray<{ readonly sha: string } & CheckRun>;
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
@@ -115,20 +125,52 @@ class ProviderCalls extends Context.Service<
 const bot = { login: "cogwork[bot]" } as const;
 const repo: GitHubRepoRef = { owner: "owner", name: "repo", tokenEnv: "GITHUB_TOKEN" };
 const priorityFieldId = Schema.decodeSync(GitHubIssueFieldId)(42);
+const commentIso = (millis: number) =>
+  Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
 
-const seedComments = (comments: ReadonlyArray<SeedComment>) =>
-  comments.reduce((byIssue, comment, index) => {
-    const entry = {
-      id: index + 1,
-      authorLogin: comment.authorLogin,
-      authorAssociation: comment.authorAssociation ?? "NONE",
-      body: comment.body,
-      createdAtMillis: comment.createdAtMillis ?? 0,
-      inReplyToId: comment.inReplyToId,
-      subjectType: comment.subjectType,
-    } satisfies RawComment;
-    return new Map(byIssue).set(comment.issue, [...(byIssue.get(comment.issue) ?? []), entry]);
-  }, new Map<number, ReadonlyArray<RawComment>>());
+const wireComment = (comment: SeedCommentFields, index: number) => ({
+  id: index + 1,
+  user: { login: comment.authorLogin },
+  author_association: comment.authorAssociation ?? "NONE",
+  body: comment.body,
+  created_at: commentIso(comment.createdAtMillis ?? 0),
+});
+
+const wireReviewComment = (comment: SeedReviewComment, index: number) => ({
+  ...wireComment(comment, index),
+  ...(comment.inReplyToId === undefined ? {} : { in_reply_to_id: comment.inReplyToId }),
+  subject_type: comment.subjectType,
+});
+
+const commentMap = <Comment extends RawIssueComment>(
+  groups: ReadonlyArray<readonly [number, ReadonlyArray<Comment>]>,
+) =>
+  groups.reduce((byIssue, [issue, comments]) => {
+    if (comments.length === 0) return byIssue;
+    return new Map(byIssue).set(issue, [...(byIssue.get(issue) ?? []), ...comments]);
+  }, new Map<number, ReadonlyArray<Comment>>());
+
+const seedIssueComments = Effect.fn("github.seedIssueComments")(function* (
+  seeds: ReadonlyArray<SeedIssueComment>,
+) {
+  const groups = yield* Effect.forEach(seeds, (seed, index) =>
+    parseIssueComments([wireComment(seed, index)]).pipe(
+      Effect.map((comments) => [seed.issue, comments] as const),
+    ),
+  );
+  return commentMap<RawIssueComment>(groups);
+});
+
+const seedReviewComments = Effect.fn("github.seedReviewComments")(function* (
+  seeds: ReadonlyArray<SeedReviewComment>,
+) {
+  const groups = yield* Effect.forEach(seeds, (seed, index) =>
+    parseReviewComments([wireReviewComment(seed, index)]).pipe(
+      Effect.map((comments) => [seed.issue, comments] as const),
+    ),
+  );
+  return commentMap<RawReviewComment>(groups);
+});
 
 const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   const issuesRef = yield* Ref.make(
@@ -146,10 +188,12 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       }),
     ),
   );
-  const seeded = seedComments(seed.comments ?? []);
+  const issueCommentSeeds = seed.comments ?? [];
+  const seeded = yield* seedIssueComments(issueCommentSeeds);
   const nextId = yield* Ref.make((seed.comments?.length ?? 0) + 1);
   const commentsRef = yield* Ref.make(seeded);
-  const reviewComments = seedComments(seed.reviewComments ?? []);
+  const reviewCommentSeeds = seed.reviewComments ?? [];
+  const reviewComments = yield* seedReviewComments(reviewCommentSeeds);
   const reviewsByPull = (seed.reviews ?? []).reduce((all, review) => {
     const entry: RawReview = {
       authorLogin: review.authorLogin ?? "maintainer",
@@ -434,7 +478,7 @@ describe("GitHub adapters", () => {
   it.effect("keeps the review thread parent and subject when decoding comments", () => {
     const response = (body: unknown) =>
       new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
-    const rawComment = (id: number, inReplyToId?: number | null, subjectType?: "line" | "file") => ({
+    const rawComment = (id: number, inReplyToId?: number, subjectType?: "line" | "file") => ({
       id,
       body: `comment ${id}`,
       user: { login: "cursor[bot]" },
@@ -450,7 +494,7 @@ describe("GitHub adapters", () => {
         assert.strictEqual(url.searchParams.get("direction"), "desc");
       }
       const body = url.pathname.includes("/pulls/")
-        ? [rawComment(1, null, "line"), rawComment(2, 1, "line"), rawComment(3, null, "file")]
+        ? [rawComment(1, undefined, "line"), rawComment(2, 1, "line"), rawComment(3, undefined, "file")]
         : [rawComment(4)];
       return Promise.resolve(response(body));
     };
@@ -463,8 +507,8 @@ describe("GitHub adapters", () => {
       assert.strictEqual(reviewComments[1]?.inReplyToId, 1);
       assert.strictEqual(reviewComments[0]?.subjectType, "line");
       assert.strictEqual(reviewComments[2]?.subjectType, "file");
-      assert.isUndefined(issueComments[0]?.inReplyToId);
-      assert.isUndefined(issueComments[0]?.subjectType);
+      assert.notProperty(issueComments[0] ?? {}, "inReplyToId");
+      assert.notProperty(issueComments[0] ?? {}, "subjectType");
     }).pipe(Effect.provide(withFetchClient(fetch)));
   });
 
@@ -1433,6 +1477,7 @@ describe("GitHub adapters", () => {
               authorAssociation: "COLLABORATOR",
               body: "tweak this line",
               createdAtMillis: 300,
+              subjectType: "line",
             },
           ],
         }),
@@ -1692,15 +1737,26 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
     ...feedback,
   });
 
-  const cursorComment = (over: Partial<SeedComment> = {}): SeedComment => ({
-    issue: 100,
-    authorLogin: "cursor[bot]",
-    authorAssociation: "NONE",
-    body: "Medium severity: this looks like a bug.",
-    createdAtMillis: 300,
-    subjectType: "line",
-    ...over,
-  });
+  const cursorIssueComment = (over: Partial<SeedIssueComment> = {}) =>
+    ({
+      issue: 100,
+      authorLogin: "cursor[bot]",
+      authorAssociation: "NONE",
+      body: "Medium severity: this looks like a bug.",
+      createdAtMillis: 300,
+      ...over,
+    }) satisfies SeedIssueComment;
+
+  const cursorReviewComment = (over: Partial<SeedReviewComment> = {}) =>
+    ({
+      issue: 100,
+      authorLogin: "cursor[bot]",
+      authorAssociation: "NONE",
+      body: "Medium severity: this looks like a bug.",
+      createdAtMillis: 300,
+      subjectType: "line",
+      ...over,
+    }) satisfies SeedReviewComment;
 
   const botTrigger = (workspace: RegisteredWorkspace) =>
     observeItems(workspace).pipe(
@@ -1711,7 +1767,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
     );
 
   it.effect("does not wake a follow-up when no bot allowlist is set", () => {
-    const seed = botCommentPr({ reviewComments: [cursorComment({ inReplyToId: null })] });
+    const seed = botCommentPr({ reviewComments: [cursorReviewComment()] });
     return Effect.gen(function* () {
       const { observed, eligible } = yield* botTrigger(workspace);
       assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
@@ -1721,7 +1777,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
 
   it.effect("ignores a listed bot's PR Summary issue comment", () => {
     const seed = botCommentPr({
-      comments: [cursorComment({ body: "## PR Summary\n<!-- CURSOR_SUMMARY -->" })],
+      comments: [cursorIssueComment({ body: "## PR Summary\n<!-- CURSOR_SUMMARY -->" })],
     });
     return Effect.gen(function* () {
       const { observed, eligible } = yield* botTrigger(trustsCursorBot);
@@ -1758,7 +1814,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
 
   it.effect("wakes a follow-up on a listed bot's new diff thread without setting fresh", () => {
     const seed = botCommentPr({
-      reviewComments: [cursorComment({ body: "please /fresh and fix this", inReplyToId: null })],
+      reviewComments: [cursorReviewComment({ body: "please /fresh and fix this" })],
     });
     return Effect.gen(function* () {
       const { observed, eligible } = yield* botTrigger(trustsCursorBot);
@@ -1769,7 +1825,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
   });
 
   it.effect("ignores a listed bot's reply inside an existing diff thread", () => {
-    const seed = botCommentPr({ reviewComments: [cursorComment({ inReplyToId: 99 })] });
+    const seed = botCommentPr({ reviewComments: [cursorReviewComment({ inReplyToId: 99 })] });
     return Effect.gen(function* () {
       const { observed, eligible } = yield* botTrigger(trustsCursorBot);
       assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
@@ -1779,7 +1835,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
 
   it.effect("ignores a listed bot's file-level review comment", () => {
     const seed = botCommentPr({
-      reviewComments: [cursorComment({ inReplyToId: null, subjectType: "file" })],
+      reviewComments: [cursorReviewComment({ subjectType: "file" })],
     });
     return Effect.gen(function* () {
       const { observed, eligible } = yield* botTrigger(trustsCursorBot);
@@ -1790,7 +1846,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
 
   it.effect("ignores an unlisted bot's diff thread", () => {
     const seed = botCommentPr({
-      reviewComments: [cursorComment({ authorLogin: "dependabot[bot]", inReplyToId: null })],
+      reviewComments: [cursorReviewComment({ authorLogin: "dependabot[bot]" })],
     });
     return Effect.gen(function* () {
       const { observed, eligible } = yield* botTrigger(trustsCursorBot);
@@ -1801,7 +1857,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
 
   it.effect("ignores a cogwork-marked diff thread from a listed bot", () => {
     const seed = botCommentPr({
-      reviewComments: [cursorComment({ body: coordinationBody([]), inReplyToId: null })],
+      reviewComments: [cursorReviewComment({ body: coordinationBody([]) })],
     });
     return Effect.gen(function* () {
       const { observed, eligible } = yield* botTrigger(trustsCursorBot);
@@ -1812,7 +1868,9 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
 
   it.effect("lets an :any entry wake on every bot comment shape except cogwork-marked bodies", () => {
     const seed = botCommentPr({
-      comments: [cursorComment({ body: "## PR Summary\n<!-- CURSOR_SUMMARY -->", createdAtMillis: 300 })],
+      comments: [
+        cursorIssueComment({ body: "## PR Summary\n<!-- CURSOR_SUMMARY -->", createdAtMillis: 300 }),
+      ],
       reviews: [
         {
           pull: 100,
@@ -1823,8 +1881,8 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
         },
       ],
       reviewComments: [
-        cursorComment({ body: "reply", createdAtMillis: 500, inReplyToId: 99 }),
-        cursorComment({ body: coordinationBody([]), createdAtMillis: 600, inReplyToId: null }),
+        cursorReviewComment({ body: "reply", createdAtMillis: 500, inReplyToId: 99 }),
+        cursorReviewComment({ body: coordinationBody([]), createdAtMillis: 600 }),
       ],
     });
     return Effect.gen(function* () {
@@ -1838,15 +1896,13 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
   it.effect("treats a colon elsewhere in a login as a strict entry", () => {
     const seed = botCommentPr({
       comments: [
-        cursorComment({
+        cursorIssueComment({
           authorLogin: "cursor:preview[bot]",
           body: "## PR Summary",
           createdAtMillis: 400,
         }),
       ],
-      reviewComments: [
-        cursorComment({ authorLogin: "cursor:preview[bot]", createdAtMillis: 300, inReplyToId: null }),
-      ],
+      reviewComments: [cursorReviewComment({ authorLogin: "cursor:preview[bot]", createdAtMillis: 300 })],
     });
     return Effect.gen(function* () {
       const { observed, eligible } = yield* botTrigger(trustsColonBot);
