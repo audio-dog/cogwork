@@ -1,0 +1,75 @@
+name: Test Suite Seed
+
+on:
+  push:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TURBO_RUN_SUMMARY: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2
+        with:
+          cache: true
+
+      - name: Cache for Turbo
+        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9
+
+      - name: Run uncached tests and seed the cache
+        run: pnpm exec turbo run test --force
+
+      - name: Record test suite measurement
+        env:
+          MEASUREMENT_PATH: test-suite-seed-measurement.json
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFile, readdir, writeFile } from 'node:fs/promises'
+
+          const runDirectory = '.turbo/runs'
+          const runFiles = await readdir(runDirectory)
+          const runSummaries = await Promise.all(
+            runFiles.map(async (file) => {
+              const summaryPath = `${runDirectory}/${file}`
+              return JSON.parse(await readFile(summaryPath, 'utf8'))
+            }),
+          )
+          const summary = runSummaries.toSorted(
+            (left, right) => right.execution.endTime - left.execution.endTime,
+          )[0]
+          const taskTestCounts = await Promise.all(
+            summary.tasks.map(async ({ logFile }) => {
+              const log = await readFile(logFile, 'utf8')
+              const testCountMatch = log.match(/^cogwork-test-count:(\d+)$/m)
+              if (!testCountMatch) throw new Error(`No test count in ${logFile}`)
+              return Number(testCountMatch[1])
+            }),
+          )
+          const testCount = taskTestCounts.reduce((total, count) => total + count, 0)
+          const { attempted, cached, startTime, endTime } = summary.execution
+          if (cached !== 0) throw new Error(`Seed run replayed ${cached} of ${attempted} tasks`)
+
+          const durationMs = endTime - startTime
+          const measurement = { durationMs, testCount }
+          await writeFile(process.env.MEASUREMENT_PATH, `${JSON.stringify(measurement, null, 2)}\n`)
+          EOF
+
+          node configs/sensor/test-measure-summary.mjs "$MEASUREMENT_PATH" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test suite measurement
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: test-suite-seed-measurement
+          path: test-suite-seed-measurement.json
+          if-no-files-found: error
+          retention-days: 90
