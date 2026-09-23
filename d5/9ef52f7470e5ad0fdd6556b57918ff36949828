@@ -1,0 +1,19 @@
+docs/adr/0027-headless-review-is-one-bounded-round-of-report-only-reviewers.md
+  s_d3750bf659498d::t_069c6363c78db0 1-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d59ef52f7470e5ad0fdd6556b57918ff36949828",
+  "prompts": {},
+  "sessions": {
+    "s_d3750bf659498d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b7d3ed18-43b6-483d-b72a-19c0c84fa58a",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
