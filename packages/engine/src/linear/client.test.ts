@@ -33,10 +33,13 @@ const linearMaxQueryComplexity = 10_000;
 const linearDefaultPageSize = 50;
 const objectPoints = 1;
 const propertyPoints = 0.1;
-const propertiesPerIssue = 5;
+const propertiesPerIssue = 8;
+const objectsPerIssue = 2;
 const propertiesPerCoordinationComment = 4;
 const propertiesPerRelation = 2;
 const objectsPerRelation = 2;
+const pageInfoPoints = objectPoints + 2 * propertyPoints;
+const nestedRelationPageSize = 7;
 
 const connectionPattern = /(?:(\w+):\s*)?(\w+)\s*(?:\(([^)]*)\))?\s*\{\s*nodes\b/g;
 
@@ -58,12 +61,13 @@ const complexityOf = (document: string) => {
   const relationPoints = propertiesPerRelation * propertyPoints + objectsPerRelation * objectPoints;
   const issuePoints =
     propertiesPerIssue * propertyPoints +
-    objectPoints +
+    objectsPerIssue * objectPoints +
     connectionPoints(sizeOf("labels"), propertyPoints) +
     connectionPoints(sizeOf("comments"), commentPoints) +
     connectionPoints(sizeOf("proposalComments"), commentPoints) +
-    connectionPoints(sizeOf("inverseRelations"), relationPoints);
-  const teamPoints = connectionPoints(sizeOf("issues"), issuePoints);
+    connectionPoints(sizeOf("inverseRelations"), relationPoints) +
+    pageInfoPoints;
+  const teamPoints = connectionPoints(sizeOf("issues"), issuePoints) + pageInfoPoints;
   return Math.ceil(connectionPoints(sizeOf("teams"), teamPoints));
 };
 
@@ -181,6 +185,48 @@ const teamBundle = {
   states: { nodes: [{ id: "state-todo", name: "Todo", type: "unstarted" }] },
   labels: { nodes: [{ id: "label-uuid", name: "state:ready-for-agent" }] },
 };
+
+const relationPage = (nodes: ReadonlyArray<unknown>, endCursor: string | null = null) => ({
+  nodes,
+  pageInfo: { hasNextPage: endCursor !== null, endCursor },
+});
+
+const issuesResponse = (inverseRelations: ReturnType<typeof relationPage>) => ({
+  body: {
+    data: {
+      teams: {
+        nodes: [
+          {
+            ...teamBundle,
+            issues: {
+              nodes: [{ ...teamBundle.issues.nodes[0], inverseRelations }],
+              pageInfo: lastPage,
+            },
+          },
+        ],
+      },
+    },
+  },
+});
+
+const relationsResponse = (inverseRelations: ReturnType<typeof relationPage>) => ({
+  body: { data: { issue: { inverseRelations } } },
+});
+
+const resolvedRelations = () =>
+  Array.from({ length: nestedRelationPageSize }, () => ({
+    type: "blocks",
+    issue: { state: { type: "completed" } },
+  }));
+
+const relationRoute =
+  (firstPage: ReturnType<typeof relationPage>, pages: Readonly<Record<string, StubResponse>>) =>
+  (document: string, variables: Record<string, unknown>) =>
+    document.includes("IssueInverseRelations")
+      ? (pages[String(variables.after)] ?? {
+          body: { errors: [{ message: `unexpected relation cursor: ${String(variables.after)}` }] },
+        })
+      : issuesResponse(firstPage);
 
 describe("linear client", () => {
   afterEach(() => {
@@ -415,35 +461,26 @@ describe("linear client", () => {
           .toSorted(),
         ["comments", "inverseRelations", "issues", "labels", "proposalComments", "teams"],
       );
+      assert.strictEqual(pageSizesOf(document).get("inverseRelations"), nestedRelationPageSize);
       assert.isAtMost(complexityOf(document), linearMaxQueryComplexity);
     }).pipe(withToken()),
   );
 
   it.effect("counts open blocking relations across open states, ignoring resolved and non-blocks", () =>
     Effect.gen(function* () {
-      const withRelations = {
-        ...teamBundle.issues.nodes[0],
-        inverseRelations: {
-          nodes: [
-            { type: "blocks", issue: { state: { type: "started" } } },
-            { type: "blocks", issue: { state: { type: "unstarted" } } },
-            { type: "blocks", issue: { state: { type: "backlog" } } },
-            { type: "blocks", issue: { state: { type: "completed" } } },
-            { type: "blocks", issue: { state: { type: "canceled" } } },
-            { type: "related", issue: { state: { type: "unstarted" } } },
-          ],
-        },
-      };
-      stubLinear(() => ({
-        body: {
-          data: {
-            teams: { nodes: [{ ...teamBundle, issues: { nodes: [withRelations], pageInfo: lastPage } }] },
-          },
-        },
-      }));
+      const firstPage = relationPage([
+        { type: "blocks", issue: { state: { type: "started" } } },
+        { type: "blocks", issue: { state: { type: "unstarted" } } },
+        { type: "blocks", issue: { state: { type: "backlog" } } },
+        { type: "blocks", issue: { state: { type: "completed" } } },
+        { type: "blocks", issue: { state: { type: "canceled" } } },
+        { type: "related", issue: { state: { type: "unstarted" } } },
+      ]);
+      const fetchStub = stubLinear(() => issuesResponse(firstPage));
       const client = yield* LinearClient;
       const issues = yield* client.observeIssues(ref, null);
       assert.strictEqual(issues[0]?.openBlockers, 3);
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
     }).pipe(withToken()),
   );
 
@@ -456,23 +493,87 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("holds an issue whose relation page is full even when every visible blocker is resolved", () =>
+  it.effect("reports no blocker after exhausting a full page of resolved relations", () =>
     Effect.gen(function* () {
-      const fullPage = Array.from({ length: 8 }, () => ({
-        type: "blocks",
-        issue: { state: { type: "completed" } },
-      }));
-      const withRelations = { ...teamBundle.issues.nodes[0], inverseRelations: { nodes: fullPage } };
-      stubLinear(() => ({
-        body: {
-          data: {
-            teams: { nodes: [{ ...teamBundle, issues: { nodes: [withRelations], pageInfo: lastPage } }] },
-          },
-        },
-      }));
+      const firstPage = relationPage(resolvedRelations(), "relation-cursor-1");
+      const fetchStub = stubLinear((document) =>
+        document.includes("IssueInverseRelations")
+          ? relationsResponse(relationPage([]))
+          : issuesResponse(firstPage),
+      );
       const client = yield* LinearClient;
       const issues = yield* client.observeIssues(ref, null);
-      assert.strictEqual(issues[0]?.openBlockers, 1);
+      assert.strictEqual(issues[0]?.openBlockers, 0);
+      assert.deepStrictEqual(
+        sentRequests(fetchStub).map((request) => request.variables),
+        [
+          { key: "AUD", filter: { state: { type: { nin: ["completed"] } } }, after: null },
+          { id: "issue-uuid", after: "relation-cursor-1" },
+        ],
+      );
+      assert.include(sentRequests(fetchStub)[1]?.query ?? "", "inverseRelations(first: 100");
+    }).pipe(withToken()),
+  );
+
+  it.effect("counts every open blocker after the first relation page", () =>
+    Effect.gen(function* () {
+      const firstPage = Array.from({ length: nestedRelationPageSize }, () => ({
+        type: "related",
+        issue: { state: { type: "unstarted" } },
+      }));
+      const relationPages: Record<string, StubResponse> = {
+        "relation-cursor-1": relationsResponse(
+          relationPage([{ type: "blocks", issue: { state: { type: "completed" } } }], "relation-cursor-2"),
+        ),
+        "relation-cursor-2": relationsResponse(
+          relationPage([
+            { type: "blocks", issue: { state: { type: "started" } } },
+            { type: "blocks", issue: { state: { type: "backlog" } } },
+            { type: "blocks", issue: { state: { type: "completed" } } },
+          ]),
+        ),
+      };
+      const fetchStub = stubLinear(
+        relationRoute(relationPage(firstPage, "relation-cursor-1"), relationPages),
+      );
+      const client = yield* LinearClient;
+      const issues = yield* client.observeIssues(ref, null);
+      assert.strictEqual(issues[0]?.openBlockers, 2);
+      assert.deepStrictEqual(
+        sentRequests(fetchStub).map((request) => request.variables.after),
+        [null, "relation-cursor-1", "relation-cursor-2"],
+      );
+    }).pipe(withToken()),
+  );
+
+  it.effect("surfaces a failed follow-up relation read", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) =>
+        document.includes("IssueInverseRelations")
+          ? { body: { errors: [{ message: "relation lookup failed" }] } }
+          : issuesResponse(relationPage(resolvedRelations(), "relation-cursor-1")),
+      );
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.include(error.message, "relation lookup failed");
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+    }).pipe(withToken()),
+  );
+
+  it.effect("fails when relation cursors cycle", () =>
+    Effect.gen(function* () {
+      const firstPage = relationPage([], "relation-cursor-1");
+      const relationPages: Record<string, StubResponse> = {
+        "relation-cursor-1": relationsResponse(relationPage([], "relation-cursor-2")),
+        "relation-cursor-2": relationsResponse(relationPage([], "relation-cursor-1")),
+      };
+      const fetchStub = stubLinear(relationRoute(firstPage, relationPages));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.include(error.message, "cursor did not advance");
+      assert.strictEqual(fetchStub.mock.calls.length, 3);
     }).pipe(withToken()),
   );
 

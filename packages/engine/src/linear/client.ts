@@ -91,6 +91,21 @@ const RelationNode = Schema.Struct({
   issue: Schema.Struct({ state: Schema.Struct({ type: Schema.String }) }),
 });
 
+const PageInfoNode = Schema.Struct({
+  hasNextPage: Schema.Boolean,
+  endCursor: Schema.NullOr(Schema.String),
+});
+
+const RelationConnection = Schema.Struct({
+  nodes: Schema.Array(RelationNode),
+  pageInfo: PageInfoNode,
+});
+
+interface RelationPaginationState {
+  readonly after: string;
+  readonly seen: ReadonlySet<string>;
+}
+
 const IssueNode = Schema.Struct({
   id: Schema.String,
   identifier: Schema.String,
@@ -105,7 +120,7 @@ const IssueNode = Schema.Struct({
     name: Schema.String,
     type: Schema.String,
   }),
-  inverseRelations: Schema.optional(Schema.Struct({ nodes: Schema.Array(RelationNode) })),
+  inverseRelations: Schema.optional(RelationConnection),
   comments: Schema.optional(Schema.Struct({ nodes: Schema.Array(CommentNode) })),
   proposalComments: Schema.optional(Schema.Struct({ nodes: Schema.Array(CommentNode) })),
 });
@@ -119,11 +134,6 @@ const StateNode = Schema.Struct({
 const LabelNode = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-});
-
-const PageInfoNode = Schema.Struct({
-  hasNextPage: Schema.Boolean,
-  endCursor: Schema.NullOr(Schema.String),
 });
 
 const IssuesTeamNode = Schema.Struct({
@@ -154,8 +164,13 @@ const CommentsPayload = Schema.Struct({
   ),
 });
 
+const IssueRelationsPayload = Schema.Struct({
+  issue: Schema.NullOr(Schema.Struct({ inverseRelations: RelationConnection })),
+});
+
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
+const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
@@ -237,6 +252,7 @@ const isoMillis = (millis: number) =>
 const isTransient = (failure: LinearRequestFailure) => failure.retryable;
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const transientAttemptDeadline = "30 seconds";
+const relationPaginationDeadline = "5 minutes";
 
 const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, LinearRequestFailure, R>) =>
   attempt.pipe(
@@ -251,6 +267,14 @@ const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, LinearRequ
     ),
   );
 
+const withRelationPaginationDeadline = <A, R>(operation: Effect.Effect<A, IssueTrackerError, R>) =>
+  operation.pipe(
+    Effect.timeout(relationPaginationDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(unavailable(`Linear relation pagination timed out after ${relationPaginationDeadline}`)),
+    ),
+  );
+
 const teamIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const millisFromIso = (value: string) => {
@@ -262,8 +286,13 @@ const issuePageSize = 100;
 const labelPageSize = 50;
 // Linear rejects any single query above 10,000 complexity points, and a nested connection multiplies
 // its children by its page size, so these sizes multiply out rather than add up.
-const relationPageSize = 8;
+const relationPageSize = 7;
+const continuedRelationPageSize = 100;
 const coordinationPageSize = 5;
+
+const relationFields = `
+        nodes { type issue { state { type } } }
+        pageInfo { hasNextPage endCursor }`;
 
 const issueFields = `
       id
@@ -274,8 +303,7 @@ const issueFields = `
       labels(first: ${labelPageSize}) { nodes { name } }
       assignee { id }
       state { name type }
-      inverseRelations(first: ${relationPageSize}) {
-        nodes { type issue { state { type } } }
+      inverseRelations(first: ${relationPageSize}) {${relationFields}
       }`;
 
 const coordinationFields = `
@@ -342,6 +370,14 @@ query IssueComments($id: String!) {
   }
 }`;
 
+const issueRelationsQuery = `
+query IssueInverseRelations($id: String!, $after: String) {
+  issue(id: $id) {
+    inverseRelations(first: ${continuedRelationPageSize}, after: $after) {${relationFields}
+    }
+  }
+}`;
+
 interface TeamAddressing<A> {
   readonly document: string;
   readonly variables: (team: string) => Record<string, unknown>;
@@ -392,24 +428,30 @@ const coordinatedIssuesShape = teamShape(
 
 const isResolvedBlocker = (stateType: string) => stateType === "completed" || stateType === "canceled";
 
-// Linear's nested inverseRelations connection can't be filtered or ordered server-side, so a full
-// page may hide further blockers; when the page is full we can't prove the issue is unblocked, so we
-// hold it rather than dispatch it ahead of a dependency.
-const openBlockersOf = (issue: typeof IssueNode.Type) => {
-  const relations = issue.inverseRelations?.nodes ?? [];
-  const open = relations.filter(
-    (relation) => relation.type === "blocks" && !isResolvedBlocker(relation.issue.state.type),
-  ).length;
-  if (open > 0) return open;
-  return relations.length >= relationPageSize ? 1 : 0;
-};
+const isOpenBlocker = (relation: typeof RelationNode.Type) =>
+  relation.type === "blocks" && !isResolvedBlocker(relation.issue.state.type);
+
+const countOpenBlockers = (relations: ReadonlyArray<typeof RelationNode.Type>) =>
+  relations.filter(isOpenBlocker).length;
+
+const continuationCursor = Effect.fn("linear.continuationCursor")(function* (
+  pageInfo: typeof PageInfoNode.Type,
+  issueIdentifier: string,
+) {
+  return yield* pageInfo.hasNextPage
+    ? Option.match(Option.fromNullOr(pageInfo.endCursor), {
+        onNone: () => Effect.fail(unavailable(`Linear relation page missing cursor: ${issueIdentifier}`)),
+        onSome: (cursor) => Effect.succeed(Option.some(cursor)),
+      })
+    : Effect.succeed(Option.none<string>());
+});
 
 // Linear uses 0 for "No priority"; anything outside 1-4 resolves to the default.
 const linearPriorityNames: Record<number, string> = { 1: "urgent", 2: "high", 3: "medium", 4: "low" };
 export const linearPriority = (value: number | undefined): Priority =>
   resolvePriority(value === undefined ? null : linearPriorityNames[value]);
 
-const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
+const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   id: issue.id,
   identifier: issue.identifier,
   title: issue.title,
@@ -418,7 +460,7 @@ const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   assignees: issue.assignee ? [issue.assignee.id] : [],
   stateName: issue.state.name,
   stateType: issue.state.type,
-  openBlockers: openBlockersOf(issue),
+  openBlockers,
   priority: linearPriority(issue.priority),
 });
 
@@ -434,8 +476,8 @@ const toRawComment = (comment: typeof CommentNode.Type): ReadonlyArray<RawCommen
       ]
     : [];
 
-const toObservedIssue = (issue: typeof IssueNode.Type): ObservedRawIssue => ({
-  ...toRawIssue(issue),
+const toObservedIssue = (issue: typeof IssueNode.Type, openBlockers: number): ObservedRawIssue => ({
+  ...toRawIssue(issue, openBlockers),
   coordinationComments: [...(issue.comments?.nodes ?? []), ...(issue.proposalComments?.nodes ?? [])].flatMap(
     toRawComment,
   ),
@@ -547,6 +589,68 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return response.data;
   });
 
+  const loadRelationPage = Effect.fn("linear.loadRelationPage")(function* (
+    ref: LinearTeamRef,
+    issueId: string,
+    after: string,
+  ) {
+    const data = yield* rawData(ref, issueRelationsQuery, { id: issueId, after });
+    const payload = yield* Effect.mapError(decodeIssueRelations(data), toUnavailable);
+    if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
+    return payload.issue.inverseRelations;
+  });
+
+  const continueRelations = Effect.fn("linear.continueRelations")(function* (
+    ref: LinearTeamRef,
+    issue: typeof IssueNode.Type,
+    cursor: RelationPaginationState,
+  ) {
+    const page = yield* loadRelationPage(ref, issue.id, cursor.after);
+    const next = yield* continuationCursor(page.pageInfo, issue.identifier);
+    const cursorRepeated = Option.exists(next, (after) => cursor.seen.has(after));
+    if (cursorRepeated) {
+      return yield* unavailable(`Linear relation cursor did not advance: ${issue.identifier}`);
+    }
+    const nextCursor = Option.map(
+      next,
+      (after) =>
+        ({
+          after,
+          seen: new Set([...cursor.seen, after]),
+        }) satisfies RelationPaginationState,
+    );
+    return [page.nodes, nextCursor] satisfies readonly [
+      ReadonlyArray<typeof RelationNode.Type>,
+      Option.Option<RelationPaginationState>,
+    ];
+  });
+
+  const openBlockersOf = Effect.fn("linear.openBlockersOf")(function* (
+    ref: LinearTeamRef,
+    issue: typeof IssueNode.Type,
+  ) {
+    const firstPage = issue.inverseRelations;
+    if (!firstPage) return 0;
+    const firstCursor = yield* continuationCursor(firstPage.pageInfo, issue.identifier);
+    const initialCursor = Option.map(
+      firstCursor,
+      (after) => ({ after, seen: new Set([after]) }) satisfies RelationPaginationState,
+    );
+    const remaining = yield* withRelationPaginationDeadline(
+      Stream.fromIterable(Option.toArray(initialCursor)).pipe(
+        Stream.flatMap((cursor) =>
+          Stream.paginate<RelationPaginationState, typeof RelationNode.Type, IssueTrackerError>(
+            cursor,
+            (current) => continueRelations(ref, issue, current),
+          ),
+        ),
+        Stream.filter(isOpenBlocker),
+        Stream.runCount,
+      ),
+    );
+    return countOpenBlockers(firstPage.nodes) + remaining;
+  });
+
   const loadTeam = <A>(
     ref: LinearTeamRef,
     shape: TeamShape<A>,
@@ -595,7 +699,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
           ];
         }),
     ).pipe(Stream.runCollect);
-    return issues.map(toObservedIssue);
+    return yield* Effect.forEach(issues, (issue) =>
+      Effect.map(openBlockersOf(ref, issue), (openBlockers) => toObservedIssue(issue, openBlockers)),
+    );
   });
 
   const mutate = Effect.fn("linear.mutate")(function* (
