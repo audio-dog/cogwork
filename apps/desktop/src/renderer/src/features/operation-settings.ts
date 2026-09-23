@@ -3,8 +3,11 @@ import {
   defaultPermissionProfile,
   type HarnessCatalog,
   type HarnessCatalogChoice,
+  HarnessModelOptionDescriptor,
   type HarnessName,
   type HarnessOptionCatalog,
+  type HarnessReadiness,
+  HarnessState,
   harnessEnabled,
   harnessModelOptionAccepts,
   LifecycleStage,
@@ -39,6 +42,16 @@ export const operationSummaries: Record<LifecycleStage, string> = {
 
 export type AvailableHarnessCatalog = HarnessOptionCatalog & { readonly harness: HarnessName };
 
+export interface ProviderAvailability {
+  readonly pickable: boolean;
+  readonly stateLabel: string;
+  readonly reason: string | null;
+}
+
+export type ProviderPickerCatalog = AvailableHarnessCatalog & {
+  readonly availability: ProviderAvailability;
+};
+
 export interface ModelOptionsCell {
   readonly own: ModelOptionSelections | null;
   readonly inherited: ModelOptionSelections | null;
@@ -53,9 +66,7 @@ export interface ModelOptionState {
 }
 
 export const availableHarnessCatalogs = (catalogs: ReadonlyArray<HarnessCatalog> | null) =>
-  catalogs?.flatMap(({ harness, catalog }) =>
-    catalog.policyProfiles.length > 0 ? [{ harness, ...catalog }] : [],
-  ) ?? [];
+  catalogs?.map(({ harness, catalog }) => ({ harness, ...catalog })) ?? [];
 
 const catalogLoadRules = [
   {
@@ -76,16 +87,70 @@ export const harnessCatalogLoad = (catalogs: ReadonlyArray<HarnessCatalog> | nul
     status: "loading" as const,
   };
 
-export const catalogFor = (catalogs: ReadonlyArray<AvailableHarnessCatalog>, harness: string | null) =>
-  catalogs.find((candidate) => candidate.harness === harness) ?? null;
+export const catalogFor = <Catalog extends AvailableHarnessCatalog>(
+  catalogs: ReadonlyArray<Catalog>,
+  harness: string | null,
+) => catalogs.find((candidate) => candidate.harness === harness) ?? null;
 
-export const selectableHarnessCatalogs = (
+export const selectableHarnessCatalogs = <Catalog extends AvailableHarnessCatalog>(
   controlStore: ControlStore | null,
-  catalogs: ReadonlyArray<AvailableHarnessCatalog>,
+  catalogs: ReadonlyArray<Catalog>,
 ) =>
   catalogs.filter((catalog) =>
     controlStore ? harnessEnabled(controlStore.harnessSettings, catalog.harness) : true,
   );
+
+const pendingProviderAvailability: ProviderAvailability = {
+  pickable: true,
+  stateLabel: "Not checked yet",
+  reason: "Readiness check pending",
+};
+
+const providerAvailability = (readiness: HarnessReadiness, state: HarnessState) =>
+  HarnessState.match<ProviderAvailability>({
+    Ready: () => ({ pickable: true, stateLabel: "Ready", reason: null }),
+    NotInstalled: ({ diagnostic }) => ({
+      pickable: false,
+      stateLabel: "Not installed",
+      reason: diagnostic,
+    }),
+    UnsupportedVersion: ({ requirement }) => ({
+      pickable: false,
+      stateLabel: "Version not supported",
+      reason: requirement ? `Requires ${requirement}` : "Installed version is not supported",
+    }),
+    NotSignedIn: ({ signIn }) => ({
+      pickable: false,
+      stateLabel: "Not signed in",
+      reason: signIn ? `Run ${signIn.command}` : "Authentication required",
+    }),
+    Unavailable: ({ diagnostic }) => ({
+      pickable: false,
+      stateLabel: "Unavailable",
+      reason: diagnostic,
+    }),
+    Unknown: ({ diagnostic }) =>
+      readiness.checkedAtMillis === 0
+        ? pendingProviderAvailability
+        : {
+            pickable: false,
+            stateLabel: "Readiness unknown",
+            reason: diagnostic,
+          },
+  })(state);
+
+export const providerPickerCatalogs = (
+  catalogs: ReadonlyArray<AvailableHarnessCatalog>,
+  readiness: HarnessReadiness | null,
+) =>
+  catalogs.map((catalog) => {
+    const readinessItem = readiness?.harnesses.find(({ harness }) => harness === catalog.harness);
+    const availability =
+      readinessItem && readiness
+        ? providerAvailability(readiness, readinessItem.state)
+        : pendingProviderAvailability;
+    return { ...catalog, availability } satisfies ProviderPickerCatalog;
+  });
 
 export const harnessIsDisabled = (controlStore: ControlStore | null, harness: string | null) => {
   if (!controlStore || !harness) return false;
@@ -336,6 +401,19 @@ export const modelOptionStates = (model: HarnessCatalogChoice, cell: ModelOption
       ...(isStale ? { staleValue: selected } : {}),
     } satisfies ModelOptionState;
   });
+
+export const modelOptionLabel = (option: ModelOptionState) => {
+  const current = HarnessModelOptionDescriptor.match(option.descriptor, {
+    boolean: ({ label }) => (option.value === true ? label : `${label} Off`),
+    select: ({ values }) => values.find(({ value }) => value === option.value)?.label ?? String(option.value),
+  });
+  return option.staleValue === undefined
+    ? current
+    : `${option.descriptor.label}: ${String(option.staleValue)}`;
+};
+
+export const modelOptionSummary = (options: ReadonlyArray<ModelOptionState>) =>
+  options.map(modelOptionLabel).join(" · ");
 
 const matchingOptionCount = (candidate: ModelOptionSelections, current: ModelOptionSelections) =>
   Object.entries(current).filter(([id, value]) => candidate[id] === value).length;

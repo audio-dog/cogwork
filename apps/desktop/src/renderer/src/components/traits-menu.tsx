@@ -18,6 +18,7 @@ import {
   type AvailableHarnessCatalog,
   type ModelOptionState,
   modelOptionChoice,
+  modelOptionLabel,
 } from "../features/operation-settings";
 
 interface TraitsMenuProps {
@@ -57,16 +58,6 @@ const traitChoices = (descriptor: ModelOptionState["descriptor"]) =>
       })),
   });
 
-const traitLabel = (option: ModelOptionState) => {
-  if (option.staleValue !== undefined) {
-    return `${option.descriptor.label}: ${String(option.staleValue)}`;
-  }
-  return HarnessModelOptionDescriptor.match(option.descriptor, {
-    boolean: ({ label }) => (option.value === true ? label : `${label} Off`),
-    select: ({ values }) => values.find(({ value }) => value === option.value)?.label ?? String(option.value),
-  });
-};
-
 const selectedOptions = (options: ReadonlyArray<ModelOptionState>) =>
   Object.fromEntries(options.map(({ descriptor, value }) => [descriptor.id, value]));
 
@@ -82,7 +73,7 @@ export function TraitsMenu({ state, actions, meta }: TraitsMenuProps) {
   const options = selectedOptions(state.options);
   const summaries = state.options.map((option) => ({
     key: option.descriptor.id,
-    label: traitLabel(option),
+    label: modelOptionLabel(option),
     source: option.source,
   }));
   const summary = summaries.map(({ label }) => label).join(" · ");
@@ -147,19 +138,17 @@ export function TraitsMenu({ state, actions, meta }: TraitsMenuProps) {
                     actions.select(choice.selection);
                   }}
                 >
-                  {choices.map((choice) => {
-                    return (
-                      <DropdownMenuRadioItem
-                        key={choice.radioValue}
-                        value={choice.radioValue}
-                        disabled={!choice.selection}
-                        closeOnClick
-                      >
-                        {choice.label}
-                        {choice.isDefault ? <Badge variant="ghost">Default</Badge> : null}
-                      </DropdownMenuRadioItem>
-                    );
-                  })}
+                  {choices.map((choice) => (
+                    <DropdownMenuRadioItem
+                      key={choice.radioValue}
+                      value={choice.radioValue}
+                      disabled={!choice.selection}
+                      closeOnClick
+                    >
+                      {choice.label}
+                      {choice.isDefault ? <Badge variant="ghost">Default</Badge> : null}
+                    </DropdownMenuRadioItem>
+                  ))}
                 </DropdownMenuRadioGroup>
               </DropdownMenuGroup>
             </Fragment>
