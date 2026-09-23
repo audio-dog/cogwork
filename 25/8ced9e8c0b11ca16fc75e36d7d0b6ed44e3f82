@@ -1,0 +1,21 @@
+packages/engine/docs/adr/0014-mutations-acknowledge-the-write-and-the-snapshot-converges-behind-a-coalescing-refresh.md
+  s_17188679a4b18c::t_333b9a4aeb5969 1-15
+packages/engine/CONTEXT.md
+  s_17188679a4b18c::t_077dc7a0b5cb0e 60-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "258ced9e8c0b11ca16fc75e36d7d0b6ed44e3f82",
+  "prompts": {},
+  "sessions": {
+    "s_17188679a4b18c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "840f1855-1074-4c3f-801a-1354d6fcd640",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
