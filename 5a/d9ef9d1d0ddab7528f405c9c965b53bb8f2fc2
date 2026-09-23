@@ -1,0 +1,26 @@
+configs/sensor/test-measure-summary.test.mjs
+  s_1304ecf1db92fc::t_735218ab328b79 1-5,7-90,112-115
+  s_1304ecf1db92fc::t_161aea6700e933 6
+  s_1304ecf1db92fc::t_2c1493def45873 91-111
+configs/sensor/test-measure-summary.mjs
+  s_1304ecf1db92fc::t_f7e6a82c0300e5 19-23,28-38,40-51,53-68,71
+  s_1304ecf1db92fc::t_11ba8c7b59d1a5 69
+  s_1304ecf1db92fc::t_a3b09bfce936e3 8-9,39,52,70,72
+  s_1304ecf1db92fc::t_8f65b9fb92303b 10-17,24-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5ad9ef9d1d0ddab7528f405c9c965b53bb8f2fc2",
+  "prompts": {},
+  "sessions": {
+    "s_1304ecf1db92fc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cfb0-d3f2-73b0-a658-9715ccc338d2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
