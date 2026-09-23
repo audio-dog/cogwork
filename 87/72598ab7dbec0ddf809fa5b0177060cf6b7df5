@@ -1,0 +1,24 @@
+packages/contracts/CONTEXT.md
+  s_d3750bf659498d::t_c064a3077c9a61 400-401
+docs/adr/0028-subagent-model-choice-is-a-named-level-not-a-pinned-model.md
+  s_d3750bf659498d::t_90a6924bb66cd8 8-17,24
+  s_d3750bf659498d::t_5bd4f9c1fbd62d 36-37,41-45
+  s_d3750bf659498d::t_4c1596247745f9 58-60
+  s_d3750bf659498d::t_04e9934e58bf38 70-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8772598ab7dbec0ddf809fa5b0177060cf6b7df5",
+  "prompts": {},
+  "sessions": {
+    "s_d3750bf659498d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b7d3ed18-43b6-483d-b72a-19c0c84fa58a",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
