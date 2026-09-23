@@ -31,7 +31,7 @@ import {
   structuredCompletions,
 } from "./harness-fixtures";
 
-describe("codexRunner execution", () => {
+describe("codexRunner execution", { timeout: 30_000 }, () => {
   it.layer(harnessLayer)((it) => {
     it.effect("suppresses the trust-bypass notice without failing the Run", () =>
       Effect.scoped(

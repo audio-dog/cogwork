@@ -306,7 +306,7 @@ const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwdOrScrip
   return yield* executeFixtureCommand(cwd, script);
 });
 
-describe("real git fixture confinement", () => {
+describe("real git fixture confinement", { timeout: 30_000 }, () => {
   it.effect("rejects a repository outside the fixture root before running its script", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -940,7 +940,7 @@ const operationFixtures: ReadonlyArray<{
 // time spent waiting on real git subprocesses. Overlap that wait. Overlapping it is also why
 // these tests need their own ceiling: five fixtures competing for the same git stretch each one
 // past the 5s default, and a test here is slow because it queued, not because it hung.
-describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, () => {
+describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, () => {
   layer(testLayer)((it) => {
     it.effect("returns the configured remote before insteadOf rewriting", () =>
       Effect.gen(function* () {

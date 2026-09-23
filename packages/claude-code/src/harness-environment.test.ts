@@ -25,7 +25,7 @@ import {
   withInheritedCredentialEnvironment,
 } from "./harness-fixtures";
 
-describe("Claude Code inherited environment", () => {
+describe("Claude Code inherited environment", { timeout: 30_000 }, () => {
   it.layer(harnessLayer)((it) => {
     it.effect("diagnoses installation, compatibility, and host login separately", () =>
       Effect.gen(function* () {

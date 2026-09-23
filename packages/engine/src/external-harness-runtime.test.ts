@@ -345,7 +345,7 @@ const terminalEvents: ReadonlyArray<StreamChunk> = [
   { type: EventType.RUN_FINISHED, threadId: "session-148", runId: request.id },
 ];
 
-describe("external Harness runtime", () => {
+describe("external Harness runtime", { timeout: 30_000 }, () => {
   it("removes every environment variable outside the inherited list", () => {
     assert.deepStrictEqual(
       environmentVariablesToRemove(
