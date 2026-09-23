@@ -1,6 +1,12 @@
 import { afterEach, expect, test, vi } from "vitest";
 import config from "../base";
-import { countMeasuredTestStates, TestCountReporter, testCountMarker } from "../test-count-reporter";
+import {
+  buildTestTimingReport,
+  countMeasuredTestStates,
+  TestCountReporter,
+  testCountMarker,
+  testTimingMarker,
+} from "../test-count-reporter";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -19,5 +25,43 @@ test("reporter writes the test count marker", () => {
 
   new TestCountReporter().onTestRunEnd([]);
 
-  expect(write).toHaveBeenCalledWith(`${testCountMarker}0\n`);
+  expect(write).toHaveBeenNthCalledWith(1, `${testCountMarker}0\n`);
+});
+
+test("timing report includes package duration, file duration, and test count", () => {
+  expect(
+    buildTestTimingReport(
+      "/workspace/packages/engine",
+      [
+        { path: "src/fast.test.ts", durationMs: 15, testCount: 2 },
+        { path: "src/slow.test.ts", durationMs: 250, testCount: 3 },
+      ],
+      180,
+    ),
+  ).toEqual({
+    packagePath: "/workspace/packages/engine",
+    durationMs: 180,
+    testCount: 5,
+    testFiles: [
+      { path: "src/fast.test.ts", durationMs: 15, testCount: 2 },
+      { path: "src/slow.test.ts", durationMs: 250, testCount: 3 },
+    ],
+  });
+});
+
+test("reporter writes the timing marker", () => {
+  const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+  vi.spyOn(performance, "now").mockReturnValueOnce(100).mockReturnValueOnce(365);
+
+  new TestCountReporter().onTestRunEnd([]);
+
+  expect(write).toHaveBeenNthCalledWith(
+    2,
+    `${testTimingMarker}${JSON.stringify({
+      packagePath: process.cwd(),
+      durationMs: 265,
+      testCount: 0,
+      testFiles: [],
+    })}\n`,
+  );
 });
