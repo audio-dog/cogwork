@@ -1118,7 +1118,7 @@ describe("daemon heartbeats", () => {
           perWorkspace: [],
         }),
       publishControlStore: (controlStore) => Effect.succeed(controlStore),
-      requestAvailabilityRefresh: () => Effect.void,
+      requestSnapshotRefresh: () => Effect.void,
       publishPlugins: (plugins) => Effect.succeed(plugins),
       publishConnections: (connections) => Effect.succeed(connections),
     })),

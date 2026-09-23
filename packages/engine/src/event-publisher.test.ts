@@ -353,7 +353,7 @@ describe("DaemonEventPublisher", () => {
       const worker = yield* Reconcile.ReconcileWorker;
       const subscription = yield* bus.subscribe();
 
-      yield* publisher.requestAvailabilityRefresh();
+      yield* publisher.requestSnapshotRefresh();
       const [published] = yield* Stream.fromSubscription(subscription).pipe(
         Stream.filter(DaemonEvent.guards.WorkspaceChanged),
         Stream.take(1),
