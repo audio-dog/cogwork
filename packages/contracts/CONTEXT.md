@@ -397,8 +397,8 @@ The saved option selections (`id` → value pairs) of one Operation, stored and 
 _Avoid_: Effort setting (retired), model suffix, traits (the desktop menu, not the data)
 
 **Model level**:
-The named capability a role or operation asks of its model — `light`, `standard`, or `deep` — instead of a vendor model name. `light` is the cheapest capable model on whatever Harness runs it; `standard` is the Run's own model, expressed by omitting the model field; `deep` is the reasoning escalation, named and unused. The level is the only model vocabulary a role definition or instruction may use; the mapping to a Harness-native value lives with whoever projects the role (the sync toolkit today, the Harness adapter once Subagents project). See ADR 0028.
-_Avoid_: Tier, pinned model, vendor alias (`sonnet`, `haiku` — those are one Harness's native values), level (bare — that word belongs to where an Operation setting is written)
+The named capability a role or operation asks of its model — `light`, `standard`, or `deep` — instead of a vendor model name. `light` is the cheapest capable model on whatever Harness runs it; `standard` is the Run's own model or the tool's default, rendered as omission where the tool inherits by omitting; `deep` is the reasoning escalation, named and unused. The level is the only model vocabulary a role definition or instruction may use; the mapping to a Harness-native value lives with whoever projects the role (the sync toolkit today, whose tier of the same three words this names, the Harness adapter once Subagents project). See ADR 0028.
+_Avoid_: Tier (sync's word for its rendering mechanism), pinned model, vendor alias (`sonnet`, `haiku` — those are one Harness's native values), `fast` / `default` / `powerful` (sync's retired tier names), level (bare — that word belongs to where an Operation setting is written)
 
 **Harness readiness**:
 An observation of one Harness's installation, compatible version, and selected authentication binding on the current Runtime host. It can block a Run when negative but never guarantees that a later launch will succeed, and it never selects a fallback Harness or authentication mode.
