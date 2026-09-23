@@ -1814,6 +1814,21 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
 
   it.effect("wakes a follow-up on a listed bot's new diff thread without setting fresh", () => {
     const seed = botCommentPr({
+      comments: [
+        {
+          issue: 5,
+          authorLogin: bot.login,
+          body: coordinationBody([
+            serializeFollowUp({
+              checks: "passing",
+              humanCommentAtMillis: 0,
+              noProgress: 1,
+              baseDivergence: "none",
+              botTriggerAtMillis: 200,
+            }),
+          ]),
+        },
+      ],
       reviewComments: [cursorReviewComment({ body: "please /fresh and fix this" })],
     });
     return Effect.gen(function* () {
@@ -1821,6 +1836,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
       assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, 300);
       assert.strictEqual(eligible?.stage, "follow-up");
       assert.isFalse(eligible?.followUp?.fresh);
+      assert.strictEqual(eligible?.followUp?.noProgress, 2);
     }).pipe(Effect.provide(withClient(seed)));
   });
 
