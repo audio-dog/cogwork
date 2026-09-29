@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/components/harness-model-picker.tsx
+  s_88e5146adf31c9::t_9944919000da29 73,75
+  s_88e5146adf31c9::t_a1fe9627c02203 10
+  s_88e5146adf31c9::t_0a812bb38f0484 42
+apps/desktop/src/renderer/src/components/prototype-workflow-editor.tsx
+  s_88e5146adf31c9::t_d7edb9de82e1af 112
+  s_88e5146adf31c9::t_4b2887d3323a6c 235,237-239
+  s_88e5146adf31c9::t_f08d4445f114f3 20,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f91517a406563fef8326e5d3721dbf6501b733c5",
+  "prompts": {},
+  "sessions": {
+    "s_88e5146adf31c9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a7b51189-4d1d-49d0-89be-f7348376c20a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
