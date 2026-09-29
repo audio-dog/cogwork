@@ -47,20 +47,50 @@ Plan the change against the acceptance criteria, then build it.
 
 - **Tests first at clear seams.** Use `/tdd` where a seam is obvious — write the failing test, make it pass, refactor.
 - **Any change to a React component or a `.tsx` / `.jsx` file — new or existing — you MUST load `/react-composition-patterns` and `/react-no-use-effect` before you write the code, then follow them.** This is not optional, and it does not wait for your own judgment that the change is "structural": a touched component file is the trigger. Boolean behavior props, `renderX` render props for static UI, monolithic components, prop drilling, `forwardRef`, and `useContext` are defects here, not style choices.
-- Run the repo's typecheck and the relevant test files frequently as you go — not just at the end.
+- Run the repo's typecheck, the test files your diff touches, and lint on touched files frequently as you go. Leave the full build for the gate; it runs once.
+
+**Write it lean.** Simplicity is generated, not retrofitted — the reviewers only catch what slips, so apply this ladder while you write:
+
+- Reuse before writing: hunt the codebase, the standard library, and installed dependencies for the thing you are about to build.
+- One caller means no new module, layer, or interface — inline it until a second caller exists.
+- Build exactly the spec's requirement: every parameter, config key, and hook earns its place by having a caller today.
+- Take the flattest control flow that reads: guard clauses over nesting, a table over a condition cascade (`/cascade-to-table`).
+- Trust the type system: guard only the states it cannot rule out.
+- Delete what you replace — replaced code leaves the tree, comments included.
 
 Completion: every acceptance criterion from [step 1](#1-read-the-brief) is met in the diff. The gate proves the code runs, not that you built the right thing.
 
 ## 3. Local gate (hard)
 
-Before returning `ready-for-pr`, run all four from a clean run:
+The gate runs in three stages, in order: checks, one review round, then one build.
+
+### Checks
+
+Before review, run all three from a clean run:
 
 1. Typecheck — no errors and no suppressions (`as any` / `@ts-ignore` / `@ts-expect-error` defeat the point of a clean typecheck).
-2. Full build.
-3. Full test suite.
-4. Full lint and formatting suite.
+2. Targeted tests — every test file that exercises your diff. Find them by reading what the diff calls and what calls the diff, then run that whole set.
+3. Targeted lint and formatting — every file the diff touches.
 
-All green is the bar. **The one failure compatible with `ready-for-pr` is a baseline failure: one you have proved already fails on the base commit, with your diff absent.** You prove it, you never judge it. Saying "this looks unrelated to my change" is the exact reasoning this gate exists to refuse, and it is wrong often enough to be worthless. Untested, every failure is yours.
+### Review — one round, then stop
+
+Dispatch three reviews **in parallel**, each with a clean context: the diff and nothing from this conversation. All report; none edits code.
+
+- **`/code-review`** — invoke it intact. Fixed point: the merge-base with the base branch. Spec source: this work item, including its body, thread, and the triage proposal's requirements digest. Add `~/.agents/rules/*` to the repo's documented standards sources. It owns standards, the smell baseline, and spec fidelity, and numbers every finding (`S1`, `SP1`, …).
+- **minimalist** — review over-engineering and needless code. Give it the work item so it judges scope creep against the real requirement.
+- **security-auditor** — review every diff.
+
+Reviewers cite the specific hunk and the specific rule, risk, smell, or spec line. They do not go for perfection. There is no second round.
+
+**One fix round.** Fix every blocking finding. Fix nits at your judgment. Every finding left unfixed gets a recorded disposition in the draft's Open questions section: *won't-fix* with a concrete reason, or *escalated* as a question for the reviewer. Key it to the finding's id when `/code-review` supplied one. Then re-run the checks above on what the fixes touched. Findings a reviewer would raise against the fixes wait for human review.
+
+Completion: every finding from `/code-review`, minimalist, and security-auditor is fixed in the diff or has a disposition in the PR-body draft, and the checks are green on the fixed diff.
+
+### Build, once
+
+Run the full production build (`pnpm build`).
+
+Green checks plus a green build is the bar. **The one failure compatible with `ready-for-pr` is a baseline failure: one you have proved already fails on the base commit, with your diff absent.** You prove it, you never judge it. Saying "this looks unrelated to my change" is the exact reasoning this gate exists to refuse, and it is wrong often enough to be worthless. Untested, every failure is yours.
 
 ### Prove a baseline failure
 
@@ -74,17 +104,6 @@ Take each failure the gate reports and:
 A failure that reproduces by identity at the base is a **baseline failure** — leave it. Every other failure is yours: fix it and re-run the gate. A baseline failure the brief asked you to fix is yours too, whatever the base does.
 
 Prepare the pull request once the gate is green or every failure left is a proved baseline failure. Record each one in the body (see [step 4](#4-commit-push-and-prepare-the-pr)): the command, the failure identity, and the base sha it reproduces on, so a reviewer can re-run your proof in one command. If a failure that is yours will not go green after a genuine effort, escalate per the [authority boundary](#authority-boundary).
-
-
-Once done, run the code-simplifier agent in a subagent to refine the implementation.
-
- Then, in parallel separate subagents run: 
-- rule-reviewer agent. Instruct it to enforce the user Authoring tree Rules and repo rules as blocking violations.
-- /adversarial-review skill
-- /review-bugbot skill
-- /code-review skill
- 
-Implement any findings. **The composition review is part of the gate: if the diff touches a React component or a `.tsx` / `.jsx` file and any composition rule is violated, treat it as a red gate and fix it before returning `ready-for-pr`.**
 
 ## 4. Commit, push, and prepare the PR
 
@@ -111,12 +130,13 @@ Prepare the title and body for a pull request that is ready for review. The **PR
 
 ## Verification
 
-<gate result: typecheck / build / tests / lint>
+<gate result: typecheck / targeted tests / lint / build>
 <baseline failures left red, each with the base sha it reproduces on; "none" if none>
 
 ## Open questions
 
-- <anything a reviewer should weigh in on; "none" if none>
+- <review findings left unfixed, each with its id where it has one and its disposition: won't-fix + the concrete reason, or escalated>
+- <anything else a reviewer should weigh in on; "none" if none>
 ```
 
 **Work item linking:** link the PR to the work item with the Issue tracker's convention (`Closes #n` / `Refs #n` on GitHub and GitLab; the equivalent linked-work item reference elsewhere). Use the *closing* form (`Closes #n`) when merging the PR should close the work item — the common case for human-filed work. Use the *reference* form (`Refs #n`) when something downstream (e.g. a post-deploy verify step) is responsible for closing it — never close those. When in doubt, close.
