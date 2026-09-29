@@ -1,0 +1,445 @@
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  h_46518a29d4dd91 1-7,31,38,41,43-47,53,58-59,63-64,69,100,107-108,112,159,193,197,200-208,210-212,214-217,219-220,226,229-232,234-241,243-265,267-273,291,296
+  h_46518a29d4dd91 109-110,218,221-224,227-228
+.pre-commit-config.yaml
+  h_46518a29d4dd91 1-11
+CONTEXT-MAP.md
+  h_46518a29d4dd91 25-28
+apps/cli/CONTEXT.md
+  h_46518a29d4dd91 27
+apps/cli/src/cli.test.ts
+  h_46518a29d4dd91 1-3,6,9-50,52-59,62-76
+apps/cli/src/commands.test.ts
+  h_46518a29d4dd91 3,25,179-206,238,243-271,298-323
+apps/cli/src/commands.ts
+  h_46518a29d4dd91 10,13,39,50,118,139-142,149-168,188-190,262-279,282-284,287,301-306,313-320,396-400,405,644-648
+apps/cli/src/external-harness.test.ts
+  h_46518a29d4dd91 3-4,43-52,54-56,58-80
+apps/cli/src/harness-commands.test.ts
+  h_46518a29d4dd91 4-5,14,23,28
+apps/cli/src/harness-commands.ts
+  h_46518a29d4dd91 1,26-27,45
+apps/cli/src/ledger.test.ts
+  h_46518a29d4dd91 120
+apps/cli/src/ledger.ts
+  h_46518a29d4dd91 402
+apps/cli/src/platform.test.ts
+  h_46518a29d4dd91 101-114,193-194,244-266,309,394-485,511-541,566-651,943,1098-1111,1144
+apps/cli/src/platform.ts
+  h_46518a29d4dd91 1,74-83,161-191,193-217,246-248,289-293,303-342
+apps/cli/src/rpc.ts
+  h_46518a29d4dd91 9,96,99-106
+apps/desktop/CONTEXT.md
+  h_46518a29d4dd91 195-210
+apps/desktop/src/main/index.ts
+  h_46518a29d4dd91 10,15,93-103,114
+apps/desktop/src/main/ipc.ts
+  h_46518a29d4dd91 264-269
+apps/desktop/src/preload/index.ts
+  h_46518a29d4dd91 18
+apps/desktop/src/renderer/src/app.tsx
+  h_46518a29d4dd91 1,3,7-11
+apps/desktop/src/renderer/src/components/badges.tsx
+  h_46518a29d4dd91 4,8-15,19
+apps/desktop/src/renderer/src/components/customize-empty.test.tsx
+  h_46518a29d4dd91 3
+apps/desktop/src/renderer/src/components/feed.tsx
+  h_46518a29d4dd91 14,175,185,187
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  h_46518a29d4dd91 42,554,560
+apps/desktop/src/renderer/src/components/mcp-facet.test.tsx
+  h_46518a29d4dd91 5
+apps/desktop/src/renderer/src/components/mcp-server-row.test.tsx
+  h_46518a29d4dd91 5-9,20,24
+apps/desktop/src/renderer/src/components/plugin-detail.test.tsx
+  h_46518a29d4dd91 10
+apps/desktop/src/renderer/src/components/plugins-facet.test.tsx
+  h_46518a29d4dd91 10
+apps/desktop/src/renderer/src/components/provider-glyph.tsx
+  h_46518a29d4dd91 10-17,25,29,31-32
+apps/desktop/src/renderer/src/components/provider-picker.test.tsx
+  h_46518a29d4dd91 1-90
+apps/desktop/src/renderer/src/components/provider-picker.tsx
+  h_46518a29d4dd91 1-337
+apps/desktop/src/renderer/src/components/render-trigger.test.tsx
+  h_46518a29d4dd91 5-9,21,25
+apps/desktop/src/renderer/src/components/traits-menu.test.tsx
+  h_46518a29d4dd91 1-89
+apps/desktop/src/renderer/src/components/traits-menu.tsx
+  h_46518a29d4dd91 1-160
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  h_46518a29d4dd91 401-403,501-503
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  h_46518a29d4dd91 4,26,30,34,36,206-213,239-240,249,254-255,258,263,265-266,268,272,276
+apps/desktop/src/renderer/src/daemon/atom-registry.test.ts
+  h_46518a29d4dd91 1,3-6,8-9,11-15,18-29
+apps/desktop/src/renderer/src/daemon/atom-registry.ts
+  h_46518a29d4dd91 1-16
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  h_46518a29d4dd91 4,9,11,25-40,90-95,102-106
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  h_46518a29d4dd91 132,147
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  h_46518a29d4dd91 70
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  h_46518a29d4dd91 2
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  h_46518a29d4dd91 7-8
+apps/desktop/src/renderer/src/features/feed.test.ts
+  h_46518a29d4dd91 4,33-59
+apps/desktop/src/renderer/src/features/feed.ts
+  h_46518a29d4dd91 34
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  h_46518a29d4dd91 3,5-6,14,16,22-23,28,31-36,85,102-132
+apps/desktop/src/renderer/src/features/harnesses-view.ts
+  h_46518a29d4dd91 1-27
+apps/desktop/src/renderer/src/features/item-tab.ts
+  h_46518a29d4dd91 67
+apps/desktop/src/renderer/src/features/operation-settings.test.ts
+  h_46518a29d4dd91 3-4,8-10,22-28,30-31,41-42,47,54,57-67,69-73,75-88,105-217,224-225,229,241-250,274,281-286,336-453,469-514,516,519,558,561,580,582,584-585
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  h_46518a29d4dd91 3-4,6,9-10,12,14-15,18,23,43,45-49,51-52,55-66,68-95,97-106,109-154,174-180,194-254,269,273,277,294,296,300-457,459,463-481,485,492,502-503,507-509,511-520
+apps/desktop/src/renderer/src/features/plugin-configuration.test.ts
+  h_46518a29d4dd91 12
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  h_46518a29d4dd91 2
+apps/desktop/src/renderer/src/features/run-status.test.ts
+  h_46518a29d4dd91 1-8
+apps/desktop/src/renderer/src/features/run-status.ts
+  h_46518a29d4dd91 1-11
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  h_46518a29d4dd91 181
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  h_46518a29d4dd91 263
+apps/desktop/src/renderer/src/routes/__root.tsx
+  h_46518a29d4dd91 9-10,50-53
+apps/desktop/src/renderer/src/routes/settings/-providers.test.ts
+  h_46518a29d4dd91 1-2,4,6-9,11-19,22-24,26-29,33-47
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  h_46518a29d4dd91 1,18,24,28-33,39,42,59,71-86,93-99,107-129,132-133,136-137,140-141,143-147,150-153,158-160,164-181,185-186,188,341-353,359-360,375,377,515-516
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  h_46518a29d4dd91 1-2,13,445-454
+apps/desktop/src/shared/ipc.ts
+  h_46518a29d4dd91 12,65
+biome.json
+  h_46518a29d4dd91 47
+configs/lint/no-env-file-load.grit
+  h_46518a29d4dd91 1-13
+configs/lint/tests/fixtures/no-env-file-load/invalid-example.ts
+  h_46518a29d4dd91 1-5
+configs/lint/tests/fixtures/no-env-file-load/valid-example.ts
+  h_46518a29d4dd91 1
+configs/lint/tests/rules.test.mjs
+  h_46518a29d4dd91 51-56
+configs/sensor/CONTEXT.md
+  h_46518a29d4dd91 1-40
+configs/sensor/package.json
+  h_46518a29d4dd91 9,22
+configs/sensor/test-performance-filer.test.ts
+  h_46518a29d4dd91 1-15,22,29,32,38-171
+configs/sensor/test-performance-filer.ts
+  h_46518a29d4dd91 4-50,53-55,58-66,69-74,78-176,178,181-187
+configs/sensor/vitest.config.ts
+  h_46518a29d4dd91 8
+configs/test/base.ts
+  h_46518a29d4dd91 1,5-6,11
+configs/test/package.json
+  h_46518a29d4dd91 14
+configs/test/src/test-count-reporter.test.ts
+  h_46518a29d4dd91 2,13-17
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  h_46518a29d4dd91 237-239
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  h_46518a29d4dd91 5
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  h_46518a29d4dd91 5
+docs/adr/0024-harness-catalogs-are-managed-not-probed.md
+  h_46518a29d4dd91 1-50
+docs/adr/0025-cursor-declares-only-the-full-profile.md
+  h_46518a29d4dd91 1-29
+docs/adr/0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md
+  h_46518a29d4dd91 1-142
+docs/agents/domain.md
+  h_46518a29d4dd91 53-60
+docs/spec/settings-and-plugins.md
+  h_46518a29d4dd91 301-305
+docs/spec/trusted-bot-wake-signal.md
+  h_46518a29d4dd91 1-159
+package.json
+  h_46518a29d4dd91 12,25
+packages/claude-code/package.json
+  h_46518a29d4dd91 13-15
+packages/claude-code/scripts/sync-models.ts
+  h_46518a29d4dd91 2-99,102-107,109-121
+packages/claude-code/src/fixtures/fake-claude.mjs
+  h_46518a29d4dd91 90-107
+packages/claude-code/src/harness-byok.test.ts
+  h_46518a29d4dd91 21,40,43-45,47-48,50-51,127
+packages/claude-code/src/harness-environment.test.ts
+  h_46518a29d4dd91 21,24,28,67-69,88-90,186
+packages/claude-code/src/harness-fixtures.ts
+  h_46518a29d4dd91 25,55-56,85-117,208-209,236,242-247,324-331,363-380,453-455,498,510
+packages/claude-code/src/harness-host.test.ts
+  h_46518a29d4dd91 32,34,66-87,89-99,101-104,108,110-113,115-116,170
+packages/claude-code/src/harness.ts
+  h_46518a29d4dd91 2,15-16,34-42,118,210,212,215,285-289,334,339,357,368,382-391,394,414,417-420
+packages/claude-code/src/index.ts
+  h_46518a29d4dd91 2-3
+packages/claude-code/src/model.test.ts
+  h_46518a29d4dd91 1-102
+packages/claude-code/src/model.ts
+  h_46518a29d4dd91 1-88
+packages/claude-code/src/models.generated.ts
+  h_46518a29d4dd91 1-71
+packages/codex-cli/CONTEXT.md
+  h_46518a29d4dd91 15,20-26
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  h_46518a29d4dd91 77
+packages/codex-cli/src/harness-configuration.test.ts
+  h_46518a29d4dd91 6,11,32,34-63,81,87-113,118-148,152-175,271-274
+packages/codex-cli/src/harness-execution.test.ts
+  h_46518a29d4dd91 34,240
+packages/codex-cli/src/harness-failures.test.ts
+  h_46518a29d4dd91 18,138,144,147
+packages/codex-cli/src/harness-fixtures.ts
+  h_46518a29d4dd91 41,88,100,117-122,290,332-333,336-341
+packages/codex-cli/src/harness.ts
+  h_46518a29d4dd91 2-3,7-8,126-141,144,146-150,153-180,202-205,218-222,229-231,234-240,295,316-317,319-320,323,336-337,340
+packages/codex-cli/src/index.ts
+  h_46518a29d4dd91 2-3
+packages/codex-cli/src/model.test.ts
+  h_46518a29d4dd91 1-42
+packages/codex-cli/src/model.ts
+  h_46518a29d4dd91 1-11
+packages/codex-cli/src/models.generated.ts
+  h_46518a29d4dd91 1-50
+packages/contracts/CONTEXT.md
+  h_46518a29d4dd91 41-49,172,216,295-299,316,332,374-389,393,421
+packages/contracts/src/board.test.ts
+  h_46518a29d4dd91 10,22,337-355
+packages/contracts/src/board.ts
+  h_46518a29d4dd91 6,25,38,123
+packages/contracts/src/daemon-event.ts
+  h_46518a29d4dd91 16,69
+packages/contracts/src/harness.test.ts
+  h_46518a29d4dd91 4-11,28,37-172
+packages/contracts/src/harness.ts
+  h_46518a29d4dd91 4,36,39-44,46-53,55-60,62-65,67-183,185-190,194-196,198-203,206,215-217,221-222
+packages/contracts/src/rpc.ts
+  h_46518a29d4dd91 24,32,63-68,107-108,172-173,181,258
+packages/contracts/src/run-plan.ts
+  h_46518a29d4dd91 8,14-17
+packages/contracts/src/run.ts
+  h_46518a29d4dd91 58
+packages/contracts/src/settings.test.ts
+  h_46518a29d4dd91 5,8-9,14,88-112,126-175
+packages/contracts/src/settings.ts
+  h_46518a29d4dd91 61,71-84,91-96,115,117,135,145,157-194,403
+packages/contracts/src/triage.test.ts
+  h_46518a29d4dd91 119,122-144,205-236
+packages/contracts/src/triage.ts
+  h_46518a29d4dd91 93-121,133-139,177-190
+packages/cursor-acp/CONTEXT.md
+  h_46518a29d4dd91 20-22,36-38
+packages/cursor-acp/FINDINGS-RESUME.md
+  h_46518a29d4dd91 28-29,213,215-216
+packages/cursor-acp/FINDINGS.md
+  h_46518a29d4dd91 31,204-210
+packages/cursor-acp/package.json
+  h_46518a29d4dd91 13-14
+packages/cursor-acp/scripts/sync-models.ts
+  h_46518a29d4dd91 4-5,9,11,13-33,36-59,64-68,70-72,74,78-79,83-85,90-92
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  h_46518a29d4dd91 33-50
+packages/cursor-acp/src/harness.test.ts
+  h_46518a29d4dd91 6,30,50-67,72-123,161,169,212-225,240-244,249,253-259,263-264,290-296,311-313,475,478-491,494-548,551,554-559,561-562,565-584,586,588-591,594-602,604-609,611-625,628-649,651-658,660-682,685-696,698,700-703,706-732,734-736,739-747,749,751-754,760,764
+packages/cursor-acp/src/harness.ts
+  h_46518a29d4dd91 2,16,19-25,40-47,58-67,78-82,84,86-96,179,187,307,329-338,340-358,378,397-398,402,405,417-418,429,433,435-436,438-444,449-454
+packages/cursor-acp/src/index.ts
+  h_46518a29d4dd91 6,9
+packages/cursor-acp/src/model.test.ts
+  h_46518a29d4dd91 2-11,14-15,33-188
+packages/cursor-acp/src/model.ts
+  h_46518a29d4dd91 1-8,12-60,62-238,240-373,377
+packages/cursor-acp/src/models.generated.ts
+  h_46518a29d4dd91 3-207,219,229-241,271-272,291-292,295-304,313-327,340-347,427,434-1122
+packages/engine/CONTEXT.md
+  h_46518a29d4dd91 45,60-63,81,89,97,101,133,135,225,233
+packages/engine/docs/adr/0002-diverged-worktree-branches-rebase-then-hand-off.md
+  h_46518a29d4dd91 5
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  h_46518a29d4dd91 20
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  h_46518a29d4dd91 1-38
+packages/engine/docs/adr/0014-mutations-acknowledge-the-write-and-the-snapshot-converges-behind-a-coalescing-refresh.md
+  h_46518a29d4dd91 1-15
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  h_46518a29d4dd91 10,39,41,67,99,103,109,111
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  h_46518a29d4dd91 57-58,81
+packages/engine/replay/README.md
+  h_46518a29d4dd91 30
+packages/engine/src/classify.test.ts
+  h_46518a29d4dd91 135,140,264-269,503-507,555-562,578-582,610-615
+packages/engine/src/classify.ts
+  h_46518a29d4dd91 4,19,43,58-63,223,232
+packages/engine/src/commands.test.ts
+  h_46518a29d4dd91 2,14,19,26-27,55-56,79-85,91,104-112,125-137,419,444,447-452,474,493,509-513,517,522,1197-1276,1283,1287-1557,1562-1564,1567,1574-1585,1588,1591-1593,1602-1624,1631-1903,1911-1913,1915-1919
+packages/engine/src/commands.ts
+  h_46518a29d4dd91 2,19,22-29,39-40,64,67-71,330,332,336-342,346-538,540,542-543,545-550,558
+packages/engine/src/comments.ts
+  h_46518a29d4dd91 1,127,136,148-156
+packages/engine/src/connection.test.ts
+  h_46518a29d4dd91 90
+packages/engine/src/control-store.test.ts
+  h_46518a29d4dd91 263-265,741-769,782-789,792-799,801,816-845
+packages/engine/src/control-store.ts
+  h_46518a29d4dd91 22,68-69,355-360,680-681,685-693,759-760,858,1083
+packages/engine/src/coordination-tracker.test.ts
+  h_46518a29d4dd91 85-88,147-150,408-412,415-418,533,538-555,576
+packages/engine/src/coordination-tracker.ts
+  h_46518a29d4dd91 30-36,99-107,184,205,227
+packages/engine/src/daemon-composition.test.ts
+  h_46518a29d4dd91 29,53-54,93-94,144-146,319,322-326
+packages/engine/src/daemon.ts
+  h_46518a29d4dd91 8,26,71,109,186,218-223,231,297-301,304,329-331,419-429,441,497-547,567-583
+packages/engine/src/engine.test.ts
+  h_46518a29d4dd91 2,10,12,18,26,32-33,46,57,62-63,85,928,1004-1053,1060-1062,1069,1077,1080-1081,1090-1094,1121,1134-1137,1163-1287,1337-1344
+packages/engine/src/event-publisher.test.ts
+  h_46518a29d4dd91 69,349-367,388
+packages/engine/src/event-publisher.ts
+  h_46518a29d4dd91 14,18,128,255-276,285
+packages/engine/src/executor.test.ts
+  h_46518a29d4dd91 17,46,56,67,85,87,90-91,93,420-421,439-461,515,525-534,581,663-664,666-678,680-694,697,708,849-850,888-1002,1019-1020,1029,1031-1036,1039,1043-1048,1099-1130,1266-1279,1440,1476,1517,1596,1620-1623,1629,1659,1668-1672,1680-1686,1707,1710,1713,1716,2149-2184,2205,2220,2295,2304,2308,2310-2313,2704-2734,2757,3020,3028,3032-3036,3039,3044,3051,3059,3063-3067,3069-3114,3126,3141-3142,3145-3148,3150-3151,3156,3521-3560,3799-3803,3808-3809,3820,3827-3832,3837-3838,3840-3843,3845,3938-3942,3944-3951,3953,3955,3957-3958,3960,3964,3970-3971,4012,4079-4103
+packages/engine/src/executor.ts
+  h_46518a29d4dd91 15,51,54,72-74,77,91-92,106,172,181,315,393,419,430,436,445,448,454-470,472-475,478-482,489,492-494,581,584-592,595-596,615-616,618,621-623,625-643,646-649,651-661,663-675,678,681,683,685-695,701,709,714,716-720,736,741,751,759,765,767-769,772,783,786,792,796,800,827,829,837-844,846,848,857,868,879,881,884,893,900-902,908-909,917,921,924,971-972,982-983,988,995-1013,1015-1026,1029-1031,1033,1038-1048,1050-1051,1053-1058
+packages/engine/src/external-harness-runtime.test.ts
+  h_46518a29d4dd91 29,44,47,49,51,53,59,64,119,201,234,248,265-266,285,291-299,327,348-421,423-442,447-448,450-454,458,461-467,480,543,550,552-557,651,696-720,767,773,791-797,820,861,871,876-878,900,904,933,938,943,949,956,961,967,974,982,991,1057,1112,1126,1145-1149,1151,1166,1172,1186,1202,1220
+packages/engine/src/external-harness-runtime.ts
+  h_46518a29d4dd91 7,32,49,60,65,84,115,137,142,145,148,153,165-214,261-262,354-362,364,366,368-369,374,396,487,503,510,512-515,585-586,595-598,649-650,657-658,664,677-678,690,695,697,702,704,738-796,798-844
+packages/engine/src/follow-up.test.ts
+  h_46518a29d4dd91 34-35,38-39,43
+packages/engine/src/git.ts
+  h_46518a29d4dd91 8,30-34,42-45,47,69
+packages/engine/src/github/client.test.ts
+  h_46518a29d4dd91 772-781
+packages/engine/src/github/client.ts
+  h_46518a29d4dd91 28,38-43,86,94-100,182,188-195,198-211,220-222,475-476,600-609,795-796,950-954,1003,1276
+packages/engine/src/github/github-helpers.test.ts
+  h_46518a29d4dd91 9,24,30-31,58-59,194,282,290-302,307-316,321-330,335-338,342-367,370-383,402,405-412,416,422-429
+packages/engine/src/github/github.test.ts
+  h_46518a29d4dd91 12,15,34-35,37,40,70,78-84,97-98,128-162,164-173,191-192,195-196,316,321,326,329-333,453-460,477-514,553-560,1097,1104-1106,1146,1480,1488,1493-1495,1498-1501,1504-1507,1514-1516,1519-1521,1526-1528,1530,1540-1543,1731,1737,1740-1775,1778-1783,1786-1787,1789-1835,1839-1841,1843-1846,1849-1850,1852-1857,1859-1928
+packages/engine/src/github/host.ts
+  h_46518a29d4dd91 21,51
+packages/engine/src/github/index.ts
+  h_46518a29d4dd91 3-13
+packages/engine/src/github/performance-issue-filer.test.ts
+  h_46518a29d4dd91 8-13,17,30-47,92-101,104-112,114,123-132,144,146-150,156-220,256,263,285,293-319,325-326,367-372,389,393-418
+packages/engine/src/github/performance-issue-filer.ts
+  h_46518a29d4dd91 7,11,23,28,36,43,70,72-91,94,97,99,151-152,157,159,161,163,171,173,175,197-199,202-214,216-220,222-232,236-237,240-241,245,247,250-251,254,256,258-262,264-265,268,271,274,282,289-299,303-311,332-333,347
+packages/engine/src/github/provider.ts
+  h_46518a29d4dd91 16,23-28,30,37-42,54,101,105,110,113-115,133,142-158,183-184,186
+packages/engine/src/harness-overview.test.ts
+  h_46518a29d4dd91 1,3-4
+packages/engine/src/harness-overview.ts
+  h_46518a29d4dd91 1-2
+packages/engine/src/harness-readiness.test.ts
+  h_46518a29d4dd91 1-4,6-8,11-23,25,27-32,35-39,41-43,45-54,56-86,88-93,95-142
+packages/engine/src/harness-readiness.ts
+  h_46518a29d4dd91 1-210
+packages/engine/src/harness.test.ts
+  h_46518a29d4dd91 71-72,83,89,132,136,235,247,304-317,319-323,325,335-336,348,354,573-590
+packages/engine/src/harness.ts
+  h_46518a29d4dd91 6,13,15,69,122,133-143,145-155,158-162,237,240,248,253,275-278,281-301,310,314,322,327-339,344,348,415-427,434-435,464,469,474,483
+packages/engine/src/index.ts
+  h_46518a29d4dd91 38
+packages/engine/src/issue-tracker-router.test.ts
+  h_46518a29d4dd91 30-34
+packages/engine/src/issue-tracker.ts
+  h_46518a29d4dd91 67
+packages/engine/src/linear/client.test.ts
+  h_46518a29d4dd91 36-37,41-42,64,68-70,189-230,464,471-479,483,496,498-522,524-538,541-576
+packages/engine/src/linear/client.ts
+  h_46518a29d4dd91 94-108,123,167-170,173,255,270-277,289-290,293-296,306,373-380,431-447,454,463,479-480,592-653,702-704
+packages/engine/src/operation-policy.ts
+  h_46518a29d4dd91 2-4,6-7,10-11,13-14,18,20,52,56-116
+packages/engine/src/operation-resolution.test.ts
+  h_46518a29d4dd91 16,75,77-85,97-98,105-106,108-111,114,121-122,132-143,154
+packages/engine/src/operation-resolution.ts
+  h_46518a29d4dd91 38-39,41,74-77,208-228,230-235,260,367-374,380,398,404,407,409-414,416,422-423,456,483,558,561,565-570,578-580,583-585,621,631-633,646
+packages/engine/src/performance-issue-filer.test.ts
+  h_46518a29d4dd91 10-11,14,18,22-23,28,31,36-81,133,141-145,148-149,156-159,167,172,183,194,199,211,219,227,239,244,255,261,271,275-318
+packages/engine/src/performance-issue-filer.ts
+  h_46518a29d4dd91 6,9,15,24-40,49,55-112,119,148-237,241,243-253,271,274,278,280,282,285-286,291-292,297-298,304,308,310,312
+packages/engine/src/performance-regression-sensor.test.ts
+  h_46518a29d4dd91 12-16,68,80,102-109,205-210,213-230,380-381
+packages/engine/src/performance-regression-sensor.ts
+  h_46518a29d4dd91 18-20,26-27,41-42,81,92-94,114-115,130-131,148,171-187,195-196,199,205,212,224,229,243-244,247,249,256,263,274,276,327
+packages/engine/src/playbook.test.ts
+  h_46518a29d4dd91 87-98,287-303
+packages/engine/src/playbook.ts
+  h_46518a29d4dd91 228-237
+packages/engine/src/provider-runner.test.ts
+  h_46518a29d4dd91 34-39,173,231,243-249,467-468,473-475
+packages/engine/src/provider-runner.ts
+  h_46518a29d4dd91 1,14,80-83,85-88,90-92,160-161,235
+packages/engine/src/recovery.test.ts
+  h_46518a29d4dd91 480
+packages/engine/src/replay-harness.test.ts
+  h_46518a29d4dd91 1,50-96,145,147-167,177
+packages/engine/src/replay-harness.ts
+  h_46518a29d4dd91 10,343-347,392-393,395-406,408,427
+packages/engine/src/resume-policy.ts
+  h_46518a29d4dd91 1,12-15
+packages/engine/src/retry-policy.ts
+  h_46518a29d4dd91 14,21
+packages/engine/src/run-ledger.test.ts
+  h_46518a29d4dd91 85
+packages/engine/src/run-plan.test.ts
+  h_46518a29d4dd91 278-282,312-351,360,363,367,382,384,796-801,863-869
+packages/engine/src/run-plan.ts
+  h_46518a29d4dd91 21,24,64,237,330,341,353,365,372,374-377,416-423,429-439,451-455,459,868,887
+packages/engine/src/run-preparation.test.ts
+  h_46518a29d4dd91 1-55,58-69,71-81,83-99,101-122,124-128,130,132-135,138-181,184-196,199-241,244-264,266-272,274-285,287-303,305-315,317-330,332-345,347-392,394-457
+packages/engine/src/run-preparation.ts
+  h_46518a29d4dd91 1-58,61,63-74,76-94,96,98-115,117-138,141-187,189-197,199-211,213
+packages/engine/src/session-choice.test.ts
+  h_46518a29d4dd91 16,42-43,77-86,92,96,100,110,124,158
+packages/engine/src/session-choice.ts
+  h_46518a29d4dd91 24-25,46-50,52-60,62
+packages/engine/src/testing/engine-test-layer.ts
+  h_46518a29d4dd91 1-7,9,12,14-18,21-25,37-44,58-62,78-145
+packages/engine/src/testing/git-invocation-counting.ts
+  h_46518a29d4dd91 60
+packages/engine/src/tools/file-diff-feed-fallback.test.ts
+  h_46518a29d4dd91 499,503-506,516-519,522-526
+packages/engine/src/tools/owned-tools.test.ts
+  h_46518a29d4dd91 189
+packages/engine/src/tools/policy.test.ts
+  h_46518a29d4dd91 121
+packages/engine/src/tools/policy.ts
+  h_46518a29d4dd91 8,51
+packages/engine/src/tools/sandbox.test.ts
+  h_46518a29d4dd91 29
+packages/engine/src/worktree-fs.ts
+  h_46518a29d4dd91 17
+packages/engine/src/worktree.test.ts
+  h_46518a29d4dd91 10,16-17,24,48-53,64,68-69,76-77,79,82-83,97,103,105-109,114-128,132-135,138-139,154-158,162-175,184-188,192,196,199,201,222,230-323,463,479-481,539-546,651,654,658-660,662,664-683,686-694,699,701-702,706-718,721,723-745,753-754,764,767,772,774-778,790-791,802,809-864,867-868,877-882,885,898-901,921-922,924-925,944,962,980,996,1001-1055
+packages/engine/src/worktree.ts
+  h_46518a29d4dd91 8,10,19-28,78,81,85-88,111-115,169-187,216-246,268-269,297-298,315-324,328-335,339,342,370-379,381-385,387-391,396-399,445,451,453-461,466,477-485
+pnpm-lock.yaml
+  h_46518a29d4dd91 111-113,386-388,407-409,1586-1648,6813-6851
+scripts/install-commit-hook.mjs
+  h_46518a29d4dd91 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6725a8808efe1e0cc6671455622387a603ca5557",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
