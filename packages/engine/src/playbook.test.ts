@@ -33,6 +33,15 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
     ...over,
   });
 
+const readOperatingInstructions = (agent: "follow-up-agent" | "implement-agent") =>
+  Effect.flatMap(FileSystem.FileSystem, (fs) =>
+    fs.readFileString(
+      decodeURIComponent(
+        new URL(`../operating-instructions/${agent}/INSTRUCTIONS.md`, import.meta.url).pathname,
+      ),
+    ),
+  );
+
 describe("resolveTriage", () => {
   it("falls back to the default skill and prompt when the stage is unset", () => {
     const resolved = resolveTriage(config());
@@ -287,16 +296,25 @@ describe("buildFollowUpPrompt", () => {
 describe("follow-up Operating Instructions", () => {
   it.effect("makes the speaking decision agent-owned and posting engine-owned", () =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const instructions = yield* fs.readFileString(
-        decodeURIComponent(
-          new URL("../operating-instructions/follow-up-agent/INSTRUCTIONS.md", import.meta.url).pathname,
-        ),
-      );
+      const instructions = yield* readOperatingInstructions("follow-up-agent");
 
       assert.include(instructions, "answer a question, do not narrate a state");
       assert.include(instructions, "choose whether to speak");
       assert.include(instructions, "Do not post it as a PR comment yourself");
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
+
+  it.effect("runs targeted checks before one final build", () =>
+    Effect.gen(function* () {
+      const instructions = yield* readOperatingInstructions("follow-up-agent");
+
+      assert.include(instructions, "Targeted tests");
+      assert.include(instructions, "Targeted lint and formatting");
+      assert.lengthOf(instructions.match(/`pnpm build`/g) ?? [], 1);
+      assert.isAbove(
+        instructions.indexOf("`pnpm build`"),
+        instructions.indexOf("Targeted lint and formatting"),
+      );
     }).pipe(Effect.provide(NodeFileSystem.layer)),
   );
 });
@@ -329,12 +347,7 @@ describe("buildImplementPrompt", () => {
 describe("implement Operating Instructions", () => {
   it.effect("keeps pull-request opening engine-owned", () =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const instructions = yield* fs.readFileString(
-        decodeURIComponent(
-          new URL("../operating-instructions/implement-agent/INSTRUCTIONS.md", import.meta.url).pathname,
-        ),
-      );
+      const instructions = yield* readOperatingInstructions("implement-agent");
       const pullRequestOpeningLines = instructions
         .split("\n")
         .filter(
@@ -346,6 +359,31 @@ describe("implement Operating Instructions", () => {
       assert.include(instructions, "Never open or merge a pull request");
       assert.include(instructions, "Commit and push the engine-owned branch");
       assert.include(instructions, "Return `ready-for-pr` with that title and body");
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
+
+  it.effect("defines one bounded report-only review round", () =>
+    Effect.gen(function* () {
+      const instructions = yield* readOperatingInstructions("implement-agent");
+      const review = instructions.slice(
+        instructions.indexOf("### Review — one round, then stop"),
+        instructions.indexOf("### Build, once"),
+      );
+
+      assert.include(review, "`/code-review`");
+      assert.include(review, "minimalist");
+      assert.include(review, "security-auditor");
+      assert.include(review, "~/.agents/rules/*");
+      assert.include(review, "One fix round");
+      assert.include(review, "none edits code");
+      assert.lengthOf(review.match(/^- \*\*/gm) ?? [], 3);
+      assert.notInclude(instructions, "code-simplifier");
+      assert.notInclude(instructions, "rule-reviewer");
+      assert.notInclude(instructions, "/adversarial-review");
+      assert.notInclude(instructions, "/review-bugbot");
+      assert.lengthOf(instructions.match(/`pnpm build`/g) ?? [], 1);
+      assert.isAbove(instructions.indexOf("### Build, once"), instructions.indexOf("One fix round"));
+      assert.include(instructions, "review findings left unfixed");
     }).pipe(Effect.provide(NodeFileSystem.layer)),
   );
 });
