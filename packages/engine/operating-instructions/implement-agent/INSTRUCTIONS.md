@@ -37,7 +37,7 @@ Before writing code, read the target repo's own guidance and follow it: `AGENTS.
 
 ## 1. Read the brief
 
-Read the work item body, all comments, labels, and dates. Establish the resolved intent per [Brief precedence](#brief-precedence) and a checklist of acceptance criteria. If the brief distinguishes work item origin (e.g. a machine-filed vs human-filed work item) and that changes how the PR links the work item, note it now — it drives `Closes` vs `Refs` at [step 4](#4-commit-push-and-prepare-the-pr).
+Read the work item body, all comments, labels, and dates. Establish the resolved intent per [Brief precedence](#brief-precedence) and a checklist of acceptance criteria. **The brief is complete**: when the triage proposal includes a Requirements digest, take it as the requirement's substance and consult an external system only where the digest points at it, never as a search. If the brief distinguishes work item origin (e.g. a machine-filed vs human-filed work item) and that changes how the PR links the work item, note it now — it drives `Closes` vs `Refs` at [step 4](#4-commit-push-and-prepare-the-pr).
 
 Completion: you can state the resolved intent and the acceptance criteria. Irreconcilable steering here → escalate now, before touching code.
 
