@@ -1,0 +1,22 @@
+packages/claude-code/src/harness-fixtures.ts
+  s_51b6ae90367d7c::t_216dda6153c72c 293-304
+  s_51b6ae90367d7c::t_7d2c90c27422e6 26
+packages/claude-code/src/harness-test-data.ts
+  s_51b6ae90367d7c::t_216dda6153c72c 1-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a51329504887585d7f6a31204bf49f91b5a1ecfa",
+  "prompts": {},
+  "sessions": {
+    "s_51b6ae90367d7c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f3b7-fc9c-72c0-94e9-0255a1849267",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
