@@ -73,7 +73,9 @@ onto TanStack's documented Codex adapter passthrough: `config` carries `mcp_serv
 and, for an authenticated server, `bearer_token_env_var` naming a hashed `COGWORK_MCP_*` variable;
 `env` carries the resolved bearer value into the Codex child environment only. Codex prepends
 `Bearer ` itself. Command arguments carry names and URLs, never secret values. The adapter is
-constructed per launch, so a rotated credential applies on the next Run. The shared runtime sends
+constructed per launch, so a rotated credential applies on the next Run. When the request projects
+Linear's MCP server, the same launch config disables only Codex Apps' native Linear connector, so
+the Run has one Linear surface and unrelated Apps remain available. The shared runtime sends
 required Instructions through Codex's in-memory system prompt and keeps the Harness Workspace
 projection already satisfied, so neither channel writes into the prepared Worktree and its
 repository-authored `AGENTS.md` remains unchanged.
