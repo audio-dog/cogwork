@@ -336,6 +336,7 @@ const issueTrackerStub = (probe: RecoveryProbeState) =>
   ({
     rateLimitScope: () => null,
     observe: () => Effect.succeed([]),
+    readProse: () => Effect.succeed({ body: "", comments: [] }),
     claim: () => Effect.void,
     release: (_workspace, item) => Ref.update(probe.released, (items) => [...items, item]),
     note: (_workspace, _item, detail) => Ref.update(probe.notes, (notes) => [...notes, detail]),

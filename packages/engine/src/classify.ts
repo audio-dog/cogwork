@@ -13,6 +13,7 @@ import type {
   PrSummary,
   ReadyToMergeItem,
   RunPlanWorkContextFacts,
+  RunPlanWorkContextProse,
   RunPlanWorkContextReference,
   SessionId,
 } from "@cogwork/contracts";
@@ -46,6 +47,12 @@ export interface EligibleWork extends ActionableItem {
     readonly facts: RunPlanWorkContextFacts;
   };
 }
+
+export type AdmittedWork = Omit<EligibleWork, "workContext"> & {
+  readonly workContext: EligibleWork["workContext"] & {
+    readonly prose: RunPlanWorkContextProse;
+  };
+};
 
 export interface Classification {
   readonly eligible: ReadonlyArray<EligibleWork>;
