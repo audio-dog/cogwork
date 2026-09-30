@@ -153,6 +153,9 @@ _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Operation resolution**:
 The engine's combination of an Operation Definition, Operation Settings, Operating Instructions, Work Context, Tools, Skills, MCP servers, Middleware, and Sandbox Policy into an immutable Run Plan before dispatch.
+For a Codex Operation on a Linear-tracked Workspace, resolution requires both the engine Linear MCP
+and the Workspace's issue-tracker Connection. A missing MCP or failed Connection readiness check
+therefore rejects planning before the Harness starts. Other Harnesses keep their declared needs.
 Its home is `src/operation-resolution.ts`.
 _Avoid_: Playbook, resolved stage, prompt assembly
 
