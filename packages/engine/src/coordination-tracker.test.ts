@@ -139,6 +139,7 @@ const makeFakeHost = Effect.fn("fakeHost")(function* (
     rateLimitScope: () => null,
     list: () => Ref.get(items).pipe(Effect.map((all) => [...all.values()].map(toListed))),
     resolve: (_workspace, id) => Effect.succeed(numberOf(id)),
+    readProse: () => Effect.succeed({ body: "", comments: [] }),
     comments: commentsFor,
     claimIdentity: () => claimant,
     addClaim: (number) => patch(number, withLabel(claimLabel)),

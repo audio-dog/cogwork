@@ -3,6 +3,7 @@ import type {
   Claim,
   LifecycleStage,
   Priority,
+  RunPlanWorkContextProse,
   TriageRole,
   WorkItemId,
 } from "@cogwork/contracts";
@@ -58,6 +59,7 @@ export interface CoordinationHost<Ref, CommentId> {
     workspace: WorkspaceIssueTrackerBinding,
     id: WorkItemId,
   ) => Effect.Effect<Ref, IssueTrackerError>;
+  readonly readProse: (ref: Ref) => Effect.Effect<RunPlanWorkContextProse, IssueTrackerError>;
   readonly comments: (ref: Ref) => CommentHost<CommentId>;
   readonly claimIdentity: (ref: Ref) => string;
   readonly addClaim: (ref: Ref) => Effect.Effect<void, IssueTrackerError>;
@@ -127,6 +129,13 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     observe: Effect.fn("coordinationTracker.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
       const listed = yield* host.list(workspace);
       return listed.map((item) => buildItem(codec, item));
+    }),
+    readProse: Effect.fn("coordinationTracker.readProse")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      return yield* host.readProse(ref);
     }),
     claim: Effect.fn("coordinationTracker.claim")(function* (
       workspace: WorkspaceIssueTrackerBinding,
