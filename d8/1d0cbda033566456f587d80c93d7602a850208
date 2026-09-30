@@ -1,0 +1,59 @@
+configs/sensor/package.json
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 9
+docs/agent-patterns/effect-test-layers.md
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 3
+AGENTS.md
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 18-22
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 63-67,107-111
+  s_89728d5021f5bd::t_58d8f262119f3f 112
+packages/engine/src/performance-issue-filer.test.ts
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 24,75-93,176-181,347-385
+packages/engine/src/performance-issue-filer.ts
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 3,104-123,127,192,256-292,297
+packages/engine/src/playbook.test.ts
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 12,36,296-321,323-333,336-344,348-354,357-369,371-405,407-436
+.github/workflows/test-suite-budget.yml
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 1-67
+configs/sensor/test-performance-filer.test.ts
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 10,15,32,38-48,74-78,134-157,169,181,208,212-290
+packages/engine/src/commands.ts
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 330-345,352-355,657,674-676,685-701,720-727,749,751-763,819-825,834,851-885,912-922,968-973
+configs/sensor/test-performance-filer.ts
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 8,20-22,41,44-55,60,72-84,89,96-106,110,139,168-186,193-195,198,212-254,260,273-287
+  s_89728d5021f5bd::t_a5f887cae1eaaa 288
+docs/adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 1-124
+docs/agent-patterns/test-value.md
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 1-83
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_89728d5021f5bd::t_e03550b06e0137 40
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 81
+  s_2f68c7896b3740::t_089cd144ec0f81 82
+packages/engine/src/commands.test.ts
+  s_89728d5021f5bd::t_1e2d8fbc5c4d23 23,51-58,338-339,342-363,618-621,675,2053-2092,2334-2418,2490-2543,2643-2680,2705-2777,3011-3109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d81d0cbda033566456f587d80c93d7602a850208",
+  "prompts": {},
+  "sessions": {
+    "s_2f68c7896b3740": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f3cb-f90d-7003-87ea-70afe04876ce",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_89728d5021f5bd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f348-a2dc-71d1-a77a-b9860418c463",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
