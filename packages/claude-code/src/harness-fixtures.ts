@@ -271,6 +271,7 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
       messages: [{ role: "user", content: "implement the issue" }],
       workContext: {
         reference: { workItem: "#153", url: null },
+        prose: { body: "", comments: [] },
         facts: {
           roles: ["ready-for-agent"],
           assignees: [],
