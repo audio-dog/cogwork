@@ -104,11 +104,11 @@ Completion: the structured result contains the complete comment body as `proposa
 
 <Your diagnosis: the verified claim and code path, the redundancy and prior-rejection results, and — when a structural option plausibly exists — the in-place fix vs the refactor and why you lean one way. Give a scope estimate: S | M | L.>
 
+**Review requirements:** <the judgment reviews this change's shape demands beyond the standard set, for example "touches auth — security findings are blocking" or "copy-only change"; the security review runs regardless. Use "standard" when nothing special applies.>
+
 ### Requirements digest
 
 <Everything the requirement needs that lives outside the work item, inlined: final copy verbatim, design file and node links, and decisions settled in chat threads, with a link to each source. The implement Run treats this digest as complete and searches nothing — omit the section only when the work item is already self-contained.>
-
-**Review requirements:** <the judgment reviews this change's shape demands beyond the standard set, for example "touches auth — security findings are blocking" or "copy-only change"; the security review runs regardless. Use "standard" when nothing special applies.>
 
 ### Draft Agent Brief
 
