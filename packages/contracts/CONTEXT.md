@@ -209,7 +209,7 @@ The routing relationship that selects what follows an operation from its outcome
 _Avoid_: Operation, workflow step
 
 **Operation definition**:
-The engine-authored contract for one operation: its behavior, defaults, required needs, Operating Instructions, and possible outcomes. A required need that cannot be satisfied — including a required Connection or MCP server that is not ready — is a Run Plan rejection, uniform across kinds. Rejection is a recorded failure with a reason; it never parks the item waiting for a human.
+The engine-authored contract for one operation: its behavior, defaults, required needs, Operating Instructions, and possible outcomes. A required need that cannot be satisfied — including a required Connection or MCP server that is not ready — is a Run Plan rejection, uniform across kinds. Rejection is recorded with its reason, but it is a fact about the machine's readiness, never a failed attempt: it does not move the item toward exhaustion, and it never parks the item waiting for a human. The item waits in view with the reason and is admitted when the need is ready. A failed attempt is work an agent was given and could not do.
 _Avoid_: Playbook, run plan, operation settings
 
 **Operation settings**:
@@ -224,8 +224,12 @@ _Avoid_: Skill, playbook skill, prompt, work context
 
 **Work context**:
 The work-specific facts supplied to a run, such as a work item's body and comments or a pull request's checks and reviews.
-**The engine supplies them; the agent never fetches its own brief.** The work item's prose is read once, at admission, through the issue-tracker port and frozen into the Run Plan, so a Run starts with its brief and a tracker MCP server is at most optional context. A steer posted mid-Run reaches the next round, not this one. See ADR 0030.
+**The engine supplies them; the agent never fetches its own brief.** The work item's prose — and, for follow-up, its pull request's description and review comments — is read once, at admission, and frozen into the Run Plan, so a Run starts with its brief and a tracker MCP server is at most optional context. A steer posted mid-Run reaches the next round, not this one. See ADR 0030.
 _Avoid_: Operating instructions, prompt template, workflow settings
+
+**Resource reference**:
+A typed pointer from frozen Work Context prose to one resource in an external system, such as a Figma frame, derived by the Engine at admission. Each one makes a ready MCP server that **reads** its system a required need of that Run. A server only declares which systems it reads, so the requirement stays the Engine's and no Plugin marks itself required.
+_Avoid_: Link, attachment, design spec, conditional need
 
 The relationship is:
 
