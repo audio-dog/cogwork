@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@v2
@@ -61,7 +63,14 @@ jobs:
           await writeFile(`${directory}/history.json`, `${JSON.stringify(history, null, 2)}\n`)
           EOF
 
+      - name: Measure test file durations
+        run: pnpm --filter @cogwork/sensor test:measure > test-suite-timing-report.json
+
       - name: Check test suite budget
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: pnpm --filter @cogwork/sensor test:file-budget "${{ github.workspace }}/test-suite-seed-history/history.json"
+        run: >-
+          pnpm --filter @cogwork/sensor test:file-budget
+          "${{ github.workspace }}/test-suite-seed-history/history.json"
+          "${{ github.workspace }}/test-suite-timing-report.json"
+          "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
