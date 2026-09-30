@@ -1888,14 +1888,21 @@ describe("Executor.execute", () => {
     ),
   );
 
-  it.effect("releases the claim when the admission prose read fails", () =>
+  it.effect("releases the claim and holds off another claim when admission fails", () =>
     Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
 
       assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      yield* TestClock.adjust("1 minute");
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      yield* TestClock.adjust("1 minute");
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
       assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
         { method: "claim", item: "#15" },
         { method: "release", item: "#15" },
       ]);

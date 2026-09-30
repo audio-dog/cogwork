@@ -201,6 +201,7 @@ export const make = Effect.gen(function* () {
       Effect.onExit((exit) => (hasInterruptsOnly(exit) ? Effect.void : releaseClaim(workspace, item.id))),
     );
   const claimCooldowns = yield* Cooldown.make;
+  const admissionCooldowns = yield* Cooldown.make;
 
   const cleanupRunContext = (runId: RunId) =>
     contextAssembler
@@ -217,18 +218,22 @@ export const make = Effect.gen(function* () {
   const claimScope = (workspace: RegisteredWorkspace, item: EligibleWork) =>
     `${workspace.config.name}:${item.id}:${item.stage}`;
 
-  const holdOffClaim = Effect.fn("Executor.holdOffClaim")(function* (
+  const holdOffItem = Effect.fn("Executor.holdOffItem")(function* (
+    cooldowns: typeof claimCooldowns,
     scope: string,
     item: EligibleWork,
     error: IssueTrackerError,
   ) {
-    const { retryAtMillis } = yield* claimCooldowns.enter(scope, error.retryAfterMillis);
-    yield* Effect.logWarning("claim failed; holding this item off until the window expires", {
-      stage: item.stage,
-      item: item.id,
-      retryAtMillis,
-      error,
-    });
+    const { retryAtMillis } = yield* cooldowns.enter(scope, error.retryAfterMillis);
+    yield* Effect.logWarning(
+      "issue-tracker operation failed; holding this item off until the window expires",
+      {
+        stage: item.stage,
+        item: item.id,
+        retryAtMillis,
+        error,
+      },
+    );
   });
 
   const logParkStep = (step: string, item: EligibleWork, error: IssueTrackerError) =>
@@ -271,7 +276,7 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     error: IssueTrackerError,
   ) {
-    yield* holdOffClaim(scope, item, error);
+    yield* holdOffItem(claimCooldowns, scope, item, error);
     if (issueTrackerErrorIsPermanent(error)) yield* parkRefusedClaim(workspace, item, error);
     return false;
   });
@@ -282,7 +287,11 @@ export const make = Effect.gen(function* () {
     at: number,
   ) {
     const scope = claimScope(workspace, item);
-    if ((yield* claimCooldowns.heldUntil(scope)) !== null) return false;
+    const heldUntil = yield* Effect.all([
+      claimCooldowns.heldUntil(scope),
+      admissionCooldowns.heldUntil(scope),
+    ]);
+    if (heldUntil.some((until) => until !== null)) return false;
     return yield* issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }).pipe(
       Effect.matchEffect({
         onFailure: (error) => declineClaim(scope, workspace, item, error),
@@ -966,6 +975,7 @@ export const make = Effect.gen(function* () {
     operation: ResolvedOperation,
     error: IssueTrackerError,
   ) {
+    yield* holdOffItem(admissionCooldowns, claimScope(workspace, item), item, error);
     yield* Effect.logWarning("Run admission rejected because the issue-tracker Connection failed", {
       workspace: workspace.config.name,
       item: item.id,
@@ -1006,6 +1016,7 @@ export const make = Effect.gen(function* () {
       }),
     );
     if (admitted === null) return false;
+    yield* admissionCooldowns.clear(claimScope(workspace, item));
     return yield* runClaimed(workspace, admitted, operation, admission.startedAtMillis, observation).pipe(
       Effect.map(() => true),
       Effect.tap(() => releaseClaim(workspace, item.id)),
