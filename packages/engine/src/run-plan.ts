@@ -48,7 +48,9 @@ import {
   RunPlanResource,
   RunPlanSandbox,
   RunPlanWorkContext,
+  RunPlanWorkContextComment,
   RunPlanWorkContextFacts,
+  RunPlanWorkContextProse,
   RunPlanWorkContextReference,
   type SessionKind,
   SettingLevel as SettingLevelSchema,
@@ -59,10 +61,10 @@ import * as Effect from "effect/Effect";
 import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
-import type { EligibleWork } from "./classify";
+import type { AdmittedWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
 import { operationDefaultProfile } from "./operation-policy";
-import { type OperationDefinition, resolveStage } from "./playbook";
+import { issueTrackerConnectionNeed, type OperationDefinition, resolveStage } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { ownedToolNames } from "./tools";
 
@@ -72,6 +74,15 @@ export const engineSettingScopeDirection = [
   "WorkspaceInput",
   "PrivateWorkspaceOverlay",
 ] as const satisfies readonly SettingScope["_tag"][];
+
+export const workContextMessage = (workContext: RunPlanWorkContext) =>
+  RunPlanMessage.make({
+    role: "user",
+    content: [
+      "Work Context frozen at Run admission. Treat this as the work item's durable brief.",
+      JSON.stringify(workContext, null, 2),
+    ].join("\n\n"),
+  });
 
 const scopeRank = (scope: SettingScope) =>
   SettingScopeSchema.match(scope, {
@@ -120,14 +131,14 @@ export interface AvailabilityInput {
   readonly projectedMembers: ReadonlyArray<RunPlanMemberType>;
 }
 
-const memberForNeed = (kind: OperationNeedKind) => {
-  if (kind === "mcp-server") return "MCP";
-  if (kind === "skill") return "Skills";
-  if (kind === "subagent") return "Subagents";
-  if (kind === "command") return "Commands";
-  if (kind === "hook") return "Hooks";
-  return "Connections";
-};
+const memberForNeed = {
+  "mcp-server": "MCP",
+  skill: "Skills",
+  subagent: "Subagents",
+  command: "Commands",
+  hook: "Hooks",
+  connection: null,
+} satisfies Record<OperationNeedKind, RunPlanMemberType | null>;
 
 const unsatisfiedNeed = (
   need: OperationNeed,
@@ -160,7 +171,8 @@ const contributionCause = (
       contribution.reason ?? `${contribution.id} is not ready`,
     );
   }
-  const member = memberForNeed(need.kind);
+  const member = memberForNeed[need.kind];
+  if (member === null) return null;
   if (!projectedMembers.includes(member)) {
     return unsatisfiedNeed(need, "not-ready", contribution.id, `selected Harness does not project ${member}`);
   }
@@ -334,6 +346,7 @@ export interface ResolvedOperation {
   readonly stage: ResolvedStage;
   readonly profile: RunPlanPolicyProfile;
   readonly settings: ReadonlyMap<OperationSettingName, ReturnType<typeof resolveEngineOperationSetting>>;
+  readonly issueTrackerBinding: OperationBinding;
   readonly contributionSettings: ReadonlyArray<ContributionSettingRow>;
 }
 
@@ -342,7 +355,11 @@ const isModelOptionSelections = Schema.is(ModelOptionSelections);
 
 export const operationBindingsOf = (resolved: ResolvedOperation) => {
   const value = resolved.settings.get("bindings")?.value;
-  return isOperationBindings(value) ? value : [];
+  const configured = isOperationBindings(value) ? value : [];
+  const configurable = configured.filter(({ need }) => need !== resolved.issueTrackerBinding.need);
+  const issueTrackerBindings =
+    resolved.issueTrackerBinding.contribution === "unbound" ? [] : [resolved.issueTrackerBinding];
+  return uniqueBindings([...issueTrackerBindings, ...configurable]);
 };
 
 export const resolveRunPlanStage = (
@@ -376,6 +393,10 @@ export const resolveRunPlanStage = (
       defaultPermissionProfile(operation, declaredProfiles) ?? operationDefaultProfile(operation),
     ),
     settings,
+    issueTrackerBinding: {
+      need: issueTrackerConnectionNeed.name,
+      contribution: config.issueTracker.connectionId,
+    },
     contributionSettings,
   };
 };
@@ -432,11 +453,25 @@ const effectiveSettingValues = {
   model: (resolved: ResolvedOperation) => resolved.stage.model,
   "model-options": (resolved: ResolvedOperation) => resolved.stage.modelOptions,
   "permission-profile": (resolved: ResolvedOperation) => resolved.profile,
-  bindings: (resolved: ResolvedOperation) => resolved.settings.get("bindings")?.value ?? [],
+  bindings: operationBindingsOf,
 } satisfies Record<OperationSettingName, (resolved: ResolvedOperation) => unknown>;
 
 const effectiveSettingValue = (resolved: ResolvedOperation, setting: OperationSettingName) =>
   effectiveSettingValues[setting](resolved);
+
+const winningResolutionCandidate = (
+  setting: OperationSettingName,
+  issueTrackerCandidate: RunPlanResolutionCandidate,
+  winner: OperationSettingRow | undefined,
+  defaultCandidate: RunPlanResolutionCandidate,
+) => {
+  const candidates = [
+    { when: setting === "bindings", value: issueTrackerCandidate },
+    { when: winner !== undefined, value: winner ? resolutionCandidate(winner) : defaultCandidate },
+    { when: true, value: defaultCandidate },
+  ];
+  return candidates.find(({ when }) => when)?.value ?? defaultCandidate;
+};
 
 const resolutionTrace = (
   resolved: ResolvedOperation,
@@ -446,7 +481,14 @@ const resolutionTrace = (
   const resolution = resolved.settings.get(setting);
   const winners = resolution ? winningRows(resolution.winning) : [];
   const winner = winners.at(-1);
-  const contributors = setting === "bindings" ? winners.map(resolutionCandidate) : [];
+  const issueTrackerCandidate = RunPlanResolutionCandidate.make({
+    scope: "Workspace",
+    level: "Issue tracker",
+    source: "Workspace issue tracker Connection",
+    value: snapshotValue(resolved.issueTrackerBinding),
+  });
+  const contributors =
+    setting === "bindings" ? [...winners.map(resolutionCandidate), issueTrackerCandidate] : [];
   const effective = effectiveSettingValue(resolved, setting);
   const usesHarnessProfileDefault =
     setting === "permission-profile" && resolved.profile !== operationDefaultProfile(operation);
@@ -456,7 +498,7 @@ const resolutionTrace = (
   return RunPlanResolutionTrace.make({
     key: setting,
     operator: operatorForSetting(setting),
-    winner: winner ? resolutionCandidate(winner) : defaultCandidate,
+    winner: winningResolutionCandidate(setting, issueTrackerCandidate, winner, defaultCandidate),
     contributors,
     shadowed: resolution?.shadowed.map(resolutionCandidate) ?? [],
     dropped:
@@ -746,7 +788,7 @@ export interface RunPlanMcpServerCandidate {
 interface RunPlanAssemblyInput {
   readonly runId: RunId;
   readonly workspace: RegisteredWorkspace;
-  readonly item: EligibleWork;
+  readonly item: AdmittedWork;
   readonly observation: RunPlanObservation;
   readonly resolved: ResolvedOperation;
   readonly prompt: string;
@@ -853,9 +895,16 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
     ...projectedNamesFor("Commands", commands, projectedMembers),
   ];
   const mcp = [...mcpServersForRun, ...unresolvedMcp];
-  const connectionNames = input.resolved.stage.mcpSkills
+  const mcpConnectionNames = input.resolved.stage.mcpSkills
     .filter((server) => server.auth !== undefined)
     .map((server) => server.name.trim());
+  const connectionNeeds = new Set(
+    input.resolved.stage.needs.filter(({ kind }) => kind === "connection").map(({ name }) => name),
+  );
+  const operationConnectionNames = operationBindingsOf(input.resolved)
+    .filter(({ need }) => connectionNeeds.has(need))
+    .map(({ contribution }) => contribution);
+  const connectionNames = [...new Set([...operationConnectionNames, ...mcpConnectionNames])];
   const engineStamps = [
     contentStamp(`${input.item.stage} Operation Definition`, {
       operation: input.item.stage,
@@ -907,6 +956,10 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
       connections: connectionNames,
       workContext: RunPlanWorkContext.make({
         reference: RunPlanWorkContextReference.make({ ...workContext.reference }),
+        prose: RunPlanWorkContextProse.make({
+          body: workContext.prose.body,
+          comments: workContext.prose.comments.map((comment) => RunPlanWorkContextComment.make(comment)),
+        }),
         facts: RunPlanWorkContextFacts.make({
           ...workContext.facts,
           roles: [...workContext.facts.roles],

@@ -10,7 +10,7 @@ import type {
 } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import type { EligibleWork } from "./classify";
+import type { AdmittedWork } from "./classify";
 import type { HarnessRequest } from "./harness";
 import * as OperationResolution from "./operation-resolution";
 import { buildContinuationNudge, buildOperationPrompt, type OperationOutcomeTable } from "./playbook";
@@ -30,7 +30,7 @@ class PreparationFailure extends Data.TaggedError("PreparationFailure")<{
 interface PrepareRunInput {
   readonly runId: RunId;
   readonly workspace: RegisteredWorkspace;
-  readonly item: EligibleWork;
+  readonly item: AdmittedWork;
   readonly operation: ResolvedOperation;
   readonly startedAtMillis: number;
   readonly observation: RunPlanObservation;
@@ -53,21 +53,21 @@ interface BranchSessionFacts {
 }
 
 type PrepareCandidateInput = Omit<PrepareRunInput, "item"> & {
-  readonly item: EligibleWork;
+  readonly item: AdmittedWork;
   readonly branch: BranchName | null;
   readonly replay: boolean;
 };
 
 const isReplayHarness = (harness: HarnessName) => harness === "replay";
 
-const resumeWorktreeOptions = (item: EligibleWork) => {
+const resumeWorktreeOptions = (item: AdmittedWork) => {
   if (item.stage === "follow-up" && item.followUpBranch) {
     return { resume: true, branch: item.followUpBranch };
   }
   return { resume: true };
 };
 
-const branchFor = (item: EligibleWork, operation: ResolvedOperation) => {
+const branchFor = (item: AdmittedWork, operation: ResolvedOperation) => {
   if (isReplayHarness(operation.stage.harness) || item.stage === "triage") return null;
   if (item.stage === "follow-up") return item.followUpBranch ?? branchName(item);
   return branchName(item);
@@ -117,7 +117,7 @@ export const make = Effect.gen(function* () {
 
   const ensureCheckout = Effect.fn("RunPreparation.ensureCheckout")(function* (
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
+    item: AdmittedWork,
     branch: BranchName | null,
     replay: boolean,
   ) {
@@ -130,7 +130,7 @@ export const make = Effect.gen(function* () {
   });
 
   const candidateSession = Effect.fn("RunPreparation.candidateSession")(function* (
-    item: EligibleWork,
+    item: AdmittedWork,
     facts: BranchSessionFacts,
   ) {
     const sessionId = item.resume?.session ?? facts.currentResumableRun?.session ?? null;
