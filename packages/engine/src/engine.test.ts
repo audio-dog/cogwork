@@ -46,7 +46,7 @@ import * as EventPublisher from "./event-publisher";
 import { Git, type GitService } from "./git";
 import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
-import { observeWorkspace } from "./observe";
+import { observeWorkspace, reconcilePollPhaseDuration } from "./observe";
 import { PerformanceHealthSource } from "./performance-health-source";
 import { PerformanceRegressionSensor } from "./performance-regression-sensor";
 import { PluginManager } from "./plugin";
@@ -105,6 +105,37 @@ const id = Schema.decodeSync(WorkItemId);
 const rateLimitHits = Metric.counter("cogwork_reconcile_rate_limit_hits_total", {
   description: "Rate-limit responses observed while polling issue trackers.",
 });
+const reconcilePollMetrics = (attributes: {
+  readonly workspace: string;
+  readonly issue_tracker: string;
+  readonly source_control: string;
+}) => ({
+  total: Metric.withAttributes(Reconcile.reconcilePollDuration, attributes),
+  tracker: Metric.withAttributes(reconcilePollPhaseDuration, { ...attributes, phase: "tracker" }),
+  sourceControl: Metric.withAttributes(reconcilePollPhaseDuration, {
+    ...attributes,
+    phase: "source-control",
+  }),
+  availability: Metric.withAttributes(reconcilePollPhaseDuration, {
+    ...attributes,
+    phase: "availability",
+  }),
+});
+
+const metricCounts = (metrics: ReturnType<typeof reconcilePollMetrics>) =>
+  Effect.all({
+    total: Metric.value(metrics.total),
+    tracker: Metric.value(metrics.tracker),
+    sourceControl: Metric.value(metrics.sourceControl),
+    availability: Metric.value(metrics.availability),
+  }).pipe(
+    Effect.map((states) => ({
+      total: states.total.count,
+      tracker: states.tracker.count,
+      sourceControl: states.sourceControl.count,
+      availability: states.availability.count,
+    })),
+  );
 
 const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.IssueTrackerService => ({
   rateLimitScope: () => null,
@@ -288,9 +319,30 @@ const defectOnceThenObserve = sources(
 
 describe("reconcile worker", () => {
   const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.readOnlyRegistry(sampleRegistry));
+  const githubWorkspace: Registry.RegisteredWorkspace = {
+    ...registeredWorkspace,
+    repository: "acme/other",
+    config: Schema.decodeSync(WorkspaceConfig)({
+      name: "other",
+      checkoutPath: "/repos/other",
+      issueTracker: { type: "github" },
+      worktrees: {},
+    }),
+  };
 
   const workerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, sources(IssueTracker.emptyLayer))),
+  );
+  const multiWorkspaceLayer = reconcileLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.succeed(
+          Registry.WorkspaceRegistry,
+          Registry.readOnlyRegistry({ workspaces: [registeredWorkspace, githubWorkspace], failures: [] }),
+        ),
+        observing([]),
+      ),
+    ),
   );
   const defectiveWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, defectOnceThenObserve)),
@@ -352,15 +404,44 @@ describe("reconcile worker", () => {
   it.effect("emits a receipt reflecting the registry when a reconcile is submitted", () =>
     Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;
-      const before = (yield* Metric.value(Reconcile.reconcilePollDuration)).count;
+      const pollDuration = Metric.withAttributes(Reconcile.reconcilePollDuration, {
+        workspace: "example",
+        issue_tracker: "linear",
+        source_control: "none",
+      });
+      const before = (yield* Metric.value(pollDuration)).count;
       const receipt = yield* worker.submit();
-      assert.strictEqual((yield* Metric.value(Reconcile.reconcilePollDuration)).count, before + 1);
+      assert.strictEqual((yield* Metric.value(pollDuration)).count, before + 1);
       assert.strictEqual(receipt.workspaces, 1);
       assert.strictEqual(receipt.failures, 2);
       assert.strictEqual(receipt.pendingWork, 0);
       assert.strictEqual(receipt.paused, 0);
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
   );
+
+  it.effect("records total and phase durations by workspace and provider kinds", () => {
+    const providerKinds = [
+      { workspace: "example", issue_tracker: "linear", source_control: "none" },
+      { workspace: "other", issue_tracker: "github", source_control: "github" },
+    ];
+    const metrics = providerKinds.map(reconcilePollMetrics);
+
+    return Effect.gen(function* () {
+      const before = yield* Effect.forEach(metrics, metricCounts);
+      yield* (yield* Reconcile.ReconcileWorker).submit();
+      const after = yield* Effect.forEach(metrics, metricCounts);
+
+      assert.deepStrictEqual(
+        after,
+        before.map((counts) => ({
+          total: counts.total + 1,
+          tracker: counts.tracker + 1,
+          sourceControl: counts.sourceControl + 1,
+          availability: counts.availability + 1,
+        })),
+      );
+    }).pipe(Effect.provide(multiWorkspaceLayer));
+  });
 
   it.effect("keeps a registry refresh failure typed", () => {
     const failure = new WorkspaceRegistrationError({ message: "registry refresh failed" });
@@ -610,6 +691,24 @@ describe("reconcile worker", () => {
   const workerWithAuthFailure = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, authFailingSource)),
   );
+
+  it.effect("records completed phases when tracker failure pauses a workspace", () => {
+    const attributes = { workspace: "example", issue_tracker: "linear", source_control: "none" };
+    const metrics = reconcilePollMetrics(attributes);
+
+    return Effect.gen(function* () {
+      const before = yield* metricCounts(metrics);
+      yield* (yield* Reconcile.ReconcileWorker).submit();
+      const after = yield* metricCounts(metrics);
+
+      assert.deepStrictEqual(after, {
+        total: before.total + 1,
+        tracker: before.tracker + 1,
+        sourceControl: before.sourceControl,
+        availability: before.availability,
+      });
+    }).pipe(Effect.provide(workerWithAuthFailure));
+  });
   const connectedGithubWorkspace: Registry.RegisteredWorkspace = {
     ...registeredWorkspace,
     repository: "acme/example",

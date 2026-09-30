@@ -27,7 +27,7 @@ import { ControlStore } from "./control-store";
 import * as Cooldown from "./cooldown";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker, type IssueTrackerError, type ObservedItem } from "./issue-tracker";
-import { observeWorkspace } from "./observe";
+import { observeWorkspace, reconcilePhaseDuration, reconcilePollAttributes } from "./observe";
 import { OperationResolution } from "./operation-resolution";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
@@ -150,6 +150,7 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
             Effect.andThen(availability.current(workspace)),
           ),
         ),
+        Effect.trackDuration(reconcilePhaseDuration(workspace, "availability")),
       ),
   );
   const observe = observeWorkspace(issueTracker, provider);
@@ -277,8 +278,9 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
           ),
         onSuccess: () => pollReadyWorkspace(workspace),
       }),
+      Effect.trackDuration(Metric.withAttributes(reconcilePollDuration, reconcilePollAttributes(workspace))),
     );
-  }, Effect.trackDuration(reconcilePollDuration));
+  });
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* () {
     const state = yield* registry.refresh;
