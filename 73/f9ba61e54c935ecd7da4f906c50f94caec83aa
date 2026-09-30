@@ -1,0 +1,21 @@
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_47aff6bd629e82::t_f9790a61fb996b 65-66
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_47aff6bd629e82::t_f9790a61fb996b 81-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "73f9ba61e54c935ecd7da4f906c50f94caec83aa",
+  "prompts": {},
+  "sessions": {
+    "s_47aff6bd629e82": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f39f-4565-7c82-bf0c-e9877c2afc05",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
