@@ -1,0 +1,20 @@
+docs/agent-patterns/test-value.md
+  s_9027228b03a236::t_bf327f867f0468 8
+  s_9027228b03a236::t_ed2a5a1fa26753 3-6,10,12-18,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7fe7f8f48dce2e523351781338386bcf1db6e944",
+  "prompts": {},
+  "sessions": {
+    "s_9027228b03a236": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f44d-6094-7152-9815-301dce4497a8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
