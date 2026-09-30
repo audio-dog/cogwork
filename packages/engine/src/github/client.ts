@@ -91,7 +91,9 @@ interface RawCommentFields {
   readonly createdAtMillis: number;
 }
 
-export type RawIssueComment = RawCommentFields;
+export type RawIssueComment = Omit<RawCommentFields, "authorLogin"> & {
+  readonly authorLogin: string | null;
+};
 
 export type RawReviewComment = RawCommentFields & {
   readonly inReplyToId: number | null;
@@ -182,31 +184,29 @@ const ReviewSchema = Schema.Struct({
 const CommentFields = {
   id: Schema.Finite,
   body: Schema.NullOr(Schema.String),
-  user: Schema.Struct({ login: Schema.String }),
   created_at: Schema.String,
   author_association: Schema.optional(Schema.String),
 };
 
-const IssueCommentSchema = Schema.Struct(CommentFields);
+const IssueCommentSchema = Schema.Struct({
+  ...CommentFields,
+  user: Schema.NullOr(Schema.Struct({ login: Schema.String })),
+});
 
 const ReviewCommentSchema = Schema.Struct({
   ...CommentFields,
+  user: Schema.Struct({ login: Schema.String }),
   in_reply_to_id: Schema.NullOr(Schema.Finite).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
   subject_type: Schema.Union([Schema.Literal("line"), Schema.Literal("file")]),
 });
 
-const toRawIssueComment = (comment: typeof IssueCommentSchema.Type) =>
-  comment.body
-    ? [
-        {
-          id: comment.id,
-          authorLogin: comment.user.login,
-          authorAssociation: comment.author_association ?? "NONE",
-          body: comment.body,
-          createdAtMillis: commentMillis(comment.created_at),
-        } satisfies RawIssueComment,
-      ]
-    : [];
+const toRawIssueComment = (comment: typeof IssueCommentSchema.Type) => ({
+  id: comment.id,
+  authorLogin: comment.user?.login ?? null,
+  authorAssociation: comment.author_association ?? "NONE",
+  body: comment.body ?? "",
+  createdAtMillis: commentMillis(comment.created_at),
+});
 
 const toRawReviewComment = (comment: typeof ReviewCommentSchema.Type) =>
   comment.body
@@ -464,6 +464,7 @@ export const graphQlData = (
 };
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
+const decodeIssue = Schema.decodeUnknownEffect(IssueSchema);
 const decodeIssueFields = Schema.decodeUnknownEffect(Schema.Array(GitHubIssueFieldSchema));
 const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
 const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
@@ -599,7 +600,7 @@ export const parseIssues = Effect.fn("github.parseIssues")(function* (repo: GitH
 
 export const parseIssueComments = Effect.fn("github.parseIssueComments")(function* (json: unknown) {
   const comments = yield* Effect.mapError(decodeIssueComments(json), toUnavailable);
-  return comments.flatMap(toRawIssueComment);
+  return comments.map(toRawIssueComment);
 });
 
 export const parseReviewComments = Effect.fn("github.parseReviewComments")(function* (json: unknown) {
@@ -669,6 +670,13 @@ const permanentAttemptError = (error: IssueTrackerError) =>
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const paginationDeadline = "5 minutes";
 const pageSize = 100;
+const workContextCommentLimit = 10_000;
+const workContextCommentByteLimit = 16 * 1024 * 1024;
+
+const issueCommentBytes = (comment: RawIssueComment) =>
+  Buffer.byteLength(comment.body) +
+  Buffer.byteLength(comment.authorLogin ?? "") +
+  Buffer.byteLength(comment.authorAssociation);
 
 const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, HttpClientError.HttpClientError, R>) =>
   attempt.pipe(
@@ -871,26 +879,45 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return (yield* fetchJsonResponse(repo, path)).body;
   });
 
+  const fetchUncachedJsonResponse = Effect.fn("github.fetchUncachedJsonResponse")(function* (
+    repo: GitHubRepoRef,
+    path: string,
+  ) {
+    return yield* withTransientRetry(
+      send(repo, HttpClientRequest.get(path), (response) =>
+        Effect.map(response.json, (body) => ({ body, nextLink: response.headers.link ?? null })),
+      ),
+    );
+  });
+
+  const linkedPageNumber = Effect.fn("github.linkedPageNumber")(function* (
+    header: string | undefined,
+    expectedPath: string,
+    canonicalPath: RegExp,
+    label: string,
+  ) {
+    const link = header?.split(",").find((part) => part.includes('rel="next"'));
+    if (!link) return null;
+    const candidateUrl = /^<([^>]+)>/.exec(link.trim())?.[1];
+    const url = candidateUrl && URL.canParse(candidateUrl) ? new URL(candidateUrl) : null;
+    const page = url?.searchParams.get("page");
+    const validLink =
+      url?.origin === "https://api.github.com" &&
+      (url.pathname === expectedPath || canonicalPath.test(url.pathname)) &&
+      typeof page === "string" &&
+      /^[1-9]\d*$/.test(page);
+    if (!validLink) return yield* unavailable(`GitHub ${label} pagination returned an invalid next link`);
+    return page;
+  });
+
   const nextPullPageUrl = Effect.fn("github.nextPullPageUrl")(function* (
     repo: GitHubRepoRef,
     header: string | undefined,
   ) {
-    const next = header?.split(",").find((part) => part.includes('rel="next"'));
-    if (!next) return null;
-    const candidateUrl = /^<([^>]+)>/.exec(next.trim())?.[1];
-    const url = candidateUrl && URL.canParse(candidateUrl) ? new URL(candidateUrl) : null;
     const expectedPath = `/repos/${repo.owner}/${repo.name}/pulls`;
     const canonicalPath = /^\/repositories\/[1-9]\d*\/pulls$/;
-    const page = url?.searchParams.get("page");
-    if (
-      url?.origin !== "https://api.github.com" ||
-      (url.pathname !== expectedPath && !canonicalPath.test(url.pathname)) ||
-      !page ||
-      !/^[1-9]\d*$/.test(page)
-    ) {
-      return yield* unavailable("GitHub pull pagination returned an invalid next link");
-    }
-    return repoPath(repo, `${openPullsPath(repo)}&page=${page}`);
+    const page = yield* linkedPageNumber(header, expectedPath, canonicalPath, "pull");
+    return page === null ? null : repoPath(repo, `${openPullsPath(repo)}&page=${page}`);
   });
 
   const fetchPullPage = Effect.fn("github.fetchPullPage")(function* (repo: GitHubRepoRef, path: string) {
@@ -913,6 +940,65 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     if (page.nextUrl === null) return page.pulls;
     const remaining = yield* collectPullPages(repo, page.nextUrl, new Set(visited).add(path));
     return [...page.pulls, ...remaining];
+  });
+
+  const issueCommentPagePath = Effect.fn("github.issueCommentPagePath")(function* (
+    repo: GitHubRepoRef,
+    issueNumber: number,
+    header: string | undefined,
+  ) {
+    const expectedPath = `/repos/${repo.owner}/${repo.name}/issues/${issueNumber}/comments`;
+    const canonicalPath = new RegExp(`^/repositories/[1-9]\\d*/issues/${issueNumber}/comments$`);
+    const page = yield* linkedPageNumber(header, expectedPath, canonicalPath, "issue comment");
+    return page === null ? null : repoPath(repo, `/issues/${issueNumber}/comments?per_page=100&page=${page}`);
+  });
+
+  interface IssueCommentPages {
+    readonly pages: ReadonlyArray<ReadonlyArray<RawIssueComment>>;
+    readonly visited: ReadonlySet<string>;
+    readonly commentCount: number;
+    readonly commentBytes: number;
+  }
+
+  const collectIssueCommentPages: (
+    repo: GitHubRepoRef,
+    issueNumber: number,
+    path: string,
+    state?: IssueCommentPages,
+  ) => Effect.Effect<ReadonlyArray<RawIssueComment>, IssueTrackerError> = Effect.fn(
+    "github.collectIssueCommentPages",
+  )(function* (
+    repo,
+    issueNumber,
+    path,
+    state = { pages: [], visited: new Set(), commentCount: 0, commentBytes: 0 },
+  ) {
+    if (state.visited.has(path)) {
+      return yield* unavailable("GitHub issue comment pagination returned a repeated next link");
+    }
+    const response = yield* fetchUncachedJsonResponse(repo, path);
+    const nextPath = yield* issueCommentPagePath(repo, issueNumber, response.nextLink ?? undefined);
+    const comments = yield* parseIssueComments(response.body);
+    const commentCount = state.commentCount + comments.length;
+    const commentBytes =
+      state.commentBytes + comments.reduce((total, comment) => total + issueCommentBytes(comment), 0);
+    const withinAdmissionLimit =
+      commentCount <= workContextCommentLimit && commentBytes <= workContextCommentByteLimit;
+    if (!withinAdmissionLimit) {
+      return yield* new IssueTrackerError({
+        reason: "unavailable",
+        retryable: false,
+        message: `GitHub issue thread exceeds admission limits (${workContextCommentLimit} comments or ${workContextCommentByteLimit} bytes)`,
+      });
+    }
+    const nextState = {
+      pages: [...state.pages, comments],
+      visited: new Set(state.visited).add(path),
+      commentCount,
+      commentBytes,
+    };
+    if (nextPath === null) return nextState.pages.flat();
+    return yield* collectIssueCommentPages(repo, issueNumber, nextPath, nextState);
   });
 
   const uniquePulls = (pulls: ReadonlyArray<typeof PullSchema.Type>) => [
@@ -1230,6 +1316,11 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     ) {
       return yield* withPaginationDeadline(collectIssuePages(repo, query));
     }),
+    readIssue: (repo: GitHubRepoRef, issueNumber: number) =>
+      fetchJson(repo, repoPath(repo, `/issues/${issueNumber}`)).pipe(
+        Effect.flatMap((json) => Effect.mapError(decodeIssue(json), toUnavailable)),
+        Effect.map((issue) => toRawIssue(repo, issue)),
+      ),
     listIssueFieldValues: Effect.fn("github.listIssueFieldValues")(function* (
       repo: GitHubRepoRef,
       issueNodeIds: ReadonlyArray<string>,
@@ -1274,6 +1365,18 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     listComments: Effect.fn("github.listComments")(function* (repo: GitHubRepoRef, issueNumber: number) {
       const json = yield* fetchJson(repo, repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`));
       return yield* parseIssueComments(json);
+    }),
+    listAllComments: Effect.fn("github.listAllComments")(function* (
+      repo: GitHubRepoRef,
+      issueNumber: number,
+    ) {
+      return yield* withPaginationDeadline(
+        collectIssueCommentPages(
+          repo,
+          issueNumber,
+          repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`),
+        ),
+      );
     }),
     listReviewComments,
     listReviews,
@@ -1322,4 +1425,7 @@ export class GitHubClient extends Context.Service<GitHubClient, GitHubClientServ
   "@cogwork/engine/github/client/GitHubClient",
 ) {}
 
-export const layer = Layer.effect(GitHubClient, Effect.flatMap(HttpClient.HttpClient, make));
+export const layer = Layer.effect(
+  GitHubClient,
+  Effect.flatMap(HttpClient.HttpClient, (client) => make(client)),
+);
