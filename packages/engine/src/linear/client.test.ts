@@ -590,7 +590,7 @@ describe("linear client", () => {
 
   it.effect("preserves comment authors and their workspace authority", () =>
     Effect.gen(function* () {
-      stubLinear(() => ({
+      const fetchStub = stubLinear(() => ({
         body: {
           data: {
             issue: {
@@ -601,31 +601,31 @@ describe("linear client", () => {
                     id: "c1",
                     body: "from the owner",
                     createdAt: "2026-07-31T00:00:00.000Z",
-                    user: { id: "owner", active: true, guest: false, app: false, owner: true },
+                    user: { id: "owner", active: true, guest: false, app: false, admin: true },
                   },
                   {
                     id: "c2",
                     body: "from a member",
                     createdAt: "2026-07-31T00:00:01.000Z",
-                    user: { id: "member", active: true, guest: false, app: false, owner: false },
+                    user: { id: "member", active: true, guest: false, app: false, admin: false },
                   },
                   {
                     id: "c3",
                     body: "from a guest",
                     createdAt: "2026-07-31T00:00:02.000Z",
-                    user: { id: "guest", active: true, guest: true, app: false, owner: false },
+                    user: { id: "guest", active: true, guest: true, app: false, admin: false },
                   },
                   {
                     id: "c4",
                     body: "from an app",
                     createdAt: "2026-07-31T00:00:03.000Z",
-                    user: { id: "app", active: true, guest: false, app: true, owner: false },
+                    user: { id: "app", active: true, guest: false, app: true, admin: false },
                   },
                   {
                     id: "c5",
                     body: "from a deactivated member",
                     createdAt: "2026-07-31T00:00:04.000Z",
-                    user: { id: "inactive", active: false, guest: false, app: false, owner: false },
+                    user: { id: "inactive", active: false, guest: false, app: false, admin: false },
                   },
                   {
                     id: "c6",
@@ -642,6 +642,8 @@ describe("linear client", () => {
       }));
       const client = yield* LinearClient;
       const comments = yield* client.listComments(ref, "AUD-1");
+      const [request] = sentRequests(fetchStub);
+      assert.include(request?.query ?? "", "user { id active guest app admin }");
       assert.deepStrictEqual(
         comments.map((comment) => [comment.id, comment.authorId, comment.authorAssociation]),
         [
@@ -674,7 +676,7 @@ describe("linear client", () => {
                       active: true,
                       guest: false,
                       app: false,
-                      owner: false,
+                      admin: false,
                     },
                   },
                 ],

@@ -99,7 +99,7 @@ const ProseCommentNode = Schema.Struct({
       active: Schema.Boolean,
       guest: Schema.Boolean,
       app: Schema.Boolean,
-      owner: Schema.Boolean,
+      admin: Schema.Boolean,
     }),
   ),
 });
@@ -401,7 +401,7 @@ query IssueComments($id: String!, $after: String) {
         id
         body
         createdAt
-        user { id active guest app owner }
+        user { id active guest app admin }
       }
       pageInfo { hasNextPage endCursor }
     }
@@ -516,7 +516,7 @@ const lacksSteeringAuthority = (user: NonNullable<(typeof ProseCommentNode.Type)
 
 const authorAssociationRules = [
   { when: lacksSteeringAuthority, value: "NONE" },
-  { when: (user: NonNullable<(typeof ProseCommentNode.Type)["user"]>) => user.owner, value: "OWNER" },
+  { when: (user: NonNullable<(typeof ProseCommentNode.Type)["user"]>) => user.admin, value: "OWNER" },
 ] as const;
 
 const authorAssociationOf = (user: (typeof ProseCommentNode.Type)["user"]): LinearAuthorAssociation =>
