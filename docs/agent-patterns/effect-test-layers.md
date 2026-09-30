@@ -1,6 +1,6 @@
 # Effect test layers
 
-Use this reference when writing or restructuring `@effect/vitest` tests: building test doubles, wiring layers, and asserting on interactions. It covers test structure and provisioning, not what to assert.
+Use this reference when writing or restructuring `@effect/vitest` tests: building test doubles, wiring layers, and asserting on interactions. It covers test structure and provisioning; `test-value.md` covers what to assert.
 
 ## Model
 

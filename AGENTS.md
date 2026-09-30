@@ -15,6 +15,11 @@ Before editing files for a substantial task:
 control flow, TypeScript, time, and React composition. Read it before you write code. Each rule in it
 blocks a change.
 
+## Tests
+
+`docs/agent-patterns/test-value.md` is the bar a test must meet to earn its place. Read it before you
+add, change, review, or delete a test.
+
 ## Effect TS
 
 The Effect v4 repository is cloned to `.repos/effect` for reference.
