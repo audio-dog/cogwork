@@ -20,6 +20,7 @@ import {
   OperationSettingUpdate,
   type PluginItem,
   type PluginOverview,
+  Principal,
   RunId,
   type RunRecord,
   type RunStatus,
@@ -47,7 +48,14 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
-import { updateWorkspace as updateWorkspaceCommand } from "./commands";
+import {
+  deregisterWorkspace as deregisterWorkspaceCommand,
+  establishConnection as establishConnectionCommand,
+  removeConnection as removeConnectionCommand,
+  setContributionSetting as setContributionSettingCommand,
+  uninstallPlugin as uninstallPluginCommand,
+  updateWorkspace as updateWorkspaceCommand,
+} from "./commands";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
@@ -326,29 +334,32 @@ class WorkspaceUpdatePublicationProbe extends Context.Service<
   );
   static readonly publisherLayer = Layer.effect(
     DaemonEventPublisher,
-    Effect.map(WorkspaceUpdatePublicationProbe, (probe) => ({
-      publishItems: () => Effect.void,
-      publishWorkspaces: () =>
+    Effect.map(WorkspaceUpdatePublicationProbe, (probe) => {
+      const holdPublication = <A>(value: A) =>
         Deferred.succeed(probe.started, undefined).pipe(
           Effect.andThen(Deferred.await(probe.release)),
-          Effect.map(() => []),
-        ),
-      publishWorkspaceRemoved: Effect.succeed,
-      publishScheduler: () =>
-        Effect.succeed({
-          scheduling: "running" as const,
-          globalInFlight: 0,
-          globalLimit: 4,
-          perWorkspaceLimit: 4,
-          dailyBudgetUsed: 0,
-          dailyBudgetLimit: 50,
-          perWorkspace: [],
-        }),
-      publishControlStore: Effect.succeed,
-      publishPlugins: (plugins) => Effect.succeed(plugins),
-      publishConnections: (connections) => Effect.succeed(connections),
-      requestSnapshotRefresh: () => Ref.update(probe.refreshes, (count) => count + 1),
-    })),
+          Effect.map(() => value),
+        );
+      return {
+        publishItems: () => Effect.void,
+        publishWorkspaces: () => holdPublication([]),
+        publishWorkspaceRemoved: Effect.succeed,
+        publishScheduler: () =>
+          Effect.succeed({
+            scheduling: "running" as const,
+            globalInFlight: 0,
+            globalLimit: 4,
+            perWorkspaceLimit: 4,
+            dailyBudgetUsed: 0,
+            dailyBudgetLimit: 50,
+            perWorkspace: [],
+          }),
+        publishControlStore: holdPublication,
+        publishPlugins: (plugins) => holdPublication(plugins),
+        publishConnections: (connections) => holdPublication(connections),
+        requestSnapshotRefresh: () => Ref.update(probe.refreshes, (count) => count + 1),
+      };
+    }),
   ).pipe(Layer.provideMerge(WorkspaceUpdatePublicationProbe.layer));
 }
 
@@ -2034,6 +2045,46 @@ describe("SetContributionSetting", () => {
     },
   };
 
+  it.effect("acknowledges the stored setting before the snapshot refresh finishes", () =>
+    Effect.gen(function* () {
+      const probe = yield* WorkspaceRefreshProbe;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const running = yield* Effect.forkChild(client.SetContributionSetting({ update }));
+      yield* Deferred.await(probe.started);
+      yield* Effect.yieldNow;
+
+      assert.isDefined(running.pollUnsafe());
+      const returned = yield* Fiber.join(running);
+      yield* Deferred.succeed(probe.release, undefined);
+
+      assert.strictEqual(returned.contributionSettings[0]?.enabled, true);
+    }).pipe(Effect.provide(daemonLayer(WorkspaceRefreshProbe.trackerLayer)), Effect.scoped),
+  );
+
+  it.effect("signals the refresh when the setting caller disconnects after the write", () =>
+    Effect.gen(function* () {
+      const probe = yield* WorkspaceUpdatePublicationProbe;
+      const setting = yield* Effect.forkChild(setContributionSettingCommand({ update }));
+      yield* Deferred.await(probe.started);
+      const interrupting = yield* Effect.forkChild(Fiber.interrupt(setting));
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(probe.release, undefined);
+      yield* Fiber.join(interrupting);
+
+      assert.strictEqual(yield* Ref.get(probe.refreshes), 1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          registryServices,
+          controlStoreStub(),
+          reconcileStubLayer,
+          WorkspaceUpdatePublicationProbe.publisherLayer,
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
   it.effect("accepts a disk-dependent dangling row and publishes the returned picture", () =>
     Effect.gen(function* () {
       const bus = yield* DaemonEventBus.DaemonEventBus;
@@ -2275,6 +2326,91 @@ describe("Connection mutations", () => {
     source: { _tag: "Stored" },
   };
 
+  it.effect("signals a snapshot refresh after establishing a Connection", () => {
+    const connection = Connection.make({
+      id: connectionIdOf("linear", "other"),
+      system: "linear",
+      account: "other",
+      status: "established",
+    });
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const probe = yield* WorkspaceRefreshProbe;
+
+      yield* client.EstablishConnection({ establishment });
+      yield* Deferred.await(probe.started);
+
+      assert.strictEqual(yield* Ref.get(probe.reconciles), 1);
+      yield* Deferred.succeed(probe.release, undefined);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          WorkspaceRefreshProbe.trackerLayer,
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          pluginManagerLayer,
+          connectionStoreStubLayer({
+            status: "established",
+            establish: () => Effect.succeed(connection),
+          }),
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("signals a snapshot refresh after removing a Connection", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const probe = yield* WorkspaceRefreshProbe;
+
+      yield* client.RemoveConnection({ connectionId: existing.id });
+      yield* Deferred.await(probe.started);
+
+      assert.strictEqual(yield* Ref.get(probe.reconciles), 1);
+      yield* Deferred.succeed(probe.release, undefined);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          WorkspaceRefreshProbe.trackerLayer,
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          pluginManagerLayer,
+          connectionStoreStubLayer({ status: "established", remove: () => Effect.void }),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("signals the refresh when a Connection caller disconnects after removal", () =>
+    Effect.gen(function* () {
+      const probe = yield* WorkspaceUpdatePublicationProbe;
+      const removing = yield* Effect.forkChild(removeConnectionCommand({ connectionId: existing.id }));
+      yield* Deferred.await(probe.started);
+      const interrupting = yield* Effect.forkChild(Fiber.interrupt(removing));
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(probe.release, undefined);
+      yield* Fiber.join(interrupting);
+
+      assert.strictEqual(yield* Ref.get(probe.refreshes), 1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          registryServices,
+          pluginManagerLayer,
+          controlStoreStub(),
+          reconcileStubLayer,
+          connectionStoreStubLayer({ status: "established", remove: () => Effect.void }),
+          WorkspaceUpdatePublicationProbe.publisherLayer,
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
   it.effect("directs account switches through removal", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
@@ -2344,6 +2480,60 @@ describe("Connection mutations", () => {
       ),
       Effect.scoped,
     );
+  });
+
+  it.effect("signals after rolling back an interrupted required Plugin installation", () => {
+    const connection = Connection.make({
+      id: connectionIdOf("linear", "other"),
+      system: "linear",
+      account: "other",
+      status: "established",
+    });
+    const requiredPlugin = {
+      ...installedPlugin("linear"),
+      record: null,
+      resolvedIdentity: null,
+      requiredConnections: ["linear"],
+    } satisfies PluginItem;
+    return Effect.gen(function* () {
+      const probe = yield* WorkspaceUpdatePublicationProbe;
+      const removed = yield* Ref.make<ReadonlyArray<Connection["id"]>>([]);
+      const establishing = yield* Effect.forkChild(
+        establishConnectionCommand({ establishment }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              Layer.succeed(Principal, { id: localOwnerId }),
+              Layer.succeed(PluginManager, {
+                overview: Effect.succeed({ plugins: [requiredPlugin] }),
+                install: () =>
+                  Effect.succeed({ overview: { plugins: [installedPlugin("linear")] }, notices: [] }),
+                uninstall: () => Effect.die("unexpected Plugin uninstall"),
+                contributions: () => Effect.succeed([]),
+              }),
+              Layer.succeed(
+                ConnectionStore,
+                connectionStoreStub({
+                  status: "established",
+                  establish: () => Effect.succeed(connection),
+                  remove: (connectionId) => Ref.update(removed, (ids) => [...ids, connectionId]),
+                }),
+              ),
+              controlStoreStub(),
+              reconcileStubLayer,
+            ),
+          ),
+        ),
+      );
+
+      yield* Deferred.await(probe.started);
+      const interrupting = yield* Effect.forkChild(Fiber.interrupt(establishing));
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(probe.release, undefined);
+      yield* Fiber.join(interrupting);
+
+      assert.deepStrictEqual(yield* Ref.get(removed), [connection.id]);
+      assert.strictEqual(yield* Ref.get(probe.refreshes), 2);
+    }).pipe(Effect.provide(WorkspaceUpdatePublicationProbe.publisherLayer), Effect.scoped);
   });
 
   it.effect("warns when a failed workspace uses the removed source-control Connection", () => {
@@ -2445,6 +2635,44 @@ describe("Connection mutations", () => {
 });
 
 describe("workspace lifecycle commands", () => {
+  it.effect("polls a new workspace and clears its items after deregistration", () => {
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const probe = yield* WorkspaceRefreshProbe;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+
+      const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      if (!WorkspaceState.guards.Registered(registered)) return assert.fail("expected registration");
+      yield* Deferred.await(probe.started);
+      assert.strictEqual(yield* Ref.get(probe.reconciles), 1);
+      yield* Deferred.succeed(probe.release, undefined);
+
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.filter(DaemonEvent.guards.ItemChanged),
+        Stream.take(1),
+        Stream.runCollect,
+      );
+      assert.strictEqual(published?.workspace, registered.name);
+
+      yield* client.DeregisterWorkspace({ workspace: registered.name });
+      const [removed] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.filter(DaemonEvent.guards.ItemRemoved),
+        Stream.take(1),
+        Stream.runCollect,
+      );
+
+      assert.strictEqual(removed?.workspace, registered.name);
+      assert.strictEqual(removed?.id, id("AUD-1"));
+    }).pipe(
+      Effect.provide(
+        daemonLayer(WorkspaceRefreshProbe.trackerLayer, schedulerStub(), controlStoreStub(), registries),
+      ),
+      Effect.scoped,
+    );
+  });
+
   it.effect("requests a fresh snapshot when the caller disconnects after the workspace write", () => {
     const registries = registrationServices();
     return Effect.gen(function* () {
@@ -2464,6 +2692,39 @@ describe("workspace lifecycle commands", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(registries, connectionStoreLayer, WorkspaceUpdatePublicationProbe.publisherLayer),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("signals a refresh when post-deregistration publication fails", () => {
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const management = yield* Registry.WorkspaceManagement;
+      const probe = yield* WorkspaceUpdatePublicationProbe;
+      yield* management.register(acmeRegistration);
+
+      const error = yield* Effect.flip(
+        deregisterWorkspaceCommand({ workspace: wsid("0198f16a-21d7-7000-8000-000000000001") }),
+      );
+
+      assert.strictEqual(error._tag, "WorkspaceRegistryError");
+      assert.strictEqual(yield* Ref.get(probe.refreshes), 1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          registries,
+          controlStoreStub({
+            read: Effect.fail(
+              ControlStoreFailure.make({
+                operation: "read control store",
+                message: "disk unavailable",
+                retryable: true,
+              }),
+            ),
+          }),
+          WorkspaceUpdatePublicationProbe.publisherLayer,
+        ),
       ),
       Effect.scoped,
     );
@@ -2702,6 +2963,105 @@ describe("workspace lifecycle commands", () => {
 });
 
 describe("Plugin lifecycle commands", () => {
+  it.effect("acknowledges Plugin installation before the snapshot refresh finishes", () => {
+    const overview = { plugins: [installedPlugin("github")] } satisfies PluginOverview;
+    const plugins = Layer.succeed(PluginManager, {
+      overview: Effect.succeed(overview),
+      install: () => Effect.succeed({ overview, notices: [] }),
+      uninstall: () => Effect.die("unexpected Plugin uninstall"),
+      contributions: () => Effect.succeed([]),
+    });
+    return Effect.gen(function* () {
+      const probe = yield* WorkspaceRefreshProbe;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const running = yield* Effect.forkChild(client.InstallPlugin({ pluginId: "github" }));
+      yield* Deferred.await(probe.started);
+      yield* Effect.yieldNow;
+
+      assert.isDefined(running.pollUnsafe());
+      const result = yield* Fiber.join(running);
+      yield* Deferred.succeed(probe.release, undefined);
+
+      assert.deepStrictEqual(result.overview, overview);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          WorkspaceRefreshProbe.trackerLayer,
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          plugins,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("acknowledges Plugin removal before the snapshot refresh finishes", () => {
+    const overview = { plugins: [] } satisfies PluginOverview;
+    const plugins = Layer.succeed(PluginManager, {
+      overview: Effect.succeed(overview),
+      install: () => Effect.die("unexpected Plugin install"),
+      uninstall: () => Effect.succeed({ overview, notices: [] }),
+      contributions: () => Effect.succeed([]),
+    });
+    return Effect.gen(function* () {
+      const probe = yield* WorkspaceRefreshProbe;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const running = yield* Effect.forkChild(client.UninstallPlugin({ pluginId: "github" }));
+      yield* Deferred.await(probe.started);
+      yield* Effect.yieldNow;
+
+      assert.isDefined(running.pollUnsafe());
+      const result = yield* Fiber.join(running);
+      yield* Deferred.succeed(probe.release, undefined);
+
+      assert.deepStrictEqual(result.overview, overview);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          WorkspaceRefreshProbe.trackerLayer,
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          plugins,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("signals the refresh when the Plugin caller disconnects after removal", () => {
+    const overview = { plugins: [] } satisfies PluginOverview;
+    const plugins = Layer.succeed(PluginManager, {
+      overview: Effect.succeed(overview),
+      install: () => Effect.die("unexpected Plugin install"),
+      uninstall: () => Effect.succeed({ overview, notices: [] }),
+      contributions: () => Effect.succeed([]),
+    });
+    return Effect.gen(function* () {
+      const probe = yield* WorkspaceUpdatePublicationProbe;
+      const removing = yield* Effect.forkChild(uninstallPluginCommand({ pluginId: "github" }));
+      yield* Deferred.await(probe.started);
+      const interrupting = yield* Effect.forkChild(Fiber.interrupt(removing));
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(probe.release, undefined);
+      yield* Fiber.join(interrupting);
+
+      assert.strictEqual(yield* Ref.get(probe.refreshes), 1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          plugins,
+          controlStoreStub(),
+          reconcileStubLayer,
+          WorkspaceUpdatePublicationProbe.publisherLayer,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
   it.effect("never publishes an older Plugin snapshot after a newer mutation", () => {
     const firstReady = Deferred.makeUnsafe<void>();
     const releaseFirst = Deferred.makeUnsafe<void>();

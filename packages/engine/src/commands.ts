@@ -327,20 +327,34 @@ export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payl
   );
 });
 
+const signalSnapshotRefreshAfter = Effect.fn("Daemon.signalSnapshotRefreshAfter")(function* <
+  A,
+  E,
+  R,
+  B,
+  E2,
+  R2,
+>(write: Effect.Effect<A, E, R>, publish: (written: A) => Effect.Effect<B, E2, R2>) {
+  const publisher = yield* DaemonEventPublisher;
+  return yield* Effect.uninterruptibleMask((restore) =>
+    restore(write).pipe(
+      Effect.flatMap((written) => publish(written).pipe(Effect.ensuring(publisher.requestSnapshotRefresh()))),
+    ),
+  );
+});
+
 const publishSnapshotMutation = Effect.fn("Daemon.publishSnapshotMutation")(function* <E, R>(
   store: ControlStoreService,
   update: Effect.Effect<ControlStorePicture, ControlStoreFailure | E, R>,
 ) {
   const publisher = yield* DaemonEventPublisher;
   const worker = yield* ReconcileWorker;
-  const published = yield* store.withWrite(
-    update.pipe(
-      Effect.tap(() => worker.invalidateAvailability()),
-      Effect.flatMap(publisher.publishControlStore),
+  return yield* store.withWrite(
+    signalSnapshotRefreshAfter(
+      update.pipe(Effect.tap(() => worker.invalidateAvailability())),
+      publisher.publishControlStore,
     ),
   );
-  yield* publisher.requestSnapshotRefresh();
-  return published;
 });
 
 type CatalogSettingName = Extract<OperationSettingName, "model" | "model-options" | "permission-profile">;
@@ -640,19 +654,7 @@ export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")
   const refusal = contributionSettingRefusal(payload.update, registry);
   if (refusal) return yield* refusal;
   const store = yield* ControlStore;
-  const publisher = yield* DaemonEventPublisher;
-  const worker = yield* ReconcileWorker;
-  const controlStore = yield* store.withWrite(
-    Effect.gen(function* () {
-      const updated = yield* store.updateContributionSetting(payload.update);
-      yield* worker.invalidateAvailability();
-      return updated;
-    }),
-  );
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  const published = yield* publisher.publishControlStore(controlStore);
-  yield* publisher.publishWorkspaces();
-  return published;
+  return yield* publishSnapshotMutation(store, store.updateContributionSetting(payload.update));
 });
 
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
@@ -669,10 +671,9 @@ export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function*
   }
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
-  const change = yield* management.register(payload.registration);
-  const state = workspaceStateFromChange(change);
-  yield* publisher.publishWorkspaces();
-  return state;
+  return yield* signalSnapshotRefreshAfter(management.register(payload.registration), (change) =>
+    publisher.publishWorkspaces().pipe(Effect.map(() => workspaceStateFromChange(change))),
+  );
 });
 
 export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(function* (payload: {
@@ -681,21 +682,24 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const store = yield* ControlStore;
-  const workspace = yield* management.deregister(payload.workspace);
-  yield* publisher.publishWorkspaceRemoved(workspace);
-  const controlStore = yield* store.picture.pipe(
-    Effect.mapError(
-      (error) =>
-        new WorkspaceRegistryError({
-          reason: "management-failed",
-          workspace,
-          operation: "deregister workspace",
-          message: error.message,
-        }),
-    ),
+  return yield* signalSnapshotRefreshAfter(management.deregister(payload.workspace), (workspace) =>
+    Effect.gen(function* () {
+      yield* publisher.publishWorkspaceRemoved(workspace);
+      const controlStore = yield* store.picture.pipe(
+        Effect.mapError(
+          (error) =>
+            new WorkspaceRegistryError({
+              reason: "management-failed",
+              workspace,
+              operation: "deregister workspace",
+              message: error.message,
+            }),
+        ),
+      );
+      yield* publisher.publishControlStore(controlStore);
+      return workspace;
+    }),
   );
-  yield* publisher.publishControlStore(controlStore);
-  return workspace;
 });
 
 export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (payload: {
@@ -713,14 +717,14 @@ export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (pa
   }
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
-  return yield* Effect.gen(function* () {
-    const change = yield* management.update(payload.workspace, payload.update);
-    const state = workspaceStateFromChange(change);
-    const published = yield* publisher.publishWorkspaces();
-    yield* publisher.publishScheduler();
-    yield* publisher.requestSnapshotRefresh();
-    return published.find((workspace) => workspace.name === payload.workspace) ?? state;
-  }).pipe(Effect.uninterruptible);
+  return yield* signalSnapshotRefreshAfter(management.update(payload.workspace, payload.update), (change) =>
+    Effect.gen(function* () {
+      const state = workspaceStateFromChange(change);
+      const published = yield* publisher.publishWorkspaces();
+      yield* publisher.publishScheduler();
+      return published.find((workspace) => workspace.name === payload.workspace) ?? state;
+    }),
+  );
 });
 
 export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {
@@ -742,20 +746,23 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
   const plugins = yield* PluginManager;
   const store = yield* ControlStore;
   const worker = yield* ReconcileWorker;
-  const completed = yield* mutation;
-  const result = yield* store.withWrite(
+  return yield* signalSnapshotRefreshAfter(mutation, (completed) =>
     Effect.gen(function* () {
-      const overview = yield* plugins.overview;
-      const notices = samePluginMembership(completed.overview, overview) ? completed.notices : [];
-      yield* worker.invalidateAvailability();
-      return { overview, notices };
+      const result = yield* store.withWrite(
+        plugins.overview.pipe(
+          Effect.map((overview) => ({
+            overview,
+            notices: samePluginMembership(completed.overview, overview) ? completed.notices : [],
+          })),
+          Effect.tap(() => worker.invalidateAvailability()),
+        ),
+      );
+      yield* publisher.publishPlugins(result.overview, result.notices);
+      yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+      yield* publisher.publishWorkspaces();
+      return result;
     }),
   );
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  yield* publisher.publishPlugins(result.overview, result.notices);
-  yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
-  yield* publisher.publishWorkspaces();
-  return result;
 });
 
 export const installPlugin = Effect.fn("Daemon.InstallPlugin")(function* (payload: {
@@ -809,18 +816,22 @@ const publishControlStore = Effect.fn("Daemon.publishControlStore")(function* ()
   );
 });
 
+const publishConnectionMutation = Effect.fn("Daemon.publishConnectionMutation")(function* (
+  danglingWorkspaces: readonly WorkspaceId[],
+) {
+  yield* publishControlStore();
+  return yield* publishConnections(danglingWorkspaces);
+});
+
 const ensureRequiredPlugin = Effect.fn("Daemon.ensureRequiredPlugin")(function* (
   system: ConnectionEstablishment["system"],
   principalId: PrincipalId,
-  rollback: Effect.Effect<void, never>,
 ) {
   const plugins = yield* PluginManager;
   const overview = yield* plugins.overview;
   const plugin = pluginRequiringConnection(overview, system);
   if (!plugin || plugin.record) return;
-  yield* publishPluginMutation(plugins.install(plugin.pluginId, principalId)).pipe(
-    Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : rollback)),
-  );
+  yield* publishPluginMutation(plugins.install(plugin.pluginId, principalId));
 });
 
 export const establishConnection = Effect.fn("Daemon.EstablishConnection")(function* (payload: {
@@ -837,21 +848,42 @@ export const establishConnection = Effect.fn("Daemon.EstablishConnection")(funct
       "Connection already exists. Use re-connect for the same account, or remove it before connecting to a different account.",
     );
   }
-  const connection = yield* connections
-    .establish(establishment)
-    .pipe(mapConnectionFailure("establish Connection", null));
-  yield* ensureRequiredPlugin(
-    establishment.system,
-    principal.id,
-    connections.remove(connection.id).pipe(Effect.ignore),
+  const publisher = yield* DaemonEventPublisher;
+  return yield* Effect.uninterruptibleMask((restore) =>
+    restore(
+      connections.establish(establishment).pipe(mapConnectionFailure("establish Connection", null)),
+    ).pipe(
+      Effect.flatMap((connection) =>
+        restore(ensureRequiredPlugin(establishment.system, principal.id)).pipe(
+          Effect.onExit((exit) =>
+            Exit.isSuccess(exit)
+              ? Effect.void
+              : connections
+                  .remove(connection.id)
+                  .pipe(
+                    Effect.ignore,
+                    Effect.andThen(
+                      publishConnectionMutation([]).pipe(
+                        Effect.ensuring(publisher.requestSnapshotRefresh()),
+                        Effect.ignore,
+                      ),
+                    ),
+                  ),
+          ),
+          Effect.andThen(
+            Effect.logInfo("Connection established", {
+              connectionId: connection.id,
+              system: connection.system,
+              account: connection.account,
+            }),
+          ),
+          Effect.andThen(
+            publishConnectionMutation([]).pipe(Effect.ensuring(publisher.requestSnapshotRefresh())),
+          ),
+        ),
+      ),
+    ),
   );
-  yield* publishControlStore();
-  yield* Effect.logInfo("Connection established", {
-    connectionId: connection.id,
-    system: connection.system,
-    account: connection.account,
-  });
-  return yield* publishConnections([]);
 });
 
 export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(function* (payload: {
@@ -877,16 +909,17 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
       `Connection is established for "${existing.account}". Remove it before connecting to "${requestedAccount}".`,
     );
   }
-  const connection = yield* connections
-    .establish(payload.establishment, existing.account)
-    .pipe(mapConnectionFailure("re-connect Connection", existing.id));
-  yield* publishControlStore();
-  yield* Effect.logInfo("Connection re-connected", {
-    connectionId: connection.id,
-    system: connection.system,
-    account: connection.account,
-  });
-  return yield* publishConnections([]);
+  return yield* signalSnapshotRefreshAfter(
+    connections
+      .establish(payload.establishment, existing.account)
+      .pipe(mapConnectionFailure("re-connect Connection", existing.id)),
+    (connection) =>
+      Effect.logInfo("Connection re-connected", {
+        connectionId: connection.id,
+        system: connection.system,
+        account: connection.account,
+      }).pipe(Effect.andThen(publishConnectionMutation([]))),
+  );
 });
 
 const boundWorkspaceName = (workspace: RegistryState["workspaces"][number], connectionId: ConnectionId) => {
@@ -932,9 +965,10 @@ export const removeConnection = Effect.fn("Daemon.RemoveConnection")(function* (
   });
   const registry = yield* (yield* WorkspaceRegistry).state;
   const danglingWorkspaces = boundWorkspaceIds(registry, payload.connectionId);
-  yield* connections
-    .remove(payload.connectionId)
-    .pipe(mapConnectionFailure("remove Connection", payload.connectionId));
-  yield* publishControlStore();
-  return yield* publishConnections(danglingWorkspaces);
+  return yield* signalSnapshotRefreshAfter(
+    connections
+      .remove(payload.connectionId)
+      .pipe(mapConnectionFailure("remove Connection", payload.connectionId)),
+    () => publishConnectionMutation(danglingWorkspaces),
+  );
 });
