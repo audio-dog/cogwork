@@ -18,6 +18,7 @@ import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import type { RegistryState } from "./projector";
@@ -126,6 +127,7 @@ export const make = Effect.gen(function* () {
   const lastWorkspaces = yield* Ref.make<ReadonlyMap<string, PublishedWorkspace>>(new Map());
   const lastScheduler = yield* Ref.make<string | null>(null);
   const snapshotRefreshes = yield* Queue.sliding<void>(1);
+  const workspacePublications = yield* Semaphore.make(1);
 
   const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
     picture: ControlStorePicture,
@@ -184,7 +186,7 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const publishWorkspaces = Effect.fn("DaemonEventPublisher.publishWorkspaces")(function* () {
+  const publishWorkspaceSnapshot = Effect.fn("DaemonEventPublisher.publishWorkspaceSnapshot")(function* () {
     const snapshot = yield* worker.snapshot;
     const states = workspaceStatesOf(yield* registry.state, snapshot);
     const previous = yield* Ref.get(lastWorkspaces);
@@ -215,6 +217,10 @@ export const make = Effect.gen(function* () {
     return states;
   });
 
+  const publishWorkspaces = Effect.fn("DaemonEventPublisher.publishWorkspaces")(() =>
+    workspacePublications.withPermits(1)(publishWorkspaceSnapshot()),
+  );
+
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
     const config = yield* scheduler.config;
     const state = yield* scheduler.stats;
@@ -226,7 +232,7 @@ export const make = Effect.gen(function* () {
     return stats;
   });
 
-  const publishWorkspaceRemoved = Effect.fn("DaemonEventPublisher.publishWorkspaceRemoved")(function* (
+  const publishWorkspaceRemoval = Effect.fn("DaemonEventPublisher.publishWorkspaceRemoval")(function* (
     workspace: WorkspaceId,
   ) {
     yield* Ref.update(
@@ -236,6 +242,10 @@ export const make = Effect.gen(function* () {
     yield* bus.publish({ _tag: "WorkspaceRemoved", workspace });
     return workspace;
   });
+
+  const publishWorkspaceRemoved = Effect.fn("DaemonEventPublisher.publishWorkspaceRemoved")(
+    (workspace: WorkspaceId) => workspacePublications.withPermits(1)(publishWorkspaceRemoval(workspace)),
+  );
 
   const publishPlugins = Effect.fn("DaemonEventPublisher.publishPlugins")(function* (
     plugins: PluginOverview,

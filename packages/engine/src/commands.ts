@@ -713,13 +713,14 @@ export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (pa
   }
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
-  const worker = yield* ReconcileWorker;
-  const change = yield* management.update(payload.workspace, payload.update);
-  const state = workspaceStateFromChange(change);
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  const published = yield* publisher.publishWorkspaces();
-  yield* publisher.publishScheduler();
-  return published.find((workspace) => workspace.name === payload.workspace) ?? state;
+  return yield* Effect.gen(function* () {
+    const change = yield* management.update(payload.workspace, payload.update);
+    const state = workspaceStateFromChange(change);
+    const published = yield* publisher.publishWorkspaces();
+    yield* publisher.publishScheduler();
+    yield* publisher.requestSnapshotRefresh();
+    return published.find((workspace) => workspace.name === payload.workspace) ?? state;
+  }).pipe(Effect.uninterruptible);
 });
 
 export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {

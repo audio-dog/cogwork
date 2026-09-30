@@ -92,4 +92,4 @@ become. See `docs/agents/product.md`.
 
 ### Technical disposition
 
-Decision shapes — a limit, a failure, a trust boundary, a name, how far to restructure, whether deterministic code or a model does the work — resolved from this project's own heuristics instead of blocked. Read it when answering a technical question in the maintainer's place. See `docs/agents/technical-disposition.md`.
+Decision shapes — a limit, a failure, a trust boundary, a name, how far to restructure, whether deterministic code or a model does the work — resolved from this project's own heuristics instead of blocked. Read it when answering a technical question in the maintainer's place, and when proposing a fix or design — an ADR, a ticket's brief or acceptance criteria, a plan. See `docs/agents/technical-disposition.md`.
