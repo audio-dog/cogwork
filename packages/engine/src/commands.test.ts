@@ -47,6 +47,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { updateWorkspace as updateWorkspaceCommand } from "./commands";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
@@ -249,28 +250,107 @@ const providerStub = Layer.succeed(SourceControlProvider, {
   openPullRequest: () => Effect.succeed({ number: 1, url: "https://example.test/pull/1" }),
 });
 
+const trackerStub = (service: Partial<IssueTracker.IssueTrackerService>) =>
+  ({
+    rateLimitScope: () => null,
+    observe: () => Effect.succeed([]),
+    claim: () => Effect.void,
+    release: () => Effect.void,
+    note: () => Effect.void,
+    triaged: () => Effect.void,
+    implemented: () => Effect.void,
+    followedUp: () => Effect.void,
+    attemptFailed: () => Effect.void,
+    handOff: () => Effect.void,
+    handBack: () => Effect.void,
+    stalled: () => Effect.void,
+    reclassify: () => Effect.void,
+    ...service,
+  }) satisfies IssueTracker.IssueTrackerService;
+
 const trackerLayer = (
   service: Partial<IssueTracker.IssueTrackerService>,
 ): Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider> =>
-  Layer.mergeAll(
-    Layer.succeed(IssueTracker.IssueTracker, {
-      rateLimitScope: () => null,
-      observe: () => Effect.succeed([]),
-      claim: () => Effect.void,
-      release: () => Effect.void,
-      note: () => Effect.void,
-      triaged: () => Effect.void,
-      implemented: () => Effect.void,
-      followedUp: () => Effect.void,
-      attemptFailed: () => Effect.void,
-      handOff: () => Effect.void,
-      handBack: () => Effect.void,
-      stalled: () => Effect.void,
-      reclassify: () => Effect.void,
-      ...service,
+  Layer.mergeAll(Layer.succeed(IssueTracker.IssueTracker, trackerStub(service)), providerStub);
+
+interface WorkspaceRefreshProbeService {
+  readonly reconciles: Ref.Ref<number>;
+  readonly started: Deferred.Deferred<void>;
+  readonly release: Deferred.Deferred<void>;
+}
+
+class WorkspaceRefreshProbe extends Context.Service<WorkspaceRefreshProbe, WorkspaceRefreshProbeService>()(
+  "@cogwork/engine/commands.test/WorkspaceRefreshProbe",
+) {
+  static readonly layer = Layer.effect(
+    WorkspaceRefreshProbe,
+    Effect.all({
+      reconciles: Ref.make(0),
+      started: Deferred.make<void>(),
+      release: Deferred.make<void>(),
     }),
-    providerStub,
   );
+  static readonly trackerLayer = Layer.effect(
+    IssueTracker.IssueTracker,
+    Effect.gen(function* () {
+      const probe = yield* WorkspaceRefreshProbe;
+      return trackerStub({
+        observe: () =>
+          Ref.update(probe.reconciles, (count) => count + 1).pipe(
+            Effect.andThen(Deferred.succeed(probe.started, undefined)),
+            Effect.andThen(Deferred.await(probe.release)),
+            Effect.map(() => [trackerItem({ claimLabeled: false, claimedByUs: false })]),
+          ),
+      });
+    }),
+  ).pipe(Layer.provideMerge(WorkspaceRefreshProbe.layer), Layer.merge(providerStub));
+}
+
+interface WorkspaceUpdatePublicationProbeService {
+  readonly started: Deferred.Deferred<void>;
+  readonly release: Deferred.Deferred<void>;
+  readonly refreshes: Ref.Ref<number>;
+}
+
+class WorkspaceUpdatePublicationProbe extends Context.Service<
+  WorkspaceUpdatePublicationProbe,
+  WorkspaceUpdatePublicationProbeService
+>()("@cogwork/engine/commands.test/WorkspaceUpdatePublicationProbe") {
+  static readonly layer = Layer.effect(
+    WorkspaceUpdatePublicationProbe,
+    Effect.all({
+      started: Deferred.make<void>(),
+      release: Deferred.make<void>(),
+      refreshes: Ref.make(0),
+    }),
+  );
+  static readonly publisherLayer = Layer.effect(
+    DaemonEventPublisher,
+    Effect.map(WorkspaceUpdatePublicationProbe, (probe) => ({
+      publishItems: () => Effect.void,
+      publishWorkspaces: () =>
+        Deferred.succeed(probe.started, undefined).pipe(
+          Effect.andThen(Deferred.await(probe.release)),
+          Effect.map(() => []),
+        ),
+      publishWorkspaceRemoved: Effect.succeed,
+      publishScheduler: () =>
+        Effect.succeed({
+          scheduling: "running" as const,
+          globalInFlight: 0,
+          globalLimit: 4,
+          perWorkspaceLimit: 4,
+          dailyBudgetUsed: 0,
+          dailyBudgetLimit: 50,
+          perWorkspace: [],
+        }),
+      publishControlStore: Effect.succeed,
+      publishPlugins: (plugins) => Effect.succeed(plugins),
+      publishConnections: (connections) => Effect.succeed(connections),
+      requestSnapshotRefresh: () => Ref.update(probe.refreshes, (count) => count + 1),
+    })),
+  ).pipe(Layer.provideMerge(WorkspaceUpdatePublicationProbe.layer));
+}
 
 const recordingTracker = (items: ReadonlyArray<TrackerItem>, calls: Ref.Ref<TrackerCalls>) =>
   trackerLayer({
@@ -478,8 +558,8 @@ const controlStoreStub = ({
     withWrite: (effect) => effect,
   });
 
-const daemonLayer = (
-  source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>,
+const daemonLayer = <SourceExtra = never>(
+  source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider | SourceExtra>,
   scheduler = schedulerStub(),
   controlStore = controlStoreStub(),
   registries = registryServices,
@@ -2365,6 +2445,30 @@ describe("Connection mutations", () => {
 });
 
 describe("workspace lifecycle commands", () => {
+  it.effect("requests a fresh snapshot when the caller disconnects after the workspace write", () => {
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const management = yield* Registry.WorkspaceManagement;
+      const probe = yield* WorkspaceUpdatePublicationProbe;
+      yield* management.register(acmeRegistration);
+      const workspace = wsid("0198f16a-21d7-7000-8000-000000000001");
+
+      const updating = yield* Effect.forkChild(updateWorkspaceCommand({ workspace, update: acmeUpdate }));
+      yield* Deferred.await(probe.started);
+      const interrupting = yield* Effect.forkChild(Fiber.interrupt(updating));
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(probe.release, undefined);
+      yield* Fiber.join(interrupting);
+
+      assert.strictEqual(yield* Ref.get(probe.refreshes), 1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(registries, connectionStoreLayer, WorkspaceUpdatePublicationProbe.publisherLayer),
+      ),
+      Effect.scoped,
+    );
+  });
+
   it.effect("refuses an invalid Connection reference before editing the workspace", () => {
     const registries = registrationServices();
     return Effect.gen(function* () {
@@ -2389,16 +2493,23 @@ describe("workspace lifecycle commands", () => {
     );
   });
 
-  it.effect("returns and publishes an updated workspace record", () => {
+  it.effect("returns and publishes the saved workspace before a fresh reconcile finishes", () => {
     const registries = registrationServices();
     return Effect.gen(function* () {
       const bus = yield* DaemonEventBus.DaemonEventBus;
+      const probe = yield* WorkspaceRefreshProbe;
       const subscription = yield* bus.subscribe();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
       if (!WorkspaceState.guards.Registered(registered)) return assert.fail("expected registration");
 
-      const updated = yield* client.UpdateWorkspace({ workspace: registered.name, update: acmeUpdate });
+      const updating = yield* Effect.forkChild(
+        client.UpdateWorkspace({ workspace: registered.name, update: acmeUpdate }),
+      );
+      yield* Deferred.await(probe.started);
+      yield* Effect.yieldNow;
+      assert.isDefined(updating.pollUnsafe());
+      const updated = yield* Fiber.join(updating);
       const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(5), Stream.runCollect);
 
       assert.strictEqual(
@@ -2431,8 +2542,22 @@ describe("workspace lifecycle commands", () => {
         DaemonEvent.guards.WorkspaceChanged(event) ? [event.workspace] : [],
       );
       assert.deepStrictEqual(published.at(-1), updated);
+      const refreshing = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil(DaemonEvent.guards.WorkspaceChanged),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* Deferred.succeed(probe.release, undefined);
+      const refreshedEvents = yield* Fiber.join(refreshing);
+      assert.deepStrictEqual(
+        [...refreshedEvents].map((event) => event._tag),
+        ["ItemChanged", "WorkspaceChanged"],
+      );
+      assert.strictEqual(yield* Ref.get(probe.reconciles), 1);
     }).pipe(
-      Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.provide(
+        daemonLayer(WorkspaceRefreshProbe.trackerLayer, schedulerStub(), controlStoreStub(), registries),
+      ),
       Effect.scoped,
     );
   });
