@@ -7,12 +7,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { fileSuiteComparison } from "./test-performance-filer.ts";
+import { fileSuiteComparison, fileTestSuiteBudget } from "./test-performance-filer.ts";
 
 const atMillis = Date.UTC(2026, 8, 9, 12);
 const repository = "colonylabs/cogwork";
 const workflowRunUrl = "https://github.com/colonylabs/cogwork/actions/runs/123";
-const report = (verdict: "slower" | "faster" | "inconclusive" = "slower") => ({
+const report = (verdict: "slower" | "faster" | "inconclusive" = "slower", ratio = 1.2) => ({
   schemaVersion: 1,
   verdict,
   base: {
@@ -29,11 +29,22 @@ const report = (verdict: "slower" | "faster" | "inconclusive" = "slower") => ({
     medianDurationMs: 120,
     testCount: 1_800,
   },
-  ratio: 1.2,
+  ratio,
   confidenceInterval: { lowRatio: 1.1, highRatio: 1.3, confidence: 0.95 },
   rounds: 5,
   seed: 0x5eed1234,
 });
+
+const seedRun = (run: number, durationMs: number, testCount = 2_000) => ({
+  durationMs,
+  testCount,
+  sha: `${run % 10}`.repeat(40),
+  startedAt: `2026-09-${String(run).padStart(2, "0")}T12:00:00Z`,
+  workflowRunUrl: `https://github.com/colonylabs/cogwork/actions/runs/${run}`,
+});
+
+const budgetHistory = (durationMs: number) =>
+  Array.from({ length: 20 }, (_, index) => seedRun(index + 1, durationMs));
 
 interface Recorded {
   readonly created: ReadonlyArray<PerformanceIssueFilerModule.PerformanceIssueCreateInput>;
@@ -58,6 +69,11 @@ const existingIssue = {
   createdAtMillis: atMillis - 1,
   labels: ["needs-triage", "origin:selfperf"],
   hasMergedFix: false,
+} satisfies PerformanceIssueFilerModule.PerformanceIssue;
+
+const existingBudgetIssue = {
+  ...existingIssue,
+  fingerprint: decodeFingerprint("repository.test-suite-ms-per-test.above"),
 } satisfies PerformanceIssueFilerModule.PerformanceIssue;
 
 const markerlessIssue = (number: number) =>
@@ -115,6 +131,30 @@ describe("test performance filer entry", () => {
     }).pipe(Effect.provide(filerLayer([]))),
   );
 
+  it.effect("requires the 1.15 materiality ratio derived from the 1.056 null-run ceiling", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+
+      const results = yield* Effect.all([
+        fileSuiteComparison({
+          report: report("slower", 1.149),
+          repository,
+          workflowRunUrl,
+          atMillis,
+        }),
+        fileSuiteComparison({
+          report: report("slower", 1.15),
+          repository,
+          workflowRunUrl,
+          atMillis,
+        }),
+      ]);
+
+      assert.deepStrictEqual(results, ["skipped", "filed"]);
+      assert.strictEqual((yield* Ref.get(calls)).created.length, 1);
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
   it.effect("rejects an unknown comparison report schema version", () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
@@ -126,7 +166,7 @@ describe("test performance filer entry", () => {
         }),
       );
 
-      if (error._tag !== "SuiteComparisonEntryError") return assert.fail(error.message);
+      if (error._tag !== "TestPerformanceEntryError") return assert.fail(error.message);
       assert.strictEqual(error.reason, "report");
       assert.include(error.message, "schemaVersion");
     }).pipe(Effect.provide(filerLayer([]))),
@@ -138,7 +178,7 @@ describe("test performance filer entry", () => {
         fileSuiteComparison({ report: report(), repository, workflowRunUrl, atMillis }),
       );
 
-      if (error._tag !== "SuiteComparisonEntryError") return assert.fail(error.message);
+      if (error._tag !== "TestPerformanceEntryError") return assert.fail(error.message);
       assert.strictEqual(error.reason, "capped");
     }).pipe(Effect.provide(filerLayer([markerlessIssue(1), markerlessIssue(2), markerlessIssue(3)]))),
   );
@@ -165,8 +205,87 @@ describe("test performance filer entry", () => {
         }),
       );
 
-      if (error._tag !== "SuiteComparisonEntryError") return assert.fail(error.message);
+      if (error._tag !== "TestPerformanceEntryError") return assert.fail(error.message);
       assert.strictEqual(error.reason, "workflow-run-url");
     }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("files one work item when the seed-run median breaches 30 ms/test", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+
+      const result = yield* fileTestSuiteBudget({
+        history: budgetHistory(65_000),
+        repository,
+        atMillis,
+      });
+      const recorded = yield* Ref.get(calls);
+      const [created] = recorded.created;
+
+      assert.strictEqual(result, "filed");
+      assert.strictEqual(recorded.created.length, 1);
+      assert.include(created?.body ?? "", "Rolling median: 32.5 ms/test");
+      assert.include(created?.body ?? "", "Window: 20 seed runs");
+      assert.include(created?.body ?? "", "https://github.com/colonylabs/cogwork/actions/runs/1");
+      assert.include(created?.body ?? "", "https://github.com/colonylabs/cogwork/actions/runs/20");
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("does nothing when the seed-run median meets the budget", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+      const noisyHistory = [...budgetHistory(50_000).slice(0, 11), ...budgetHistory(100_000).slice(0, 9)];
+
+      const results = yield* Effect.all([
+        fileTestSuiteBudget({ history: budgetHistory(60_000), repository, atMillis }),
+        fileTestSuiteBudget({ history: budgetHistory(50_000), repository, atMillis }),
+        fileTestSuiteBudget({ history: noisyHistory, repository, atMillis }),
+      ]);
+
+      assert.deepStrictEqual(results, ["skipped", "skipped", "skipped"]);
+      assert.deepStrictEqual(yield* Ref.get(calls), { created: [], comments: [] });
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("rejects missing, malformed, or oversized seed-run history", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+      const invalidHistories = [[], [{}], [...budgetHistory(65_000), seedRun(21, 65_000)]];
+
+      const errors = yield* Effect.forEach(invalidHistories, (history) =>
+        Effect.flip(fileTestSuiteBudget({ history, repository, atMillis })),
+      );
+
+      assert.isTrue(errors.every((error) => error.reason === "history"));
+      assert.deepStrictEqual(yield* Ref.get(calls), { created: [], comments: [] });
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("reports a near-threshold breach above the budget", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+
+      yield* fileTestSuiteBudget({ history: budgetHistory(60_001), repository, atMillis });
+      const [created] = (yield* Ref.get(calls)).created;
+
+      assert.include(created?.body ?? "", "Rolling median: 30.01 ms/test");
+      assert.include(created?.body ?? "", "| 60001 ms | 2000 | 30.01 |");
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("comments on the open budget fingerprint instead of filing a second issue", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+
+      const result = yield* fileTestSuiteBudget({
+        history: budgetHistory(65_000),
+        repository,
+        atMillis,
+      });
+
+      assert.strictEqual(result, "commented");
+      assert.strictEqual((yield* Ref.get(calls)).created.length, 0);
+      assert.strictEqual((yield* Ref.get(calls)).comments.length, 1);
+    }).pipe(Effect.provide(filerLayer([existingBudgetIssue]))),
   );
 });

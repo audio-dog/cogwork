@@ -21,6 +21,7 @@ import {
 const decodeWorkItemId = Schema.decodeSync(WorkItemId);
 const decodeGitCommitSha = Schema.decodeSync(GitCommitSha);
 const decodeGitHubWorkflowRunUrl = Schema.decodeSync(GitHubWorkflowRunUrl);
+const decodeStartedAt = Schema.decodeSync(Schema.DateTimeUtcFromString);
 const decodeFingerprint = Schema.decodeSync(PerformanceIssueFingerprint);
 const fingerprint = decodeFingerprint("daemon.event-loop-delay-p99.above");
 const marker = wireCodec.encode({ name: "selfperf", pairs: `fingerprint=${fingerprint}` });
@@ -69,6 +70,25 @@ const suiteComparisonVerdict = {
   confidenceInterval: { lowRatio: 1.004, highRatio: 1.006, confidence: 0.95 },
   rounds: 5,
   workflowRunUrl: decodeGitHubWorkflowRunUrl("https://github.com/colonylabs/cogwork/actions/runs/123"),
+} satisfies PerformanceVerdict;
+
+const budgetVerdict = {
+  kind: "budget",
+  signal: "test-suite-ms-per-test",
+  subsystem: "repository",
+  direction: "above",
+  observed: 32.5,
+  budget: 30,
+  unit: "ms/test",
+  window: [
+    {
+      durationMs: 65_000,
+      testCount: 2_000,
+      sha: decodeGitCommitSha("2222222222222222222222222222222222222222"),
+      startedAt: decodeStartedAt("2026-09-22T12:00:00Z"),
+      workflowRunUrl: decodeGitHubWorkflowRunUrl("https://github.com/colonylabs/cogwork/actions/runs/123"),
+    },
+  ],
 } satisfies PerformanceVerdict;
 
 const recurrenceBody = [
@@ -150,6 +170,12 @@ const cappedIssues = [
 ];
 const closedOccurrence = issue({
   state: "closed",
+  createdAtMillis: Date.UTC(2026, 8, 8, 12),
+  hasMergedFix: true,
+});
+const closedBudgetOccurrence = issue({
+  state: "closed",
+  fingerprint: decodeFingerprint("repository.test-suite-ms-per-test.above"),
   createdAtMillis: Date.UTC(2026, 8, 8, 12),
   hasMergedFix: true,
 });
@@ -317,5 +343,44 @@ describe("performance issue filer", () => {
         labels: ["needs-triage", "origin:selfperf"],
       });
     }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("renders a test-suite budget verdict with its seed-run window", () =>
+    Effect.gen(function* () {
+      const filer = yield* PerformanceIssueFiler;
+      const recorded = yield* PerformanceIssueCalls;
+
+      const result = yield* filer.submit(budgetVerdict, today);
+      const [created] = (yield* Ref.get(recorded)).created;
+
+      assert.strictEqual(result, "filed");
+      assert.deepStrictEqual(created, {
+        fingerprint: decodeFingerprint("repository.test-suite-ms-per-test.above"),
+        title: "Test suite exceeds the 30 ms/test budget",
+        body: [
+          "Signal: Test suite cost — repository — above budget",
+          "Budget: ≤ 30 ms/test\nRolling median: 32.5 ms/test\nWindow: 1 seed run from 2026-09-22T12:00:00.000Z to 2026-09-22T12:00:00.000Z\n\n| Seed run | Commit | Duration | Tests | ms/test |\n| --- | --- | ---: | ---: | ---: |\n| [2026-09-22T12:00:00.000Z](https://github.com/colonylabs/cogwork/actions/runs/123) | `2222222` | 65000 ms | 2000 | 32.5 |\n\nClose when: the rolling median over the latest seed-run window is at or below 30 ms/test.",
+          wireCodec.encode({
+            name: "selfperf",
+            pairs: "fingerprint=repository.test-suite-ms-per-test.above",
+          }),
+        ].join("\n\n"),
+        labels: ["needs-triage", "origin:selfperf"],
+      });
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("files a cross-linked regression when a fixed budget breach recurs", () =>
+    Effect.gen(function* () {
+      const filer = yield* PerformanceIssueFiler;
+      const recorded = yield* PerformanceIssueCalls;
+
+      const result = yield* filer.submit(budgetVerdict, today);
+      const [created] = (yield* Ref.get(recorded)).created;
+
+      assert.strictEqual(result, "filed");
+      assert.strictEqual(created?.title, "Regression: Test suite exceeds the 30 ms/test budget");
+      assert.include(created?.body ?? "", `Previous occurrence: ${closedBudgetOccurrence.url}`);
+    }).pipe(Effect.provide(filerLayer([closedBudgetOccurrence]))),
   );
 });
