@@ -1,0 +1,22 @@
+configs/sensor/test-performance-filer.test.ts
+  s_a9e5062dd61619::t_c86cd661eab86f 54-60
+  s_a9e5062dd61619::t_3d8f4f0996e964 2,10,14-15,51-53,309,311,331,333,343,346,348-350,354,356-360
+configs/sensor/test-performance-filer.ts
+  s_a9e5062dd61619::t_3d8f4f0996e964 70,73-75,78,83,101,275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5f849aef7b4ec176d1173a8759bf9fcd5d3a0fdc",
+  "prompts": {},
+  "sessions": {
+    "s_a9e5062dd61619": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f452-7147-7750-90b1-8b5209259928",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
