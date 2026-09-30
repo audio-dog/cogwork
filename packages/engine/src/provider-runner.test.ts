@@ -189,6 +189,17 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
       messages: [{ role: "user", content: "do the thing" }],
       workContext: {
         reference: { workItem: "#1", url: null },
+        prose: {
+          body: "Ship the requested provider change.",
+          comments: [
+            {
+              author: "maintainer",
+              authorAssociation: "MEMBER",
+              body: "Keep the adapter contract stable.",
+              createdAtMillis: 2,
+            },
+          ],
+        },
         facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
         observation: { generation: 1, observedAtMillis: 1 },
       },
@@ -288,13 +299,12 @@ describe("providerRunner", { timeout: 30_000 }, () => {
 
         const options = capturedOptions[0];
         if (!options) return assert.fail("runChat was never invoked");
-        assert.deepStrictEqual(
-          [...options.messages],
-          [
-            { role: "assistant", content: "earlier turn" },
-            { role: "user", content: "do the thing" },
-          ],
-        );
+        assert.strictEqual(options.messages.length, 3);
+        assert.deepStrictEqual(options.messages[0], { role: "assistant", content: "earlier turn" });
+        assert.strictEqual(options.messages[1]?.role, "user");
+        assert.deepStrictEqual(options.messages[2], { role: "user", content: "do the thing" });
+        assert.include(String(options.messages[1]?.content), "Ship the requested provider change.");
+        assert.include(String(options.messages[1]?.content), "Keep the adapter contract stable.");
         assert.lengthOf([...options.tools], 7);
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "cogwork-context"));
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "chat-persistence"));
