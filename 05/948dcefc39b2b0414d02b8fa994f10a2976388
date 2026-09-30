@@ -1,0 +1,21 @@
+configs/sensor/package.json
+  s_a9e5062dd61619::t_057c4e8f26cb83 12
+.github/workflows/test-suite-budget.yml
+  s_a9e5062dd61619::t_057c4e8f26cb83 66-70,72,74,78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "05948dcefc39b2b0414d02b8fa994f10a2976388",
+  "prompts": {},
+  "sessions": {
+    "s_a9e5062dd61619": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f452-7147-7750-90b1-8b5209259928",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
