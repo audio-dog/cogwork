@@ -161,6 +161,34 @@ describe("codexRunner configuration", { timeout: 30_000 }, () => {
       ),
     );
 
+    it.effect("disables native Linear Apps when projecting the engine Linear MCP server", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const calls: Array<CodexTextConfig> = [];
+          const harness = Harness.make([
+            runner({
+              makeAdapter: (model, config) => {
+                calls.push(config);
+                return codexText(model, config);
+              },
+            }),
+          ]);
+
+          const mcpSkills = authenticatedMcp("linear-secret").map((server) => ({
+            ...server,
+            endpoint: "https://mcp.linear.app./mcp/readonly",
+          }));
+          yield* runInRepository(harness, handle, { mcpSkills });
+
+          const config = calls[0]?.config;
+          assert.strictEqual(config?.["apps.linear.enabled"], "false");
+          assert.isDefined(config?.["mcp_servers.test__linear_api__0.url"]);
+          assert.isUndefined(config?.["apps.default.enabled"]);
+        }),
+      ),
+    );
+
     it.effect("rejects a missing checkout before Codex launch", () =>
       Effect.gen(function* () {
         const harness = Harness.make([runner({ codexExecutable: "/missing-codex-executable" })]);

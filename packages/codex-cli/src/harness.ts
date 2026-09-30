@@ -263,6 +263,13 @@ interface CodexMcpProjection {
   readonly env: Record<string, string>;
 }
 
+const isLinearMcpServer = (server: Harness.ResolvedMcpSkill) => {
+  if (!URL.canParse(server.endpoint)) return false;
+  const endpoint = new URL(server.endpoint);
+  const hostname = endpoint.hostname.replace(/\.$/, "");
+  return endpoint.protocol === "https:" && hostname === "mcp.linear.app";
+};
+
 // Codex rejects a literal `bearer_token` for streamable-HTTP servers ("set
 // `bearer_token_env_var`"), so command arguments carry only the URL and an environment
 // variable NAME; the resolved bearer value travels in the child environment alone —
@@ -284,8 +291,9 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
       env: server.bearer === null ? [] : [[environmentName, Redacted.value(server.bearer)] as const],
     };
   });
+  const appConfig = servers.some(isLinearMcpServer) ? [["apps.linear.enabled", "false"] as const] : [];
   return {
-    config: Object.fromEntries(projected.flatMap(({ config }) => config)),
+    config: Object.fromEntries([...appConfig, ...projected.flatMap(({ config }) => config)]),
     env: Object.fromEntries(projected.flatMap(({ env }) => env)),
   };
 };
