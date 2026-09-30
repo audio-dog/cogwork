@@ -1,5 +1,6 @@
 import { makeBrand, type WorkItemId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
@@ -100,9 +101,30 @@ const SuiteComparisonPerformanceVerdict = Schema.Struct({
 });
 type SuiteComparisonPerformanceVerdict = typeof SuiteComparisonPerformanceVerdict.Type;
 
+const TestSuiteBudgetPerformanceVerdict = Schema.Struct({
+  kind: Schema.Literal("budget"),
+  signal: Schema.Literal("test-suite-ms-per-test"),
+  subsystem: Schema.Literal("repository"),
+  direction: Schema.Literal("above"),
+  observed: Schema.Finite.check(Schema.isGreaterThan(0)),
+  budget: Schema.Finite.check(Schema.isGreaterThan(0)),
+  unit: Schema.Literal("ms/test"),
+  window: Schema.NonEmptyArray(
+    Schema.Struct({
+      durationMs: Schema.Finite.check(Schema.isGreaterThan(0)),
+      testCount: Schema.Int.check(Schema.isGreaterThan(0)),
+      sha: GitCommitSha,
+      startedAt: Schema.DateTimeUtc,
+      workflowRunUrl: GitHubWorkflowRunUrl,
+    }),
+  ),
+});
+type TestSuiteBudgetPerformanceVerdict = typeof TestSuiteBudgetPerformanceVerdict.Type;
+
 export const PerformanceVerdict = Schema.Union([
   HealthSignalPerformanceVerdict,
   SuiteComparisonPerformanceVerdict,
+  TestSuiteBudgetPerformanceVerdict,
 ]).pipe(Schema.toTaggedUnion("kind"));
 export type PerformanceVerdict = typeof PerformanceVerdict.Type;
 
@@ -167,6 +189,7 @@ const titleThreshold = (threshold: number, unit: HealthSignalPerformanceVerdict[
   unit === "%" ? `${threshold}${unit}` : `${threshold} ${unit}`;
 
 const formatValue = (value: number) => Number(value.toFixed(2));
+const formatBudgetMeasurement = (value: number) => Math.ceil(value * 100) / 100;
 
 export const performanceVerdictFingerprint = (verdict: PerformanceVerdictIdentity) =>
   PerformanceIssueFingerprint.make(`${verdict.subsystem}.${verdict.signal}.${verdict.direction}`);
@@ -230,10 +253,48 @@ const renderSuiteComparison = (verdict: SuiteComparisonPerformanceVerdict) => {
   };
 };
 
+const testSuiteBudgetEvidence = (verdict: TestSuiteBudgetPerformanceVerdict) => {
+  const window = verdict.window.toSorted(
+    (left, right) => DateTime.toEpochMillis(left.startedAt) - DateTime.toEpochMillis(right.startedAt),
+  );
+  const first = window[0] ?? verdict.window[0];
+  const last = window.at(-1) ?? first;
+  const runCount = `${window.length} seed ${window.length === 1 ? "run" : "runs"}`;
+  const rows = window.map(
+    (run) =>
+      `| [${DateTime.formatIso(run.startedAt)}](${run.workflowRunUrl}) | \`${run.sha.slice(0, 7)}\` | ${run.durationMs} ms | ${run.testCount} | ${formatBudgetMeasurement(run.durationMs / run.testCount)} |`,
+  );
+  return [
+    `Budget: ≤ ${verdict.budget} ${verdict.unit}`,
+    `Rolling median: ${formatBudgetMeasurement(verdict.observed)} ${verdict.unit}`,
+    `Window: ${runCount} from ${DateTime.formatIso(first.startedAt)} to ${DateTime.formatIso(last.startedAt)}`,
+    "",
+    "| Seed run | Commit | Duration | Tests | ms/test |",
+    "| --- | --- | ---: | ---: | ---: |",
+    ...rows,
+    "",
+    `Close when: the rolling median over the latest seed-run window is at or below ${verdict.budget} ${verdict.unit}.`,
+  ].join("\n");
+};
+
+const renderTestSuiteBudget = (verdict: TestSuiteBudgetPerformanceVerdict) => {
+  const evidence = testSuiteBudgetEvidence(verdict);
+  const title = `Test suite exceeds the ${verdict.budget} ${verdict.unit} budget`;
+  const body = ["Signal: Test suite cost — repository — above budget", "", evidence].join("\n");
+  return {
+    fingerprint: performanceVerdictFingerprint(verdict),
+    title,
+    recurrenceTitle: `Regression: ${title}`,
+    body,
+    recurrenceBody: `Fired again.\n\n${body}`,
+  };
+};
+
 const renderVerdict = (verdict: PerformanceVerdict) =>
   PerformanceVerdict.match(verdict, {
     "health-signal": renderHealthSignal,
     "suite-comparison": renderSuiteComparison,
+    budget: renderTestSuiteBudget,
   });
 
 const recurrenceIssue = (
