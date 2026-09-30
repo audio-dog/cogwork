@@ -1146,6 +1146,35 @@ describe("GitHub adapters", () => {
     ),
   );
 
+  it.effect("ignores empty pull request comments as follow-up feedback", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#26");
+
+      assert.isNull(observed?.pr?.latestHumanCommentAtMillis ?? null);
+      assert.isUndefined(classify(items).eligible.find((item) => item.id === "#26"));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 26, title: "empty comment", labels: ["ready-for-agent"] },
+            { number: 206, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 206, headRef: "26-empty-comment" })],
+          comments: [
+            {
+              issue: 206,
+              authorLogin: "maintainer",
+              authorAssociation: "MEMBER",
+              body: "",
+              createdAtMillis: 600,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it.effect("carries the PR number, deep-link URL, and last-activity instant onto the observed item", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
