@@ -1,0 +1,72 @@
+configs/sensor/test-measure-summary.mjs
+  s_89728d5021f5bd::t_2eb46724c93ec2 8-17,19-72
+docs/agents/technical-disposition.md
+  s_89728d5021f5bd::t_2eb46724c93ec2 7-9
+packages/engine/src/commands.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 716-723
+packages/engine/src/observe.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 3,8-27,71,89
+packages/engine/src/playbook.test.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 36-44,299,306-319,350,364-397,399
+  s_89728d5021f5bd::t_a67e540eb634c0 398
+configs/test/test-count-reporter.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 4,7-12,19-35,37-38,40-46,49-50
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_89728d5021f5bd::t_2eb46724c93ec2 76-79
+configs/sensor/test-measure.test.mjs
+  s_89728d5021f5bd::t_2eb46724c93ec2 8,17,20-29,98-103,107,126,155-163,165-173,175,178-182,188-323,326-335,340
+docs/adr/0030-work-context-carries-the-work-item-prose.md
+  s_89728d5021f5bd::t_2eb46724c93ec2 1-68
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_89728d5021f5bd::t_2eb46724c93ec2 67,73,76-78
+configs/lint/tests/test-count-reporter.test.mjs
+  s_89728d5021f5bd::t_2eb46724c93ec2 10,14,21-30
+packages/contracts/CONTEXT.md
+  s_89728d5021f5bd::t_2eb46724c93ec2 227,318
+packages/engine/src/commands.test.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 50,253-256,258-271,275-291,294-354,562-563,2449-2472,2497,2501,2507-2513,2546-2557,2559-2561
+  s_89728d5021f5bd::t_b6ec93542c1bd6 257
+configs/sensor/test-compare.test.mjs
+  s_89728d5021f5bd::t_2eb46724c93ec2 12-18,226-227,235-236
+packages/engine/src/event-publisher.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 21,130,189,220-223,235,246-248
+  s_89728d5021f5bd::t_ea8534c69503c7 249
+packages/engine/src/event-publisher.test.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 157-202,445-520
+configs/sensor/test-measure.mjs
+  s_89728d5021f5bd::t_2eb46724c93ec2 3-4,6,9-10,12-15,37,56,59-66,69-72,76,78,97,99,101-105,107-195,198-218,231,243
+configs/sensor/test-measure-summary.test.mjs
+  s_89728d5021f5bd::t_2eb46724c93ec2 1-115
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_89728d5021f5bd::t_2eb46724c93ec2 50-59,65-69,72-83,85-95,106,135,140-141
+configs/sensor/test-compare.mjs
+  s_89728d5021f5bd::t_2eb46724c93ec2 149-159,162,166-168,175-176,268-269,275-277
+AGENTS.md
+  s_89728d5021f5bd::t_2eb46724c93ec2 95
+configs/lint/tests/test-count-reporter.mjs
+  s_89728d5021f5bd::t_2eb46724c93ec2 1-8,19-20,22
+packages/engine/src/engine.test.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 49,108-138,323-332,337-347,408-413,415,423-446,695-712
+configs/test/src/test-count-reporter.test.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 3-9,33-71
+packages/engine/src/reconcile.ts
+  s_89728d5021f5bd::t_2eb46724c93ec2 30,153,281,283
+.github/workflows/test-suite-comparison.yml
+  s_89728d5021f5bd::t_2eb46724c93ec2 40-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "eb8259d47b6b3cd06b3d29454435e4406216f564",
+  "prompts": {},
+  "sessions": {
+    "s_89728d5021f5bd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f348-a2dc-71d1-a77a-b9860418c463",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
