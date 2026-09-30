@@ -6,6 +6,7 @@ import {
   type LifecycleStage,
   linearTeams,
   type Priority,
+  type RunPlanWorkContextProse,
   type TriageRole,
   type WorkItemId,
 } from "@cogwork/contracts";
@@ -121,9 +122,20 @@ const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: Wor
   return [] as ReadonlyArray<TrackerItem>;
 });
 
+const readEmptyProse = Effect.fn("IssueTracker.readProse")(function* (
+  workspace: WorkspaceIssueTrackerBinding,
+) {
+  if (hasRemoteSource(workspace)) {
+    return yield* noAdapter(workspace);
+  }
+  const prose: RunPlanWorkContextProse = { body: "", comments: [] };
+  return prose;
+});
+
 export const makeEmpty = Effect.succeed({
   rateLimitScope: (_workspace: WorkspaceIssueTrackerBinding): string | null => null,
   observe: observeEmpty,
+  readProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) => readEmptyProse(workspace),
   claim: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _claim: ClaimRequest) =>
     failWhenRemote(workspace),
   release: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) => failWhenRemote(workspace),
