@@ -724,7 +724,7 @@ export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (pa
       yield* publisher.publishScheduler();
       return published.find((workspace) => workspace.name === payload.workspace) ?? state;
     }),
-  );
+  ).pipe(Effect.uninterruptible);
 });
 
 export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {

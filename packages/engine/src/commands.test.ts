@@ -614,7 +614,10 @@ const daemonLayerWithHarness = (
     reconcileStubLayer,
   );
 
-const registrationServices = (contributions: readonly LocalContribution[] = []) => {
+const registrationServices = (
+  contributions: readonly LocalContribution[] = [],
+  afterUpdateWrite: Effect.Effect<void> = Effect.void,
+) => {
   const cell = Ref.makeUnsafe<Registry.RegistryState>(Registry.emptyRegistry);
   const registry: Registry.WorkspaceRegistryService = {
     state: Ref.get(cell),
@@ -668,6 +671,7 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
         },
         workspaceLimit: update.concurrency,
       };
+      yield* afterUpdateWrite;
       yield* Ref.update(cell, (state) => ({
         ...state,
         workspaces: state.workspaces.map((entry) => (entry.config.name === workspace ? changed : entry)),
@@ -2689,6 +2693,46 @@ describe("workspace lifecycle commands", () => {
       yield* Fiber.join(interrupting);
 
       assert.strictEqual(yield* Ref.get(probe.refreshes), 1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(registries, connectionStoreLayer, WorkspaceUpdatePublicationProbe.publisherLayer),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("finishes a persisted workspace update when the caller disconnects", () => {
+    const updateStarted = Deferred.makeUnsafe<void>();
+    const releaseUpdate = Deferred.makeUnsafe<void>();
+    const persisted = Ref.makeUnsafe(false);
+    const registries = registrationServices(
+      [],
+      Ref.set(persisted, true).pipe(
+        Effect.andThen(Deferred.succeed(updateStarted, undefined)),
+        Effect.andThen(Deferred.await(releaseUpdate)),
+      ),
+    );
+    return Effect.gen(function* () {
+      const management = yield* Registry.WorkspaceManagement;
+      const registry = yield* Registry.WorkspaceRegistry;
+      const publication = yield* WorkspaceUpdatePublicationProbe;
+      yield* management.register(acmeRegistration);
+      yield* Deferred.succeed(publication.release, undefined);
+      const workspace = wsid("0198f16a-21d7-7000-8000-000000000001");
+
+      const updating = yield* Effect.forkChild(updateWorkspaceCommand({ workspace, update: acmeUpdate }));
+      yield* Deferred.await(updateStarted);
+      const interrupting = yield* Effect.forkChild(Fiber.interrupt(updating));
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(releaseUpdate, undefined);
+      yield* Fiber.join(interrupting);
+
+      const registered = (yield* registry.state).workspaces.find(
+        (candidate) => candidate.config.name === workspace,
+      );
+      assert.isTrue(yield* Ref.get(persisted));
+      assert.strictEqual(registered?.config.displayName, acmeUpdate.name);
+      assert.strictEqual(yield* Ref.get(publication.refreshes), 1);
     }).pipe(
       Effect.provide(
         Layer.mergeAll(registries, connectionStoreLayer, WorkspaceUpdatePublicationProbe.publisherLayer),
