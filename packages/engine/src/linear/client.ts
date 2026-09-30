@@ -55,9 +55,12 @@ export interface ObservedRawIssue extends RawIssue {
   readonly coordinationComments: ReadonlyArray<RawComment>;
 }
 
+type LinearAuthorAssociation = "MEMBER" | "NONE" | "OWNER";
+
 export interface RawComment {
   readonly id: string;
   readonly authorId: string | null;
+  readonly authorAssociation: LinearAuthorAssociation;
   readonly body: string;
   readonly createdAtMillis: number;
 }
@@ -84,6 +87,21 @@ const CommentNode = Schema.Struct({
   body: Schema.String,
   createdAt: Schema.String,
   user: Schema.NullOr(Schema.Struct({ id: Schema.String })),
+});
+
+const ProseCommentNode = Schema.Struct({
+  id: Schema.String,
+  body: Schema.String,
+  createdAt: Schema.String,
+  user: Schema.NullOr(
+    Schema.Struct({
+      id: Schema.String,
+      active: Schema.Boolean,
+      guest: Schema.Boolean,
+      app: Schema.Boolean,
+      owner: Schema.Boolean,
+    }),
+  ),
 });
 
 const RelationNode = Schema.Struct({
@@ -173,7 +191,7 @@ const CommentsPayload = Schema.Struct({
     Schema.Struct({
       description: Schema.NullOr(Schema.String),
       comments: Schema.Struct({
-        nodes: Schema.Array(CommentNode),
+        nodes: Schema.Array(ProseCommentNode),
         pageInfo: PageInfoNode,
       }),
     }),
@@ -383,7 +401,7 @@ query IssueComments($id: String!, $after: String) {
         id
         body
         createdAt
-        user { id }
+        user { id active guest app owner }
       }
       pageInfo { hasNextPage endCursor }
     }
@@ -488,6 +506,26 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
 const toRawComment = (comment: typeof CommentNode.Type) => ({
   id: comment.id,
   authorId: comment.user?.id ?? null,
+  authorAssociation: "NONE" as const,
+  body: comment.body,
+  createdAtMillis: millisFromIso(comment.createdAt),
+});
+
+const lacksSteeringAuthority = (user: NonNullable<(typeof ProseCommentNode.Type)["user"]>) =>
+  !user.active || user.guest || user.app;
+
+const authorAssociationRules = [
+  { when: lacksSteeringAuthority, value: "NONE" },
+  { when: (user: NonNullable<(typeof ProseCommentNode.Type)["user"]>) => user.owner, value: "OWNER" },
+] as const;
+
+const authorAssociationOf = (user: (typeof ProseCommentNode.Type)["user"]): LinearAuthorAssociation =>
+  user === null ? "NONE" : (authorAssociationRules.find(({ when }) => when(user))?.value ?? "MEMBER");
+
+const toRawProseComment = (comment: typeof ProseCommentNode.Type) => ({
+  id: comment.id,
+  authorId: comment.user?.id ?? null,
+  authorAssociation: authorAssociationOf(comment.user),
   body: comment.body,
   createdAtMillis: millisFromIso(comment.createdAt),
 });
@@ -766,7 +804,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       if (cursorRepeated) {
         return yield* unavailable(`Linear comment cursor did not advance: ${issueId}`);
       }
-      const comments = payload.issue.comments.nodes.map(toRawComment);
+      const comments = payload.issue.comments.nodes.map(toRawProseComment);
       const commentCount = state.commentCount + comments.length;
       const proseBytes =
         state.proseBytes +
@@ -830,7 +868,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     listComments: Effect.fn("linear.listComments")(function* (ref: LinearTeamRef, issueId: string) {
       const data = yield* rawData(ref, commentsQuery, { id: issueId, after: null });
       const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
-      return (payload.issue?.comments.nodes ?? []).map(toRawComment);
+      return (payload.issue?.comments.nodes ?? []).map(toRawProseComment);
     }),
     readProse,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>

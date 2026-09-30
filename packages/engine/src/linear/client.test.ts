@@ -588,7 +588,7 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("preserves comments Linear reports without an author", () =>
+  it.effect("preserves comment authors and their workspace authority", () =>
     Effect.gen(function* () {
       stubLinear(() => ({
         body: {
@@ -599,14 +599,38 @@ describe("linear client", () => {
                 nodes: [
                   {
                     id: "c1",
-                    body: "from a person",
+                    body: "from the owner",
                     createdAt: "2026-07-31T00:00:00.000Z",
-                    user: { id: "u1" },
+                    user: { id: "owner", active: true, guest: false, app: false, owner: true },
                   },
                   {
                     id: "c2",
-                    body: "from an integration",
+                    body: "from a member",
                     createdAt: "2026-07-31T00:00:01.000Z",
+                    user: { id: "member", active: true, guest: false, app: false, owner: false },
+                  },
+                  {
+                    id: "c3",
+                    body: "from a guest",
+                    createdAt: "2026-07-31T00:00:02.000Z",
+                    user: { id: "guest", active: true, guest: true, app: false, owner: false },
+                  },
+                  {
+                    id: "c4",
+                    body: "from an app",
+                    createdAt: "2026-07-31T00:00:03.000Z",
+                    user: { id: "app", active: true, guest: false, app: true, owner: false },
+                  },
+                  {
+                    id: "c5",
+                    body: "from a deactivated member",
+                    createdAt: "2026-07-31T00:00:04.000Z",
+                    user: { id: "inactive", active: false, guest: false, app: false, owner: false },
+                  },
+                  {
+                    id: "c6",
+                    body: "from an integration",
+                    createdAt: "2026-07-31T00:00:05.000Z",
                     user: null,
                   },
                 ],
@@ -619,10 +643,14 @@ describe("linear client", () => {
       const client = yield* LinearClient;
       const comments = yield* client.listComments(ref, "AUD-1");
       assert.deepStrictEqual(
-        comments.map((comment) => [comment.id, comment.authorId]),
+        comments.map((comment) => [comment.id, comment.authorId, comment.authorAssociation]),
         [
-          ["c1", "u1"],
-          ["c2", null],
+          ["c1", "owner", "OWNER"],
+          ["c2", "member", "MEMBER"],
+          ["c3", "guest", "NONE"],
+          ["c4", "app", "NONE"],
+          ["c5", "inactive", "NONE"],
+          ["c6", null, "NONE"],
         ],
       );
     }).pipe(withToken()),
@@ -641,7 +669,13 @@ describe("linear client", () => {
                     id,
                     body: id,
                     createdAt: "2026-07-31T00:00:00.000Z",
-                    user: { id: `author-${id}` },
+                    user: {
+                      id: `author-${id}`,
+                      active: true,
+                      guest: false,
+                      app: false,
+                      owner: false,
+                    },
                   },
                 ],
                 pageInfo: { hasNextPage: endCursor !== null, endCursor },
