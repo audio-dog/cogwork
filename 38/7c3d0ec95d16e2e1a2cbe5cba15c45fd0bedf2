@@ -1,0 +1,19 @@
+docs/adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md
+  s_c16cb415a4cbe9::t_3a5d1453398f45 1-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "387c3d0ec95d16e2e1a2cbe5cba15c45fd0bedf2",
+  "prompts": {},
+  "sessions": {
+    "s_c16cb415a4cbe9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "be4d1b34-be72-46ec-bfca-15a99b880dd5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
