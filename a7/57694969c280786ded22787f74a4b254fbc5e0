@@ -1,0 +1,23 @@
+AGENTS.md
+  s_c16cb415a4cbe9::t_63cd42d3186e29 18-22
+docs/agent-patterns/effect-test-layers.md
+  s_c16cb415a4cbe9::t_587913293b3e90 3
+docs/agent-patterns/test-value.md
+  s_c16cb415a4cbe9::t_968dc3daf8d90f 1-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a757694969c280786ded22787f74a4b254fbc5e0",
+  "prompts": {},
+  "sessions": {
+    "s_c16cb415a4cbe9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "be4d1b34-be72-46ec-bfca-15a99b880dd5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
