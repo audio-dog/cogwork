@@ -49,6 +49,7 @@ interface SeedIssue {
   readonly stateType?: string;
   readonly openBlockers?: number;
   readonly priority?: Priority;
+  readonly description?: string;
 }
 
 interface Seed {
@@ -181,6 +182,20 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     listWorkflowStates: () => guard(Effect.succeed(states)),
     listComments: (_ref, issueId) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
+    readProse: (_ref, issueId) =>
+      guard(
+        Effect.gen(function* () {
+          const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
+          const issue = issues.find((candidate) => candidate.identifier === issueId);
+          if (!issue) {
+            return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
+          }
+          return {
+            body: seed.issues.find((candidate) => candidate.identifier === issueId)?.description ?? "",
+            comments: [...(comments.get(issueId) ?? [])],
+          };
+        }),
+      ),
     addLabel: (ref, issueId, label) =>
       guard(
         inTeam(
@@ -309,6 +324,45 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
   comments.filter((comment) => comment.authorId === bot.id);
 
 describe("linear work source adapter", () => {
+  it.effect("reads current issue prose and comment attribution for admission", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const prose = yield* tracker.readProse(workspace, id("AUD-41"));
+      assert.deepStrictEqual(prose, {
+        body: "Original request",
+        comments: [
+          {
+            author: "maintainer-id",
+            authorAssociation: null,
+            body: "Latest steer",
+            createdAtMillis: 2,
+          },
+        ],
+      });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            {
+              identifier: "AUD-41",
+              title: "prose",
+              labels: ["state:ready-for-agent"],
+              description: "Original request",
+            },
+          ],
+          comments: [
+            {
+              issue: "AUD-41",
+              authorId: "maintainer-id",
+              body: "Latest steer",
+              createdAtMillis: 2,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it.effect("holds a ready-for-agent ticket with an open blocker out of the eligible set", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);

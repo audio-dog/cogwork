@@ -588,12 +588,13 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("skips comments Linear reports without an author", () =>
+  it.effect("preserves comments Linear reports without an author", () =>
     Effect.gen(function* () {
       stubLinear(() => ({
         body: {
           data: {
             issue: {
+              description: "Current issue body",
               comments: {
                 nodes: [
                   {
@@ -609,6 +610,7 @@ describe("linear client", () => {
                     user: null,
                   },
                 ],
+                pageInfo: lastPage,
               },
             },
           },
@@ -618,8 +620,90 @@ describe("linear client", () => {
       const comments = yield* client.listComments(ref, "AUD-1");
       assert.deepStrictEqual(
         comments.map((comment) => [comment.id, comment.authorId]),
-        [["c1", "u1"]],
+        [
+          ["c1", "u1"],
+          ["c2", null],
+        ],
       );
+    }).pipe(withToken()),
+  );
+
+  it.effect("reads the current issue body and every comment page in order", () =>
+    Effect.gen(function* () {
+      const page = (id: string, endCursor: string | null) => ({
+        body: {
+          data: {
+            issue: {
+              description: "Current issue body",
+              comments: {
+                nodes: [
+                  {
+                    id,
+                    body: id,
+                    createdAt: "2026-07-31T00:00:00.000Z",
+                    user: { id: `author-${id}` },
+                  },
+                ],
+                pageInfo: { hasNextPage: endCursor !== null, endCursor },
+              },
+            },
+          },
+        },
+      });
+      const fetchStub = stubLinear((_document, variables) =>
+        variables.after === null ? page("c1", "comment-cursor-1") : page("c2", null),
+      );
+      const client = yield* LinearClient;
+      const prose = yield* client.readProse(ref, "AUD-1");
+      assert.strictEqual(prose.body, "Current issue body");
+      assert.deepStrictEqual(
+        prose.comments.map(({ id }) => id),
+        ["c1", "c2"],
+      );
+      assert.deepStrictEqual(
+        sentRequests(fetchStub).map(({ variables }) => variables.after),
+        [null, "comment-cursor-1"],
+      );
+    }).pipe(withToken()),
+  );
+
+  it.effect("fails when a continued comment page omits its cursor", () =>
+    Effect.gen(function* () {
+      stubLinear(() => ({
+        body: {
+          data: {
+            issue: {
+              description: "body",
+              comments: { nodes: [], pageInfo: { hasNextPage: true, endCursor: null } },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.readProse(ref, "AUD-1"));
+      assert.include(error.message, "comment page missing cursor");
+    }).pipe(withToken()),
+  );
+
+  it.effect("fails when a comment cursor repeats", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({
+        body: {
+          data: {
+            issue: {
+              description: "body",
+              comments: {
+                nodes: [],
+                pageInfo: { hasNextPage: true, endCursor: "comment-cursor-1" },
+              },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.readProse(ref, "AUD-1"));
+      assert.include(error.message, "comment cursor did not advance");
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
     }).pipe(withToken()),
   );
 
