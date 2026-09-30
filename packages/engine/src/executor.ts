@@ -983,10 +983,20 @@ export const make = Effect.gen(function* () {
       message: error.message,
     });
     if (issueTrackerErrorIsPermanent(error)) {
-      yield* issueTracker.handOff(workspace, item.id, {
-        stage: item.stage,
-        note: `Work Context admission failed: ${error.message}`,
-      });
+      yield* issueTracker
+        .handOff(workspace, item.id, {
+          stage: item.stage,
+          note: `Work Context admission failed: ${error.message}`,
+        })
+        .pipe(
+          Effect.catchTag("IssueTrackerError", (handoffError) =>
+            Effect.logWarning("could not hand off failed admission", {
+              workspace: workspace.config.name,
+              item: item.id,
+              error: handoffError,
+            }),
+          ),
+        );
     }
     return null;
   });

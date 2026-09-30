@@ -568,6 +568,7 @@ function trackerRecorder(
   attemptFailure?: IssueTrackerError,
   readProse: IssueTrackerService["readProse"] = (_workspace, itemId) =>
     Effect.succeed(workContext(itemId).prose),
+  handOffFailure?: IssueTrackerError,
 ) {
   return Layer.effect(
     IssueTracker,
@@ -600,8 +601,15 @@ function trackerRecorder(
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
         },
-        handOff: (_workspace, itemId, outcome) =>
-          record(calls, { method: "handOff", item: itemId, stage: outcome.stage, note: outcome.note }),
+        handOff: (_workspace, itemId, outcome) => {
+          const recorded = record(calls, {
+            method: "handOff",
+            item: itemId,
+            stage: outcome.stage,
+            note: outcome.note,
+          });
+          return handOffFailure ? recorded.pipe(Effect.andThen(Effect.fail(handOffFailure))) : recorded;
+        },
         handBack: () => Effect.void,
         stalled: (_workspace, itemId, outcome) =>
           record(calls, {
@@ -1954,6 +1962,48 @@ describe("Executor.execute", () => {
                 message: "issue thread is too large",
               }),
             ),
+          ),
+          runnableStages,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("returns false when permanent admission handoff fails", () =>
+    Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
+        {
+          method: "handOff",
+          item: "#15",
+          stage: "implement",
+          note: "Work Context admission failed: issue thread is too large",
+        },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(
+            undefined,
+            undefined,
+            undefined,
+            () =>
+              Effect.fail(
+                new IssueTrackerError({
+                  reason: "unavailable",
+                  retryable: false,
+                  message: "issue thread is too large",
+                }),
+              ),
+            new IssueTrackerError({ reason: "auth", message: "issue-tracker credential expired" }),
           ),
           runnableStages,
         ),
