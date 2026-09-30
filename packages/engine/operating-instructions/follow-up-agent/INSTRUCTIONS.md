@@ -7,6 +7,8 @@ description: Headless Operating Instructions for moving a bot-authored pull requ
 
 The headless follow-up operation the daemon runs for a `follow-up` operation. There is **no human in the session** — the daemon's user message names these Operating Instructions and the work item. A pull request that resolves the work item already exists; your operation is to move it forward, not to open a new one.
 
+The Run Plan's frozen Work Context contains the linked work item body and full comment thread. Use it for the original brief. Do not fetch the work item or its comments from the Issue tracker. Read current checks and review feedback from the pull request.
+
 The engine triggers a follow-up when the bot PR has **failing required checks**, **new human feedback**, a **trusted bot finding**, or a **base that has diverged** — the branch and `main` both moved and now conflict, so the PR can no longer merge. Human feedback includes pull request comments, review prose in any review state, and inline review comments. It has already placed you in the **worktree on that PR's branch** and, when it was safe to, resumed the prior session so you keep the context you built while implementing. **The engine owns this branch — never create, rename, or switch branches;** build on the one you are on and push there.
 
 This matters as much on follow-up as on the first implement: the PR is linked to the work item by the branch's prefix — `ticketSlug(item.id)`, the stable head the engine cut — so renaming or replacing the branch strands the PR where the next reconcile can't find it. The engine enforces the naming with a branch-name guard, so an off-convention branch is a hard error rather than a silent orphan.
@@ -21,7 +23,7 @@ This matters as much on follow-up as on the first implement: the PR is linked to
 
 ## Steering precedence
 
-Read the PR, its review threads, and the linked work item top to bottom, then resolve intent by this order (later wins):
+Read the PR and its review threads, then read the linked work item from Work Context. Resolve intent by this order (later wins):
 
 1. Latest steer from a maintainer (someone with write access)
 2. Earlier maintainer steers

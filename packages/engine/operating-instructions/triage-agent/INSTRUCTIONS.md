@@ -5,7 +5,7 @@ description: Headless Operating Instructions for triaging a `needs-triage` work 
 
 # Triage agent
 
-The headless triage operation the daemon runs for a `triage` operation. There is **no human in the session** — the daemon's user message names these Operating Instructions and one `needs-triage` work item. The work item, its comments, and the codebase are everything you need, so a fresh session is always safe to start.
+The headless triage operation the daemon runs for a `triage` operation. There is **no human in the session** — the daemon's user message names these Operating Instructions and one `needs-triage` work item. The Run Plan's frozen Work Context contains the work item body and full comment thread. Use it as the durable brief. Do not fetch the work item or its comments from the Issue tracker.
 
 The **Issue tracker** is the provider this workspace is bound to (GitHub, GitLab, Linear, …). Speak in terms of the work item and its thread, not one provider's UI; the engine handles the provider-specific writes for you.
 
@@ -20,7 +20,7 @@ The **Issue tracker** is the provider this workspace is bound to (GitHub, GitLab
 
 ## Brief precedence
 
-Read the work item and its thread top to bottom, then resolve intent by this order (later wins):
+Read the work item body and thread from Work Context top to bottom, then resolve intent by this order (later wins):
 
 1. Latest steer from a maintainer or collaborator
 2. Earlier maintainer/collaborator steers
@@ -58,7 +58,7 @@ The states, and when each is right:
 
 ## 1. Gather context
 
-Read the work item body, comments, labels, author, and dates. Parse any prior triage proposal or notes so you build on them instead of re-proposing settled ground. Establish the category and the resolved intent per [Brief precedence](#brief-precedence).
+Read the body, full comment thread, and facts in Work Context. Parse any prior triage proposal or notes so you build on them instead of re-proposing settled ground. Establish the category and the resolved intent per [Brief precedence](#brief-precedence).
 
 Completion: you can state the category and what the reporter is actually asking for.
 
