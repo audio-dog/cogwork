@@ -33,7 +33,7 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
     ...over,
   });
 
-const readOperatingInstructions = (agent: "follow-up-agent" | "implement-agent") =>
+const readOperatingInstructions = (agent: "follow-up-agent" | "implement-agent" | "triage-agent") =>
   Effect.flatMap(FileSystem.FileSystem, (fs) =>
     fs.readFileString(
       decodeURIComponent(
@@ -344,7 +344,32 @@ describe("buildImplementPrompt", () => {
   });
 });
 
+describe("triage Operating Instructions", () => {
+  it.effect("captures linked requirements in the proposal", () =>
+    Effect.gen(function* () {
+      const instructions = yield* readOperatingInstructions("triage-agent");
+
+      assert.include(instructions, "Follow the links — context acquisition is your job, done once");
+      assert.include(instructions, "every externally linked requirement detail");
+      assert.include(instructions, "### Requirements digest");
+      assert.include(instructions, "**Review requirements:**");
+      assert.include(instructions, "omit the section only when the work item is already self-contained");
+      assert.include(instructions, "security review runs regardless");
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
+});
+
 describe("implement Operating Instructions", () => {
+  it.effect("treats the requirements digest as the complete external brief", () =>
+    Effect.gen(function* () {
+      const instructions = yield* readOperatingInstructions("implement-agent");
+
+      assert.include(instructions, "The brief is complete");
+      assert.include(instructions, "consult an external system only where the digest points at it");
+      assert.include(instructions, "never as a search");
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
+
   it.effect("keeps pull-request opening engine-owned", () =>
     Effect.gen(function* () {
       const instructions = yield* readOperatingInstructions("implement-agent");
