@@ -1,0 +1,19 @@
+packages/codex-cli/CONTEXT.md
+  s_9b8617cf84460f::t_b3192f92d3576f 76-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c74e1f9b2e67b2e5f25b8bef9196435d682298a6",
+  "prompts": {},
+  "sessions": {
+    "s_9b8617cf84460f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ef9e-9452-7ca0-bbd6-28d87710db1a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
