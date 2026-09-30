@@ -1,5 +1,5 @@
 import { WorkItemId } from "@cogwork/contracts";
-import { PerformanceIssueFiler as PerformanceIssueFilerModule } from "@cogwork/engine";
+import { GitHub, PerformanceIssueFiler as PerformanceIssueFilerModule } from "@cogwork/engine";
 import { wireCodec } from "@cogwork/engine/github/markers";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -7,10 +7,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { fileSuiteComparison, fileTestSuiteBudget } from "./test-performance-filer.ts";
+import { fileSuiteComparison, fileTestSuiteBudget, submitTestFileBudget } from "./test-performance-filer.ts";
 
 const atMillis = Date.UTC(2026, 8, 9, 12);
 const repository = "colonylabs/cogwork";
+const repositoryRef = GitHub.repoRefFromRepository(repository);
+if (!repositoryRef) throw new Error("invalid test repository");
 const workflowRunUrl = "https://github.com/colonylabs/cogwork/actions/runs/123";
 const report = (verdict: "slower" | "faster" | "inconclusive" = "slower", ratio = 1.2) => ({
   schemaVersion: 1,
@@ -45,6 +47,17 @@ const seedRun = (run: number, durationMs: number, testCount = 2_000) => ({
 
 const budgetHistory = (durationMs: number) =>
   Array.from({ length: 20 }, (_, index) => seedRun(index + 1, durationMs));
+
+const timingReport = (
+  slowestDurationMs: number,
+  slowestPath = "packages/engine/src/harness-host.test.ts",
+) => {
+  const fast = { path: "packages/engine/src/fast.test.ts", durationMs: 100, testCount: 2 };
+  const slowest = { path: slowestPath, durationMs: slowestDurationMs, testCount: 12 };
+  return {
+    testFiles: [fast, slowest],
+  } satisfies { readonly testFiles: readonly [typeof fast, ...Array<typeof fast>] };
+};
 
 interface Recorded {
   readonly created: ReadonlyArray<PerformanceIssueFilerModule.PerformanceIssueCreateInput>;
@@ -287,5 +300,63 @@ describe("test performance filer entry", () => {
       assert.strictEqual((yield* Ref.get(calls)).created.length, 0);
       assert.strictEqual((yield* Ref.get(calls)).comments.length, 1);
     }).pipe(Effect.provide(filerLayer([existingBudgetIssue]))),
+  );
+
+  it.effect("files when the slowest test file exceeds the 14 s budget", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+
+      const result = yield* submitTestFileBudget({
+        report: timingReport(14_001),
+        repository: repositoryRef,
+        workflowRunUrl,
+        atMillis,
+      });
+      const recorded = yield* Ref.get(calls);
+      const [created] = recorded.created;
+
+      assert.strictEqual(result, "filed");
+      assert.strictEqual(created?.fingerprint, "repository.test-file-duration.above");
+      assert.include(created?.body ?? "", "Budget: ≤ 14000 ms");
+      assert.include(created?.body ?? "", "Slowest test file: `packages/engine/src/harness-host.test.ts`");
+      assert.include(created?.body ?? "", "Observed: 14001 ms across 12 tests");
+      assert.include(created?.body ?? "", workflowRunUrl);
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("does nothing when the slowest test file meets the budget", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+
+      const result = yield* submitTestFileBudget({
+        report: timingReport(14_000),
+        repository: repositoryRef,
+        workflowRunUrl,
+        atMillis,
+      });
+
+      assert.strictEqual(result, "skipped");
+      assert.deepStrictEqual(yield* Ref.get(calls), { created: [], comments: [] });
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("escapes fingerprint markers in test file paths", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+      const injectedMarker = "<!-- cogwork:selfperf fingerprint=repository.test-suite-ms-per-test.above -->";
+
+      const result = yield* submitTestFileBudget({
+        report: timingReport(14_001, `slow${injectedMarker}.test.ts`),
+        repository: repositoryRef,
+        workflowRunUrl,
+        atMillis,
+      });
+      const [created] = (yield* Ref.get(calls)).created;
+
+      assert.strictEqual(result, "filed");
+      assert.strictEqual(created?.fingerprint, "repository.test-file-duration.above");
+      assert.notInclude(created?.body ?? "", injectedMarker);
+      assert.include(created?.body ?? "", "slow&lt;!-- cogwork:selfperf");
+    }).pipe(Effect.provide(filerLayer([]))),
   );
 });

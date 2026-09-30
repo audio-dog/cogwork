@@ -19,6 +19,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 const positiveFinite = Schema.Finite.check(Schema.isGreaterThan(0));
 const positiveInt = Schema.Int.check(Schema.isGreaterThan(0));
 const materialRegressionRatio = 1.15;
+const slowestTestFileBudgetMs = 14_000;
 const testSuiteBudgetMsPerTest = 30;
 
 const SuiteComparisonReport = Schema.Struct({
@@ -51,22 +52,35 @@ const SeedRunHistory = Schema.NonEmptyArray(
   }),
 ).check(Schema.isMaxLength(20));
 
+const TestTimingReport = Schema.Struct({
+  testFiles: Schema.NonEmptyArray(
+    Schema.Struct({
+      path: Schema.String.check(Schema.isNonEmpty()),
+      durationMs: positiveFinite,
+      testCount: positiveInt,
+    }),
+  ),
+});
+
 class TestPerformanceEntryError extends Data.TaggedError("TestPerformanceEntryError")<{
   readonly reason: "arguments" | "capped" | "history" | "report" | "repository" | "workflow-run-url";
   readonly message: string;
 }> {}
 
-const reportError = (message: string) =>
+const comparisonReportError = (message: string) =>
   new TestPerformanceEntryError({ reason: "report", message: `invalid comparison report: ${message}` });
+
+const timingReportError = (message: string) =>
+  new TestPerformanceEntryError({ reason: "report", message: `invalid timing report: ${message}` });
 
 const decodeReport = (value: unknown) =>
   Schema.decodeUnknownEffect(SuiteComparisonReport)(value).pipe(
-    Effect.mapError((error) => reportError(error.message)),
+    Effect.mapError((error) => comparisonReportError(error.message)),
   );
 
 const decodeReportJson = (value: string) =>
   Schema.decodeEffect(Schema.fromJsonString(SuiteComparisonReport))(value).pipe(
-    Effect.mapError((error) => reportError(error.message)),
+    Effect.mapError((error) => comparisonReportError(error.message)),
   );
 
 const historyError = (message: string) =>
@@ -82,6 +96,11 @@ const decodeHistoryJson = (value: string) =>
     Effect.mapError((error) => historyError(error.message)),
   );
 
+const decodeTimingReportJson = (value: string) =>
+  Schema.decodeEffect(Schema.fromJsonString(TestTimingReport))(value).pipe(
+    Effect.mapError((error) => timingReportError(error.message)),
+  );
+
 const decodeEntryArguments = (args: ReadonlyArray<string>) =>
   Schema.decodeUnknownEffect(Schema.Tuple([Schema.String, Schema.String]))(args).pipe(
     Effect.mapError(
@@ -94,7 +113,9 @@ const decodeEntryArguments = (args: ReadonlyArray<string>) =>
   );
 
 const decodeBudgetEntryArguments = (args: ReadonlyArray<string>) =>
-  Schema.decodeUnknownEffect(Schema.Tuple([Schema.Literal("--budget"), Schema.String]))(args).pipe(
+  Schema.decodeUnknownEffect(
+    Schema.Tuple([Schema.Literal("--budget"), Schema.String, Schema.String, Schema.String]),
+  )(args).pipe(
     Effect.mapError(
       (error) =>
         new TestPerformanceEntryError({
@@ -251,6 +272,35 @@ export const fileTestSuiteBudget = Effect.fn("TestSuiteBudgetEntry.file")(functi
   return yield* submitTestSuiteBudget({ ...input, history, repository });
 });
 
+export const submitTestFileBudget = Effect.fn("TestFileBudgetEntry.submit")(function* (input: {
+  readonly report: typeof TestTimingReport.Type;
+  readonly repository: GitHub.GitHubRepoRef;
+  readonly workflowRunUrl: string;
+  readonly atMillis: number;
+}) {
+  const slowest = input.report.testFiles.reduce((current, testFile) =>
+    testFile.durationMs > current.durationMs ? testFile : current,
+  );
+  if (slowest.durationMs <= slowestTestFileBudgetMs) return "skipped" as const;
+
+  const workflowRunUrl = yield* normalizeWorkflowRunUrl(input.workflowRunUrl, input.repository);
+  return yield* submitVerdict(
+    {
+      kind: "test-file-budget",
+      signal: "test-file-duration",
+      subsystem: "repository",
+      direction: "above",
+      observed: slowest.durationMs,
+      budget: slowestTestFileBudgetMs,
+      unit: "ms",
+      testFilePath: slowest.path,
+      testCount: slowest.testCount,
+      workflowRunUrl,
+    },
+    input.atMillis,
+  );
+});
+
 const makeFiler = Effect.fn("TestPerformanceEntry.makeFiler")(function* (repository: GitHub.GitHubRepoRef) {
   const client = yield* GitHub.GitHubClient;
   const target = yield* GitHub.makePerformanceIssueFilerTarget(client, repository, "origin-label-only");
@@ -271,16 +321,18 @@ const runComparisonEntry = Effect.fn("SuiteComparisonEntry.run")(function* (args
 });
 
 const runBudgetEntry = Effect.fn("TestSuiteBudgetEntry.run")(function* (args: ReadonlyArray<string>) {
-  const [, historyPath] = yield* decodeBudgetEntryArguments(args);
+  const [, historyPath, reportPath, workflowRunUrl] = yield* decodeBudgetEntryArguments(args);
   const fileSystem = yield* FileSystem.FileSystem;
   const history = yield* fileSystem.readFileString(historyPath).pipe(Effect.flatMap(decodeHistoryJson));
+  const report = yield* fileSystem.readFileString(reportPath).pipe(Effect.flatMap(decodeTimingReportJson));
   const repository = yield* Config.string("GITHUB_REPOSITORY").pipe(Effect.flatMap(decodeRepository));
   const filer = yield* makeFiler(repository);
   const atMillis = yield* Clock.currentTimeMillis;
-  const result = yield* submitTestSuiteBudget({ history, repository, atMillis }).pipe(
-    Effect.provideService(PerformanceIssueFilerModule.PerformanceIssueFiler, filer),
-  );
-  yield* Console.log(result);
+  const results = yield* Effect.all([
+    submitTestSuiteBudget({ history, repository, atMillis }),
+    submitTestFileBudget({ report, repository, workflowRunUrl, atMillis }),
+  ]).pipe(Effect.provideService(PerformanceIssueFilerModule.PerformanceIssueFiler, filer));
+  yield* Console.log(results.join("\n"));
 });
 
 const runEntry = (args: ReadonlyArray<string>) =>
