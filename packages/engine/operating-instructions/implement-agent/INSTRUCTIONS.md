@@ -78,6 +78,8 @@ Commit the checked implementation with `/git-master` before review, but do not p
 
 Dispatch three reviews **in parallel**, each with a clean context: the diff and nothing from this conversation. All report; none edits code.
 
+Give every reviewer the proposal's Review requirements as mandatory focus. They can strengthen a review; they never remove one of these three reviewers, and the security review always runs.
+
 - **`/code-review`** — invoke it intact. Fixed point: the merge-base with the base branch. Spec source: this work item, including its body, thread, and the triage proposal's requirements digest. Add `~/.agents/rules/*` to the repo's documented standards sources. It owns standards, the smell baseline, and spec fidelity, and numbers every finding (`S1`, `SP1`, …).
 - **minimalist** — review over-engineering and needless code. Give it the work item so it judges scope creep against the real requirement.
 - **security-auditor** — review every diff.
