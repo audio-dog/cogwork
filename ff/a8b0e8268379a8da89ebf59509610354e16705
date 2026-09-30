@@ -1,0 +1,24 @@
+configs/sensor/test-performance-filer.ts
+  s_a9e5062dd61619::t_af93b8b0a0efe1 22,55-64,96-105,118-120,277-316,337,340,344-348
+configs/sensor/CONTEXT.md
+  s_a9e5062dd61619::t_af93b8b0a0efe1 18-19
+configs/sensor/test-performance-filer.test.ts
+  s_a9e5062dd61619::t_cc28e5f216b008 49-62,93-97,310-364
+  s_a9e5062dd61619::t_fcddaf1564a573 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ffa8b0e8268379a8da89ebf59509610354e16705",
+  "prompts": {},
+  "sessions": {
+    "s_a9e5062dd61619": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f452-7147-7750-90b1-8b5209259928",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
