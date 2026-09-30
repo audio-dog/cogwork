@@ -1,0 +1,19 @@
+.github/workflows/test-suite-budget.yml
+  s_7159706f06029a::t_ba93bd3de73b89 67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5e483565a3c0cd1e04f874b59caabf52a9a07e17",
+  "prompts": {},
+  "sessions": {
+    "s_7159706f06029a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f332-39b2-7722-a64a-c9c648c38b61",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
