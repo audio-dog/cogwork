@@ -1,0 +1,36 @@
+configs/sensor/package.json
+  s_7159706f06029a::t_14acf940ade7c0 9
+configs/sensor/test-performance-filer.test.ts
+  s_7159706f06029a::t_216fafc6149c3c 169,181,208
+  s_7159706f06029a::t_1b598173256186 10,32,38-40,42-48,134-154,212-221,224-225,232-236,238-241,243-244,246,274-286
+  s_7159706f06029a::t_6ecff717e6baad 245,247-252,254-272
+  s_7159706f06029a::t_c4acde35091ad0 222-223,226-230
+  s_7159706f06029a::t_eda2e2eb33f377 15,74-76,287-289
+  s_7159706f06029a::t_5824fa714469f8 155-156,231,253,273,290
+  s_7159706f06029a::t_a25b523a7deea4 41
+  s_7159706f06029a::t_7b0ba76d4d2778 237,242
+  s_7159706f06029a::t_03d89bfd54efac 77-78,157
+configs/sensor/test-performance-filer.ts
+  s_7159706f06029a::t_6aaae47795fbee 8,20-22,45-53,55,72,74-82,96-99,101-102,104,168-180,182-186,193-195,198,212-225,227-251,260,273-280,285-287
+  s_7159706f06029a::t_6d16030cab39a6 41
+  s_7159706f06029a::t_5824fa714469f8 83,105,252-253,281-284,288
+  s_7159706f06029a::t_216fafc6149c3c 54,60,73,89,100,110,139,181,226,254
+  s_7159706f06029a::t_6ecff717e6baad 44
+  s_7159706f06029a::t_08ac1727001d35 84,103,106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ac90760422da36e365f1ecfdb279502aab7201c0",
+  "prompts": {},
+  "sessions": {
+    "s_7159706f06029a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f332-39b2-7722-a64a-c9c648c38b61",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
