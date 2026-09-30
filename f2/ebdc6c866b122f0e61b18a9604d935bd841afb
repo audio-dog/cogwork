@@ -1,0 +1,25 @@
+packages/contracts/src/run-plan.ts
+  s_89728d5021f5bd::t_d023922c4d5409 88-96,98-100,102-103,110
+  s_89728d5021f5bd::t_88011e7c57c353 97
+  s_89728d5021f5bd::t_6f69a04a7dd359 101
+packages/claude-code/src/harness-fixtures.ts
+  s_89728d5021f5bd::t_cd9f0adb640dd8 274
+apps/cli/src/ledger.test.ts
+  s_89728d5021f5bd::t_a388fbeff3b5fe 139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f2ebdc6c866b122f0e61b18a9604d935bd841afb",
+  "prompts": {},
+  "sessions": {
+    "s_89728d5021f5bd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f348-a2dc-71d1-a77a-b9860418c463",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
