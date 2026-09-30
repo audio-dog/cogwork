@@ -250,6 +250,7 @@ const mutableRegistryLayer = Layer.effect(
 const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerService => ({
   rateLimitScope: () => null,
   observe,
+  readProse: () => Effect.succeed({ body: "", comments: [] }),
   claim: () => Effect.void,
   release: () => Effect.void,
   note: () => Effect.void,
