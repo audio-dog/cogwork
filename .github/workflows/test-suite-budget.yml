@@ -64,4 +64,4 @@ jobs:
       - name: Check test suite budget
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: pnpm --filter @cogwork/sensor test:file-budget test-suite-seed-history/history.json
+        run: pnpm --filter @cogwork/sensor test:file-budget "${{ github.workspace }}/test-suite-seed-history/history.json"
