@@ -1,0 +1,19 @@
+docs/adr/0030-work-context-carries-the-work-item-prose.md
+  s_31fa93eb2f45a2::t_52971c40604d16 6-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1d3e5e436b59f451619c9206dd360a8f384253e7",
+  "prompts": {},
+  "sessions": {
+    "s_31fa93eb2f45a2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0576fd12-aa4a-4060-afac-27bb3b331435",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
