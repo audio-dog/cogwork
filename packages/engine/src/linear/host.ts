@@ -174,6 +174,18 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
       }
       return { target, issueId: id } satisfies LinearRef;
     }),
+    readProse: (ref) =>
+      client.readProse(ref.target, ref.issueId).pipe(
+        Effect.map(({ body, comments }) => ({
+          body,
+          comments: comments.map((comment) => ({
+            author: comment.authorId,
+            authorAssociation: null,
+            body: comment.body,
+            createdAtMillis: comment.createdAtMillis,
+          })),
+        })),
+      ),
     comments: (ref) => commentsFor(ref.target, ref.issueId),
     claimIdentity: () => Coordination.defaultClaimant,
     addClaim: (ref) => client.addLabel(ref.target, ref.issueId, claimLabel),
