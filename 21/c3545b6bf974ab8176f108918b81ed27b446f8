@@ -1,0 +1,36 @@
+packages/engine/src/github/host.ts
+  s_89728d5021f5bd::t_c2a33e0d9b83be 103-105,107-118,203
+  s_89728d5021f5bd::t_20394df1cfbc79 106
+packages/engine/src/github/client.ts
+  s_89728d5021f5bd::t_be3a677b7a56a4 1369-1372
+  s_89728d5021f5bd::t_59a6631c8b780f 203
+  s_89728d5021f5bd::t_96e45fdda90292 988-992
+  s_89728d5021f5bd::t_6da5cbe0615001 673-679
+  s_89728d5021f5bd::t_ef6980944a524e 882,884-893,895-897,900-901,903-908,910-916,920,953,979,1323
+  s_89728d5021f5bd::t_d46c3ae0c02a85 1378-1379
+  s_89728d5021f5bd::t_5ee87e02a6d6b7 1373
+  s_89728d5021f5bd::t_3208bcff8ae11a 956-978,981-987,993-999,1374-1377
+  s_89728d5021f5bd::t_cb250d0329abe3 1428-1431
+  s_89728d5021f5bd::t_ea171e7aad113b 899,909,919,952
+  s_89728d5021f5bd::t_37f2b4b2d070a9 945-949,954,980,1000-1002
+  s_89728d5021f5bd::t_8c00e3fb3dc2d1 191-194,198,204-209,467,603
+  s_89728d5021f5bd::t_d753553097c80b 94-96
+  s_89728d5021f5bd::t_b6d1554e7a68cf 950-951
+  s_89728d5021f5bd::t_3f26529f4fd8fa 955,1003,1319-1322,1380
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "21c3545b6bf974ab8176f108918b81ed27b446f8",
+  "prompts": {},
+  "sessions": {
+    "s_89728d5021f5bd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f348-a2dc-71d1-a77a-b9860418c463",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
