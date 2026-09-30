@@ -27,6 +27,7 @@ import {
 import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
+import { workContextMessage } from "./run-plan";
 import { SessionStore } from "./session-store";
 import {
   makeOwnedToolSet,
@@ -201,6 +202,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             : [];
           const messages: ReadonlyArray<ModelMessage> = [
             ...history,
+            workContextMessage(plan.workContext),
             ...plan.messages.map(({ role, content }) => ({ role, content })),
           ];
 

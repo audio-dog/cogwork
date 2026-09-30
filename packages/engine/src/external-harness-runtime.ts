@@ -60,6 +60,7 @@ import {
   validateCheckoutDirectory,
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
+import { workContextMessage } from "./run-plan";
 import { SessionStore } from "./session-store";
 import { boundedDiff, ignored, mergeFileDiffFeed, watchWorktreeDiffs } from "./tools/file-diff-feed";
 import { policyForProfile } from "./tools/policy";
@@ -492,7 +493,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     mcp: resolvedMcpSkills(request),
     secrets: { mcp: request.mcpCredentials },
     checkout: { path: request.plan.sandbox.workspace, gitWritablePaths: writablePaths },
-    prompt: request.plan.messages,
+    prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
   } satisfies ExternalHarnessResolvedRequest;
 });
