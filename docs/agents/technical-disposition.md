@@ -4,7 +4,9 @@ How this project decides.
 
 Read this when you are answering a technical question in the maintainer's place and the code cannot
 tell you the answer — a finely-tuned call about how much to expose, whether to cap something, which
-error shape to use, how to split the work. These are rarely the maintainer's to answer: they follow
+error shape to use, how to split the work. Read it too when you propose a fix or a design — an ADR,
+a ticket's brief or acceptance criteria, a plan — even with the maintainer in the conversation: the
+shape of a fix is set where it is first written down, and every stage after it inherits that shape. These are rarely the maintainer's to answer: they follow
 from where the product is going and from how mature tools solve the same problem. Resolve them
 yourself instead of blocking.
 

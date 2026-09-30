@@ -73,6 +73,10 @@ Two cheap checks before proposing:
 
 Where it's cheap, check that the claim holds up rather than taking it at face value. For a bug, reproduce it from the reporter's steps and report the result: confirmed (name the code path), failed to reproduce, or not enough detail — the last is a strong `needs-info` signal. A confirmed claim raises your confidence and makes a far stronger brief. No live reporter means no back-and-forth; let the proposal carry any questions.
 
+**Verify the proposed fix, not only the claim.** A work item often arrives with its fix already written — in the body, the acceptance criteria, or an earlier steer. Treat that shape as a hypothesis. Find the cause behind the reported instance, then apply the disposition doc's **Fix the class, not the instance** test to the proposed fix: would it still be needed if the system were shaped right? When the answer is yes, the structural fix is the brief — say so in your findings, name the class and the heuristic, and write the Agent Brief against the structure. Reshaping a fix toward its class is a technical call you resolve, never an escalation.
+
+Completion: you can name the cause behind the reported instance, and state whether the brief fixes that cause or one instance of it.
+
 ## 4. Write the proposal
 
 Decide the disposition:
