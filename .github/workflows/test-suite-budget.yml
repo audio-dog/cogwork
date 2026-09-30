@@ -63,14 +63,18 @@ jobs:
           await writeFile(`${directory}/history.json`, `${JSON.stringify(history, null, 2)}\n`)
           EOF
 
-      - name: Measure test file durations
-        run: pnpm --filter @cogwork/sensor test:measure > test-suite-timing-report.json
-
       - name: Check test suite budget
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm --filter @cogwork/sensor test:file-budget "${{ github.workspace }}/test-suite-seed-history/history.json"
+
+      - name: Measure test file durations
+        run: pnpm --silent --filter @cogwork/sensor test:measure > test-suite-timing-report.json
+
+      - name: Check slowest test file budget
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: >-
-          pnpm --filter @cogwork/sensor test:file-budget
-          "${{ github.workspace }}/test-suite-seed-history/history.json"
+          pnpm --filter @cogwork/sensor test:slowest-file-budget
           "${{ github.workspace }}/test-suite-timing-report.json"
           "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
