@@ -1,0 +1,19 @@
+packages/engine/src/playbook.test.ts
+  s_47aff6bd629e82::t_f9790a61fb996b 12,296-321,323-333,336-344,348-364,366-399,402-431
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2e6c528441ade7bf356e446e51cba77bb60dce20",
+  "prompts": {},
+  "sessions": {
+    "s_47aff6bd629e82": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f39f-4565-7c82-bf0c-e9877c2afc05",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
