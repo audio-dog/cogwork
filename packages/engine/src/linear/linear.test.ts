@@ -6,7 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "../classify";
-import { triageProposalBody } from "../comments";
+import { triageProposalAttribution, triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
 import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
@@ -24,7 +24,7 @@ import {
   type RawIssue,
   type RawWorkflowState,
 } from "./client";
-import { claimLabel, wireCodec } from "./markers";
+import { claimLabel, ledgerMarker, wireCodec } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -82,6 +82,11 @@ class LinearClientCalls extends Context.Service<LinearClientCalls, LinearClientC
 }
 
 const bot = { id: "bot-user" } as const;
+const botCoordination = {
+  actorUserId: bot.id,
+  ledgerMarker,
+  proposalMarker: triageProposalAttribution,
+};
 
 const teamRef: LinearTeamRef = {
   team: "AUD",
@@ -187,7 +192,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         }),
       ),
     listWorkflowStates: () => guard(Effect.succeed(states)),
-    listComments: (_ref, issueId) =>
+    listComments: (_ref, issueId, _coordination) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
     readProse: (_ref, issueId) =>
       guard(
@@ -520,7 +525,7 @@ describe("linear work source adapter", () => {
       const client = yield* LinearClient;
       const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
       yield* source.claim(workspace, id("AUD-7"), request);
-      const comments = botComments(yield* client.listComments(teamRef, "AUD-7"));
+      const comments = botComments(yield* client.listComments(teamRef, "AUD-7", botCoordination));
       assert.strictEqual(comments.length, 1);
       assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
       assert.isFalse(comments[0]?.body.includes("<!--") ?? true);

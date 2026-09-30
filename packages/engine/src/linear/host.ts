@@ -98,7 +98,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
 
   const commentsFor = (target: AuthenticatedLinearTarget, issueId: string): CommentHost<string> => ({
     comments: client
-      .listComments(target, issueId)
+      .listComments(target, issueId, coordinationScope(target))
       .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.actorUserId)))),
     edit: (id, body) => client.editComment(target, id, body),
     create: (body) => client.createComment(target, issueId, body),
