@@ -11,6 +11,7 @@ import {
   GitHubClient,
   type GitHubClientService,
   type GitHubRepoRef,
+  type RawIssueComment,
   type RawPull,
   type RawReview,
   type RawReviewComment,
@@ -180,7 +181,13 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
         .filter((review) => writeAccess.has(review.authorAssociation))
         .map((review) => ({ login: review.authorLogin, state: review.state })),
     );
-    const pullRequestFeedback = [...comments, ...reviewFeedback(reviews)];
+    const pullRequestFeedback = [
+      ...comments.filter(
+        (comment): comment is RawIssueComment & { readonly authorLogin: string } =>
+          comment.authorLogin !== null,
+      ),
+      ...reviewFeedback(reviews),
+    ];
     const feedback = [...pullRequestFeedback, ...reviewComments];
     const human = humanCommentSignal(feedback, target.botAllowlist);
     const bot = botTriggerSignal(reviewComments, pullRequestFeedback, target.botAllowlist);

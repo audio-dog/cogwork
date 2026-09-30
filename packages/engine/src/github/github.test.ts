@@ -233,6 +233,15 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   return {
     authenticatedLogin: () => Effect.succeed(bot.login),
     listIssues: () => Ref.get(issuesRef),
+    readIssue: (_repo, number) =>
+      Effect.gen(function* () {
+        const issues = yield* Ref.get(issuesRef);
+        const issue = issues.find((candidate) => candidate.number === number);
+        if (!issue) {
+          return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
+        }
+        return issue;
+      }),
     listIssueFieldValues: (_repo, nodeIds) =>
       seed.priorityValueError
         ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "field values unavailable" }))
@@ -254,6 +263,8 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     issuePullReferences: () => Effect.succeed([]),
     pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
     listComments: (_repo, number) =>
+      Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
+    listAllComments: (_repo, number) =>
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
     listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
@@ -462,6 +473,39 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
 });
 
 describe("GitHub adapters", () => {
+  it.effect("reads current issue prose and comment attribution for admission", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const prose = yield* tracker.readProse(workspace, id("#41"));
+      assert.deepStrictEqual(prose, {
+        body: "Original request",
+        comments: [
+          {
+            author: "maintainer",
+            authorAssociation: "MEMBER",
+            body: "Latest steer",
+            createdAtMillis: 2,
+          },
+        ],
+      });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 41, title: "prose", labels: ["ready-for-agent"], body: "Original request" }],
+          comments: [
+            {
+              issue: 41,
+              authorLogin: "maintainer",
+              authorAssociation: "MEMBER",
+              body: "Latest steer",
+              createdAtMillis: 2,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it("uses the workspace's bound Connection for priority field reads", () => {
     const target = targetFor({
       repository: "owner/repo",
@@ -509,6 +553,51 @@ describe("GitHub adapters", () => {
       assert.strictEqual(reviewComments[2]?.subjectType, "file");
       assert.notProperty(issueComments[0] ?? {}, "inReplyToId");
       assert.notProperty(issueComments[0] ?? {}, "subjectType");
+    }).pipe(Effect.provide(withFetchClient(fetch)));
+  });
+
+  it.effect("reads every issue comment page and preserves comments without an author or body", () => {
+    const page = (body: unknown, link?: string) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json", ...(link ? { link } : {}) },
+      });
+    const first = {
+      id: 1,
+      body: null,
+      user: null,
+      created_at: "2026-09-21T12:00:00Z",
+      author_association: "NONE",
+    };
+    const second = {
+      id: 2,
+      body: "second",
+      user: { login: "maintainer" },
+      created_at: "2026-09-21T12:01:00Z",
+      author_association: "MEMBER",
+    };
+    const fetch: typeof globalThis.fetch = (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      return Promise.resolve(
+        url.searchParams.get("page") === "2"
+          ? page([second])
+          : page(
+              [first],
+              '<https://api.github.com/repos/owner/repo/issues/100/comments?per_page=100&page=2>; rel="next"',
+            ),
+      );
+    };
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const comments = yield* client.listAllComments(repo, 100);
+      assert.deepStrictEqual(
+        comments.map(({ id, authorLogin, body }) => ({ id, authorLogin, body })),
+        [
+          { id: 1, authorLogin: null, body: "" },
+          { id: 2, authorLogin: "maintainer", body: "second" },
+        ],
+      );
     }).pipe(Effect.provide(withFetchClient(fetch)));
   });
 

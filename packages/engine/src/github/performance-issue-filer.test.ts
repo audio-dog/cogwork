@@ -340,6 +340,7 @@ it.effect("retries creation after a transient failure that did not report accept
                   authenticatedLogin: () => Effect.succeed("cogwork-bot"),
                   listIssues: () =>
                     Ref.get(calls).pipe(Effect.map((count) => (count >= 2 ? [issue(2, marker)] : []))),
+                  readIssue: unexpectedClientCall,
                   listIssueFieldValues: unexpectedClientCall,
                   listPriorityFields: unexpectedClientCall,
                   issuePullReferences: noPullReferences,
@@ -348,6 +349,7 @@ it.effect("retries creation after a transient failure that did not report accept
                   listPulls: unexpectedClientCall,
                   pullMergeableState: unexpectedClientCall,
                   listComments: unexpectedClientCall,
+                  listAllComments: unexpectedClientCall,
                   listReviewComments: unexpectedClientCall,
                   listReviews: unexpectedClientCall,
                   listCheckRuns: unexpectedClientCall,
