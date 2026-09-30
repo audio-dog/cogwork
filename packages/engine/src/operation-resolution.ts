@@ -30,7 +30,7 @@ import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { Availability } from "./availability";
-import type { EligibleWork } from "./classify";
+import type { AdmittedWork, EligibleWork } from "./classify";
 import { ConnectionStore } from "./connection";
 import { ContextAssembler } from "./context-assembler";
 import { ControlStore } from "./control-store";
@@ -83,7 +83,7 @@ export type CandidateSessionFacts = Omit<
 export interface CandidateFacts {
   readonly runId: RunId;
   readonly workspace: RegisteredWorkspace;
-  readonly item: EligibleWork;
+  readonly item: AdmittedWork;
   readonly observation: RunPlanObservation;
   readonly checkoutPath: string;
   readonly continuationPrompt: string;

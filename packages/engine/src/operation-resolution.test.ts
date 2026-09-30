@@ -10,7 +10,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import type { EligibleWork } from "./classify";
+import type { AdmittedWork } from "./classify";
 import * as OperationResolution from "./operation-resolution";
 import type { RegisteredWorkspace } from "./projector";
 import { engineTestLayerWithOperationResolution } from "./testing/engine-test-layer";
@@ -41,7 +41,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "workspace",
     checkoutPath: "/repo",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/default" },
     mcpSkills: [
       {
         name: "tracker",
@@ -52,7 +52,7 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 
-const item: EligibleWork = {
+const item: AdmittedWork = {
   id: itemId,
   title: "Land operation resolution",
   url: "https://github.com/colonylabs/cogwork/issues/491",
@@ -61,6 +61,7 @@ const item: EligibleWork = {
   priorFailures: 0,
   workContext: {
     reference: { workItem: itemId, url: "https://github.com/colonylabs/cogwork/issues/491" },
+    prose: { body: "", comments: [] },
     facts: {
       roles: ["ready-for-agent"],
       assignees: ["maintainer"],
@@ -107,7 +108,7 @@ const testLayer = (
 
 const candidateFacts = (
   session: OperationResolution.CandidateSessionFacts["session"] = null,
-  candidate: EligibleWork = item,
+  candidate: AdmittedWork = item,
 ) => ({
   runId,
   workspace,
