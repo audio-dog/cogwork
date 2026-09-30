@@ -1,0 +1,22 @@
+packages/claude-code/package.json
+  s_51b6ae90367d7c::t_3b08f0691ad3a3 13
+packages/claude-code/src/harness-host-contract.test.ts
+  s_51b6ae90367d7c::t_22be70d1d4ff9c 2,4-5,20-27,33,61-63
+  s_51b6ae90367d7c::t_3b08f0691ad3a3 1,3,6-19,28-32,34-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5edfbedfec3c927d8d143a47eff4eb11bbed28ec",
+  "prompts": {},
+  "sessions": {
+    "s_51b6ae90367d7c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f3b7-fc9c-72c0-94e9-0255a1849267",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
