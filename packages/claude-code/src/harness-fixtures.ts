@@ -23,6 +23,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { type ClaudeCodeRunnerOptions, claudeCodeRunner } from "./harness";
+import { networkEnvironmentProbe, repositorySeedFiles, windowsEnvironmentProbe } from "./harness-test-data";
 
 const name = Schema.decodeSync(HarnessName)("claude");
 const companionName = Schema.decodeSync(HarnessName)("companion");
@@ -96,25 +97,6 @@ const inheritedEnvironment = {
   http_proxy: environmentValue("http_proxy"),
   https_proxy: environmentValue("https_proxy"),
   NODE_EXTRA_CA_CERTS: environmentValue("NODE_EXTRA_CA_CERTS"),
-};
-
-const windowsEnvironmentProbe = {
-  USERPROFILE: "C:\\Users\\cogwork",
-  HOMEDRIVE: "C:",
-  HOMEPATH: "\\Users\\cogwork",
-  APPDATA: "C:\\Users\\cogwork\\AppData\\Roaming",
-  SYSTEMROOT: "C:\\Windows",
-  PATHEXT: ".COM;.EXE;.BAT;.CMD",
-  COMSPEC: "C:\\Windows\\System32\\cmd.exe",
-};
-
-const networkEnvironmentProbe = {
-  HTTP_PROXY: "http://proxy.example.test:8080",
-  HTTPS_PROXY: "https://proxy.example.test:8443",
-  NO_PROXY: "localhost,.example.test",
-  http_proxy: "http://lowercase-proxy.example.test:8080",
-  https_proxy: "https://lowercase-proxy.example.test:8443",
-  NODE_EXTRA_CA_CERTS: "/tmp/cogwork-enterprise-ca.pem",
 };
 
 const persistence = memoryPersistence();
@@ -308,16 +290,18 @@ const makeLiveHarness = (
   Effect.acquireRelease(createTestSandbox(), destroyTestSandbox).pipe(
     Effect.tap((handle) =>
       Effect.promise(() =>
-        handle.process.exec(
-          [
-            "git init",
-            'git config user.email "cogwork@example.com"',
-            'git config user.name "Cogwork"',
-            'printf "initial\\n" > tracked.txt',
-            'printf "existing repo agents\\n" > AGENTS.md',
-            "git add tracked.txt AGENTS.md",
-            'git commit -m "initial"',
-          ].join(" && "),
+        Promise.all(
+          Object.entries(repositorySeedFiles).map(([path, contents]) => handle.fs.write(path, contents)),
+        ).then(() =>
+          handle.process.exec(
+            [
+              "git init",
+              'git config user.email "cogwork@example.com"',
+              'git config user.name "Cogwork"',
+              `git add ${Object.keys(repositorySeedFiles).join(" ")}`,
+              'git commit -m "initial"',
+            ].join(" && "),
+          ),
         ),
       ).pipe(Effect.timeout(testProcessDeadline)),
     ),
