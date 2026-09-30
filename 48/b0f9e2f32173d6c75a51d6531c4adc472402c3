@@ -1,0 +1,27 @@
+packages/engine/src/performance-issue-filer.ts
+  s_a9e5062dd61619::t_af93b8b0a0efe1 124-137,142,309-311,313-328,334
+packages/engine/CONTEXT.md
+  s_a9e5062dd61619::t_af93b8b0a0efe1 249
+configs/sensor/test-performance-filer.ts
+  s_a9e5062dd61619::t_af93b8b0a0efe1 22,55-64,99-100,102-103,116-118,276-303,324,327,331-335
+configs/sensor/CONTEXT.md
+  s_a9e5062dd61619::t_af93b8b0a0efe1 18-19
+configs/sensor/test-performance-filer.test.ts
+  s_a9e5062dd61619::t_cc28e5f216b008 61,304-308,310,312-330,332,334-342,344-345,347,351-353,355,361
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "48b0f9e2f32173d6c75a51d6531c4adc472402c3",
+  "prompts": {},
+  "sessions": {
+    "s_a9e5062dd61619": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f452-7147-7750-90b1-8b5209259928",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
