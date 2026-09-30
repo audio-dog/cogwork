@@ -198,11 +198,21 @@ const CommentsPayload = Schema.Struct({
   ),
 });
 
+const CoordinationCommentsPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({
+      comments: Schema.Struct({ nodes: Schema.Array(CommentNode) }),
+      proposalComments: Schema.Struct({ nodes: Schema.Array(CommentNode) }),
+    }),
+  ),
+});
+
 const IssueRelationsPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ inverseRelations: RelationConnection })),
 });
 
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
+const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 
@@ -408,6 +418,12 @@ query IssueComments($id: String!, $after: String) {
   }
 }`;
 
+const coordinationCommentsQuery = `
+query IssueCoordinationComments($id: String!, $bot: ID!, $ledger: String!, $proposal: String!) {
+  issue(id: $id) {${coordinationFields}
+  }
+}`;
+
 const issueRelationsQuery = `
 query IssueInverseRelations($id: String!, $after: String) {
   issue(id: $id) {
@@ -503,13 +519,16 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   priority: linearPriority(issue.priority),
 });
 
-const toRawComment = (comment: typeof CommentNode.Type) => ({
-  id: comment.id,
-  authorId: comment.user?.id ?? null,
-  authorAssociation: "NONE" as const,
-  body: comment.body,
-  createdAtMillis: millisFromIso(comment.createdAt),
-});
+const toRawComment = (comment: typeof CommentNode.Type) => {
+  const rawComment: RawComment = {
+    id: comment.id,
+    authorId: comment.user?.id ?? null,
+    authorAssociation: "NONE",
+    body: comment.body,
+    createdAtMillis: millisFromIso(comment.createdAt),
+  };
+  return rawComment;
+};
 
 const lacksSteeringAuthority = (user: NonNullable<(typeof ProseCommentNode.Type)["user"]>) =>
   !user.active || user.guest || user.app;
@@ -865,10 +884,21 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     observeIssues,
     listWorkflowStates: (ref: LinearTeamRef) =>
       Effect.map(loadTeam(ref, metaShape), (team): ReadonlyArray<RawWorkflowState> => team.states.nodes),
-    listComments: Effect.fn("linear.listComments")(function* (ref: LinearTeamRef, issueId: string) {
-      const data = yield* rawData(ref, commentsQuery, { id: issueId, after: null });
-      const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
-      return (payload.issue?.comments.nodes ?? []).map(toRawProseComment);
+    listComments: Effect.fn("linear.listComments")(function* (
+      ref: LinearTeamRef,
+      issueId: string,
+      coordination: CoordinationScope,
+    ) {
+      const data = yield* rawData(ref, coordinationCommentsQuery, {
+        id: issueId,
+        bot: coordination.actorUserId,
+        ledger: coordination.ledgerMarker,
+        proposal: coordination.proposalMarker,
+      });
+      const payload = yield* Effect.mapError(decodeCoordinationComments(data), toUnavailable);
+      return [...(payload.issue?.comments.nodes ?? []), ...(payload.issue?.proposalComments.nodes ?? [])].map(
+        toRawComment,
+      );
     }),
     readProse,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
