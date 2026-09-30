@@ -33,7 +33,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { Availability, availabilityCauseSummary } from "./availability";
-import type { EligibleWork } from "./classify";
+import type { AdmittedWork, EligibleWork } from "./classify";
 import {
   followUpNoteBody,
   handoffNote,
@@ -952,6 +952,35 @@ export const make = Effect.gen(function* () {
     return true;
   });
 
+  const refreshWorkContext = Effect.fn("Executor.refreshWorkContext")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const prose = yield* issueTracker.readProse(workspace, item.id);
+    return { ...item, workContext: { ...item.workContext, prose } } satisfies AdmittedWork;
+  });
+
+  const rejectAdmission = Effect.fn("Executor.rejectAdmission")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    operation: ResolvedOperation,
+    error: IssueTrackerError,
+  ) {
+    yield* Effect.logWarning("Run admission rejected because the issue-tracker Connection failed", {
+      workspace: workspace.config.name,
+      item: item.id,
+      connection: operation.issueTrackerBinding,
+      message: error.message,
+    });
+    if (issueTrackerErrorIsPermanent(error)) {
+      yield* issueTracker.handOff(workspace, item.id, {
+        stage: item.stage,
+        note: `Work Context admission failed: ${error.message}`,
+      });
+    }
+    return null;
+  });
+
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -966,20 +995,29 @@ export const make = Effect.gen(function* () {
     if (!checked.resolved || !checked.availability.available) {
       return yield* decline(workspace, item, checked.availability.causes);
     }
+    const operation = checked.resolved;
     const admission = yield* claimEnabledItem(workspace, item);
     if (!admission.claimed) return false;
-    yield* runClaimed(workspace, item, checked.resolved, admission.startedAtMillis, observation).pipe(
+    const admitted = yield* refreshWorkContext(workspace, item).pipe(
+      Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : releaseClaim(workspace, item.id))),
+      Effect.matchEffect({
+        onFailure: (error) => rejectAdmission(workspace, item, operation, error),
+        onSuccess: (admittedItem) => Effect.succeed(admittedItem),
+      }),
+    );
+    if (admitted === null) return false;
+    return yield* runClaimed(workspace, admitted, operation, admission.startedAtMillis, observation).pipe(
+      Effect.map(() => true),
       Effect.tap(() => releaseClaim(workspace, item.id)),
       Effect.onExit((exit) =>
         Exit.isSuccess(exit) || hasInterruptsOnly(exit) ? Effect.void : releaseClaim(workspace, item.id),
       ),
     );
-    return true;
   });
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
+    item: AdmittedWork,
     operation: ResolvedOperation,
     startedAtMillis: number,
     observation: RunPlanObservation,
