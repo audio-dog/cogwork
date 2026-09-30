@@ -9,7 +9,13 @@ import {
   withCleanups,
 } from "./test-compare.mjs";
 
-const measurements = (durationMs) => Array.from({ length: 5 }, () => ({ durationMs, testCount: 1_800 }));
+const measurements = (durationMs) =>
+  Array.from({ length: 5 }, () => ({
+    durationMs,
+    testCount: 1_800,
+    packages: [{ path: "packages/engine", durationMs: 80, testCount: 1_800 }],
+    testFiles: [{ path: "packages/engine/src/engine.test.ts", durationMs: 80, testCount: 1_800 }],
+  }));
 
 describe("test comparison statistics", () => {
   it("classifies slower, faster, and indistinguishable measurements", () => {
@@ -217,6 +223,8 @@ describe("test comparison statistics", () => {
         environment: {},
         medianDurationMs: 100,
         testCount: 1_800,
+        packages: [{ path: "packages/engine", durationMs: 80, testCount: 1_800 }],
+        testFiles: [{ path: "packages/engine/src/engine.test.ts", durationMs: 80, testCount: 1_800 }],
       },
       head: {
         ref: "HEAD",
@@ -224,6 +232,8 @@ describe("test comparison statistics", () => {
         environment: {},
         medianDurationMs: 120,
         testCount: 1_800,
+        packages: [{ path: "packages/engine", durationMs: 80, testCount: 1_800 }],
+        testFiles: [{ path: "packages/engine/src/engine.test.ts", durationMs: 80, testCount: 1_800 }],
       },
       ratio: 1.2,
       confidenceInterval: { lowRatio: 1.2, highRatio: 1.2, confidence: 0.95 },

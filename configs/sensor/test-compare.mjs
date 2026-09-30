@@ -146,22 +146,34 @@ const summarizeMeasurements = (measurements, label) => {
   if (testCounts.size !== 1 || !Number.isInteger(testCount) || testCount <= 0) {
     throw new Error(`${label} measurements must contain one stable positive test count`);
   }
-  return { durationsMs, testCount };
+  const representative = measurements.toSorted((left, right) => left.durationMs - right.durationMs)[
+    Math.floor(measurements.length / 2)
+  ];
+  const hasTimingReport = Array.isArray(representative.packages) && Array.isArray(representative.testFiles);
+  if (!hasTimingReport) throw new Error(`${label} measurements must contain timing reports`);
+  return {
+    durationsMs,
+    testCount,
+    packages: representative.packages,
+    testFiles: representative.testFiles,
+  };
 };
 
-const configurationReport = (configuration, medianDurationMs, testCount) => ({
+const configurationReport = (configuration, medianDurationMs, measurement) => ({
   ...configuration,
   environment: configuration.environment ?? {},
   medianDurationMs,
-  testCount,
+  testCount: measurement.testCount,
+  packages: measurement.packages,
+  testFiles: measurement.testFiles,
 });
 
 export const buildReport = (baseConfiguration, headConfiguration, measurements) => {
   const base = summarizeMeasurements(measurements.base, "base");
   const head = summarizeMeasurements(measurements.head, "head");
   const comparison = analyzeDurations(base.durationsMs, head.durationsMs);
-  const baseReport = configurationReport(baseConfiguration, comparison.baseMedianMs, base.testCount);
-  const headReport = configurationReport(headConfiguration, comparison.headMedianMs, head.testCount);
+  const baseReport = configurationReport(baseConfiguration, comparison.baseMedianMs, base);
+  const headReport = configurationReport(headConfiguration, comparison.headMedianMs, head);
   const identical =
     baseReport.sha === headReport.sha && isDeepStrictEqual(baseReport.environment, headReport.environment);
   const verdict = identical ? "inconclusive" : comparison.verdict;
@@ -253,14 +265,16 @@ export const withCleanups = async (operation, cleanups) => {
 
 const parseMeasurement = (stdout) => {
   const measurement = JSON.parse(stdout.trim());
-  if (
+  const hasTimingReport = Array.isArray(measurement?.packages) && Array.isArray(measurement?.testFiles);
+  const invalidMeasurement =
     typeof measurement !== "object" ||
     measurement === null ||
     !Number.isFinite(measurement.durationMs) ||
     measurement.durationMs <= 0 ||
     !Number.isInteger(measurement.testCount) ||
-    measurement.testCount <= 0
-  ) {
+    measurement.testCount <= 0 ||
+    !hasTimingReport;
+  if (invalidMeasurement) {
     throw new Error("test:measure returned an invalid measurement");
   }
   return measurement;
