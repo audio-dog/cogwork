@@ -189,6 +189,7 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
       messages: [{ role: "user", content: "triage the issue" }],
       workContext: {
         reference: { workItem: "#1", url: null },
+        prose: { body: "", comments: [] },
         facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
         observation: { generation: 1, observedAtMillis: 1 },
       },

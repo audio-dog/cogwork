@@ -138,6 +138,7 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
       messages: [{ role: "user", content: overrides.prompt ?? "implement the issue" }],
       workContext: {
         reference: { workItem: workItemId, url: null },
+        prose: { body: "", comments: [] },
         facts: {
           roles: ["ready-for-agent"],
           assignees: [],
