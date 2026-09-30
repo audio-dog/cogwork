@@ -1,7 +1,9 @@
 import {
   AgUiEvent,
   BranchName,
+  Connection,
   ConnectionId,
+  type ConnectionReadiness,
   type ContributionSettingRow,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
@@ -46,7 +48,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { vi } from "vitest";
 import * as Availability from "./availability";
 import type { EligibleWork } from "./classify";
-import { ConnectionStore, type ConnectionStoreService } from "./connection";
+import { ConnectionStore, type ConnectionStoreService, connectionOverview } from "./connection";
 import * as ContextAssembler from "./context-assembler";
 import { ContextFsError } from "./context-fs";
 import { ControlStore, type ControlStoreService } from "./control-store";
@@ -223,6 +225,17 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
     ],
+  }),
+};
+
+const linearWorkspace: RegisteredWorkspace = {
+  source: workspace.source,
+  repository: workspace.repository,
+  contributions: [],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "linear-workspace",
+    checkoutPath: "/repos/linear-workspace",
+    issueTracker: { type: "linear", connectionId: linearConnectionId, teams: ["ENG"] },
   }),
 };
 
@@ -735,30 +748,38 @@ const recordOnlyRunner = (events: ReadonlyArray<AgUiEvent>) =>
 const capturingRunner = (
   events: ReadonlyArray<AgUiEvent>,
   tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
-  sessionKind: SessionKind = "opaque-handle",
-  name: HarnessName = cursor,
-  humanAttach: HarnessCapabilityProfile["session"]["humanAttach"] = "codex-cli",
-  affinity: HarnessCapabilityProfile["session"]["affinity"] = "runtime-host",
-): TestRunner => ({
-  make: (requests) => ({
-    ...testRunnerDefaults,
-    capabilities: {
-      ...testRunnerDefaults.capabilities,
-      session: { ...testRunnerDefaults.capabilities.session, affinity, humanAttach },
-    },
-    name,
-    sessionKind,
-    projectedMembers: [],
-    planMiddleware: [],
-    execution: fullHarnessExecution,
-    run: (request) =>
-      Stream.unwrap(
-        Ref.update(requests, (xs) => [...xs, request]).pipe(
-          Effect.map(() => Stream.concat(Stream.fromArray(events), tail)),
+  options: {
+    readonly sessionKind?: SessionKind;
+    readonly name?: HarnessName;
+    readonly humanAttach?: HarnessCapabilityProfile["session"]["humanAttach"];
+    readonly affinity?: HarnessCapabilityProfile["session"]["affinity"];
+    readonly projectedMembers?: HarnessRunner["projectedMembers"];
+  } = {},
+) =>
+  ({
+    make: (requests) => ({
+      ...testRunnerDefaults,
+      capabilities: {
+        ...testRunnerDefaults.capabilities,
+        session: {
+          ...testRunnerDefaults.capabilities.session,
+          affinity: options.affinity ?? "runtime-host",
+          humanAttach: options.humanAttach ?? "codex-cli",
+        },
+      },
+      name: options.name ?? cursor,
+      sessionKind: options.sessionKind ?? "opaque-handle",
+      projectedMembers: options.projectedMembers ?? [],
+      planMiddleware: [],
+      execution: fullHarnessExecution,
+      run: (request) =>
+        Stream.unwrap(
+          Ref.update(requests, (xs) => [...xs, request]).pipe(
+            Effect.map(() => Stream.concat(Stream.fromArray(events), tail)),
+          ),
         ),
-      ),
-  }),
-});
+    }),
+  }) satisfies TestRunner;
 
 const sequenceRunner = (streams: ReadonlyArray<Stream.Stream<AgUiEvent, HarnessError>>): TestRunner => ({
   make: (requests) => ({
@@ -1398,6 +1419,34 @@ const connectionStoreService = {
 
 const connectionStoreStub = Layer.succeed(ConnectionStore, connectionStoreService);
 
+const expiringLinearConnectionLayer = Layer.effect(
+  ConnectionStore,
+  Effect.gen(function* () {
+    const overviewReads = yield* Ref.make(0);
+    const connection = Connection.make({
+      id: linearConnectionId,
+      system: "linear",
+      account: "acme",
+      status: "established",
+    });
+    return {
+      ...connectionStoreService,
+      overview: Ref.getAndUpdate(overviewReads, (reads) => reads + 1).pipe(
+        Effect.map((reads) => {
+          const readiness =
+            reads === 0
+              ? ({ _tag: "Ready" } satisfies ConnectionReadiness)
+              : ({
+                  _tag: "NotReady",
+                  reason: "credential expired",
+                } satisfies ConnectionReadiness);
+          return connectionOverview([connection], new Map([[connection.id, readiness]]));
+        }),
+      ),
+    } satisfies ConnectionStoreService;
+  }),
+);
+
 const stagesEnabled: OperationSettingRow = {
   setting: "enabled",
   level: { _tag: "Default" },
@@ -1412,12 +1461,18 @@ const cursorHarness: OperationSettingRow = {
   value: "cursor",
 };
 
+const codexHarness: OperationSettingRow = {
+  ...cursorHarness,
+  value: "codex",
+};
+
 const replayHarness: OperationSettingRow = {
   ...cursorHarness,
   value: "replay",
 };
 
 const runnableStages = [stagesEnabled, cursorHarness];
+const runnableCodexStages = [stagesEnabled, codexHarness];
 const runnableReplayStages = [stagesEnabled, replayHarness];
 
 const controlStoreLayer = (
@@ -1639,7 +1694,7 @@ function provide<SourceControlRequirements = never>(
     FetchHttpClient.layer,
   );
   return Layer.merge(executor, operationResolution).pipe(
-    Layer.provide(Availability.Availability.layer),
+    Layer.provideMerge(Availability.Availability.layer),
     Layer.provideMerge(
       Layer.mergeAll(
         issueTracker,
@@ -2290,6 +2345,81 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
     }).pipe(Effect.provide(provide([unsupported])));
+  });
+
+  it.effect("declines a Linear Codex run without the engine Linear MCP", () => {
+    const connectionRunner = capturingRunner([], Stream.empty, {
+      name: codex,
+      projectedMembers: ["MCP", "Connections"],
+    });
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, linearWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+      assert.strictEqual((yield* (yield* RunLedger.RunLedger).listRuns(10)).length, 0);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [connectionRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableCodexStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableCodexStages),
+          runLedgerIdentity,
+          expiringLinearConnectionLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("releases a claim when its Linear Connection dies before Run Plan acceptance", () => {
+    const connectionRunner = capturingRunner([], Stream.empty, {
+      name: codex,
+      projectedMembers: ["MCP", "Connections"],
+    });
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+
+      assert.isTrue(yield* execute(executor, linearWorkspace, implementItem));
+
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "claim"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+      assert.strictEqual((yield* (yield* RunLedger.RunLedger).listRuns(10)).length, 0);
+      const [availability] = yield* (yield* Availability.Availability).current(linearWorkspace);
+      const [cause] = availability?.causes ?? [];
+      assert.strictEqual(cause?._tag, "UnsatisfiedNeed");
+      if (cause?._tag !== "UnsatisfiedNeed") return;
+      assert.strictEqual(cause.contribution, linearConnectionId);
+      assert.include(cause.message, linearConnectionId);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [connectionRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableCodexStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          availablePluginMcpLayer,
+          [],
+          controlStoreLayer(runnableCodexStages),
+          runLedgerIdentity,
+          expiringLinearConnectionLayer,
+        ),
+      ),
+    );
   });
 
   it.effect("refuses a saved permission profile the Harness does not declare", () => {
@@ -3783,13 +3913,9 @@ describe("Executor.execute", () => {
     }).pipe(
       Effect.provide(
         provide([
-          capturingRunner(
-            [runStarted, sessionEvent("cursor-acp-session")],
-            Stream.fail(error),
-            "opaque-handle",
-            cursor,
-            false,
-          ),
+          capturingRunner([runStarted, sessionEvent("cursor-acp-session")], Stream.fail(error), {
+            humanAttach: false,
+          }),
         ]),
       ),
     );

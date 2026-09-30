@@ -26,6 +26,7 @@ import {
   buildRunPlan,
   engineAdmissibleSettingScope,
   engineSettingScopeDirection,
+  operationBindingsOf,
   projectedContributionName,
   resolveEngineContributionEnabled,
   resolveEngineContributionUnion,
@@ -358,6 +359,47 @@ describe("stage settings come from Operation settings", () => {
 
     assert.strictEqual(resolved?.stage.model, "gpt-5.6-sol");
     assert.strictEqual(resolved?.stage.modelOptions.effort, "high");
+  });
+
+  it("keeps the Linear issue tracker Connection binding authoritative", () => {
+    const linearConfig = Schema.decodeSync(WorkspaceConfig)({
+      name: "linear-workspace",
+      checkoutPath: "/linear",
+      issueTracker: { type: "linear", connectionId: "linear/acme", teams: ["ENG"] },
+    });
+    const resolved = resolveRunPlanStage(linearConfig, "implement", [
+      stageEnabled,
+      codexHarness,
+      {
+        ...profileDefault,
+        setting: "bindings",
+        value: [
+          { need: "issue-tracker-connection", contribution: "github/default" },
+          { need: "issue-tracker-mcp", contribution: "plugin:other/mcp/tracker" },
+          { need: "review", contribution: "local:private/skill/review" },
+        ],
+      },
+    ]);
+
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+    assert.deepStrictEqual(operationBindingsOf(resolved), [
+      { need: "issue-tracker-connection", contribution: "linear/acme" },
+      { need: "issue-tracker-mcp", contribution: "plugin:linear/mcp/linear" },
+      { need: "review", contribution: "local:private/skill/review" },
+    ]);
+  });
+
+  it("does not add Linear tracker requirements to another Harness", () => {
+    const linearConfig = Schema.decodeSync(WorkspaceConfig)({
+      name: "linear-workspace",
+      checkoutPath: "/linear",
+      issueTracker: { type: "linear", connectionId: "linear/acme", teams: ["ENG"] },
+    });
+    const resolved = resolveRunPlanStage(linearConfig, "implement", [stageEnabled, hostHarness]);
+
+    assert.deepStrictEqual(resolved?.stage.needs, []);
+    assert.deepStrictEqual(resolved && operationBindingsOf(resolved), []);
   });
 
   it("trims model and resolves model options", () => {

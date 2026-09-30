@@ -157,7 +157,9 @@ const contributionCause = (
       need,
       "not-ready",
       contribution.id,
-      contribution.reason ?? `${contribution.id} is not ready`,
+      contribution.reason
+        ? `${contribution.id} is not ready: ${contribution.reason}`
+        : `${contribution.id} is not ready`,
     );
   }
   const member = memberForNeed(need.kind);
@@ -334,6 +336,7 @@ export interface ResolvedOperation {
   readonly stage: ResolvedStage;
   readonly profile: RunPlanPolicyProfile;
   readonly settings: ReadonlyMap<OperationSettingName, ReturnType<typeof resolveEngineOperationSetting>>;
+  readonly issueTrackerBindings: ReadonlyArray<OperationBinding>;
   readonly contributionSettings: ReadonlyArray<ContributionSettingRow>;
 }
 
@@ -342,7 +345,32 @@ const isModelOptionSelections = Schema.is(ModelOptionSelections);
 
 export const operationBindingsOf = (resolved: ResolvedOperation) => {
   const value = resolved.settings.get("bindings")?.value;
-  return isOperationBindings(value) ? value : [];
+  const configured = isOperationBindings(value) ? value : [];
+  const issueTrackerNeeds = new Set(resolved.issueTrackerBindings.map(({ need }) => need));
+  const configurableBindings = configured.filter(({ need }) => !issueTrackerNeeds.has(need));
+  return uniqueBindings([...resolved.issueTrackerBindings, ...configurableBindings]);
+};
+
+const codexLinearTrackerRequirements = (config: WorkspaceConfig, harness: HarnessName) => {
+  const linearTracker = config.issueTracker.type === "linear" ? config.issueTracker : null;
+  const usesCodexLinearTracker = harness === "codex" && linearTracker !== null;
+  return (
+    usesCodexLinearTracker
+      ? {
+          needs: [
+            { name: "issue-tracker-connection", kind: "connection" },
+            { name: "issue-tracker-mcp", kind: "mcp-server" },
+          ],
+          bindings: [
+            { need: "issue-tracker-connection", contribution: linearTracker.connectionId },
+            { need: "issue-tracker-mcp", contribution: "plugin:linear/mcp/linear" },
+          ],
+        }
+      : { needs: [], bindings: [] }
+  ) satisfies {
+    readonly needs: ReadonlyArray<OperationNeed>;
+    readonly bindings: ReadonlyArray<OperationBinding>;
+  };
 };
 
 export const resolveRunPlanStage = (
@@ -362,10 +390,12 @@ export const resolveRunPlanStage = (
   const settingValueOf = (setting: OperationSettingName) => settings.get(setting)?.value;
   const harness = harnessValue(settingValueOf("harness"));
   if (!harness) return null;
+  const issueTrackerRequirements = codexLinearTrackerRequirements(config, harness);
   const modelOptions = settingValueOf("model-options");
   return {
     stage: {
       ...base,
+      needs: [...base.needs, ...issueTrackerRequirements.needs],
       enabled: booleanValue(settingValueOf("enabled"), false),
       harness,
       model: trimmedStringValue(settingValueOf("model"), null),
@@ -376,6 +406,7 @@ export const resolveRunPlanStage = (
       defaultPermissionProfile(operation, declaredProfiles) ?? operationDefaultProfile(operation),
     ),
     settings,
+    issueTrackerBindings: issueTrackerRequirements.bindings,
     contributionSettings,
   };
 };
@@ -432,7 +463,7 @@ const effectiveSettingValues = {
   model: (resolved: ResolvedOperation) => resolved.stage.model,
   "model-options": (resolved: ResolvedOperation) => resolved.stage.modelOptions,
   "permission-profile": (resolved: ResolvedOperation) => resolved.profile,
-  bindings: (resolved: ResolvedOperation) => resolved.settings.get("bindings")?.value ?? [],
+  bindings: operationBindingsOf,
 } satisfies Record<OperationSettingName, (resolved: ResolvedOperation) => unknown>;
 
 const effectiveSettingValue = (resolved: ResolvedOperation, setting: OperationSettingName) =>
@@ -445,19 +476,33 @@ const resolutionTrace = (
 ) => {
   const resolution = resolved.settings.get(setting);
   const winners = resolution ? winningRows(resolution.winning) : [];
-  const winner = winners.at(-1);
-  const contributors = setting === "bindings" ? winners.map(resolutionCandidate) : [];
+  const derivedBindingCandidate =
+    setting === "bindings" && resolved.issueTrackerBindings.length > 0
+      ? RunPlanResolutionCandidate.make({
+          scope: "Workspace input",
+          level: `Operation coding/${operation}`,
+          source: "Workspace issue tracker Connection",
+          value: snapshotValue(resolved.issueTrackerBindings),
+        })
+      : null;
+  const bindingContributors = [
+    ...winners.map(resolutionCandidate),
+    ...(derivedBindingCandidate ? [derivedBindingCandidate] : []),
+  ];
+  const rowWinner = winners.at(-1);
+  const rowWinnerCandidate = rowWinner ? resolutionCandidate(rowWinner) : null;
   const effective = effectiveSettingValue(resolved, setting);
   const usesHarnessProfileDefault =
     setting === "permission-profile" && resolved.profile !== operationDefaultProfile(operation);
   const defaultCandidate = usesHarnessProfileDefault
     ? harnessCandidate(resolved.stage.harness, effective)
     : engineCandidate(operation, effective);
+  const winnerCandidate = setting === "bindings" ? bindingContributors.at(-1) : rowWinnerCandidate;
   return RunPlanResolutionTrace.make({
     key: setting,
     operator: operatorForSetting(setting),
-    winner: winner ? resolutionCandidate(winner) : defaultCandidate,
-    contributors,
+    winner: winnerCandidate ?? defaultCandidate,
+    contributors: setting === "bindings" ? bindingContributors : [],
     shadowed: resolution?.shadowed.map(resolutionCandidate) ?? [],
     dropped:
       resolution?.dropped.map(({ row, reason }) =>
