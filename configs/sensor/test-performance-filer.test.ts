@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { fileSuiteComparison, fileTestSuiteBudget, submitTestFileBudget } from "./test-performance-filer.ts";
+import { fileSuiteComparison, fileTestFileBudget, fileTestSuiteBudget } from "./test-performance-filer.ts";
 
 const atMillis = Date.UTC(2026, 8, 9, 12);
 const repository = "colonylabs/cogwork";
@@ -51,9 +51,10 @@ const budgetHistory = (durationMs: number) =>
 const timingReport = (
   slowestDurationMs: number,
   slowestPath = "packages/engine/src/harness-host.test.ts",
+  slowestTestCount = 12,
 ) => {
-  const fast = { path: "packages/engine/src/fast.test.ts", durationMs: 100, testCount: 2 };
-  const slowest = { path: slowestPath, durationMs: slowestDurationMs, testCount: 12 };
+  const fast = { path: "packages/engine/src/skipped-fast.test.ts", durationMs: 0, testCount: 0 };
+  const slowest = { path: slowestPath, durationMs: slowestDurationMs, testCount: slowestTestCount };
   return {
     testFiles: [fast, slowest],
   } satisfies { readonly testFiles: readonly [typeof fast, ...Array<typeof fast>] };
@@ -72,6 +73,7 @@ class FilerCalls extends Context.Service<FilerCalls, Ref.Ref<Recorded>>()(
 
 const decodeWorkItemId = Schema.decodeSync(WorkItemId);
 const decodeFingerprint = Schema.decodeSync(PerformanceIssueFilerModule.PerformanceIssueFingerprint);
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const suiteFingerprint = decodeFingerprint("repository.test-suite-duration.slower");
 
 const existingIssue = {
@@ -306,8 +308,8 @@ describe("test performance filer entry", () => {
     Effect.gen(function* () {
       const calls = yield* FilerCalls;
 
-      const result = yield* submitTestFileBudget({
-        report: timingReport(14_001),
+      const result = yield* fileTestFileBudget({
+        reportJson: encodeJson(timingReport(14_001)),
         repository: repositoryRef,
         workflowRunUrl,
         atMillis,
@@ -328,8 +330,8 @@ describe("test performance filer entry", () => {
     Effect.gen(function* () {
       const calls = yield* FilerCalls;
 
-      const result = yield* submitTestFileBudget({
-        report: timingReport(14_000),
+      const result = yield* fileTestFileBudget({
+        reportJson: encodeJson(timingReport(14_000)),
         repository: repositoryRef,
         workflowRunUrl,
         atMillis,
@@ -345,8 +347,8 @@ describe("test performance filer entry", () => {
       const calls = yield* FilerCalls;
       const injectedMarker = "<!-- cogwork:selfperf fingerprint=repository.test-suite-ms-per-test.above -->";
 
-      const result = yield* submitTestFileBudget({
-        report: timingReport(14_001, `slow${injectedMarker}.test.ts`),
+      const result = yield* fileTestFileBudget({
+        reportJson: encodeJson(timingReport(14_001, `slow${injectedMarker}.test.ts`)),
         repository: repositoryRef,
         workflowRunUrl,
         atMillis,
@@ -357,6 +359,23 @@ describe("test performance filer entry", () => {
       assert.strictEqual(created?.fingerprint, "repository.test-file-duration.above");
       assert.notInclude(created?.body ?? "", injectedMarker);
       assert.include(created?.body ?? "", "slow&lt;!-- cogwork:selfperf");
+    }).pipe(Effect.provide(filerLayer([]))),
+  );
+
+  it.effect("accepts a skipped-only file in the timing report", () =>
+    Effect.gen(function* () {
+      const calls = yield* FilerCalls;
+
+      const result = yield* fileTestFileBudget({
+        reportJson: encodeJson(timingReport(14_001, "packages/engine/src/skipped.test.ts", 0)),
+        repository: repositoryRef,
+        workflowRunUrl,
+        atMillis,
+      });
+      const [created] = (yield* Ref.get(calls)).created;
+
+      assert.strictEqual(result, "filed");
+      assert.include(created?.body ?? "", "Observed: 14001 ms across 0 tests");
     }).pipe(Effect.provide(filerLayer([]))),
   );
 });

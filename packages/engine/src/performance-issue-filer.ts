@@ -130,7 +130,7 @@ const TestFileBudgetPerformanceVerdict = Schema.Struct({
   budget: Schema.Finite.check(Schema.isGreaterThan(0)),
   unit: Schema.Literal("ms"),
   testFilePath: Schema.String.check(Schema.isNonEmpty()),
-  testCount: Schema.Int.check(Schema.isGreaterThan(0)),
+  testCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   workflowRunUrl: GitHubWorkflowRunUrl,
 });
 type TestFileBudgetPerformanceVerdict = typeof TestFileBudgetPerformanceVerdict.Type;
