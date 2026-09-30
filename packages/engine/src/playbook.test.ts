@@ -377,10 +377,21 @@ describe("implement Operating Instructions", () => {
       assert.include(review, "One fix round");
       assert.include(review, "none edits code");
       assert.lengthOf(review.match(/^- \*\*/gm) ?? [], 3);
+      assert.isAbove(
+        instructions.indexOf("Commit the checked implementation"),
+        instructions.indexOf("### Checks"),
+      );
+      assert.isBelow(
+        instructions.indexOf("Commit the checked implementation"),
+        instructions.indexOf("### Review — one round, then stop"),
+      );
+      assert.include(review, "React composition violation is a blocking finding");
       assert.notInclude(instructions, "code-simplifier");
       assert.notInclude(instructions, "rule-reviewer");
       assert.notInclude(instructions, "/adversarial-review");
       assert.notInclude(instructions, "/review-bugbot");
+      assert.notInclude(instructions, "re-run the gate");
+      assert.include(instructions, "re-run the failed check or build");
       assert.lengthOf(instructions.match(/`pnpm build`/g) ?? [], 1);
       assert.isAbove(instructions.indexOf("### Build, once"), instructions.indexOf("One fix round"));
       assert.include(instructions, "review findings left unfixed");

@@ -72,6 +72,8 @@ Before review, run all three from a clean run:
 2. Targeted tests — every test file that exercises your diff. Find them by reading what the diff calls and what calls the diff, then run that whole set.
 3. Targeted lint and formatting — every file the diff touches.
 
+Commit the checked implementation with `/git-master` before review, but do not push. The merge-base-to-HEAD diff is then the exact review scope.
+
 ### Review — one round, then stop
 
 Dispatch three reviews **in parallel**, each with a clean context: the diff and nothing from this conversation. All report; none edits code.
@@ -82,7 +84,7 @@ Dispatch three reviews **in parallel**, each with a clean context: the diff and 
 
 Reviewers cite the specific hunk and the specific rule, risk, smell, or spec line. They do not go for perfection. There is no second round.
 
-**One fix round.** Fix every blocking finding. Fix nits at your judgment. Every finding left unfixed gets a recorded disposition in the draft's Open questions section: *won't-fix* with a concrete reason, or *escalated* as a question for the reviewer. Key it to the finding's id when `/code-review` supplied one. Then re-run the checks above on what the fixes touched. Findings a reviewer would raise against the fixes wait for human review.
+**One fix round.** Fix every blocking finding. A React composition violation is a blocking finding. Fix nits at your judgment. Every finding left unfixed gets a recorded disposition in the draft's Open questions section: *won't-fix* with a concrete reason, or *escalated* as a question for the reviewer. Key it to the finding's id when `/code-review` supplied one. Then re-run the checks above on what the fixes touched. Findings a reviewer would raise against the fixes wait for human review.
 
 Completion: every finding from `/code-review`, minimalist, and security-auditor is fixed in the diff or has a disposition in the PR-body draft, and the checks are green on the fixed diff.
 
@@ -101,7 +103,7 @@ Take each failure the gate reports and:
 3. Check that commit out detached in this same worktree, run the same command, and capture the output. Re-run the install first when your diff touched a manifest or a lockfile. Then return to the engine's branch — a detached base checkout is a measurement, and the branch rule above still holds.
 4. Compare by **identity**, not by color: the same test and assertion, the same file and lint rule, the same type error at the same symbol. A suite red before and red now is not a match, and a failure whose message moved is a new failure.
 
-A failure that reproduces by identity at the base is a **baseline failure** — leave it. Every other failure is yours: fix it and re-run the gate. A baseline failure the brief asked you to fix is yours too, whatever the base does.
+A failure that reproduces by identity at the base is a **baseline failure** — leave it. Every other failure is yours: fix it and re-run the failed check or build. Do not run another review round. A baseline failure the brief asked you to fix is yours too, whatever the base does.
 
 Prepare the pull request once the gate is green or every failure left is a proved baseline failure. Record each one in the body (see [step 4](#4-commit-push-and-prepare-the-pr)): the command, the failure identity, and the base sha it reproduces on, so a reviewer can re-run your proof in one command. If a failure that is yours will not go green after a genuine effort, escalate per the [authority boundary](#authority-boundary).
 
