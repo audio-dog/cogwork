@@ -1,4 +1,7 @@
 import {
+  Connection,
+  type ConnectionOverview,
+  connectionIdOf,
   defaultControlStore,
   type HarnessName,
   type HarnessOptionCatalog,
@@ -43,6 +46,13 @@ export interface EngineOperationResolutionTestLayerOptions {
 }
 
 const keepRunLedger = (layer: RunLedgerLayer) => layer;
+
+const githubConnection = Connection.make({
+  id: connectionIdOf("github", "default"),
+  system: "github",
+  account: "default",
+  status: "established",
+});
 
 export const engineTestLayer = ({
   coreRunLedger = RunLedger.layerMemoryCore,
@@ -131,7 +141,11 @@ export const engineTestLayerWithOperationResolution = ({
     controlStore,
     contextAssembler,
     harnessService,
-    Layer.mock(ConnectionStore, { overview: Effect.succeed({ connections: [] }) }),
+    Layer.mock(ConnectionStore, {
+      overview: Effect.succeed({
+        connections: [{ system: "github", connection: githubConnection, readiness: { _tag: "Ready" } }],
+      } satisfies ConnectionOverview),
+    }),
     Layer.mock(McpSkillAssembler, { assemble: () => Effect.succeed(mcpSkills) }),
     Layer.mock(PluginManager, { overview: Effect.succeed({ plugins: [] }) }),
     CredentialStore.layerEnv,
