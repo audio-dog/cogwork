@@ -180,7 +180,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
           body,
           comments: comments.map((comment) => ({
             author: comment.authorId,
-            authorAssociation: null,
+            authorAssociation: comment.authorAssociation,
             body: comment.body,
             createdAtMillis: comment.createdAtMillis,
           })),

@@ -55,7 +55,10 @@ interface SeedIssue {
 interface Seed {
   readonly issues: ReadonlyArray<SeedIssue>;
   readonly comments?: ReadonlyArray<
-    { readonly issue: string } & Omit<RawComment, "id"> & { readonly id?: string }
+    { readonly issue: string } & Omit<RawComment, "authorAssociation" | "id"> & {
+        readonly authorAssociation?: RawComment["authorAssociation"];
+        readonly id?: string;
+      }
   >;
   readonly states?: ReadonlyArray<RawWorkflowState>;
   readonly authError?: boolean;
@@ -114,7 +117,11 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     (all, { issue, id: commentId, ...comment }) =>
       all.set(issue, [
         ...(all.get(issue) ?? []),
-        { id: commentId ?? `comment-${all.get(issue)?.length ?? 0}`, ...comment },
+        {
+          id: commentId ?? `comment-${all.get(issue)?.length ?? 0}`,
+          authorAssociation: "NONE" as const,
+          ...comment,
+        },
       ]),
     new Map<string, ReadonlyArray<RawComment>>(),
   );
@@ -242,6 +249,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             const comment: RawComment = {
               id: `comment-${seq}`,
               authorId: bot.id,
+              authorAssociation: "NONE",
               body,
               createdAtMillis: seq,
             };
@@ -333,7 +341,7 @@ describe("linear work source adapter", () => {
         comments: [
           {
             author: "maintainer-id",
-            authorAssociation: null,
+            authorAssociation: "MEMBER",
             body: "Latest steer",
             createdAtMillis: 2,
           },
@@ -354,6 +362,7 @@ describe("linear work source adapter", () => {
             {
               issue: "AUD-41",
               authorId: "maintainer-id",
+              authorAssociation: "MEMBER",
               body: "Latest steer",
               createdAtMillis: 2,
             },
