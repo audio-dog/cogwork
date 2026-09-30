@@ -1,0 +1,34 @@
+packages/engine/src/run-plan.ts
+  s_89728d5021f5bd::t_d9f1e55c430f36 67,456,484-491,898,901-907,959,962
+  s_89728d5021f5bd::t_3d8d46baf40e35 79-86
+  s_89728d5021f5bd::t_db233fc047c0ce 64,791
+  s_89728d5021f5bd::t_0ef87036cd3912 360-362
+  s_89728d5021f5bd::t_af968d2530e64d 462-474,501
+  s_89728d5021f5bd::t_352e8d727fac5a 960-961
+  s_89728d5021f5bd::t_d023922c4d5409 51,53,134-141,174-175,349,358-359,396-399
+  s_89728d5021f5bd::t_8482e8c2be52b9 78
+  s_89728d5021f5bd::t_5fadc329e214a4 475
+packages/engine/src/run-plan.test.ts
+  s_89728d5021f5bd::t_d82e5f29084df4 683,894-900
+  s_89728d5021f5bd::t_b08138543826b7 18,211
+  s_89728d5021f5bd::t_7e82b7f7b13acb 940-943
+  s_89728d5021f5bd::t_cefaeae0dfd358 29,201,231-241,298-331
+packages/engine/src/run-preparation.ts
+  s_89728d5021f5bd::t_b08138543826b7 13,33,56,63,70,120,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fa219f44f5df62113ddb015db7db38858d138e23",
+  "prompts": {},
+  "sessions": {
+    "s_89728d5021f5bd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f348-a2dc-71d1-a77a-b9860418c463",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
