@@ -64,10 +64,17 @@ const stubFs = (
       Effect.map((calls) => {
         const copy = calls.findLast(({ dest }) => target === dest || target.startsWith(`${dest}/`));
         const resolved = copy ? `${copy.source}${target.slice(copy.dest.length)}` : target;
-        return Object.keys(files)
+        const entries = Object.keys(files)
           .filter((file) => file.startsWith(`${resolved}/`))
-          .map((file) => file.slice(resolved.length + 1))
-          .filter((name) => options?.recursive || !name.includes("/"));
+          .map((file) => file.slice(resolved.length + 1));
+        const mountedEntries = calls
+          .filter(({ dest }) => dest.startsWith(`${target}/`))
+          .flatMap(({ source, dest }) =>
+            Object.keys(files)
+              .filter((file) => file.startsWith(`${source}/`))
+              .map((file) => `${dest.slice(target.length + 1)}/${file.slice(source.length + 1)}`),
+          );
+        return [...entries, ...mountedEntries].filter((name) => options?.recursive || !name.includes("/"));
       }),
     ),
   copyDirectory: (source, dest) => Ref.update(copies, (xs) => [...xs, { source, dest }]),
@@ -346,6 +353,10 @@ describe("ContextAssembler.assemble", () => {
           source: "/engine/operating-instructions/implement-agent",
           dest: "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/implement-agent",
         },
+        {
+          source: "/engine/operating-instructions/shared/test-value",
+          dest: "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/implement-agent/test-value",
+        },
       ]);
       assert.isTrue(assembled.operatingInstructionsPath.startsWith(config.homeDir));
       assert.isFalse(assembled.operatingInstructionsPath.startsWith(request.projectRoot));
@@ -361,6 +372,43 @@ describe("ContextAssembler.assemble", () => {
         },
       ]);
     }),
+  );
+
+  it.effect.each(["implement-agent", "follow-up-agent"])(
+    "provisions the shared test-value resource for %s",
+    (operatingInstructions) =>
+      Effect.gen(function* () {
+        const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+        const assembler = make(
+          config,
+          stubFs(
+            {
+              [`/engine/operating-instructions/${operatingInstructions}/INSTRUCTIONS.md`]: `${operatingInstructions} instructions`,
+              "/engine/operating-instructions/shared/test-value/TEST-VALUE.md": "test-value bar",
+            },
+            copies,
+          ),
+        );
+
+        const assembled = yield* assembler.assemble({ ...request, operatingInstructions });
+
+        assert.deepStrictEqual(yield* Ref.get(copies), [
+          {
+            source: `/engine/operating-instructions/${operatingInstructions}`,
+            dest: assembled.operatingInstructionsPath,
+          },
+          {
+            source: "/engine/operating-instructions/shared/test-value",
+            dest: `${assembled.operatingInstructionsPath}/test-value`,
+          },
+        ]);
+        assert.deepStrictEqual(assembled.operatingInstructionResources, [
+          {
+            source: `${assembled.operatingInstructionsPath}/test-value/TEST-VALUE.md`,
+            content: "test-value bar",
+          },
+        ]);
+      }),
   );
 
   it.effect("replaces Operating Instructions with the Workspace override", () =>

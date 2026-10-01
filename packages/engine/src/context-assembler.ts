@@ -76,6 +76,11 @@ const safePathSegment = /^[A-Za-z0-9._-]+$/;
 const isSafePathSegment = (segment: string) =>
   segment !== "." && segment !== ".." && safePathSegment.test(segment);
 
+const sharedResourceBundles: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "follow-up-agent": ["test-value"],
+  "implement-agent": ["test-value"],
+};
+
 const runPathSegment = (runId: RunId) =>
   `run-${Array.from(runId, (character) => character.codePointAt(0)?.toString(16) ?? "").join("-")}`;
 
@@ -245,6 +250,14 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
         request.operatingInstructions,
         operatingInstructionsPath,
         request.operatingInstructions,
+      );
+      const sharedBundles =
+        source.provenanceDir === null ? (sharedResourceBundles[request.operatingInstructions] ?? []) : [];
+      yield* Effect.forEach(sharedBundles, (bundle) =>
+        fs.copyDirectory(
+          joinPath(joinPath(config.operatingInstructionsDir, "shared"), bundle),
+          joinPath(operatingInstructionsPath, bundle),
+        ),
       );
       const provisionedResources = yield* operatingInstructionResources(operatingInstructionsPath);
       const sourcePath = (provisionedPath: string) =>
