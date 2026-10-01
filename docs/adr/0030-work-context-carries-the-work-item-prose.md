@@ -3,6 +3,12 @@
 - **Status:** accepted
 - **Date:** 2026-09-30
 
+> **Amendment (2026-09-30).** A follow-up Run also freezes its pull request's description and review
+> comments into Work Context at admission, for the same reasons. It is also a prerequisite of ADR
+> [0032](./0032-resource-references-make-their-reader-a-required-need.md): the engine can only derive a
+> resource reference, and fail before the Run, from prose it read before the Run. Each round's
+> admission reads the pull request again, so a comment added between rounds reaches the next Run.
+
 ## Context
 
 A Run's Work Context carries the work item's reference and its coordination facts (roles, claim,
