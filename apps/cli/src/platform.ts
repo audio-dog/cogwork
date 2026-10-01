@@ -394,10 +394,15 @@ export const contextFsLayer = Layer.effect(
     const fail = (operation: string) => (cause: unknown) =>
       new ContextFs.ContextFsError({ operation, message: describe(cause), retryable: true });
 
-    const readDirectory = (target: string, options?: { readonly recursive?: boolean }) =>
-      fs
-        .readDirectory(target, options)
-        .pipe(Effect.catch(recoverNotFound(noFiles, fail(`read directory ${target}`))));
+    const readFiles = (target: string, options?: { readonly recursive?: boolean }) =>
+      fs.readDirectory(target, options).pipe(
+        Effect.flatMap((entries) =>
+          Effect.filter(entries, (entry) =>
+            fs.stat(path.join(target, entry)).pipe(Effect.map((info) => info.type === "File")),
+          ),
+        ),
+        Effect.catch(recoverNotFound(noFiles, fail(`read files ${target}`))),
+      );
 
     return {
       directoryExists: (target) =>
@@ -407,7 +412,7 @@ export const contextFsLayer = Layer.effect(
         ),
       readFile: (target) =>
         fs.readFileString(target).pipe(Effect.catch(recoverNotFound(null, fail(`read ${target}`)))),
-      readDirectory,
+      readDirectory: readFiles,
       copyDirectory: (source, dest) =>
         fs
           .remove(dest, { recursive: true, force: true })

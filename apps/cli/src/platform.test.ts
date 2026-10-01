@@ -1175,7 +1175,7 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
 const contextTestLayer = contextFsLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
 describe("contextFsLayer against a real filesystem", () => {
-  it.effect("lists an Authoring tree directory and treats a missing one as empty", () =>
+  it.effect("lists only files from an Authoring tree and treats a missing directory as empty", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -1190,11 +1190,19 @@ describe("contextFsLayer against a real filesystem", () => {
       assert.deepStrictEqual(yield* context.readDirectory(rules), ["global.md"]);
       assert.deepStrictEqual(yield* context.readDirectory(path.join(root, "missing")), []);
 
+      const nestedRules = path.join(rules, "nested");
+      yield* fs.makeDirectory(nestedRules);
+      yield* fs.writeFileString(path.join(nestedRules, "local.md"), "local rules");
+      assert.deepStrictEqual([...(yield* context.readDirectory(rules, { recursive: true }))].sort(), [
+        "global.md",
+        path.join("nested", "local.md"),
+      ]);
+
       const file = path.join(root, "not-a-directory");
       yield* fs.writeFileString(file, "not a directory");
       const error = yield* Effect.flip(context.readDirectory(file));
       assert.strictEqual(error._tag, "ContextFsError");
-      assert.include(error.operation, "read directory");
+      assert.include(error.operation, "read files");
     }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
   );
 
