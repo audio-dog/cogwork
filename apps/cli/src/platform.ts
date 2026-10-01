@@ -396,12 +396,16 @@ export const contextFsLayer = Layer.effect(
 
     const readFiles = (target: string, options?: { readonly recursive?: boolean }) =>
       fs.readDirectory(target, options).pipe(
-        Effect.flatMap((entries) =>
-          Effect.filter(entries, (entry) =>
-            fs.stat(path.join(target, entry)).pipe(Effect.map((info) => info.type === "File")),
-          ),
-        ),
         Effect.catch(recoverNotFound(noFiles, fail(`read files ${target}`))),
+        Effect.flatMap((entries) =>
+          Effect.filter(entries, (entry) => {
+            const entryPath = path.join(target, entry);
+            return fs.stat(entryPath).pipe(
+              Effect.map((info) => info.type === "File"),
+              Effect.catch(recoverNotFound(false, fail(`stat context entry ${entryPath}`))),
+            );
+          }),
+        ),
       );
 
     return {
