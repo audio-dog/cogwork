@@ -9,6 +9,7 @@
     "test:file-budget": "tsx test-performance-filer.ts --budget",
     "test:file-performance": "tsx test-performance-filer.ts",
     "test:measure": "cd ../.. && node configs/sensor/test-measure.mjs",
+    "test:slowest-file-budget": "tsx test-performance-filer.ts --file-budget",
     "typecheck": "tsc --noEmit",
     "worktree:git-invocations": "tsx count-worktree-git-invocations.ts"
   },

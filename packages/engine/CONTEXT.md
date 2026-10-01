@@ -246,7 +246,7 @@ Deterministic engine code that watches the telemetry store's health signals and,
 _Avoid_: Performance sensor (ambiguous once budgets also file), detector, watchdog, monitor (a Datadog-style alert rule), triage (the stage that verifies what the sensor files)
 
 **Performance verdict**:
-One sensor's decision that a performance claim holds, handed to the Performance issue filer as data: the kind (health signal, suite comparison, budget), the signal, subsystem, and direction, the numbers, and the evidence. The filer renders the ticket from it; a sensor never writes ticket text or a Fingerprint string itself.
+One sensor's decision that a performance claim holds, handed to the Performance issue filer as data: the kind (health signal, suite comparison, suite budget, test-file budget), the signal, subsystem, and direction, the numbers, and the evidence. The filer renders the ticket from it; a sensor never writes ticket text or a Fingerprint string itself.
 _Avoid_: Alarm (the state a health signal is in), finding, report (the comparison tool's JSON, which a verdict is decoded from)
 
 **Performance issue filer**:

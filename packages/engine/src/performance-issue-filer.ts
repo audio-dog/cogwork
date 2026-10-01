@@ -121,10 +121,25 @@ const TestSuiteBudgetPerformanceVerdict = Schema.Struct({
 });
 type TestSuiteBudgetPerformanceVerdict = typeof TestSuiteBudgetPerformanceVerdict.Type;
 
+const TestFileBudgetPerformanceVerdict = Schema.Struct({
+  kind: Schema.Literal("test-file-budget"),
+  signal: Schema.Literal("test-file-duration"),
+  subsystem: Schema.Literal("repository"),
+  direction: Schema.Literal("above"),
+  observed: Schema.Finite.check(Schema.isGreaterThan(0)),
+  budget: Schema.Finite.check(Schema.isGreaterThan(0)),
+  unit: Schema.Literal("ms"),
+  testFilePath: Schema.String.check(Schema.isNonEmpty()),
+  testCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  workflowRunUrl: GitHubWorkflowRunUrl,
+});
+type TestFileBudgetPerformanceVerdict = typeof TestFileBudgetPerformanceVerdict.Type;
+
 export const PerformanceVerdict = Schema.Union([
   HealthSignalPerformanceVerdict,
   SuiteComparisonPerformanceVerdict,
   TestSuiteBudgetPerformanceVerdict,
+  TestFileBudgetPerformanceVerdict,
 ]).pipe(Schema.toTaggedUnion("kind"));
 export type PerformanceVerdict = typeof PerformanceVerdict.Type;
 
@@ -190,6 +205,7 @@ const titleThreshold = (threshold: number, unit: HealthSignalPerformanceVerdict[
 
 const formatValue = (value: number) => Number(value.toFixed(2));
 const formatBudgetMeasurement = (value: number) => Math.ceil(value * 100) / 100;
+const escapeControlMarkers = (value: string) => value.replaceAll("<", "&lt;");
 
 export const performanceVerdictFingerprint = (verdict: PerformanceVerdictIdentity) =>
   PerformanceIssueFingerprint.make(`${verdict.subsystem}.${verdict.signal}.${verdict.direction}`);
@@ -290,11 +306,32 @@ const renderTestSuiteBudget = (verdict: TestSuiteBudgetPerformanceVerdict) => {
   };
 };
 
+const renderTestFileBudget = (verdict: TestFileBudgetPerformanceVerdict) => {
+  const evidence = [
+    `Budget: ≤ ${verdict.budget} ${verdict.unit}`,
+    `Slowest test file: \`${escapeControlMarkers(verdict.testFilePath)}\``,
+    `Observed: ${formatBudgetMeasurement(verdict.observed)} ${verdict.unit} across ${verdict.testCount} tests`,
+    `Measurement run: ${verdict.workflowRunUrl}`,
+    "",
+    `Close when: the slowest test file is at or below ${verdict.budget} ${verdict.unit}.`,
+  ].join("\n");
+  const title = `Slowest test file exceeds the ${verdict.budget} ${verdict.unit} budget`;
+  const body = ["Signal: Test file duration — repository — above budget", "", evidence].join("\n");
+  return {
+    fingerprint: performanceVerdictFingerprint(verdict),
+    title,
+    recurrenceTitle: `Regression: ${title}`,
+    body,
+    recurrenceBody: `Fired again.\n\n${body}`,
+  };
+};
+
 const renderVerdict = (verdict: PerformanceVerdict) =>
   PerformanceVerdict.match(verdict, {
     "health-signal": renderHealthSignal,
     "suite-comparison": renderSuiteComparison,
     budget: renderTestSuiteBudget,
+    "test-file-budget": renderTestFileBudget,
   });
 
 const recurrenceIssue = (

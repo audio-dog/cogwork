@@ -18,7 +18,10 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
 const positiveFinite = Schema.Finite.check(Schema.isGreaterThan(0));
 const positiveInt = Schema.Int.check(Schema.isGreaterThan(0));
+const nonNegativeFinite = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
+const nonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const materialRegressionRatio = 1.15;
+const slowestTestFileBudgetMs = 14_000;
 const testSuiteBudgetMsPerTest = 30;
 
 const SuiteComparisonReport = Schema.Struct({
@@ -51,22 +54,35 @@ const SeedRunHistory = Schema.NonEmptyArray(
   }),
 ).check(Schema.isMaxLength(20));
 
+const TestTimingReport = Schema.Struct({
+  testFiles: Schema.NonEmptyArray(
+    Schema.Struct({
+      path: Schema.String.check(Schema.isNonEmpty()),
+      durationMs: nonNegativeFinite,
+      testCount: nonNegativeInt,
+    }),
+  ),
+});
+
 class TestPerformanceEntryError extends Data.TaggedError("TestPerformanceEntryError")<{
   readonly reason: "arguments" | "capped" | "history" | "report" | "repository" | "workflow-run-url";
   readonly message: string;
 }> {}
 
-const reportError = (message: string) =>
+const comparisonReportError = (message: string) =>
   new TestPerformanceEntryError({ reason: "report", message: `invalid comparison report: ${message}` });
+
+const timingReportError = (message: string) =>
+  new TestPerformanceEntryError({ reason: "report", message: `invalid timing report: ${message}` });
 
 const decodeReport = (value: unknown) =>
   Schema.decodeUnknownEffect(SuiteComparisonReport)(value).pipe(
-    Effect.mapError((error) => reportError(error.message)),
+    Effect.mapError((error) => comparisonReportError(error.message)),
   );
 
 const decodeReportJson = (value: string) =>
   Schema.decodeEffect(Schema.fromJsonString(SuiteComparisonReport))(value).pipe(
-    Effect.mapError((error) => reportError(error.message)),
+    Effect.mapError((error) => comparisonReportError(error.message)),
   );
 
 const historyError = (message: string) =>
@@ -80,6 +96,11 @@ const decodeHistory = (value: unknown) =>
 const decodeHistoryJson = (value: string) =>
   Schema.decodeEffect(Schema.fromJsonString(SeedRunHistory))(value).pipe(
     Effect.mapError((error) => historyError(error.message)),
+  );
+
+const decodeTimingReportJson = (value: string) =>
+  Schema.decodeEffect(Schema.fromJsonString(TestTimingReport))(value).pipe(
+    Effect.mapError((error) => timingReportError(error.message)),
   );
 
 const decodeEntryArguments = (args: ReadonlyArray<string>) =>
@@ -100,6 +121,19 @@ const decodeBudgetEntryArguments = (args: ReadonlyArray<string>) =>
         new TestPerformanceEntryError({
           reason: "arguments",
           message: `invalid budget arguments: ${error.message}`,
+        }),
+    ),
+  );
+
+const decodeTestFileBudgetEntryArguments = (args: ReadonlyArray<string>) =>
+  Schema.decodeUnknownEffect(Schema.Tuple([Schema.Literal("--file-budget"), Schema.String, Schema.String]))(
+    args,
+  ).pipe(
+    Effect.mapError(
+      (error) =>
+        new TestPerformanceEntryError({
+          reason: "arguments",
+          message: `invalid test file budget arguments: ${error.message}`,
         }),
     ),
   );
@@ -251,6 +285,45 @@ export const fileTestSuiteBudget = Effect.fn("TestSuiteBudgetEntry.file")(functi
   return yield* submitTestSuiteBudget({ ...input, history, repository });
 });
 
+const submitTestFileBudget = Effect.fn("TestFileBudgetEntry.submit")(function* (input: {
+  readonly report: typeof TestTimingReport.Type;
+  readonly repository: GitHub.GitHubRepoRef;
+  readonly workflowRunUrl: string;
+  readonly atMillis: number;
+}) {
+  const slowest = input.report.testFiles.reduce((current, testFile) =>
+    testFile.durationMs > current.durationMs ? testFile : current,
+  );
+  if (slowest.durationMs <= slowestTestFileBudgetMs) return "skipped" as const;
+
+  const workflowRunUrl = yield* normalizeWorkflowRunUrl(input.workflowRunUrl, input.repository);
+  return yield* submitVerdict(
+    {
+      kind: "test-file-budget",
+      signal: "test-file-duration",
+      subsystem: "repository",
+      direction: "above",
+      observed: slowest.durationMs,
+      budget: slowestTestFileBudgetMs,
+      unit: "ms",
+      testFilePath: slowest.path,
+      testCount: slowest.testCount,
+      workflowRunUrl,
+    },
+    input.atMillis,
+  );
+});
+
+export const fileTestFileBudget = Effect.fn("TestFileBudgetEntry.file")(function* (input: {
+  readonly reportJson: string;
+  readonly repository: GitHub.GitHubRepoRef;
+  readonly workflowRunUrl: string;
+  readonly atMillis: number;
+}) {
+  const report = yield* decodeTimingReportJson(input.reportJson);
+  return yield* submitTestFileBudget({ ...input, report });
+});
+
 const makeFiler = Effect.fn("TestPerformanceEntry.makeFiler")(function* (repository: GitHub.GitHubRepoRef) {
   const client = yield* GitHub.GitHubClient;
   const target = yield* GitHub.makePerformanceIssueFilerTarget(client, repository, "origin-label-only");
@@ -283,8 +356,26 @@ const runBudgetEntry = Effect.fn("TestSuiteBudgetEntry.run")(function* (args: Re
   yield* Console.log(result);
 });
 
+const runTestFileBudgetEntry = Effect.fn("TestFileBudgetEntry.run")(function* (args: ReadonlyArray<string>) {
+  const [, reportPath, workflowRunUrl] = yield* decodeTestFileBudgetEntryArguments(args);
+  const fileSystem = yield* FileSystem.FileSystem;
+  const reportJson = yield* fileSystem.readFileString(reportPath);
+  const repository = yield* Config.string("GITHUB_REPOSITORY").pipe(Effect.flatMap(decodeRepository));
+  const filer = yield* makeFiler(repository);
+  const atMillis = yield* Clock.currentTimeMillis;
+  const result = yield* fileTestFileBudget({ reportJson, repository, workflowRunUrl, atMillis }).pipe(
+    Effect.provideService(PerformanceIssueFilerModule.PerformanceIssueFiler, filer),
+  );
+  yield* Console.log(result);
+});
+
+const entryModes = [
+  { mode: "--budget", run: runBudgetEntry },
+  { mode: "--file-budget", run: runTestFileBudgetEntry },
+];
+
 const runEntry = (args: ReadonlyArray<string>) =>
-  args[0] === "--budget" ? runBudgetEntry(args) : runComparisonEntry(args);
+  (entryModes.find(({ mode }) => mode === args[0])?.run ?? runComparisonEntry)(args);
 
 const isMain = process.argv[1] ? pathToFileURL(process.argv[1]).href === import.meta.url : false;
 
