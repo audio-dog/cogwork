@@ -1,0 +1,19 @@
+packages/engine/operating-instructions/shared/test-value/TEST-VALUE.md
+  s_9027228b03a236::t_834260c2e18b4f 1-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5da2c30560da3a6ddf87f201cfc7d6a9b9f29c91",
+  "prompts": {},
+  "sessions": {
+    "s_9027228b03a236": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f44d-6094-7152-9815-301dce4497a8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
