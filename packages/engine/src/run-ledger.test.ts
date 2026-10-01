@@ -101,6 +101,7 @@ const runPlan = (id: string) =>
     messages: [{ role: "user", content: "Triage #7" }],
     workContext: {
       reference: { workItem, url: "https://example.test/issues/7" },
+      prose: { body: "", comments: [] },
       facts: {
         roles: ["needs-triage"],
         assignees: [],

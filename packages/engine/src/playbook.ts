@@ -50,7 +50,7 @@ export interface OperationDefinition<Stage extends LifecycleStage = LifecycleSta
 
 const defaultTriagePrompt = [
   'You are running the triage playbook for work item {id} ("{title}") in this repository checkout.',
-  "Follow the `{skill}` skill to triage {id}: read the issue and its comments, explore the codebase,",
+  "Follow the `{skill}` skill to triage {id}: use the frozen Work Context as the brief, explore the codebase,",
   "verify the claim where you can, and decide the correct next state.",
   "Read the checkout, never write to it: leave every file exactly as you found it.",
 ].join("\n");
@@ -58,7 +58,7 @@ const defaultTriagePrompt = [
 const defaultImplementPrompt = [
   'You are running the implement playbook for work item {id} ("{title}") in this repository checkout.',
   "You are on a fresh branch dedicated to {id}, with no human in the session.",
-  "Follow the `{skill}` skill to implement {id}: read the issue and its comments as the brief, make the change,",
+  "Follow the `{skill}` skill to implement {id}: use the frozen Work Context as the brief, make the change,",
   "pass the local gate, commit, and prepare the pull request title and body for the engine.",
 ].join("\n");
 
@@ -67,6 +67,7 @@ const defaultFollowUpPrompt = [
   "You are in the worktree on that PR's branch, with no human in the session.",
   "Follow the `{skill}` skill to move the PR forward: read the PR's failing checks and any human review",
   "comments, make the fix, pass the local gate, and push to the same branch.",
+  "Use the frozen Work Context for the linked work item's brief; do not fetch it from the Issue tracker.",
   "Never merge the PR and never resolve review threads — a human gates the code.",
   "Linear history for this repository is {linearHistory}.",
 ].join("\n");
@@ -110,6 +111,11 @@ export const operationOutcomeTables = {
   "follow-up": { outcomes: followUpOutcomes },
 } satisfies OperationOutcomeTables;
 
+export const issueTrackerConnectionNeed = {
+  name: "issue-tracker-connection",
+  kind: "connection",
+} satisfies OperationNeed;
+
 const resolveStageConfig = <Stage extends LifecycleStage>(
   config: WorkspaceConfig,
   defaults: StageDefaults<Stage>,
@@ -124,7 +130,7 @@ export const resolveTriage = (config: WorkspaceConfig) =>
     promptTemplate: defaultTriagePrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
-    needs: [],
+    needs: [issueTrackerConnectionNeed],
     outcomeTable: operationOutcomeTables.triage,
   });
 
@@ -134,7 +140,7 @@ export const resolveImplement = (config: WorkspaceConfig) =>
     promptTemplate: defaultImplementPrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
-    needs: [],
+    needs: [issueTrackerConnectionNeed],
     outcomeTable: operationOutcomeTables.implement,
   });
 
@@ -144,7 +150,7 @@ export const resolveFollowUp = (config: WorkspaceConfig) =>
     promptTemplate: defaultFollowUpPrompt,
     resumeMaxAgeMillis: Duration.toMillis(day),
     resumeMaxTokens: null,
-    needs: [],
+    needs: [issueTrackerConnectionNeed],
     outcomeTable: operationOutcomeTables["follow-up"],
   });
 

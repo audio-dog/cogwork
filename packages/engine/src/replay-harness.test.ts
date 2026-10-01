@@ -70,6 +70,7 @@ const replayRequest = (speed: ReplaySpeed) => ({
     messages: [{ role: "user", content: "replay the fixture" }],
     workContext: {
       reference: { workItem: "#690", url: null },
+      prose: { body: "", comments: [] },
       facts: {
         roles: [],
         assignees: [],

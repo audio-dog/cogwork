@@ -140,6 +140,7 @@ const metricCounts = (metrics: ReturnType<typeof reconcilePollMetrics>) =>
 const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
+  readProse: () => Effect.succeed({ body: "", comments: [] }),
   claim: () => Effect.void,
   release: () => Effect.void,
   note: () => Effect.void,

@@ -17,7 +17,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
-import type { EligibleWork } from "./classify";
+import type { AdmittedWork } from "./classify";
 import type * as OperationResolution from "./operation-resolution";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunLedger from "./run-ledger";
@@ -51,13 +51,14 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "workspace",
     checkoutPath: "/repo",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/default" },
   }),
 };
 
 const workContext = (id: WorkItemId) =>
   ({
     reference: { workItem: id, url: null },
+    prose: { body: "", comments: [] },
     facts: {
       roles: [],
       assignees: [],
@@ -66,7 +67,7 @@ const workContext = (id: WorkItemId) =>
       priority: "medium",
       pr: null,
     },
-  }) satisfies EligibleWork["workContext"];
+  }) satisfies AdmittedWork["workContext"];
 
 const implementItem = (number: number) => {
   const id = itemId(`#${number}`);
@@ -77,7 +78,7 @@ const implementItem = (number: number) => {
     priority: "medium",
     priorFailures: 0,
     workContext: workContext(id),
-  } satisfies EligibleWork;
+  } satisfies AdmittedWork;
 };
 
 const followUpItem = (number: number, fresh = false) => {
@@ -98,7 +99,7 @@ const followUpItem = (number: number, fresh = false) => {
       fresh,
       baseDivergence: "none",
     },
-  } satisfies EligibleWork;
+  } satisfies AdmittedWork;
 };
 
 const triageItem = (number: number) => {
@@ -110,7 +111,7 @@ const triageItem = (number: number) => {
     priority: "medium",
     priorFailures: 0,
     workContext: workContext(id),
-  } satisfies EligibleWork;
+  } satisfies AdmittedWork;
 };
 
 const operationSettingsFor = (harness: HarnessName) =>
@@ -129,7 +130,7 @@ const operationSettingsFor = (harness: HarnessName) =>
     },
   ] satisfies ReadonlyArray<OperationSettingRow>;
 
-const operationFor = (item: EligibleWork, harness: HarnessName = cursor) => {
+const operationFor = (item: AdmittedWork, harness: HarnessName = cursor) => {
   const operation = resolveRunPlanStage(workspace.config, item.stage, operationSettingsFor(harness));
   if (!operation) return assert.fail(`expected ${item.stage} operation`);
   return operation;
@@ -208,7 +209,7 @@ const session = (id: string, harness: HarnessName = cursor) =>
 
 const record = (
   id: string,
-  item: EligibleWork,
+  item: AdmittedWork,
   stored: Session,
   startedAtMillis: number,
   branch: BranchName = branchName(item),
@@ -228,7 +229,7 @@ const record = (
   }) satisfies RunRecord;
 
 const seedBranchSession = (
-  item: EligibleWork,
+  item: AdmittedWork,
   stored: Session,
   startedAtMillis = 1_000,
   branch: BranchName = branchName(item),
@@ -241,14 +242,14 @@ const seedBranchSession = (
     );
   });
 
-const resume = (item: EligibleWork, stored: Session) =>
+const resume = (item: AdmittedWork, stored: Session) =>
   ({
     ...item,
     resume: { session: stored.id, reason: "interrupted" },
-  }) satisfies EligibleWork;
+  }) satisfies AdmittedWork;
 
 const prepare = Effect.fn("RunPreparationTest.prepare")(function* (
-  item: EligibleWork,
+  item: AdmittedWork,
   harness: HarnessName = cursor,
 ) {
   yield* TestClock.setTime(20_000);

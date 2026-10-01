@@ -15,7 +15,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import type { EligibleWork } from "./classify";
+import type { AdmittedWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
 import { resolvedMcpSkills } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
@@ -26,6 +26,7 @@ import {
   buildRunPlan,
   engineAdmissibleSettingScope,
   engineSettingScopeDirection,
+  operationBindingsOf,
   projectedContributionName,
   resolveEngineContributionEnabled,
   resolveEngineContributionUnion,
@@ -197,7 +198,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "workspace",
     checkoutPath: "/repo",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/maintainer" },
   }),
 };
 
@@ -207,7 +208,7 @@ const otherWorkspace = Schema.decodeSync(WorkspaceConfig)({
   issueTracker: { type: "github" },
 }).name;
 
-const item: EligibleWork = {
+const item: AdmittedWork = {
   id: Schema.decodeSync(WorkItemId)("#228"),
   title: "Assemble Run Plan",
   url: "https://github.com/owner/repo/issues/228",
@@ -226,6 +227,17 @@ const item: EligibleWork = {
       claim: null,
       priority: "high",
       pr: null,
+    },
+    prose: {
+      body: "Build the resolved Run Plan.",
+      comments: [
+        {
+          author: "maintainer",
+          authorAssociation: "MEMBER",
+          body: "Keep the accepted plan immutable.",
+          createdAtMillis: 900,
+        },
+      ],
     },
   },
 };
@@ -283,6 +295,40 @@ const highEffort: OperationSettingRow = {
 const invalidPlanRunId = Schema.decodeSync(RunId)("run-invalid-plan");
 
 describe("stage settings come from Operation settings", () => {
+  it.each(["triage", "implement", "follow-up"] as const)(
+    "%s requires the workspace issue-tracker Connection",
+    (stage) => {
+      const resolved = resolveRunPlanStage(workspace.config, stage, [stageEnabled, hostHarness]);
+
+      assert.deepStrictEqual(resolved?.stage.needs, [
+        { name: "issue-tracker-connection", kind: "connection" },
+      ]);
+      assert.deepStrictEqual(resolved && operationBindingsOf(resolved), [
+        { need: "issue-tracker-connection", contribution: "github/maintainer" },
+      ]);
+    },
+  );
+
+  it("keeps the workspace issue-tracker Connection binding authoritative", () => {
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [
+      stageEnabled,
+      hostHarness,
+      {
+        ...profileDefault,
+        setting: "bindings",
+        value: [
+          { need: "issue-tracker-connection", contribution: "github/other" },
+          { need: "review", contribution: "local:private/skill/review" },
+        ],
+      },
+    ]);
+
+    assert.deepStrictEqual(resolved && operationBindingsOf(resolved), [
+      { need: "issue-tracker-connection", contribution: "github/maintainer" },
+      { need: "review", contribution: "local:private/skill/review" },
+    ]);
+  });
+
   it("enables a stage from an Operation setting rather than the Workspace input", () => {
     const resolved = resolveRunPlanStage(bareConfig, "implement", [stageEnabled, codexHarness]);
 
@@ -634,7 +680,7 @@ describe("Run Plan assembly", () => {
         { name: "linear", endpoint: "https://mcp.linear.app/mcp" },
       ],
     );
-    assert.deepStrictEqual(plan.connections, ["workspace-tools"]);
+    assert.deepStrictEqual(plan.connections, ["github/maintainer", "workspace-tools"]);
   });
 
   it("projects same-named servers under distinct qualified names recorded in Provenance", () => {
@@ -846,6 +892,13 @@ describe("Run Plan assembly", () => {
     );
     assert.deepStrictEqual({ ...plan.workContext.facts }, item.workContext?.facts);
     assert.deepStrictEqual(
+      {
+        ...plan.workContext.prose,
+        comments: plan.workContext.prose.comments.map((comment) => ({ ...comment })),
+      },
+      item.workContext.prose,
+    );
+    assert.deepStrictEqual(
       { ...plan.workContext.observation },
       {
         generation: 12,
@@ -884,7 +937,10 @@ describe("Run Plan assembly", () => {
       plan.provenance.resolution
         .find((entry) => entry.key === "bindings")
         ?.contributors.map((candidate) => candidate.value),
-      [[{ need: "review", contribution: "local:private/skill/review" }]],
+      [
+        [{ need: "review", contribution: "local:private/skill/review" }],
+        { need: "issue-tracker-connection", contribution: "github/maintainer" },
+      ],
     );
     assert.deepStrictEqual(
       plan.provenance.stamps.map((stamp) => stamp.source),

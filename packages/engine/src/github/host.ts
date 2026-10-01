@@ -100,6 +100,22 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
     create: (body) => client.createComment(target, number, body),
   });
 
+  const readProse = Effect.fn("github.readProse")(function* (ref: GitHubRef) {
+    const [issue, comments] = yield* Effect.all([
+      client.readIssue(ref.target, ref.number),
+      client.listAllComments(ref.target, ref.number),
+    ]);
+    return {
+      body: issue.body,
+      comments: comments.map((comment) => ({
+        author: comment.authorLogin,
+        authorAssociation: comment.authorAssociation,
+        body: comment.body,
+        createdAtMillis: comment.createdAtMillis,
+      })),
+    };
+  });
+
   const listItem = (target: AuthenticatedGitHubTarget, priorities: ReadonlyMap<number, Priority>) =>
     Effect.fn("github.listItem")(function* (issue: RawIssue) {
       const rawComments = yield* client.listComments(target, issue.number);
@@ -184,6 +200,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
       const number = yield* issueNumberOf(id);
       return { target, number } satisfies GitHubRef;
     }),
+    readProse,
     comments: (ref) => commentsFor(ref.target, ref.number),
     claimIdentity: (ref) => claimIdentity(ref.target),
     addClaim: (ref) => client.addLabel(ref.target, ref.number, claimLabel),

@@ -105,6 +105,7 @@ const request = {
     messages: [{ role: "user", content: "triage the issue" }],
     workContext: {
       reference: { workItem: "#1", url: null },
+      prose: { body: "", comments: [] },
       facts: {
         roles: [],
         assignees: [],

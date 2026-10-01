@@ -98,7 +98,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
 
   const commentsFor = (target: AuthenticatedLinearTarget, issueId: string): CommentHost<string> => ({
     comments: client
-      .listComments(target, issueId)
+      .listComments(target, issueId, coordinationScope(target))
       .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.actorUserId)))),
     edit: (id, body) => client.editComment(target, id, body),
     create: (body) => client.createComment(target, issueId, body),
@@ -174,6 +174,18 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
       }
       return { target, issueId: id } satisfies LinearRef;
     }),
+    readProse: (ref) =>
+      client.readProse(ref.target, ref.issueId).pipe(
+        Effect.map(({ body, comments }) => ({
+          body,
+          comments: comments.map((comment) => ({
+            author: comment.authorId,
+            authorAssociation: comment.authorAssociation,
+            body: comment.body,
+            createdAtMillis: comment.createdAtMillis,
+          })),
+        })),
+      ),
     comments: (ref) => commentsFor(ref.target, ref.issueId),
     claimIdentity: () => Coordination.defaultClaimant,
     addClaim: (ref) => client.addLabel(ref.target, ref.issueId, claimLabel),

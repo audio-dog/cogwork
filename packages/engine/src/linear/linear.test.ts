@@ -6,7 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "../classify";
-import { triageProposalBody } from "../comments";
+import { triageProposalAttribution, triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
 import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
@@ -24,7 +24,7 @@ import {
   type RawIssue,
   type RawWorkflowState,
 } from "./client";
-import { claimLabel, wireCodec } from "./markers";
+import { claimLabel, ledgerMarker, wireCodec } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -49,12 +49,16 @@ interface SeedIssue {
   readonly stateType?: string;
   readonly openBlockers?: number;
   readonly priority?: Priority;
+  readonly description?: string;
 }
 
 interface Seed {
   readonly issues: ReadonlyArray<SeedIssue>;
   readonly comments?: ReadonlyArray<
-    { readonly issue: string } & Omit<RawComment, "id"> & { readonly id?: string }
+    { readonly issue: string } & Omit<RawComment, "authorAssociation" | "id"> & {
+        readonly authorAssociation?: RawComment["authorAssociation"];
+        readonly id?: string;
+      }
   >;
   readonly states?: ReadonlyArray<RawWorkflowState>;
   readonly authError?: boolean;
@@ -78,6 +82,11 @@ class LinearClientCalls extends Context.Service<LinearClientCalls, LinearClientC
 }
 
 const bot = { id: "bot-user" } as const;
+const botCoordination = {
+  actorUserId: bot.id,
+  ledgerMarker,
+  proposalMarker: triageProposalAttribution,
+};
 
 const teamRef: LinearTeamRef = {
   team: "AUD",
@@ -113,7 +122,11 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     (all, { issue, id: commentId, ...comment }) =>
       all.set(issue, [
         ...(all.get(issue) ?? []),
-        { id: commentId ?? `comment-${all.get(issue)?.length ?? 0}`, ...comment },
+        {
+          id: commentId ?? `comment-${all.get(issue)?.length ?? 0}`,
+          authorAssociation: "NONE" as const,
+          ...comment,
+        },
       ]),
     new Map<string, ReadonlyArray<RawComment>>(),
   );
@@ -179,8 +192,22 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         }),
       ),
     listWorkflowStates: () => guard(Effect.succeed(states)),
-    listComments: (_ref, issueId) =>
+    listComments: (_ref, issueId, _coordination) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
+    readProse: (_ref, issueId) =>
+      guard(
+        Effect.gen(function* () {
+          const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
+          const issue = issues.find((candidate) => candidate.identifier === issueId);
+          if (!issue) {
+            return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
+          }
+          return {
+            body: seed.issues.find((candidate) => candidate.identifier === issueId)?.description ?? "",
+            comments: [...(comments.get(issueId) ?? [])],
+          };
+        }),
+      ),
     addLabel: (ref, issueId, label) =>
       guard(
         inTeam(
@@ -227,6 +254,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             const comment: RawComment = {
               id: `comment-${seq}`,
               authorId: bot.id,
+              authorAssociation: "NONE",
               body,
               createdAtMillis: seq,
             };
@@ -309,6 +337,46 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
   comments.filter((comment) => comment.authorId === bot.id);
 
 describe("linear work source adapter", () => {
+  it.effect("reads current issue prose and comment attribution for admission", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const prose = yield* tracker.readProse(workspace, id("AUD-41"));
+      assert.deepStrictEqual(prose, {
+        body: "Original request",
+        comments: [
+          {
+            author: "maintainer-id",
+            authorAssociation: "MEMBER",
+            body: "Latest steer",
+            createdAtMillis: 2,
+          },
+        ],
+      });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            {
+              identifier: "AUD-41",
+              title: "prose",
+              labels: ["state:ready-for-agent"],
+              description: "Original request",
+            },
+          ],
+          comments: [
+            {
+              issue: "AUD-41",
+              authorId: "maintainer-id",
+              authorAssociation: "MEMBER",
+              body: "Latest steer",
+              createdAtMillis: 2,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it.effect("holds a ready-for-agent ticket with an open blocker out of the eligible set", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
@@ -457,7 +525,7 @@ describe("linear work source adapter", () => {
       const client = yield* LinearClient;
       const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
       yield* source.claim(workspace, id("AUD-7"), request);
-      const comments = botComments(yield* client.listComments(teamRef, "AUD-7"));
+      const comments = botComments(yield* client.listComments(teamRef, "AUD-7", botCoordination));
       assert.strictEqual(comments.length, 1);
       assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
       assert.isFalse(comments[0]?.body.includes("<!--") ?? true);

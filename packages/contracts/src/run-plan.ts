@@ -85,12 +85,29 @@ export class RunPlanWorkContextFacts extends Schema.Class<RunPlanWorkContextFact
   },
 ) {}
 
+export class RunPlanWorkContextComment extends Schema.Class<RunPlanWorkContextComment>(
+  "RunPlanWorkContextComment",
+)({
+  author: Schema.NullOr(TrimmedNonEmptyString),
+  authorAssociation: Schema.NullOr(TrimmedNonEmptyString),
+  body: Schema.String,
+  createdAtMillis: Schema.Natural,
+}) {}
+
+export class RunPlanWorkContextProse extends Schema.Class<RunPlanWorkContextProse>("RunPlanWorkContextProse")(
+  {
+    body: Schema.String,
+    comments: Schema.Array(RunPlanWorkContextComment),
+  },
+) {}
+
 export const RunPlanMcpMember = Schema.Union([RunPlanMcpServer, RunPlanContributionMember]);
 export type RunPlanMcpMember = typeof RunPlanMcpMember.Type;
 
 export class RunPlanWorkContext extends Schema.Class<RunPlanWorkContext>("RunPlanWorkContext")({
   reference: RunPlanWorkContextReference,
   facts: RunPlanWorkContextFacts,
+  prose: RunPlanWorkContextProse,
   observation: RunPlanObservation,
 }) {}
 

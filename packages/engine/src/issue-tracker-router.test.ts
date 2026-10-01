@@ -42,6 +42,7 @@ class RouterCalls extends Context.Service<RouterCalls, Ref.Ref<ReadonlyArray<Rec
 const fakeSource = (source: string, calls: Ref.Ref<ReadonlyArray<Recorded>>): IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
+  readProse: () => Effect.succeed({ body: "", comments: [] }),
   claim: () => Effect.void,
   release: () => Effect.void,
   note: () => Effect.void,

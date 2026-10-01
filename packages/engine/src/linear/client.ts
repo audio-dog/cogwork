@@ -55,9 +55,12 @@ export interface ObservedRawIssue extends RawIssue {
   readonly coordinationComments: ReadonlyArray<RawComment>;
 }
 
+type LinearAuthorAssociation = "MEMBER" | "NONE" | "OWNER";
+
 export interface RawComment {
   readonly id: string;
-  readonly authorId: string;
+  readonly authorId: string | null;
+  readonly authorAssociation: LinearAuthorAssociation;
   readonly body: string;
   readonly createdAtMillis: number;
 }
@@ -86,6 +89,21 @@ const CommentNode = Schema.Struct({
   user: Schema.NullOr(Schema.Struct({ id: Schema.String })),
 });
 
+const ProseCommentNode = Schema.Struct({
+  id: Schema.String,
+  body: Schema.String,
+  createdAt: Schema.String,
+  user: Schema.NullOr(
+    Schema.Struct({
+      id: Schema.String,
+      active: Schema.Boolean,
+      guest: Schema.Boolean,
+      app: Schema.Boolean,
+      admin: Schema.Boolean,
+    }),
+  ),
+});
+
 const RelationNode = Schema.Struct({
   type: Schema.String,
   issue: Schema.Struct({ state: Schema.Struct({ type: Schema.String }) }),
@@ -104,6 +122,18 @@ const RelationConnection = Schema.Struct({
 interface RelationPaginationState {
   readonly after: string;
   readonly seen: ReadonlySet<string>;
+}
+
+interface CommentPaginationState {
+  readonly after: string | null;
+  readonly seen: ReadonlySet<string>;
+  readonly commentCount: number;
+  readonly proseBytes: number;
+}
+
+interface CommentPage {
+  readonly body: string;
+  readonly comments: ReadonlyArray<RawComment>;
 }
 
 const IssueNode = Schema.Struct({
@@ -159,7 +189,20 @@ const WorkspaceLabelsPayload = Schema.Struct({
 const CommentsPayload = Schema.Struct({
   issue: Schema.NullOr(
     Schema.Struct({
+      description: Schema.NullOr(Schema.String),
+      comments: Schema.Struct({
+        nodes: Schema.Array(ProseCommentNode),
+        pageInfo: PageInfoNode,
+      }),
+    }),
+  ),
+});
+
+const CoordinationCommentsPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({
       comments: Schema.Struct({ nodes: Schema.Array(CommentNode) }),
+      proposalComments: Schema.Struct({ nodes: Schema.Array(CommentNode) }),
     }),
   ),
 });
@@ -169,6 +212,7 @@ const IssueRelationsPayload = Schema.Struct({
 });
 
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
+const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 
@@ -252,7 +296,7 @@ const isoMillis = (millis: number) =>
 const isTransient = (failure: LinearRequestFailure) => failure.retryable;
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const transientAttemptDeadline = "30 seconds";
-const relationPaginationDeadline = "5 minutes";
+const paginationDeadline = "5 minutes";
 
 const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, LinearRequestFailure, R>) =>
   attempt.pipe(
@@ -267,11 +311,11 @@ const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, LinearRequ
     ),
   );
 
-const withRelationPaginationDeadline = <A, R>(operation: Effect.Effect<A, IssueTrackerError, R>) =>
+const withPaginationDeadline = <A, R>(kind: string, operation: Effect.Effect<A, IssueTrackerError, R>) =>
   operation.pipe(
-    Effect.timeout(relationPaginationDeadline),
+    Effect.timeout(paginationDeadline),
     Effect.catchTag("TimeoutError", () =>
-      Effect.fail(unavailable(`Linear relation pagination timed out after ${relationPaginationDeadline}`)),
+      Effect.fail(unavailable(`Linear ${kind} pagination timed out after ${paginationDeadline}`)),
     ),
   );
 
@@ -284,6 +328,8 @@ const millisFromIso = (value: string) => {
 
 const issuePageSize = 100;
 const labelPageSize = 50;
+const workContextCommentLimit = 10_000;
+const workContextProseByteLimit = 16 * 1024 * 1024;
 // Linear rejects any single query above 10,000 complexity points, and a nested connection multiplies
 // its children by its page size, so these sizes multiply out rather than add up.
 const relationPageSize = 7;
@@ -357,16 +403,24 @@ query WorkspaceLabelByName($label: String!) {
 }`;
 
 const commentsQuery = `
-query IssueComments($id: String!) {
+query IssueComments($id: String!, $after: String) {
   issue(id: $id) {
-    comments(first: 100) {
+    description
+    comments(first: 100, after: $after, orderBy: createdAt) {
       nodes {
         id
         body
         createdAt
-        user { id }
+        user { id active guest app admin }
       }
+      pageInfo { hasNextPage endCursor }
     }
+  }
+}`;
+
+const coordinationCommentsQuery = `
+query IssueCoordinationComments($id: String!, $bot: ID!, $ledger: String!, $proposal: String!) {
+  issue(id: $id) {${coordinationFields}
   }
 }`;
 
@@ -437,10 +491,11 @@ const countOpenBlockers = (relations: ReadonlyArray<typeof RelationNode.Type>) =
 const continuationCursor = Effect.fn("linear.continuationCursor")(function* (
   pageInfo: typeof PageInfoNode.Type,
   issueIdentifier: string,
+  kind = "relation",
 ) {
   return yield* pageInfo.hasNextPage
     ? Option.match(Option.fromNullOr(pageInfo.endCursor), {
-        onNone: () => Effect.fail(unavailable(`Linear relation page missing cursor: ${issueIdentifier}`)),
+        onNone: () => Effect.fail(unavailable(`Linear ${kind} page missing cursor: ${issueIdentifier}`)),
         onSome: (cursor) => Effect.succeed(Option.some(cursor)),
       })
     : Effect.succeed(Option.none<string>());
@@ -464,21 +519,42 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   priority: linearPriority(issue.priority),
 });
 
-const toRawComment = (comment: typeof CommentNode.Type): ReadonlyArray<RawComment> =>
-  comment.user
-    ? [
-        {
-          id: comment.id,
-          authorId: comment.user.id,
-          body: comment.body,
-          createdAtMillis: millisFromIso(comment.createdAt),
-        },
-      ]
-    : [];
+const toRawComment = (comment: typeof CommentNode.Type) => {
+  const rawComment: RawComment = {
+    id: comment.id,
+    authorId: comment.user?.id ?? null,
+    authorAssociation: "NONE",
+    body: comment.body,
+    createdAtMillis: millisFromIso(comment.createdAt),
+  };
+  return rawComment;
+};
+
+const lacksSteeringAuthority = (user: NonNullable<(typeof ProseCommentNode.Type)["user"]>) =>
+  !user.active || user.guest || user.app;
+
+const authorAssociationRules = [
+  { when: lacksSteeringAuthority, value: "NONE" },
+  { when: (user: NonNullable<(typeof ProseCommentNode.Type)["user"]>) => user.admin, value: "OWNER" },
+] as const;
+
+const authorAssociationOf = (user: (typeof ProseCommentNode.Type)["user"]): LinearAuthorAssociation =>
+  user === null ? "NONE" : (authorAssociationRules.find(({ when }) => when(user))?.value ?? "MEMBER");
+
+const toRawProseComment = (comment: typeof ProseCommentNode.Type) => ({
+  id: comment.id,
+  authorId: comment.user?.id ?? null,
+  authorAssociation: authorAssociationOf(comment.user),
+  body: comment.body,
+  createdAtMillis: millisFromIso(comment.createdAt),
+});
+
+const rawCommentBytes = (comment: RawComment) =>
+  Buffer.byteLength(comment.body) + Buffer.byteLength(comment.authorId ?? "");
 
 const toObservedIssue = (issue: typeof IssueNode.Type, openBlockers: number): ObservedRawIssue => ({
   ...toRawIssue(issue, openBlockers),
-  coordinationComments: [...(issue.comments?.nodes ?? []), ...(issue.proposalComments?.nodes ?? [])].flatMap(
+  coordinationComments: [...(issue.comments?.nodes ?? []), ...(issue.proposalComments?.nodes ?? [])].map(
     toRawComment,
   ),
 });
@@ -636,7 +712,8 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       firstCursor,
       (after) => ({ after, seen: new Set([after]) }) satisfies RelationPaginationState,
     );
-    const remaining = yield* withRelationPaginationDeadline(
+    const remaining = yield* withPaginationDeadline(
+      "relation",
       Stream.fromIterable(Option.toArray(initialCursor)).pipe(
         Stream.flatMap((cursor) =>
           Stream.paginate<RelationPaginationState, typeof RelationNode.Type, IssueTrackerError>(
@@ -736,6 +813,68 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return payload.issueLabelId;
   });
 
+  const readProse = (ref: LinearTeamRef, issueId: string) => {
+    const loadPage = Effect.fn("linear.loadCommentPage")(function* (state: CommentPaginationState) {
+      const data = yield* rawData(ref, commentsQuery, { id: issueId, after: state.after });
+      const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
+      if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
+      const next = yield* continuationCursor(payload.issue.comments.pageInfo, issueId, "comment");
+      const cursorRepeated = Option.exists(next, (after) => state.seen.has(after));
+      if (cursorRepeated) {
+        return yield* unavailable(`Linear comment cursor did not advance: ${issueId}`);
+      }
+      const comments = payload.issue.comments.nodes.map(toRawProseComment);
+      const commentCount = state.commentCount + comments.length;
+      const proseBytes =
+        state.proseBytes +
+        comments.reduce((total, comment) => total + rawCommentBytes(comment), 0) +
+        (state.after === null ? Buffer.byteLength(payload.issue.description ?? "") : 0);
+      const withinAdmissionLimit =
+        commentCount <= workContextCommentLimit && proseBytes <= workContextProseByteLimit;
+      if (!withinAdmissionLimit) {
+        return yield* new IssueTrackerError({
+          reason: "unavailable",
+          retryable: false,
+          message: `Linear issue thread exceeds admission limits (${workContextCommentLimit} comments or ${workContextProseByteLimit} bytes)`,
+        });
+      }
+      const nextState = Option.map(
+        next,
+        (after) =>
+          ({
+            after,
+            seen: new Set([...state.seen, after]),
+            commentCount,
+            proseBytes,
+          }) satisfies CommentPaginationState,
+      );
+      const page = {
+        body: payload.issue.description ?? "",
+        comments,
+      } satisfies CommentPage;
+      return [[page], nextState] satisfies readonly [
+        ReadonlyArray<CommentPage>,
+        Option.Option<CommentPaginationState>,
+      ];
+    });
+    return withPaginationDeadline(
+      "comment",
+      Stream.paginate<CommentPaginationState, CommentPage, IssueTrackerError>(
+        { after: null, seen: new Set(), commentCount: 0, proseBytes: 0 },
+        loadPage,
+      ).pipe(
+        Stream.runCollect,
+        Effect.map((pages) => {
+          const collected = Array.from(pages);
+          return {
+            body: collected.at(0)?.body ?? "",
+            comments: collected.flatMap((page) => page.comments),
+          };
+        }),
+      ),
+    );
+  };
+
   return {
     authenticatedUserId: Effect.fn("linear.authenticatedUserId")(function* (ref: LinearTeamRef) {
       const credential = yield* credentialFor(ref);
@@ -745,12 +884,23 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     observeIssues,
     listWorkflowStates: (ref: LinearTeamRef) =>
       Effect.map(loadTeam(ref, metaShape), (team): ReadonlyArray<RawWorkflowState> => team.states.nodes),
-    listComments: (ref: LinearTeamRef, issueId: string) =>
-      Effect.gen(function* () {
-        const data = yield* rawData(ref, commentsQuery, { id: issueId });
-        const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
-        return (payload.issue?.comments.nodes ?? []).flatMap(toRawComment);
-      }),
+    listComments: Effect.fn("linear.listComments")(function* (
+      ref: LinearTeamRef,
+      issueId: string,
+      coordination: CoordinationScope,
+    ) {
+      const data = yield* rawData(ref, coordinationCommentsQuery, {
+        id: issueId,
+        bot: coordination.actorUserId,
+        ledger: coordination.ledgerMarker,
+        proposal: coordination.proposalMarker,
+      });
+      const payload = yield* Effect.mapError(decodeCoordinationComments(data), toUnavailable);
+      return [...(payload.issue?.comments.nodes ?? []), ...(payload.issue?.proposalComments.nodes ?? [])].map(
+        toRawComment,
+      );
+    }),
+    readProse,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);

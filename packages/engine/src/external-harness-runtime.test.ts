@@ -221,6 +221,17 @@ const request = Schema.decodeSync(RunPlan)({
   messages: [{ role: "user", content: "Implement #147." }],
   workContext: {
     reference: { workItem: "#147", url: null },
+    prose: {
+      body: "Ship the external Harness change.",
+      comments: [
+        {
+          author: "maintainer",
+          authorAssociation: "MEMBER",
+          body: "Keep this instruction in the admitted snapshot.",
+          createdAtMillis: 2,
+        },
+      ],
+    },
     facts: {
       roles: ["ready-for-agent"],
       assignees: [],
@@ -465,9 +476,12 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           assert.include(instructions, "Follow repo rules.");
           assert.include(instructions, "Mandatory Operating Instructions: /instructions/implement-agent");
           assert.strictEqual(projection.root, checkout);
-          assert.deepStrictEqual(probe.chatOptions[0]?.messages, [
-            { role: "user", content: "Implement #147." },
-          ]);
+          const messages = probe.chatOptions[0]?.messages ?? [];
+          assert.strictEqual(messages.length, 2);
+          assert.strictEqual(messages[0]?.role, "user");
+          assert.include(messages[0]?.content ?? "", "Ship the external Harness change.");
+          assert.include(messages[0]?.content ?? "", "Keep this instruction in the admitted snapshot.");
+          assert.deepStrictEqual(messages[1], { role: "user", content: "Implement #147." });
           assert.deepStrictEqual(probe.chatOptions[0]?.systemPrompts, []);
         }),
     );
@@ -903,7 +917,12 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         assert.strictEqual(launch?.request.policy, "full");
         assert.strictEqual(launch?.request.checkout.path, checkoutPath);
         assert.strictEqual(launch?.request.operatingInstructions.path, "/instructions/implement-agent");
-        assert.deepStrictEqual(launch?.request.prompt, request.messages);
+        assert.deepStrictEqual(launch?.request.prompt.slice(1), request.messages);
+        assert.include(launch?.request.prompt[0]?.content ?? "", "Ship the external Harness change.");
+        assert.include(
+          launch?.request.prompt[0]?.content ?? "",
+          "Keep this instruction in the admitted snapshot.",
+        );
         assert.deepStrictEqual(launch?.request.outputSchema, request.structuredOutput);
         assert.strictEqual(probe.chatOptions[0]?.runId, request.id);
         assert.strictEqual(probe.chatOptions[0]?.threadId, freshSession);

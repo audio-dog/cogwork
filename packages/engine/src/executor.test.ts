@@ -1,6 +1,7 @@
 import {
   AgUiEvent,
   BranchName,
+  Connection,
   ConnectionId,
   type ContributionSettingRow,
   ControlStoreFailure,
@@ -98,6 +99,12 @@ const replay = Schema.decodeSync(HarnessName)("replay");
 const id = Schema.decodeSync(WorkItemId);
 const testObservation = { generation: 1, observedAtMillis: 1 } as const;
 const linearConnectionId = Schema.decodeSync(ConnectionId)("linear/acme");
+const githubConnection = Connection.make({
+  id: Schema.decodeSync(ConnectionId)("github/default"),
+  system: "github",
+  account: "default",
+  status: "established",
+});
 
 const execute = (
   executor: Effect.Success<typeof Executor.make>,
@@ -107,6 +114,7 @@ const execute = (
 
 const workContext = (workItem: WorkItemId, priority: "medium" = "medium") => ({
   reference: { workItem, url: null },
+  prose: { body: "", comments: [] },
   facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority, pr: null },
 });
 const previousSession = Schema.decodeSync(SessionIdSchema)("sess-prev");
@@ -143,7 +151,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/default" },
   }),
 };
 
@@ -189,7 +197,7 @@ const implementWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/default" },
   }),
 };
 
@@ -207,7 +215,7 @@ const mcpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/default" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
   }),
 };
@@ -219,7 +227,7 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/default" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
     ],
@@ -387,7 +395,7 @@ const followUpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/default" },
   }),
 };
 
@@ -498,7 +506,7 @@ const disabledWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github" },
+    issueTracker: { type: "github", connectionId: "github/default" },
   }),
 };
 
@@ -558,6 +566,9 @@ function trackerRecorder(
   claimFailure?: IssueTrackerError,
   claimWriteActive?: Ref.Ref<boolean>,
   attemptFailure?: IssueTrackerError,
+  readProse: IssueTrackerService["readProse"] = (_workspace, itemId) =>
+    Effect.succeed(workContext(itemId).prose),
+  handOffFailure?: IssueTrackerError,
 ) {
   return Layer.effect(
     IssueTracker,
@@ -566,6 +577,7 @@ function trackerRecorder(
       (calls): IssueTrackerService => ({
         rateLimitScope: () => null,
         observe: () => Effect.succeed([]),
+        readProse,
         claim: (_workspace, itemId) => recordClaim(calls, itemId, claimWriteActive, claimFailure),
         release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
         note: (_workspace, itemId, detail) => record(calls, { method: "note", item: itemId, note: detail }),
@@ -589,8 +601,15 @@ function trackerRecorder(
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
         },
-        handOff: (_workspace, itemId, outcome) =>
-          record(calls, { method: "handOff", item: itemId, stage: outcome.stage, note: outcome.note }),
+        handOff: (_workspace, itemId, outcome) => {
+          const recorded = record(calls, {
+            method: "handOff",
+            item: itemId,
+            stage: outcome.stage,
+            note: outcome.note,
+          });
+          return handOffFailure ? recorded.pipe(Effect.andThen(Effect.fail(handOffFailure))) : recorded;
+        },
         handBack: () => Effect.void,
         stalled: (_workspace, itemId, outcome) =>
           record(calls, {
@@ -1383,7 +1402,9 @@ const unavailablePluginLayer = Layer.succeed(PluginManager, {
 });
 
 const connectionStoreService = {
-  overview: Effect.succeed({ connections: [] }),
+  overview: Effect.succeed({
+    connections: [{ system: "github", connection: githubConnection, readiness: { _tag: "Ready" } }],
+  }),
   find: () => Effect.succeed(null),
   findSystem: () => Effect.succeed(null),
   bearer: () =>
@@ -1768,6 +1789,324 @@ describe("Executor.execute", () => {
       assert.isTrue(availability.available);
       assert.deepStrictEqual(availability.causes, []);
     }).pipe(Effect.provide(provide([transientPreflight])));
+  });
+
+  it.effect("declines an operation whose issue-tracker Connection is not ready", () => {
+    const notReadyConnections = Layer.succeed(ConnectionStore, {
+      ...connectionStoreService,
+      overview: Effect.succeed({
+        connections: [
+          {
+            system: "github",
+            connection: githubConnection,
+            readiness: { _tag: "NotReady", reason: "credential expired" },
+          },
+        ],
+      }),
+    } satisfies ConnectionStoreService);
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const resolution = yield* OperationResolution.OperationResolution;
+      const executor = yield* Executor.Executor;
+      const availability = yield* resolution.availabilityOf(implementWorkspace, implementItem);
+
+      assert.isFalse(availability.available);
+      assert.deepStrictEqual(availability.causes, [
+        {
+          _tag: "UnsatisfiedNeed",
+          need: "issue-tracker-connection",
+          kind: "connection",
+          reason: "not-ready",
+          contribution: "github/default",
+          message: "credential expired",
+        },
+      ]);
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages),
+          runLedgerIdentity,
+          notReadyConnections,
+        ),
+      ),
+    );
+  });
+
+  it.effect("releases the claim when the issue-tracker Connection expires during preparation", () =>
+    Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+
+      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
+      ]);
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages),
+          runLedgerIdentity,
+          Layer.effect(
+            ConnectionStore,
+            Effect.gen(function* () {
+              const reads = yield* Ref.make(0);
+              return {
+                ...connectionStoreService,
+                overview: Ref.getAndUpdate(reads, (count) => count + 1).pipe(
+                  Effect.map((count) => ({
+                    connections: [
+                      {
+                        system: "github" as const,
+                        connection: githubConnection,
+                        readiness:
+                          count === 0
+                            ? ({ _tag: "Ready" } as const)
+                            : ({ _tag: "NotReady", reason: "credential expired" } as const),
+                      },
+                    ],
+                  })),
+                ),
+              } satisfies ConnectionStoreService;
+            }),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("releases the claim and holds off another claim when admission fails", () =>
+    Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      yield* TestClock.adjust("1 minute");
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      yield* TestClock.adjust("1 minute");
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
+      ]);
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(undefined, undefined, undefined, () =>
+            Effect.fail(
+              new IssueTrackerError({ reason: "auth", message: "issue-tracker credential expired" }),
+            ),
+          ),
+          runnableStages,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("hands off a permanent admission prose failure", () =>
+    Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
+        {
+          method: "handOff",
+          item: "#15",
+          stage: "implement",
+          note: "Work Context admission failed: issue thread is too large",
+        },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(undefined, undefined, undefined, () =>
+            Effect.fail(
+              new IssueTrackerError({
+                reason: "unavailable",
+                retryable: false,
+                message: "issue thread is too large",
+              }),
+            ),
+          ),
+          runnableStages,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("returns false when permanent admission handoff fails", () =>
+    Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, implementWorkspace, implementItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
+        {
+          method: "handOff",
+          item: "#15",
+          stage: "implement",
+          note: "Work Context admission failed: issue thread is too large",
+        },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(
+            undefined,
+            undefined,
+            undefined,
+            () =>
+              Effect.fail(
+                new IssueTrackerError({
+                  reason: "unavailable",
+                  retryable: false,
+                  message: "issue thread is too large",
+                }),
+              ),
+            new IssueTrackerError({ reason: "auth", message: "issue-tracker credential expired" }),
+          ),
+          runnableStages,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("releases the claim when the admission prose read defects", () =>
+    Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      const exit = yield* Effect.exit(execute(executor, implementWorkspace, implementItem));
+      assert.strictEqual(exit._tag, "Failure");
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(undefined, undefined, undefined, () => Effect.die(new Error("prose defect"))),
+          runnableStages,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("freezes prose read after claim into the Harness request", () =>
+    Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+      const [request] = yield* Ref.get(requests);
+      const prose = request?.plan.workContext.prose;
+      assert.deepStrictEqual(
+        prose ? { body: prose.body, comments: prose.comments.map((comment) => ({ ...comment })) } : undefined,
+        {
+          body: "Body read at admission",
+          comments: [
+            {
+              author: "maintainer",
+              authorAssociation: "MEMBER",
+              body: "Latest steer",
+              createdAtMillis: 2,
+            },
+          ],
+        },
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(undefined, undefined, undefined, () =>
+            Effect.succeed({
+              body: "Body read at admission",
+              comments: [
+                {
+                  author: "maintainer",
+                  authorAssociation: "MEMBER",
+                  body: "Latest steer",
+                  createdAtMillis: 2,
+                },
+              ],
+            }),
+          ),
+          runnableStages,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("releases the claim when admission prose reading is interrupted", () => {
+    const entered = Deferred.makeUnsafe<void>();
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
+      yield* Deferred.await(entered);
+      yield* Fiber.interrupt(running);
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: "#15" },
+        { method: "release", item: "#15" },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(undefined, undefined, undefined, () =>
+            Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
+          ),
+          runnableStages,
+        ),
+      ),
+      Effect.scoped,
+    );
   });
 
   it.effect("declines when the Harness enablement reread fails", () => {

@@ -33,7 +33,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { Availability, availabilityCauseSummary } from "./availability";
-import type { EligibleWork } from "./classify";
+import type { AdmittedWork, EligibleWork } from "./classify";
 import {
   followUpNoteBody,
   handoffNote,
@@ -201,6 +201,7 @@ export const make = Effect.gen(function* () {
       Effect.onExit((exit) => (hasInterruptsOnly(exit) ? Effect.void : releaseClaim(workspace, item.id))),
     );
   const claimCooldowns = yield* Cooldown.make;
+  const admissionCooldowns = yield* Cooldown.make;
 
   const cleanupRunContext = (runId: RunId) =>
     contextAssembler
@@ -217,18 +218,22 @@ export const make = Effect.gen(function* () {
   const claimScope = (workspace: RegisteredWorkspace, item: EligibleWork) =>
     `${workspace.config.name}:${item.id}:${item.stage}`;
 
-  const holdOffClaim = Effect.fn("Executor.holdOffClaim")(function* (
+  const holdOffItem = Effect.fn("Executor.holdOffItem")(function* (
+    cooldowns: typeof claimCooldowns,
     scope: string,
     item: EligibleWork,
     error: IssueTrackerError,
   ) {
-    const { retryAtMillis } = yield* claimCooldowns.enter(scope, error.retryAfterMillis);
-    yield* Effect.logWarning("claim failed; holding this item off until the window expires", {
-      stage: item.stage,
-      item: item.id,
-      retryAtMillis,
-      error,
-    });
+    const { retryAtMillis } = yield* cooldowns.enter(scope, error.retryAfterMillis);
+    yield* Effect.logWarning(
+      "issue-tracker operation failed; holding this item off until the window expires",
+      {
+        stage: item.stage,
+        item: item.id,
+        retryAtMillis,
+        error,
+      },
+    );
   });
 
   const logParkStep = (step: string, item: EligibleWork, error: IssueTrackerError) =>
@@ -271,7 +276,7 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     error: IssueTrackerError,
   ) {
-    yield* holdOffClaim(scope, item, error);
+    yield* holdOffItem(claimCooldowns, scope, item, error);
     if (issueTrackerErrorIsPermanent(error)) yield* parkRefusedClaim(workspace, item, error);
     return false;
   });
@@ -282,7 +287,11 @@ export const make = Effect.gen(function* () {
     at: number,
   ) {
     const scope = claimScope(workspace, item);
-    if ((yield* claimCooldowns.heldUntil(scope)) !== null) return false;
+    const heldUntil = yield* Effect.all([
+      claimCooldowns.heldUntil(scope),
+      admissionCooldowns.heldUntil(scope),
+    ]);
+    if (heldUntil.some((until) => until !== null)) return false;
     return yield* issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }).pipe(
       Effect.matchEffect({
         onFailure: (error) => declineClaim(scope, workspace, item, error),
@@ -952,6 +961,46 @@ export const make = Effect.gen(function* () {
     return true;
   });
 
+  const refreshWorkContext = Effect.fn("Executor.refreshWorkContext")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const prose = yield* issueTracker.readProse(workspace, item.id);
+    return { ...item, workContext: { ...item.workContext, prose } } satisfies AdmittedWork;
+  });
+
+  const rejectAdmission = Effect.fn("Executor.rejectAdmission")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    operation: ResolvedOperation,
+    error: IssueTrackerError,
+  ) {
+    yield* holdOffItem(admissionCooldowns, claimScope(workspace, item), item, error);
+    yield* Effect.logWarning("Run admission rejected because the issue-tracker Connection failed", {
+      workspace: workspace.config.name,
+      item: item.id,
+      connection: operation.issueTrackerBinding,
+      message: error.message,
+    });
+    if (issueTrackerErrorIsPermanent(error)) {
+      yield* issueTracker
+        .handOff(workspace, item.id, {
+          stage: item.stage,
+          note: `Work Context admission failed: ${error.message}`,
+        })
+        .pipe(
+          Effect.catchTag("IssueTrackerError", (handoffError) =>
+            Effect.logWarning("could not hand off failed admission", {
+              workspace: workspace.config.name,
+              item: item.id,
+              error: handoffError,
+            }),
+          ),
+        );
+    }
+    return null;
+  });
+
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -966,20 +1015,30 @@ export const make = Effect.gen(function* () {
     if (!checked.resolved || !checked.availability.available) {
       return yield* decline(workspace, item, checked.availability.causes);
     }
+    const operation = checked.resolved;
     const admission = yield* claimEnabledItem(workspace, item);
     if (!admission.claimed) return false;
-    yield* runClaimed(workspace, item, checked.resolved, admission.startedAtMillis, observation).pipe(
+    const admitted = yield* refreshWorkContext(workspace, item).pipe(
+      Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : releaseClaim(workspace, item.id))),
+      Effect.matchEffect({
+        onFailure: (error) => rejectAdmission(workspace, item, operation, error),
+        onSuccess: (admittedItem) => Effect.succeed(admittedItem),
+      }),
+    );
+    if (admitted === null) return false;
+    yield* admissionCooldowns.clear(claimScope(workspace, item));
+    return yield* runClaimed(workspace, admitted, operation, admission.startedAtMillis, observation).pipe(
+      Effect.map(() => true),
       Effect.tap(() => releaseClaim(workspace, item.id)),
       Effect.onExit((exit) =>
         Exit.isSuccess(exit) || hasInterruptsOnly(exit) ? Effect.void : releaseClaim(workspace, item.id),
       ),
     );
-    return true;
   });
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
+    item: AdmittedWork,
     operation: ResolvedOperation,
     startedAtMillis: number,
     observation: RunPlanObservation,
