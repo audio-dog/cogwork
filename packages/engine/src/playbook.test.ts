@@ -35,21 +35,17 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
 
 type OperatingInstructionAgent = "follow-up-agent" | "implement-agent" | "triage-agent";
 
-const readOperatingInstructionResource = (
-  agent: OperatingInstructionAgent,
-  resource: "INSTRUCTIONS.md" | "TEST-VALUE.md",
-) =>
+const readOperatingInstructionResource = (resource: string) =>
   Effect.flatMap(FileSystem.FileSystem, (fs) =>
     fs.readFileString(
-      decodeURIComponent(new URL(`../operating-instructions/${agent}/${resource}`, import.meta.url).pathname),
+      decodeURIComponent(new URL(`../operating-instructions/${resource}`, import.meta.url).pathname),
     ),
   );
 
 const readOperatingInstructions = (agent: OperatingInstructionAgent) =>
-  readOperatingInstructionResource(agent, "INSTRUCTIONS.md");
+  readOperatingInstructionResource(`${agent}/INSTRUCTIONS.md`);
 
-const readTestValue = (agent: Exclude<OperatingInstructionAgent, "triage-agent">) =>
-  readOperatingInstructionResource(agent, "TEST-VALUE.md");
+const readTestValue = () => readOperatingInstructionResource("shared/test-value/TEST-VALUE.md");
 
 describe("resolveTriage", () => {
   it("falls back to the default skill and prompt when the stage is unset", () => {
@@ -336,7 +332,7 @@ layer(NodeFileSystem.layer)((it) => {
           instructions.indexOf("## Nothing to do"),
         );
 
-        assert.include(instructions, "Read `TEST-VALUE.md`");
+        assert.include(instructions, "Read `test-value/TEST-VALUE.md`");
         assert.include(instructions, "Base");
         assert.include(instructions, "Mutation");
         assert.include(instructions, "An import, compile, or type error is not a red");
@@ -397,15 +393,13 @@ layer(NodeFileSystem.layer)((it) => {
   });
 
   describe("implement Operating Instructions", () => {
-    it.effect("keeps package test-value copies identical and excludes named repo concepts", () =>
+    it.effect("keeps the shared test-value resource free of named repo concepts", () =>
       Effect.gen(function* () {
-        const implementTestValue = yield* readTestValue("implement-agent");
-        const followUpTestValue = yield* readTestValue("follow-up-agent");
+        const testValue = yield* readTestValue();
 
-        assert.strictEqual(implementTestValue, followUpTestValue);
-        assert.notInclude(implementTestValue, "cogwork");
-        assert.notInclude(implementTestValue, "ADR");
-        assert.notInclude(implementTestValue, "Effect");
+        assert.notInclude(testValue, "cogwork");
+        assert.notInclude(testValue, "ADR");
+        assert.notInclude(testValue, "Effect");
       }),
     );
 
@@ -413,12 +407,12 @@ layer(NodeFileSystem.layer)((it) => {
       Effect.gen(function* () {
         const instructions = yield* readOperatingInstructions("implement-agent");
 
-        assert.include(instructions, "Read `TEST-VALUE.md`");
+        assert.include(instructions, "Read `test-value/TEST-VALUE.md`");
         assert.include(instructions, "Base");
         assert.include(instructions, "Mutation");
         assert.include(instructions, "An import, compile, or type error is not a red");
         assert.include(instructions, "## Test proof");
-        assert.include(instructions, "Give it `TEST-VALUE.md`");
+        assert.include(instructions, "Give it `test-value/TEST-VALUE.md`");
       }),
     );
 

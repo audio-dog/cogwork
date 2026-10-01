@@ -61,7 +61,7 @@ Completion: `main` is integrated in your working tree and any conflicts are reso
 Address the checklist from [step 1](#1-read-the-state) against the existing diff.
 
 - **Tests first at clear seams.** Use `/tdd` where a seam is obvious.
-- **Tests earn their place.** Read `TEST-VALUE.md` before you add or change a test. Apply its four questions and hunt list while you write the fix.
+- **Tests earn their place.** Read `test-value/TEST-VALUE.md` before you add or change a test. Apply its four questions and hunt list while you write the fix.
 - **Any change to a React component or a `.tsx` / `.jsx` file — new or existing — you MUST load `/react-composition-patterns` and `/react-no-use-effect` before you write the code, then follow them.** This is not optional, and it does not wait for your own judgment that the change is "structural": a touched component file is the trigger. Boolean behavior props, `renderX` render props for static UI, monolithic components, prop drilling, `forwardRef`, and `useContext` are defects here, not style choices. Before you push, re-read your React diff against `/react-composition-patterns` and fix any violation — a composition violation is a red gate, the same as a failing check.
 - Run the repo's typecheck, the test files the diff touches, and lint on touched files frequently as you go. Leave the full build for the gate; it runs once.
 
