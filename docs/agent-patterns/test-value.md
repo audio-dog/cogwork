@@ -1,7 +1,7 @@
 # Test value
 
 The general bar lives in the shipped
-[`TEST-VALUE.md`](../../packages/engine/operating-instructions/implement-agent/TEST-VALUE.md). Read it
+[`TEST-VALUE.md`](../../packages/engine/operating-instructions/shared/test-value/TEST-VALUE.md). Read it
 first when you add, change, review, or delete a test. This reference adds cogwork's retention bar and
 Effect-specific shapes. `effect-test-layers.md` covers how an Effect test is structured; the Testing
 heuristics in `docs/agents/technical-disposition.md` hold the reasoning behind both.
@@ -40,7 +40,7 @@ it is not before you remove it.
 
 - `docs/agents/technical-disposition.md`, Testing and Evidence: _test through the interface_, _test
   what fails silently_, _declared is not reachable_.
-- `packages/engine/operating-instructions/implement-agent/TEST-VALUE.md`: the general test-value bar.
+- `packages/engine/operating-instructions/shared/test-value/TEST-VALUE.md`: the general test-value bar.
 - `docs/agent-patterns/effect-test-layers.md`: probe services and test-only interface leaks.
 - `docs/adr/0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md`: cut by measurement
   and judgment, never by category.
