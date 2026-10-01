@@ -1,0 +1,19 @@
+docs/adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md
+  s_9027228b03a236::t_2261cfb940a0a4 47-55,76,111-113,115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8741fa458dd6d2550703393e125e7b64047e189e",
+  "prompts": {},
+  "sessions": {
+    "s_9027228b03a236": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f44d-6094-7152-9815-301dce4497a8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
