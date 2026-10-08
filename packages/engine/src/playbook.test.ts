@@ -33,14 +33,19 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
     ...over,
   });
 
-const readOperatingInstructions = (agent: "follow-up-agent" | "implement-agent" | "triage-agent") =>
+type OperatingInstructionAgent = "follow-up-agent" | "implement-agent" | "triage-agent";
+
+const readOperatingInstructionResource = (resource: string) =>
   Effect.flatMap(FileSystem.FileSystem, (fs) =>
     fs.readFileString(
-      decodeURIComponent(
-        new URL(`../operating-instructions/${agent}/INSTRUCTIONS.md`, import.meta.url).pathname,
-      ),
+      decodeURIComponent(new URL(`../operating-instructions/${resource}`, import.meta.url).pathname),
     ),
   );
+
+const readOperatingInstructions = (agent: OperatingInstructionAgent) =>
+  readOperatingInstructionResource(`${agent}/INSTRUCTIONS.md`);
+
+const readTestValue = () => readOperatingInstructionResource("shared/test-value/TEST-VALUE.md");
 
 describe("resolveTriage", () => {
   it("falls back to the default skill and prompt when the stage is unset", () => {
@@ -318,6 +323,25 @@ layer(NodeFileSystem.layer)((it) => {
         );
       }),
     );
+
+    it.effect("carries the test-value bar through fixes, checks, and the round summary", () =>
+      Effect.gen(function* () {
+        const instructions = yield* readOperatingInstructions("follow-up-agent");
+        const summary = instructions.slice(
+          instructions.indexOf("## 5. Push and summarize"),
+          instructions.indexOf("## Nothing to do"),
+        );
+
+        assert.include(instructions, "Read `test-value/TEST-VALUE.md`");
+        assert.include(instructions, "Base");
+        assert.include(instructions, "Mutation");
+        assert.include(instructions, "An import, compile, or type error is not a red");
+        assert.include(summary, "Test proof");
+        assert.include(summary, "one entry per new or changed test");
+        assert.include(summary, "Base or named Mutation source");
+        assert.include(summary, "failing assertion");
+      }),
+    );
   });
 
   describe("buildImplementPrompt", () => {
@@ -369,6 +393,29 @@ layer(NodeFileSystem.layer)((it) => {
   });
 
   describe("implement Operating Instructions", () => {
+    it.effect("keeps the shared test-value resource free of named repo concepts", () =>
+      Effect.gen(function* () {
+        const testValue = yield* readTestValue();
+
+        assert.notInclude(testValue, "cogwork");
+        assert.notInclude(testValue, "ADR");
+        assert.notInclude(testValue, "Effect");
+      }),
+    );
+
+    it.effect("carries the test-value bar through implementation, checks, and review", () =>
+      Effect.gen(function* () {
+        const instructions = yield* readOperatingInstructions("implement-agent");
+
+        assert.include(instructions, "Read `test-value/TEST-VALUE.md`");
+        assert.include(instructions, "Base");
+        assert.include(instructions, "Mutation");
+        assert.include(instructions, "An import, compile, or type error is not a red");
+        assert.include(instructions, "## Test proof");
+        assert.include(instructions, "Give it `test-value/TEST-VALUE.md`");
+      }),
+    );
+
     it.effect("treats the requirements digest as the complete external brief", () =>
       Effect.gen(function* () {
         const instructions = yield* readOperatingInstructions("implement-agent");

@@ -63,6 +63,7 @@ Completion: `main` is integrated in your working tree and any conflicts are reso
 Address the checklist from [step 1](#1-read-the-state) against the existing diff.
 
 - **Tests first at clear seams.** Use `/tdd` where a seam is obvious.
+- **Tests earn their place.** Read `test-value/TEST-VALUE.md` before you add or change a test. Apply its four questions and hunt list while you write the fix.
 - **Any change to a React component or a `.tsx` / `.jsx` file — new or existing — you MUST load `/react-composition-patterns` and `/react-no-use-effect` before you write the code, then follow them.** This is not optional, and it does not wait for your own judgment that the change is "structural": a touched component file is the trigger. Boolean behavior props, `renderX` render props for static UI, monolithic components, prop drilling, `forwardRef`, and `useContext` are defects here, not style choices. Before you push, re-read your React diff against `/react-composition-patterns` and fix any violation — a composition violation is a red gate, the same as a failing check.
 - Run the repo's typecheck, the test files the diff touches, and lint on touched files frequently as you go. Leave the full build for the gate; it runs once.
 
@@ -70,12 +71,21 @@ Completion: every failing check has a fix, and every ask is answered — in the 
 
 ## 4. Local gate (hard)
 
-Before pushing, run all four from a clean run, in this order — the build last, and once:
+Before pushing, run all five from a clean run, in this order — the build last, and once:
 
 1. Typecheck — no errors and no suppressions (`as any` / `@ts-ignore` / `@ts-expect-error` defeat the point).
 2. Targeted tests — every test file that exercises this PR's diff. Find them by reading what the diff calls and what calls the diff, then run that whole set.
-3. Targeted lint and formatting — every file the diff touches.
-4. Full production build (`pnpm build`).
+3. Red proofs — every new or changed test fails on an assertion for the contract it guards. Use one of two sources:
+   - **Base** — run the test against the base commit's production code for a bug fix or behavior change.
+   - **Mutation** — make a small, named break in the new production code for new behavior, run the test, then restore the code.
+
+   An import, compile, or type error is not a red: it proves only that a symbol is new. One proof covers one contract, not every case in its table. A moved test, or a characterization test that passes on the base by design, records that fact instead.
+4. Targeted lint and formatting — every file the diff touches.
+5. Full production build (`pnpm build`).
+
+Record each proof for the round summary's **Test proof** section: test, red source, and failing assertion.
+
+Completion: typecheck, targeted tests, targeted lint, and build pass, and every new or changed test has a recorded red proof or an explicit moved/characterization entry.
 
 All green is the bar. **The one failure you may push over is a baseline failure: one you have proved already fails on the base commit, with this PR's diff absent.** You prove it, you never judge it — "this looks unrelated to my change" is the exact reasoning this gate exists to refuse, and it is wrong often enough to be worthless. Untested, every failure belongs to this PR.
 
@@ -102,7 +112,7 @@ Then write your round summary as your **final message**. Use one rule: **answer 
 
 This split is deliberate, and it's the whole point of this operation. The marker is what keeps the daemon's own writing out of the human-feedback signal — the engine reads a write-access comment with no `cogwork` marker as human feedback, and human feedback wakes another round. You used to write that marker yourself, and one wrong marker turned a summary into a trigger that woke round after round, a loop that never settled. So the marker is the engine's operation now, not yours. Write plain prose and let it own the marker.
 
-Make the summary self-contained, the way a reviewer could read it without re-deriving your reasoning: if you integrated the base, say whether you merged or rebased (and, for a rebase, that you force-pushed and why); which checks you fixed and how; and how you answered each ask — the change you made, or, for an ask you are declining, the reason. Do not resolve the review threads yourself.
+Make the summary self-contained, the way a reviewer could read it without re-deriving your reasoning: if you integrated the base, say whether you merged or rebased (and, for a rebase, that you force-pushed and why); which checks you fixed and how; and how you answered each ask — the change you made, or, for an ask you are declining, the reason. Add a **Test proof** section with one entry per new or changed test: the test, its Base or named Mutation source, and the failing assertion. Mark moved and characterization tests explicitly instead. Do not resolve the review threads yourself.
 
 Then end the turn. Do not sit polling CI — the engine picks up the next round if the checks are still red or a human responds again.
 

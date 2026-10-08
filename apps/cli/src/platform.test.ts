@@ -241,6 +241,14 @@ const denied = (method: string, target: string) =>
     pathOrDescriptor: target,
   });
 
+const missing = (method: string, target: string) =>
+  PlatformError.systemError({
+    _tag: "NotFound",
+    module: "FileSystem",
+    method,
+    pathOrDescriptor: target,
+  });
+
 const debrisInspectionFailureLayer: Layer.Layer<
   WorktreeFs.WorktreeFs | FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
 > = worktreeFsLayer.pipe(
@@ -1175,7 +1183,43 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
 const contextTestLayer = contextFsLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
 describe("contextFsLayer against a real filesystem", () => {
-  it.effect("lists an Authoring tree directory and treats a missing one as empty", () =>
+  it.effect("keeps readable files when a listed child disappears", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-race-" });
+      yield* fs.writeFileString(path.join(root, "keep.md"), "keep");
+      yield* fs.writeFileString(path.join(root, "gone.md"), "gone");
+
+      assert.deepStrictEqual(yield* context.readDirectory(root), ["keep.md"]);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        contextFsLayer.pipe(
+          Layer.provideMerge(
+            Layer.merge(
+              Layer.effect(
+                FileSystem.FileSystem,
+                Effect.map(FileSystem.FileSystem, (fs) =>
+                  FileSystem.FileSystem.of({
+                    ...fs,
+                    stat: (target) =>
+                      String(target).endsWith("gone.md")
+                        ? Effect.fail(missing("stat", String(target)))
+                        : fs.stat(target),
+                  }),
+                ),
+              ).pipe(Layer.provide(NodeFileSystem.layer)),
+              NodePath.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("lists only files from an Authoring tree and treats a missing directory as empty", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -1190,11 +1234,19 @@ describe("contextFsLayer against a real filesystem", () => {
       assert.deepStrictEqual(yield* context.readDirectory(rules), ["global.md"]);
       assert.deepStrictEqual(yield* context.readDirectory(path.join(root, "missing")), []);
 
+      const nestedRules = path.join(rules, "nested");
+      yield* fs.makeDirectory(nestedRules);
+      yield* fs.writeFileString(path.join(nestedRules, "local.md"), "local rules");
+      assert.deepStrictEqual([...(yield* context.readDirectory(rules, { recursive: true }))].sort(), [
+        "global.md",
+        path.join("nested", "local.md"),
+      ]);
+
       const file = path.join(root, "not-a-directory");
       yield* fs.writeFileString(file, "not a directory");
       const error = yield* Effect.flip(context.readDirectory(file));
       assert.strictEqual(error._tag, "ContextFsError");
-      assert.include(error.operation, "read directory");
+      assert.include(error.operation, "read files");
     }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
   );
 

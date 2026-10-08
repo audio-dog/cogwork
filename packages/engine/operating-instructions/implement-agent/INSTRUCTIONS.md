@@ -46,6 +46,7 @@ Completion: you can state the resolved intent and the acceptance criteria. Irrec
 Plan the change against the acceptance criteria, then build it.
 
 - **Tests first at clear seams.** Use `/tdd` where a seam is obvious — write the failing test, make it pass, refactor.
+- **Tests earn their place.** Read `test-value/TEST-VALUE.md` before you add or change a test. Apply its four questions and hunt list while you write, beside `/tdd` and the lean-code ladder below.
 - **Any change to a React component or a `.tsx` / `.jsx` file — new or existing — you MUST load `/react-composition-patterns` and `/react-no-use-effect` before you write the code, then follow them.** This is not optional, and it does not wait for your own judgment that the change is "structural": a touched component file is the trigger. Boolean behavior props, `renderX` render props for static UI, monolithic components, prop drilling, `forwardRef`, and `useContext` are defects here, not style choices.
 - Run the repo's typecheck, the test files your diff touches, and lint on touched files frequently as you go. Leave the full build for the gate; it runs once.
 
@@ -66,11 +67,20 @@ The gate runs in three stages, in order: checks, one review round, then one buil
 
 ### Checks
 
-Before review, run all three from a clean run:
+Before review, run all four from a clean run:
 
 1. Typecheck — no errors and no suppressions (`as any` / `@ts-ignore` / `@ts-expect-error` defeat the point of a clean typecheck).
 2. Targeted tests — every test file that exercises your diff. Find them by reading what the diff calls and what calls the diff, then run that whole set.
-3. Targeted lint and formatting — every file the diff touches.
+3. Red proofs — every new or changed test fails on an assertion for the contract it guards. Use one of two sources:
+   - **Base** — run the test against the base commit's production code for a bug fix or behavior change.
+   - **Mutation** — make a small, named break in the new production code for new behavior, run the test, then restore the code.
+
+   An import, compile, or type error is not a red: it proves only that a symbol is new. One proof covers one contract, not every case in its table. A moved test, or a characterization test that passes on the base by design, records that fact instead.
+4. Targeted lint and formatting — every file the diff touches.
+
+Record each proof in the pull request draft's **Test proof** section: test, red source, and failing assertion.
+
+Completion: typecheck, targeted tests, and targeted lint pass, and every new or changed test has a recorded red proof or an explicit moved/characterization entry.
 
 Commit the checked implementation with `/git-master` before review, but do not push. The merge-base-to-HEAD diff is then the exact review scope.
 
@@ -81,7 +91,7 @@ Dispatch three reviews **in parallel**, each with a clean context: the diff and 
 Give every reviewer the proposal's Review requirements as mandatory focus. They can strengthen a review; they never remove one of these three reviewers, and the security review always runs.
 
 - **`/code-review`** — invoke it intact. Fixed point: the merge-base with the base branch. Spec source: this work item, including its body, thread, and the triage proposal's requirements digest. Add `~/.agents/rules/*` to the repo's documented standards sources. It owns standards, the smell baseline, and spec fidelity, and numbers every finding (`S1`, `SP1`, …).
-- **minimalist** — review over-engineering and needless code. Give it the work item so it judges scope creep against the real requirement.
+- **minimalist** — review over-engineering and needless code. Give it `test-value/TEST-VALUE.md` and the work item so it judges added tests and scope creep against the real requirement.
 - **security-auditor** — review every diff.
 
 Reviewers cite the specific hunk and the specific rule, risk, smell, or spec line. They do not go for perfection. There is no second round.
@@ -136,6 +146,11 @@ Prepare the title and body for a pull request that is ready for review. The **PR
 
 <gate result: typecheck / targeted tests / lint / build>
 <baseline failures left red, each with the base sha it reproduces on; "none" if none>
+
+## Test proof
+
+- <test — Base, or Mutation: named production break — failing assertion>
+- <moved or characterization test — why no red proof applies>
 
 ## Open questions
 

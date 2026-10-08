@@ -44,17 +44,15 @@ text.
 
 ## Decision
 
-**The general test-value bar ships as a resource in the `implement-agent` and `follow-up-agent`
-packages.** The four questions, the hunt list, and the bug-fix rule move from
-`docs/agent-patterns/test-value.md` into `TEST-VALUE.md` in each package. The "Implement" step names
-it beside `/tdd` and the lean-code ladder: simple tests are generated, not retrofitted, the same
-argument ADR 0027 made for lean code. The repo doc keeps only what is this repo's own — the
-retention bar that names cogwork's contracts and ADR-backed invariants, and the Effect-specific
-shapes — and points at the shipped file for the rest.
-
-The context assembler provisions only the Run's own package, so the follow-up package carries an
-identical copy. An engine test fails when the two copies differ. A shared-resource mechanism waits
-for a third package that needs the file.
+**The general test-value bar ships as one shared resource in the stock `implement-agent` and
+`follow-up-agent` packages.** The four questions, the hunt list, and the bug-fix rule move from
+`docs/agent-patterns/test-value.md` into one engine-owned `shared/test-value/TEST-VALUE.md`. The
+context assembler copies that bundle into each stock Run package as `test-value/TEST-VALUE.md`.
+Workspace overrides remain whole-package replacements and do not inherit the shared resource. The
+"Implement" step names it beside `/tdd` and the lean-code ladder: simple tests are generated, not
+retrofitted, the same argument ADR 0027 made for lean code. The repo doc keeps only what is this
+repo's own — the retention bar that names cogwork's contracts and ADR-backed invariants, and the
+Effect-specific shapes — and points at the shipped file for the rest.
 
 **Every new or changed test carries a red proof, and the proof is a gate item.** The test must fail
 on an assertion, from one of two sources:
@@ -75,7 +73,7 @@ summary reply. Each entry names the test, the red source (base, or the mutation 
 the failing assertion. This is the completion criterion the gate binds to, and what a reviewer
 checks.
 
-**The minimalist review receives `TEST-VALUE.md`.** The review stage's dispatch line hands the
+**The minimalist review receives `test-value/TEST-VALUE.md`.** The review stage's dispatch line hands the
 minimalist the resource, so it judges added tests against the hunt list as needless code. The
 minimalist's brief is an ambient subagent definition, so the resource travels in the dispatch, not
 in the brief. No reviewer is added: ADR 0027's three-review bound holds.
@@ -110,10 +108,11 @@ test the diff adds, once real Runs show the section is reliable.
 ## Consequences
 
 - Both shipped packages change: the "Implement" and "Fix" steps, the Checks stage, the implement PR
-  body template and the follow-up summary, and the minimalist dispatch line. The tests that assert
-  on shipped instruction text (`packages/engine/src/playbook.test.ts`) change with them.
+  body template and the follow-up summary, and the minimalist dispatch line. The context assembler
+  adds the shared resource to stock packages before it reads their resources. Engine tests cover
+  the composition and the shipped instruction text.
 - `docs/agent-patterns/test-value.md` shrinks to this repo's retention bar and Effect shapes, and
-  points at the shipped `TEST-VALUE.md`. `/test-audit` reads both.
+  points at the shared `TEST-VALUE.md`. `/test-audit` reads both.
 - The colony Workspace's private-overlay forks (ADR
   [0019](./0019-per-workspace-operating-instructions-overrides.md)) receive none of this until they
   are updated by hand, as for ADR 0027.
