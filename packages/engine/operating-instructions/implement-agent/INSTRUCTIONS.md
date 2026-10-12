@@ -123,20 +123,21 @@ Prepare the pull request once the gate is green or every failure left is a prove
 
 Commit and push the engine-owned branch with the `git-master` skill. Do not open a pull request.
 
-Prepare the title and body for a pull request that is ready for review. The **PR body is a self-contained onboarding artifact** — a reviewer should need nothing but the PR to understand the change. Write it in ASD-STE100 Simplified Technical English: give a little context so a reviewer who was not in the run can follow, and use the ubiquitous language from the driven repo's `CONTEXT.md` when present. Use the existing repo's PR template. If not present, use this template:
+Prepare the title and body for a pull request that is ready for review. The **PR body is a self-contained onboarding artifact** — a reviewer should need nothing but the PR to understand the change. Write it in ASD-STE100 Simplified Technical English: give a little context so a reviewer who was not in the run can follow, and use the ubiquitous language from the driven repo's `CONTEXT.md` when present.
+
+**Load `/pr` before you write the body**, and write its three sections with it: Summary, Evidence, and Merge Danger. Where `/pr` names `GLOSSARY.md`, read the driven repo's `CONTEXT.md`. A headless run has no app to screenshot, so the Evidence is the key test's red proof and its green run; the Test proof section stays the full record of every proof.
+
+The body also carries the Work item, Steering honored, Verification, Test proof, and Open questions sections from the template below. The frame comes from the repo:
+
+- **The repo has a PR template** — keep it as the frame. Put the Summary where the template describes the change, the Evidence where it describes testing, and the Merge Danger where it collects other reviewer notes. Fold each of the five sections above into the template section that fits it, and add the rest after the template.
+- **The repo has no PR template** — use this template:
 
 ```markdown
 ## Work item
 
 <Closes #n | Refs #n> — <work item title>
 
-## Approach
-
-<the resolved intent and the approach you took>
-
-## Changes
-
-- <what changed, grouped by area>
+<Summary, Evidence, and Merge Danger, written with `/pr`>
 
 ## Steering honored
 
