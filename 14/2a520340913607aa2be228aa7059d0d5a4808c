@@ -1,0 +1,75 @@
+apps/desktop/src/renderer/src/components/prototype-agent-returns.tsx
+  s_1aa0e8aa3263db::t_931f2db190783a 1-122
+apps/desktop/src/renderer/src/components/prototype-workflow-editor.tsx
+  s_1aa0e8aa3263db::t_22ae584adcf3ab 105-114,122-136
+  s_1aa0e8aa3263db::t_aeb917b5039dbd 40,43-44,50-51
+  s_1aa0e8aa3263db::t_ab9d3c6b278298 117
+  s_1aa0e8aa3263db::t_6a61747119a8d7 42
+  s_1aa0e8aa3263db::t_3af36b6c4ed7e7 115-116,118-121
+apps/desktop/src/renderer/src/components/prototype-workflows-list.tsx
+  s_1aa0e8aa3263db::t_5ea66b30f2ba6b 274,298
+apps/desktop/src/renderer/src/components/prototype-operation-routes.tsx
+  s_1aa0e8aa3263db::t_2bb8e4be0ff144 11
+  s_1aa0e8aa3263db::t_e9b8fb3335a1d3 136-149
+  s_1aa0e8aa3263db::t_89f38ca31ac896 1-10,12-41,52,56-76,82,90-130,132-135,150-349
+  s_1aa0e8aa3263db::t_92e9b245253f1b 77-81,83-86,88-89
+  s_1aa0e8aa3263db::t_4608d1b4e2b97e 87,131
+  s_1aa0e8aa3263db::t_df8f8e43b81c5f 42-51,53-55
+apps/desktop/src/renderer/src/features/prototype-catalog.ts
+  s_1aa0e8aa3263db::t_8efac7afc86e68 95,101
+  s_1aa0e8aa3263db::t_27234ae56aca80 409-412
+  s_1aa0e8aa3263db::t_a521cc12463008 187-194,200,202,205-225,234-251,260-283,293-312
+  s_1aa0e8aa3263db::t_a3c4a815e5e023 372-373
+  s_1aa0e8aa3263db::t_d5727d96f8f624 35-36,39-74
+  s_1aa0e8aa3263db::t_4437acdf440a48 400-408,413-417
+  s_1aa0e8aa3263db::t_f72e45d596f2dd 75
+apps/desktop/src/renderer/src/components/prototype-step-inputs.tsx
+  s_1aa0e8aa3263db::t_b9f997f0c7ea18 230
+  s_1aa0e8aa3263db::t_01bfb866b4be81 1,3-13,16-20,22-24,26-28,33-49,57-58,60-72,102-104,107-108,126-127,137-141,143,145,147-150,161,172,177-179,181,187,192-193,195-203,205,211-213,223-224,227,233-246
+  s_1aa0e8aa3263db::t_fee15725fb9f86 2,14-15,21,25,29-32,50-56,59,73-101,105-106,109-125,128-136,142,144,146,151-160,162-171,173-176,180,182-186,188-191,194,204,206-210,214-222,225-226,228-229,231-232
+apps/desktop/src/renderer/src/components/prototype-catalog-menu.tsx
+  s_1aa0e8aa3263db::t_311e1e78b2fbb5 195
+apps/desktop/src/renderer/src/routes/_app/workflows/new.tsx
+  s_1aa0e8aa3263db::t_5ea66b30f2ba6b 27
+  s_1aa0e8aa3263db::t_46916f73f459c5 17
+  s_1aa0e8aa3263db::t_e34f556fef3cc0 8
+  s_1aa0e8aa3263db::t_af402c84693e8d 9-10,14-16
+apps/desktop/src/renderer/src/components/prototype-inline-instructions.tsx
+  s_1aa0e8aa3263db::t_816e548c8e72fc 2
+  s_1aa0e8aa3263db::t_fafb6ee0a28995 39,51,53-54,56
+  s_1aa0e8aa3263db::t_d582f0633a2c20 13-14
+  s_1aa0e8aa3263db::t_1c4183f9185fa1 17-18,20-21
+  s_1aa0e8aa3263db::t_af10170e97174e 10-11,16,24-27,38,75-77
+  s_1aa0e8aa3263db::t_f8fbd045fd449a 3,5
+  s_1aa0e8aa3263db::t_96da02b775c838 43-48,50,52,60,63
+  s_1aa0e8aa3263db::t_b2105426c00db2 1,4,6-9,12,15,22-23,28-37,40-42,49,55,57-59,61-62,64-74
+  s_1aa0e8aa3263db::t_4709ee29822397 19
+apps/desktop/src/renderer/src/components/prototype-routes-parts.tsx
+  s_1aa0e8aa3263db::t_2c95ea0c15a9a1 32
+  s_1aa0e8aa3263db::t_35f1848c45f127 16
+apps/desktop/src/renderer/src/features/prototype-routing.ts
+  s_1aa0e8aa3263db::t_32711744a2ad20 517-518
+  s_1aa0e8aa3263db::t_10d8e1bb074623 95,123,135,158
+  s_1aa0e8aa3263db::t_61e5e0c101c42d 412,414,417,421-434
+  s_1aa0e8aa3263db::t_fa4c339b8406bc 57-61
+  s_1aa0e8aa3263db::t_9b04f370402c4f 435-446
+  s_1aa0e8aa3263db::t_01ec4846d7de61 2-12
+  s_1aa0e8aa3263db::t_92f886a6c58dc7 254-308,311-335,337-362
+  s_1aa0e8aa3263db::t_bca88545312125 447-448
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "142a520340913607aa2be228aa7059d0d5a4808c",
+  "prompts": {},
+  "sessions": {
+    "s_1aa0e8aa3263db": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "235fd05e-023c-4d77-8aab-a413d0bb18c2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
