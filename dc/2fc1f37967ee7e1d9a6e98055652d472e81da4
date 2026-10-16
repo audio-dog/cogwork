@@ -1,0 +1,25 @@
+packages/ui/src/components/dropdown-menu.tsx
+  s_1aa0e8aa3263db::t_a1b48c744d4604 285-286,288,291
+  s_1aa0e8aa3263db::t_8abd39f1e0c2d1 2,4
+  s_1aa0e8aa3263db::t_91af799d5a8f80 224-267
+packages/ui/package.json
+  s_1aa0e8aa3263db::t_694530ca28b9fa 18
+pnpm-lock.yaml
+  s_1aa0e8aa3263db::t_886856ef80ff84 282,667-668,945-946,962-963,5300-5301,5776-5780,6303,6306,6311,6315,6321-6322,10116,10618-10621,10811,10815
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dc2fc1f37967ee7e1d9a6e98055652d472e81da4",
+  "prompts": {},
+  "sessions": {
+    "s_1aa0e8aa3263db": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "235fd05e-023c-4d77-8aab-a413d0bb18c2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
