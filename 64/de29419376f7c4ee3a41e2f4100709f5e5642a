@@ -1,0 +1,33 @@
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_1aa0e8aa3263db::t_dd894a3b0cd022 1-569
+apps/desktop/src/renderer/src/components/workflow-catalog-menu.tsx
+  s_1aa0e8aa3263db::t_e0767c91328eca 1-268
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_1aa0e8aa3263db::t_eef61b2517eaa7 1-290
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_1aa0e8aa3263db::t_cb71a4aacdb225 1-274
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_1aa0e8aa3263db::t_30ffa3cd936fa6 25-27,95-109,135-136,139,152-153,156,173-174,177,194-195,198,211-212,215,231-232,235,337-357,394-395,397,404-405,407
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId.tsx
+  s_1aa0e8aa3263db::t_3fd7fb7c3a8325 1-44
+apps/desktop/src/renderer/src/routes/_app/workflows/index.tsx
+  s_1aa0e8aa3263db::t_34fc8ff5bd27ca 1-6
+apps/desktop/src/renderer/src/routes/_app/workflows/new.tsx
+  s_1aa0e8aa3263db::t_66bc42d3f194ab 2-3,5-6,9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "64de29419376f7c4ee3a41e2f4100709f5e5642a",
+  "prompts": {},
+  "sessions": {
+    "s_1aa0e8aa3263db": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "235fd05e-023c-4d77-8aab-a413d0bb18c2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
