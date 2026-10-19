@@ -29,23 +29,46 @@ import {
   inheritedAt,
   isComplete,
   type Operation,
-  type OperationDraftActions,
+  operationEdits,
   type Question,
   routeAt,
   stepsAt,
   uncovered,
-  useOperationDraft,
 } from "../features/workflow-model";
-import { catalogIconFor, PickFromCatalog } from "./workflow-catalog-menu";
+import { CatalogMenu, catalogIconFor } from "./workflow-catalog-menu";
 
 /**
  * An Operation's outcomes and what Cogwork does with each one.
  *
  * Each outcome is a heading; what Cogwork does is a list under it — the Action's name in one column
  * and, when the agent writes part of it, the instruction the agent reads in the next. A hand-off to
- * another Operation closes the list, because it is where the work goes next. The provider owns the
- * Operation's working copy, and every part reads it from context.
+ * another Operation closes the list, because it is where the work goes next.
+ *
+ * The provider does not own the Operation: it reads it and sends every change through `update`, so
+ * whoever holds the Workflow's draft holds the outcomes too.
  */
+
+type Update = (change: (operation: Operation) => Operation) => void;
+
+/** Each edit, applied to whatever the Operation is when the update runs. */
+const bindEdits = (update: Update) => ({
+  removeStep: (when: Condition, step: CatalogChoice) =>
+    update((operation) => operationEdits.removeStep(operation, when, step)),
+  addRoute: (when: Condition) => update((operation) => operationEdits.addRoute(operation, when)),
+  removeRoute: (when: Condition) => update((operation) => operationEdits.removeRoute(operation, when)),
+  setInstruction: (step: CatalogChoice, inputId: string, field: string, hint: string) =>
+    update((operation) => operationEdits.setInput(operation, step, inputId, { kind: "agent", field, hint })),
+  setQuestionText: (questionId: string, text: string) =>
+    update((operation) => operationEdits.setQuestionText(operation, questionId, text)),
+  renameChoice: (questionId: string, choiceId: string, name: string) =>
+    update((operation) => operationEdits.renameChoice(operation, questionId, choiceId, name)),
+  addChoice: (questionId: string) => update((operation) => operationEdits.addChoice(operation, questionId)),
+  removeChoice: (questionId: string, choiceId: string) =>
+    update((operation) => operationEdits.removeChoice(operation, questionId, choiceId)),
+  addQuestion: () => update((operation) => operationEdits.addQuestion(operation)),
+  removeQuestion: (questionId: string) =>
+    update((operation) => operationEdits.removeQuestion(operation, questionId)),
+});
 
 interface OperationOutcomesContextValue {
   readonly state: {
@@ -53,7 +76,7 @@ interface OperationOutcomesContextValue {
     /** The step picked last, keyed by row and step, so its instruction can take the cursor. */
     readonly justPicked: string | null;
   };
-  readonly actions: OperationDraftActions & {
+  readonly actions: ReturnType<typeof bindEdits> & {
     readonly pickStep: (when: Condition, step: CatalogChoice) => void;
   };
   readonly meta: { readonly catalog: Catalog };
@@ -71,30 +94,113 @@ const pickKey = (operation: Operation, when: Condition, step: CatalogChoice) =>
   `${conditionKey(operation, when)}|${choiceKey(step)}`;
 
 function Provider({
-  seed,
+  operation,
+  update,
   catalog,
   children,
 }: {
-  readonly seed: Operation;
+  readonly operation: Operation;
+  readonly update: Update;
   readonly catalog: Catalog;
   readonly children: ReactNode;
 }) {
-  const { operation, actions } = useOperationDraft(seed);
   const [justPicked, setJustPicked] = useState<string | null>(null);
   const pickStep = (when: Condition, step: CatalogChoice) => {
-    actions.addStep(when, step);
+    update((current) => operationEdits.addStep(current, when, step));
     setJustPicked(pickKey(operation, when, step));
   };
   return (
     <OperationOutcomesContext
-      value={{ state: { operation, justPicked }, actions: { ...actions, pickStep }, meta: { catalog } }}
+      value={{
+        state: { operation, justPicked },
+        actions: { ...bindEdits(update), pickStep },
+        meta: { catalog },
+      }}
     >
       {children}
     </OperationOutcomesContext>
   );
 }
 
-/* ---------- atoms ---------- */
+/* ---------- one outcome ---------- */
+
+const OutcomeContext = createContext<{ readonly when: Condition } | null>(null);
+
+const useOutcome = () => {
+  const value = use(OutcomeContext);
+  if (!value) throw new Error("Outcome parts need an Outcome");
+  return value;
+};
+
+/** One outcome — a choice, a combination of choices, or every time — and what it runs. */
+function Outcome({ when, children }: { readonly when: Condition; readonly children: ReactNode }) {
+  return (
+    <OutcomeContext value={{ when }}>
+      <div className="group/row flex flex-col gap-0.5 px-3 py-2">{children}</div>
+    </OutcomeContext>
+  );
+}
+
+/** The catalog of Actions and hand-offs, adding the pick to this outcome. */
+function AddActionMenu({ children }: { readonly children: ReactNode }) {
+  const {
+    actions,
+    meta: { catalog },
+  } = useOperationOutcomes();
+  const { when } = useOutcome();
+  return (
+    <CatalogMenu.Root catalog={catalog} onChoose={(step) => actions.pickStep(when, step)}>
+      {children}
+      <CatalogMenu.Content placeholder="Search Actions…" />
+    </CatalogMenu.Root>
+  );
+}
+
+/**
+ * The outcome's heading line. Once the outcome has steps, "Add an Action" waits at the end of this
+ * line, so showing it on hover never moves the list below.
+ */
+function OutcomeHeading({ children }: { readonly children: ReactNode }) {
+  const {
+    state: { operation },
+  } = useOperationOutcomes();
+  const { when } = useOutcome();
+  return (
+    <div className="flex h-7 items-center gap-2">
+      {children}
+      {stepsAt(operation, when).length > 0 ? (
+        <AddActionMenu>
+          <CatalogMenu.Trigger
+            render={
+              <Button
+                size="xs"
+                variant="ghost"
+                className="ms-auto font-normal text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100"
+              />
+            }
+          >
+            <RiAddLine data-icon="inline-start" />
+            Add an Action
+          </CatalogMenu.Trigger>
+        </AddActionMenu>
+      ) : null}
+    </div>
+  );
+}
+
+function RemoveOnHover({ label, onRemove }: { readonly label: string; readonly onRemove: () => void }) {
+  return (
+    <Button
+      size="icon-xs"
+      variant="ghost"
+      aria-label={label}
+      className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+      onClick={onRemove}
+    >
+      <RiCloseLine />
+    </Button>
+  );
+}
 
 function StepLabel({ step }: { readonly step: CatalogChoice }) {
   const Icon = catalogIconFor(step.icon);
@@ -106,6 +212,128 @@ function StepLabel({ step }: { readonly step: CatalogChoice }) {
         <span className="font-mono text-[11px] text-muted-foreground">{step.optionName}</span>
       ) : null}
     </>
+  );
+}
+
+/** Module-level so its identity never changes: React calls it once on attach, not on every keystroke. */
+const focusOnAttach = (node: HTMLTextAreaElement | null) => {
+  node?.focus();
+};
+
+/** The instructions the agent reads for one step. Each one hugs its text and wraps at the row's edge. */
+function Instructions({ step }: { readonly step: CatalogChoice }) {
+  const {
+    state: { operation, justPicked },
+    actions,
+  } = useOperationOutcomes();
+  const { when } = useOutcome();
+  const instructed = agentInputs(operation, step);
+  const fresh = justPicked === pickKey(operation, when, step);
+  const several = instructed.length > 1;
+  return (
+    <div
+      className={cn(
+        "grid min-w-0 items-start gap-x-1.5",
+        several && "grid-cols-[auto_minmax(0,1fr)]",
+        !several && "grid-cols-[minmax(0,1fr)]",
+      )}
+    >
+      {instructed.map(({ entry, source }, index) => (
+        <Fragment key={entry.id}>
+          {several ? (
+            <span className="flex h-[26px] items-center text-xs text-muted-foreground">{entry.label}</span>
+          ) : null}
+          <Textarea
+            ref={fresh && index === 0 ? focusOnAttach : undefined}
+            rows={1}
+            aria-label={`What the agent writes for the ${entry.label.toLowerCase()}`}
+            value={source.hint}
+            placeholder={`What should the agent write for the ${entry.label.toLowerCase()}?`}
+            className="min-h-0 w-auto max-w-full min-w-24 resize-none rounded-sm border-0 bg-transparent px-1 py-[5px] text-xs leading-4 shadow-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-0 md:text-xs dark:bg-transparent"
+            onChange={(event) => actions.setInstruction(step, entry.id, source.field, event.target.value)}
+          />
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+function ActionLine({ step }: { readonly step: CatalogChoice }) {
+  const { actions } = useOperationOutcomes();
+  const { when } = useOutcome();
+  return (
+    <div className="group/action grid grid-cols-[minmax(0,15rem)_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-1.5 hover:bg-muted/40">
+      <span className="flex h-[26px] min-w-0 items-center gap-1.5 text-xs whitespace-nowrap">
+        <StepLabel step={step} />
+      </span>
+      <Instructions step={step} />
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label={`Remove ${step.itemName}`}
+        className="mt-0.5 opacity-0 group-hover/action:opacity-100 focus-visible:opacity-100"
+        onClick={() => actions.removeStep(when, step)}
+      >
+        <RiCloseLine />
+      </Button>
+    </div>
+  );
+}
+
+function HandOffLine({ step }: { readonly step: CatalogChoice }) {
+  const { actions } = useOperationOutcomes();
+  const { when } = useOutcome();
+  return (
+    <div className="group/action flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs hover:bg-muted/40">
+      <RiArrowRightLine className="size-3.5 text-muted-foreground" />
+      <span className="text-muted-foreground">then run</span>
+      <span className="font-medium">{step.itemName}</span>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label={`Stop handing off to ${step.itemName}`}
+        className="ms-auto opacity-0 group-hover/action:opacity-100 focus-visible:opacity-100"
+        onClick={() => actions.removeStep(when, step)}
+      >
+        <RiCloseLine />
+      </Button>
+    </div>
+  );
+}
+
+/** What the outcome runs: its Actions, then its hand-offs. An outcome with none offers to add one. */
+function OutcomeSteps() {
+  const {
+    state: { operation },
+  } = useOperationOutcomes();
+  const { when } = useOutcome();
+  const steps = stepsAt(operation, when);
+  const nothing =
+    steps.length === 0 && isComplete(operation, when) && inheritedAt(operation, when).length === 0;
+  return (
+    <div className="ms-2.5 flex flex-col gap-0.5 border-s ps-2">
+      {steps
+        .filter((step) => !isHandOff(step))
+        .map((step) => (
+          <ActionLine key={choiceKey(step)} step={step} />
+        ))}
+      {steps.filter(isHandOff).map((step) => (
+        <HandOffLine key={choiceKey(step)} step={step} />
+      ))}
+      {nothing ? (
+        <span className="px-1.5 py-1 text-xs text-muted-foreground italic">Does nothing</span>
+      ) : null}
+      {steps.length === 0 ? (
+        <AddActionMenu>
+          <CatalogMenu.Trigger
+            render={<Button size="xs" variant="ghost" className="w-fit font-normal text-muted-foreground" />}
+          >
+            <RiAddLine data-icon="inline-start" />
+            Add an Action
+          </CatalogMenu.Trigger>
+        </AddActionMenu>
+      ) : null}
+    </div>
   );
 }
 
@@ -133,146 +361,9 @@ function ConditionBadges({ when }: { readonly when: Condition }) {
   );
 }
 
-/** Module-level so its identity never changes: React calls it once on attach, not on every keystroke. */
-const focusOnAttach = (node: HTMLTextAreaElement | null) => {
-  node?.focus();
-};
+/* ---------- the list ---------- */
 
-/** The instructions the agent reads for one step. Each one hugs its text and wraps at the row's edge. */
-function InstructionFields({ when, step }: { readonly when: Condition; readonly step: CatalogChoice }) {
-  const {
-    state: { operation, justPicked },
-    actions,
-  } = useOperationOutcomes();
-  const instructed = agentInputs(operation, step);
-  const fresh = justPicked === pickKey(operation, when, step);
-  const several = instructed.length > 1;
-  return (
-    <div
-      className={cn(
-        "grid min-w-0 items-start gap-x-1.5",
-        several && "grid-cols-[auto_minmax(0,1fr)]",
-        !several && "grid-cols-[minmax(0,1fr)]",
-      )}
-    >
-      {instructed.map(({ entry, source }, index) => (
-        <Fragment key={entry.id}>
-          {several ? (
-            <span className="flex h-[26px] items-center text-xs text-muted-foreground">{entry.label}</span>
-          ) : null}
-          <Textarea
-            ref={fresh && index === 0 ? focusOnAttach : undefined}
-            rows={1}
-            aria-label={`What the agent writes for the ${entry.label.toLowerCase()}`}
-            value={source.hint}
-            placeholder={`What should the agent write for the ${entry.label.toLowerCase()}?`}
-            className="min-h-0 w-auto max-w-full min-w-24 resize-none rounded-sm border-0 bg-transparent px-1 py-[5px] text-xs leading-4 shadow-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-0 md:text-xs dark:bg-transparent"
-            onChange={(event) => actions.setInput(step, entry.id, { ...source, hint: event.target.value })}
-          />
-        </Fragment>
-      ))}
-    </div>
-  );
-}
-
-/* ---------- one outcome ---------- */
-
-function ActionLine({ when, step }: { readonly when: Condition; readonly step: CatalogChoice }) {
-  const { actions } = useOperationOutcomes();
-  return (
-    <div className="group/action grid grid-cols-[minmax(0,15rem)_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-1.5 hover:bg-muted/40">
-      <span className="flex h-[26px] min-w-0 items-center gap-1.5 text-xs whitespace-nowrap">
-        <StepLabel step={step} />
-      </span>
-      <InstructionFields when={when} step={step} />
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={`Remove ${step.itemName}`}
-        className="mt-0.5 opacity-0 group-hover/action:opacity-100 focus-visible:opacity-100"
-        onClick={() => actions.removeStep(when, step)}
-      >
-        <RiCloseLine />
-      </Button>
-    </div>
-  );
-}
-
-function HandOffLine({ when, step }: { readonly when: Condition; readonly step: CatalogChoice }) {
-  const { actions } = useOperationOutcomes();
-  return (
-    <div className="group/action flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs hover:bg-muted/40">
-      <RiArrowRightLine className="size-3.5 text-muted-foreground" />
-      <span className="text-muted-foreground">then run</span>
-      <span className="font-medium">{step.itemName}</span>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={`Stop handing off to ${step.itemName}`}
-        className="ms-auto opacity-0 group-hover/action:opacity-100 focus-visible:opacity-100"
-        onClick={() => actions.removeStep(when, step)}
-      >
-        <RiCloseLine />
-      </Button>
-    </div>
-  );
-}
-
-/**
- * One outcome: its heading, then what Cogwork does. "Add an Action" sits on the heading line, so
- * showing it on hover never moves the list; an outcome with no steps shows it in the list instead.
- */
-function OutcomeBlock({ heading, when }: { readonly heading: ReactNode; readonly when: Condition }) {
-  const {
-    state: { operation },
-    actions,
-    meta: { catalog },
-  } = useOperationOutcomes();
-  const steps = stepsAt(operation, when);
-  const doing = steps.filter((step) => !isHandOff(step));
-  const next = steps.filter(isHandOff);
-  const empty = steps.length === 0;
-  const nothing = empty && isComplete(operation, when) && inheritedAt(operation, when).length === 0;
-  const pick = (step: CatalogChoice) => actions.pickStep(when, step);
-  return (
-    <div className="group/row flex flex-col gap-0.5 px-3 py-2">
-      <div className="flex h-7 items-center gap-2">
-        {heading}
-        {empty ? null : (
-          <PickFromCatalog
-            catalog={catalog}
-            label="Add an Action"
-            placeholder="Search Actions…"
-            onChoose={pick}
-            className="ms-auto opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100"
-          />
-        )}
-      </div>
-      <div className="ms-2.5 flex flex-col gap-0.5 border-s ps-2">
-        {doing.map((step) => (
-          <ActionLine key={choiceKey(step)} when={when} step={step} />
-        ))}
-        {next.map((step) => (
-          <HandOffLine key={choiceKey(step)} when={when} step={step} />
-        ))}
-        {nothing ? (
-          <span className="px-1.5 py-1 text-xs text-muted-foreground italic">Does nothing</span>
-        ) : null}
-        {empty ? (
-          <PickFromCatalog
-            catalog={catalog}
-            label="Add an Action"
-            placeholder="Search Actions…"
-            onChoose={pick}
-            className="w-fit"
-          />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-/** An outcome name that reads as text and edits in place; its remove button shows on hover. */
+/** An outcome name that reads as text and edits in place. */
 function OutcomeName({
   question,
   choice,
@@ -291,20 +382,13 @@ function OutcomeName({
         className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1.5 font-mono text-[13px] shadow-none hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-0 dark:bg-transparent"
         onChange={(event) => actions.renameChoice(question.id, choice.id, event.target.value)}
       />
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={`Remove ${choice.name}`}
-        className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
-        onClick={() => actions.removeChoice(question.id, choice.id)}
-      >
-        <RiCloseLine />
-      </Button>
+      <RemoveOnHover
+        label={`Remove ${choice.name}`}
+        onRemove={() => actions.removeChoice(question.id, choice.id)}
+      />
     </span>
   );
 }
-
-/* ---------- the list ---------- */
 
 /** The question in prose, as an editable heading rather than a boxed field. */
 function QuestionLine({ question, index }: { readonly question: Question; readonly index: number }) {
@@ -344,11 +428,12 @@ function QuestionBlock({ question, index }: { readonly question: Question; reado
       <QuestionLine question={question} index={index} />
       <div className="flex flex-col divide-y divide-border/60">
         {question.choices.map((choice, at) => (
-          <OutcomeBlock
-            key={choice.id}
-            when={{ [question.id]: choice.id }}
-            heading={<OutcomeName question={question} choice={choice} index={at} />}
-          />
+          <Outcome key={choice.id} when={{ [question.id]: choice.id }}>
+            <OutcomeHeading>
+              <OutcomeName question={question} choice={choice} index={at} />
+            </OutcomeHeading>
+            <OutcomeSteps />
+          </Outcome>
         ))}
       </div>
       <Button
@@ -364,43 +449,17 @@ function QuestionBlock({ question, index }: { readonly question: Question; reado
   );
 }
 
-function RemovableHeading({
-  label,
-  children,
-  onRemove,
-}: {
-  readonly label: string;
-  readonly children: ReactNode;
-  readonly onRemove: () => void;
-}) {
-  return (
-    <span className="flex h-7 items-center gap-1 ps-1.5">
-      {children}
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={label}
-        className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
-        onClick={onRemove}
-      >
-        <RiCloseLine />
-      </Button>
-    </span>
-  );
-}
-
-function EveryTimeBlock() {
+function EveryTime() {
   const { actions } = useOperationOutcomes();
   return (
     <div className="border-b bg-muted/30 last:border-b-0">
-      <OutcomeBlock
-        when={{}}
-        heading={
-          <RemovableHeading label="Stop running anything every time" onRemove={() => actions.removeRoute({})}>
-            <span className="text-sm text-muted-foreground">Every time</span>
-          </RemovableHeading>
-        }
-      />
+      <Outcome when={{}}>
+        <OutcomeHeading>
+          <span className="ps-1.5 text-sm text-muted-foreground">Every time</span>
+          <RemoveOnHover label="Stop running anything every time" onRemove={() => actions.removeRoute({})} />
+        </OutcomeHeading>
+        <OutcomeSteps />
+      </Outcome>
     </div>
   );
 }
@@ -415,18 +474,15 @@ function Combinations() {
   return (
     <div className="flex flex-col divide-y divide-border/60 border-b last:border-b-0">
       {combined.map((route) => (
-        <OutcomeBlock
-          key={conditionKey(operation, route.when)}
-          when={route.when}
-          heading={
-            <RemovableHeading
-              label="Remove this combination"
-              onRemove={() => actions.removeRoute(route.when)}
-            >
+        <Outcome key={conditionKey(operation, route.when)} when={route.when}>
+          <OutcomeHeading>
+            <span className="ps-1.5">
               <ConditionBadges when={route.when} />
-            </RemovableHeading>
-          }
-        />
+            </span>
+            <RemoveOnHover label="Remove this combination" onRemove={() => actions.removeRoute(route.when)} />
+          </OutcomeHeading>
+          <OutcomeSteps />
+        </Outcome>
       ))}
     </div>
   );
@@ -555,7 +611,7 @@ function List() {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col overflow-hidden rounded-lg border bg-background">
-        {routeAt(operation, {}) ? <EveryTimeBlock /> : null}
+        {routeAt(operation, {}) ? <EveryTime /> : null}
         {operation.questions.map((question, index) => (
           <QuestionBlock key={question.id} question={question} index={index} />
         ))}

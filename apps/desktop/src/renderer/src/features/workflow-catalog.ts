@@ -71,6 +71,8 @@ export interface CatalogChoice {
   readonly itemId: string;
   readonly itemName: string;
   readonly optionName: string | null;
+  /** What the engine needs to perform it. Empty for a Trigger. */
+  readonly inputs: readonly ActionInput[];
 }
 
 const input = (id: string, label: string, source: InputSource): ActionInput => ({ id, label, source });
@@ -321,6 +323,7 @@ export const choiceOf = (
   itemId: entry.id,
   itemName: entry.name,
   optionName,
+  inputs: entry.inputs,
 });
 
 export const choiceKey = (choice: CatalogChoice) =>
@@ -368,26 +371,17 @@ export const handOffTo = (operation: OperationRef): CatalogChoice => ({
   itemId: operation.id,
   itemName: operation.name,
   optionName: null,
+  inputs: [handOffBrief],
 });
 
-const entryOf = (catalog: Catalog, groupId: string, itemId: string) => {
+/** Finds a catalog entry by connector and id, so mock data reads as the menu path a person clicks. */
+const pickFrom = (catalog: Catalog, groupId: string, itemId: string, optionName: string | null) => {
   const group = catalog.groups.find((candidate) => candidate.id === groupId);
   const entry = [...(group?.items ?? []), ...(group?.exclusive ?? [])].find(
     (candidate) => candidate.id === itemId,
   );
-  return group && entry ? { group, entry } : null;
-};
-
-export const inputsFor = (choice: CatalogChoice): readonly ActionInput[] => {
-  if (isHandOff(choice)) return [handOffBrief];
-  return entryOf(actionCatalog, choice.groupId, choice.itemId)?.entry.inputs ?? [];
-};
-
-/** Finds a catalog entry by connector and id, so mock data reads as the menu path a person clicks. */
-const pickFrom = (catalog: Catalog, groupId: string, itemId: string, optionName: string | null) => {
-  const found = entryOf(catalog, groupId, itemId);
-  if (!found) throw new Error(`No catalog entry ${groupId}/${itemId}`);
-  return choiceOf(found.group, found.entry, optionName);
+  if (!group || !entry) throw new Error(`No catalog entry ${groupId}/${itemId}`);
+  return choiceOf(group, entry, optionName);
 };
 
 export const pickAction = (groupId: string, itemId: string, optionName: string | null = null) =>

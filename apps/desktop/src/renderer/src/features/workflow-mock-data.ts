@@ -21,7 +21,15 @@ const operation = (
   instruction: string,
   questions: readonly Question[],
   routes: readonly Route[],
-): Operation => ({ id, name, instruction, questions, routes, inputs: {} });
+): Operation => ({
+  id,
+  name,
+  instruction,
+  model: { harness: null, model: null },
+  questions,
+  routes,
+  inputs: {},
+});
 
 const implement = { id: "implement", name: "Implement" };
 const followUp = { id: "follow-up", name: "Follow-up" };

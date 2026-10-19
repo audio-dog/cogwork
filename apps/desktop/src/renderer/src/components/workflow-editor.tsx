@@ -1,4 +1,3 @@
-import type { HarnessName } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Input } from "@cogwork/ui/components/input";
@@ -16,7 +15,7 @@ import { Textarea } from "@cogwork/ui/components/textarea";
 import { useAtomValue } from "@effect/atom-react";
 import { RiAddLine, RiCloseLine, RiRobot2Line, RiToolsLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { createContext, use } from "react";
 import { harnessCatalogsAtom, harnessReadinessAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import {
@@ -32,43 +31,87 @@ import {
   triggerCatalog,
   withOperations,
 } from "../features/workflow-catalog";
+import { useWorkflowDraft, type WorkflowDraftActions } from "../features/workflow-draft";
 import { mockWorkspaces } from "../features/workflow-mock-data";
-import { blankOperation, type Operation, type Workflow } from "../features/workflow-model";
+import { type Operation, operationEdits, type Workflow } from "../features/workflow-model";
 import { OperationOutcomes } from "./operation-outcomes";
 import { ProviderPicker } from "./provider-picker";
-import { AddFromCatalog, catalogIconFor } from "./workflow-catalog-menu";
+import { CatalogMenu, catalogIconFor } from "./workflow-catalog-menu";
 
 /**
  * The Workflow editor: its Triggers, then each Operation with its instructions, its model, and its
- * outcomes. Runs on mock data — nothing is saved or sent to the daemon yet.
+ * outcomes. Every part edits one draft, held here. Runs on mock data — nothing is saved yet.
  */
+
+interface WorkflowEditorContextValue {
+  readonly state: { readonly workflow: Workflow };
+  readonly actions: WorkflowDraftActions;
+  readonly meta: { readonly workspaces: readonly string[] };
+}
+
+const WorkflowEditorContext = createContext<WorkflowEditorContextValue | null>(null);
+
+const useWorkflowEditor = () => {
+  const value = use(WorkflowEditorContext);
+  if (!value) throw new Error("WorkflowEditor parts need a WorkflowEditor");
+  return value;
+};
 
 const noWorkspace = "none";
 const everyWorkspace = "every";
 
-const workspaceItems = [
-  { value: noWorkspace, label: "No workspace" },
-  ...mockWorkspaces.map((workspace) => ({ value: workspace, label: workspace })),
-  { value: everyWorkspace, label: "Every workspace" },
-];
-
-const workspaceValue = (workspaces: readonly string[]) => {
+const workspaceValue = (workspaces: readonly string[], every: readonly string[]) => {
   if (workspaces.length === 0) return noWorkspace;
-  if (workspaces.length === mockWorkspaces.length) return everyWorkspace;
+  if (workspaces.length === every.length) return everyWorkspace;
   return workspaces[0] ?? noWorkspace;
 };
 
-function Section({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+const workspacesFor = (value: string, every: readonly string[]): readonly string[] => {
+  if (value === noWorkspace) return [];
+  if (value === everyWorkspace) return every;
+  return [value];
+};
+
+function WorkspaceSelect() {
+  const {
+    state: { workflow },
+    actions,
+    meta: { workspaces },
+  } = useWorkflowEditor();
+  const items = [
+    { value: noWorkspace, label: "No workspace" },
+    ...workspaces.map((workspace) => ({ value: workspace, label: workspace })),
+    { value: everyWorkspace, label: "Every workspace" },
+  ];
   return (
-    <section className="flex flex-col gap-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      {children}
-    </section>
+    <Select
+      items={items}
+      value={workspaceValue(workflow.workspaces, workspaces)}
+      onValueChange={(value) => {
+        if (typeof value === "string") actions.setWorkspaces(workspacesFor(value, workspaces));
+      }}
+    >
+      <SelectTrigger size="sm" className="w-44 border-0 shadow-none" aria-label="Workspaces">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
 
-function EditorHeader({ workflow }: { readonly workflow: Workflow }) {
-  const [enabled, setEnabled] = useState(workflow.enabled);
+function EditorHeader() {
+  const {
+    state: { workflow },
+    actions,
+  } = useWorkflowEditor();
   return (
     <header className="flex flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
@@ -82,47 +125,30 @@ function EditorHeader({ workflow }: { readonly workflow: Workflow }) {
         </Button>
       </div>
       <Input
-        defaultValue={workflow.name}
+        value={workflow.name}
         aria-label="Workflow name"
         className="h-auto border-0 bg-transparent px-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
+        onChange={(event) => actions.rename(event.target.value)}
       />
       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
         <span className="flex items-center gap-2">
           <Switch
             size="sm"
-            checked={enabled}
-            onCheckedChange={setEnabled}
+            checked={workflow.enabled}
+            onCheckedChange={actions.setEnabled}
             aria-label="Turn this Workflow on"
           />
-          {enabled ? "On" : "Off"}
+          {workflow.enabled ? "On" : "Off"}
         </span>
         <Separator orientation="vertical" className="h-4" />
-        <Select items={workspaceItems} defaultValue={workspaceValue(workflow.workspaces)}>
-          <SelectTrigger size="sm" className="w-44 border-0 shadow-none" aria-label="Workspaces">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {workspaceItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <WorkspaceSelect />
       </div>
     </header>
   );
 }
 
-function TriggerRow({
-  trigger,
-  onRemove,
-}: {
-  readonly trigger: CatalogChoice;
-  readonly onRemove: () => void;
-}) {
+function TriggerRow({ trigger }: { readonly trigger: CatalogChoice }) {
+  const { actions } = useWorkflowEditor();
   const Icon = catalogIconFor(trigger.icon);
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/50 px-3 py-2.5">
@@ -138,7 +164,7 @@ function TriggerRow({
         variant="ghost"
         className="ms-auto"
         aria-label={`Remove ${trigger.itemName}`}
-        onClick={onRemove}
+        onClick={() => actions.removeTrigger(trigger)}
       >
         <RiCloseLine />
       </Button>
@@ -146,14 +172,38 @@ function TriggerRow({
   );
 }
 
-interface ModelChoice {
-  readonly harness: HarnessName | null;
-  readonly model: string | null;
+function Triggers() {
+  const {
+    state: { workflow },
+    actions,
+  } = useWorkflowEditor();
+  return (
+    <section className="flex flex-col gap-1.5">
+      <h2 className="text-xs text-muted-foreground">Triggers</h2>
+      {workflow.triggers.map((trigger) => (
+        <TriggerRow key={choiceKey(trigger)} trigger={trigger} />
+      ))}
+      <CatalogMenu.Root catalog={triggerCatalog} onChoose={actions.addTrigger}>
+        <CatalogMenu.Trigger
+          render={
+            <Button
+              variant="ghost"
+              className="w-full justify-start rounded-xl bg-muted/50 py-3 font-normal text-muted-foreground hover:bg-muted"
+            />
+          }
+        >
+          <RiAddLine data-icon="inline-start" />
+          Add Trigger
+        </CatalogMenu.Trigger>
+        <CatalogMenu.Content placeholder="Search Triggers…" />
+      </CatalogMenu.Root>
+    </section>
+  );
 }
 
-/** The Harness and model one Operation runs with. No choice means the Operation settings decide. */
-function OperationModelPicker() {
-  const [choice, setChoice] = useState<ModelChoice>({ harness: null, model: null });
+/** The Harness and model one Operation runs with. No choice leaves it to the Operation settings. */
+function OperationModelPicker({ operation }: { readonly operation: Operation }) {
+  const { actions } = useWorkflowEditor();
   const catalogResult = useAtomValue(harnessCatalogsAtom);
   const readinessResult = useAtomValue(harnessReadinessAtom);
   const boardResult = useBoard();
@@ -170,14 +220,19 @@ function OperationModelPicker() {
         state: {
           allProviders: providers,
           selectableProviders: selectableHarnessCatalogs(controlStore, providers),
-          selectedHarness: choice.harness,
-          model: choice.model,
+          selectedHarness: operation.model.harness,
+          model: operation.model.model,
           options: [],
-          own: choice.model !== null,
+          own: operation.model.model !== null,
           stale: false,
-          disabledHarness: harnessIsDisabled(controlStore, choice.harness),
+          disabledHarness: harnessIsDisabled(controlStore, operation.model.harness),
         },
-        actions: { pick: (harness, model) => setChoice({ harness, model }) },
+        actions: {
+          pick: (harness, model) =>
+            actions.updateOperation(operation.id, (current) =>
+              operationEdits.chooseModel(current, { harness, model }),
+            ),
+        },
         meta: { disabled: false },
       }}
     >
@@ -193,25 +248,28 @@ function OperationModelPicker() {
   );
 }
 
-function OperationCard({
-  operation,
-  others,
-  onRemove,
-}: {
-  readonly operation: Operation;
-  readonly others: readonly Operation[];
-  readonly onRemove: () => void;
-}) {
+function OperationCard({ operation }: { readonly operation: Operation }) {
+  const {
+    state: { workflow },
+    actions,
+  } = useWorkflowEditor();
+  const others = workflow.operations.filter((other) => other.id !== operation.id);
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-muted/50 p-2.5">
       <div className="flex items-center gap-2 px-1">
         <RiRobot2Line className="size-4 shrink-0 text-muted-foreground" />
         <Input
-          defaultValue={operation.name}
+          value={operation.name}
           aria-label="Operation name"
           className="h-7 flex-1 border-0 bg-transparent px-0 text-sm font-medium shadow-none focus-visible:ring-0 dark:bg-transparent"
+          onChange={(event) => actions.renameOperation(operation.id, event.target.value)}
         />
-        <Button size="icon-sm" variant="ghost" aria-label={`Remove ${operation.name}`} onClick={onRemove}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={`Remove ${operation.name}`}
+          onClick={() => actions.removeOperation(operation.id)}
+        >
           <RiCloseLine />
         </Button>
       </div>
@@ -219,13 +277,18 @@ function OperationCard({
       <div className="flex flex-col gap-1.5 rounded-lg bg-background p-1.5">
         <Textarea
           rows={3}
-          defaultValue={operation.instruction}
+          value={operation.instruction}
           aria-label={`Instructions for ${operation.name}`}
           placeholder="Tell the agent what to do and how to decide."
           className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
+          onChange={(event) =>
+            actions.updateOperation(operation.id, (current) =>
+              operationEdits.instruct(current, event.target.value),
+            )
+          }
         />
         <div className="flex flex-wrap items-center gap-1">
-          <OperationModelPicker />
+          <OperationModelPicker operation={operation} />
           <Button size="sm" variant="ghost" className="font-normal text-muted-foreground">
             <RiToolsLine data-icon="inline-start" />
             Add tools, skills or MCPs
@@ -234,8 +297,12 @@ function OperationCard({
       </div>
 
       <div className="flex flex-col gap-1.5 px-1">
-        <span className="text-xs text-muted-foreground">Outcomes</span>
-        <OperationOutcomes.Provider seed={operation} catalog={withOperations(actionCatalog, others)}>
+        <h3 className="text-xs text-muted-foreground">Outcomes</h3>
+        <OperationOutcomes.Provider
+          operation={operation}
+          update={(edit) => actions.updateOperation(operation.id, edit)}
+          catalog={withOperations(actionCatalog, others)}
+        >
           <OperationOutcomes.List />
         </OperationOutcomes.Provider>
       </div>
@@ -243,48 +310,38 @@ function OperationCard({
   );
 }
 
-export function WorkflowEditor({ workflow }: { readonly workflow: Workflow }) {
-  const [triggers, setTriggers] = useState<readonly CatalogChoice[]>(workflow.triggers);
-  const [operations, setOperations] = useState<readonly Operation[]>(workflow.operations);
-
+function Operations() {
+  const {
+    state: { workflow },
+    actions,
+  } = useWorkflowEditor();
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-8 py-8">
-      <EditorHeader workflow={workflow} />
+    <section className="flex flex-col gap-1.5">
+      <h2 className="text-xs text-muted-foreground">Operations</h2>
+      {workflow.operations.map((operation) => (
+        <OperationCard key={operation.id} operation={operation} />
+      ))}
+      <Button
+        variant="ghost"
+        className="w-full justify-start rounded-xl bg-muted/50 py-3 font-normal text-muted-foreground hover:bg-muted"
+        onClick={actions.addOperation}
+      >
+        <RiAddLine data-icon="inline-start" />
+        Add Operation
+      </Button>
+    </section>
+  );
+}
 
-      <Section label="Triggers">
-        {triggers.map((trigger) => (
-          <TriggerRow
-            key={choiceKey(trigger)}
-            trigger={trigger}
-            onRemove={() => setTriggers(triggers.filter((candidate) => candidate !== trigger))}
-          />
-        ))}
-        <AddFromCatalog
-          catalog={triggerCatalog}
-          label="Add Trigger"
-          placeholder="Search Triggers…"
-          onChoose={(trigger) => setTriggers([...triggers, trigger])}
-        />
-      </Section>
-
-      <Section label="Operations">
-        {operations.map((operation) => (
-          <OperationCard
-            key={operation.id}
-            operation={operation}
-            others={operations.filter((other) => other.id !== operation.id)}
-            onRemove={() => setOperations(operations.filter((other) => other.id !== operation.id))}
-          />
-        ))}
-        <Button
-          variant="ghost"
-          className="w-full justify-start rounded-xl bg-muted/50 py-3 font-normal text-muted-foreground hover:bg-muted"
-          onClick={() => setOperations([...operations, blankOperation(operations.map((other) => other.id))])}
-        >
-          <RiAddLine data-icon="inline-start" />
-          Add Operation
-        </Button>
-      </Section>
-    </div>
+export function WorkflowEditor({ workflow: seed }: { readonly workflow: Workflow }) {
+  const { workflow, actions } = useWorkflowDraft(seed);
+  return (
+    <WorkflowEditorContext value={{ state: { workflow }, actions, meta: { workspaces: mockWorkspaces } }}>
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-8 py-8">
+        <EditorHeader />
+        <Triggers />
+        <Operations />
+      </div>
+    </WorkflowEditorContext>
   );
 }

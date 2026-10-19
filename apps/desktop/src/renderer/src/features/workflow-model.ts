@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { type CatalogChoice, choiceKey, type InputSource, inputsFor } from "./workflow-catalog";
+import type { HarnessName } from "@cogwork/contracts";
+import { type CatalogChoice, choiceKey, type InputSource } from "./workflow-catalog";
 
 /**
  * What an Operation decides, and what Cogwork does with each decision.
@@ -36,10 +36,17 @@ export interface Route {
   readonly steps: readonly CatalogChoice[];
 }
 
+/** The Harness and model this Operation runs with. Null leaves the choice to the Operation settings. */
+export interface ModelChoice {
+  readonly harness: HarnessName | null;
+  readonly model: string | null;
+}
+
 export interface Operation {
   readonly id: string;
   readonly name: string;
   readonly instruction: string;
+  readonly model: ModelChoice;
   readonly questions: readonly Question[];
   readonly routes: readonly Route[];
   /**
@@ -68,7 +75,7 @@ export interface Workflow {
   readonly activity: WorkflowActivity;
 }
 
-/* ---------- reading the model ---------- */
+/* ---------- reading an Operation ---------- */
 
 /** Keys a condition by question order, so the same choices always produce the same key. */
 export const conditionKey = (operation: Operation, when: Condition) =>
@@ -141,18 +148,14 @@ export const uncovered = (operation: Operation) =>
 export const combinedRoutes = (operation: Operation) =>
   operation.routes.filter((route) => Object.keys(route.when).length > 1);
 
-const inputSource = (operation: Operation, step: CatalogChoice, inputId: string) =>
-  operation.inputs[choiceKey(step)]?.[inputId] ??
-  inputsFor(step).find((entry) => entry.id === inputId)?.source;
-
 /** The inputs of a step the agent writes, each with the instruction it reads. */
 export const agentInputs = (operation: Operation, step: CatalogChoice) =>
-  inputsFor(step).flatMap((entry) => {
-    const source = inputSource(operation, step, entry.id);
-    return source?.kind === "agent" ? [{ entry, source }] : [];
+  step.inputs.flatMap((entry) => {
+    const source = operation.inputs[choiceKey(step)]?.[entry.id] ?? entry.source;
+    return source.kind === "agent" ? [{ entry, source }] : [];
   });
 
-/* ---------- editing the model ---------- */
+/* ---------- editing an Operation ---------- */
 
 /** Changes the steps of the route at one condition, and creates the route when it is missing. */
 const withRoute = (
@@ -170,6 +173,13 @@ const withRoute = (
   };
 };
 
+const mapQuestion = (operation: Operation, questionId: string, change: (question: Question) => Question) => ({
+  ...operation,
+  questions: operation.questions.map((question) =>
+    question.id === questionId ? change(question) : question,
+  ),
+});
+
 const freshId = (prefix: string, taken: readonly string[]) =>
   [...Array(taken.length + 1).keys()]
     .map((index) => `${prefix}-${index + 1}`)
@@ -185,107 +195,80 @@ const yesOrNo = (id: string): Question => ({
   ],
 });
 
-export const blankOperation = (taken: readonly string[]): Operation => {
-  const id = freshId("operation", taken);
-  return {
-    id,
-    name: "New Operation",
-    instruction: "",
-    questions: [yesOrNo("outcome")],
-    routes: [],
-    inputs: {},
-  };
-};
-
-const mapQuestion = (operation: Operation, questionId: string, change: (question: Question) => Question) => ({
-  ...operation,
-  questions: operation.questions.map((question) =>
-    question.id === questionId ? change(question) : question,
-  ),
+export const blankOperation = (taken: readonly string[]): Operation => ({
+  id: freshId("operation", taken),
+  name: "New Operation",
+  instruction: "",
+  model: { harness: null, model: null },
+  questions: [yesOrNo("outcome")],
+  routes: [],
+  inputs: {},
 });
 
-/** One Operation's working copy. Nothing persists: the editor runs on mock data. */
-export function useOperationDraft(seed: Operation) {
-  const [operation, setOperation] = useState(seed);
-
-  const actions = {
-    addStep: (when: Condition, step: CatalogChoice) =>
-      setOperation((current) =>
-        withRoute(current, when, (steps) =>
-          steps.some((existing) => choiceKey(existing) === choiceKey(step)) ? steps : [...steps, step],
+/** Every change the editor makes to an Operation, as a pure function of the Operation it changes. */
+export const operationEdits = {
+  rename: (operation: Operation, name: string): Operation => ({ ...operation, name }),
+  instruct: (operation: Operation, instruction: string): Operation => ({ ...operation, instruction }),
+  chooseModel: (operation: Operation, model: ModelChoice): Operation => ({ ...operation, model }),
+  addStep: (operation: Operation, when: Condition, step: CatalogChoice) =>
+    withRoute(operation, when, (steps) =>
+      steps.some((existing) => choiceKey(existing) === choiceKey(step)) ? steps : [...steps, step],
+    ),
+  removeStep: (operation: Operation, when: Condition, step: CatalogChoice) =>
+    withRoute(operation, when, (steps) =>
+      steps.filter((existing) => choiceKey(existing) !== choiceKey(step)),
+    ),
+  addRoute: (operation: Operation, when: Condition) => withRoute(operation, when, (steps) => steps),
+  removeRoute: (operation: Operation, when: Condition): Operation => ({
+    ...operation,
+    routes: operation.routes.filter(
+      (route) => conditionKey(operation, route.when) !== conditionKey(operation, when),
+    ),
+  }),
+  setInput: (operation: Operation, step: CatalogChoice, inputId: string, source: InputSource): Operation => {
+    const key = choiceKey(step);
+    return {
+      ...operation,
+      inputs: { ...operation.inputs, [key]: { ...operation.inputs[key], [inputId]: source } },
+    };
+  },
+  setQuestionText: (operation: Operation, questionId: string, text: string) =>
+    mapQuestion(operation, questionId, (question) => ({ ...question, text })),
+  renameChoice: (operation: Operation, questionId: string, choiceId: string, name: string) =>
+    mapQuestion(operation, questionId, (question) => ({
+      ...question,
+      choices: question.choices.map((choice) => (choice.id === choiceId ? { ...choice, name } : choice)),
+    })),
+  addChoice: (operation: Operation, questionId: string) =>
+    mapQuestion(operation, questionId, (question) => {
+      const id = freshId(
+        "outcome",
+        question.choices.map((choice) => choice.id),
+      );
+      return { ...question, choices: [...question.choices, { id, name: id }] };
+    }),
+  removeChoice: (operation: Operation, questionId: string, choiceId: string): Operation => ({
+    ...mapQuestion(operation, questionId, (question) => ({
+      ...question,
+      choices: question.choices.filter((choice) => choice.id !== choiceId),
+    })),
+    routes: operation.routes.filter((route) => route.when[questionId] !== choiceId),
+  }),
+  addQuestion: (operation: Operation): Operation => ({
+    ...operation,
+    questions: [
+      ...operation.questions,
+      yesOrNo(
+        freshId(
+          "question",
+          operation.questions.map((question) => question.id),
         ),
       ),
-    removeStep: (when: Condition, step: CatalogChoice) =>
-      setOperation((current) =>
-        withRoute(current, when, (steps) =>
-          steps.filter((existing) => choiceKey(existing) !== choiceKey(step)),
-        ),
-      ),
-    addRoute: (when: Condition) => setOperation((current) => withRoute(current, when, (steps) => steps)),
-    removeRoute: (when: Condition) =>
-      setOperation((current) => ({
-        ...current,
-        routes: current.routes.filter(
-          (route) => conditionKey(current, route.when) !== conditionKey(current, when),
-        ),
-      })),
-    setInput: (step: CatalogChoice, inputId: string, source: InputSource) =>
-      setOperation((current) => {
-        const key = choiceKey(step);
-        return {
-          ...current,
-          inputs: { ...current.inputs, [key]: { ...current.inputs[key], [inputId]: source } },
-        };
-      }),
-    setQuestionText: (questionId: string, text: string) =>
-      setOperation((current) => mapQuestion(current, questionId, (question) => ({ ...question, text }))),
-    renameChoice: (questionId: string, choiceId: string, name: string) =>
-      setOperation((current) =>
-        mapQuestion(current, questionId, (question) => ({
-          ...question,
-          choices: question.choices.map((choice) => (choice.id === choiceId ? { ...choice, name } : choice)),
-        })),
-      ),
-    addChoice: (questionId: string) =>
-      setOperation((current) =>
-        mapQuestion(current, questionId, (question) => {
-          const id = freshId(
-            "outcome",
-            question.choices.map((choice) => choice.id),
-          );
-          return { ...question, choices: [...question.choices, { id, name: id }] };
-        }),
-      ),
-    removeChoice: (questionId: string, choiceId: string) =>
-      setOperation((current) => ({
-        ...mapQuestion(current, questionId, (question) => ({
-          ...question,
-          choices: question.choices.filter((choice) => choice.id !== choiceId),
-        })),
-        routes: current.routes.filter((route) => route.when[questionId] !== choiceId),
-      })),
-    addQuestion: () =>
-      setOperation((current) => ({
-        ...current,
-        questions: [
-          ...current.questions,
-          yesOrNo(
-            freshId(
-              "question",
-              current.questions.map((question) => question.id),
-            ),
-          ),
-        ],
-      })),
-    removeQuestion: (questionId: string) =>
-      setOperation((current) => ({
-        ...current,
-        questions: current.questions.filter((question) => question.id !== questionId),
-        routes: current.routes.filter((route) => route.when[questionId] === undefined),
-      })),
-  };
-
-  return { operation, actions };
-}
-
-export type OperationDraftActions = ReturnType<typeof useOperationDraft>["actions"];
+    ],
+  }),
+  removeQuestion: (operation: Operation, questionId: string): Operation => ({
+    ...operation,
+    questions: operation.questions.filter((question) => question.id !== questionId),
+    routes: operation.routes.filter((route) => route.when[questionId] === undefined),
+  }),
+};

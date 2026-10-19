@@ -48,10 +48,6 @@ const consequenceIcons: Record<Exclude<ConsequenceKind, "nothing">, ComponentTyp
 
 const isTouchpoint = (kind: ConsequenceKind) => kind === "approval" || kind === "notification";
 
-function SectionLabel({ children }: { readonly children: string }) {
-  return <span className="text-xs font-medium text-muted-foreground">{children}</span>;
-}
-
 function Connector() {
   return <span className="ms-4 h-3 w-px bg-border" />;
 }
@@ -150,10 +146,10 @@ function WorkflowShape({ workflow }: { readonly workflow: Workflow }) {
   const spine = spineOf(workflow);
   return (
     <div className="flex flex-col gap-2">
-      <SectionLabel>Triggers</SectionLabel>
+      <h3 className="text-xs font-medium text-muted-foreground">Triggers</h3>
       <Triggers workflow={workflow} />
       <Connector />
-      <SectionLabel>Operations</SectionLabel>
+      <h3 className="text-xs font-medium text-muted-foreground">Operations</h3>
       <div className="flex flex-col">
         {spine.map((operation, index) => (
           <div key={operation.id} className="flex flex-col">

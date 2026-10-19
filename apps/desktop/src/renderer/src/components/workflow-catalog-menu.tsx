@@ -1,6 +1,5 @@
 import { Badge } from "@cogwork/ui/components/badge";
 import { GithubIcon, LinearIcon } from "@cogwork/ui/components/brand-icons";
-import { Button } from "@cogwork/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,9 +16,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@cogwork/ui/components/dropdown-menu";
-import { cn } from "@cogwork/ui/lib/utils";
 import {
-  RiAddLine,
   RiCalendarScheduleLine,
   RiMicLine,
   RiNodeTree,
@@ -27,7 +24,7 @@ import {
   RiSlackLine,
   RiWebhookLine,
 } from "@remixicon/react";
-import { type ComponentType, type ReactElement, useState } from "react";
+import { type ComponentType, createContext, type ReactNode, use, useState } from "react";
 import {
   type Catalog,
   type CatalogChoice,
@@ -44,6 +41,11 @@ import {
  * then event, then option — each submenu opening beside the last so the whole path stays in view.
  * Typing in the root's search field flattens the catalog to its leaves. A submenu has no field, so
  * typing there jumps to the item whose name starts with the typed text.
+ *
+ *   <CatalogMenu.Root catalog={…} onChoose={…}>
+ *     <CatalogMenu.Trigger render={<Button />}>Add Trigger</CatalogMenu.Trigger>
+ *     <CatalogMenu.Content placeholder="Search Triggers…" />
+ *   </CatalogMenu.Root>
  */
 
 const catalogIcons: Record<CatalogIcon, ComponentType<{ className?: string }>> = {
@@ -59,15 +61,45 @@ const catalogIcons: Record<CatalogIcon, ComponentType<{ className?: string }>> =
 
 export const catalogIconFor = (icon: CatalogIcon) => catalogIcons[icon];
 
-function SearchResults({
+interface CatalogMenuContextValue {
+  readonly state: { readonly query: string };
+  readonly actions: { readonly choose: (choice: CatalogChoice) => void };
+  readonly meta: { readonly catalog: Catalog };
+}
+
+const CatalogMenuContext = createContext<CatalogMenuContextValue | null>(null);
+
+const useCatalogMenu = () => {
+  const value = use(CatalogMenuContext);
+  if (!value) throw new Error("CatalogMenu parts need a CatalogMenu.Root");
+  return value;
+};
+
+function Root({
   catalog,
-  query,
   onChoose,
+  children,
 }: {
   readonly catalog: Catalog;
-  readonly query: string;
   readonly onChoose: (choice: CatalogChoice) => void;
+  readonly children: ReactNode;
 }) {
+  const [query, setQuery] = useState("");
+  return (
+    <CatalogMenuContext value={{ state: { query }, actions: { choose: onChoose }, meta: { catalog } }}>
+      <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery} autoHighlight>
+        <DropdownMenu>{children}</DropdownMenu>
+      </DropdownMenuFilter>
+    </CatalogMenuContext>
+  );
+}
+
+function SearchResults() {
+  const {
+    state: { query },
+    actions: { choose },
+    meta: { catalog },
+  } = useCatalogMenu();
   const needle = query.trim().toLowerCase();
   const results = leavesOf(catalog).filter((choice) =>
     `${choice.groupName} ${choice.itemName} ${choice.optionName ?? ""}`.toLowerCase().includes(needle),
@@ -77,7 +109,7 @@ function SearchResults({
       {results.map((choice) => {
         const Icon = catalogIcons[choice.icon];
         return (
-          <DropdownMenuItem key={choiceKey(choice)} onClick={() => onChoose(choice)}>
+          <DropdownMenuItem key={choiceKey(choice)} onClick={() => choose(choice)}>
             <Icon className="text-muted-foreground" />
             <span className="truncate">{choice.itemName}</span>
             {choice.optionName ? (
@@ -93,18 +125,13 @@ function SearchResults({
   );
 }
 
-function CatalogEntry({
-  group,
-  entry,
-  onChoose,
-}: {
-  readonly group: CatalogGroup;
-  readonly entry: CatalogItem;
-  readonly onChoose: (choice: CatalogChoice) => void;
-}) {
+function CatalogEntry({ group, entry }: { readonly group: CatalogGroup; readonly entry: CatalogItem }) {
+  const {
+    actions: { choose },
+  } = useCatalogMenu();
   if (entry.options.length === 0) {
     return (
-      <DropdownMenuItem label={entry.name} onClick={() => onChoose(choiceOf(group, entry, null))}>
+      <DropdownMenuItem label={entry.name} onClick={() => choose(choiceOf(group, entry, null))}>
         {entry.name}
       </DropdownMenuItem>
     );
@@ -117,7 +144,7 @@ function CatalogEntry({
           <DropdownMenuItem
             key={option.id}
             label={option.name}
-            onClick={() => onChoose(choiceOf(group, entry, option.name))}
+            onClick={() => choose(choiceOf(group, entry, option.name))}
           >
             {option.name}
           </DropdownMenuItem>
@@ -127,13 +154,10 @@ function CatalogEntry({
   );
 }
 
-function ConnectorCascade({
-  catalog,
-  onChoose,
-}: {
-  readonly catalog: Catalog;
-  readonly onChoose: (choice: CatalogChoice) => void;
-}) {
+function ConnectorCascade() {
+  const {
+    meta: { catalog },
+  } = useCatalogMenu();
   return (
     <DropdownMenuGroup>
       {catalog.groups.map((group) => {
@@ -152,7 +176,7 @@ function ConnectorCascade({
             <DropdownMenuSubContent className="min-w-48">
               <DropdownMenuGroup>
                 {group.items.map((entry) => (
-                  <CatalogEntry key={entry.id} group={group} entry={entry} onChoose={onChoose} />
+                  <CatalogEntry key={entry.id} group={group} entry={entry} />
                 ))}
               </DropdownMenuGroup>
               {group.exclusive.length > 0 ? (
@@ -161,7 +185,7 @@ function ConnectorCascade({
                   <DropdownMenuGroup>
                     <DropdownMenuLabel>Only on {group.name}</DropdownMenuLabel>
                     {group.exclusive.map((entry) => (
-                      <CatalogEntry key={entry.id} group={group} entry={entry} onChoose={onChoose} />
+                      <CatalogEntry key={entry.id} group={group} entry={entry} />
                     ))}
                   </DropdownMenuGroup>
                 </>
@@ -174,95 +198,21 @@ function ConnectorCascade({
   );
 }
 
-function CatalogMenu({
-  catalog,
-  placeholder,
-  onChoose,
-  trigger,
-}: {
-  readonly catalog: Catalog;
-  readonly placeholder: string;
-  readonly onChoose: (choice: CatalogChoice) => void;
-  readonly trigger: ReactElement;
-}) {
-  const [query, setQuery] = useState("");
-  const searching = query.trim().length > 0;
+function Content({ placeholder }: { readonly placeholder: string }) {
+  const {
+    state: { query },
+  } = useCatalogMenu();
   return (
-    <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery} autoHighlight>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={trigger} />
-        {/* Picking an Action that needs text moves the cursor into its instruction; returning focus to the trigger would take it back. */}
-        <DropdownMenuContent className="w-64" finalFocus={false}>
-          <DropdownMenuInput placeholder={placeholder} aria-label={placeholder} />
-          <DropdownMenuEmpty>No matches</DropdownMenuEmpty>
-          <DropdownMenuList>
-            {searching ? (
-              <SearchResults catalog={catalog} query={query} onChoose={onChoose} />
-            ) : (
-              <ConnectorCascade catalog={catalog} onChoose={onChoose} />
-            )}
-          </DropdownMenuList>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </DropdownMenuFilter>
+    // Picking an Action that needs text moves the cursor into its instruction; returning focus to
+    // the trigger would take it back.
+    <DropdownMenuContent className="w-64" finalFocus={false}>
+      <DropdownMenuInput placeholder={placeholder} aria-label={placeholder} />
+      <DropdownMenuEmpty>No matches</DropdownMenuEmpty>
+      <DropdownMenuList>
+        {query.trim().length > 0 ? <SearchResults /> : <ConnectorCascade />}
+      </DropdownMenuList>
+    </DropdownMenuContent>
   );
 }
 
-/** The small inline button that opens the catalog beside existing content. */
-export function PickFromCatalog({
-  catalog,
-  label,
-  placeholder,
-  onChoose,
-  className,
-}: {
-  readonly catalog: Catalog;
-  readonly label: string;
-  readonly placeholder: string;
-  readonly onChoose: (choice: CatalogChoice) => void;
-  readonly className?: string;
-}) {
-  return (
-    <CatalogMenu
-      catalog={catalog}
-      placeholder={placeholder}
-      onChoose={onChoose}
-      trigger={
-        <Button size="xs" variant="ghost" className={cn("font-normal text-muted-foreground", className)}>
-          <RiAddLine data-icon="inline-start" />
-          {label}
-        </Button>
-      }
-    />
-  );
-}
-
-/** The full-width "+ Add …" row that opens the catalog. */
-export function AddFromCatalog({
-  catalog,
-  label,
-  placeholder,
-  onChoose,
-}: {
-  readonly catalog: Catalog;
-  readonly label: string;
-  readonly placeholder: string;
-  readonly onChoose: (choice: CatalogChoice) => void;
-}) {
-  return (
-    <CatalogMenu
-      catalog={catalog}
-      placeholder={placeholder}
-      onChoose={onChoose}
-      trigger={
-        <Button
-          variant="ghost"
-          className="w-full justify-start rounded-xl bg-muted/50 py-3 font-normal text-muted-foreground hover:bg-muted"
-        >
-          <RiAddLine data-icon="inline-start" />
-          {label}
-        </Button>
-      }
-    />
-  );
-}
+export const CatalogMenu = { Root, Trigger: DropdownMenuTrigger, Content };
