@@ -1,0 +1,52 @@
+apps/desktop/src/renderer/src/features/workflow-model.ts
+  s_1aa0e8aa3263db::t_873317231a36b7 80,109,116,144,158
+  s_1aa0e8aa3263db::t_382da3c6b9ce90 228-230
+  s_1aa0e8aa3263db::t_0de81b67e0da2b 1-79,81-108,110-115,117-143,145-157,159-227,231-291
+apps/desktop/src/renderer/src/features/workflow-mock-data.ts
+  s_1aa0e8aa3263db::t_c6eb3a6e8e556d 1-258
+packages/ui/src/components/dropdown-menu.tsx
+  s_1aa0e8aa3263db::t_356d5dc2bfc02b 2,4,224-267,285-286,288,291
+apps/desktop/src/renderer/src/components/workflow-catalog-menu.tsx
+  s_1aa0e8aa3263db::t_6653332129b5ba 1-268
+apps/desktop/src/renderer/src/features/workflow-model.test.ts
+  s_1aa0e8aa3263db::t_2d00e495b719ce 1-51
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_1aa0e8aa3263db::t_5a12d7c6bcecad 1-290
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId.tsx
+  s_1aa0e8aa3263db::t_49453f08bf4f1d 1-44
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_1aa0e8aa3263db::t_44d992b37b1baf 1-274
+apps/desktop/src/renderer/src/routes/_app/workflows/index.tsx
+  s_1aa0e8aa3263db::t_690e9d20010b42 1-6
+apps/desktop/src/renderer/src/routes/_app/workflows/new.tsx
+  s_1aa0e8aa3263db::t_e1eabf8f3e6475 1-11
+apps/desktop/src/renderer/src/features/workflow-catalog.ts
+  s_1aa0e8aa3263db::t_ee6f28901cf343 1-397
+packages/ui/package.json
+  s_1aa0e8aa3263db::t_356d5dc2bfc02b 18
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_1aa0e8aa3263db::t_1f99d2af632774 1-569
+apps/desktop/src/renderer/src/features/workflow-overview.ts
+  s_1aa0e8aa3263db::t_46f312755180b2 2
+  s_1aa0e8aa3263db::t_a4ac580b86cfca 1,3-71
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_1aa0e8aa3263db::t_4aab5a57e62056 25-27,95-109,135-136,139,152-153,156,173-174,177,194-195,198,211-212,215,231-232,235,337-357,394-395,397,404-405,407
+pnpm-lock.yaml
+  s_1aa0e8aa3263db::t_405912631f30f0 282,667-668,942-943,959-960,5088-5089,5544-5548,6071,6074,6079,6083,6089-6090,9700,10187-10190,10380,10384
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fcb686a5918ff0f29fabe857bb5fa267a522c8f3",
+  "prompts": {},
+  "sessions": {
+    "s_1aa0e8aa3263db": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "235fd05e-023c-4d77-8aab-a413d0bb18c2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
