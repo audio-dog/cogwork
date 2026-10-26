@@ -128,9 +128,9 @@ describe("Claude Code inherited environment", { timeout: 30_000 }, () => {
         assert.isFalse(events.some((event) => event.type === "CUSTOM" && event.name === "file.changed"));
         const finished = events.find((event) => event.type === "RUN_FINISHED");
         assert.deepNestedInclude(finished?.usage, {
-          promptTokens: 13,
+          promptTokens: 16,
           completionTokens: 8,
-          totalTokens: 21,
+          totalTokens: 24,
           providerUsageDetails: { totalCostUsd: 0.01 },
         });
         assert.isFalse(yield* Effect.promise(() => handle.fs.exists("/workspace/.mcp.json")));

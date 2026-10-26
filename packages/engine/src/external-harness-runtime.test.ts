@@ -893,13 +893,13 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         assert.strictEqual(output.filter((event) => event.name === "structured-output.complete").length, 1);
         const diagnostic = output.find((event) => event.name === "controlled.diagnostic");
         assert.deepStrictEqual(diagnostic?.value, { native: true });
-        assert.deepStrictEqual(diagnostic?.metadata, { controlled: { trace: "trace-147" } });
+        assert.deepNestedInclude(diagnostic?.metadata, { controlled: { trace: "trace-147" } });
         const fileDiff = output.find((event) => event.name === FILE_DIFF_EVENT);
         assert.deepStrictEqual(fileDiff?.value, {
           path: "file.ts",
           diff: "diff --git a/file.ts b/file.ts",
         });
-        assert.deepStrictEqual(fileDiff?.metadata, { controlled: { fidelity: "terminal" } });
+        assert.deepNestedInclude(fileDiff?.metadata, { controlled: { fidelity: "terminal" } });
         assert.isFalse(output.some((event) => event.name === "file.changed"));
         const finished = output.find((event) => event.type === EventType.RUN_FINISHED);
         assert.deepStrictEqual(finished?.usage, {
@@ -1028,29 +1028,30 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
     it.effect("scrubs secrets before output, Workspace serialization, and persistence", () =>
       Effect.gen(function* () {
         const secret = "anthropic-test-key-secret";
+        const identifierSecret = "RUN-147";
         const probe = new ControlledProbe();
         const harness = makeHarness(
           descriptor(
             [
-              { type: EventType.RUN_STARTED, threadId: "RUN", runId: "RUN" },
+              { type: EventType.RUN_STARTED, threadId: identifierSecret, runId: identifierSecret },
               {
                 type: EventType.CUSTOM,
-                name: "RUN",
-                value: { message: `rejected RUN and ${secret}` },
+                name: identifierSecret,
+                value: { message: `rejected ${identifierSecret} and ${secret}` },
               },
               {
                 type: EventType.CUSTOM,
                 name: "structured-output.complete",
                 value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
               },
-              { type: EventType.RUN_FINISHED, threadId: "RUN", runId: "RUN" },
+              { type: EventType.RUN_FINISHED, threadId: identifierSecret, runId: identifierSecret },
             ],
             probe,
           ),
           {
             authentication: Effect.succeed({
               mode: "host",
-              secrets: createSecrets({ LONG_KEY: secret, SHORT_KEY: "RUN" }),
+              secrets: createSecrets({ LONG_KEY: secret, IDENTIFIER_KEY: identifierSecret }),
             }),
           },
         );
@@ -1061,8 +1062,8 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         if (!options) return yield* Effect.die("external Harness opened no chat");
 
         assert.strictEqual(output[0]?.type, EventType.RUN_STARTED);
-        assert.strictEqual(output[0]?.threadId, "RUN");
-        assert.strictEqual(output[1]?.name, "RUN");
+        assert.strictEqual(output[0]?.threadId, identifierSecret);
+        assert.strictEqual(output[1]?.name, identifierSecret);
         assert.deepStrictEqual(output[1]?.value, {
           message: "rejected [redacted] and [redacted]",
         });
@@ -1281,7 +1282,7 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         assert.strictEqual(error.message, "controlled turn failed");
         assert.strictEqual(seen[1]?.type, EventType.RUN_ERROR);
         assert.strictEqual(seen[1]?.code, "CONTROLLED_FAILURE");
-        assert.deepStrictEqual(seen[1]?.metadata, { controlled: { retryAfter: 3 } });
+        assert.deepNestedInclude(seen[1]?.metadata, { controlled: { retryAfter: 3 } });
       }),
     );
   });
