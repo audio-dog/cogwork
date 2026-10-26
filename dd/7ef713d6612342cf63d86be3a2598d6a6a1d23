@@ -1,0 +1,22 @@
+docs/research/tanstack-ai-agent-authoring.md
+  s_84a24dc9323efe::t_f05bbf778c86b2 211
+  s_84a24dc9323efe::t_8fa44ecab834e0 1-210,212-278,280-320,322-523
+  s_84a24dc9323efe::t_961d17c63ea7d6 321
+  s_84a24dc9323efe::t_eab6bd18a85bcd 279
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dd7ef713d6612342cf63d86be3a2598d6a6a1d23",
+  "prompts": {},
+  "sessions": {
+    "s_84a24dc9323efe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b127dd00-7be8-4357-869d-5d3ca42af3e1",
+        "model": "claude-fable-5-1-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
