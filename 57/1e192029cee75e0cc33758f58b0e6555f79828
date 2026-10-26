@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/components/workflow-catalog-menu.tsx
+  s_c7746d92f54ddb::t_54bec454416698 26
+  s_c7746d92f54ddb::t_6f091cd9ce655d 78-89,91
+  s_c7746d92f54ddb::t_33b580c3c2e428 53-56
+  s_c7746d92f54ddb::t_8a2ceea5ef9dee 199,202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "571e192029cee75e0cc33758f58b0e6555f79828",
+  "prompts": {},
+  "sessions": {
+    "s_c7746d92f54ddb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e4fa0d47-f9cf-432a-b1f0-46b7130169d6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
