@@ -1,0 +1,21 @@
+packages/ui/src/components/input.tsx
+  s_1aa0e8aa3263db::t_f243eb5702bc7c 2,7-28,33-34,40
+packages/ui/src/components/textarea.tsx
+  s_1aa0e8aa3263db::t_767b1852eea7af 1,6-26,30-31,37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2bb745637fdfa8ec8982f4c87c50767b625fd16c",
+  "prompts": {},
+  "sessions": {
+    "s_1aa0e8aa3263db": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "235fd05e-023c-4d77-8aab-a413d0bb18c2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
