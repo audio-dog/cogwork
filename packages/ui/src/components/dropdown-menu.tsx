@@ -1,6 +1,7 @@
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { RiArrowRightSLine, RiCheckLine } from "@remixicon/react";
+import { RiArrowRightSLine, RiCheckLine, RiSearchLine } from "@remixicon/react";
 import type * as React from "react";
+import { InputGroup, InputGroupAddon } from "#components/input-group";
 import { cn } from "#lib/utils";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
@@ -220,6 +221,50 @@ function DropdownMenuSeparator({ className, ...props }: MenuPrimitive.Separator.
   );
 }
 
+function DropdownMenuFilter(props: MenuPrimitive.FilterProvider.Props) {
+  return <MenuPrimitive.FilterProvider {...props} />;
+}
+
+function DropdownMenuInput({ className, ...props }: MenuPrimitive.Input.Props) {
+  return (
+    <div data-slot="dropdown-menu-input-wrapper" className="pb-1">
+      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:ps-2!">
+        <MenuPrimitive.Input
+          data-slot="dropdown-menu-input"
+          className={cn(
+            "h-full w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground",
+            className,
+          )}
+          {...props}
+        />
+        <InputGroupAddon>
+          <RiSearchLine className="size-4 shrink-0 opacity-50" />
+        </InputGroupAddon>
+      </InputGroup>
+    </div>
+  );
+}
+
+function DropdownMenuList({ className, ...props }: MenuPrimitive.List.Props) {
+  return (
+    <MenuPrimitive.List
+      data-slot="dropdown-menu-list"
+      className={cn("scroll-py-1 outline-none", className)}
+      {...props}
+    />
+  );
+}
+
+function DropdownMenuEmpty({ className, ...props }: MenuPrimitive.Empty.Props) {
+  return (
+    <MenuPrimitive.Empty
+      data-slot="dropdown-menu-empty"
+      className={cn("py-6 text-center text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  );
+}
+
 function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
@@ -237,9 +282,13 @@ export {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuEmpty,
+  DropdownMenuFilter,
   DropdownMenuGroup,
+  DropdownMenuInput,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuList,
   DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
