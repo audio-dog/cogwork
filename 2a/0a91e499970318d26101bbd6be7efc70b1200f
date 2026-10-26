@@ -1,0 +1,22 @@
+docs/research/granola-slack-trigger-sources.md
+  s_42e4e0a75b7079::t_50e680e68ee1dc 400-402
+  s_42e4e0a75b7079::t_99b2f3ea77ab90 1-101,103-399,403-412,416-491
+  s_42e4e0a75b7079::t_fd526d3c3bba03 413-415
+  s_42e4e0a75b7079::t_4962f79fa1717f 102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2a0a91e499970318d26101bbd6be7efc70b1200f",
+  "prompts": {},
+  "sessions": {
+    "s_42e4e0a75b7079": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "73622b24-b8e8-480f-ae7d-7a7746123765",
+        "model": "claude-fable-5-1-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
