@@ -15,7 +15,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { choiceKey } from "../features/workflow-catalog";
-import { mockWorkflows, mockWorkspaces } from "../features/workflow-mock-data";
+import { mockWorkflows } from "../features/workflow-mock-data";
 import {
   type Condition,
   conditionKey,
@@ -23,20 +23,8 @@ import {
   type Operation,
   type Workflow,
 } from "../features/workflow-model";
-import {
-  type ConsequenceKind,
-  consequenceOf,
-  outcomeCount,
-  outcomeRowsOf,
-  spineOf,
-  workspaceScope,
-} from "../features/workflow-overview";
+import { type ConsequenceKind, consequenceOf, outcomeRowsOf, spineOf } from "../features/workflow-overview";
 import { catalogIconFor } from "./workflow-catalog-menu";
-
-/**
- * The Workflows index. Each row opens onto the Workflow's shape: its Triggers, the Operations work
- * passes through, and where each outcome leads. Runs on mock data.
- */
 
 const consequenceIcons: Record<Exclude<ConsequenceKind, "nothing">, ComponentType<{ className?: string }>> = {
   operation: RiRobot2Line,
@@ -101,7 +89,6 @@ function OutcomeRow({
           "flex items-center gap-1.5 text-xs",
           continues && "font-medium text-foreground",
           !continues && "text-muted-foreground",
-          consequence.kind === "nothing" && "italic",
         )}
       >
         {Icon ? (
@@ -114,7 +101,6 @@ function OutcomeRow({
           />
         ) : null}
         {consequence.name}
-        {consequence.more > 0 ? <span className="text-muted-foreground">+{consequence.more}</span> : null}
       </span>
     </div>
   );
@@ -145,44 +131,17 @@ function OperationCard({
 function WorkflowShape({ workflow }: { readonly workflow: Workflow }) {
   const spine = spineOf(workflow);
   return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-xs font-medium text-muted-foreground">Triggers</h3>
+    <div className="flex flex-col">
       <Triggers workflow={workflow} />
-      <Connector />
-      <h3 className="text-xs font-medium text-muted-foreground">Operations</h3>
-      <div className="flex flex-col">
-        {spine.map((operation, index) => (
-          <div key={operation.id} className="flex flex-col">
-            {index > 0 ? <Connector /> : null}
-            <OperationCard operation={operation} nextId={spine[index + 1]?.id ?? null} />
-          </div>
-        ))}
-      </div>
+      {spine.map((operation, index) => (
+        <div key={operation.id} className="flex flex-col">
+          <Connector />
+          <OperationCard operation={operation} nextId={spine[index + 1]?.id ?? null} />
+        </div>
+      ))}
     </div>
   );
 }
-
-function RowGist({ workflow }: { readonly workflow: Workflow }) {
-  return (
-    <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-      <span className="flex shrink-0 items-center gap-1">
-        {workflow.triggers.map((trigger) => {
-          const Icon = catalogIconFor(trigger.icon);
-          return <Icon key={choiceKey(trigger)} className="size-3.5" />;
-        })}
-      </span>
-      <span className="truncate">
-        {spineOf(workflow)
-          .map((operation) => operation.name)
-          .join(" → ")}
-      </span>
-      <span className="shrink-0 whitespace-nowrap tabular-nums">{outcomeCount(workflow)} outcomes</span>
-    </span>
-  );
-}
-
-const lastRunLabel = (workflow: Workflow) =>
-  workflow.activity.lastRun === "never" ? "No runs yet" : `Last run ${workflow.activity.lastRun}`;
 
 function WorkflowRow({ workflow }: { readonly workflow: Workflow }) {
   return (
@@ -198,47 +157,34 @@ function WorkflowRow({ workflow }: { readonly workflow: Workflow }) {
           }
         >
           <RiArrowRightSLine className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/row:rotate-90" />
-          <span
-            className={cn(
-              "size-1.5 shrink-0 rounded-full",
-              workflow.enabled && "bg-primary",
-              !workflow.enabled && "bg-muted-foreground/30",
-            )}
-          />
-          <span className="flex shrink-0 items-center gap-2">
-            <span className="text-sm font-medium">{workflow.name}</span>
-            <Badge variant={workflow.origin === "cogwork" ? "outline" : "secondary"}>
-              {workflow.origin === "cogwork" ? "Cogwork" : "Yours"}
-            </Badge>
+          <span className="truncate text-sm font-medium">{workflow.name}</span>
+          <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+            {workflow.triggers.map((trigger) => {
+              const Icon = catalogIconFor(trigger.icon);
+              return <Icon key={choiceKey(trigger)} className="size-3.5" />;
+            })}
           </span>
-          <RowGist workflow={workflow} />
         </CollapsibleTrigger>
-        {workflow.activity.waiting > 0 ? (
+        {workflow.waiting > 0 ? (
           <Badge variant="secondary" className="shrink-0">
             <RiPauseCircleLine data-icon="inline-start" />
-            {workflow.activity.waiting} waiting for you
+            {workflow.waiting} waiting
           </Badge>
         ) : null}
         <Switch size="sm" defaultChecked={workflow.enabled} aria-label={`Turn ${workflow.name} on`} />
       </div>
       <CollapsibleContent>
         <div className="flex flex-col gap-3 border-t px-3 py-3">
-          <p className="text-sm text-muted-foreground">{workflow.summary}</p>
           <WorkflowShape workflow={workflow} />
-          <div className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
-            <span>
-              {workspaceScope(workflow, mockWorkspaces.length)} · {workflow.activity.runsLastWeek} runs this
-              week · {lastRunLabel(workflow)}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              nativeButton={false}
-              render={<Link to="/workflows/$workflowId" params={{ workflowId: workflow.id }} />}
-            >
-              Edit
-            </Button>
-          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-end"
+            nativeButton={false}
+            render={<Link to="/workflows/$workflowId" params={{ workflowId: workflow.id }} />}
+          >
+            Edit
+          </Button>
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -248,13 +194,8 @@ function WorkflowRow({ workflow }: { readonly workflow: Workflow }) {
 export function WorkflowsList() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-8 py-8">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">Workflows</h1>
-          <p className="text-sm text-muted-foreground">
-            Run agents when something happens in your tools, or on a schedule.
-          </p>
-        </div>
+      <header className="flex items-center justify-between gap-4">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">Workflows</h1>
         <Button size="sm" nativeButton={false} render={<Link to="/workflows/new" />}>
           <RiAddLine data-icon="inline-start" />
           New Workflow

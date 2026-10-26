@@ -27,13 +27,11 @@ describe("workflowEdits", () => {
   const workflow: Workflow = {
     id: "slack-review",
     name: "Slack → Review",
-    summary: "",
-    origin: "yours",
     enabled: true,
     workspaces: [],
     triggers: [],
     operations: [classify, review],
-    activity: { runsLastWeek: 0, lastRun: "never", waiting: 0 },
+    waiting: 0,
   };
   const stepsOfClassify = (edited: Workflow) =>
     edited.operations

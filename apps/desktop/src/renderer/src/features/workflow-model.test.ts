@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pickAction } from "./workflow-catalog";
-import { inheritedAt, type Operation, operationEdits, uncovered } from "./workflow-model";
+import { type Operation, operationEdits, uncovered } from "./workflow-model";
 
 const comment = pickAction("github", "comment");
 const close = pickAction("github", "close");
@@ -31,16 +31,6 @@ const extract = operation("extract", {
     { when: { request: "no" }, steps: [close] },
     { when: { request: "yes", match: "new" }, steps: [createIssue] },
   ],
-});
-
-describe("inheritedAt", () => {
-  it("adds every broader route that matches to what a row runs", () => {
-    expect(inheritedAt(extract, { request: "no", match: "new" }).map(({ step }) => step)).toEqual([
-      comment,
-      close,
-    ]);
-    expect(inheritedAt(extract, { request: "yes", match: "new" }).map(({ step }) => step)).toEqual([comment]);
-  });
 });
 
 describe("uncovered", () => {

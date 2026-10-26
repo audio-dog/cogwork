@@ -26,8 +26,6 @@ import {
   combinedRoutes,
   conditionKey,
   conditionParts,
-  inheritedAt,
-  isComplete,
   type Operation,
   operationEdits,
   type Question,
@@ -151,13 +149,13 @@ function AddActionMenu({ children }: { readonly children: ReactNode }) {
   return (
     <CatalogMenu.Root catalog={catalog} onChoose={(step) => actions.pickStep(when, step)}>
       {children}
-      <CatalogMenu.Content placeholder="Search Actions…" />
+      <CatalogMenu.Content placeholder="Search" />
     </CatalogMenu.Root>
   );
 }
 
 /**
- * The outcome's heading line. Once the outcome has steps, "Add an Action" waits at the end of this
+ * The outcome's heading line. Once the outcome has steps, "Add Action" waits at the end of this
  * line, so showing it on hover never moves the list below.
  */
 function OutcomeHeading({ children }: { readonly children: ReactNode }) {
@@ -180,7 +178,7 @@ function OutcomeHeading({ children }: { readonly children: ReactNode }) {
             }
           >
             <RiAddLine data-icon="inline-start" />
-            Add an Action
+            Add Action
           </CatalogMenu.Trigger>
         </AddActionMenu>
       ) : null}
@@ -248,7 +246,7 @@ function Instructions({ step }: { readonly step: CatalogChoice }) {
             rows={1}
             aria-label={`What the agent writes for the ${entry.label.toLowerCase()}`}
             value={source.hint}
-            placeholder={`What should the agent write for the ${entry.label.toLowerCase()}?`}
+            placeholder="What to write"
             className="min-h-0 w-auto max-w-full min-w-24 resize-none rounded-sm border-0 bg-transparent px-1 py-[5px] text-xs leading-4 shadow-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-0 md:text-xs dark:bg-transparent"
             onChange={(event) => actions.setInstruction(step, entry.id, source.field, event.target.value)}
           />
@@ -286,7 +284,6 @@ function HandOffLine({ step }: { readonly step: CatalogChoice }) {
   return (
     <div className="group/action flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs hover:bg-muted/40">
       <RiArrowRightLine className="size-3.5 text-muted-foreground" />
-      <span className="text-muted-foreground">then run</span>
       <span className="font-medium">{step.itemName}</span>
       <Button
         size="icon-xs"
@@ -308,8 +305,6 @@ function OutcomeSteps() {
   } = useOperationOutcomes();
   const { when } = useOutcome();
   const steps = stepsAt(operation, when);
-  const nothing =
-    steps.length === 0 && isComplete(operation, when) && inheritedAt(operation, when).length === 0;
   return (
     <div className="ms-2.5 flex flex-col gap-0.5 border-s ps-2">
       {steps
@@ -320,16 +315,13 @@ function OutcomeSteps() {
       {steps.filter(isHandOff).map((step) => (
         <HandOffLine key={choiceKey(step)} step={step} />
       ))}
-      {nothing ? (
-        <span className="px-1.5 py-1 text-xs text-muted-foreground italic">Does nothing</span>
-      ) : null}
       {steps.length === 0 ? (
         <AddActionMenu>
           <CatalogMenu.Trigger
             render={<Button size="xs" variant="ghost" className="w-fit font-normal text-muted-foreground" />}
           >
             <RiAddLine data-icon="inline-start" />
-            Add an Action
+            Add Action
           </CatalogMenu.Trigger>
         </AddActionMenu>
       ) : null}
@@ -401,7 +393,7 @@ function QuestionLine({ question, index }: { readonly question: Question; readon
     <div className="group/question flex items-center gap-2 px-3 pt-3 pb-1">
       <Input
         value={question.text}
-        placeholder="What should the agent decide?"
+        placeholder="Question"
         aria-label={alone ? "Question" : `Question ${index + 1}`}
         className="h-7 flex-1 border-0 bg-transparent px-1 text-sm font-medium shadow-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-0 dark:bg-transparent"
         onChange={(event) => actions.setQuestionText(question.id, event.target.value)}
@@ -560,7 +552,7 @@ function UncoveredNotice() {
     <Alert>
       <RiErrorWarningLine />
       <AlertDescription className="flex flex-wrap items-center gap-1.5">
-        Nothing happens when the agent answers
+        Unhandled:
         {gaps.map((when) => (
           <ConditionBadges key={conditionKey(operation, when)} when={when} />
         ))}
@@ -585,7 +577,7 @@ function Footer() {
             onClick={() => actions.addRoute({})}
           >
             <RiAddLine data-icon="inline-start" />
-            Run something every time
+            Every time
           </Button>
         )}
         <Button

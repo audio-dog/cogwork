@@ -8,7 +8,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuInput,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuList,
   DropdownMenuSeparator,
   DropdownMenuSub,
@@ -16,6 +15,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@cogwork/ui/components/dropdown-menu";
+import { cn } from "@cogwork/ui/lib/utils";
 import {
   RiCalendarScheduleLine,
   RiMicLine,
@@ -164,14 +164,12 @@ function ConnectorCascade() {
         const Icon = catalogIcons[group.icon];
         return (
           <DropdownMenuSub key={group.id}>
-            <DropdownMenuSubTrigger label={group.name}>
+            <DropdownMenuSubTrigger
+              label={group.name}
+              className={cn(!group.connected && "text-muted-foreground")}
+            >
               <Icon className="text-muted-foreground" />
               <span className="flex-1 truncate">{group.name}</span>
-              {group.connected ? null : (
-                <Badge variant="outline" className="font-normal">
-                  Connect
-                </Badge>
-              )}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="min-w-48">
               <DropdownMenuGroup>
@@ -183,7 +181,6 @@ function ConnectorCascade() {
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
-                    <DropdownMenuLabel>Only on {group.name}</DropdownMenuLabel>
                     {group.exclusive.map((entry) => (
                       <CatalogEntry key={entry.id} group={group} entry={entry} />
                     ))}

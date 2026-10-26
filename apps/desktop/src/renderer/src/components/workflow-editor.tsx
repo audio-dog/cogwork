@@ -13,7 +13,7 @@ import { Separator } from "@cogwork/ui/components/separator";
 import { Switch } from "@cogwork/ui/components/switch";
 import { Textarea } from "@cogwork/ui/components/textarea";
 import { useAtomValue } from "@effect/atom-react";
-import { RiAddLine, RiCloseLine, RiRobot2Line, RiToolsLine } from "@remixicon/react";
+import { RiAddLine, RiArrowLeftLine, RiCloseLine, RiRobot2Line, RiToolsLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
 import { createContext, use } from "react";
 import { harnessCatalogsAtom, harnessReadinessAtom } from "../daemon/atoms";
@@ -114,33 +114,30 @@ function EditorHeader() {
   } = useWorkflowEditor();
   return (
     <header className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-sm">
-        <Link to="/workflows" className="text-muted-foreground hover:text-foreground">
-          Workflows
-        </Link>
-        <span className="text-muted-foreground">/</span>
-        <span>{workflow.name}</span>
-        <Button size="sm" className="ms-auto">
-          Save
+      <div className="flex items-center gap-2">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Back to Workflows"
+          nativeButton={false}
+          render={<Link to="/workflows" />}
+        >
+          <RiArrowLeftLine />
         </Button>
+        <Input
+          value={workflow.name}
+          aria-label="Workflow name"
+          className="h-auto flex-1 border-0 bg-transparent px-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
+          onChange={(event) => actions.rename(event.target.value)}
+        />
+        <Switch
+          checked={workflow.enabled}
+          onCheckedChange={actions.setEnabled}
+          aria-label="Turn this Workflow on"
+        />
+        <Button size="sm">Save</Button>
       </div>
-      <Input
-        value={workflow.name}
-        aria-label="Workflow name"
-        className="h-auto border-0 bg-transparent px-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
-        onChange={(event) => actions.rename(event.target.value)}
-      />
-      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-        <span className="flex items-center gap-2">
-          <Switch
-            size="sm"
-            checked={workflow.enabled}
-            onCheckedChange={actions.setEnabled}
-            aria-label="Turn this Workflow on"
-          />
-          {workflow.enabled ? "On" : "Off"}
-        </span>
-        <Separator orientation="vertical" className="h-4" />
+      <div className="ps-9">
         <WorkspaceSelect />
       </div>
     </header>
@@ -178,8 +175,7 @@ function Triggers() {
     actions,
   } = useWorkflowEditor();
   return (
-    <section className="flex flex-col gap-1.5">
-      <h2 className="text-xs text-muted-foreground">Triggers</h2>
+    <section aria-label="Triggers" className="flex flex-col gap-1.5">
       {workflow.triggers.map((trigger) => (
         <TriggerRow key={choiceKey(trigger)} trigger={trigger} />
       ))}
@@ -195,7 +191,7 @@ function Triggers() {
           <RiAddLine data-icon="inline-start" />
           Add Trigger
         </CatalogMenu.Trigger>
-        <CatalogMenu.Content placeholder="Search Triggers…" />
+        <CatalogMenu.Content placeholder="Search" />
       </CatalogMenu.Root>
     </section>
   );
@@ -279,7 +275,7 @@ function OperationCard({ operation }: { readonly operation: Operation }) {
           rows={3}
           value={operation.instruction}
           aria-label={`Instructions for ${operation.name}`}
-          placeholder="Tell the agent what to do and how to decide."
+          placeholder="Instructions"
           className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
           onChange={(event) =>
             actions.updateOperation(operation.id, (current) =>
@@ -291,13 +287,12 @@ function OperationCard({ operation }: { readonly operation: Operation }) {
           <OperationModelPicker operation={operation} />
           <Button size="sm" variant="ghost" className="font-normal text-muted-foreground">
             <RiToolsLine data-icon="inline-start" />
-            Add tools, skills or MCPs
+            Tools
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5 px-1">
-        <h3 className="text-xs text-muted-foreground">Outcomes</h3>
+      <div className="px-1">
         <OperationOutcomes.Provider
           operation={operation}
           update={(edit) => actions.updateOperation(operation.id, edit)}
@@ -316,8 +311,7 @@ function Operations() {
     actions,
   } = useWorkflowEditor();
   return (
-    <section className="flex flex-col gap-1.5">
-      <h2 className="text-xs text-muted-foreground">Operations</h2>
+    <section aria-label="Operations" className="flex flex-col gap-1.5">
       {workflow.operations.map((operation) => (
         <OperationCard key={operation.id} operation={operation} />
       ))}

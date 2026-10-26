@@ -1,12 +1,5 @@
 import { Button } from "@cogwork/ui/components/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@cogwork/ui/components/empty";
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiNodeTree } from "@remixicon/react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { WorkflowEditor } from "../../../components/workflow-editor";
@@ -28,7 +21,6 @@ function WorkflowRoute() {
               <RiNodeTree />
             </EmptyMedia>
             <EmptyTitle>Workflow not found</EmptyTitle>
-            <EmptyDescription>It may have been removed.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/workflows" />}>

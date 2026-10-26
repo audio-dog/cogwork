@@ -56,23 +56,15 @@ export interface Operation {
   readonly inputs: Readonly<Record<string, Readonly<Record<string, InputSource>>>>;
 }
 
-export interface WorkflowActivity {
-  readonly runsLastWeek: number;
-  readonly lastRun: string;
-  /** Items parked on a human touchpoint. */
-  readonly waiting: number;
-}
-
 export interface Workflow {
   readonly id: string;
   readonly name: string;
-  readonly summary: string;
-  readonly origin: "cogwork" | "yours";
   readonly enabled: boolean;
   readonly workspaces: readonly string[];
   readonly triggers: readonly CatalogChoice[];
   readonly operations: readonly Operation[];
-  readonly activity: WorkflowActivity;
+  /** Items parked on a human touchpoint. */
+  readonly waiting: number;
 }
 
 /* ---------- reading an Operation ---------- */
@@ -85,9 +77,6 @@ export const conditionKey = (operation: Operation, when: Condition) =>
     .join("&");
 
 const isEvery = (when: Condition) => Object.keys(when).length === 0;
-
-export const isComplete = (operation: Operation, when: Condition) =>
-  Object.keys(when).length === operation.questions.length;
 
 const choiceName = (operation: Operation, questionId: string, choiceId: string) =>
   operation.questions
@@ -133,12 +122,6 @@ const stepsFor = (operation: Operation, answers: Condition) =>
   operation.routes
     .filter((route) => matches(route.when, answers))
     .flatMap((route) => route.steps.map((step) => ({ step, from: route.when })));
-
-/** Steps a condition also runs from broader routes. */
-export const inheritedAt = (operation: Operation, when: Condition) =>
-  stepsFor(operation, when).filter(
-    ({ from }) => conditionKey(operation, from) !== conditionKey(operation, when),
-  );
 
 /** Combinations no route reaches, so nothing happens when the agent answers that way. */
 export const uncovered = (operation: Operation) =>
