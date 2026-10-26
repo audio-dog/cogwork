@@ -36,18 +36,6 @@ import {
   leavesOf,
 } from "../features/workflow-catalog";
 
-/**
- * The catalog picker for Triggers, Actions and hand-offs. With no query it cascades — connector,
- * then event, then option — each submenu opening beside the last so the whole path stays in view.
- * Typing in the root's search field flattens the catalog to its leaves. A submenu has no field, so
- * typing there jumps to the item whose name starts with the typed text.
- *
- *   <CatalogMenu.Root catalog={…} onChoose={…}>
- *     <CatalogMenu.Trigger render={<Button />}>Add Trigger</CatalogMenu.Trigger>
- *     <CatalogMenu.Content placeholder="Search Triggers…" />
- *   </CatalogMenu.Root>
- */
-
 const catalogIcons: Record<CatalogIcon, ComponentType<{ className?: string }>> = {
   schedule: RiCalendarScheduleLine,
   github: GithubIcon,

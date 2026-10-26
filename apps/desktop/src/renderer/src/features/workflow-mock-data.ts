@@ -1,19 +1,14 @@
 import { type CatalogChoice, handOffTo, pickAction, pickTrigger } from "./workflow-catalog";
-import type { Condition, Operation, Question, Route, Workflow } from "./workflow-model";
+import type { Condition, Question, Route, Workflow } from "./workflow-model";
 
-/**
- * Mock Workflows for the Workflows screens. Nothing here reaches the daemon: the engine does not
- * store user-authored Workflows yet, so the list and the editor read these instead.
- */
-
-const question = (key: string, text: string, ...choices: readonly string[]): Question => ({
+const question = (key: string, text: string, ...choices: readonly string[]) => ({
   id: key,
   key,
   text,
   choices: choices.map((name) => ({ id: name, name })),
 });
 
-const route = (when: Condition, ...steps: readonly CatalogChoice[]): Route => ({ when, steps });
+const route = (when: Condition, ...steps: readonly CatalogChoice[]) => ({ when, steps });
 
 const operation = (
   id: string,
@@ -21,7 +16,7 @@ const operation = (
   instruction: string,
   questions: readonly Question[],
   routes: readonly Route[],
-): Operation => ({
+) => ({
   id,
   name,
   instruction,

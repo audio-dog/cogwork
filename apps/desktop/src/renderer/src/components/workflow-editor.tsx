@@ -38,11 +38,6 @@ import { OperationOutcomes } from "./operation-outcomes";
 import { ProviderPicker } from "./provider-picker";
 import { CatalogMenu, catalogIconFor } from "./workflow-catalog-menu";
 
-/**
- * The Workflow editor: its Triggers, then each Operation with its instructions, its model, and its
- * outcomes. Every part edits one draft, held here. Runs on mock data — nothing is saved yet.
- */
-
 interface WorkflowEditorContextValue {
   readonly state: { readonly workflow: Workflow };
   readonly actions: WorkflowDraftActions;
@@ -60,17 +55,16 @@ const useWorkflowEditor = () => {
 const noWorkspace = "none";
 const everyWorkspace = "every";
 
-const workspaceValue = (workspaces: readonly string[], every: readonly string[]) => {
-  if (workspaces.length === 0) return noWorkspace;
-  if (workspaces.length === every.length) return everyWorkspace;
-  return workspaces[0] ?? noWorkspace;
-};
+const workspaceValueRules = [
+  { when: (selected: readonly string[]) => selected.length === 0, value: noWorkspace },
+  {
+    when: (selected: readonly string[], every: readonly string[]) => selected.length === every.length,
+    value: everyWorkspace,
+  },
+];
 
-const workspacesFor = (value: string, every: readonly string[]): readonly string[] => {
-  if (value === noWorkspace) return [];
-  if (value === everyWorkspace) return every;
-  return [value];
-};
+const workspaceValue = (selected: readonly string[], every: readonly string[]) =>
+  workspaceValueRules.find((rule) => rule.when(selected, every))?.value ?? selected[0] ?? noWorkspace;
 
 function WorkspaceSelect() {
   const {
@@ -79,16 +73,17 @@ function WorkspaceSelect() {
     meta: { workspaces },
   } = useWorkflowEditor();
   const items = [
-    { value: noWorkspace, label: "No workspace" },
-    ...workspaces.map((workspace) => ({ value: workspace, label: workspace })),
-    { value: everyWorkspace, label: "Every workspace" },
+    { value: noWorkspace, label: "No workspace", workspaces: [] },
+    ...workspaces.map((workspace) => ({ value: workspace, label: workspace, workspaces: [workspace] })),
+    { value: everyWorkspace, label: "Every workspace", workspaces },
   ];
   return (
     <Select
       items={items}
       value={workspaceValue(workflow.workspaces, workspaces)}
       onValueChange={(value) => {
-        if (typeof value === "string") actions.setWorkspaces(workspacesFor(value, workspaces));
+        const picked = items.find((item) => item.value === value);
+        if (picked) actions.setWorkspaces(picked.workspaces);
       }}
     >
       <SelectTrigger size="sm" className="w-44 border-0 shadow-none" aria-label="Workspaces">
@@ -197,7 +192,6 @@ function Triggers() {
   );
 }
 
-/** The Harness and model one Operation runs with. No choice leaves it to the Operation settings. */
 function OperationModelPicker({ operation }: { readonly operation: Operation }) {
   const { actions } = useWorkflowEditor();
   const catalogResult = useAtomValue(harnessCatalogsAtom);

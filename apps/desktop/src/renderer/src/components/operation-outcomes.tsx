@@ -35,43 +35,33 @@ import {
 } from "../features/workflow-model";
 import { CatalogMenu, catalogIconFor } from "./workflow-catalog-menu";
 
-/**
- * An Operation's outcomes and what Cogwork does with each one.
- *
- * Each outcome is a heading; what Cogwork does is a list under it — the Action's name in one column
- * and, when the agent writes part of it, the instruction the agent reads in the next. A hand-off to
- * another Operation closes the list, because it is where the work goes next.
- *
- * The provider does not own the Operation: it reads it and sends every change through `update`, so
- * whoever holds the Workflow's draft holds the outcomes too.
- */
-
 type Update = (change: (operation: Operation) => Operation) => void;
 
-/** Each edit, applied to whatever the Operation is when the update runs. */
-const bindEdits = (update: Update) => ({
-  removeStep: (when: Condition, step: CatalogChoice) =>
-    update((operation) => operationEdits.removeStep(operation, when, step)),
-  addRoute: (when: Condition) => update((operation) => operationEdits.addRoute(operation, when)),
-  removeRoute: (when: Condition) => update((operation) => operationEdits.removeRoute(operation, when)),
-  setInstruction: (step: CatalogChoice, inputId: string, field: string, hint: string) =>
-    update((operation) => operationEdits.setInput(operation, step, inputId, { kind: "agent", field, hint })),
-  setQuestionText: (questionId: string, text: string) =>
-    update((operation) => operationEdits.setQuestionText(operation, questionId, text)),
-  renameChoice: (questionId: string, choiceId: string, name: string) =>
-    update((operation) => operationEdits.renameChoice(operation, questionId, choiceId, name)),
-  addChoice: (questionId: string) => update((operation) => operationEdits.addChoice(operation, questionId)),
-  removeChoice: (questionId: string, choiceId: string) =>
-    update((operation) => operationEdits.removeChoice(operation, questionId, choiceId)),
-  addQuestion: () => update((operation) => operationEdits.addQuestion(operation)),
-  removeQuestion: (questionId: string) =>
-    update((operation) => operationEdits.removeQuestion(operation, questionId)),
-});
+const bindEdits = (update: Update) => {
+  const bind =
+    <Args extends readonly unknown[]>(edit: (operation: Operation, ...args: Args) => Operation) =>
+    (...args: Args) =>
+      update((operation) => edit(operation, ...args));
+  return {
+    removeStep: bind(operationEdits.removeStep),
+    addRoute: bind(operationEdits.addRoute),
+    removeRoute: bind(operationEdits.removeRoute),
+    setInstruction: (step: CatalogChoice, inputId: string, field: string, hint: string) =>
+      update((operation) =>
+        operationEdits.setInput(operation, step, inputId, { kind: "agent", field, hint }),
+      ),
+    setQuestionText: bind(operationEdits.setQuestionText),
+    renameChoice: bind(operationEdits.renameChoice),
+    addChoice: bind(operationEdits.addChoice),
+    removeChoice: bind(operationEdits.removeChoice),
+    addQuestion: bind(operationEdits.addQuestion),
+    removeQuestion: bind(operationEdits.removeQuestion),
+  };
+};
 
 interface OperationOutcomesContextValue {
   readonly state: {
     readonly operation: Operation;
-    /** The step picked last, keyed by row and step, so its instruction can take the cursor. */
     readonly justPicked: string | null;
   };
   readonly actions: ReturnType<typeof bindEdits> & {
@@ -120,8 +110,6 @@ function Provider({
   );
 }
 
-/* ---------- one outcome ---------- */
-
 const OutcomeContext = createContext<{ readonly when: Condition } | null>(null);
 
 const useOutcome = () => {
@@ -130,7 +118,6 @@ const useOutcome = () => {
   return value;
 };
 
-/** One outcome — a choice, a combination of choices, or every time — and what it runs. */
 function Outcome({ when, children }: { readonly when: Condition; readonly children: ReactNode }) {
   return (
     <OutcomeContext value={{ when }}>
@@ -139,7 +126,6 @@ function Outcome({ when, children }: { readonly when: Condition; readonly childr
   );
 }
 
-/** The catalog of Actions and hand-offs, adding the pick to this outcome. */
 function AddActionMenu({ children }: { readonly children: ReactNode }) {
   const {
     actions,
@@ -154,10 +140,6 @@ function AddActionMenu({ children }: { readonly children: ReactNode }) {
   );
 }
 
-/**
- * The outcome's heading line. Once the outcome has steps, "Add Action" waits at the end of this
- * line, so showing it on hover never moves the list below.
- */
 function OutcomeHeading({ children }: { readonly children: ReactNode }) {
   const {
     state: { operation },
@@ -218,7 +200,6 @@ const focusOnAttach = (node: HTMLTextAreaElement | null) => {
   node?.focus();
 };
 
-/** The instructions the agent reads for one step. Each one hugs its text and wraps at the row's edge. */
 function Instructions({ step }: { readonly step: CatalogChoice }) {
   const {
     state: { operation, justPicked },
@@ -298,7 +279,6 @@ function HandOffLine({ step }: { readonly step: CatalogChoice }) {
   );
 }
 
-/** What the outcome runs: its Actions, then its hand-offs. An outcome with none offers to add one. */
 function OutcomeSteps() {
   const {
     state: { operation },
@@ -353,9 +333,6 @@ function ConditionBadges({ when }: { readonly when: Condition }) {
   );
 }
 
-/* ---------- the list ---------- */
-
-/** An outcome name that reads as text and edits in place. */
 function OutcomeName({
   question,
   choice,
@@ -382,7 +359,6 @@ function OutcomeName({
   );
 }
 
-/** The question in prose, as an editable heading rather than a boxed field. */
 function QuestionLine({ question, index }: { readonly question: Question; readonly index: number }) {
   const {
     state: { operation },
@@ -480,7 +456,6 @@ function Combinations() {
   );
 }
 
-/** Picks a combination of two answers: a question's choice, then a later question's choice. */
 function CombinationMenu() {
   const {
     state: { operation },
@@ -541,7 +516,6 @@ function CombinationMenu() {
   );
 }
 
-/** Names the answers no route reaches, so a gap in the routing is visible before it runs. */
 function UncoveredNotice() {
   const {
     state: { operation },

@@ -1,19 +1,5 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { type CatalogChoice, choiceKey, type InputSource } from "./workflow-catalog";
-
-/**
- * What an Operation decides, and what Cogwork does with each decision.
- *
- * An Operation asks one or more questions. The agent answers each with exactly one of its choices,
- * constrained by the Operation's structured output. A route names a choice for some of the
- * questions and leaves the rest open, and **every route whose choices match the answers runs**: a
- * route that names nothing runs every time, and a broad route ("request is no") never competes with
- * a narrow one ("request is yes and match is new"). There is no order and no fallback, so a
- * combination no route reaches does nothing, and the editor says so.
- *
- * A step is an Action from the catalog, or a hand-off that starts another Operation of the same
- * Workflow. One route holds any number of steps.
- */
+import { type CatalogChoice, choiceKey, type InputSource, sameChoice } from "./workflow-catalog";
 
 export interface Choice {
   readonly id: string;
@@ -22,13 +8,13 @@ export interface Choice {
 
 export interface Question {
   readonly id: string;
-  /** The property the agent's answer is returned under. */
+  /** The property the agent's answer is returned under in the structured output. */
   readonly key: string;
   readonly text: string;
   readonly choices: readonly Choice[];
 }
 
-/** Question id → choice id. A question it does not name is open. */
+/** Question id → choice id. */
 export type Condition = Readonly<Record<string, string>>;
 
 export interface Route {
@@ -36,7 +22,7 @@ export interface Route {
   readonly steps: readonly CatalogChoice[];
 }
 
-/** The Harness and model this Operation runs with. Null leaves the choice to the Operation settings. */
+/** Null leaves the choice to the Operation settings. */
 export interface ModelChoice {
   readonly harness: HarnessName | null;
   readonly model: string | null;
@@ -49,10 +35,7 @@ export interface Operation {
   readonly model: ModelChoice;
   readonly questions: readonly Question[];
   readonly routes: readonly Route[];
-  /**
-   * Input sources changed from the catalog's defaults, keyed by step then input. A step used on
-   * several routes shares one setting, so the same comment on two outcomes is one field.
-   */
+  /** Keyed by `choiceKey` then input id, so a step on several routes shares one setting. */
   readonly inputs: Readonly<Record<string, Readonly<Record<string, InputSource>>>>;
 }
 
@@ -63,18 +46,18 @@ export interface Workflow {
   readonly workspaces: readonly string[];
   readonly triggers: readonly CatalogChoice[];
   readonly operations: readonly Operation[];
-  /** Items parked on a human touchpoint. */
   readonly waiting: number;
 }
 
-/* ---------- reading an Operation ---------- */
-
-/** Keys a condition by question order, so the same choices always produce the same key. */
+/** In question order, not insertion order, so equal conditions always share a key. */
 export const conditionKey = (operation: Operation, when: Condition) =>
   operation.questions
     .filter((question) => when[question.id] !== undefined)
     .map((question) => `${question.id}=${when[question.id]}`)
     .join("&");
+
+const sameCondition = (operation: Operation, a: Condition, b: Condition) =>
+  conditionKey(operation, a) === conditionKey(operation, b);
 
 const isEvery = (when: Condition) => Object.keys(when).length === 0;
 
@@ -83,7 +66,6 @@ const choiceName = (operation: Operation, questionId: string, choiceId: string) 
     .find((question) => question.id === questionId)
     ?.choices.find((choice) => choice.id === choiceId)?.name ?? choiceId;
 
-/** The named parts of a condition in question order. */
 export const conditionParts = (operation: Operation, when: Condition) =>
   operation.questions
     .filter((question) => when[question.id] !== undefined)
@@ -93,16 +75,18 @@ export const conditionParts = (operation: Operation, when: Condition) =>
       choice: choiceName(operation, question.id, when[question.id] ?? ""),
     }));
 
-/** Short text for a condition: the choice alone for one question, `key: choice` pairs for several. */
+type ConditionPart = ReturnType<typeof conditionParts>[number];
+
 export const conditionLabel = (operation: Operation, when: Condition) => {
   if (isEvery(when)) return "Every time";
-  const parts = conditionParts(operation, when);
-  if (operation.questions.length === 1) return parts.map((part) => part.choice).join(" · ");
-  return parts.map((part) => `${part.key}: ${part.choice}`).join(" · ");
+  const label =
+    operation.questions.length === 1
+      ? (part: ConditionPart) => part.choice
+      : (part: ConditionPart) => `${part.key}: ${part.choice}`;
+  return conditionParts(operation, when).map(label).join(" · ");
 };
 
-/** Every full combination of answers the agent can return. */
-const combinations = (questions: readonly Question[]): readonly Condition[] =>
+const combinations = (questions: readonly Question[]) =>
   questions.reduce<readonly Condition[]>(
     (partial, next) =>
       partial.flatMap((when) => next.choices.map((choice) => ({ ...when, [next.id]: choice.id }))),
@@ -113,39 +97,32 @@ const matches = (when: Condition, answers: Condition) =>
   Object.entries(when).every(([questionId, choiceId]) => answers[questionId] === choiceId);
 
 export const routeAt = (operation: Operation, when: Condition) =>
-  operation.routes.find((route) => conditionKey(operation, route.when) === conditionKey(operation, when));
+  operation.routes.find((route) => sameCondition(operation, route.when, when));
 
 export const stepsAt = (operation: Operation, when: Condition) => routeAt(operation, when)?.steps ?? [];
 
-/** What runs for one set of answers, each step paired with the route it came from. */
 const stepsFor = (operation: Operation, answers: Condition) =>
   operation.routes
     .filter((route) => matches(route.when, answers))
     .flatMap((route) => route.steps.map((step) => ({ step, from: route.when })));
 
-/** Combinations no route reaches, so nothing happens when the agent answers that way. */
 export const uncovered = (operation: Operation) =>
   combinations(operation.questions).filter((answers) => stepsFor(operation, answers).length === 0);
 
-/** Routes that name more than one question. */
 export const combinedRoutes = (operation: Operation) =>
   operation.routes.filter((route) => Object.keys(route.when).length > 1);
 
-/** The inputs of a step the agent writes, each with the instruction it reads. */
 export const agentInputs = (operation: Operation, step: CatalogChoice) =>
   step.inputs.flatMap((entry) => {
     const source = operation.inputs[choiceKey(step)]?.[entry.id] ?? entry.source;
     return source.kind === "agent" ? [{ entry, source }] : [];
   });
 
-/* ---------- editing an Operation ---------- */
-
-/** Changes the steps of the route at one condition, and creates the route when it is missing. */
 const withRoute = (
   operation: Operation,
   when: Condition,
   change: (steps: readonly CatalogChoice[]) => readonly CatalogChoice[],
-): Operation => {
+) => {
   const existing = routeAt(operation, when);
   if (!existing) return { ...operation, routes: [...operation.routes, { when, steps: change([]) }] };
   return {
@@ -164,11 +141,11 @@ const mapQuestion = (operation: Operation, questionId: string, change: (question
 });
 
 const freshId = (prefix: string, taken: readonly string[]) =>
-  [...Array(taken.length + 1).keys()]
-    .map((index) => `${prefix}-${index + 1}`)
-    .find((id) => !taken.includes(id)) ?? `${prefix}-${taken.length + 1}`;
+  Array.from({ length: taken.length + 1 }, (_, index) => `${prefix}-${index + 1}`).find(
+    (id) => !taken.includes(id),
+  ) ?? `${prefix}-${taken.length + 1}`;
 
-const yesOrNo = (id: string): Question => ({
+const yesOrNo = (id: string) => ({
   id,
   key: id,
   text: "",
@@ -178,7 +155,7 @@ const yesOrNo = (id: string): Question => ({
   ],
 });
 
-export const blankOperation = (taken: readonly string[]): Operation => ({
+export const blankOperation = (taken: readonly string[]) => ({
   id: freshId("operation", taken),
   name: "New Operation",
   instruction: "",
@@ -188,27 +165,22 @@ export const blankOperation = (taken: readonly string[]): Operation => ({
   inputs: {},
 });
 
-/** Every change the editor makes to an Operation, as a pure function of the Operation it changes. */
 export const operationEdits = {
-  rename: (operation: Operation, name: string): Operation => ({ ...operation, name }),
-  instruct: (operation: Operation, instruction: string): Operation => ({ ...operation, instruction }),
-  chooseModel: (operation: Operation, model: ModelChoice): Operation => ({ ...operation, model }),
+  rename: (operation: Operation, name: string) => ({ ...operation, name }),
+  instruct: (operation: Operation, instruction: string) => ({ ...operation, instruction }),
+  chooseModel: (operation: Operation, model: ModelChoice) => ({ ...operation, model }),
   addStep: (operation: Operation, when: Condition, step: CatalogChoice) =>
     withRoute(operation, when, (steps) =>
-      steps.some((existing) => choiceKey(existing) === choiceKey(step)) ? steps : [...steps, step],
+      steps.some((existing) => sameChoice(existing, step)) ? steps : [...steps, step],
     ),
   removeStep: (operation: Operation, when: Condition, step: CatalogChoice) =>
-    withRoute(operation, when, (steps) =>
-      steps.filter((existing) => choiceKey(existing) !== choiceKey(step)),
-    ),
+    withRoute(operation, when, (steps) => steps.filter((existing) => !sameChoice(existing, step))),
   addRoute: (operation: Operation, when: Condition) => withRoute(operation, when, (steps) => steps),
-  removeRoute: (operation: Operation, when: Condition): Operation => ({
+  removeRoute: (operation: Operation, when: Condition) => ({
     ...operation,
-    routes: operation.routes.filter(
-      (route) => conditionKey(operation, route.when) !== conditionKey(operation, when),
-    ),
+    routes: operation.routes.filter((route) => !sameCondition(operation, route.when, when)),
   }),
-  setInput: (operation: Operation, step: CatalogChoice, inputId: string, source: InputSource): Operation => {
+  setInput: (operation: Operation, step: CatalogChoice, inputId: string, source: InputSource) => {
     const key = choiceKey(step);
     return {
       ...operation,
@@ -230,14 +202,14 @@ export const operationEdits = {
       );
       return { ...question, choices: [...question.choices, { id, name: id }] };
     }),
-  removeChoice: (operation: Operation, questionId: string, choiceId: string): Operation => ({
+  removeChoice: (operation: Operation, questionId: string, choiceId: string) => ({
     ...mapQuestion(operation, questionId, (question) => ({
       ...question,
       choices: question.choices.filter((choice) => choice.id !== choiceId),
     })),
     routes: operation.routes.filter((route) => route.when[questionId] !== choiceId),
   }),
-  addQuestion: (operation: Operation): Operation => ({
+  addQuestion: (operation: Operation) => ({
     ...operation,
     questions: [
       ...operation.questions,
@@ -249,7 +221,7 @@ export const operationEdits = {
       ),
     ],
   }),
-  removeQuestion: (operation: Operation, questionId: string): Operation => ({
+  removeQuestion: (operation: Operation, questionId: string) => ({
     ...operation,
     questions: operation.questions.filter((question) => question.id !== questionId),
     routes: operation.routes.filter((route) => route.when[questionId] === undefined),

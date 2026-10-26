@@ -1,13 +1,3 @@
-/**
- * The Triggers and Actions a person picks from while authoring a Workflow. Mock data: the engine
- * does not expose its Connections' events and output actions to the desktop yet.
- *
- * Triggers and Actions share one shape, because they are the same kind of choice: pick a connector,
- * pick the thing it offers, sometimes narrow that down once more. An Action also declares its
- * inputs and who fills each one, because only the text that needs judgement is the agent's to
- * write; the engine fills everything else.
- */
-
 export type CatalogIcon =
   | "schedule"
   | "github"
@@ -23,11 +13,7 @@ export interface CatalogOption {
   readonly name: string;
 }
 
-/**
- * Where one Action input gets its value. Only `agent` becomes a field of the Operation's structured
- * output; the engine fills the others from fixed text, from the Run, or from the option picked in
- * the menu.
- */
+/** Only `agent` becomes a field of the Operation's structured output; the engine fills the others. */
 export type InputSource =
   | { readonly kind: "agent"; readonly field: string; readonly hint: string }
   | { readonly kind: "fixed"; readonly text: string }
@@ -43,9 +29,7 @@ export interface ActionInput {
 export interface CatalogItem {
   readonly id: string;
   readonly name: string;
-  /** A third level in the menu. An item with options opens a submenu instead of being picked. */
   readonly options: readonly CatalogOption[];
-  /** Empty for a Trigger. */
   readonly inputs: readonly ActionInput[];
 }
 
@@ -55,7 +39,6 @@ export interface CatalogGroup {
   readonly icon: CatalogIcon;
   readonly connected: boolean;
   readonly items: readonly CatalogItem[];
-  /** Items only this connector offers, listed under their own heading. */
   readonly exclusive: readonly CatalogItem[];
 }
 
@@ -63,7 +46,6 @@ export interface Catalog {
   readonly groups: readonly CatalogGroup[];
 }
 
-/** One thing picked from a catalog: a Trigger, an Action, or a hand-off to another Operation. */
 export interface CatalogChoice {
   readonly groupId: string;
   readonly groupName: string;
@@ -71,7 +53,6 @@ export interface CatalogChoice {
   readonly itemId: string;
   readonly itemName: string;
   readonly optionName: string | null;
-  /** What the engine needs to perform it. Empty for a Trigger. */
   readonly inputs: readonly ActionInput[];
 }
 
@@ -329,57 +310,49 @@ export const choiceOf = (
 export const choiceKey = (choice: CatalogChoice) =>
   `${choice.groupId}/${choice.itemId}/${choice.optionName ?? ""}`;
 
-/** Every leaf in the catalog, so one query can match a connector, an event, or an option. */
+export const sameChoice = (a: CatalogChoice, b: CatalogChoice) => choiceKey(a) === choiceKey(b);
+
+const entriesOf = (group: CatalogGroup) => [...group.items, ...group.exclusive];
+
 export const leavesOf = (catalog: Catalog) =>
   catalog.groups.flatMap((group) =>
-    [...group.items, ...group.exclusive].flatMap((entry) =>
+    entriesOf(group).flatMap((entry) =>
       entry.options.length === 0
         ? [choiceOf(group, entry, null)]
         : entry.options.map((option) => choiceOf(group, entry, option.name)),
     ),
   );
 
-const operationsGroupId = "operations";
-const operationsGroupName = "Run an Operation";
-
-export const isHandOff = (choice: CatalogChoice) => choice.groupId === operationsGroupId;
-
 interface OperationRef {
   readonly id: string;
   readonly name: string;
 }
 
-/** The Workflow's other Operations, offered as one more group so a hand-off is picked like an Action. */
-export const withOperations = (catalog: Catalog, operations: readonly OperationRef[]): Catalog => ({
-  groups: [
-    {
-      id: operationsGroupId,
-      name: operationsGroupName,
-      icon: "operation",
-      connected: true,
-      items: operations.map((operation) => item(operation.id, operation.name, [], [handOffBrief])),
-      exclusive: [],
-    },
-    ...catalog.groups,
-  ],
-});
+const operationsGroupId = "operations";
 
-export const handOffTo = (operation: OperationRef): CatalogChoice => ({
-  groupId: operationsGroupId,
-  groupName: operationsGroupName,
+const handOffItem = (operation: OperationRef) => item(operation.id, operation.name, [], [handOffBrief]);
+
+const operationsGroup = (operations: readonly OperationRef[]): CatalogGroup => ({
+  id: operationsGroupId,
+  name: "Run an Operation",
   icon: "operation",
-  itemId: operation.id,
-  itemName: operation.name,
-  optionName: null,
-  inputs: [handOffBrief],
+  connected: true,
+  items: operations.map(handOffItem),
+  exclusive: [],
 });
 
-/** Finds a catalog entry by connector and id, so mock data reads as the menu path a person clicks. */
+export const isHandOff = (choice: CatalogChoice) => choice.groupId === operationsGroupId;
+
+export const withOperations = (catalog: Catalog, operations: readonly OperationRef[]): Catalog => ({
+  groups: [operationsGroup(operations), ...catalog.groups],
+});
+
+export const handOffTo = (operation: OperationRef) =>
+  choiceOf(operationsGroup([]), handOffItem(operation), null);
+
 const pickFrom = (catalog: Catalog, groupId: string, itemId: string, optionName: string | null) => {
   const group = catalog.groups.find((candidate) => candidate.id === groupId);
-  const entry = [...(group?.items ?? []), ...(group?.exclusive ?? [])].find(
-    (candidate) => candidate.id === itemId,
-  );
+  const entry = group && entriesOf(group).find((candidate) => candidate.id === itemId);
   if (!group || !entry) throw new Error(`No catalog entry ${groupId}/${itemId}`);
   return choiceOf(group, entry, optionName);
 };

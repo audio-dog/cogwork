@@ -1,7 +1,7 @@
 import { type CatalogChoice, isHandOff } from "./workflow-catalog";
 import { type Condition, type Operation, stepsAt, type Workflow } from "./workflow-model";
 
-export const spineOf = (workflow: Workflow): readonly Operation[] => {
+export const spineOf = (workflow: Workflow) => {
   const byId = (id: string) => workflow.operations.find((operation) => operation.id === id);
   const walk = (operation: Operation, seen: readonly Operation[]): readonly Operation[] => {
     const next = operation.routes
@@ -14,7 +14,7 @@ export const spineOf = (workflow: Workflow): readonly Operation[] => {
   return first ? walk(first, [first]) : [];
 };
 
-export const outcomeRowsOf = (operation: Operation): readonly Condition[] => {
+export const outcomeRowsOf = (operation: Operation) => {
   const [only] = operation.questions;
   if (operation.questions.length === 1 && only) {
     return only.choices.map((choice): Condition => ({ [only.id]: choice.id }));
@@ -36,7 +36,7 @@ const kindOf = (step: CatalogChoice) =>
 const rank: readonly ConsequenceKind[] = ["operation", "approval", "notification", "stop", "action"];
 
 export const consequenceOf = (operation: Operation, when: Condition) => {
-  const [lead] = [...stepsAt(operation, when)].sort(
+  const [lead] = stepsAt(operation, when).toSorted(
     (a, b) => rank.indexOf(kindOf(a)) - rank.indexOf(kindOf(b)),
   );
   if (!lead) return { kind: "nothing" as const, name: "Nothing", step: null };
