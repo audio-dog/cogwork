@@ -1,6 +1,11 @@
 import type { HarnessName } from "@cogwork/contracts";
 import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
-import { type CodexTextAdapter, type CodexTextConfig, codexText } from "@tanstack/ai-codex";
+import {
+  type CodexTextAdapter,
+  type CodexTextConfig,
+  type CodexTextProviderOptions,
+  codexText,
+} from "@tanstack/ai-codex";
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
@@ -322,6 +327,7 @@ const codexDescriptor = (
       return makeAdapter(model, {
         authMode: nativeAuthentication,
         approvalPolicy: "never",
+        modelReasoningEffort: codexSelectionEffort(request),
         codexExecutable: executable,
         // Codex's `read-only` sandbox mode blocks network too, cutting a read-only
         // Operation off from the Issue tracker it reads with `gh`.
@@ -335,11 +341,11 @@ const codexDescriptor = (
     },
     projectModel: (request) =>
       codexModels.find((model) => model === request.selection.model) ?? defaultCodexModel,
-    projectOptions: (request) => ({
-      ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
-      modelReasoningEffort: codexSelectionEffort(request),
-      authMode: "host",
-    }),
+    projectOptions: (request) =>
+      ({
+        ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
+        authMode: "host",
+      }) satisfies CodexTextProviderOptions,
     transport: {
       instructionProjection: "system-prompt",
       mcpProjection: "native",
