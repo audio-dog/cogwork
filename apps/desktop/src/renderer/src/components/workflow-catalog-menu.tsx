@@ -23,7 +23,7 @@ import {
   RiSlackLine,
   RiWebhookLine,
 } from "@remixicon/react";
-import { type ComponentType, createContext, type ReactNode, use, useState } from "react";
+import { type ComponentType, createContext, type ReactNode, use, useRef, useState } from "react";
 import {
   allChoicesIn,
   type Catalog,
@@ -50,7 +50,10 @@ export const catalogIconFor = (icon: CatalogIcon) => catalogIcons[icon];
 
 interface CatalogMenuContextValue {
   readonly state: { readonly query: string };
-  readonly actions: { readonly choose: (choice: CatalogChoice) => void };
+  readonly actions: {
+    readonly choose: (choice: CatalogChoice) => void;
+    readonly takeFinalFocus: () => boolean;
+  };
   readonly meta: { readonly catalog: Catalog };
 }
 
@@ -72,8 +75,20 @@ function Root({
   readonly children: ReactNode;
 }) {
   const [query, setQuery] = useState("");
+  const lastPick = useRef<CatalogChoice | null>(null);
+  const choose = (choice: CatalogChoice) => {
+    lastPick.current = choice;
+    onChoose(choice);
+  };
+  // A pick with agent inputs moves the cursor into its instruction; returning focus to the trigger
+  // would take it back.
+  const takeFinalFocus = () => {
+    const movedToInstruction = (lastPick.current?.agentInputs.length ?? 0) > 0;
+    lastPick.current = null;
+    return !movedToInstruction;
+  };
   return (
-    <CatalogMenuContext value={{ state: { query }, actions: { choose: onChoose }, meta: { catalog } }}>
+    <CatalogMenuContext value={{ state: { query }, actions: { choose, takeFinalFocus }, meta: { catalog } }}>
       <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery} autoHighlight>
         <DropdownMenu>{children}</DropdownMenu>
       </DropdownMenuFilter>
@@ -181,11 +196,10 @@ function ConnectorCascade() {
 function Content({ placeholder }: { readonly placeholder: string }) {
   const {
     state: { query },
+    actions: { takeFinalFocus },
   } = useCatalogMenu();
   return (
-    // Picking an Action that needs text moves the cursor into its instruction; returning focus to
-    // the trigger would take it back.
-    <DropdownMenuContent className="w-64" finalFocus={false}>
+    <DropdownMenuContent className="w-64" finalFocus={takeFinalFocus}>
       <DropdownMenuInput placeholder={placeholder} aria-label={placeholder} />
       <DropdownMenuEmpty>No matches</DropdownMenuEmpty>
       <DropdownMenuList>
