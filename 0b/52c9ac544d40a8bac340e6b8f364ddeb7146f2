@@ -1,0 +1,25 @@
+packages/engine/src/external-harness-runtime.test.ts
+  s_8e2a1788901e5c::t_72f9405ce152cf 902
+  s_8e2a1788901e5c::t_3717e9d9296102 1065-1066
+  s_8e2a1788901e5c::t_7d05822c427b0f 896
+  s_8e2a1788901e5c::t_12a3c081bd46dd 1031,1036,1039-1040,1047,1054
+  s_8e2a1788901e5c::t_a3e7250fabc070 1285
+packages/claude-code/src/harness-environment.test.ts
+  s_8e2a1788901e5c::t_389536f01c071d 131,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0b52c9ac544d40a8bac340e6b8f364ddeb7146f2",
+  "prompts": {},
+  "sessions": {
+    "s_8e2a1788901e5c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9b958b9a-4092-4b51-a3f6-f8a9fc5deae2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
