@@ -1,0 +1,19 @@
+docs/research/agents-author-automations.md
+  s_02b6d3e885f82a::t_f2e46de858d117 1-519
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8cf0bda3b7c7d58ca6ec9a5cebba93ccfca5e9e0",
+  "prompts": {},
+  "sessions": {
+    "s_02b6d3e885f82a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "dacfc358-b83f-4c82-9814-bd73ddb25cfd",
+        "model": "claude-fable-5-1-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
