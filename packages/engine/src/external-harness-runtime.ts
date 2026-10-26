@@ -736,25 +736,28 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
   };
 };
 
-export const environmentVariablesToRemove = (
-  environment: ReadonlyArray<string>,
-  inherited: ReadonlyArray<string>,
-  allowed: ReadonlyArray<string> = [],
-  denied: ReadonlyArray<string> = [],
-) => {
-  const environmentName = (name: string) => (process.platform === "win32" ? name.toUpperCase() : name);
-  const deniedNames = new Set(denied.map(environmentName));
-  const inheritedNames = new Set(
-    [...inherited, ...allowed].map(environmentName).filter((name) => !deniedNames.has(name)),
-  );
-  return environment.filter((name) => !inheritedNames.has(environmentName(name)));
-};
+const environmentName = (name: string) => (process.platform === "win32" ? name.toUpperCase() : name);
 
 interface EnvironmentRule {
   readonly inherited: ReadonlyArray<string>;
   readonly allowed?: ReadonlyArray<string>;
   readonly denied?: ReadonlyArray<string>;
 }
+
+const inheritedEnvironmentNames = ({ inherited, allowed = [], denied = [] }: EnvironmentRule) => {
+  const deniedNames = new Set(denied.map(environmentName));
+  return new Set([...inherited, ...allowed].map(environmentName).filter((name) => !deniedNames.has(name)));
+};
+
+export const environmentVariablesToRemove = (
+  environment: ReadonlyArray<string>,
+  inherited: ReadonlyArray<string>,
+  allowed: ReadonlyArray<string> = [],
+  denied: ReadonlyArray<string> = [],
+) => {
+  const inheritedNames = inheritedEnvironmentNames({ inherited, allowed, denied });
+  return environment.filter((name) => !inheritedNames.has(environmentName(name)));
+};
 
 const withCurrentEnvironment = <Value>(refreshEnvironment: () => void, action: () => Value) => {
   refreshEnvironment();
@@ -799,8 +802,11 @@ const localProcessSandboxProvider = (directory: string, rule: EnvironmentRule) =
   };
   refreshEnvironment();
   const handles = new Map<string, SandboxHandle>();
+  // A command gets only the provider's short base list plus `passEnv`; `scrubEnv` then removes the
+  // base names this rule does not inherit.
   const provider = localProcessSandbox({
     dir: directory,
+    passEnv: [...inheritedEnvironmentNames(rule)],
     scrubEnv,
   });
   const register = (sandbox: SandboxHandle) => {
