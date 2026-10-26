@@ -51,4 +51,14 @@ describe("operationEdits.removeChoice", () => {
     const edited = operationEdits.removeChoice(extract, "request", "yes");
     expect(edited.routes.map((route) => route.when)).toEqual([{}, { request: "no" }]);
   });
+
+  it("keeps the last outcome, so the unhandled answers stay visible", () => {
+    const once = operationEdits.removeChoice(
+      operation("gate", { questions: [question("ok", "yes", "no")] }),
+      "ok",
+      "yes",
+    );
+    const twice = operationEdits.removeChoice(once, "ok", "no");
+    expect(uncovered(twice)).toEqual([{ ok: "no" }]);
+  });
 });

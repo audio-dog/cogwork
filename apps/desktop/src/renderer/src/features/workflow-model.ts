@@ -138,6 +138,9 @@ const freshId = (prefix: string, taken: readonly string[]) =>
     (id) => !taken.includes(id),
   ) ?? `${prefix}-${taken.length + 1}`;
 
+/** A question with no outcomes has no answers, so `uncovered` would report no gaps. */
+export const canRemoveChoice = (question: Question | undefined) => (question?.choices.length ?? 0) > 1;
+
 const yesOrNo = (id: string) => ({
   id,
   text: "",
@@ -194,13 +197,17 @@ export const operationEdits = {
       );
       return { ...question, choices: [...question.choices, { id, name: id }] };
     }),
-  removeChoice: (operation: Operation, questionId: string, choiceId: string) => ({
-    ...mapQuestion(operation, questionId, (question) => ({
-      ...question,
-      choices: question.choices.filter((choice) => choice.id !== choiceId),
-    })),
-    routes: operation.routes.filter((route) => route.when[questionId] !== choiceId),
-  }),
+  removeChoice: (operation: Operation, questionId: string, choiceId: string) => {
+    if (!canRemoveChoice(operation.questions.find((question) => question.id === questionId)))
+      return operation;
+    return {
+      ...mapQuestion(operation, questionId, (question) => ({
+        ...question,
+        choices: question.choices.filter((choice) => choice.id !== choiceId),
+      })),
+      routes: operation.routes.filter((route) => route.when[questionId] !== choiceId),
+    };
+  },
   addQuestion: (operation: Operation) => ({
     ...operation,
     questions: [

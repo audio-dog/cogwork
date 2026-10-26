@@ -25,6 +25,7 @@ import {
   agentInstructions,
   type Choice,
   type Condition,
+  canRemoveChoice,
   combinedRoutes,
   conditionKey,
   conditionParts,
@@ -352,10 +353,12 @@ function OutcomeName({ question, choice }: { readonly question: Question; readon
         className="h-7 flex-1 px-1.5 font-mono text-[13px]"
         onChange={(event) => actions.renameChoice(question.id, choice.id, event.target.value)}
       />
-      <RemoveOnHover
-        label={`Remove ${choice.name}`}
-        onRemove={() => actions.removeChoice(question.id, choice.id)}
-      />
+      {canRemoveChoice(question) ? (
+        <RemoveOnHover
+          label={`Remove ${choice.name}`}
+          onRemove={() => actions.removeChoice(question.id, choice.id)}
+        />
+      ) : null}
     </span>
   );
 }

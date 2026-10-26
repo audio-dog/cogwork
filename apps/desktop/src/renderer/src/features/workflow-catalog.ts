@@ -274,10 +274,8 @@ const operationsGroup = (operations: readonly OperationRef[]): CatalogGroup => (
 
 export const isHandOff = (choice: CatalogChoice) => choice.groupId === operationsGroupId;
 
-export const withOperations = (catalog: Catalog, operations: readonly OperationRef[]) => [
-  operationsGroup(operations),
-  ...catalog,
-];
+export const withOperations = (catalog: Catalog, operations: readonly OperationRef[]) =>
+  operations.length === 0 ? catalog : [operationsGroup(operations), ...catalog];
 
 export const handOffTo = (operation: OperationRef) =>
   choiceOf(operationsGroup([]), item(operation.id, operation.name), null);
