@@ -1,0 +1,37 @@
+apps/desktop/src/renderer/src/features/workflow-draft.ts
+  s_8af331634637d7::t_33f1bb43c7c775 2,5,9,21-26,28-31,35,37,39,46,50,52,54-56,58,60,66-69,71-79
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_8af331634637d7::t_cf2a5f6ffed256 40-60
+apps/desktop/src/renderer/src/features/workflow-catalog.ts
+  s_8af331634637d7::t_49db62b06aa587 16
+  s_8af331634637d7::t_3261b379632269 313-316,319,333,335,337,339-341,345-347,350-352,355
+  s_8af331634637d7::t_28efc4899a3fb7 331-332,336,344
+  s_8af331634637d7::t_285095111d157c 342-343
+apps/desktop/src/renderer/src/features/workflow-model.ts
+  s_8af331634637d7::t_49c56cea9210c7 2,11,17,25,38,52,59-61,78-79,82-86,89,100,125,144-146,148,169-171,174,177,179,181,183,205,212,224
+  s_8af331634637d7::t_a7a7af23bb7705 158
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_8af331634637d7::t_a60e14f9e27bad 58-64,66-67,76-78,85-86
+apps/desktop/src/renderer/src/features/workflow-overview.ts
+  s_8af331634637d7::t_e4c57e6f894329 39
+  s_8af331634637d7::t_0a3bc3ccd6a6d2 4
+  s_8af331634637d7::t_8a2a6c05bbb725 17
+apps/desktop/src/renderer/src/features/workflow-mock-data.ts
+  s_8af331634637d7::t_1832cf8db16d27 2,4,11,19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bd8402b7690280177f5ee026a0cfa83e7040a104",
+  "prompts": {},
+  "sessions": {
+    "s_8af331634637d7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c4503883-87bc-43a6-bde6-1cce78b66f2d",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
