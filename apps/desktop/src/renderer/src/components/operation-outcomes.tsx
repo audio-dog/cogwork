@@ -19,37 +19,34 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { RiAddLine, RiArrowRightLine, RiCloseLine, RiErrorWarningLine } from "@remixicon/react";
 import { createContext, Fragment, type ReactNode, use, useState } from "react";
 import { type Catalog, type CatalogChoice, choiceKey, isHandOff } from "../features/workflow-catalog";
+import { bindEdits } from "../features/workflow-draft";
 import {
-  agentInputs,
+  actionsAt,
+  agentInstructions,
   type Choice,
   type Condition,
   combinedRoutes,
   conditionKey,
   conditionParts,
+  namesQuestions,
   type Operation,
   operationEdits,
   type Question,
   routeAt,
-  stepsAt,
   uncovered,
 } from "../features/workflow-model";
 import { CatalogMenu, catalogIconFor } from "./workflow-catalog-menu";
 
 type Update = (change: (operation: Operation) => Operation) => void;
 
-const bindEdits = (update: Update) => {
-  const bind =
-    <Args extends readonly unknown[]>(edit: (operation: Operation, ...args: Args) => Operation) =>
-    (...args: Args) =>
-      update((operation) => edit(operation, ...args));
+const operationActions = (update: Update) => {
+  const bind = bindEdits(update);
   return {
-    removeStep: bind(operationEdits.removeStep),
+    addAction: bind(operationEdits.addAction),
+    removeAction: bind(operationEdits.removeAction),
     addRoute: bind(operationEdits.addRoute),
     removeRoute: bind(operationEdits.removeRoute),
-    setInstruction: (step: CatalogChoice, inputId: string, field: string, hint: string) =>
-      update((operation) =>
-        operationEdits.setInput(operation, step, inputId, { kind: "agent", field, hint }),
-      ),
+    setHint: bind(operationEdits.setHint),
     setQuestionText: bind(operationEdits.setQuestionText),
     renameChoice: bind(operationEdits.renameChoice),
     addChoice: bind(operationEdits.addChoice),
@@ -64,8 +61,8 @@ interface OperationOutcomesContextValue {
     readonly operation: Operation;
     readonly justPicked: string | null;
   };
-  readonly actions: ReturnType<typeof bindEdits> & {
-    readonly pickStep: (when: Condition, step: CatalogChoice) => void;
+  readonly actions: ReturnType<typeof operationActions> & {
+    readonly pickAction: (when: Condition, action: CatalogChoice) => void;
   };
   readonly meta: { readonly catalog: Catalog };
 }
@@ -78,8 +75,8 @@ const useOperationOutcomes = () => {
   return value;
 };
 
-const pickKey = (operation: Operation, when: Condition, step: CatalogChoice) =>
-  `${conditionKey(operation, when)}|${choiceKey(step)}`;
+const pickKey = (operation: Operation, when: Condition, action: CatalogChoice) =>
+  `${conditionKey(operation, when)}|${choiceKey(action)}`;
 
 function Provider({
   operation,
@@ -93,24 +90,30 @@ function Provider({
   readonly children: ReactNode;
 }) {
   const [justPicked, setJustPicked] = useState<string | null>(null);
-  const pickStep = (when: Condition, step: CatalogChoice) => {
-    update((current) => operationEdits.addStep(current, when, step));
-    setJustPicked(pickKey(operation, when, step));
+  const actions = operationActions(update);
+  const pickAction = (when: Condition, action: CatalogChoice) => {
+    actions.addAction(when, action);
+    setJustPicked(pickKey(operation, when, action));
   };
   return (
     <OperationOutcomesContext
-      value={{
-        state: { operation, justPicked },
-        actions: { ...bindEdits(update), pickStep },
-        meta: { catalog },
-      }}
+      value={{ state: { operation, justPicked }, actions: { ...actions, pickAction }, meta: { catalog } }}
     >
       {children}
     </OperationOutcomesContext>
   );
 }
 
-const OutcomeContext = createContext<{ readonly when: Condition } | null>(null);
+interface OutcomeContextValue {
+  readonly state: { readonly when: Condition; readonly actions: readonly CatalogChoice[] };
+  readonly actions: {
+    readonly pick: (action: CatalogChoice) => void;
+    readonly remove: (action: CatalogChoice) => void;
+  };
+  readonly meta: { readonly justPicked: (action: CatalogChoice) => boolean };
+}
+
+const OutcomeContext = createContext<OutcomeContextValue | null>(null);
 
 const useOutcome = () => {
   const value = use(OutcomeContext);
@@ -119,8 +122,21 @@ const useOutcome = () => {
 };
 
 function Outcome({ when, children }: { readonly when: Condition; readonly children: ReactNode }) {
+  const {
+    state: { operation, justPicked },
+    actions,
+  } = useOperationOutcomes();
   return (
-    <OutcomeContext value={{ when }}>
+    <OutcomeContext
+      value={{
+        state: { when, actions: actionsAt(operation, when) },
+        actions: {
+          pick: (action) => actions.pickAction(when, action),
+          remove: (action) => actions.removeAction(when, action),
+        },
+        meta: { justPicked: (action) => justPicked === pickKey(operation, when, action) },
+      }}
+    >
       <div className="group/row flex flex-col gap-0.5 px-3 py-2">{children}</div>
     </OutcomeContext>
   );
@@ -128,12 +144,11 @@ function Outcome({ when, children }: { readonly when: Condition; readonly childr
 
 function AddActionMenu({ children }: { readonly children: ReactNode }) {
   const {
-    actions,
     meta: { catalog },
   } = useOperationOutcomes();
-  const { when } = useOutcome();
+  const { actions } = useOutcome();
   return (
-    <CatalogMenu.Root catalog={catalog} onChoose={(step) => actions.pickStep(when, step)}>
+    <CatalogMenu.Root catalog={catalog} onChoose={actions.pick}>
       {children}
       <CatalogMenu.Content placeholder="Search" />
     </CatalogMenu.Root>
@@ -141,14 +156,11 @@ function AddActionMenu({ children }: { readonly children: ReactNode }) {
 }
 
 function OutcomeHeading({ children }: { readonly children: ReactNode }) {
-  const {
-    state: { operation },
-  } = useOperationOutcomes();
-  const { when } = useOutcome();
+  const { state } = useOutcome();
   return (
     <div className="flex h-7 items-center gap-2">
       {children}
-      {stepsAt(operation, when).length > 0 ? (
+      {state.actions.length > 0 ? (
         <AddActionMenu>
           <CatalogMenu.Trigger
             render={
@@ -182,33 +194,32 @@ function RemoveOnHover({ label, onRemove }: { readonly label: string; readonly o
   );
 }
 
-function StepLabel({ step }: { readonly step: CatalogChoice }) {
-  const Icon = catalogIconFor(step.icon);
+function ActionLabel({ action }: { readonly action: CatalogChoice }) {
+  const Icon = catalogIconFor(action.icon);
   return (
     <>
       <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="truncate">{step.itemName}</span>
-      {step.optionName ? (
-        <span className="font-mono text-[11px] text-muted-foreground">{step.optionName}</span>
+      <span className="truncate">{action.itemName}</span>
+      {action.optionName ? (
+        <span className="font-mono text-[11px] text-muted-foreground">{action.optionName}</span>
       ) : null}
     </>
   );
 }
 
-/** Module-level so its identity never changes: React calls it once on attach, not on every keystroke. */
+// Module-level so the ref callback keeps one identity: an inline one would refocus on every keystroke.
 const focusOnAttach = (node: HTMLTextAreaElement | null) => {
   node?.focus();
 };
 
-function Instructions({ step }: { readonly step: CatalogChoice }) {
+function Instructions({ action }: { readonly action: CatalogChoice }) {
   const {
-    state: { operation, justPicked },
+    state: { operation },
     actions,
   } = useOperationOutcomes();
-  const { when } = useOutcome();
-  const instructed = agentInputs(operation, step);
-  const fresh = justPicked === pickKey(operation, when, step);
-  const several = instructed.length > 1;
+  const { meta } = useOutcome();
+  const instructions = agentInstructions(operation, action);
+  const several = instructions.length > 1;
   return (
     <div
       className={cn(
@@ -217,19 +228,20 @@ function Instructions({ step }: { readonly step: CatalogChoice }) {
         !several && "grid-cols-[minmax(0,1fr)]",
       )}
     >
-      {instructed.map(({ entry, source }, index) => (
-        <Fragment key={entry.id}>
+      {instructions.map(({ input, hint }, index) => (
+        <Fragment key={input.id}>
           {several ? (
-            <span className="flex h-[26px] items-center text-xs text-muted-foreground">{entry.label}</span>
+            <span className="flex h-[26px] items-center text-xs text-muted-foreground">{input.label}</span>
           ) : null}
           <Textarea
-            ref={fresh && index === 0 ? focusOnAttach : undefined}
+            variant="ghost"
+            ref={meta.justPicked(action) && index === 0 ? focusOnAttach : undefined}
             rows={1}
-            aria-label={`What the agent writes for the ${entry.label.toLowerCase()}`}
-            value={source.hint}
+            aria-label={`What the agent writes for the ${input.label.toLowerCase()}`}
+            value={hint}
             placeholder="What to write"
-            className="min-h-0 w-auto max-w-full min-w-24 resize-none rounded-sm border-0 bg-transparent px-1 py-[5px] text-xs leading-4 shadow-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-0 md:text-xs dark:bg-transparent"
-            onChange={(event) => actions.setInstruction(step, entry.id, source.field, event.target.value)}
+            className="w-auto max-w-full min-w-24 rounded-sm py-[5px] text-xs leading-4"
+            onChange={(event) => actions.setHint(action, input.id, event.target.value)}
           />
         </Fragment>
       ))}
@@ -237,21 +249,20 @@ function Instructions({ step }: { readonly step: CatalogChoice }) {
   );
 }
 
-function ActionLine({ step }: { readonly step: CatalogChoice }) {
-  const { actions } = useOperationOutcomes();
-  const { when } = useOutcome();
+function ActionLine({ action }: { readonly action: CatalogChoice }) {
+  const { actions } = useOutcome();
   return (
     <div className="group/action grid grid-cols-[minmax(0,15rem)_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-1.5 hover:bg-muted/40">
       <span className="flex h-[26px] min-w-0 items-center gap-1.5 text-xs whitespace-nowrap">
-        <StepLabel step={step} />
+        <ActionLabel action={action} />
       </span>
-      <Instructions step={step} />
+      <Instructions action={action} />
       <Button
         size="icon-xs"
         variant="ghost"
-        aria-label={`Remove ${step.itemName}`}
+        aria-label={`Remove ${action.itemName}`}
         className="mt-0.5 opacity-0 group-hover/action:opacity-100 focus-visible:opacity-100"
-        onClick={() => actions.removeStep(when, step)}
+        onClick={() => actions.remove(action)}
       >
         <RiCloseLine />
       </Button>
@@ -259,19 +270,18 @@ function ActionLine({ step }: { readonly step: CatalogChoice }) {
   );
 }
 
-function HandOffLine({ step }: { readonly step: CatalogChoice }) {
-  const { actions } = useOperationOutcomes();
-  const { when } = useOutcome();
+function HandOffLine({ action }: { readonly action: CatalogChoice }) {
+  const { actions } = useOutcome();
   return (
     <div className="group/action flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs hover:bg-muted/40">
       <RiArrowRightLine className="size-3.5 text-muted-foreground" />
-      <span className="font-medium">{step.itemName}</span>
+      <span className="font-medium">{action.itemName}</span>
       <Button
         size="icon-xs"
         variant="ghost"
-        aria-label={`Stop handing off to ${step.itemName}`}
+        aria-label={`Stop handing off to ${action.itemName}`}
         className="ms-auto opacity-0 group-hover/action:opacity-100 focus-visible:opacity-100"
-        onClick={() => actions.removeStep(when, step)}
+        onClick={() => actions.remove(action)}
       >
         <RiCloseLine />
       </Button>
@@ -279,23 +289,19 @@ function HandOffLine({ step }: { readonly step: CatalogChoice }) {
   );
 }
 
-function OutcomeSteps() {
-  const {
-    state: { operation },
-  } = useOperationOutcomes();
-  const { when } = useOutcome();
-  const steps = stepsAt(operation, when);
+function OutcomeActions() {
+  const { state } = useOutcome();
   return (
     <div className="ms-2.5 flex flex-col gap-0.5 border-s ps-2">
-      {steps
-        .filter((step) => !isHandOff(step))
-        .map((step) => (
-          <ActionLine key={choiceKey(step)} step={step} />
+      {state.actions
+        .filter((action) => !isHandOff(action))
+        .map((action) => (
+          <ActionLine key={choiceKey(action)} action={action} />
         ))}
-      {steps.filter(isHandOff).map((step) => (
-        <HandOffLine key={choiceKey(step)} step={step} />
+      {state.actions.filter(isHandOff).map((action) => (
+        <HandOffLine key={choiceKey(action)} action={action} />
       ))}
-      {steps.length === 0 ? (
+      {state.actions.length === 0 ? (
         <AddActionMenu>
           <CatalogMenu.Trigger
             render={<Button size="xs" variant="ghost" className="w-fit font-normal text-muted-foreground" />}
@@ -325,7 +331,9 @@ function ConditionBadges({ when }: { readonly when: Condition }) {
     <span className="flex flex-wrap items-center gap-1">
       {parts.map((part) => (
         <Badge key={part.questionId} variant="secondary" className="font-mono text-[11px] font-normal">
-          {operation.questions.length > 1 ? <span className="text-muted-foreground">{part.key}</span> : null}
+          {namesQuestions(operation) ? (
+            <span className="text-muted-foreground">{part.questionId}</span>
+          ) : null}
           {part.choice}
         </Badge>
       ))}
@@ -333,22 +341,15 @@ function ConditionBadges({ when }: { readonly when: Condition }) {
   );
 }
 
-function OutcomeName({
-  question,
-  choice,
-  index,
-}: {
-  readonly question: Question;
-  readonly choice: Choice;
-  readonly index: number;
-}) {
+function OutcomeName({ question, choice }: { readonly question: Question; readonly choice: Choice }) {
   const { actions } = useOperationOutcomes();
   return (
     <span className="flex w-56 max-w-full min-w-0 items-center gap-0.5">
       <Input
+        variant="ghost"
         value={choice.name}
-        aria-label={`Outcome ${index + 1}`}
-        className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1.5 font-mono text-[13px] shadow-none hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-0 dark:bg-transparent"
+        aria-label={`Outcome ${question.choices.indexOf(choice) + 1}`}
+        className="h-7 flex-1 px-1.5 font-mono text-[13px]"
         onChange={(event) => actions.renameChoice(question.id, choice.id, event.target.value)}
       />
       <RemoveOnHover
@@ -359,48 +360,49 @@ function OutcomeName({
   );
 }
 
-function QuestionLine({ question, index }: { readonly question: Question; readonly index: number }) {
+function QuestionLine({ question }: { readonly question: Question }) {
   const {
     state: { operation },
     actions,
   } = useOperationOutcomes();
-  const alone = operation.questions.length === 1;
+  const label = `Question ${operation.questions.indexOf(question) + 1}`;
   return (
     <div className="group/question flex items-center gap-2 px-3 pt-3 pb-1">
       <Input
+        variant="ghost"
         value={question.text}
         placeholder="Question"
-        aria-label={alone ? "Question" : `Question ${index + 1}`}
-        className="h-7 flex-1 border-0 bg-transparent px-1 text-sm font-medium shadow-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-0 dark:bg-transparent"
+        aria-label={label}
+        className="h-7 flex-1 text-sm font-medium"
         onChange={(event) => actions.setQuestionText(question.id, event.target.value)}
       />
-      {alone ? null : (
+      {namesQuestions(operation) ? (
         <Button
           size="icon-xs"
           variant="ghost"
-          aria-label={`Remove question ${index + 1}`}
+          aria-label={`Remove ${label.toLowerCase()}`}
           className="opacity-0 group-hover/question:opacity-100 focus-visible:opacity-100"
           onClick={() => actions.removeQuestion(question.id)}
         >
           <RiCloseLine />
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }
 
-function QuestionBlock({ question, index }: { readonly question: Question; readonly index: number }) {
+function QuestionBlock({ question }: { readonly question: Question }) {
   const { actions } = useOperationOutcomes();
   return (
     <div className="flex flex-col border-b pb-2 last:border-b-0">
-      <QuestionLine question={question} index={index} />
+      <QuestionLine question={question} />
       <div className="flex flex-col divide-y divide-border/60">
-        {question.choices.map((choice, at) => (
+        {question.choices.map((choice) => (
           <Outcome key={choice.id} when={{ [question.id]: choice.id }}>
             <OutcomeHeading>
-              <OutcomeName question={question} choice={choice} index={at} />
+              <OutcomeName question={question} choice={choice} />
             </OutcomeHeading>
-            <OutcomeSteps />
+            <OutcomeActions />
           </Outcome>
         ))}
       </div>
@@ -426,7 +428,7 @@ function EveryTime() {
           <span className="ps-1.5 text-sm text-muted-foreground">Every time</span>
           <RemoveOnHover label="Stop running anything every time" onRemove={() => actions.removeRoute({})} />
         </OutcomeHeading>
-        <OutcomeSteps />
+        <OutcomeActions />
       </Outcome>
     </div>
   );
@@ -449,18 +451,68 @@ function Combinations() {
             </span>
             <RemoveOnHover label="Remove this combination" onRemove={() => actions.removeRoute(route.when)} />
           </OutcomeHeading>
-          <OutcomeSteps />
+          <OutcomeActions />
         </Outcome>
       ))}
     </div>
   );
 }
 
-function CombinationMenu() {
+function CombinationLevel({ prefix, after }: { readonly prefix: Condition; readonly after: number }) {
   const {
     state: { operation },
     actions,
   } = useOperationOutcomes();
+  const last = operation.questions.length - 1;
+  const atTop = Object.keys(prefix).length === 0;
+  const canJoin = (index: number) => index > after && !(atTop && index === last);
+  const candidates = operation.questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ index }) => canJoin(index));
+  return candidates.map(({ question, index }, at) => (
+    <DropdownMenuGroup key={question.id}>
+      {at > 0 ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuLabel className="font-mono">{question.id}</DropdownMenuLabel>
+      {question.choices.map((choice) => {
+        const when = { ...prefix, [question.id]: choice.id };
+        if (index === last) {
+          return (
+            <DropdownMenuItem
+              key={choice.id}
+              label={choice.name}
+              className="font-mono text-xs"
+              onClick={() => actions.addRoute(when)}
+            >
+              {choice.name}
+            </DropdownMenuItem>
+          );
+        }
+        return (
+          <DropdownMenuSub key={choice.id}>
+            <DropdownMenuSubTrigger label={choice.name} className="font-mono text-xs">
+              {choice.name}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="min-w-48">
+              {atTop ? null : (
+                <>
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onClick={() => actions.addRoute(when)}>
+                      This combination
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <CombinationLevel prefix={when} after={index} />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        );
+      })}
+    </DropdownMenuGroup>
+  ));
+}
+
+function CombinationMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -472,45 +524,7 @@ function CombinationMenu() {
         }
       />
       <DropdownMenuContent className="w-56">
-        <DropdownMenuGroup>
-          {operation.questions.slice(0, -1).map((question, index) => (
-            <DropdownMenuSub key={question.id}>
-              <DropdownMenuSubTrigger label={question.key}>
-                <span className="font-mono text-xs">{question.key}</span>
-                <span className="text-muted-foreground">is…</span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="min-w-44">
-                {question.choices.map((choice) => (
-                  <DropdownMenuSub key={choice.id}>
-                    <DropdownMenuSubTrigger label={choice.name} className="font-mono text-xs">
-                      {choice.name}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="min-w-48">
-                      {operation.questions.slice(index + 1).map((later, at) => (
-                        <DropdownMenuGroup key={later.id}>
-                          {at > 0 ? <DropdownMenuSeparator /> : null}
-                          <DropdownMenuLabel className="font-mono">and {later.key} is</DropdownMenuLabel>
-                          {later.choices.map((laterChoice) => (
-                            <DropdownMenuItem
-                              key={laterChoice.id}
-                              label={laterChoice.name}
-                              className="font-mono text-xs"
-                              onClick={() =>
-                                actions.addRoute({ [question.id]: choice.id, [later.id]: laterChoice.id })
-                              }
-                            >
-                              {laterChoice.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuGroup>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          ))}
-        </DropdownMenuGroup>
+        <CombinationLevel prefix={{}} after={-1} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -558,12 +572,12 @@ function Footer() {
           size="xs"
           variant="ghost"
           className="font-normal text-muted-foreground"
-          onClick={actions.addQuestion}
+          onClick={() => actions.addQuestion()}
         >
           <RiAddLine data-icon="inline-start" />
           Add question
         </Button>
-        {operation.questions.length > 1 ? <CombinationMenu /> : null}
+        {namesQuestions(operation) ? <CombinationMenu /> : null}
       </div>
       <UncoveredNotice />
     </>
@@ -578,8 +592,8 @@ function List() {
     <div className="flex flex-col gap-2">
       <div className="flex flex-col overflow-hidden rounded-lg border bg-background">
         {routeAt(operation, {}) ? <EveryTime /> : null}
-        {operation.questions.map((question, index) => (
-          <QuestionBlock key={question.id} question={question} index={index} />
+        {operation.questions.map((question) => (
+          <QuestionBlock key={question.id} question={question} />
         ))}
         <Combinations />
       </div>

@@ -1,6 +1,7 @@
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@cogwork/ui/components/collapsible";
+import { Separator } from "@cogwork/ui/components/separator";
 import { Switch } from "@cogwork/ui/components/switch";
 import { cn } from "@cogwork/ui/lib/utils";
 import {
@@ -16,14 +17,13 @@ import { Link } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { choiceKey } from "../features/workflow-catalog";
 import { mockWorkflows } from "../features/workflow-mock-data";
+import { conditionKey, conditionLabel, type Operation, type Workflow } from "../features/workflow-model";
 import {
-  type Condition,
-  conditionKey,
-  conditionLabel,
-  type Operation,
-  type Workflow,
-} from "../features/workflow-model";
-import { type ConsequenceKind, consequenceOf, outcomeRowsOf, spineOf } from "../features/workflow-overview";
+  type ConsequenceKind,
+  consequenceOf,
+  operationsInOrder,
+  outcomeRowsOf,
+} from "../features/workflow-overview";
 import { catalogIconFor } from "./workflow-catalog-menu";
 
 const consequenceIcons: Record<Exclude<ConsequenceKind, "nothing">, ComponentType<{ className?: string }>> = {
@@ -35,10 +35,6 @@ const consequenceIcons: Record<Exclude<ConsequenceKind, "nothing">, ComponentTyp
 };
 
 const isTouchpoint = (kind: ConsequenceKind) => kind === "approval" || kind === "notification";
-
-function Connector() {
-  return <span className="ms-4 h-3 w-px bg-border" />;
-}
 
 function Triggers({ workflow }: { readonly workflow: Workflow }) {
   return (
@@ -64,48 +60,6 @@ function Triggers({ workflow }: { readonly workflow: Workflow }) {
   );
 }
 
-function OutcomeRow({
-  operation,
-  when,
-  nextId,
-}: {
-  readonly operation: Operation;
-  readonly when: Condition;
-  readonly nextId: string | null;
-}) {
-  const consequence = consequenceOf(operation, when);
-  const continues = consequence.kind === "operation" && consequence.step?.itemId === nextId;
-  const Icon = consequence.kind === "nothing" ? null : consequenceIcons[consequence.kind];
-  return (
-    <div className="grid grid-cols-[minmax(0,11rem)_1fr] items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5">
-      <Badge
-        variant={continues ? "secondary" : "outline"}
-        className="w-fit max-w-full truncate font-mono text-[10px] font-normal"
-      >
-        {conditionLabel(operation, when)}
-      </Badge>
-      <span
-        className={cn(
-          "flex items-center gap-1.5 text-xs",
-          continues && "font-medium text-foreground",
-          !continues && "text-muted-foreground",
-        )}
-      >
-        {Icon ? (
-          <Icon
-            className={cn(
-              "size-3.5 shrink-0",
-              isTouchpoint(consequence.kind) && "text-primary",
-              !isTouchpoint(consequence.kind) && "opacity-70",
-            )}
-          />
-        ) : null}
-        {consequence.name}
-      </span>
-    </div>
-  );
-}
-
 function OperationCard({
   operation,
   nextId,
@@ -120,23 +74,56 @@ function OperationCard({
         <span className="text-sm font-medium">{operation.name}</span>
       </div>
       <div className="flex flex-col gap-1">
-        {outcomeRowsOf(operation).map((when) => (
-          <OutcomeRow key={conditionKey(operation, when)} operation={operation} when={when} nextId={nextId} />
-        ))}
+        {outcomeRowsOf(operation).map((when) => {
+          const consequence = consequenceOf(operation, when);
+          const continues = consequence.kind === "operation" && consequence.action?.itemId === nextId;
+          const Icon = consequence.kind === "nothing" ? null : consequenceIcons[consequence.kind];
+          return (
+            <div
+              key={conditionKey(operation, when)}
+              className="grid grid-cols-[minmax(0,11rem)_1fr] items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5"
+            >
+              <Badge
+                variant={continues ? "secondary" : "outline"}
+                className="w-fit max-w-full truncate font-mono text-[10px] font-normal"
+              >
+                {conditionLabel(operation, when)}
+              </Badge>
+              <span
+                className={cn(
+                  "flex items-center gap-1.5 text-xs",
+                  continues && "font-medium text-foreground",
+                  !continues && "text-muted-foreground",
+                )}
+              >
+                {Icon ? (
+                  <Icon
+                    className={cn(
+                      "size-3.5 shrink-0",
+                      isTouchpoint(consequence.kind) && "text-primary",
+                      !isTouchpoint(consequence.kind) && "opacity-70",
+                    )}
+                  />
+                ) : null}
+                {consequence.name}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 function WorkflowShape({ workflow }: { readonly workflow: Workflow }) {
-  const spine = spineOf(workflow);
+  const operations = operationsInOrder(workflow);
   return (
     <div className="flex flex-col">
       <Triggers workflow={workflow} />
-      {spine.map((operation, index) => (
+      {operations.map((operation, index) => (
         <div key={operation.id} className="flex flex-col">
-          <Connector />
-          <OperationCard operation={operation} nextId={spine[index + 1]?.id ?? null} />
+          <Separator orientation="vertical" className="ms-4 h-3" />
+          <OperationCard operation={operation} nextId={operations[index + 1]?.id ?? null} />
         </div>
       ))}
     </div>
@@ -149,14 +136,14 @@ function WorkflowRow({ workflow }: { readonly workflow: Workflow }) {
       <div className="flex items-center gap-3 px-3 py-2">
         <CollapsibleTrigger
           render={
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               aria-label={`Show ${workflow.name}`}
-              className="group/row flex min-w-0 flex-1 items-center gap-3 text-start outline-none"
+              className="group/row min-w-0 flex-1 justify-start gap-3"
             />
           }
         >
-          <RiArrowRightSLine className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/row:rotate-90" />
+          <RiArrowRightSLine className="text-muted-foreground transition-transform group-data-[panel-open]/row:rotate-90" />
           <span className="truncate text-sm font-medium">{workflow.name}</span>
           <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
             {workflow.triggers.map((trigger) => {
@@ -165,12 +152,6 @@ function WorkflowRow({ workflow }: { readonly workflow: Workflow }) {
             })}
           </span>
         </CollapsibleTrigger>
-        {workflow.waiting > 0 ? (
-          <Badge variant="secondary" className="shrink-0">
-            <RiPauseCircleLine data-icon="inline-start" />
-            {workflow.waiting} waiting
-          </Badge>
-        ) : null}
         <Switch size="sm" defaultChecked={workflow.enabled} aria-label={`Turn ${workflow.name} on`} />
       </div>
       <CollapsibleContent>

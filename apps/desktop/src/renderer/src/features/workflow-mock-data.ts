@@ -1,14 +1,13 @@
 import { type CatalogChoice, handOffTo, pickAction, pickTrigger } from "./workflow-catalog";
 import type { Condition, Question, Route, Workflow } from "./workflow-model";
 
-const question = (key: string, text: string, ...choices: readonly string[]) => ({
-  id: key,
-  key,
+const question = (id: string, text: string, ...choices: readonly string[]) => ({
+  id,
   text,
   choices: choices.map((name) => ({ id: name, name })),
 });
 
-const route = (when: Condition, ...steps: readonly CatalogChoice[]) => ({ when, steps });
+const route = (when: Condition, ...actions: readonly CatalogChoice[]) => ({ when, actions });
 
 const operation = (
   id: string,
@@ -23,7 +22,7 @@ const operation = (
   model: { harness: null, model: null },
   questions,
   routes,
-  inputs: {},
+  hints: {},
 });
 
 const implement = { id: "implement", name: "Implement" };
@@ -35,7 +34,7 @@ export const mockWorkflows: readonly Workflow[] = [
     id: "triage-implement-follow-up",
     name: "Triage → Implement → Follow-up",
     enabled: true,
-    workspaces: ["cogwork", "feldspar", "colony-site"],
+    workspaces: { kind: "every" },
     triggers: [pickTrigger("github", "issue-labelled", "needs-triage")],
     operations: [
       operation(
@@ -93,13 +92,12 @@ export const mockWorkflows: readonly Workflow[] = [
         ],
       ),
     ],
-    waiting: 2,
   },
   {
     id: "granola-issue",
     name: "Granola → Issue",
     enabled: true,
-    workspaces: ["cogwork"],
+    workspaces: { kind: "listed", names: ["cogwork"] },
     triggers: [pickTrigger("granola", "transcript")],
     operations: [
       operation(
@@ -126,13 +124,12 @@ export const mockWorkflows: readonly Workflow[] = [
         ],
       ),
     ],
-    waiting: 1,
   },
   {
     id: "slack-review",
     name: "Slack → Review",
     enabled: true,
-    workspaces: ["cogwork", "feldspar"],
+    workspaces: { kind: "listed", names: ["cogwork"] },
     triggers: [pickTrigger("slack", "directed")],
     operations: [
       operation(
@@ -157,13 +154,12 @@ export const mockWorkflows: readonly Workflow[] = [
         ],
       ),
     ],
-    waiting: 0,
   },
   {
     id: "staleness-sweep",
     name: "Staleness sweep",
     enabled: true,
-    workspaces: ["cogwork", "feldspar", "colony-site"],
+    workspaces: { kind: "every" },
     triggers: [pickTrigger("schedule", "daily", "08:00")],
     operations: [
       operation(
@@ -177,13 +173,12 @@ export const mockWorkflows: readonly Workflow[] = [
         ],
       ),
     ],
-    waiting: 0,
   },
   {
     id: "pr-merged-verify",
     name: "PR merged → Verify",
     enabled: false,
-    workspaces: [],
+    workspaces: { kind: "listed", names: [] },
     triggers: [pickTrigger("github", "pull-request", "Merged")],
     operations: [
       operation(
@@ -208,13 +203,12 @@ export const mockWorkflows: readonly Workflow[] = [
         ],
       ),
     ],
-    waiting: 0,
   },
   {
     id: "monday-digest",
     name: "Monday digest",
     enabled: false,
-    workspaces: ["cogwork"],
+    workspaces: { kind: "listed", names: ["cogwork"] },
     triggers: [pickTrigger("schedule", "weekly", "Monday")],
     operations: [
       operation(
@@ -228,7 +222,6 @@ export const mockWorkflows: readonly Workflow[] = [
         ],
       ),
     ],
-    waiting: 0,
   },
 ];
 
@@ -240,8 +233,7 @@ export const untitledWorkflow: Workflow = {
   id: "new",
   name: "Untitled Workflow",
   enabled: false,
-  workspaces: [],
+  workspaces: { kind: "listed", names: [] },
   triggers: [],
   operations: [],
-  waiting: 0,
 };

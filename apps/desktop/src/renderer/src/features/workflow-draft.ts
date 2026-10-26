@@ -1,18 +1,30 @@
 import { useState } from "react";
 import { type CatalogChoice, isHandOff, sameChoice } from "./workflow-catalog";
-import { blankOperation, type Operation, operationEdits, type Workflow } from "./workflow-model";
+import {
+  blankOperation,
+  type Operation,
+  operationEdits,
+  type Workflow,
+  type WorkspaceScope,
+} from "./workflow-model";
+
+export const bindEdits =
+  <T>(update: (change: (current: T) => T) => void) =>
+  <Args extends readonly unknown[]>(edit: (current: T, ...args: Args) => T) =>
+  (...args: Args) =>
+    update((current) => edit(current, ...args));
 
 const mapHandOffsTo = (
   operation: Operation,
   targetId: string,
-  change: (step: CatalogChoice) => CatalogChoice | null,
+  change: (action: CatalogChoice) => CatalogChoice | null,
 ) => ({
   ...operation,
   routes: operation.routes.map((route) => ({
     ...route,
-    steps: route.steps.flatMap((step) => {
-      if (!isHandOff(step) || step.itemId !== targetId) return [step];
-      const next = change(step);
+    actions: route.actions.flatMap((action) => {
+      if (!isHandOff(action) || action.itemId !== targetId) return [action];
+      const next = change(action);
       return next ? [next] : [];
     }),
   })),
@@ -27,10 +39,12 @@ const updateWhere = (
 export const workflowEdits = {
   rename: (workflow: Workflow, name: string) => ({ ...workflow, name }),
   setEnabled: (workflow: Workflow, enabled: boolean) => ({ ...workflow, enabled }),
-  setWorkspaces: (workflow: Workflow, workspaces: readonly string[]) => ({ ...workflow, workspaces }),
+  setWorkspaces: (workflow: Workflow, workspaces: WorkspaceScope) => ({ ...workflow, workspaces }),
   addTrigger: (workflow: Workflow, trigger: CatalogChoice) => ({
     ...workflow,
-    triggers: [...workflow.triggers, trigger],
+    triggers: workflow.triggers.some((existing) => sameChoice(existing, trigger))
+      ? workflow.triggers
+      : [...workflow.triggers, trigger],
   }),
   removeTrigger: (workflow: Workflow, trigger: CatalogChoice) => ({
     ...workflow,
@@ -53,7 +67,7 @@ export const workflowEdits = {
     ...workflow,
     operations: updateWhere(workflow.operations, id, (operation) =>
       operationEdits.rename(operation, name),
-    ).map((operation) => mapHandOffsTo(operation, id, (step) => ({ ...step, itemName: name }))),
+    ).map((operation) => mapHandOffsTo(operation, id, (action) => ({ ...action, itemName: name }))),
   }),
   updateOperation: (workflow: Workflow, id: string, edit: (operation: Operation) => Operation) => ({
     ...workflow,
@@ -63,10 +77,7 @@ export const workflowEdits = {
 
 export function useWorkflowDraft(seed: Workflow) {
   const [workflow, setWorkflow] = useState(seed);
-  const bind =
-    <Args extends readonly unknown[]>(edit: (workflow: Workflow, ...args: Args) => Workflow) =>
-    (...args: Args) =>
-      setWorkflow((current) => edit(current, ...args));
+  const bind = bindEdits(setWorkflow);
   const actions = {
     rename: bind(workflowEdits.rename),
     setEnabled: bind(workflowEdits.setEnabled),

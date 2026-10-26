@@ -1,5 +1,5 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { type CatalogChoice, choiceKey, type InputSource, sameChoice } from "./workflow-catalog";
+import { type AgentInput, type CatalogChoice, choiceKey, sameChoice } from "./workflow-catalog";
 
 export interface Choice {
   readonly id: string;
@@ -8,18 +8,15 @@ export interface Choice {
 
 export interface Question {
   readonly id: string;
-  /** The property the agent's answer is returned under in the structured output. */
-  readonly key: string;
   readonly text: string;
   readonly choices: readonly Choice[];
 }
 
-/** Question id → choice id. */
-export type Condition = Readonly<Record<string, string>>;
+export type Condition = Readonly<Record<Question["id"], Choice["id"]>>;
 
 export interface Route {
   readonly when: Condition;
-  readonly steps: readonly CatalogChoice[];
+  readonly actions: readonly CatalogChoice[];
 }
 
 /** Null leaves the choice to the Operation settings. */
@@ -35,21 +32,23 @@ export interface Operation {
   readonly model: ModelChoice;
   readonly questions: readonly Question[];
   readonly routes: readonly Route[];
-  /** Keyed by `choiceKey` then input id, so a step on several routes shares one setting. */
-  readonly inputs: Readonly<Record<string, Readonly<Record<string, InputSource>>>>;
+  /** Keyed by `choiceKey` then input id, so an Action on several routes shares one hint. */
+  readonly hints: Readonly<Record<string, Readonly<Record<AgentInput["id"], string>>>>;
 }
+
+export type WorkspaceScope =
+  | { readonly kind: "every" }
+  | { readonly kind: "listed"; readonly names: readonly string[] };
 
 export interface Workflow {
   readonly id: string;
   readonly name: string;
   readonly enabled: boolean;
-  readonly workspaces: readonly string[];
+  readonly workspaces: WorkspaceScope;
   readonly triggers: readonly CatalogChoice[];
   readonly operations: readonly Operation[];
-  readonly waiting: number;
 }
 
-/** In question order, not insertion order, so equal conditions always share a key. */
 export const conditionKey = (operation: Operation, when: Condition) =>
   operation.questions
     .filter((question) => when[question.id] !== undefined)
@@ -61,6 +60,8 @@ const sameCondition = (operation: Operation, a: Condition, b: Condition) =>
 
 const isEvery = (when: Condition) => Object.keys(when).length === 0;
 
+export const namesQuestions = (operation: Operation) => operation.questions.length > 1;
+
 const choiceName = (operation: Operation, questionId: string, choiceId: string) =>
   operation.questions
     .find((question) => question.id === questionId)
@@ -71,19 +72,14 @@ export const conditionParts = (operation: Operation, when: Condition) =>
     .filter((question) => when[question.id] !== undefined)
     .map((question) => ({
       questionId: question.id,
-      key: question.key,
       choice: choiceName(operation, question.id, when[question.id] ?? ""),
     }));
 
-type ConditionPart = ReturnType<typeof conditionParts>[number];
-
 export const conditionLabel = (operation: Operation, when: Condition) => {
   if (isEvery(when)) return "Every time";
-  const label =
-    operation.questions.length === 1
-      ? (part: ConditionPart) => part.choice
-      : (part: ConditionPart) => `${part.key}: ${part.choice}`;
-  return conditionParts(operation, when).map(label).join(" · ");
+  return conditionParts(operation, when)
+    .map((part) => (namesQuestions(operation) ? `${part.questionId}: ${part.choice}` : part.choice))
+    .join(" · ");
 };
 
 const combinations = (questions: readonly Question[]) =>
@@ -99,36 +95,33 @@ const matches = (when: Condition, answers: Condition) =>
 export const routeAt = (operation: Operation, when: Condition) =>
   operation.routes.find((route) => sameCondition(operation, route.when, when));
 
-export const stepsAt = (operation: Operation, when: Condition) => routeAt(operation, when)?.steps ?? [];
-
-const stepsFor = (operation: Operation, answers: Condition) =>
-  operation.routes
-    .filter((route) => matches(route.when, answers))
-    .flatMap((route) => route.steps.map((step) => ({ step, from: route.when })));
+export const actionsAt = (operation: Operation, when: Condition) => routeAt(operation, when)?.actions ?? [];
 
 export const uncovered = (operation: Operation) =>
-  combinations(operation.questions).filter((answers) => stepsFor(operation, answers).length === 0);
+  combinations(operation.questions).filter(
+    (answers) => !operation.routes.some((route) => matches(route.when, answers) && route.actions.length > 0),
+  );
 
 export const combinedRoutes = (operation: Operation) =>
   operation.routes.filter((route) => Object.keys(route.when).length > 1);
 
-export const agentInputs = (operation: Operation, step: CatalogChoice) =>
-  step.inputs.flatMap((entry) => {
-    const source = operation.inputs[choiceKey(step)]?.[entry.id] ?? entry.source;
-    return source.kind === "agent" ? [{ entry, source }] : [];
-  });
+export const agentInstructions = (operation: Operation, action: CatalogChoice) =>
+  action.agentInputs.map((input) => ({
+    input,
+    hint: operation.hints[choiceKey(action)]?.[input.id] ?? input.hint,
+  }));
 
 const withRoute = (
   operation: Operation,
   when: Condition,
-  change: (steps: readonly CatalogChoice[]) => readonly CatalogChoice[],
+  change: (actions: readonly CatalogChoice[]) => readonly CatalogChoice[],
 ) => {
   const existing = routeAt(operation, when);
-  if (!existing) return { ...operation, routes: [...operation.routes, { when, steps: change([]) }] };
+  if (!existing) return { ...operation, routes: [...operation.routes, { when, actions: change([]) }] };
   return {
     ...operation,
     routes: operation.routes.map((route) =>
-      route === existing ? { ...route, steps: change(route.steps) } : route,
+      route === existing ? { ...route, actions: change(route.actions) } : route,
     ),
   };
 };
@@ -147,7 +140,6 @@ const freshId = (prefix: string, taken: readonly string[]) =>
 
 const yesOrNo = (id: string) => ({
   id,
-  key: id,
   text: "",
   choices: [
     { id: "yes", name: "yes" },
@@ -162,29 +154,29 @@ export const blankOperation = (taken: readonly string[]) => ({
   model: { harness: null, model: null },
   questions: [yesOrNo("outcome")],
   routes: [],
-  inputs: {},
+  hints: {},
 });
 
 export const operationEdits = {
   rename: (operation: Operation, name: string) => ({ ...operation, name }),
   instruct: (operation: Operation, instruction: string) => ({ ...operation, instruction }),
   chooseModel: (operation: Operation, model: ModelChoice) => ({ ...operation, model }),
-  addStep: (operation: Operation, when: Condition, step: CatalogChoice) =>
-    withRoute(operation, when, (steps) =>
-      steps.some((existing) => sameChoice(existing, step)) ? steps : [...steps, step],
+  addAction: (operation: Operation, when: Condition, action: CatalogChoice) =>
+    withRoute(operation, when, (actions) =>
+      actions.some((existing) => sameChoice(existing, action)) ? actions : [...actions, action],
     ),
-  removeStep: (operation: Operation, when: Condition, step: CatalogChoice) =>
-    withRoute(operation, when, (steps) => steps.filter((existing) => !sameChoice(existing, step))),
-  addRoute: (operation: Operation, when: Condition) => withRoute(operation, when, (steps) => steps),
+  removeAction: (operation: Operation, when: Condition, action: CatalogChoice) =>
+    withRoute(operation, when, (actions) => actions.filter((existing) => !sameChoice(existing, action))),
+  addRoute: (operation: Operation, when: Condition) => withRoute(operation, when, (actions) => actions),
   removeRoute: (operation: Operation, when: Condition) => ({
     ...operation,
     routes: operation.routes.filter((route) => !sameCondition(operation, route.when, when)),
   }),
-  setInput: (operation: Operation, step: CatalogChoice, inputId: string, source: InputSource) => {
-    const key = choiceKey(step);
+  setHint: (operation: Operation, action: CatalogChoice, inputId: string, hint: string) => {
+    const key = choiceKey(action);
     return {
       ...operation,
-      inputs: { ...operation.inputs, [key]: { ...operation.inputs[key], [inputId]: source } },
+      hints: { ...operation.hints, [key]: { ...operation.hints[key], [inputId]: hint } },
     };
   },
   setQuestionText: (operation: Operation, questionId: string, text: string) =>

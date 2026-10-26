@@ -6,9 +6,8 @@ const comment = pickAction("github", "comment");
 const close = pickAction("github", "close");
 const createIssue = pickAction("github", "create-issue");
 
-const question = (key: string, ...choices: readonly string[]) => ({
-  id: key,
-  key,
+const question = (id: string, ...choices: readonly string[]) => ({
+  id,
   text: "",
   choices: choices.map((name) => ({ id: name, name })),
 });
@@ -20,16 +19,16 @@ const operation = (id: string, overrides: Partial<Operation> = {}): Operation =>
   model: { harness: null, model: null },
   questions: [],
   routes: [],
-  inputs: {},
+  hints: {},
   ...overrides,
 });
 
 const extract = operation("extract", {
   questions: [question("request", "yes", "no"), question("match", "new", "duplicate")],
   routes: [
-    { when: {}, steps: [comment] },
-    { when: { request: "no" }, steps: [close] },
-    { when: { request: "yes", match: "new" }, steps: [createIssue] },
+    { when: {}, actions: [comment] },
+    { when: { request: "no" }, actions: [close] },
+    { when: { request: "yes", match: "new" }, actions: [createIssue] },
   ],
 });
 

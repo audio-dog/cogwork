@@ -15,7 +15,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@cogwork/ui/components/dropdown-menu";
-import { cn } from "@cogwork/ui/lib/utils";
 import {
   RiCalendarScheduleLine,
   RiMicLine,
@@ -26,6 +25,7 @@ import {
 } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use, useState } from "react";
 import {
+  allChoicesIn,
   type Catalog,
   type CatalogChoice,
   type CatalogGroup,
@@ -33,7 +33,6 @@ import {
   type CatalogItem,
   choiceKey,
   choiceOf,
-  leavesOf,
 } from "../features/workflow-catalog";
 
 const catalogIcons: Record<CatalogIcon, ComponentType<{ className?: string }>> = {
@@ -89,7 +88,7 @@ function SearchResults() {
     meta: { catalog },
   } = useCatalogMenu();
   const needle = query.trim().toLowerCase();
-  const results = leavesOf(catalog).filter((choice) =>
+  const results = allChoicesIn(catalog).filter((choice) =>
     `${choice.groupName} ${choice.itemName} ${choice.optionName ?? ""}`.toLowerCase().includes(needle),
   );
   return (
@@ -105,7 +104,6 @@ function SearchResults() {
                 {choice.optionName}
               </Badge>
             ) : null}
-            <span className="ms-auto shrink-0 ps-3 text-xs text-muted-foreground">{choice.groupName}</span>
           </DropdownMenuItem>
         );
       })}
@@ -130,11 +128,11 @@ function CatalogEntry({ group, entry }: { readonly group: CatalogGroup; readonly
       <DropdownMenuSubContent className="min-w-40">
         {entry.options.map((option) => (
           <DropdownMenuItem
-            key={option.id}
-            label={option.name}
-            onClick={() => choose(choiceOf(group, entry, option.name))}
+            key={option}
+            label={option}
+            onClick={() => choose(choiceOf(group, entry, option))}
           >
-            {option.name}
+            {option}
           </DropdownMenuItem>
         ))}
       </DropdownMenuSubContent>
@@ -148,14 +146,11 @@ function ConnectorCascade() {
   } = useCatalogMenu();
   return (
     <DropdownMenuGroup>
-      {catalog.groups.map((group) => {
+      {catalog.map((group) => {
         const Icon = catalogIcons[group.icon];
         return (
           <DropdownMenuSub key={group.id}>
-            <DropdownMenuSubTrigger
-              label={group.name}
-              className={cn(!group.connected && "text-muted-foreground")}
-            >
+            <DropdownMenuSubTrigger label={group.name}>
               <Icon className="text-muted-foreground" />
               <span className="flex-1 truncate">{group.name}</span>
             </DropdownMenuSubTrigger>
@@ -165,11 +160,11 @@ function ConnectorCascade() {
                   <CatalogEntry key={entry.id} group={group} entry={entry} />
                 ))}
               </DropdownMenuGroup>
-              {group.exclusive.length > 0 ? (
+              {group.connectorOnly.length > 0 ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
-                    {group.exclusive.map((entry) => (
+                    {group.connectorOnly.map((entry) => (
                       <CatalogEntry key={entry.id} group={group} entry={entry} />
                     ))}
                   </DropdownMenuGroup>

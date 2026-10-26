@@ -33,7 +33,12 @@ import {
 } from "../features/workflow-catalog";
 import { useWorkflowDraft, type WorkflowDraftActions } from "../features/workflow-draft";
 import { mockWorkspaces } from "../features/workflow-mock-data";
-import { type Operation, operationEdits, type Workflow } from "../features/workflow-model";
+import {
+  type Operation,
+  operationEdits,
+  type Workflow,
+  type WorkspaceScope,
+} from "../features/workflow-model";
 import { OperationOutcomes } from "./operation-outcomes";
 import { ProviderPicker } from "./provider-picker";
 import { CatalogMenu, catalogIconFor } from "./workflow-catalog-menu";
@@ -55,16 +60,8 @@ const useWorkflowEditor = () => {
 const noWorkspace = "none";
 const everyWorkspace = "every";
 
-const workspaceValueRules = [
-  { when: (selected: readonly string[]) => selected.length === 0, value: noWorkspace },
-  {
-    when: (selected: readonly string[], every: readonly string[]) => selected.length === every.length,
-    value: everyWorkspace,
-  },
-];
-
-const workspaceValue = (selected: readonly string[], every: readonly string[]) =>
-  workspaceValueRules.find((rule) => rule.when(selected, every))?.value ?? selected[0] ?? noWorkspace;
+const workspaceValue = (scope: WorkspaceScope) =>
+  scope.kind === "every" ? everyWorkspace : (scope.names[0] ?? noWorkspace);
 
 function WorkspaceSelect() {
   const {
@@ -72,21 +69,25 @@ function WorkspaceSelect() {
     actions,
     meta: { workspaces },
   } = useWorkflowEditor();
-  const items = [
-    { value: noWorkspace, label: "No workspace", workspaces: [] },
-    ...workspaces.map((workspace) => ({ value: workspace, label: workspace, workspaces: [workspace] })),
-    { value: everyWorkspace, label: "Every workspace", workspaces },
+  const items: readonly { value: string; label: string; scope: WorkspaceScope }[] = [
+    { value: noWorkspace, label: "No workspace", scope: { kind: "listed", names: [] } },
+    ...workspaces.map((workspace) => ({
+      value: workspace,
+      label: workspace,
+      scope: { kind: "listed" as const, names: [workspace] },
+    })),
+    { value: everyWorkspace, label: "Every workspace", scope: { kind: "every" } },
   ];
   return (
     <Select
       items={items}
-      value={workspaceValue(workflow.workspaces, workspaces)}
+      value={workspaceValue(workflow.workspaces)}
       onValueChange={(value) => {
         const picked = items.find((item) => item.value === value);
-        if (picked) actions.setWorkspaces(picked.workspaces);
+        if (picked) actions.setWorkspaces(picked.scope);
       }}
     >
-      <SelectTrigger size="sm" className="w-44 border-0 shadow-none" aria-label="Workspaces">
+      <SelectTrigger size="sm" className="w-44" aria-label="Workspaces">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -120,9 +121,10 @@ function EditorHeader() {
           <RiArrowLeftLine />
         </Button>
         <Input
+          variant="ghost"
           value={workflow.name}
           aria-label="Workflow name"
-          className="h-auto flex-1 border-0 bg-transparent px-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
+          className="h-auto flex-1 font-heading text-2xl font-semibold tracking-tight"
           onChange={(event) => actions.rename(event.target.value)}
         />
         <Switch
@@ -249,9 +251,10 @@ function OperationCard({ operation }: { readonly operation: Operation }) {
       <div className="flex items-center gap-2 px-1">
         <RiRobot2Line className="size-4 shrink-0 text-muted-foreground" />
         <Input
+          variant="ghost"
           value={operation.name}
           aria-label="Operation name"
-          className="h-7 flex-1 border-0 bg-transparent px-0 text-sm font-medium shadow-none focus-visible:ring-0 dark:bg-transparent"
+          className="h-7 flex-1 text-sm font-medium"
           onChange={(event) => actions.renameOperation(operation.id, event.target.value)}
         />
         <Button
@@ -266,11 +269,12 @@ function OperationCard({ operation }: { readonly operation: Operation }) {
 
       <div className="flex flex-col gap-1.5 rounded-lg bg-background p-1.5">
         <Textarea
+          variant="ghost"
           rows={3}
           value={operation.instruction}
           aria-label={`Instructions for ${operation.name}`}
           placeholder="Instructions"
-          className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
+          className="min-h-16 py-2 text-sm"
           onChange={(event) =>
             actions.updateOperation(operation.id, (current) =>
               operationEdits.instruct(current, event.target.value),
