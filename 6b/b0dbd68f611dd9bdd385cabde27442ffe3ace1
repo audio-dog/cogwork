@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_f80ef6da3d4491::t_a5ce56458aa09a 1,4-9,11-12,15,18,22,43-47,68,89,110,112-117,119-162,165,167,169-172,175,177,179-180,217-220,222-224,233
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_f80ef6da3d4491::t_c2491f4bfc039b 28-30,36-37,43-47,49-50
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_f80ef6da3d4491::t_cbb437c059ca38 632
+  s_f80ef6da3d4491::t_fdb8146defebca 686-692,696
+  s_f80ef6da3d4491::t_26668091382f6c 3,13-22,55-56,60,66,78,84,110-115,128,130,153-181,183-201,206-219,223,228,236-240,246,255,257-258,261,266-267,288-291,315-319,325-331,335,340,342,348-353,367,369,375,390-399,403,405-412,424,427,430-432,436,444-445,448,450-451,470,503,511-512,539-540,547-548,576,578,580,582-591,595,597,600-631,633-634,638-640,647-656,658-685,693-695,697-701,706-707,709,722,729,731,739-741,745,752,755,763,771,773,782,792,797,800-801,807,817-833,845-853,867-869,872,874-875,879-881,885,900-902,907,911,913-924,926
+apps/desktop/src/renderer/src/features/workflow-parks.test.ts
+  s_f80ef6da3d4491::t_3e8535f626daa6 21
+  s_f80ef6da3d4491::t_f56a546effc754 47-54
+  s_f80ef6da3d4491::t_194a1c5e38ff68 55
+apps/desktop/src/renderer/src/features/workflow-parks-mock-data.ts
+  s_f80ef6da3d4491::t_6ff56c7f5283e3 4,8,24-26,28,30-31,37,44-51,56,59,66-72,80-97,103,106,113-134,137-149,153,157,174,177,183-189,193,199,202,208-226,232,235,245,249,266,270,283,286,290,299,313,324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6bb0dbd68f611dd9bdd385cabde27442ffe3ace1",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
