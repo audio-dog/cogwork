@@ -207,14 +207,9 @@ export const planDigest = (item: ParkedItem, edits: PlanEdits) =>
   );
 
 export const skippedByWorkflow = (records: readonly SkippedRecord[]) =>
-  records
-    .filter(
-      (record, index) => records.findIndex((first) => first.workflow.id === record.workflow.id) === index,
-    )
-    .map(({ workflow }) => ({
-      workflow,
-      records: records.filter((record) => record.workflow.id === workflow.id),
-    }));
+  [...Map.groupBy(records, (record) => record.workflow.id).values()].flatMap(([first, ...rest]) =>
+    first ? [{ workflow: first.workflow, records: [first, ...rest] }] : [],
+  );
 
 export const skippedSummary = (records: readonly SkippedRecord[]) => {
   const steps = records.filter((record) => record.kind === "step").length;
