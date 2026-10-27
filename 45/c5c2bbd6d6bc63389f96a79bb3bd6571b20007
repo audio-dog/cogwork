@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/components/prototype-attention-by-workflow.tsx
+  s_f80ef6da3d4491::t_63144fc4bb3f78 1-22,24-184,186-221,225-233
+  s_f80ef6da3d4491::t_275cdb80610064 222-224
+  s_f80ef6da3d4491::t_9841f9e194c35f 23
+  s_f80ef6da3d4491::t_89e80d084b9662 185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "45c5c2bbd6d6bc63389f96a79bb3bd6571b20007",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
