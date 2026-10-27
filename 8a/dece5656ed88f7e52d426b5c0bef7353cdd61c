@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/components/prototype-attention-split.tsx
+  s_f80ef6da3d4491::t_64353310ba05bf 282
+  s_f80ef6da3d4491::t_ad0d4a398472db 252-263
+  s_f80ef6da3d4491::t_82cbb7d567c2e6 131
+  s_f80ef6da3d4491::t_5d632511453a91 296-298
+  s_f80ef6da3d4491::t_d2222353d8ccbb 197,222,246
+  s_f80ef6da3d4491::t_6fbbb72cb22efa 39-41
+  s_f80ef6da3d4491::t_487d3361a2f357 1-18,20-38,42-130,132-182,184-196,199-207,209-221,224-233,235-245,248-251,264-281,283-295,299-301
+  s_f80ef6da3d4491::t_d40b98637f786a 183,208,234
+  s_f80ef6da3d4491::t_ebf0ed96cca105 198,223,247
+  s_f80ef6da3d4491::t_0a9b6fba81030d 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8adece5656ed88f7e52d426b5c0bef7353cdd61c",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
