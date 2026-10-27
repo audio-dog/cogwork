@@ -1,0 +1,33 @@
+apps/desktop/package.json
+  s_f80ef6da3d4491::t_ee3ff53291ef10 42
+apps/desktop/src/renderer/src/components/markdown.tsx
+  s_f80ef6da3d4491::t_0475f1dba57e58 1
+packages/ui/package.json
+  s_f80ef6da3d4491::t_9a8f12a5f12df4 22
+packages/ui/src/components/code-block.tsx
+  s_f80ef6da3d4491::t_9aee411e894c3c 8
+  s_f80ef6da3d4491::t_2fd21d8681bbb6 251
+  s_f80ef6da3d4491::t_6c21f26bb19268 207-230
+packages/ui/src/lib/highlighter.ts
+  s_f80ef6da3d4491::t_8740452e5e059b 1-30
+packages/ui/src/styles/globals.css
+  s_f80ef6da3d4491::t_28b2351847376e 155-188
+pnpm-lock.yaml
+  s_f80ef6da3d4491::t_64d76dd3ace466 260-261,678-680,2535-2536,7434
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d8031e894c186458577bc4d502bcc306012e4e6d",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
