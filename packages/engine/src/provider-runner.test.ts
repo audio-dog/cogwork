@@ -314,6 +314,24 @@ describe("providerRunner", { timeout: 30_000 }, () => {
     30000,
   );
 
+  it.live("keys a fresh chat thread by its Run when no Session resumes", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const capturedOptions: Array<RunChatOptions> = [];
+      const runChat: RunChat = (options) => {
+        capturedOptions.push(options);
+        return toAsyncIterable(scriptedChunks);
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+
+      yield* Stream.runDrain(runner.run(request({ checkoutPath }))).pipe(
+        Effect.provide(providerRunnerLayer()),
+      );
+
+      assert.strictEqual(capturedOptions[0]?.threadId, "run-provider-test");
+    }),
+  );
+
   it.live("aborts the chat request when the provider stream is interrupted", () =>
     Effect.gen(function* () {
       const checkoutPath = yield* scratchCheckout();

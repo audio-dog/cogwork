@@ -46,7 +46,7 @@ export interface RunChatOptions {
   readonly agentLoopStrategy: AgentLoopStrategy;
   readonly abortController: AbortController;
   readonly runId: RunId;
-  readonly threadId?: string;
+  readonly threadId: string;
   readonly outputSchema?: JSONSchema;
 }
 
@@ -237,7 +237,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             agentLoopStrategy: maxIterations(defaultLoopBudget(plan.harness.profile)),
             abortController,
             runId: plan.id,
-            threadId: session ?? undefined,
+            threadId: session ?? plan.id,
             outputSchema: plan.structuredOutput ?? undefined,
           });
 
