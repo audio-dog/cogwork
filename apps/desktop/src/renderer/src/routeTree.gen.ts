@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAttentionPrototypeRouteImport } from './routes/_app/attention-prototype'
 import { Route as AppConnectionsRouteImport } from './routes/_app/connections'
 import { Route as AppCustomizeRouteRouteImport } from './routes/_app/customize/route'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
@@ -40,6 +41,11 @@ const SettingsRouteRoute = SettingsRouteRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppAttentionPrototypeRoute = AppAttentionPrototypeRouteImport.update({
+  id: '/attention-prototype',
+  path: '/attention-prototype',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AppConnectionsRoute = AppConnectionsRouteImport.update({
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsRouteRouteWithChildren
   '/customize': typeof AppCustomizeRouteRouteWithChildren
+  '/attention-prototype': typeof AppAttentionPrototypeRoute
   '/connections': typeof AppConnectionsRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
@@ -140,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
 export interface FileRoutesByTo {
+  '/attention-prototype': typeof AppAttentionPrototypeRoute
   '/connections': typeof AppConnectionsRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
@@ -161,6 +169,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
   '/_app/customize': typeof AppCustomizeRouteRouteWithChildren
+  '/_app/attention-prototype': typeof AppAttentionPrototypeRoute
   '/_app/connections': typeof AppConnectionsRoute
   '/settings/$': typeof SettingsSplatRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
@@ -183,6 +192,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/customize'
+    | '/attention-prototype'
     | '/connections'
     | '/settings/$'
     | '/settings/appearance'
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/customize/plugin/$pluginId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/attention-prototype'
     | '/connections'
     | '/settings/$'
     | '/settings/appearance'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/settings'
     | '/_app/customize'
+    | '/_app/attention-prototype'
     | '/_app/connections'
     | '/settings/$'
     | '/settings/appearance'
@@ -262,6 +274,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/attention-prototype': {
+      id: '/_app/attention-prototype'
+      path: '/attention-prototype'
+      fullPath: '/attention-prototype'
+      preLoaderRoute: typeof AppAttentionPrototypeRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/_app/connections': {
@@ -389,6 +408,7 @@ const AppCustomizeRouteRouteWithChildren =
 
 interface AppRouteRouteChildren {
   AppCustomizeRouteRoute: typeof AppCustomizeRouteRouteWithChildren
+  AppAttentionPrototypeRoute: typeof AppAttentionPrototypeRoute
   AppConnectionsRoute: typeof AppConnectionsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppWorkflowsWorkflowIdRoute: typeof AppWorkflowsWorkflowIdRoute
@@ -399,6 +419,7 @@ interface AppRouteRouteChildren {
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppCustomizeRouteRoute: AppCustomizeRouteRouteWithChildren,
+  AppAttentionPrototypeRoute: AppAttentionPrototypeRoute,
   AppConnectionsRoute: AppConnectionsRoute,
   AppIndexRoute: AppIndexRoute,
   AppWorkflowsWorkflowIdRoute: AppWorkflowsWorkflowIdRoute,

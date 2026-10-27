@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwo
 import {
   RiAlertLine,
   RiEqualizerLine,
+  RiFocus2Line,
   RiNodeTree,
   RiPlugLine,
   RiPulseLine,
@@ -52,6 +53,7 @@ interface View {
 
 const views: ReadonlyArray<View> = [
   { label: "Feed", icon: RiPulseLine, to: "/" },
+  { label: "Attention", icon: RiFocus2Line, to: "/attention-prototype" },
   { label: "Workflows", icon: RiNodeTree, to: "/workflows" },
   { label: "Connections", icon: RiPlugLine, to: "/connections" },
   { label: "Customize", icon: RiEqualizerLine, to: "/customize" },
