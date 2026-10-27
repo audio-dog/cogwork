@@ -152,4 +152,38 @@
   .settings-focus-flash {
     animation: settings-focus-flash 1.6s ease-out;
   }
+
+  /* TanStack Highlight token classes (`th-*`) on the design-system colors. */
+  .th-token {
+    color: var(--foreground);
+  }
+  .th-comment,
+  .th-meta {
+    color: var(--muted-foreground);
+  }
+  .th-keyword,
+  .th-command,
+  .th-operator,
+  .th-tag,
+  .th-heading,
+  .th-link {
+    color: var(--primary);
+  }
+  .th-string,
+  .th-inserted,
+  .th-selector {
+    color: color-mix(in oklch, var(--success), var(--foreground) 25%);
+  }
+  .th-number,
+  .th-literal,
+  .th-type,
+  .th-attr,
+  .th-property,
+  .th-variable,
+  .th-code-inline {
+    color: color-mix(in oklch, var(--warning), var(--foreground) 40%);
+  }
+  .th-deleted {
+    color: var(--destructive);
+  }
 }
