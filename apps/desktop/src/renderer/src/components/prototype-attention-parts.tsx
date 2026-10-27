@@ -6,7 +6,6 @@ import { cn } from "@cogwork/ui/lib/utils";
 import {
   RiArrowRightSLine,
   RiBellLine,
-  RiCheckLine,
   RiCloseCircleLine,
   RiErrorWarningLine,
   RiLoopLeftLine,
@@ -15,7 +14,6 @@ import {
   RiRefreshLine,
   RiShieldCheckLine,
   RiSignpostLine,
-  RiSkipForwardLine,
   RiUserLine,
 } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
@@ -36,14 +34,35 @@ import {
   type PlanStep,
   parkedItems,
   planDigest,
-  type SkippedRecord,
   skippedRecords,
   type WorkflowRef,
 } from "../features/prototype-attention-data";
 import { type ResponseMode, usePrototypeAttention } from "../features/prototype-attention-store";
 import { catalogIconFor } from "./workflow-catalog-menu";
 
-/** PROTOTYPE — issue #794. Parts the attention variants share. */
+/** PROTOTYPE — issue #794. Parts the attention polish versions share. */
+
+export type AttentionLayout = "board" | "list";
+
+interface AttentionViewValue {
+  focus: string | null;
+  setFocus: (id: string | null) => void;
+  layout: AttentionLayout;
+}
+
+const AttentionViewContext = createContext<AttentionViewValue | null>(null);
+
+export function AttentionViewProvider({ children, ...value }: AttentionViewValue & { children: ReactNode }) {
+  return <AttentionViewContext value={value}>{children}</AttentionViewContext>;
+}
+
+export function useAttentionView() {
+  const value = use(AttentionViewContext);
+  if (!value) throw new Error("useAttentionView must render inside AttentionViewProvider");
+  return value;
+}
+
+export const scrollIntoView = (node: HTMLElement | null) => node?.scrollIntoView({ block: "nearest" });
 
 const reasonIcons: Record<ParkTag, ComponentType<{ className?: string }>> = {
   "awaiting-approval": RiShieldCheckLine,
@@ -57,29 +76,34 @@ const reasonIcons: Record<ParkTag, ComponentType<{ className?: string }>> = {
   "ready-for-human": RiUserLine,
 };
 
-const fixedReasonTitles = {
-  "awaiting-approval": "Waits for approval",
+const reasonLabels: Record<ParkTag, string> = {
+  "awaiting-approval": "Approval",
   stuck: "Stuck",
-  "no-workspace-recognized": "No Workspace recognized",
+  exhausted: "Failed",
+  "write-failed": "Write failed",
+  "hop-cap": "Hop cap",
+  "missing-operation": "Missing Operation",
+  "no-workspace-recognized": "No Workspace",
   "needs-info": "Needs info",
-  "ready-for-human": "Ready for a person",
+  "ready-for-human": "Needs a person",
 };
 
-export const reasonTitle = (item: ParkedItem) => {
+export const reasonLabel = (item: ParkedItem) => reasonLabels[item.reason.tag];
+
+export const reasonDetail = (item: ParkedItem) => {
   const { reason } = item;
-  if (reason.tag === "exhausted") return `Failed ${reason.attempts} times`;
-  if (reason.tag === "write-failed") return `Write failed: ${reason.step}`;
-  if (reason.tag === "hop-cap") return `Hop cap: ${reason.hops} hops`;
-  if (reason.tag === "missing-operation") return `r${item.workflow.revision} has no “${reason.operation}”`;
-  return fixedReasonTitles[reason.tag];
-};
-
-export const reasonDetail = (reason: ParkReason) => {
   if (reason.tag === "stuck") return reason.summary;
-  if (reason.tag === "exhausted") return reason.failure;
-  if (reason.tag === "write-failed") return reason.error;
+  if (reason.tag === "exhausted") return `${reason.failure} · ${reason.attempts} attempts`;
+  if (reason.tag === "write-failed") return `${reason.step}: ${reason.error}`;
+  if (reason.tag === "hop-cap") return `${reason.hops} hops from ${item.lineage[0]?.label ?? "the root"}`;
+  if (reason.tag === "missing-operation") {
+    return `r${item.workflow.revision} has no “${reason.operation}”`;
+  }
   return null;
 };
+
+/** What a card shows under its title: the reason when it has text, else the element summary. */
+export const cardDescription = (item: ParkedItem) => reasonDetail(item) ?? item.summary;
 
 type ReasonTone = "approval" | "failure" | "setup" | "triage";
 
@@ -121,15 +145,15 @@ export function AppIcon({ app, className }: { app: LineageHop["app"]; className?
   return <Icon className={cn("size-3.5 shrink-0 text-muted-foreground", className)} />;
 }
 
-export function WorkflowTag({ workflow, operation }: { workflow: WorkflowRef; operation?: string }) {
+export function WorkflowLine({ workflow, operation }: { workflow: WorkflowRef; operation?: string }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       <span className="truncate">{workflow.name}</span>
-      <span className="font-mono text-[10px]">r{workflow.revision}</span>
+      <span className="font-mono">r{workflow.revision}</span>
       {operation && (
         <>
           <span aria-hidden>·</span>
-          <span className="truncate text-foreground/80">{operation}</span>
+          <span className="truncate">{operation}</span>
         </>
       )}
     </span>
@@ -142,12 +166,11 @@ export function When({ atMillis }: { atMillis: number }) {
   );
 }
 
-export function ChangedBadge() {
+export function ChangedMark() {
   return (
     <Tooltip>
-      <TooltipTrigger render={<Badge variant="outline" />}>
-        <RiRefreshLine data-icon="inline-start" />
-        Changed
+      <TooltipTrigger render={<span className="inline-flex text-muted-foreground" />}>
+        <RiRefreshLine className="size-3.5" aria-label="Changed since it parked" />
       </TooltipTrigger>
       <TooltipContent>Changed since it parked</TooltipContent>
     </Tooltip>
@@ -176,131 +199,40 @@ function HopLabel({ hop }: { hop: LineageHop }) {
   );
 }
 
-/** Root first, the item's own Operation last. */
-export function LineageTrail({ item }: { item: ParkedItem }) {
+const isIdRef = (ref: string) => /^(#|PR #|[A-Z]+-\d)/.test(ref);
+
+export function RefLabel({ itemRef }: { itemRef: string }) {
+  return <span className={cn("truncate", isIdRef(itemRef) && "font-mono")}>{itemRef}</span>;
+}
+
+/** The Workflow and its revision, then root first and the item's own Operation last. */
+export function Provenance({ item }: { item: ParkedItem }) {
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-muted-foreground">
+      <span className="text-foreground/80">{item.workflow.name}</span>
+      <span className="font-mono">r{item.workflow.revision}</span>
+      <span aria-hidden className="px-0.5">
+        ·
+      </span>
+      <LineageHops item={item} />
+    </span>
+  );
+}
+
+function LineageHops({ item }: { item: ParkedItem }) {
+  return (
+    <>
       {item.lineage.map((hop, index) => (
         <span key={`${hop.label}:${index}`} className="flex items-center gap-1">
+          {hop.workflow && hop.workflow !== item.workflow.name && (
+            <span className="text-foreground/70">{hop.workflow}:</span>
+          )}
           <HopLabel hop={hop} />
           <RiArrowRightSLine className="size-3.5 shrink-0" />
         </span>
       ))}
-      <span className="flex items-center gap-1 font-medium text-foreground">
-        <AppIcon app="operation" className="text-foreground" />
-        {item.operation}
-      </span>
-    </span>
-  );
-}
-
-interface WorkflowRun {
-  readonly workflow: string | null;
-  readonly hops: readonly LineageHop[];
-}
-
-/** A source belongs to the Workflow it started; an artifact to the Workflow that created it. */
-const hopWorkflow = (hops: readonly LineageHop[], index: number) => {
-  const hop = hops[index];
-  if (hop?.kind === "operation") return hop.workflow;
-  if (hop?.kind === "artifact") {
-    return hops.slice(0, index).findLast((earlier) => earlier.kind === "operation")?.workflow ?? null;
-  }
-  return hops.slice(index).find((later) => later.kind === "operation")?.workflow ?? null;
-};
-
-const workflowRuns = (item: ParkedItem) => {
-  const current: LineageHop = {
-    kind: "operation",
-    app: "operation",
-    label: item.operation,
-    workflow: item.workflow.name,
-  };
-  const hops = [...item.lineage, current];
-  const hopWorkflows = hops.map((_, index) => hopWorkflow(hops, index));
-  const starts = hopWorkflows.flatMap((workflow, index) =>
-    index === 0 || workflow !== hopWorkflows[index - 1] ? [index] : [],
-  );
-  return starts.map(
-    (start, runIndex): WorkflowRun => ({
-      workflow: hopWorkflows[start] ?? null,
-      hops: hops.slice(start, starts[runIndex + 1]),
-    }),
-  );
-};
-
-/** Groups the hops by the Workflow that ran them, so each hand-off between Workflows shows. */
-export function LineageTimeline({ item }: { item: ParkedItem }) {
-  const runs = workflowRuns(item);
-  const isCurrent = (runIndex: number, hopIndex: number, run: WorkflowRun) =>
-    runIndex === runs.length - 1 && hopIndex === run.hops.length - 1;
-  return (
-    <ol className="flex flex-col gap-3">
-      {runs.map((run, runIndex) => (
-        <li key={`${run.workflow}:${runIndex}`} className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium">{run.workflow}</span>
-          <ol className="flex flex-col gap-1 border-s ps-3">
-            {run.hops.map((hop, index) => (
-              <li
-                key={`${hop.label}:${index}`}
-                className={cn(
-                  "text-xs",
-                  isCurrent(runIndex, index, run) && "font-medium text-foreground",
-                  !isCurrent(runIndex, index, run) && "text-muted-foreground",
-                )}
-              >
-                <HopLabel hop={hop} />
-              </li>
-            ))}
-          </ol>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function StepState({ step }: { step: PlanStep }) {
-  if (step.state === "done") return <RiCheckLine className="size-4 shrink-0 text-success" />;
-  if (step.state === "failed") return <RiCloseCircleLine className="size-4 shrink-0 text-destructive" />;
-  if (step.state === "skipped")
-    return <RiSkipForwardLine className="size-4 shrink-0 text-muted-foreground" />;
-  return <span className="size-4 shrink-0" aria-hidden />;
-}
-
-function StepHeader({ step, index }: { step: PlanStep; index: number }) {
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <span className="w-4 shrink-0 text-end font-mono text-xs text-muted-foreground">{index + 1}</span>
-      <AppIcon app={step.app} className="text-foreground" />
-      <span
-        className={cn("truncate text-sm", step.state === "skipped" && "text-muted-foreground line-through")}
-      >
-        {step.action}
-      </span>
-      <span className="truncate font-mono text-xs text-muted-foreground">{step.target}</span>
-      {step.parameters.map((parameter) => (
-        <Badge key={parameter} variant="outline" className="font-normal">
-          {parameter}
-        </Badge>
-      ))}
-      <span className="ms-auto" />
-      <StepState step={step} />
-    </span>
-  );
-}
-
-function StepNote({ step }: { step: PlanStep }) {
-  if (!step.note) return null;
-  return (
-    <span
-      className={cn(
-        "ps-6 text-xs",
-        step.state === "failed" && "text-destructive",
-        step.state !== "failed" && "text-muted-foreground",
-      )}
-    >
-      {step.note}
-    </span>
+      <span className="font-medium text-foreground">{item.operation}</span>
+    </>
   );
 }
 
@@ -356,33 +288,145 @@ function ParkedProvider({ item, children }: { item: ParkedItem; children: ReactN
   );
 }
 
-function ParkedPlan() {
+function StepInputs({ step }: { step: PlanStep }) {
   const {
     state: { item, mode },
     actions: { setEdit },
     meta: { edits },
   } = useParked();
+  if (step.inputs.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {step.inputs.map((agentInput, index) =>
+        mode === "edit" ? (
+          <Textarea
+            key={agentInput.id}
+            aria-label={agentInput.label}
+            value={inputText(edits, item, step, agentInput)}
+            onChange={(event) => setEdit(editKey(item, step, agentInput), event.target.value)}
+          />
+        ) : (
+          <p
+            key={agentInput.id}
+            className={cn(
+              "text-sm whitespace-pre-wrap",
+              index === 0 && "text-foreground",
+              index > 0 && "text-muted-foreground",
+            )}
+          >
+            {inputText(edits, item, step, agentInput)}
+          </p>
+        ),
+      )}
+    </div>
+  );
+}
+
+function StepDot({ step }: { step: PlanStep }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "relative z-10 size-2 shrink-0 rounded-full ring-4 ring-card",
+        step.state === "planned" && "bg-foreground/40",
+        step.state === "done" && "bg-success",
+        step.state === "failed" && "bg-destructive",
+        step.state === "skipped" && "border border-muted-foreground/50 bg-card",
+      )}
+    />
+  );
+}
+
+function StepLine({ step }: { step: PlanStep }) {
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+      <AppIcon app={step.app} />
+      <span className={cn("truncate", step.state === "skipped" && "text-muted-foreground line-through")}>
+        {step.action}
+      </span>
+      {step.parameters.map((parameter) => (
+        <Badge key={parameter} variant="outline" className="font-normal">
+          {parameter}
+        </Badge>
+      ))}
+      <span className="ms-auto shrink-0 font-mono text-xs text-muted-foreground">{step.target}</span>
+    </span>
+  );
+}
+
+function StepNote({ step }: { step: PlanStep }) {
+  if (!step.note) return null;
+  return (
+    <span
+      className={cn(
+        "text-xs",
+        step.state === "failed" && "text-destructive",
+        step.state !== "failed" && "text-muted-foreground",
+      )}
+    >
+      {step.note}
+    </span>
+  );
+}
+
+/** The plan as a timeline: one dot per step, the agent's text under each step. */
+function PlanTimeline() {
+  const {
+    state: { item },
+  } = useParked();
   if (item.plan.length === 0) return null;
   return (
-    <ol className="flex flex-col gap-3">
+    <ol className="relative flex flex-col gap-3 before:absolute before:top-2.5 before:bottom-2.5 before:left-[3.5px] before:w-px before:bg-border">
+      {item.plan.map((step) => (
+        <li key={step.id} className="flex gap-3">
+          <span className="flex h-5 items-center">
+            <StepDot step={step} />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <StepLine step={step} />
+            <StepNote step={step} />
+            <StepInputs step={step} />
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** The plan as numbered rows inside one muted panel. */
+function PlanPanel() {
+  const {
+    state: { item },
+  } = useParked();
+  if (item.plan.length === 0) return null;
+  return (
+    <ol className="flex flex-col divide-y rounded-lg bg-muted/50">
       {item.plan.map((step, index) => (
-        <li key={step.id} className="flex flex-col gap-1">
-          <StepHeader step={step} index={index} />
-          <StepNote step={step} />
-          {step.inputs.map((agentInput) => (
-            <div key={agentInput.id} className="flex flex-col gap-0.5 ps-6">
-              <span className="text-[11px] text-muted-foreground">{agentInput.label}</span>
-              {mode === "edit" ? (
-                <Textarea
-                  aria-label={agentInput.label}
-                  value={inputText(edits, item, step, agentInput)}
-                  onChange={(event) => setEdit(editKey(item, step, agentInput), event.target.value)}
-                />
-              ) : (
-                <p className="text-sm whitespace-pre-wrap">{inputText(edits, item, step, agentInput)}</p>
-              )}
-            </div>
-          ))}
+        <li key={step.id} className="flex gap-2.5 px-3 py-2.5">
+          <span className="w-3 shrink-0 pt-0.5 font-mono text-xs text-muted-foreground">{index + 1}</span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <StepLine step={step} />
+            <StepNote step={step} />
+            <StepInputs step={step} />
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** One line per step, no agent text: enough to see what Approve commits to. */
+function PlanOutline() {
+  const {
+    state: { item },
+  } = useParked();
+  if (item.plan.length === 0) return null;
+  return (
+    <ol className="flex flex-col gap-1">
+      {item.plan.map((step) => (
+        <li key={step.id} className="flex items-center gap-2">
+          <StepDot step={step} />
+          <StepLine step={step} />
         </li>
       ))}
     </ol>
@@ -396,7 +440,17 @@ function ParkedDigest() {
   if (item.reason.tag !== "awaiting-approval") return null;
   return (
     <Tooltip>
-      <TooltipTrigger render={<Badge variant={edited ? "default" : "outline"} className="font-mono" />}>
+      <TooltipTrigger
+        render={
+          <span
+            className={cn(
+              "font-mono text-xs",
+              edited && "text-foreground",
+              !edited && "text-muted-foreground",
+            )}
+          />
+        }
+      >
         {digest}
       </TooltipTrigger>
       <TooltipContent>{`Plan digest · built on ${item.reason.builtOn}`}</TooltipContent>
@@ -446,8 +500,9 @@ function ApprovalCommands() {
   if (mode === "hand-back") return <NoteCommand confirm="Hand back" variant="default" onConfirm={handBack} />;
   if (mode === "edit") {
     return (
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center gap-2">
         <ParkedDigest />
+        <span className="ms-auto" />
         <Button size="sm" variant="ghost" onClick={cancel}>
           Cancel
         </Button>
@@ -458,17 +513,17 @@ function ApprovalCommands() {
     );
   }
   return (
-    <div className="flex items-center justify-end gap-2">
+    <div className="flex items-center gap-1.5">
       <ParkedDigest />
-      <span className="me-auto" />
+      <span className="ms-auto" />
+      <Button size="sm" variant="ghost" onClick={() => setMode("edit")}>
+        Edit
+      </Button>
       <Button size="sm" variant="ghost" onClick={() => setMode("hand-back")}>
         Hand back
       </Button>
-      <Button size="sm" variant="ghost" onClick={() => setMode("reject")}>
+      <Button size="sm" variant="outline" onClick={() => setMode("reject")}>
         Reject
-      </Button>
-      <Button size="sm" variant="outline" onClick={() => setMode("edit")}>
-        Edit
       </Button>
       <Button size="sm" onClick={approve}>
         Approve
@@ -484,11 +539,11 @@ function HandBackCommands() {
   } = useParked();
   if (mode === "hand-back") return <NoteCommand confirm="Hand back" variant="default" onConfirm={handBack} />;
   return (
-    <div className="flex items-center justify-end gap-2">
+    <div className="flex items-center justify-end gap-1.5">
       {item.reason.tag === "missing-operation" && (
         <Button
           size="sm"
-          variant="outline"
+          variant="ghost"
           nativeButton={false}
           render={<Link to="/workflows/$workflowId" params={{ workflowId: item.workflow.id }} />}
         >
@@ -527,7 +582,9 @@ function ParkedCommands() {
 
 export const Parked = {
   Provider: ParkedProvider,
-  Plan: ParkedPlan,
+  Timeline: PlanTimeline,
+  Panel: PlanPanel,
+  Outline: PlanOutline,
   Commands: ParkedCommands,
 };
 
@@ -552,8 +609,8 @@ export function ArtifactLinks({ artifacts }: { artifacts: readonly Artifact[] })
 export function ItemLink({ itemRef }: { itemRef: string }) {
   const open = usePrototypeAttention((state) => state.open);
   return (
-    <Button size="xs" variant="link" className="px-0 font-mono" onClick={() => open(itemRef)}>
-      {itemRef}
+    <Button size="xs" variant="link" className="px-0" onClick={() => open(itemRef)}>
+      <RefLabel itemRef={itemRef} />
     </Button>
   );
 }
@@ -564,20 +621,6 @@ export function DismissButton({ notification }: { notification: NotificationReco
     <Button size="sm" variant="ghost" onClick={() => dismiss(notification)}>
       Dismiss
     </Button>
-  );
-}
-
-export function SkippedRow({ record }: { record: SkippedRecord }) {
-  return (
-    <div className="flex items-center gap-2 py-1.5 text-sm">
-      <AppIcon app={record.app} />
-      <Badge variant="outline" className="w-12 justify-center font-normal">
-        {record.kind}
-      </Badge>
-      <span className="min-w-0 truncate">{record.what}</span>
-      <span className="min-w-0 flex-1 truncate text-end text-xs text-muted-foreground">{record.reason}</span>
-      <When atMillis={record.atMillis} />
-    </div>
   );
 }
 
@@ -608,21 +651,39 @@ export function useVisibleNotifications() {
 export const skippedFor = (workflow: WorkflowRef) =>
   skippedRecords.filter((record) => record.workflowId === workflow.id);
 
-interface FocusContextValue {
-  focus: string | null;
-  setFocus: (id: string | null) => void;
+export const skippedCounts = (workflow: WorkflowRef) => {
+  const records = skippedFor(workflow);
+  const steps = records.filter((record) => record.kind === "step").length;
+  return {
+    steps,
+    events: records.length - steps,
+    latest: Math.max(...records.map((record) => record.atMillis)),
+  };
+};
+
+export const skippedSummary = (workflow: WorkflowRef) => {
+  const { steps, events } = skippedCounts(workflow);
+  return [
+    steps > 0 && `${steps} ${steps === 1 ? "step" : "steps"}`,
+    events > 0 && `${events} ${events === 1 ? "event" : "events"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+};
+
+export function SkippedLines({ workflow }: { workflow: WorkflowRef }) {
+  return (
+    <ul className="flex flex-col gap-2.5">
+      {skippedFor(workflow).map((record) => (
+        <li key={record.id} className="flex items-start gap-2">
+          <AppIcon app={record.app} className="mt-0.5" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm">{record.what}</span>
+            <span className="text-xs text-muted-foreground">{record.reason}</span>
+          </span>
+          <When atMillis={record.atMillis} />
+        </li>
+      ))}
+    </ul>
+  );
 }
-
-const FocusContext = createContext<FocusContextValue | null>(null);
-
-export function FocusProvider({ children, ...value }: FocusContextValue & { children: ReactNode }) {
-  return <FocusContext value={value}>{children}</FocusContext>;
-}
-
-export function useFocus() {
-  const value = use(FocusContext);
-  if (!value) throw new Error("useFocus must render inside FocusProvider");
-  return value;
-}
-
-export const scrollIntoView = (node: HTMLElement | null) => node?.scrollIntoView({ block: "nearest" });
