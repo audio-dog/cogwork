@@ -39,7 +39,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@react-hookz/web": "^26.1.0",
     "@remixicon/react": "^4.9.0",
-    "@tanstack/highlight": "^0.0.10",
+    "@tanstack/highlight": "^1.2.0",
     "@tanstack/markdown": "^0.0.13",
     "@tanstack/react-form": "^1.33.5",
     "@tanstack/react-router": "^1.170.32",

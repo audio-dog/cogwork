@@ -5,6 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
 
 import { Button } from "#components/button";
+import { highlightLines } from "#lib/highlighter";
 import { cn } from "#lib/utils";
 
 const codeBlockVariants = cva(
@@ -203,6 +204,30 @@ function CodeBlockLine({
   );
 }
 
+function CodeBlockHighlight({
+  code,
+  lang,
+  ...props
+}: Omit<React.ComponentProps<typeof CodeBlockContent>, "children"> & { code: string; lang: string }) {
+  return (
+    <CodeBlockContent {...props}>
+      {highlightLines(code, lang).map((tokens, index) => (
+        <CodeBlockLine key={index}>
+          {tokens.map((token, tokenIndex) =>
+            token.className ? (
+              <span key={tokenIndex} className={`th-token th-${token.className}`}>
+                {token.value}
+              </span>
+            ) : (
+              token.value
+            ),
+          )}
+        </CodeBlockLine>
+      ))}
+    </CodeBlockContent>
+  );
+}
+
 function CodeBlockFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -223,6 +248,7 @@ export {
   CodeBlockCopyButton,
   CodeBlockFooter,
   CodeBlockHeader,
+  CodeBlockHighlight,
   CodeBlockLine,
   CodeBlockTitle,
 };
