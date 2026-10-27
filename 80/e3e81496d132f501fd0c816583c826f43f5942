@@ -1,0 +1,19 @@
+docs/adr/0033-work-items-without-a-tracker-are-coordinated-in-the-control-store.md
+  s_ee51aefe7fce88::t_87190453d55583 1-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "80e3e81496d132f501fd0c816583c826f43f5942",
+  "prompts": {},
+  "sessions": {
+    "s_ee51aefe7fce88": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e599b41-dd2a-4625-bae1-5c870d9d9da4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
