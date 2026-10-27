@@ -1,4 +1,4 @@
-import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cogwork/ui/components/tabs";
 import { RiLayoutColumnLine, RiListUnordered } from "@remixicon/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
@@ -44,33 +44,7 @@ function Variant({ variant }: { variant: string }) {
   return <AttentionQuiet />;
 }
 
-function LayoutToggle({
-  layout,
-  onLayout,
-}: {
-  layout: AttentionLayout;
-  onLayout: (layout: AttentionLayout) => void;
-}) {
-  return (
-    <ToggleGroup
-      variant="outline"
-      size="sm"
-      value={[layout]}
-      onValueChange={(next) => {
-        if (next[0] === "board" || next[0] === "list") onLayout(next[0]);
-      }}
-    >
-      <ToggleGroupItem value="board">
-        <RiLayoutColumnLine data-icon="inline-start" />
-        Board
-      </ToggleGroupItem>
-      <ToggleGroupItem value="list">
-        <RiListUnordered data-icon="inline-start" />
-        List
-      </ToggleGroupItem>
-    </ToggleGroup>
-  );
-}
+const isLayout = (value: unknown): value is AttentionLayout => value === "board" || value === "list";
 
 function AttentionPrototypeRoute() {
   const { variant, layout, focus } = Route.useSearch();
@@ -81,13 +55,33 @@ function AttentionPrototypeRoute() {
 
   return (
     <AttentionViewProvider focus={focus ?? null} setFocus={setFocus} layout={layout}>
-      <div className="flex flex-col gap-4 px-6 pt-5 pb-24">
+      <Tabs
+        value={layout}
+        onValueChange={(next) => {
+          if (isLayout(next)) go({ layout: next });
+        }}
+        className="gap-4 px-6 pt-5 pb-24"
+      >
         <header className="flex items-center justify-between">
           <h1 className="text-base font-medium">Attention</h1>
-          <LayoutToggle layout={layout} onLayout={(next) => go({ layout: next })} />
+          <TabsList>
+            <TabsTrigger value="board">
+              <RiLayoutColumnLine />
+              Board
+            </TabsTrigger>
+            <TabsTrigger value="list">
+              <RiListUnordered />
+              List
+            </TabsTrigger>
+          </TabsList>
         </header>
-        <Variant variant={variant} />
-      </div>
+        <TabsContent value="board">
+          <Variant variant={variant} />
+        </TabsContent>
+        <TabsContent value="list">
+          <Variant variant={variant} />
+        </TabsContent>
+      </Tabs>
       <OsNotificationBanner onOpen={setFocus} />
       <CommandReadout />
       <PrototypeSwitcher variants={variants} current={variant} onSelect={(key) => go({ variant: key })}>
