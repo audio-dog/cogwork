@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/features/workflow-parks-mock-data.ts
+  s_f80ef6da3d4491::t_ef3495b543d982 14-367
+  s_f80ef6da3d4491::t_24f7e491a2ab92 1-13,368-422
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_f80ef6da3d4491::t_669a4f3ba9f6da 1-209,218-228
+  s_f80ef6da3d4491::t_b01cfe357e1f6e 210-217
+apps/desktop/src/renderer/src/features/workflow-parks.test.ts
+  s_f80ef6da3d4491::t_5d577d91d9d768 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d0ffe8d83361492c3ec2acdad89607a14a0f49dd",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
