@@ -54,6 +54,7 @@ import { Link } from "@tanstack/react-router";
 import { type ComponentType, createContext, type ReactNode, use, useState } from "react";
 import { plural, relativeTime } from "../features/format";
 import { safeHref } from "../features/safe-href";
+import { useNow } from "../features/use-now";
 import type { CatalogIcon } from "../features/workflow-catalog";
 import {
   type Answer,
@@ -132,9 +133,7 @@ export interface AttentionActions {
   readonly setLayout: (layout: AttentionLayout) => void;
 }
 
-export interface AttentionMeta {
-  readonly now: number;
-}
+export type AttentionMeta = Record<string, never>;
 
 interface AttentionContextValue {
   state: AttentionState;
@@ -244,9 +243,7 @@ function AppIcon({ app }: { app: CatalogIcon }) {
 }
 
 function RelativeTime({ atMillis }: { atMillis: number }) {
-  const {
-    meta: { now },
-  } = useAttention();
+  const now = useNow(60_000);
   return (
     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{relativeTime(atMillis, now)}</span>
   );

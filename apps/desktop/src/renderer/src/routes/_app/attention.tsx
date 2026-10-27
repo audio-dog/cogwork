@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Attention, type AttentionLayout, isAttentionLayout } from "../../components/attention-board";
-import { useNow } from "../../features/use-now";
 import {
   mockNotifications,
   mockParkedItems,
@@ -24,7 +23,6 @@ export const Route = createFileRoute("/_app/attention")({
 function AttentionRoute() {
   const { layout, focus } = Route.useSearch();
   const navigate = useNavigate();
-  const now = useNow(60_000);
   const [resolved, setResolved] = useState<ReadonlySet<string>>(new Set());
   const resolve = (id: string) => setResolved((current) => new Set([...current, id]));
   const updateSearch = (next: Partial<AttentionSearch>) =>
@@ -49,7 +47,7 @@ function AttentionRoute() {
         setFocus: (id) => updateSearch({ focus: id ?? undefined }),
         setLayout: (next) => updateSearch({ layout: next }),
       }}
-      meta={{ now }}
+      meta={{}}
     >
       <Attention.Frame>
         <Attention.Lanes />
