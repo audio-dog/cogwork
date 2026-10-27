@@ -1,0 +1,38 @@
+apps/desktop/src/renderer/src/routes/_app/attention-prototype.tsx
+  s_f80ef6da3d4491::t_2ded6c9ca7925a 1-2,9-12,16-17,21-23,28,34-35,42-72,76,79,83-89,96
+apps/desktop/src/renderer/src/components/prototype-attention-compact.tsx
+  s_f80ef6da3d4491::t_d8e6869c2e7651 23
+  s_f80ef6da3d4491::t_ca7a78894343e7 85
+  s_f80ef6da3d4491::t_46009938d0ae2c 21
+  s_f80ef6da3d4491::t_c9fe2b41dcbbca 1-20,22,24-84,86-93,95-158
+  s_f80ef6da3d4491::t_5e705f168c1ccb 94
+apps/desktop/src/renderer/src/components/prototype-attention-chrome.tsx
+  s_f80ef6da3d4491::t_22abb9406227c5 16,25
+apps/desktop/src/renderer/src/components/prototype-attention-quiet.tsx
+  s_f80ef6da3d4491::t_3e9670a732d267 1-21,23,25-89,91-93,95-115,117-174
+  s_f80ef6da3d4491::t_b6f40dbca34462 24
+  s_f80ef6da3d4491::t_4fd2bf8f6364d8 116
+  s_f80ef6da3d4491::t_6341920e55b0d0 90
+  s_f80ef6da3d4491::t_edb5886802b5dc 22
+  s_f80ef6da3d4491::t_124853895e1f2f 94
+apps/desktop/src/renderer/src/components/prototype-attention-upfront.tsx
+  s_f80ef6da3d4491::t_8e1839257b3783 77
+  s_f80ef6da3d4491::t_5094e8658e5d91 22
+  s_f80ef6da3d4491::t_1f57e4e1e59f2c 1-21,23-76,78-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "02067bce3c50db4ac4927511132785a3743d335a",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
