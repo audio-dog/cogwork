@@ -7,6 +7,7 @@ import {
   type WorkItemId,
   type WorkspaceId,
 } from "@cogwork/contracts";
+import { plural } from "./format";
 
 export type StateTone = "live" | "attention" | "ready" | "muted";
 
@@ -15,8 +16,6 @@ export interface ItemStateDescriptor {
   readonly tone: StateTone;
   readonly running: boolean;
 }
-
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 const calmDescriptor = (verb: "Queued" | "Working", stage: LifecycleStage | null): ItemStateDescriptor => {
   return { label: stage ? `${verb} · ${stage}` : verb, tone: "muted", running: false };

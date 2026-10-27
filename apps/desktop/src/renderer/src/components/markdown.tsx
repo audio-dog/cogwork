@@ -1,35 +1,14 @@
+import { highlighter } from "@cogwork/ui/lib/highlighter";
 import { cn } from "@cogwork/ui/lib/utils";
-import { createHighlighter } from "@tanstack/highlight/core";
-import { diff } from "@tanstack/highlight/languages/diff";
-import { json } from "@tanstack/highlight/languages/json";
-import { shell } from "@tanstack/highlight/languages/shell";
-import { ts } from "@tanstack/highlight/languages/ts";
-import { tsx } from "@tanstack/highlight/languages/tsx";
 import { createTanStackMarkdownHighlighter } from "@tanstack/highlight/markdown";
 import { type MarkdownComponentProps, Markdown as TanStackMarkdown } from "@tanstack/markdown/react";
+import { safeHref } from "../features/safe-href";
 
-const highlighter = createHighlighter({ languages: [diff, json, shell, ts, tsx] });
 const markdownHighlighter = createTanStackMarkdownHighlighter(highlighter);
 
 function MarkdownParagraph({ className, ...props }: MarkdownComponentProps<"p">) {
   return <p className={cn("leading-relaxed", className)} {...props} />;
 }
-
-const linkSchemes = new Set(["http:", "https:", "mailto:"]);
-
-/**
- * Markdown here renders agent output, so a `javascript:` or `data:` href would
- * execute in the renderer when clicked. `target`/`rel` do not stop that.
- */
-const safeHref = (href: string | undefined) => {
-  if (!href) return undefined;
-  if (href.startsWith("#") || href.startsWith("/")) return href;
-  try {
-    return linkSchemes.has(new URL(href, "https://localhost").protocol) ? href : undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 function MarkdownLink({ className, href, ...props }: MarkdownComponentProps<"a">) {
   const safe = safeHref(href);
