@@ -55,13 +55,16 @@ import {
   inputText,
   isEdited,
   type NotificationRecord,
+  type ParkCommand,
   type ParkedItem,
   type ParkReason,
   type ParkTag,
   type PlanEdits,
   type PlanStep,
   planDigest,
+  plural,
   reasonLabel,
+  runnableSteps,
   type SkippedRecord,
   type StepState,
   skippedByWorkflow,
@@ -333,7 +336,6 @@ function useParked() {
   return value;
 }
 
-/** Holds the person's draft for one parked item: edited agent text and a note. Nothing else. */
 function ParkedProvider({ item, children }: { item: ParkedItem; children: ReactNode }) {
   const { actions } = useAttention();
   const [mode, setMode] = useState<ResponseMode>("view");
@@ -425,21 +427,24 @@ function StepLine({ step }: { step: PlanStep }) {
   );
 }
 
+function FailureText({ text }: { text: string }) {
+  return (
+    <CodeBlock size="sm" variant="destructive">
+      <CodeBlockContent wrap>{text}</CodeBlockContent>
+    </CodeBlock>
+  );
+}
+
+const failureNote = (step: PlanStep) => (step.state === "failed" ? step.note : null);
+
 function StepDetail({ step }: { step: PlanStep }) {
-  if (step.state === "failed" && step.note) {
-    return (
-      <CodeBlock size="sm" variant="destructive">
-        <CodeBlockContent wrap>{step.note}</CodeBlockContent>
-      </CodeBlock>
-    );
-  }
+  const failure = failureNote(step);
+  if (failure) return <FailureText text={failure} />;
   return <StepInputs step={step} />;
 }
 
-const hasStepDetail = (step: PlanStep) =>
-  step.inputs.length > 0 || (step.state === "failed" && step.note !== null);
+const hasStepDetail = (step: PlanStep) => step.inputs.length > 0 || failureNote(step) !== null;
 
-/** One Trace line per step. A line with agent text or an error opens to show it; Edit opens them all. */
 function ParkedPlan() {
   const {
     state: { item, mode },
@@ -501,6 +506,20 @@ function NoteCommand({
   );
 }
 
+function RejectNote() {
+  const {
+    actions: { reject },
+  } = useParked();
+  return <NoteCommand confirm="Reject" variant="destructive" onConfirm={reject} />;
+}
+
+function HandBackNote() {
+  const {
+    actions: { handBack },
+  } = useParked();
+  return <NoteCommand confirm="Hand back" variant="default" onConfirm={handBack} />;
+}
+
 function ApprovalMenu() {
   const {
     actions: { setMode },
@@ -520,19 +539,15 @@ function ApprovalMenu() {
   );
 }
 
-/** A pending approval is a prompt, not activity: one Item under the plan it names. */
-function ApprovalPrompt() {
+function ApprovalItem() {
   const {
     state: { item, mode, digest, edited },
-    actions: { setMode, cancel, approve, reject, handBack },
+    actions: { setMode, cancel, approve },
   } = useParked();
-  if (mode === "reject") return <NoteCommand confirm="Reject" variant="destructive" onConfirm={reject} />;
-  if (mode === "hand-back") return <NoteCommand confirm="Hand back" variant="default" onConfirm={handBack} />;
-  const steps = item.plan.filter((step) => step.state !== "skipped").length;
   return (
     <Item variant="muted" size="sm">
       <ItemContent>
-        <ItemTitle>{`Run ${steps} ${steps === 1 ? "step" : "steps"}?`}</ItemTitle>
+        <ItemTitle>{`Run ${plural(runnableSteps(item).length, "step")}?`}</ItemTitle>
         <ItemDescription className={cn("font-mono", edited && "text-foreground")}>{digest}</ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -541,11 +556,13 @@ function ApprovalPrompt() {
             Cancel
           </Button>
         )}
-        {mode === "view" && <ApprovalMenu />}
         {mode === "view" && (
-          <Button size="sm" variant="outline" onClick={() => setMode("reject")}>
-            Reject
-          </Button>
+          <>
+            <ApprovalMenu />
+            <Button size="sm" variant="outline" onClick={() => setMode("reject")}>
+              Reject
+            </Button>
+          </>
         )}
         <Button size="sm" onClick={approve}>
           Approve
@@ -555,12 +572,27 @@ function ApprovalPrompt() {
   );
 }
 
+const approvalPrompts: Record<ResponseMode, ComponentType> = {
+  view: ApprovalItem,
+  edit: ApprovalItem,
+  reject: RejectNote,
+  "hand-back": HandBackNote,
+};
+
+function ApprovalPrompt() {
+  const {
+    state: { mode },
+  } = useParked();
+  const Prompt = approvalPrompts[mode];
+  return <Prompt />;
+}
+
 function HandBackCommands() {
   const {
     state: { item, mode },
-    actions: { setMode, handBack },
+    actions: { setMode },
   } = useParked();
-  if (mode === "hand-back") return <NoteCommand confirm="Hand back" variant="default" onConfirm={handBack} />;
+  if (mode === "hand-back") return <HandBackNote />;
   return (
     <div className="flex items-center justify-end gap-1.5">
       {item.reason.tag === "missing-operation" && (
@@ -596,16 +628,19 @@ function OpenCommand() {
   );
 }
 
+const commandPanels: ReadonlyArray<{ readonly command: ParkCommand; readonly Panel: ComponentType }> = [
+  { command: "approve", Panel: ApprovalPrompt },
+  { command: "hand-back", Panel: HandBackCommands },
+];
+
 function ParkedCommands() {
   const {
     state: { item },
   } = useParked();
-  if (item.commands.includes("approve")) return <ApprovalPrompt />;
-  if (item.commands.includes("hand-back")) return <HandBackCommands />;
-  return <OpenCommand />;
+  const Panel = commandPanels.find(({ command }) => item.commands.includes(command))?.Panel ?? OpenCommand;
+  return <Panel />;
 }
 
-/** One line naming the root; it opens to every hop down to this Operation. */
 function LineageTrace({ item }: { item: ParkedItem }) {
   const root = item.lineage[0];
   if (!root) return null;
@@ -648,11 +683,7 @@ function LineageTrace({ item }: { item: ParkedItem }) {
 
 function FailureBlock({ item }: { item: ParkedItem }) {
   if (item.reason.tag !== "exhausted") return null;
-  return (
-    <CodeBlock size="sm" variant="destructive">
-      <CodeBlockContent wrap>{item.reason.failure}</CodeBlockContent>
-    </CodeBlock>
-  );
+  return <FailureText text={item.reason.failure} />;
 }
 
 function ParkedCard({ item }: { item: ParkedItem }) {
@@ -688,14 +719,13 @@ function ParkedCard({ item }: { item: ParkedItem }) {
   );
 }
 
-/** The Sources pattern: one line that opens to a link for each artifact. */
 function ArtifactTrace({ artifacts }: { artifacts: readonly Artifact[] }) {
   if (artifacts.length === 0) return null;
   return (
     <TraceCollapsible>
       <TraceCollapsibleTrigger>
         <TraceLine>
-          <TraceTitle>{`Created ${artifacts.length} ${artifacts.length === 1 ? "artifact" : "artifacts"}`}</TraceTitle>
+          <TraceTitle>{`Created ${plural(artifacts.length, "artifact")}`}</TraceTitle>
         </TraceLine>
       </TraceCollapsibleTrigger>
       <TraceCollapsibleContent>

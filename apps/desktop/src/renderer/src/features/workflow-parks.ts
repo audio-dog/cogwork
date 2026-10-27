@@ -99,14 +99,23 @@ export interface SkippedRecord {
   readonly atMillis: number;
 }
 
-/** Agent-input text a person edited before approving, keyed by `editKey`. */
 export type PlanEdits = Readonly<Record<string, string>>;
 
-export const commandsFor = (reason: ParkReason): readonly ParkCommand[] => {
-  if (reason.tag === "awaiting-approval") return ["approve", "reject", "hand-back"];
-  if (reason.tag === "needs-info" || reason.tag === "ready-for-human") return ["open"];
-  return ["hand-back"];
+const parkCommands: Record<ParkTag, readonly ParkCommand[]> = {
+  "awaiting-approval": ["approve", "reject", "hand-back"],
+  "needs-info": ["open"],
+  "ready-for-human": ["open"],
+  stuck: ["hand-back"],
+  exhausted: ["hand-back"],
+  "write-failed": ["hand-back"],
+  "hop-cap": ["hand-back"],
+  "missing-operation": ["hand-back"],
+  "no-workspace-recognized": ["hand-back"],
 };
+
+export const commandsFor = (reason: ParkReason) => parkCommands[reason.tag];
+
+export const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 const urgency: Record<ParkTag, number> = {
   "awaiting-approval": 0,
@@ -137,17 +146,25 @@ const reasonLabels: Record<ParkTag, string> = {
 
 export const reasonLabel = (item: ParkedItem) => reasonLabels[item.reason.tag];
 
-export const reasonDetail = (item: ParkedItem) => {
-  const { reason } = item;
-  if (reason.tag === "stuck") return reason.summary;
-  if (reason.tag === "exhausted") return `${reason.failure} · ${reason.attempts} attempts`;
-  if (reason.tag === "write-failed") return `${reason.step}: ${reason.error}`;
-  if (reason.tag === "hop-cap") return `${reason.hops} hops from ${item.lineage[0]?.label ?? "the root"}`;
-  if (reason.tag === "missing-operation") return `r${item.workflow.revision} has no “${reason.operation}”`;
-  return null;
+type ReasonOf<Tag extends ParkTag> = Extract<ParkReason, { readonly tag: Tag }>;
+
+const reasonDetails: { [Tag in ParkTag]: (reason: ReasonOf<Tag>, item: ParkedItem) => string | null } = {
+  stuck: (reason) => reason.summary,
+  exhausted: (reason) => `${reason.failure} · ${reason.attempts} attempts`,
+  "write-failed": (reason) => `${reason.step}: ${reason.error}`,
+  "hop-cap": (reason, item) => `${reason.hops} hops from ${item.lineage[0]?.label ?? "the root"}`,
+  "missing-operation": (reason, item) => `r${item.workflow.revision} has no “${reason.operation}”`,
+  "awaiting-approval": () => null,
+  "needs-info": () => null,
+  "ready-for-human": () => null,
+  "no-workspace-recognized": () => null,
 };
 
-/** What a card shows under its title: the reason when it has text, else the element summary. */
+const detailOf = <Tag extends ParkTag>(reason: { readonly tag: Tag } & ReasonOf<Tag>, item: ParkedItem) =>
+  reasonDetails[reason.tag](reason, item);
+
+export const reasonDetail = (item: ParkedItem) => detailOf(item.reason, item);
+
 export const cardDescription = (item: ParkedItem) => reasonDetail(item) ?? item.summary;
 
 const pastTenses: Record<string, string> = {
@@ -165,13 +182,19 @@ const pastTenses: Record<string, string> = {
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
-/** A step title says what happened: "Create an issue", "Created an issue", "Failed to add a label". */
-export const stepTitle = (step: PlanStep) => {
-  const [verb = "", ...rest] = step.action.split(" ");
-  if (step.state === "failed") return `Failed to ${lowerFirst(step.action)}`;
-  if (step.state === "done") return [pastTenses[verb] ?? verb, ...rest].join(" ");
-  return step.action;
+const pastTense = (action: string) => {
+  const [verb = "", ...rest] = action.split(" ");
+  return [pastTenses[verb] ?? verb, ...rest].join(" ");
 };
+
+const stepTitles: Record<StepState, (action: string) => string> = {
+  planned: (action) => action,
+  skipped: (action) => action,
+  done: pastTense,
+  failed: (action) => `Failed to ${lowerFirst(action)}`,
+};
+
+export const stepTitle = (step: PlanStep) => stepTitles[step.state](step.action);
 
 export const editKey = (item: ParkedItem, step: PlanStep, input: AgentInputText) =>
   `${item.id}/${step.id}/${input.id}`;
@@ -189,14 +212,15 @@ const fnv1a = (text: string) =>
     .padStart(8, "0")
     .slice(0, 7);
 
+export const runnableSteps = (item: ParkedItem) => item.plan.filter((step) => step.state !== "skipped");
+
 /**
  * Stands in for the engine's plan digest until the read model carries it. An approval names the
  * digest of what the person saw, so any edit to agent-input text must change it.
  */
 export const planDigest = (item: ParkedItem, edits: PlanEdits) =>
   fnv1a(
-    item.plan
-      .filter((step) => step.state !== "skipped")
+    runnableSteps(item)
       .map(
         (step) =>
           `${step.app}:${step.action}:${step.target}:${step.parameters.join(",")}:${step.inputs
@@ -214,10 +238,7 @@ export const skippedByWorkflow = (records: readonly SkippedRecord[]) =>
 export const skippedSummary = (records: readonly SkippedRecord[]) => {
   const steps = records.filter((record) => record.kind === "step").length;
   const events = records.length - steps;
-  return [
-    steps > 0 && `${steps} ${steps === 1 ? "step" : "steps"}`,
-    events > 0 && `${events} ${events === 1 ? "event" : "events"}`,
-  ]
+  return [steps > 0 && plural(steps, "step"), events > 0 && plural(events, "event")]
     .filter(Boolean)
     .join(" · ");
 };

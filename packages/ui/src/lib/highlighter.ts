@@ -6,25 +6,23 @@ import { shell } from "@tanstack/highlight/languages/shell";
 import { ts } from "@tanstack/highlight/languages/ts";
 import { tsx } from "@tanstack/highlight/languages/tsx";
 
-/** The one registry every code surface shares, so a language highlights the same everywhere. */
 export const highlighter = createHighlighter({ languages: [diff, json, markdown, shell, ts, tsx] });
 
-/** Tokens split into lines; a token that spans a newline is cut at it. */
-export const highlightLines = (code: string, lang: string) => {
-  const pieces = highlighter
-    .tokenize(code.replace(/\n$/, ""), { lang })
-    .tokens.flatMap((token) =>
-      token.value
-        .split("\n")
-        .flatMap(
-          (value, index): Array<HighlightToken | "break"> =>
-            index === 0 ? [{ ...token, value }] : ["break", { ...token, value }],
-        ),
+type Piece = HighlightToken | "break";
+
+const toPieces = (token: HighlightToken) =>
+  token.value
+    .split("\n")
+    .flatMap((value, index): Piece[] =>
+      index === 0 ? [{ ...token, value }] : ["break", { ...token, value }],
     );
-  const lines: HighlightToken[][] = [[]];
-  for (const piece of pieces) {
-    if (piece === "break") lines.push([]);
-    else if (piece.value) lines.at(-1)?.push(piece);
-  }
-  return lines;
+
+const isVisible = (piece: Piece): piece is HighlightToken => piece !== "break" && piece.value !== "";
+
+export const highlightLines = (code: string, lang: string) => {
+  const pieces = highlighter.tokenize(code.replace(/\n$/, ""), { lang }).tokens.flatMap(toPieces);
+  const breaks = pieces.flatMap((piece, index) => (piece === "break" ? [index] : []));
+  return [-1, ...breaks].map((previousBreak, line) =>
+    pieces.slice(previousBreak + 1, breaks[line]).filter(isVisible),
+  );
 };

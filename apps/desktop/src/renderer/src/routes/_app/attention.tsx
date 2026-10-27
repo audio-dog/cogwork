@@ -21,7 +21,6 @@ export const Route = createFileRoute("/_app/attention")({
   component: AttentionRoute,
 });
 
-/** Mock data until the read model carries Workflow parks; a command only removes what it cleared. */
 function AttentionRoute() {
   const { layout, focus } = Route.useSearch();
   const navigate = useNavigate();
