@@ -1,19 +1,41 @@
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
+import { CodeBlock, CodeBlockContent } from "@cogwork/ui/components/code-block";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@cogwork/ui/components/dropdown-menu";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { Textarea } from "@cogwork/ui/components/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@cogwork/ui/components/trace";
 import { cn } from "@cogwork/ui/lib/utils";
 import {
   RiArrowRightSLine,
+  RiArrowRightUpLine,
   RiBellLine,
   RiCloseCircleLine,
   RiErrorWarningLine,
   RiLoopLeftLine,
   RiMapPinLine,
+  RiMoreLine,
   RiQuestionLine,
   RiRefreshLine,
   RiShieldCheckLine,
   RiSignpostLine,
+  RiSkipForwardLine,
   RiUserLine,
 } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
@@ -580,13 +602,243 @@ function ParkedCommands() {
   return <OpenCommand />;
 }
 
+const pastTenses: Record<string, string> = {
+  Add: "Added",
+  Close: "Closed",
+  Comment: "Commented",
+  Create: "Created",
+  Notify: "Notified",
+  Open: "Opened",
+  Reply: "Replied",
+  Request: "Requested",
+  Send: "Sent",
+};
+
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
+/** Trace titles say what happened: "Create an issue", "Created an issue", "Failed to add a label". */
+const stepTitle = (step: PlanStep) => {
+  const [verb = "", ...rest] = step.action.split(" ");
+  if (step.state === "failed") return `Failed to ${lowerFirst(step.action)}`;
+  if (step.state === "done") return [pastTenses[verb] ?? verb, ...rest].join(" ");
+  return step.action;
+};
+
+const traceStatus: Record<PlanStep["state"], "pending" | "error" | undefined> = {
+  planned: "pending",
+  done: undefined,
+  failed: "error",
+  skipped: "pending",
+};
+
+function StepTraceLine({ step }: { step: PlanStep }) {
+  return (
+    <TraceLine status={traceStatus[step.state]}>
+      <TraceIcon>
+        <AppIcon app={step.app} />
+      </TraceIcon>
+      <TraceTitle>{stepTitle(step)}</TraceTitle>
+      <TraceDescription>
+        {step.state === "skipped" ? step.note : [step.target, ...step.parameters].filter(Boolean).join(" · ")}
+      </TraceDescription>
+      {step.state === "skipped" && (
+        <TraceIcon>
+          <RiSkipForwardLine />
+        </TraceIcon>
+      )}
+    </TraceLine>
+  );
+}
+
+function StepTraceDetail({ step }: { step: PlanStep }) {
+  if (step.state === "failed" && step.note) {
+    return (
+      <CodeBlock size="sm" variant="destructive">
+        <CodeBlockContent wrap>{step.note}</CodeBlockContent>
+      </CodeBlock>
+    );
+  }
+  return <StepInputs step={step} />;
+}
+
+const hasTraceDetail = (step: PlanStep) => step.inputs.length > 0 || (step.state === "failed" && step.note);
+
+/** The plan as Trace lines. A line with agent text or an error opens to show it; Edit opens them all. */
+function PlanTrace() {
+  const {
+    state: { item, mode },
+  } = useParked();
+  if (item.plan.length === 0) return null;
+  return (
+    <Trace>
+      {item.plan.map((step) =>
+        hasTraceDetail(step) ? (
+          <TraceCollapsible
+            key={`${step.id}:${mode}`}
+            defaultOpen={mode === "edit" || step.state === "failed"}
+          >
+            <TraceCollapsibleTrigger>
+              <StepTraceLine step={step} />
+            </TraceCollapsibleTrigger>
+            <TraceCollapsibleContent>
+              <StepTraceDetail step={step} />
+            </TraceCollapsibleContent>
+          </TraceCollapsible>
+        ) : (
+          <StepTraceLine key={step.id} step={step} />
+        ),
+      )}
+    </Trace>
+  );
+}
+
+/** A pending approval is a prompt, not activity: one Item under the plan it names. */
+function ApprovalPrompt() {
+  const {
+    state: { item, mode, digest, edited },
+    actions: { setMode, cancel, approve, reject, handBack },
+  } = useParked();
+  if (mode === "reject") return <NoteCommand confirm="Reject" variant="destructive" onConfirm={reject} />;
+  if (mode === "hand-back") return <NoteCommand confirm="Hand back" variant="default" onConfirm={handBack} />;
+  const steps = item.plan.filter((step) => step.state !== "skipped").length;
+  return (
+    <Item variant="muted" size="sm">
+      <ItemContent>
+        <ItemTitle>{`Run ${steps} ${steps === 1 ? "step" : "steps"}?`}</ItemTitle>
+        <ItemDescription className={cn("font-mono", edited && "text-foreground")}>{digest}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        {mode === "edit" ? (
+          <Button size="sm" variant="ghost" onClick={cancel}>
+            Cancel
+          </Button>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button aria-label="More" size="icon-sm" variant="ghost" />}>
+              <RiMoreLine />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => setMode("edit")}>Edit</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMode("hand-back")}>Hand back</DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {mode !== "edit" && (
+          <Button size="sm" variant="outline" onClick={() => setMode("reject")}>
+            Reject
+          </Button>
+        )}
+        <Button size="sm" onClick={approve}>
+          Approve
+        </Button>
+      </ItemActions>
+    </Item>
+  );
+}
+
+function ParkedPrompt() {
+  const {
+    state: { item },
+  } = useParked();
+  if (item.commands.includes("approve")) return <ApprovalPrompt />;
+  return <ParkedCommands />;
+}
+
 export const Parked = {
   Provider: ParkedProvider,
   Timeline: PlanTimeline,
   Panel: PlanPanel,
   Outline: PlanOutline,
+  Trace: PlanTrace,
   Commands: ParkedCommands,
+  Prompt: ParkedPrompt,
 };
+
+/** One collapsible line naming the root; it opens to every hop down to this Operation. */
+export function LineageTrace({ item }: { item: ParkedItem }) {
+  const root = item.lineage[0];
+  if (!root) return null;
+  return (
+    <TraceCollapsible>
+      <TraceCollapsibleTrigger>
+        <TraceLine>
+          <TraceIcon>
+            <AppIcon app={root.app} />
+          </TraceIcon>
+          <TraceTitle>From {root.label}</TraceTitle>
+          <TraceDescription>
+            {item.workflow.name} r{item.workflow.revision} · {item.operation}
+          </TraceDescription>
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
+        <Trace>
+          {item.lineage.map((hop, index) => (
+            <TraceLine key={`${hop.label}:${index}`}>
+              <TraceIcon>
+                <AppIcon app={hop.app} />
+              </TraceIcon>
+              <TraceTitle>{hop.label}</TraceTitle>
+              {hop.workflow && <TraceDescription>{hop.workflow}</TraceDescription>}
+            </TraceLine>
+          ))}
+          <TraceLine>
+            <TraceIcon>
+              <AppIcon app="operation" />
+            </TraceIcon>
+            <TraceTitle className="text-foreground">{item.operation}</TraceTitle>
+            <TraceDescription>{item.workflow.name}</TraceDescription>
+          </TraceLine>
+        </Trace>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
+  );
+}
+
+export function FailureBlock({ item }: { item: ParkedItem }) {
+  if (item.reason.tag !== "exhausted") return null;
+  return (
+    <CodeBlock size="sm" variant="destructive">
+      <CodeBlockContent wrap>{item.reason.failure}</CodeBlockContent>
+    </CodeBlock>
+  );
+}
+
+/** The Sources pattern: one line that opens to a link for each artifact. */
+export function ArtifactTrace({ artifacts }: { artifacts: readonly Artifact[] }) {
+  if (artifacts.length === 0) return null;
+  return (
+    <TraceCollapsible>
+      <TraceCollapsibleTrigger>
+        <TraceLine>
+          <TraceTitle>{`Created ${artifacts.length} ${artifacts.length === 1 ? "artifact" : "artifacts"}`}</TraceTitle>
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
+        <Trace>
+          {artifacts.map((artifact) => (
+            <a key={artifact.label} href={artifact.url} target="_blank" rel="noreferrer">
+              <TraceLine>
+                <TraceIcon>
+                  <AppIcon app={artifact.app} />
+                </TraceIcon>
+                <TraceTitle>
+                  {artifact.label}
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </TraceTitle>
+                <TraceIcon>
+                  <RiArrowRightUpLine />
+                </TraceIcon>
+              </TraceLine>
+            </a>
+          ))}
+        </Trace>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
+  );
+}
 
 export function ArtifactLinks({ artifacts }: { artifacts: readonly Artifact[] }) {
   if (artifacts.length === 0) return null;

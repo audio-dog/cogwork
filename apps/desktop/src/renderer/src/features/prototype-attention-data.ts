@@ -329,7 +329,7 @@ export const parkedItems: readonly ParkedItem[] = [
         "failed",
         "Linear 403: no access to team FEL",
       ),
-      step("notify", "cogwork", "Notify me", "You"),
+      step("notify", "cogwork", "Notify me", ""),
     ],
   }),
   parked({

@@ -12,14 +12,15 @@ import { Lane, Lanes } from "./prototype-attention-lanes";
 import {
   AnswerChips,
   AppIcon,
-  ArtifactLinks,
+  ArtifactTrace,
   ChangedMark,
   cardDescription,
   DismissButton,
+  FailureBlock,
   ItemLink,
+  LineageTrace,
   NotificationIcon,
   Parked,
-  Provenance,
   ReasonIcon,
   RefLabel,
   reasonLabel,
@@ -91,11 +92,12 @@ function ParkedQuietCard({ item }: { item: ParkedItem }) {
         </>
       }
     >
-      <Provenance item={item} />
+      <LineageTrace item={item} />
       {description !== item.summary && <p className="text-sm">{item.summary}</p>}
+      <FailureBlock item={item} />
       <Parked.Provider item={item}>
-        <Parked.Timeline />
-        <Parked.Commands />
+        <Parked.Trace />
+        <Parked.Prompt />
       </Parked.Provider>
     </QuietCard>
   );
@@ -119,7 +121,7 @@ function NotificationQuietCard({ notification }: { notification: NotificationRec
     >
       <WorkflowLine workflow={notification.workflow} operation={notification.operation} />
       <AnswerChips answers={notification.answers} />
-      <ArtifactLinks artifacts={notification.artifacts} />
+      <ArtifactTrace artifacts={notification.artifacts} />
       <span className="flex items-center justify-between">
         <ItemLink itemRef={notification.ref} />
         <DismissButton notification={notification} />
