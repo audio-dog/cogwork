@@ -18,14 +18,11 @@ const reason = { tag: "awaiting-approval" as const, builtOn: "note revision 14:0
 const approval: ParkedItem = {
   id: "run:granola-weekly-sync",
   title: "Add CSV export to the run ledger",
-  ref: "Weekly product sync",
-  source: "granola",
-  workspace: "cogwork",
+  source: { app: "granola", label: "Weekly product sync" },
   workflow: { id: "granola-issue", name: "Granola → Issue", revision: 4 },
   operation: "Extract",
   lineage: [],
   summary: "",
-  answers: [],
   changedSinceParked: false,
   parkedAtMillis: 0,
   reason,
@@ -46,5 +43,14 @@ describe("planDigest", () => {
 
     expect(planDigest(approval, edits)).toBe(planDigest(approval, {}));
     expect(isEdited(approval, edits)).toBe(false);
+  });
+
+  it("leaves a skipped step's text out of both the digest and the edited check", () => {
+    const skipped = { ...createIssue, id: "linear", app: "linear" as const, state: "skipped" as const };
+    const withSkipped = { ...approval, plan: [createIssue, skipped] };
+    const edits = { [editKey(withSkipped, skipped, title)]: "Text the plan will not run" };
+
+    expect(planDigest(withSkipped, edits)).toBe(planDigest(withSkipped, {}));
+    expect(isEdited(withSkipped, edits)).toBe(false);
   });
 });

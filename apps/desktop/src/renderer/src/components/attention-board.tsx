@@ -1,6 +1,6 @@
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
-import { Card } from "@cogwork/ui/components/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { CodeBlock, CodeBlockContent } from "@cogwork/ui/components/code-block";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@cogwork/ui/components/collapsible";
 import {
@@ -10,7 +10,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@cogwork/ui/components/dropdown-menu";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@cogwork/ui/components/item";
+import { Separator } from "@cogwork/ui/components/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cogwork/ui/components/tabs";
 import { Textarea } from "@cogwork/ui/components/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
@@ -35,7 +44,6 @@ import {
   RiLoopLeftLine,
   RiMapPinLine,
   RiMoreLine,
-  RiQuestionLine,
   RiRefreshLine,
   RiShieldCheckLine,
   RiSignpostLine,
@@ -44,16 +52,18 @@ import {
 } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
 import { type ComponentType, createContext, type ReactNode, use, useState } from "react";
-import { relativeTime } from "../features/format";
+import { plural, relativeTime } from "../features/format";
+import { safeHref } from "../features/safe-href";
 import type { CatalogIcon } from "../features/workflow-catalog";
 import {
   type Answer,
+  type AnswerChoice,
   type Artifact,
   byUrgency,
   cardDescription,
   editKey,
   inputText,
-  isEdited,
+  isRunnable,
   type NotificationRecord,
   type ParkCommand,
   type ParkedItem,
@@ -62,15 +72,16 @@ import {
   type PlanEdits,
   type PlanStep,
   planDigest,
-  plural,
   reasonLabel,
   runnableSteps,
   type SkippedRecord,
+  type SourceRef,
   type StepState,
   skippedByWorkflow,
   skippedSummary,
   stepTitle,
   type WorkflowRef,
+  workflowLabel,
 } from "../features/workflow-parks";
 import { catalogIconFor } from "./workflow-catalog-menu";
 
@@ -96,6 +107,12 @@ export interface HandBack {
   readonly note: string;
 }
 
+export interface AnswerChosen {
+  readonly item: ParkedItem;
+  readonly choice: AnswerChoice;
+  readonly input: string | null;
+}
+
 export interface AttentionState {
   readonly parked: readonly ParkedItem[];
   readonly notifications: readonly NotificationRecord[];
@@ -108,8 +125,9 @@ export interface AttentionActions {
   readonly approve: (approval: Approval) => void;
   readonly reject: (rejection: Rejection) => void;
   readonly handBack: (handBack: HandBack) => void;
+  readonly chooseAnswer: (answer: AnswerChosen) => void;
   readonly dismiss: (notification: NotificationRecord) => void;
-  readonly openItem: (ref: string) => void;
+  readonly openItem: (id: string) => void;
   readonly setFocus: (id: string | null) => void;
   readonly setLayout: (layout: AttentionLayout) => void;
 }
@@ -132,52 +150,92 @@ function useAttention() {
   return value;
 }
 
+type ResponseMode = "view" | "edit" | "reject" | "hand-back";
+
+interface ParkDraft {
+  readonly mode: ResponseMode;
+  readonly edits: PlanEdits;
+  readonly note: string;
+  readonly choice: string | null;
+  readonly input: string;
+}
+
+const emptyDraft: ParkDraft = { mode: "view", edits: {}, note: "", choice: null, input: "" };
+
+interface DraftsContextValue {
+  state: { drafts: Readonly<Record<string, ParkDraft>> };
+  actions: {
+    update: (id: string, change: Partial<ParkDraft>) => void;
+    discard: (id: string) => void;
+  };
+  meta: Record<string, never>;
+}
+
+const DraftsContext = createContext<DraftsContextValue | null>(null);
+
+function useDrafts() {
+  const value = use(DraftsContext);
+  if (!value) throw new Error("Draft parts must render inside Attention.Provider");
+  return value;
+}
+
 function AttentionProvider({ children, ...value }: AttentionContextValue & { children: ReactNode }) {
-  return <AttentionContext value={value}>{children}</AttentionContext>;
+  const [drafts, setDrafts] = useState<Readonly<Record<string, ParkDraft>>>({});
+  const discard = (id: string) => setDrafts(({ [id]: _discarded, ...rest }) => rest);
+  return (
+    <AttentionContext value={value}>
+      <DraftsContext
+        value={{
+          state: { drafts },
+          actions: {
+            update: (id, change) =>
+              setDrafts((current) => ({ ...current, [id]: { ...(current[id] ?? emptyDraft), ...change } })),
+            discard,
+          },
+          meta: {},
+        }}
+      >
+        {children}
+      </DraftsContext>
+    </AttentionContext>
+  );
 }
 
 const scrollIntoView = (node: HTMLElement | null) => node?.scrollIntoView({ block: "nearest" });
 
-const reasonIcons: Record<ParkTag, ComponentType<{ className?: string }>> = {
-  "awaiting-approval": RiShieldCheckLine,
-  stuck: RiErrorWarningLine,
-  exhausted: RiCloseCircleLine,
-  "write-failed": RiCloseCircleLine,
-  "hop-cap": RiLoopLeftLine,
-  "missing-operation": RiSignpostLine,
-  "no-workspace-recognized": RiMapPinLine,
-  "needs-info": RiQuestionLine,
-  "ready-for-human": RiUserLine,
-};
+type ReasonTone = "decision" | "failure" | "setup";
 
-type ReasonTone = "approval" | "failure" | "setup" | "triage";
-
-const reasonTones: Record<ParkTag, ReasonTone> = {
-  "awaiting-approval": "approval",
-  stuck: "failure",
-  exhausted: "failure",
-  "write-failed": "failure",
-  "hop-cap": "setup",
-  "missing-operation": "setup",
-  "no-workspace-recognized": "setup",
-  "needs-info": "triage",
-  "ready-for-human": "triage",
+const reasonPresentations: Record<
+  ParkTag,
+  { icon: ComponentType<{ className?: string }>; tone: ReasonTone }
+> = {
+  "awaiting-approval": { icon: RiShieldCheckLine, tone: "decision" },
+  "handed-to-you": { icon: RiUserLine, tone: "decision" },
+  stuck: { icon: RiErrorWarningLine, tone: "failure" },
+  exhausted: { icon: RiCloseCircleLine, tone: "failure" },
+  "write-failed": { icon: RiCloseCircleLine, tone: "failure" },
+  "hop-cap": { icon: RiLoopLeftLine, tone: "setup" },
+  "missing-operation": { icon: RiSignpostLine, tone: "setup" },
+  "no-workspace-recognized": { icon: RiMapPinLine, tone: "setup" },
 };
 
 function ReasonIcon({ reason }: { reason: ParkReason }) {
-  const Icon = reasonIcons[reason.tag];
-  const tone = reasonTones[reason.tag];
+  const { icon: Icon, tone } = reasonPresentations[reason.tag];
   return (
     <Icon
       className={cn(
         "size-4 shrink-0",
-        tone === "approval" && "text-primary",
+        tone === "decision" && "text-primary",
         tone === "failure" && "text-destructive",
         tone === "setup" && "text-warning",
-        tone === "triage" && "text-muted-foreground",
       )}
     />
   );
+}
+
+function CatalogGlyph({ app }: { app: CatalogIcon }) {
+  const Icon = catalogIconFor(app);
+  return <Icon />;
 }
 
 function AppIcon({ app }: { app: CatalogIcon }) {
@@ -185,7 +243,7 @@ function AppIcon({ app }: { app: CatalogIcon }) {
   return <Icon className="size-3.5 shrink-0 text-muted-foreground" />;
 }
 
-function When({ atMillis }: { atMillis: number }) {
+function RelativeTime({ atMillis }: { atMillis: number }) {
   const {
     meta: { now },
   } = useAttention();
@@ -194,19 +252,19 @@ function When({ atMillis }: { atMillis: number }) {
   );
 }
 
-const isIdRef = (ref: string) => /^(#|PR #|[A-Z]+-\d)/.test(ref);
+const trackerApps: ReadonlySet<CatalogIcon> = new Set(["github", "linear"]);
 
-function RefLabel({ itemRef }: { itemRef: string }) {
-  return <span className={cn("truncate", isIdRef(itemRef) && "font-mono")}>{itemRef}</span>;
+function SourceLabel({ source }: { source: SourceRef }) {
+  return <span className={cn("truncate", trackerApps.has(source.app) && "font-mono")}>{source.label}</span>;
 }
 
-function ItemLink({ itemRef }: { itemRef: string }) {
+function ItemLink({ id, source }: { id: string; source: SourceRef }) {
   const {
     actions: { openItem },
   } = useAttention();
   return (
-    <Button size="xs" variant="link" className="px-0" onClick={() => openItem(itemRef)}>
-      <RefLabel itemRef={itemRef} />
+    <Button size="xs" variant="link" className="px-0" onClick={() => openItem(id)}>
+      <SourceLabel source={source} />
     </Button>
   );
 }
@@ -222,24 +280,15 @@ function ChangedMark() {
   );
 }
 
-function WorkflowLine({ workflow, operation }: { workflow: WorkflowRef; operation: string }) {
-  return (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-      <span className="truncate">{workflow.name}</span>
-      <span className="font-mono">r{workflow.revision}</span>
-      <span aria-hidden>·</span>
-      <span className="truncate">{operation}</span>
-    </span>
-  );
-}
-
 function AnswerChips({ answers }: { answers: readonly Answer[] }) {
   if (answers.length === 0) return null;
   return (
     <span className="flex flex-wrap gap-1">
       {answers.map((answer) => (
-        <Badge key={answer.question} variant="secondary" className="font-mono font-normal">
-          {answer.question}: {answer.choice}
+        <Badge key={answer.question} variant="secondary">
+          <span className="font-mono">
+            {answer.question}: {answer.choice}
+          </span>
         </Badge>
       ))}
     </span>
@@ -263,67 +312,67 @@ function AttentionCardRoot({ id, children }: { id: string; children: ReactNode }
 
 function AttentionCardSummary({ children }: { children: ReactNode }) {
   return (
-    <CollapsibleTrigger className="grid w-full grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 p-3 text-start outline-none focus-visible:bg-muted/50">
+    <CollapsibleTrigger
+      nativeButton={false}
+      render={<CardHeader />}
+      className="w-full py-3 text-start outline-none focus-visible:bg-muted/50"
+    >
       {children}
     </CollapsibleTrigger>
   );
 }
 
-function AttentionCardIcon({ children }: { children: ReactNode }) {
-  return <span className="flex h-5 items-center">{children}</span>;
-}
-
-function AttentionCardTitle({ children }: { children: ReactNode }) {
-  return <span className="text-sm leading-5 font-medium">{children}</span>;
+function AttentionCardTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <CardTitle className="flex items-start gap-2.5">
+      <span className="flex h-5 items-center">{icon}</span>
+      {children}
+    </CardTitle>
+  );
 }
 
 function AttentionCardDescription({ children }: { children: ReactNode }) {
-  return <span className="col-start-2 line-clamp-2 text-sm text-muted-foreground">{children}</span>;
+  return <CardDescription className="line-clamp-2 ps-6.5">{children}</CardDescription>;
 }
 
 function AttentionCardMeta({ children }: { children: ReactNode }) {
   return (
-    <span className="col-start-2 mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+    <div className="mt-1 flex min-w-0 items-center gap-1.5 ps-6.5 text-xs text-muted-foreground">
       {children}
-    </span>
+    </div>
   );
 }
 
 function AttentionCardDetail({ children }: { children: ReactNode }) {
   return (
-    <CollapsibleContent className="mx-3 flex flex-col gap-3 border-t py-3">{children}</CollapsibleContent>
+    <CollapsibleContent>
+      <CardContent className="flex flex-col gap-3 pb-3">
+        <Separator />
+        {children}
+      </CardContent>
+    </CollapsibleContent>
   );
 }
 
 const AttentionCard = {
   Root: AttentionCardRoot,
   Summary: AttentionCardSummary,
-  Icon: AttentionCardIcon,
   Title: AttentionCardTitle,
   Description: AttentionCardDescription,
   Meta: AttentionCardMeta,
   Detail: AttentionCardDetail,
 };
 
-type ResponseMode = "view" | "edit" | "reject" | "hand-back";
-
 interface ParkedContextValue {
-  state: {
-    item: ParkedItem;
-    mode: ResponseMode;
-    edits: PlanEdits;
-    note: string;
-    digest: string;
-    edited: boolean;
-  };
+  state: { item: ParkedItem; draft: ParkDraft; digest: string };
   actions: {
-    setMode: (mode: ResponseMode) => void;
+    update: (change: Partial<ParkDraft>) => void;
     cancel: () => void;
     setEdit: (key: string, text: string) => void;
-    setNote: (text: string) => void;
     approve: () => void;
     reject: () => void;
     handBack: () => void;
+    chooseAnswer: (choice: AnswerChoice) => void;
   };
   meta: Record<string, never>;
 }
@@ -338,26 +387,29 @@ function useParked() {
 
 function ParkedProvider({ item, children }: { item: ParkedItem; children: ReactNode }) {
   const { actions } = useAttention();
-  const [mode, setMode] = useState<ResponseMode>("view");
-  const [edits, setEdits] = useState<PlanEdits>({});
-  const [note, setNote] = useState("");
-  const digest = planDigest(item, edits);
+  const {
+    state: { drafts },
+    actions: { update, discard },
+  } = useDrafts();
+  const draft = drafts[item.id] ?? emptyDraft;
+  const digest = planDigest(item, draft.edits);
+  const send = (command: () => void) => {
+    command();
+    discard(item.id);
+  };
   return (
     <ParkedContext
       value={{
-        state: { item, mode, edits, note, digest, edited: isEdited(item, edits) },
+        state: { item, draft, digest },
         actions: {
-          setMode,
-          cancel: () => {
-            setMode("view");
-            setEdits({});
-            setNote("");
-          },
-          setEdit: (key, text) => setEdits((current) => ({ ...current, [key]: text })),
-          setNote,
-          approve: () => actions.approve({ item, digest, edits }),
-          reject: () => actions.reject({ item, digest, note }),
-          handBack: () => actions.handBack({ item, note }),
+          update: (change) => update(item.id, change),
+          cancel: () => discard(item.id),
+          setEdit: (key, text) => update(item.id, { edits: { ...draft.edits, [key]: text } }),
+          approve: () => send(() => actions.approve({ item, digest, edits: draft.edits })),
+          reject: () => send(() => actions.reject({ item, digest, note: draft.note })),
+          handBack: () => send(() => actions.handBack({ item, note: draft.note })),
+          chooseAnswer: (choice) =>
+            send(() => actions.chooseAnswer({ item, choice, input: choice.input ? draft.input : null })),
         },
         meta: {},
       }}
@@ -369,18 +421,19 @@ function ParkedProvider({ item, children }: { item: ParkedItem; children: ReactN
 
 function StepInputs({ step }: { step: PlanStep }) {
   const {
-    state: { item, mode, edits },
+    state: { item, draft },
     actions: { setEdit },
   } = useParked();
-  if (step.inputs.length === 0) return null;
+  const editable = draft.mode === "edit" && isRunnable(step);
   return (
     <div className="flex flex-col gap-1.5">
-      {step.inputs.map((input, index) =>
-        mode === "edit" ? (
+      {step.inputs.map((input, index) => {
+        const isLead = index === 0;
+        return editable ? (
           <Textarea
             key={input.id}
             aria-label={input.label}
-            value={inputText(edits, item, step, input)}
+            value={inputText(draft.edits, item, step, input)}
             onChange={(event) => setEdit(editKey(item, step, input), event.target.value)}
           />
         ) : (
@@ -388,14 +441,14 @@ function StepInputs({ step }: { step: PlanStep }) {
             key={input.id}
             className={cn(
               "text-sm whitespace-pre-wrap",
-              index === 0 && "text-foreground",
-              index > 0 && "text-muted-foreground",
+              isLead && "text-foreground",
+              !isLead && "text-muted-foreground",
             )}
           >
-            {inputText(edits, item, step, input)}
+            {inputText(draft.edits, item, step, input)}
           </p>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -414,7 +467,7 @@ function StepLine({ step }: { step: PlanStep }) {
   return (
     <TraceLine status={traceStatus[step.state]}>
       <TraceIcon>
-        <AppIcon app={step.app} />
+        <CatalogGlyph app={step.app} />
       </TraceIcon>
       <TraceTitle>{stepTitle(step)}</TraceTitle>
       <TraceDescription>{stepDescription(step)}</TraceDescription>
@@ -447,7 +500,7 @@ const hasStepDetail = (step: PlanStep) => step.inputs.length > 0 || failureNote(
 
 function ParkedPlan() {
   const {
-    state: { item, mode },
+    state: { item, draft },
   } = useParked();
   if (item.plan.length === 0) return null;
   return (
@@ -455,8 +508,8 @@ function ParkedPlan() {
       {item.plan.map((step) =>
         hasStepDetail(step) ? (
           <TraceCollapsible
-            key={`${step.id}:${mode}`}
-            defaultOpen={mode === "edit" || step.state === "failed"}
+            key={`${step.id}:${draft.mode}`}
+            defaultOpen={draft.mode === "edit" || step.state === "failed"}
           >
             <TraceCollapsibleTrigger>
               <StepLine step={step} />
@@ -483,16 +536,16 @@ function NoteCommand({
   onConfirm: () => void;
 }) {
   const {
-    state: { note },
-    actions: { setNote, cancel },
+    state: { draft },
+    actions: { update, cancel },
   } = useParked();
   return (
     <div className="flex w-full flex-col gap-2">
       <Textarea
         aria-label="Note"
         placeholder="Note"
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
+        value={draft.note}
+        onChange={(event) => update({ note: event.target.value })}
       />
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={cancel}>
@@ -520,79 +573,140 @@ function HandBackNote() {
   return <NoteCommand confirm="Hand back" variant="default" onConfirm={handBack} />;
 }
 
-function ApprovalMenu() {
+function ApprovalSummary({ children }: { children: ReactNode }) {
   const {
-    actions: { setMode },
+    state: { item, digest },
   } = useParked();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button aria-label="More" size="icon-sm" variant="ghost" />}>
-        <RiMoreLine />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => setMode("edit")}>Edit</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setMode("hand-back")}>Hand back</DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function ApprovalItem() {
-  const {
-    state: { item, mode, digest, edited },
-    actions: { setMode, cancel, approve },
-  } = useParked();
+  const builtOn = item.reason.tag === "awaiting-approval" ? item.reason.builtOn : null;
   return (
     <Item variant="muted" size="sm">
       <ItemContent>
         <ItemTitle>{`Run ${plural(runnableSteps(item).length, "step")}?`}</ItemTitle>
-        <ItemDescription className={cn("font-mono", edited && "text-foreground")}>{digest}</ItemDescription>
+        <ItemDescription>
+          <span className="font-mono">{digest}</span>
+          {builtOn && ` · built on ${builtOn}`}
+        </ItemDescription>
       </ItemContent>
-      <ItemActions>
-        {mode === "edit" && (
-          <Button size="sm" variant="ghost" onClick={cancel}>
-            Cancel
-          </Button>
-        )}
-        {mode === "view" && (
-          <>
-            <ApprovalMenu />
-            <Button size="sm" variant="outline" onClick={() => setMode("reject")}>
-              Reject
-            </Button>
-          </>
-        )}
-        <Button size="sm" onClick={approve}>
-          Approve
-        </Button>
-      </ItemActions>
+      <ItemActions>{children}</ItemActions>
     </Item>
   );
 }
 
-const approvalPrompts: Record<ResponseMode, ComponentType> = {
-  view: ApprovalItem,
-  edit: ApprovalItem,
+function ApprovalView() {
+  const {
+    actions: { update, approve },
+  } = useParked();
+  return (
+    <ApprovalSummary>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button aria-label="More" size="icon-sm" variant="ghost" />}>
+          <RiMoreLine />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={() => update({ mode: "edit" })}>Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => update({ mode: "hand-back" })}>Hand back</DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button size="sm" variant="outline" onClick={() => update({ mode: "reject" })}>
+        Reject
+      </Button>
+      <Button size="sm" onClick={approve}>
+        Approve
+      </Button>
+    </ApprovalSummary>
+  );
+}
+
+function ApprovalEdit() {
+  const {
+    actions: { cancel, approve },
+  } = useParked();
+  return (
+    <ApprovalSummary>
+      <Button size="sm" variant="ghost" onClick={cancel}>
+        Cancel
+      </Button>
+      <Button size="sm" onClick={approve}>
+        Approve
+      </Button>
+    </ApprovalSummary>
+  );
+}
+
+const approvalPanels: Record<ResponseMode, ComponentType> = {
+  view: ApprovalView,
+  edit: ApprovalEdit,
   reject: RejectNote,
   "hand-back": HandBackNote,
 };
 
 function ApprovalPrompt() {
   const {
-    state: { mode },
+    state: { draft },
   } = useParked();
-  const Prompt = approvalPrompts[mode];
-  return <Prompt />;
+  const Panel = approvalPanels[draft.mode];
+  return <Panel />;
+}
+
+function AnswerInput({ choice, label }: { choice: AnswerChoice; label: string }) {
+  const {
+    state: { draft },
+    actions: { update, cancel, chooseAnswer },
+  } = useParked();
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <Textarea
+        aria-label={label}
+        placeholder={label}
+        value={draft.input}
+        onChange={(event) => update({ input: event.target.value })}
+      />
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={cancel}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={draft.input.trim() === ""} onClick={() => chooseAnswer(choice)}>
+          {choice.label}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AnswerPrompt() {
+  const {
+    state: { item, draft },
+    actions: { update, chooseAnswer },
+  } = useParked();
+  const choices = item.reason.tag === "handed-to-you" ? item.reason.choices : [];
+  const pending = choices.find((choice) => choice.id === draft.choice);
+  if (pending?.input) return <AnswerInput choice={pending} label={pending.input.label} />;
+  const pick = (choice: AnswerChoice) => {
+    if (choice.input) {
+      update({ choice: choice.id });
+      return;
+    }
+    chooseAnswer(choice);
+  };
+  return (
+    <div className="flex flex-wrap justify-end gap-1.5">
+      {choices.map((choice) => (
+        <Button key={choice.id} size="sm" variant="outline" onClick={() => pick(choice)}>
+          {choice.label}
+        </Button>
+      ))}
+    </div>
+  );
 }
 
 function HandBackCommands() {
   const {
-    state: { item, mode },
-    actions: { setMode },
+    state: { item, draft },
+    actions: { update },
   } = useParked();
-  if (mode === "hand-back") return <HandBackNote />;
+  if (draft.mode === "hand-back") return <HandBackNote />;
   return (
     <div className="flex items-center justify-end gap-1.5">
       {item.reason.tag === "missing-operation" && (
@@ -605,31 +719,16 @@ function HandBackCommands() {
           Edit Workflow
         </Button>
       )}
-      <Button size="sm" onClick={() => setMode("hand-back")}>
+      <Button size="sm" onClick={() => update({ mode: "hand-back" })}>
         Hand back
       </Button>
     </div>
   );
 }
 
-function OpenCommand() {
-  const {
-    state: { item },
-  } = useParked();
-  const {
-    actions: { openItem },
-  } = useAttention();
-  return (
-    <div className="flex justify-end">
-      <Button size="sm" variant="outline" onClick={() => openItem(item.ref)}>
-        Open {item.ref}
-      </Button>
-    </div>
-  );
-}
-
-const commandPanels: ReadonlyArray<{ readonly command: ParkCommand; readonly Panel: ComponentType }> = [
+const commandPanels: ReadonlyArray<{ command: ParkCommand; Panel: ComponentType }> = [
   { command: "approve", Panel: ApprovalPrompt },
+  { command: "choose-answer", Panel: AnswerPrompt },
   { command: "hand-back", Panel: HandBackCommands },
 ];
 
@@ -637,24 +736,23 @@ function ParkedCommands() {
   const {
     state: { item },
   } = useParked();
-  const Panel = commandPanels.find(({ command }) => item.commands.includes(command))?.Panel ?? OpenCommand;
-  return <Panel />;
+  const entry = commandPanels.find(({ command }) => item.commands.includes(command));
+  if (!entry) return null;
+  return <entry.Panel />;
 }
 
 function LineageTrace({ item }: { item: ParkedItem }) {
-  const root = item.lineage[0];
+  const [root] = item.lineage;
   if (!root) return null;
   return (
     <TraceCollapsible>
       <TraceCollapsibleTrigger>
         <TraceLine>
           <TraceIcon>
-            <AppIcon app={root.app} />
+            <CatalogGlyph app={root.app} />
           </TraceIcon>
           <TraceTitle>From {root.label}</TraceTitle>
-          <TraceDescription>
-            {item.workflow.name} r{item.workflow.revision} · {item.operation}
-          </TraceDescription>
+          <TraceDescription>{workflowLabel(item.workflow, item.operation)}</TraceDescription>
         </TraceLine>
       </TraceCollapsibleTrigger>
       <TraceCollapsibleContent>
@@ -662,7 +760,7 @@ function LineageTrace({ item }: { item: ParkedItem }) {
           {item.lineage.map((hop, index) => (
             <TraceLine key={`${hop.label}:${index}`}>
               <TraceIcon>
-                <AppIcon app={hop.app} />
+                <CatalogGlyph app={hop.app} />
               </TraceIcon>
               <TraceTitle>{hop.label}</TraceTitle>
               {hop.workflow && <TraceDescription>{hop.workflow}</TraceDescription>}
@@ -670,9 +768,9 @@ function LineageTrace({ item }: { item: ParkedItem }) {
           ))}
           <TraceLine>
             <TraceIcon>
-              <AppIcon app="operation" />
+              <CatalogGlyph app="operation" />
             </TraceIcon>
-            <TraceTitle className="text-foreground">{item.operation}</TraceTitle>
+            <TraceTitle>{item.operation}</TraceTitle>
             <TraceDescription>{item.workflow.name}</TraceDescription>
           </TraceLine>
         </Trace>
@@ -681,7 +779,7 @@ function LineageTrace({ item }: { item: ParkedItem }) {
   );
 }
 
-function FailureBlock({ item }: { item: ParkedItem }) {
+function ExhaustedFailure({ item }: { item: ParkedItem }) {
   if (item.reason.tag !== "exhausted") return null;
   return <FailureText text={item.reason.failure} />;
 }
@@ -691,31 +789,45 @@ function ParkedCard({ item }: { item: ParkedItem }) {
   return (
     <AttentionCard.Root id={item.id}>
       <AttentionCard.Summary>
-        <AttentionCard.Icon>
-          <ReasonIcon reason={item.reason} />
-        </AttentionCard.Icon>
-        <AttentionCard.Title>{item.title}</AttentionCard.Title>
+        <AttentionCard.Title icon={<ReasonIcon reason={item.reason} />}>{item.title}</AttentionCard.Title>
         <AttentionCard.Description>{description}</AttentionCard.Description>
         <AttentionCard.Meta>
           <span className="text-foreground">{reasonLabel(item)}</span>
           <span aria-hidden>·</span>
-          <When atMillis={item.parkedAtMillis} />
+          <RelativeTime atMillis={item.parkedAtMillis} />
           {item.changedSinceParked && <ChangedMark />}
           <span className="ms-auto" />
-          <AppIcon app={item.source} />
-          <RefLabel itemRef={item.ref} />
+          <AppIcon app={item.source.app} />
+          <SourceLabel source={item.source} />
         </AttentionCard.Meta>
       </AttentionCard.Summary>
       <AttentionCard.Detail>
         <LineageTrace item={item} />
         {description !== item.summary && <p className="text-sm">{item.summary}</p>}
-        <FailureBlock item={item} />
+        <ExhaustedFailure item={item} />
         <ParkedProvider item={item}>
           <ParkedPlan />
           <ParkedCommands />
         </ParkedProvider>
       </AttentionCard.Detail>
     </AttentionCard.Root>
+  );
+}
+
+function ArtifactLine({ artifact }: { artifact: Artifact }) {
+  return (
+    <TraceLine>
+      <TraceIcon>
+        <CatalogGlyph app={artifact.app} />
+      </TraceIcon>
+      <TraceTitle>
+        {artifact.label}
+        <span className="sr-only"> (opens in a new tab)</span>
+      </TraceTitle>
+      <TraceIcon>
+        <RiArrowRightUpLine />
+      </TraceIcon>
+    </TraceLine>
   );
 }
 
@@ -730,22 +842,15 @@ function ArtifactTrace({ artifacts }: { artifacts: readonly Artifact[] }) {
       </TraceCollapsibleTrigger>
       <TraceCollapsibleContent>
         <Trace>
-          {artifacts.map((artifact) => (
-            <a key={artifact.label} href={artifact.url} target="_blank" rel="noreferrer">
-              <TraceLine>
-                <TraceIcon>
-                  <AppIcon app={artifact.app} />
-                </TraceIcon>
-                <TraceTitle>
-                  {artifact.label}
-                  <span className="sr-only"> (opens in a new tab)</span>
-                </TraceTitle>
-                <TraceIcon>
-                  <RiArrowRightUpLine />
-                </TraceIcon>
-              </TraceLine>
-            </a>
-          ))}
+          {artifacts.map((artifact) => {
+            const href = safeHref(artifact.url);
+            if (!href) return <ArtifactLine key={artifact.label} artifact={artifact} />;
+            return (
+              <a key={artifact.label} href={href} target="_blank" rel="noreferrer">
+                <ArtifactLine artifact={artifact} />
+              </a>
+            );
+          })}
         </Trace>
       </TraceCollapsibleContent>
     </TraceCollapsible>
@@ -759,24 +864,25 @@ function NotificationCard({ notification }: { notification: NotificationRecord }
   return (
     <AttentionCard.Root id={notification.id}>
       <AttentionCard.Summary>
-        <AttentionCard.Icon>
-          <RiBellLine className="size-4 shrink-0 text-muted-foreground" />
-        </AttentionCard.Icon>
-        <AttentionCard.Title>{notification.title}</AttentionCard.Title>
+        <AttentionCard.Title icon={<RiBellLine className="size-4 shrink-0 text-muted-foreground" />}>
+          {notification.title}
+        </AttentionCard.Title>
         <AttentionCard.Description>{notification.summary}</AttentionCard.Description>
         <AttentionCard.Meta>
-          <When atMillis={notification.atMillis} />
+          <RelativeTime atMillis={notification.atMillis} />
           <span className="ms-auto" />
-          <AppIcon app={notification.source} />
-          <RefLabel itemRef={notification.ref} />
+          <AppIcon app={notification.source.app} />
+          <SourceLabel source={notification.source} />
         </AttentionCard.Meta>
       </AttentionCard.Summary>
       <AttentionCard.Detail>
-        <WorkflowLine workflow={notification.workflow} operation={notification.operation} />
+        <span className="text-xs text-muted-foreground">
+          {workflowLabel(notification.workflow, notification.operation)}
+        </span>
         <AnswerChips answers={notification.answers} />
         <ArtifactTrace artifacts={notification.artifacts} />
         <span className="flex items-center justify-between">
-          <ItemLink itemRef={notification.ref} />
+          <ItemLink id={notification.id} source={notification.source} />
           <Button size="sm" variant="ghost" onClick={() => dismiss(notification)}>
             Dismiss
           </Button>
@@ -791,32 +897,33 @@ function SkippedCard({ workflow, records }: { workflow: WorkflowRef; records: re
   return (
     <AttentionCard.Root id={`workflow:${workflow.id}`}>
       <AttentionCard.Summary>
-        <AttentionCard.Icon>
-          <RiSkipForwardLine className="size-4 shrink-0 text-muted-foreground" />
-        </AttentionCard.Icon>
-        <AttentionCard.Title>{workflow.name}</AttentionCard.Title>
+        <AttentionCard.Title icon={<RiSkipForwardLine className="size-4 shrink-0 text-muted-foreground" />}>
+          {workflow.name}
+        </AttentionCard.Title>
         <AttentionCard.Description>{records[0]?.reason}</AttentionCard.Description>
         <AttentionCard.Meta>
           <span className="text-foreground">{skippedSummary(records)}</span>
           <span aria-hidden>·</span>
-          <When atMillis={latest} />
+          <RelativeTime atMillis={latest} />
         </AttentionCard.Meta>
       </AttentionCard.Summary>
       <AttentionCard.Detail>
-        <ul className="flex flex-col gap-2.5">
+        <ItemGroup className="gap-1">
           {records.map((record) => (
-            <li key={record.id} className="flex items-start gap-2">
-              <span className="flex h-5 items-center">
-                <AppIcon app={record.app} />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm">{record.what}</span>
-                <span className="text-xs text-muted-foreground">{record.reason}</span>
-              </span>
-              <When atMillis={record.atMillis} />
-            </li>
+            <Item key={record.id} size="xs">
+              <ItemMedia variant="icon">
+                <CatalogGlyph app={record.app} />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>{record.what}</ItemTitle>
+                <ItemDescription>{record.reason}</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <RelativeTime atMillis={record.atMillis} />
+              </ItemActions>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       </AttentionCard.Detail>
     </AttentionCard.Root>
   );

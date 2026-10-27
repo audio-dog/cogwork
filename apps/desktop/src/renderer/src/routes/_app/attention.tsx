@@ -25,28 +25,29 @@ function AttentionRoute() {
   const { layout, focus } = Route.useSearch();
   const navigate = useNavigate();
   const now = useNow(60_000);
-  const [cleared, setCleared] = useState<ReadonlySet<string>>(new Set());
-  const clear = (id: string) => setCleared((current) => new Set([...current, id]));
-  const go = (next: Partial<AttentionSearch>) =>
+  const [resolved, setResolved] = useState<ReadonlySet<string>>(new Set());
+  const resolve = (id: string) => setResolved((current) => new Set([...current, id]));
+  const updateSearch = (next: Partial<AttentionSearch>) =>
     navigate({ to: "/attention", search: { layout, focus, ...next }, replace: true });
 
   return (
     <Attention.Provider
       state={{
-        parked: mockParkedItems.filter((item) => !cleared.has(item.id)),
-        notifications: mockNotifications.filter((notification) => !cleared.has(notification.id)),
+        parked: mockParkedItems.filter((item) => !resolved.has(item.id)),
+        notifications: mockNotifications.filter((notification) => !resolved.has(notification.id)),
         skipped: mockSkippedRecords,
         layout,
         focus: focus ?? null,
       }}
       actions={{
-        approve: ({ item }) => clear(item.id),
-        reject: ({ item }) => clear(item.id),
-        handBack: ({ item }) => clear(item.id),
-        dismiss: (notification) => clear(notification.id),
+        approve: ({ item }) => resolve(item.id),
+        reject: ({ item }) => resolve(item.id),
+        handBack: ({ item }) => resolve(item.id),
+        chooseAnswer: ({ item }) => resolve(item.id),
+        dismiss: (notification) => resolve(notification.id),
         openItem: () => undefined,
-        setFocus: (id) => go({ focus: id ?? undefined }),
-        setLayout: (next) => go({ layout: next }),
+        setFocus: (id) => updateSearch({ focus: id ?? undefined }),
+        setLayout: (next) => updateSearch({ layout: next }),
       }}
       meta={{ now }}
     >

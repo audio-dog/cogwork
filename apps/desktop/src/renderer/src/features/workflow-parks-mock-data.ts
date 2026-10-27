@@ -1,11 +1,12 @@
 import type { CatalogIcon } from "./workflow-catalog";
 import {
   type AgentInputText,
+  type AnswerChoice,
   commandsFor,
   type NotificationRecord,
   type ParkedItem,
+  type PlanStep,
   type SkippedRecord,
-  type StepState,
   type WorkflowRef,
 } from "./workflow-parks";
 
@@ -20,63 +21,55 @@ const workflows = {
 } satisfies Record<string, WorkflowRef>;
 
 const step = (
-  id: string,
-  app: CatalogIcon,
-  action: string,
-  target: string,
-  inputs: readonly AgentInputText[] = [],
-  parameters: readonly string[] = [],
-  state: StepState = "planned",
-  note: string | null = null,
-) => ({ id, app, action, target, inputs, parameters, state, note });
+  fields: Pick<PlanStep, "id" | "app" | "action" | "target"> &
+    Partial<Omit<PlanStep, "id" | "app" | "action" | "target">>,
+): PlanStep => ({ inputs: [], parameters: [], state: "planned", note: null, ...fields });
 
-const input = (id: string, label: string, text: string) => ({ id, label, text });
+const input = (id: string, label: string, text: string): AgentInputText => ({ id, label, text });
 
-const source = (app: CatalogIcon, label: string) => ({ kind: "source" as const, app, label, workflow: null });
+const source = (app: CatalogIcon, label: string) => ({ app, label });
+const root = (app: CatalogIcon, label: string) => ({ app, label, workflow: null });
 const operationHop = (workflow: WorkflowRef, label: string) => ({
-  kind: "operation" as const,
   app: "operation" as const,
   label,
   workflow: workflow.name,
 });
-const artifact = (app: CatalogIcon, label: string) => ({
-  kind: "artifact" as const,
-  app,
-  label,
-  workflow: null,
-});
+const artifact = (app: CatalogIcon, label: string) => ({ app, label, workflow: null });
 
 const parked = (item: Omit<ParkedItem, "commands">): ParkedItem => ({
   ...item,
   commands: commandsFor(item.reason),
 });
 
+const triageQuestion = "Is this ticket ready, and who should pick it up?";
+const triageChoices: readonly AnswerChoice[] = [
+  { id: "ready-for-agent", label: "Ready for agent", input: null },
+  { id: "needs-info", label: "Needs info", input: { id: "comment", label: "Question for the reporter" } },
+  { id: "ready-for-human", label: "Ready for human", input: null },
+  { id: "wontfix", label: "Won't fix", input: null },
+];
+
 export const mockParkedItems: readonly ParkedItem[] = [
   parked({
     id: "run:granola-weekly-sync-2",
     title: "Add CSV export to the run ledger",
-    ref: "Weekly product sync",
-    source: "granola",
-    workspace: "cogwork",
+    source: source("granola", "Weekly product sync"),
     workflow: workflows.granola,
     operation: "Extract",
-    lineage: [source("granola", "Weekly product sync")],
+    lineage: [root("granola", "Weekly product sync")],
     summary:
       "Sam asked for a CSV export of the run ledger so finance can see agent spend per week. Taylor said it should go in this cycle.",
-    answers: [
-      { question: "request", choice: "yes" },
-      { question: "match", choice: "new" },
-    ],
     changedSinceParked: false,
     parkedAtMillis: minutesAgo(6),
     reason: { tag: "awaiting-approval", builtOn: "note revision 14:02" },
     plan: [
-      step(
-        "create",
-        "github",
-        "Create an issue",
-        "cogwork",
-        [
+      step({
+        id: "create",
+        app: "github",
+        action: "Create an issue",
+        target: "cogwork",
+        parameters: ["needs-triage"],
+        inputs: [
           input("issue_title", "Title", "Add CSV export to the run ledger"),
           input(
             "issue_body",
@@ -84,67 +77,89 @@ export const mockParkedItems: readonly ParkedItem[] = [
             "Finance wants agent spend per week. Add a CSV export of the run ledger with one row per Run: Workflow, Operation, Harness, model, tokens, and cost.\n\nAsked for by Sam in the weekly product sync.",
           ),
         ],
-        ["needs-triage"],
-      ),
-      step(
-        "linear",
-        "linear",
-        "Create an issue",
-        "cogwork",
-        [],
-        [],
-        "skipped",
-        "cogwork does not bind Linear",
-      ),
-      step("post", "slack", "Send a message", "#product", [
-        input("message", "Message", "Filed the CSV export from today's sync. It goes to triage next."),
-      ]),
+      }),
+      step({
+        id: "linear",
+        app: "linear",
+        action: "Create an issue",
+        target: "cogwork",
+        state: "skipped",
+        note: "cogwork does not bind Linear",
+      }),
+      step({
+        id: "post",
+        app: "slack",
+        action: "Send a message",
+        target: "#product",
+        inputs: [
+          input("message", "Message", "Filed the CSV export from today's sync. It goes to triage next."),
+        ],
+      }),
     ],
   }),
   parked({
     id: "run:slack-review-771",
     title: "Can someone review #771 before the release?",
-    ref: "#eng",
-    source: "slack",
-    workspace: "cogwork",
+    source: source("slack", "#eng"),
     workflow: workflows.slack,
     operation: "Review the pull request",
-    lineage: [source("slack", "Message in #eng"), operationHop(workflows.slack, "Classify the ask")],
+    lineage: [root("slack", "Message in #eng"), operationHop(workflows.slack, "Classify the ask")],
     summary:
       "The change is small and correct. One test asserts on wall-clock time and will be flaky on CI; I suggest TestClock.",
-    answers: [{ question: "result", choice: "reviewed" }],
     changedSinceParked: false,
     parkedAtMillis: minutesAgo(14),
     reason: { tag: "awaiting-approval", builtOn: "thread revision 13:51" },
     plan: [
-      step("comment", "github", "Comment on this pull request", "#771", [
-        input(
-          "comment",
-          "Comment",
-          "Looks correct. `scheduler.test.ts` asserts on `Date.now()`, which will flake on CI. Use `TestClock` and advance it in the test.",
-        ),
-      ]),
-      step("reply", "slack", "Reply as me", "#eng thread", [
-        input("message", "Message", "Reviewed #771: good to go after one test fix. Comment is on the PR."),
-      ]),
+      step({
+        id: "comment",
+        app: "github",
+        action: "Comment on this pull request",
+        target: "#771",
+        inputs: [
+          input(
+            "comment",
+            "Comment",
+            "Looks correct. `scheduler.test.ts` asserts on `Date.now()`, which will flake on CI. Use `TestClock` and advance it in the test.",
+          ),
+        ],
+      }),
+      step({
+        id: "reply",
+        app: "slack",
+        action: "Reply as me",
+        target: "#eng thread",
+        inputs: [
+          input("message", "Message", "Reviewed #771: good to go after one test fix. Comment is on the PR."),
+        ],
+      }),
     ],
+  }),
+  parked({
+    id: "run:triage-805",
+    title: "Crash on start when the socket file is stale",
+    source: source("github", "#805"),
+    workflow: workflows.triage,
+    operation: "Triage",
+    lineage: [root("github", "#805")],
+    summary: "I could not reproduce it. The report has no macOS version and no daemon log.",
+    changedSinceParked: false,
+    parkedAtMillis: minutesAgo(20),
+    reason: { tag: "handed-to-you", question: triageQuestion, choices: triageChoices },
+    plan: [],
   }),
   parked({
     id: "run:implement-812",
     title: "Add CSV export to the run ledger",
-    ref: "#812",
-    source: "github",
-    workspace: "cogwork",
+    source: source("github", "#812"),
     workflow: workflows.triage,
     operation: "Implement",
     lineage: [
-      source("granola", "Weekly product sync"),
+      root("granola", "Weekly product sync"),
       operationHop(workflows.granola, "Extract"),
       artifact("github", "#812"),
       operationHop(workflows.triage, "Triage"),
     ],
     summary: "The ledger has no stable column order, so I cannot tell which columns the export must keep.",
-    answers: [{ question: "outcome", choice: "stuck" }],
     changedSinceParked: true,
     parkedAtMillis: minutesAgo(42),
     reason: {
@@ -156,86 +171,69 @@ export const mockParkedItems: readonly ParkedItem[] = [
   parked({
     id: "run:granola-1on1",
     title: "Move the staging database to Postgres 17",
-    ref: "1:1 Taylor / Sam",
-    source: "granola",
-    workspace: null,
+    source: source("granola", "1:1 Taylor / Sam"),
     workflow: workflows.granola,
     operation: "Extract",
-    lineage: [source("granola", "1:1 Taylor / Sam")],
+    lineage: [root("granola", "1:1 Taylor / Sam")],
     summary: "Taylor agreed to move staging to Postgres 17 before the schema split. No repository was named.",
-    answers: [
-      { question: "request", choice: "yes" },
-      { question: "match", choice: "new" },
-    ],
     changedSinceParked: false,
     parkedAtMillis: minutesAgo(65),
     reason: { tag: "no-workspace-recognized" },
     plan: [
-      step(
-        "create",
-        "github",
-        "Create an issue",
-        "No Workspace",
-        [
+      step({
+        id: "create",
+        app: "github",
+        action: "Create an issue",
+        target: "No Workspace",
+        parameters: ["needs-triage"],
+        inputs: [
           input("issue_title", "Title", "Move the staging database to Postgres 17"),
           input("issue_body", "Body", "Do this before the users table split."),
         ],
-        ["needs-triage"],
-      ),
+      }),
     ],
   }),
   parked({
     id: "run:granola-feldspar-ops",
     title: "Rotate the Feldspar deploy keys",
-    ref: "Feldspar ops review",
-    source: "granola",
-    workspace: "feldspar",
+    source: source("granola", "Feldspar ops review"),
     workflow: workflows.granola,
     operation: "Extract",
-    lineage: [source("granola", "Feldspar ops review")],
+    lineage: [root("granola", "Feldspar ops review")],
     summary: "The team agreed to rotate the deploy keys before the audit on Friday.",
-    answers: [
-      { question: "request", choice: "yes" },
-      { question: "match", choice: "new" },
-    ],
     changedSinceParked: false,
     parkedAtMillis: minutesAgo(88),
     reason: { tag: "write-failed", step: "Add a label", error: "Linear 403: no access to team FEL" },
     plan: [
-      step(
-        "create",
-        "linear",
-        "Create an issue",
-        "feldspar",
-        [input("issue_title", "Title", "Rotate the Feldspar deploy keys")],
-        [],
-        "done",
-        "FEL-212",
-      ),
-      step(
-        "label",
-        "linear",
-        "Add a label",
-        "FEL-212",
-        [],
-        ["security"],
-        "failed",
-        "Linear 403: no access to team FEL",
-      ),
-      step("notify", "cogwork", "Notify me", ""),
+      step({
+        id: "create",
+        app: "linear",
+        action: "Create an issue",
+        target: "feldspar",
+        inputs: [input("issue_title", "Title", "Rotate the Feldspar deploy keys")],
+        state: "done",
+        note: "FEL-212",
+      }),
+      step({
+        id: "label",
+        app: "linear",
+        action: "Add a label",
+        target: "FEL-212",
+        parameters: ["security"],
+        state: "failed",
+        note: "Linear 403: no access to team FEL",
+      }),
+      step({ id: "notify", app: "cogwork", action: "Notify me", target: "" }),
     ],
   }),
   parked({
     id: "run:support-token",
     title: "How do I rotate the GitHub token?",
-    ref: "#support",
-    source: "slack",
-    workspace: "cogwork",
+    source: source("slack", "#support"),
     workflow: workflows.slack,
     operation: "Classify the ask",
-    lineage: [source("slack", "Message in #support")],
+    lineage: [root("slack", "Message in #support")],
     summary: "This is a question I can answer from the docs.",
-    answers: [{ question: "ask", choice: "question" }],
     changedSinceParked: false,
     parkedAtMillis: minutesAgo(130),
     reason: { tag: "missing-operation", operation: "Answer the question" },
@@ -244,13 +242,11 @@ export const mockParkedItems: readonly ParkedItem[] = [
   parked({
     id: "run:verify-640",
     title: "Verify: fix the flaky ledger test",
-    ref: "#836",
-    source: "github",
-    workspace: "cogwork",
+    source: source("github", "#836"),
     workflow: workflows.verify,
     operation: "Verify",
     lineage: [
-      source("github", "#640"),
+      root("github", "#640"),
       operationHop(workflows.triage, "Implement"),
       artifact("github", "PR #702"),
       operationHop(workflows.verify, "Verify"),
@@ -259,7 +255,6 @@ export const mockParkedItems: readonly ParkedItem[] = [
       artifact("github", "PR #829"),
     ],
     summary: "The merged change still leaves one flaky assertion.",
-    answers: [{ question: "result", choice: "outstanding" }],
     changedSinceParked: false,
     parkedAtMillis: minutesAgo(190),
     reason: { tag: "hop-cap", hops: 8 },
@@ -268,53 +263,31 @@ export const mockParkedItems: readonly ParkedItem[] = [
   parked({
     id: "run:follow-up-798",
     title: "Show plan digest on approvals",
-    ref: "#798",
-    source: "github",
-    workspace: "cogwork",
+    source: source("github", "#798"),
     workflow: workflows.triage,
     operation: "Follow-up",
     lineage: [
-      source("github", "#798"),
+      root("github", "#798"),
       operationHop(workflows.triage, "Implement"),
       artifact("github", "PR #801"),
     ],
     summary: "Three review comments are addressed; the fourth needs the harness.",
-    answers: [],
     changedSinceParked: true,
     parkedAtMillis: minutesAgo(260),
     reason: { tag: "exhausted", failure: "Harness exited: context window exceeded", attempts: 3 },
     plan: [],
   }),
   parked({
-    id: "run:triage-805",
-    title: "Crash on start when the socket file is stale",
-    ref: "#805",
-    source: "github",
-    workspace: "cogwork",
-    workflow: workflows.triage,
-    operation: "Triage",
-    lineage: [source("github", "#805")],
-    summary: "I cannot reproduce it. I asked for the macOS version and the daemon log.",
-    answers: [{ question: "role", choice: "needs-info" }],
-    changedSinceParked: false,
-    parkedAtMillis: minutesAgo(320),
-    reason: { tag: "needs-info" },
-    plan: [],
-  }),
-  parked({
     id: "run:triage-aud-14",
     title: "Rotate the signing keys",
-    ref: "AUD-14",
-    source: "linear",
-    workspace: "colony-site",
+    source: source("linear", "AUD-14"),
     workflow: workflows.triage,
     operation: "Triage",
-    lineage: [source("linear", "AUD-14")],
+    lineage: [root("linear", "AUD-14")],
     summary: "This needs admin access to the Apple developer account.",
-    answers: [{ question: "role", choice: "ready-for-human" }],
     changedSinceParked: false,
     parkedAtMillis: minutesAgo(410),
-    reason: { tag: "ready-for-human" },
+    reason: { tag: "handed-to-you", question: triageQuestion, choices: triageChoices },
     plan: [],
   }),
 ];
@@ -323,8 +296,7 @@ export const mockNotifications: readonly NotificationRecord[] = [
   {
     id: "note:granola-related-823",
     title: "Keep run ledgers for 90 days",
-    ref: "Weekly product sync",
-    source: "granola",
+    source: source("granola", "Weekly product sync"),
     workflow: workflows.granola,
     operation: "Extract",
     summary: "Created #823. It is related to #640, which sets the current retention to 30 days.",
@@ -338,8 +310,7 @@ export const mockNotifications: readonly NotificationRecord[] = [
   {
     id: "note:review-779",
     title: "Sign the Electron build in CI",
-    ref: "PR #779",
-    source: "github",
+    source: source("github", "PR #779"),
     workflow: workflows.slack,
     operation: "Review the pull request",
     summary: "This changes the release signing. It needs someone who knows the release pipeline.",
@@ -350,8 +321,7 @@ export const mockNotifications: readonly NotificationRecord[] = [
   {
     id: "note:triage-aud-14",
     title: "Rotate the signing keys",
-    ref: "AUD-14",
-    source: "linear",
+    source: source("linear", "AUD-14"),
     workflow: workflows.triage,
     operation: "Triage",
     summary: "Needs admin access to the Apple developer account.",

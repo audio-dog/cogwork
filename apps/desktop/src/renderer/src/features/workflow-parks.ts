@@ -1,19 +1,25 @@
+import { plural } from "./format";
 import type { CatalogIcon } from "./workflow-catalog";
 
+export interface AnswerChoice {
+  readonly id: string;
+  readonly label: string;
+  readonly input: { readonly id: string; readonly label: string } | null;
+}
+
 export type ParkReason =
-  | { readonly tag: "needs-info" }
-  | { readonly tag: "ready-for-human" }
+  | { readonly tag: "awaiting-approval"; readonly builtOn: string }
+  | { readonly tag: "handed-to-you"; readonly question: string; readonly choices: readonly AnswerChoice[] }
   | { readonly tag: "stuck"; readonly summary: string }
   | { readonly tag: "exhausted"; readonly failure: string; readonly attempts: number }
+  | { readonly tag: "write-failed"; readonly step: string; readonly error: string }
   | { readonly tag: "hop-cap"; readonly hops: number }
   | { readonly tag: "missing-operation"; readonly operation: string }
-  | { readonly tag: "write-failed"; readonly step: string; readonly error: string }
-  | { readonly tag: "no-workspace-recognized" }
-  | { readonly tag: "awaiting-approval"; readonly builtOn: string };
+  | { readonly tag: "no-workspace-recognized" };
 
 export type ParkTag = ParkReason["tag"];
 
-export type ParkCommand = "approve" | "reject" | "hand-back" | "open";
+export type ParkCommand = "approve" | "reject" | "hand-back" | "choose-answer";
 
 export type StepState = "planned" | "done" | "failed" | "skipped";
 
@@ -34,8 +40,12 @@ export interface PlanStep {
   readonly note: string | null;
 }
 
+export interface SourceRef {
+  readonly app: CatalogIcon;
+  readonly label: string;
+}
+
 export interface LineageHop {
-  readonly kind: "source" | "operation" | "artifact";
   readonly app: CatalogIcon;
   readonly label: string;
   readonly workflow: string | null;
@@ -55,14 +65,11 @@ export interface WorkflowRef {
 export interface ParkedItem {
   readonly id: string;
   readonly title: string;
-  readonly ref: string;
-  readonly source: CatalogIcon;
-  readonly workspace: string | null;
+  readonly source: SourceRef;
   readonly workflow: WorkflowRef;
   readonly operation: string;
   readonly lineage: readonly LineageHop[];
   readonly summary: string;
-  readonly answers: readonly Answer[];
   readonly changedSinceParked: boolean;
   readonly parkedAtMillis: number;
   readonly reason: ParkReason;
@@ -79,8 +86,7 @@ export interface Artifact {
 export interface NotificationRecord {
   readonly id: string;
   readonly title: string;
-  readonly ref: string;
-  readonly source: CatalogIcon;
+  readonly source: SourceRef;
   readonly workflow: WorkflowRef;
   readonly operation: string;
   readonly summary: string;
@@ -101,71 +107,77 @@ export interface SkippedRecord {
 
 export type PlanEdits = Readonly<Record<string, string>>;
 
-const parkCommands: Record<ParkTag, readonly ParkCommand[]> = {
-  "awaiting-approval": ["approve", "reject", "hand-back"],
-  "needs-info": ["open"],
-  "ready-for-human": ["open"],
-  stuck: ["hand-back"],
-  exhausted: ["hand-back"],
-  "write-failed": ["hand-back"],
-  "hop-cap": ["hand-back"],
-  "missing-operation": ["hand-back"],
-  "no-workspace-recognized": ["hand-back"],
-};
-
-export const commandsFor = (reason: ParkReason) => parkCommands[reason.tag];
-
-export const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-
-const urgency: Record<ParkTag, number> = {
-  "awaiting-approval": 0,
-  stuck: 1,
-  exhausted: 1,
-  "write-failed": 1,
-  "no-workspace-recognized": 2,
-  "missing-operation": 2,
-  "hop-cap": 2,
-  "ready-for-human": 3,
-  "needs-info": 3,
-};
-
-export const byUrgency = (items: readonly ParkedItem[]) =>
-  items.toSorted((left, right) => urgency[left.reason.tag] - urgency[right.reason.tag]);
-
-const reasonLabels: Record<ParkTag, string> = {
-  "awaiting-approval": "Approval",
-  stuck: "Stuck",
-  exhausted: "Failed",
-  "write-failed": "Write failed",
-  "hop-cap": "Hop cap",
-  "missing-operation": "Missing Operation",
-  "no-workspace-recognized": "No Workspace",
-  "needs-info": "Needs info",
-  "ready-for-human": "Needs a person",
-};
-
-export const reasonLabel = (item: ParkedItem) => reasonLabels[item.reason.tag];
-
 type ReasonOf<Tag extends ParkTag> = Extract<ParkReason, { readonly tag: Tag }>;
 
-const reasonDetails: { [Tag in ParkTag]: (reason: ReasonOf<Tag>, item: ParkedItem) => string | null } = {
-  stuck: (reason) => reason.summary,
-  exhausted: (reason) => `${reason.failure} · ${reason.attempts} attempts`,
-  "write-failed": (reason) => `${reason.step}: ${reason.error}`,
-  "hop-cap": (reason, item) => `${reason.hops} hops from ${item.lineage[0]?.label ?? "the root"}`,
-  "missing-operation": (reason, item) => `r${item.workflow.revision} has no “${reason.operation}”`,
-  "awaiting-approval": () => null,
-  "needs-info": () => null,
-  "ready-for-human": () => null,
-  "no-workspace-recognized": () => null,
+interface ReasonSpec<Tag extends ParkTag> {
+  readonly label: string;
+  readonly urgency: number;
+  readonly commands: readonly ParkCommand[];
+  readonly detail: (reason: ReasonOf<Tag>, item: ParkedItem) => string | null;
+}
+
+const reasonSpecs: { readonly [Tag in ParkTag]: ReasonSpec<Tag> } = {
+  "awaiting-approval": {
+    label: "Approval",
+    urgency: 0,
+    commands: ["approve", "reject", "hand-back"],
+    detail: () => null,
+  },
+  "handed-to-you": {
+    label: "Handed to you",
+    urgency: 0,
+    commands: ["choose-answer"],
+    detail: (reason) => reason.question,
+  },
+  stuck: { label: "Stuck", urgency: 1, commands: ["hand-back"], detail: (reason) => reason.summary },
+  exhausted: {
+    label: "Failed",
+    urgency: 1,
+    commands: ["hand-back"],
+    detail: (reason) => `${reason.failure} · ${plural(reason.attempts, "attempt")}`,
+  },
+  "write-failed": {
+    label: "Write failed",
+    urgency: 1,
+    commands: ["hand-back"],
+    detail: (reason) => `${reason.step}: ${reason.error}`,
+  },
+  "hop-cap": {
+    label: "Hop cap",
+    urgency: 2,
+    commands: ["hand-back"],
+    detail: (reason, item) => `${plural(reason.hops, "hop")} from ${item.lineage[0]?.label ?? "the root"}`,
+  },
+  "missing-operation": {
+    label: "Missing Operation",
+    urgency: 2,
+    commands: ["hand-back"],
+    detail: (reason, item) => `r${item.workflow.revision} has no “${reason.operation}”`,
+  },
+  "no-workspace-recognized": {
+    label: "No Workspace",
+    urgency: 2,
+    commands: ["hand-back"],
+    detail: () => null,
+  },
 };
 
+export const commandsFor = (reason: ParkReason) => reasonSpecs[reason.tag].commands;
+
+export const reasonLabel = (item: ParkedItem) => reasonSpecs[item.reason.tag].label;
+
+export const byUrgency = (items: readonly ParkedItem[]) =>
+  items.toSorted(
+    (left, right) => reasonSpecs[left.reason.tag].urgency - reasonSpecs[right.reason.tag].urgency,
+  );
+
 const detailOf = <Tag extends ParkTag>(reason: { readonly tag: Tag } & ReasonOf<Tag>, item: ParkedItem) =>
-  reasonDetails[reason.tag](reason, item);
+  reasonSpecs[reason.tag].detail(reason, item);
 
-export const reasonDetail = (item: ParkedItem) => detailOf(item.reason, item);
+export const cardDescription = (item: ParkedItem) => detailOf(item.reason, item) ?? item.summary;
 
-export const cardDescription = (item: ParkedItem) => reasonDetail(item) ?? item.summary;
+export const workflowLabel = (workflow: WorkflowRef, operation: string) =>
+  `${workflow.name} r${workflow.revision} · ${operation}`;
 
 const pastTenses: Record<string, string> = {
   Add: "Added",
@@ -202,8 +214,14 @@ export const editKey = (item: ParkedItem, step: PlanStep, input: AgentInputText)
 export const inputText = (edits: PlanEdits, item: ParkedItem, step: PlanStep, input: AgentInputText) =>
   edits[editKey(item, step, input)] ?? input.text;
 
+export const isRunnable = (step: PlanStep) => step.state !== "skipped";
+
+export const runnableSteps = (item: ParkedItem) => item.plan.filter(isRunnable);
+
 export const isEdited = (item: ParkedItem, edits: PlanEdits) =>
-  item.plan.some((step) => step.inputs.some((input) => inputText(edits, item, step, input) !== input.text));
+  runnableSteps(item).some((step) =>
+    step.inputs.some((input) => inputText(edits, item, step, input) !== input.text),
+  );
 
 const fnv1a = (text: string) =>
   [...text]
@@ -212,12 +230,7 @@ const fnv1a = (text: string) =>
     .padStart(8, "0")
     .slice(0, 7);
 
-export const runnableSteps = (item: ParkedItem) => item.plan.filter((step) => step.state !== "skipped");
-
-/**
- * Stands in for the engine's plan digest until the read model carries it. An approval names the
- * digest of what the person saw, so any edit to agent-input text must change it.
- */
+/** Stands in for the engine's plan digest until the read model carries it. */
 export const planDigest = (item: ParkedItem, edits: PlanEdits) =>
   fnv1a(
     runnableSteps(item)
