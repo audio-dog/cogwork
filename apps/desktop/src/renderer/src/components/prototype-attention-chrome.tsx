@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { RiCloseLine, RiNotification3Line, RiRefreshLine } from "@remixicon/react";
 import { notifications, parkedItems, raisesOsNotification } from "../features/prototype-attention-data";
 import { usePrototypeAttention } from "../features/prototype-attention-store";
-import { NotificationIcon, ReasonIcon, reasonTitle } from "./prototype-attention-parts";
+import { NotificationIcon, ReasonIcon, reasonLabel } from "./prototype-attention-parts";
 
 /**
  * PROTOTYPE — issue #794. Controls around the variants, not part of the design: a stand-in for the
@@ -22,7 +22,7 @@ import { NotificationIcon, ReasonIcon, reasonTitle } from "./prototype-attention
 
 const bannerContent = (id: string) => {
   const item = parkedItems.find((candidate) => candidate.id === id);
-  if (item) return { title: reasonTitle(item), body: item.title, icon: <ReasonIcon reason={item.reason} /> };
+  if (item) return { title: reasonLabel(item), body: item.title, icon: <ReasonIcon reason={item.reason} /> };
   const notification = notifications.find((candidate) => candidate.id === id);
   if (notification)
     return { title: notification.title, body: notification.summary, icon: <NotificationIcon /> };

@@ -1,69 +1,98 @@
+import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
+import { RiLayoutColumnLine, RiListUnordered } from "@remixicon/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AttentionBoard } from "../../components/prototype-attention-board";
-import { AttentionByWorkflow } from "../../components/prototype-attention-by-workflow";
 import {
   CommandReadout,
   OsNotificationBanner,
   PrototypeControls,
 } from "../../components/prototype-attention-chrome";
-import { AttentionList } from "../../components/prototype-attention-list";
-import { FocusProvider } from "../../components/prototype-attention-parts";
-import { AttentionSplit } from "../../components/prototype-attention-split";
+import { AttentionCompact } from "../../components/prototype-attention-compact";
+import { type AttentionLayout, AttentionViewProvider } from "../../components/prototype-attention-parts";
+import { AttentionQuiet } from "../../components/prototype-attention-quiet";
+import { AttentionUpfront } from "../../components/prototype-attention-upfront";
 import { PrototypeSwitcher, type PrototypeVariant } from "../../components/prototype-switcher";
 
 /**
- * PROTOTYPE — issue #794. Four layouts of the attention surface for Workflow parks, approvals,
- * notifications, and skipped work, switchable via `?variant=`, on mock data. `?focus=` names the
- * item an OS notification click opens.
+ * PROTOTYPE — issue #794. One attention surface with a board and a list; `?variant=` switches the
+ * polish version, `?layout=` the arrangement, and `?focus=` names the card an OS notification opens.
  */
 
 const variants: readonly PrototypeVariant[] = [
-  { key: "A", name: "Board" },
-  { key: "B", name: "List" },
-  { key: "C", name: "Split" },
-  { key: "D", name: "By Workflow" },
+  { key: "P1", name: "Quiet" },
+  { key: "P2", name: "Compact" },
+  { key: "P3", name: "Plan up front" },
 ];
 
 interface AttentionSearch {
   readonly variant: string;
+  readonly layout: AttentionLayout;
   readonly focus?: string;
 }
 
 export const Route = createFileRoute("/_app/attention-prototype")({
   validateSearch: (search: Record<string, unknown>): AttentionSearch => ({
-    variant: typeof search.variant === "string" ? search.variant : "A",
+    variant: typeof search.variant === "string" ? search.variant : "P1",
+    layout: search.layout === "list" ? "list" : "board",
     focus: typeof search.focus === "string" ? search.focus : undefined,
   }),
   component: AttentionPrototypeRoute,
 });
 
 function Variant({ variant }: { variant: string }) {
-  if (variant === "B") return <AttentionList />;
-  if (variant === "C") return <AttentionSplit />;
-  if (variant === "D") return <AttentionByWorkflow />;
-  return <AttentionBoard />;
+  if (variant === "P2") return <AttentionCompact />;
+  if (variant === "P3") return <AttentionUpfront />;
+  return <AttentionQuiet />;
+}
+
+function LayoutToggle({
+  layout,
+  onLayout,
+}: {
+  layout: AttentionLayout;
+  onLayout: (layout: AttentionLayout) => void;
+}) {
+  return (
+    <ToggleGroup
+      variant="outline"
+      size="sm"
+      value={[layout]}
+      onValueChange={(next) => {
+        if (next[0] === "board" || next[0] === "list") onLayout(next[0]);
+      }}
+    >
+      <ToggleGroupItem value="board">
+        <RiLayoutColumnLine data-icon="inline-start" />
+        Board
+      </ToggleGroupItem>
+      <ToggleGroupItem value="list">
+        <RiListUnordered data-icon="inline-start" />
+        List
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
 }
 
 function AttentionPrototypeRoute() {
-  const { variant, focus } = Route.useSearch();
+  const { variant, layout, focus } = Route.useSearch();
   const navigate = useNavigate();
   const go = (next: Partial<AttentionSearch>) =>
-    navigate({ to: "/attention-prototype", search: { variant, focus, ...next }, replace: true });
+    navigate({ to: "/attention-prototype", search: { variant, layout, focus, ...next }, replace: true });
   const setFocus = (id: string | null) => go({ focus: id ?? undefined });
 
   return (
-    <FocusProvider focus={focus ?? null} setFocus={setFocus}>
-      <div className="flex h-full min-h-0 flex-col gap-4 pt-6 pb-20">
-        <h1 className="px-6 font-heading text-2xl font-semibold tracking-tight">Attention</h1>
-        <div className="min-h-0 flex-1">
-          <Variant variant={variant} />
-        </div>
+    <AttentionViewProvider focus={focus ?? null} setFocus={setFocus} layout={layout}>
+      <div className="flex flex-col gap-4 px-6 pt-5 pb-24">
+        <header className="flex items-center justify-between">
+          <h1 className="text-base font-medium">Attention</h1>
+          <LayoutToggle layout={layout} onLayout={(next) => go({ layout: next })} />
+        </header>
+        <Variant variant={variant} />
       </div>
       <OsNotificationBanner onOpen={setFocus} />
       <CommandReadout />
       <PrototypeSwitcher variants={variants} current={variant} onSelect={(key) => go({ variant: key })}>
         <PrototypeControls />
       </PrototypeSwitcher>
-    </FocusProvider>
+    </AttentionViewProvider>
   );
 }
