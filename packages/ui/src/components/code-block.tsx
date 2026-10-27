@@ -215,7 +215,7 @@ function CodeBlockHighlight({
         <CodeBlockLine key={index}>
           {tokens.map((token, tokenIndex) =>
             token.className ? (
-              <span key={tokenIndex} className={`th-token th-${token.className}`}>
+              <span key={tokenIndex} className={cn("th-token", `th-${token.className}`)}>
                 {token.value}
               </span>
             ) : (
