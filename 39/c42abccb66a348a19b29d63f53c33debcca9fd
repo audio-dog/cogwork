@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/prototype-attention-board.tsx
+  s_f80ef6da3d4491::t_db85820612b6c6 17
+  s_f80ef6da3d4491::t_6010d9cbf164f8 100
+  s_f80ef6da3d4491::t_02299f65d6b895 1-16,18-99,101-169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "39c42abccb66a348a19b29d63f53c33debcca9fd",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
