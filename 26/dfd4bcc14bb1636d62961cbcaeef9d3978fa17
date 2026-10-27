@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/prototype-switcher.tsx
+  s_f80ef6da3d4491::t_901234cec5ecb5 1-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "26dfd4bcc14bb1636d62961cbcaeef9d3978fa17",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
