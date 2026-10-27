@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/features/prototype-attention-data.ts
+  s_f80ef6da3d4491::t_7a47c52dd7b029 332
+apps/desktop/src/renderer/src/components/prototype-attention-parts.tsx
+  s_f80ef6da3d4491::t_c6f369343ab603 642
+  s_f80ef6da3d4491::t_852a056c1e2191 605-641,643-748,754,756,759-771,773-841
+  s_f80ef6da3d4491::t_76efbe21616910 772
+  s_f80ef6da3d4491::t_033d9dfc879f88 27,33,38
+  s_f80ef6da3d4491::t_13ca2c6b7e3a3d 3-11,14-23
+  s_f80ef6da3d4491::t_c34bb745b7eb7f 842
+apps/desktop/src/renderer/src/components/prototype-attention-quiet.tsx
+  s_f80ef6da3d4491::t_682e50d950ad6b 15,19,21
+  s_f80ef6da3d4491::t_28e98956c4c0ad 95,97,99-100
+  s_f80ef6da3d4491::t_e3c5ce72fbbd54 124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c029203ecf858e68c0e22a2b572164537860835b",
+  "prompts": {},
+  "sessions": {
+    "s_f80ef6da3d4491": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fa784f8f-2eb6-4c76-b04d-b22e90dd6b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
