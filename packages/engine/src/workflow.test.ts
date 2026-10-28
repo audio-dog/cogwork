@@ -4,6 +4,7 @@ import {
   MachineReadiness,
   Principal,
   WorkflowCatalogEntry,
+  type WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowEditRefused,
   WorkflowNodeId,
@@ -11,6 +12,7 @@ import {
   WorkflowPublishRefused,
   WorkflowSwitchRefused,
   WorkflowUnreadable,
+  type WorkspaceId,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
@@ -27,6 +29,7 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { clockEntries, clockSource } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Harness from "./harness";
@@ -69,6 +72,16 @@ const triggerContribution: WorkflowCatalogContribution = {
   templates: [],
 };
 
+const clockContribution = {
+  entries: clockEntries,
+  templates: [],
+  listOptions: (entry: WorkflowCatalogKey, parameter: string, workspaces: ReadonlyArray<WorkspaceId>) =>
+    clockSource.listOptions(entry, parameter).pipe(
+      Effect.map((options) => options.map((option) => ({ ...option, listedIn: workspaces }))),
+      Effect.catchTag("SourceFailure", () => Effect.succeed([])),
+    ),
+};
+
 const document = decodeDocument({
   name: "Complete",
   workspaces: { _tag: "Every" },
@@ -106,6 +119,7 @@ const temporaryStore = Effect.fn("test.temporaryWorkflowsStore")(function* () {
 const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
   triggerContribution,
+  clockContribution,
 ]);
 
 const testLayer = (
@@ -366,13 +380,31 @@ layer(NodeServices.layer)((it) => {
       const storePath = yield* temporaryStore();
       const result = yield* withWorkflows(storePath, ({ catalog }) => catalog);
 
-      assert.lengthOf(result.catalog.entries, 6);
+      assert.lengthOf(result.catalog.entries, 9);
       assert.deepStrictEqual(result.catalog.instructionPackages, [
         "triage-agent",
         "implement-agent",
         "follow-up-agent",
       ]);
       assert.deepStrictEqual(result.machine, machine);
+    }),
+  );
+
+  it.effect("lists live schedule zones through the Workflow catalog", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const options = yield* withWorkflows(storePath, ({ listOptions }) =>
+        listOptions({
+          entry: Schema.decodeSync(WorkflowCatalogEntry.fields.key)("schedule.daily"),
+          parameter: "zone",
+          workspaces: [],
+        }),
+      );
+
+      assert.include(
+        options.map(({ value }) => value),
+        "America/New_York",
+      );
     }),
   );
 

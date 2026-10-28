@@ -1,6 +1,7 @@
 import {
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
+  type WorkflowOption,
   type WorkflowParameterValue,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
@@ -158,12 +159,11 @@ const validLocalInstant = (parts: DateTime.DateTime.Parts, zone: string) => {
 
 const nextValidLocalMinute = (parts: DateTime.DateTime.Parts, zone: string) => {
   const naive = DateTime.makeUnsafe(parts);
-  return (
-    Array.from({ length: 181 }, (_, offset) => {
-      const candidate = DateTime.toPartsUtc(DateTime.add(naive, { minutes: offset }));
-      return validLocalInstant(candidate, zone);
-    }).find((instant) => instant !== null) ?? null
+  const candidateAt = (offset: number) => DateTime.toPartsUtc(DateTime.add(naive, { minutes: offset }));
+  const validOffset = Array.from({ length: 181 }, (_, offset) => offset).find(
+    (offset) => validLocalInstant(candidateAt(offset), zone) !== null,
   );
+  return validOffset === undefined ? null : validLocalInstant(candidateAt(validOffset), zone);
 };
 
 const hoursFor = (schedule: ClockSchedule) =>
@@ -220,6 +220,9 @@ export const latestScheduledInstant = (subscription: TriggerSubscription, atMill
     : null;
 };
 
+export const matchesScheduledInstant = (subscription: TriggerSubscription, instantMillis: number) =>
+  latestScheduledInstant(subscription, instantMillis) === instantMillis;
+
 const eventOf = (
   subscription: TriggerSubscription,
   instant: number,
@@ -271,7 +274,14 @@ export const clockSource: TriggerSource = {
   id: "clock",
   entries: clockEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: () => Effect.succeed([]),
+  listOptions: (entry, parameter) => {
+    const isZoneParameter = parameter === "zone" && clockEntries.some(({ key }) => key === entry);
+    if (!isZoneParameter) return Effect.succeed([]);
+    const zones = [...new Set(["UTC", ...Intl.supportedValuesOf("timeZone")])];
+    return Effect.succeed(
+      zones.map((zone) => ({ value: zone, name: zone, listedIn: [] }) satisfies WorkflowOption),
+    );
+  },
   observe: (subscriptions) =>
     subscriptions.length === 0
       ? Stream.empty

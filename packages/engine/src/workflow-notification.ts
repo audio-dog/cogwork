@@ -26,7 +26,7 @@ export const make = Effect.gen(function* () {
   return {
     write: (run, notification) =>
       recorder.record(run, { type: "CUSTOM", name: eventName, value: notification }).pipe(Effect.asVoid),
-    list: ledger.listRuns(100).pipe(
+    list: ledger.listRuns(Number.MAX_SAFE_INTEGER).pipe(
       Effect.flatMap((runs) =>
         Effect.forEach(runs, (run) =>
           recorder.replay(run).pipe(

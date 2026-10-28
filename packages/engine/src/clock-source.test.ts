@@ -75,4 +75,19 @@ describe("ClockSource", () => {
       assert.strictEqual(event?.atMillis, 60000);
     }),
   );
+
+  it.effect("lists IANA zones for schedule zone parameters", () =>
+    Effect.gen(function* () {
+      const options = yield* clockSource.listOptions(decodeEntry("schedule.daily"), "zone");
+
+      assert.include(
+        options.map(({ value }) => value),
+        "UTC",
+      );
+      assert.include(
+        options.map(({ value }) => value),
+        "America/New_York",
+      );
+    }),
+  );
 });

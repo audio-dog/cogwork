@@ -34,10 +34,23 @@ import { Workflows, type WorkflowsService } from "./workflow";
 const workflowId = Schema.decodeSync(WorkflowId)("daily-summary");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
 const entry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
+const scheduleParameters = [
+  { id: "hour", value: "0" },
+  { id: "minute", value: "0" },
+  { id: "zone", value: "UTC" },
+];
+const scheduledInstant = Date.UTC(2025, 0, 1);
 const document = Schema.decodeSync(WorkflowDocument)({
   name: "Daily summary",
   workspaces: { _tag: "Listed", workspaces: [] },
-  triggers: [{ id: triggerId, entry, parameters: [], start: Schema.decodeSync(WorkflowNodeId)("summarize") }],
+  triggers: [
+    {
+      id: triggerId,
+      entry,
+      parameters: scheduleParameters,
+      start: Schema.decodeSync(WorkflowNodeId)("summarize"),
+    },
+  ],
   operations: [],
 });
 
@@ -53,12 +66,12 @@ const record = (enabled: boolean): WorkflowRecord => ({
   readiness: [],
 });
 
-const workItem = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis: 1_000 } as const;
+const workItem = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis: scheduledInstant } as const;
 const event = {
   key: workItem,
-  revision: "1000",
+  revision: String(scheduledInstant),
   cause: { _tag: "Unknown" },
-  atMillis: 1_000,
+  atMillis: scheduledInstant,
   entry,
   workspace: null,
 } as const;
@@ -69,7 +82,7 @@ const subscription: TriggerSubscription = {
   trigger: triggerId,
   operation: Schema.decodeSync(WorkflowNodeId)("summarize"),
   entry,
-  parameters: [],
+  parameters: scheduleParameters,
   workspaces: [],
   catchUp: { since: 0 },
 };
@@ -116,10 +129,18 @@ const coordinationService = (
 });
 
 describe("TriggerObservation", () => {
-  it("matches the schedule event only to its Workflow", () => {
+  it("matches a schedule event to one Trigger with the scheduled parameters", () => {
     const other = { ...subscription, workflow: Schema.decodeSync(WorkflowId)("other") };
+    const later = {
+      ...subscription,
+      trigger: Schema.decodeSync(WorkflowNodeId)("later"),
+      operation: Schema.decodeSync(WorkflowNodeId)("later-operation"),
+      parameters: scheduleParameters.map((parameter) =>
+        parameter.id === "hour" ? { ...parameter, value: "1" } : parameter,
+      ),
+    };
 
-    assert.deepStrictEqual(matchTriggerEvent([subscription, other], event), [subscription]);
+    assert.deepStrictEqual(matchTriggerEvent([later, subscription, other], event), [subscription]);
   });
 
   it.effect("admits once and stops the source after switch-off", () =>
@@ -179,27 +200,51 @@ layer(NodeServices.layer)((it) => {
         );
 
       yield* useStore((store) =>
-        store.put(admission).pipe(
-          Effect.andThen(store.activate([subscription], 1_000)),
+        store
+          .activate([subscription], 1_000)
+          .pipe(
+            Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 1_000))),
+          ),
+      );
+      yield* useStore((store) =>
+        store
+          .activate([subscription], 2_000)
+          .pipe(
+            Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 1_000))),
+          ),
+      );
+      yield* useStore((store) =>
+        store.activate([subscription], 3_000).pipe(
           Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 1_000))),
+          Effect.andThen(
+            store.put({
+              ...admission,
+              event: {
+                ...admission.event,
+                key: { ...admission.event.key, instantMillis: 1_500 },
+                revision: "1500",
+                atMillis: 1_500,
+              },
+            }),
+          ),
         ),
       );
       yield* useStore((store) =>
-        Effect.all([store.admissions, store.activate([subscription], 2_000)]).pipe(
+        Effect.all([store.admissions, store.activate([subscription], 4_000)]).pipe(
           Effect.tap(([admissions, active]) =>
             Effect.sync(() => {
-              assert.deepStrictEqual(admissions, [admission]);
-              assert.strictEqual(active[0]?.catchUp?.since, 1_000);
+              assert.strictEqual(admissions[0]?.event.revision, "1500");
+              assert.strictEqual(active[0]?.catchUp?.since, 1_500);
             }),
           ),
-          Effect.andThen(store.activate([], 3_000)),
+          Effect.andThen(store.activate([], 5_000)),
         ),
       );
       yield* useStore((store) =>
         store
-          .activate([subscription], 4_000)
+          .activate([subscription], 6_000)
           .pipe(
-            Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 4_000))),
+            Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 6_000))),
           ),
       );
     }),

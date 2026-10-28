@@ -18,6 +18,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { matchesScheduledInstant } from "./clock-source";
 import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
 import {
@@ -71,6 +72,10 @@ const encodeAdmission = Schema.encodeSync(admissionJson);
 const decodeAdmission = Schema.decodeUnknownEffect(admissionJson);
 const storeError = (error: unknown) => new TriggerObservationStoreError({ message: String(error) });
 const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workflow}:${trigger}`;
+const checkpointOf = (admission: TriggerAdmission) =>
+  admission.event.key._tag === "ScheduleInstant"
+    ? admission.event.key.instantMillis
+    : admission.event.atMillis;
 
 const activateSubscriptions = (
   subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -93,6 +98,18 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
     put: (admission) =>
       Ref.update(admissions, (current) =>
         new Map(current).set(`${keyOf(admission.event.key)}:${admission.event.revision}`, admission),
+      ).pipe(
+        Effect.andThen(
+          Ref.update(checkpoints, (current) => {
+            const key = subscriptionKey(admission.subscription);
+            const checkpoint = current.get(key);
+            if (!checkpoint) return current;
+            return new Map(current).set(key, {
+              ...checkpoint,
+              checkpointMillis: Math.max(checkpoint.checkpointMillis, checkpointOf(admission)),
+            });
+          }),
+        ),
       ),
     activate: (subscriptions, atMillis) =>
       Ref.modify(checkpoints, (current) => {
@@ -102,9 +119,12 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
           ([key, value]) =>
             [key, activeKeys.has(key) ? value : { active: false, checkpointMillis: atMillis }] as const,
         );
-        const next = subscriptions.reduce(
+        const next = activated.reduce(
           (result, subscription) =>
-            result.set(subscriptionKey(subscription), { active: true, checkpointMillis: atMillis }),
+            result.set(subscriptionKey(subscription), {
+              active: true,
+              checkpointMillis: subscription.catchUp?.since ?? atMillis,
+            }),
           new Map(inactive),
         );
         return [activated, next];
@@ -129,11 +149,22 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
     ),
     put: (admission) =>
       controlStore
-        .withWrite(sql`
-          INSERT INTO trigger_admissions (work_item, revision, payload)
-          VALUES (${keyOf(admission.event.key)}, ${admission.event.revision}, ${encodeAdmission(admission)})
-          ON CONFLICT (work_item, revision) DO UPDATE SET payload = excluded.payload
-        `)
+        .withWrite(
+          sql.withTransaction(
+            sql`
+              INSERT INTO trigger_admissions (work_item, revision, payload)
+              VALUES (${keyOf(admission.event.key)}, ${admission.event.revision}, ${encodeAdmission(admission)})
+              ON CONFLICT (work_item, revision) DO UPDATE SET payload = excluded.payload
+            `.pipe(
+              Effect.andThen(sql`
+                UPDATE trigger_subscription_checkpoints
+                SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
+                WHERE workflow = ${admission.subscription.workflow}
+                  AND trigger = ${admission.subscription.trigger}
+              `),
+            ),
+          ),
+        )
         .pipe(Effect.asVoid, Effect.mapError(storeError)),
     activate: (subscriptions, atMillis) =>
       controlStore
@@ -157,11 +188,11 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
                 `.pipe(
                   Effect.andThen(
                     Effect.forEach(
-                      subscriptions,
+                      activated,
                       (subscription) => sql`
                   INSERT INTO trigger_subscription_checkpoints
                     (workflow, trigger, active, checkpoint_millis)
-                  VALUES (${subscription.workflow}, ${subscription.trigger}, 1, ${atMillis})
+                  VALUES (${subscription.workflow}, ${subscription.trigger}, 1, ${subscription.catchUp?.since ?? atMillis})
                   ON CONFLICT (workflow, trigger) DO UPDATE SET
                     active = 1,
                     checkpoint_millis = excluded.checkpoint_millis
@@ -190,13 +221,17 @@ export interface TriggerSourceHealth {
   readonly message: string | null;
 }
 
-export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) =>
-  subscriptions.filter((subscription) => {
+export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) => {
+  const matched = subscriptions.filter((subscription) => {
     const sameScheduleWorkflow =
       event.key._tag !== "ScheduleInstant" || event.key.workflow === subscription.workflow;
     const sameWorkspace = event.workspace === null || subscription.workspaces.includes(event.workspace);
-    return subscription.entry === event.entry && sameScheduleWorkflow && sameWorkspace;
+    const sameSchedule =
+      event.key._tag !== "ScheduleInstant" || matchesScheduledInstant(subscription, event.key.instantMillis);
+    return subscription.entry === event.entry && sameScheduleWorkflow && sameWorkspace && sameSchedule;
   });
+  return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
+};
 
 const subscriptionsOf = (records: ReadonlyArray<WorkflowRecord>) =>
   records.flatMap((record) => {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  type AgUiEvent,
   agUiIsStructuredOutputComplete,
   keyOf,
   matchWorkflowTransitions,
@@ -20,6 +21,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -38,6 +40,7 @@ import { WorkflowNotifications } from "./workflow-notification";
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
+const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 
 const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
   workflow: admission.subscription.workflow,
@@ -84,6 +87,11 @@ export const make = Effect.gen(function* () {
       ledger.updateRun(record.id, { status, usage: null, endedAtMillis }),
     );
 
+  const decline = (admission: TriggerAdmission) =>
+    coordination
+      .park(admission.event.key, { _tag: "MissingOperation" })
+      .pipe(Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)));
+
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
     const record = yield* workflows.get({ id: admission.subscription.workflow });
     const document = record.publishedCopy;
@@ -96,7 +104,15 @@ export const make = Effect.gen(function* () {
 
     const catalogResult = yield* workflows.catalog;
     const selectedHarness = operation.model.harness ?? catalogResult.machine.defaultHarness;
-    if (selectedHarness === null) return yield* Effect.die("Workflow Operation has no Harness");
+    const hasMissingNeed = operation.requires.some(
+      (need) => !catalogResult.machine.readyNeeds.includes(need),
+    );
+    if (selectedHarness === null || hasMissingNeed) return yield* decline(admission);
+    const options = Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value]));
+    const preflight = yield* Effect.result(
+      harness.preflight(selectedHarness, operation.permissionProfile, operation.model.model, options),
+    );
+    if (Result.isFailure(preflight)) return yield* decline(admission);
 
     const key = operationKeyOf(admission, operation.id);
     const claim = yield* Effect.acquireRelease(
@@ -134,7 +150,7 @@ export const make = Effect.gen(function* () {
       harness: {
         name: selectedHarness,
         model: operation.model.model,
-        options: Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value])),
+        options,
         profile: operation.permissionProfile,
       },
       instructions: assembled.layers,
@@ -201,6 +217,7 @@ export const make = Effect.gen(function* () {
     );
     if (Exit.isFailure(eventsExit)) {
       const reason = String(eventsExit.cause);
+      yield* recorder.record(run, failedTerminal);
       const view = yield* coordination.recordAttempt(admission.event.key, {
         operation: key,
         outcome: "failed",

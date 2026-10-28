@@ -5,6 +5,7 @@ import {
   localOwnerId,
   type ParkReason,
   ParkRecord,
+  RunId,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -13,18 +14,29 @@ import {
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { clockEntries } from "./clock-source";
 import { ContextAssembler } from "./context-assembler";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import * as CredentialStore from "./credential-store";
-import { fullHarnessExecution, Harness, make as makeHarness } from "./harness";
+import {
+  fullHarnessExecution,
+  Harness,
+  HarnessError,
+  type HarnessRunner,
+  make as makeHarness,
+} from "./harness";
+import { defaultRunBudget } from "./provider-runner";
 import { RunLedger } from "./run-ledger";
+import { RunRecorder } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import type { TriggerAdmission } from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
@@ -34,6 +46,7 @@ import { make as makeWorkflowRun } from "./workflow-run";
 const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
+const decodeRun = Schema.decodeSync(RunId);
 const workflow = decodeWorkflow("daily-summary");
 const trigger = decodeNode("schedule");
 const operation = decodeNode("summarize");
@@ -230,7 +243,12 @@ const requirements = Layer.mergeAll(
   }),
 );
 
-const testProgram = (objects: ReadonlyArray<unknown>) =>
+interface HarnessBehavior {
+  readonly preflight?: HarnessRunner["preflight"];
+  readonly run?: HarnessRunner["run"];
+}
+
+const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior = {}) =>
   Effect.gen(function* () {
     const output = yield* Ref.make(objects);
     const coordination = yield* makeCoordination();
@@ -263,8 +281,10 @@ const testProgram = (objects: ReadonlyArray<unknown>) =>
             authentication: { mode: "host", status: "available", diagnostic: "ready" },
             diagnostics: [],
           }),
-        preflight: () => Effect.void,
-        run: () => Stream.fromEffect(Ref.modify(output, ([next, ...rest]) => [resultEvent(next), rest])),
+        preflight: behavior.preflight ?? (() => Effect.void),
+        run:
+          behavior.run ??
+          (() => Stream.fromEffect(Ref.modify(output, ([next, ...rest]) => [resultEvent(next), rest]))),
       },
     ]);
     const runner = yield* makeWorkflowRun.pipe(
@@ -290,10 +310,22 @@ describe("WorkflowRun", () => {
       yield* runner.execute(admission);
       const ledger = yield* RunLedger;
       const [run] = yield* ledger.listRuns(10);
-      const plan = run ? yield* ledger.getRunPlan(run.id) : null;
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* ledger.getRunPlan(run.id);
+      yield* Effect.forEach(
+        Array.from({ length: 101 }, (_, index) => index),
+        (index) =>
+          ledger.insertRun({
+            ...run,
+            id: decodeRun(`noise-${index}`),
+            startedAtMillis: run.startedAtMillis + index + 1,
+          }),
+        { discard: true },
+      );
       const restartedNotifications = yield* makeNotifications;
 
-      assert.strictEqual(run?.status, "succeeded");
+      assert.strictEqual(run.status, "succeeded");
       assert.isNull(plan?.sandbox.workspace);
       assert.strictEqual(
         plan?.instructions.find(({ source }) => source === "workflow-operation")?.content,
@@ -341,6 +373,53 @@ describe("WorkflowRun", () => {
       assert.lengthOf(yield* Ref.get(coordination.attempts), 1);
       assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "Stuck");
       assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("declines before creating a Run when Harness preflight fails", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram([], {
+        preflight: () =>
+          Effect.fail(
+            new HarnessError({
+              reason: "credential",
+              retryable: true,
+              message: "Harness unavailable",
+            }),
+          ),
+        run: () => Stream.die("unexpected Harness run"),
+      });
+      yield* runner.execute(admission);
+
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+      assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "MissingOperation");
+      assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("records a failed terminal event when a Workflow Run times out", () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const { runner } = yield* testProgram([], {
+        run: () =>
+          Stream.fromEffect(Deferred.succeed(started, undefined)).pipe(Stream.flatMap(() => Stream.never)),
+      });
+      const running = yield* Effect.forkChild(runner.execute(admission), { startImmediately: true });
+      yield* Deferred.await(started);
+      yield* TestClock.adjust(defaultRunBudget("read-only"));
+      yield* Fiber.join(running);
+
+      const ledger = yield* RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.isDefined(run);
+      if (!run) return;
+      const recorder = yield* RunRecorder;
+      const activities = yield* recorder.replay(run).pipe(Stream.runCollect);
+
+      assert.deepInclude(
+        activities.map(({ event }) => event),
+        { type: "RUN_FINISHED", finishReason: "failed" },
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 });

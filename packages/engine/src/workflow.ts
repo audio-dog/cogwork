@@ -420,11 +420,19 @@ export const make = Effect.gen(function* () {
     readonly parameter: string;
     readonly workspaces: ReadonlyArray<WorkspaceId>;
   }) => {
-    const values = catalog.entries
-      .find(({ key }) => key === payload.entry)
-      ?.parameters.find(({ id }) => id === payload.parameter)?.values;
+    const entry = catalog.entries.find(({ key }) => key === payload.entry);
+    const parameter = entry?.parameters.find(({ id }) => id === payload.parameter);
+    if (parameter?.source === "live") {
+      const contribution = contributions.find(({ entries }) =>
+        entries.some(({ key }) => key === payload.entry),
+      );
+      return (
+        contribution?.listOptions?.(payload.entry, payload.parameter, payload.workspaces) ??
+        Effect.succeed([])
+      );
+    }
     return Effect.succeed(
-      (values ?? []).map((value) => ({
+      (parameter?.values ?? []).map((value) => ({
         value,
         name: value,
         listedIn: payload.workspaces,
