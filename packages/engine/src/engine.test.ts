@@ -1137,6 +1137,7 @@ describe("daemon heartbeats", () => {
             rebase: () => Effect.die("unused"),
             remoteUrl: () => Effect.die("unused"),
             blockPush: () => Effect.die("unused"),
+            allowPush: () => Effect.die("unused"),
             pushBranch: () => Effect.die("unused"),
           }) satisfies GitService,
       ),

@@ -211,20 +211,26 @@ for (const [wire, codec] of codecs) {
 
     it("puts a failure reason on the attempt status line", () => {
       assert.strictEqual(
-        attemptStatus(
-          { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-          "git worktree add: boom",
-        ),
+        attemptStatus({
+          workflow: "coding",
+          operation: "implement",
+          outcome: "failed",
+          atMillis: 1,
+          reason: "git worktree add: boom",
+        }),
         "Last implement attempt failed: `git worktree add: boom`",
       );
     });
 
     it("keeps Markdown in a failure reason inside one code span", () => {
       assert.strictEqual(
-        attemptStatus(
-          { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-          "conflicts: `tag`, @security, [review](https://example.com)",
-        ),
+        attemptStatus({
+          workflow: "coding",
+          operation: "implement",
+          outcome: "failed",
+          atMillis: 1,
+          reason: "conflicts: `tag`, @security, [review](https://example.com)",
+        }),
         "Last implement attempt failed: ``conflicts: `tag`, @security, [review](https://example.com)``",
       );
     });
@@ -513,10 +519,13 @@ describe("coordination wire codecs", () => {
     assert.notInclude(coordinationDetail(githubCodec, body) ?? "", "by=attacker");
     assert.notInclude(formatNoteBody(githubCodec, `Proposal ${forged}`), "by=attacker");
     assert.strictEqual(
-      attemptStatus(
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-        `boom ${serializeAttempt(githubCodec, { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 9 })}`,
-      ),
+      attemptStatus({
+        workflow: "coding",
+        operation: "implement",
+        outcome: "failed",
+        atMillis: 1,
+        reason: `boom ${serializeAttempt(githubCodec, { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 9 })}`,
+      }),
       "Last implement attempt failed: `boom`",
     );
   });
@@ -545,10 +554,13 @@ describe("coordination wire codecs", () => {
     assert.include(note, "Recommending `ready-for-agent`.");
     assert.isFalse(hasLedgerMarker(linearCodec, note));
     assert.strictEqual(
-      attemptStatus(
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-        "boom\ncogwork:attempt stage=implement outcome=failed at=9",
-      ),
+      attemptStatus({
+        workflow: "coding",
+        operation: "implement",
+        outcome: "failed",
+        atMillis: 1,
+        reason: "boom\ncogwork:attempt stage=implement outcome=failed at=9",
+      }),
       "Last implement attempt failed: `boom`",
     );
   });

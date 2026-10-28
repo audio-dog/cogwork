@@ -62,10 +62,10 @@ export const claimStatus = (stage: LifecycleStage) => `Currently ${stageGerund[s
 export const claimStatusFor = (claim: Claim) =>
   claim.stage ? claimStatus(claim.stage) : `In progress — claimed by ${claim.by}.`;
 
-export const attemptStatus = (attempt: AttemptRecord, reason?: string | null) => {
+export const attemptStatus = (attempt: AttemptRecord) => {
   if (attempt.outcome === "succeeded") return `${attempt.operation} completed.`;
   if (attempt.outcome === "abandoned") return `${attempt.operation} abandoned.`;
-  const trimmed = reason ? statusReason(reason) : "";
+  const trimmed = attempt.reason ? statusReason(attempt.reason) : "";
   if (trimmed) return `Last ${attempt.operation} attempt failed: ${markdownCode(trimmed)}`;
   return `Last ${attempt.operation} attempt failed.`;
 };

@@ -28,6 +28,7 @@ const makeEmptyCounts = () =>
     rebase: 0,
     remoteUrl: 0,
     blockPush: 0,
+    allowPush: 0,
     pushBranch: 0,
   }) satisfies GitInvocationCounts;
 
@@ -76,6 +77,7 @@ export const countingLayer = Layer.effect(
         counter.track("rebase", git.rebase(worktreePath, remote, branch)),
       remoteUrl: (repoPath, remote) => counter.track("remoteUrl", git.remoteUrl(repoPath, remote)),
       blockPush: (worktreePath, remote) => counter.track("blockPush", git.blockPush(worktreePath, remote)),
+      allowPush: (worktreePath, remote) => counter.track("allowPush", git.allowPush(worktreePath, remote)),
       pushBranch: (repoPath, remoteUrl, branch) =>
         counter.track("pushBranch", git.pushBranch(repoPath, remoteUrl, branch)),
     } satisfies GitService;

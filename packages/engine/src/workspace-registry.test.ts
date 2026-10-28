@@ -40,6 +40,7 @@ const gitService = (remoteUrl: GitService["remoteUrl"]) =>
     rebase: () => Effect.die("unused"),
     remoteUrl,
     blockPush: () => Effect.die("unused"),
+    allowPush: () => Effect.die("unused"),
     pushBranch: () => Effect.die("unused"),
   }) satisfies GitService;
 

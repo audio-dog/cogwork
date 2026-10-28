@@ -15,6 +15,7 @@ const baseGit = {
   rebase: () => Effect.void,
   remoteUrl: () => Effect.succeed("git@example.test:acme/repo.git"),
   blockPush: () => Effect.void,
+  allowPush: () => Effect.void,
   pushBranch: () => Effect.void,
 } satisfies GitService;
 

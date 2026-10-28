@@ -18,6 +18,9 @@ export const OperationKey = Schema.Struct({
 });
 export type OperationKey = typeof OperationKey.Type;
 
+export const AttemptReason = TrimmedNonEmptyString.check(Schema.isMaxLength(800));
+export type AttemptReason = typeof AttemptReason.Type;
+
 export const codingOperation = (stage: LifecycleStage) => ({
   workflow: "coding",
   operation: stage,
@@ -27,7 +30,7 @@ export const AttemptRecord = Schema.Struct({
   ...OperationKey.fields,
   outcome: AttemptOutcome,
   atMillis: Schema.Natural,
-  reason: Schema.optional(TrimmedNonEmptyString),
+  reason: Schema.optional(AttemptReason),
 });
 export type AttemptRecord = typeof AttemptRecord.Type;
 

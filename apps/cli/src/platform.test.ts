@@ -956,6 +956,7 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
         const git = yield* Git.Git;
         const { root, checkout, worktree, branch } = yield* fixture("807-engine-push");
 
+        yield* git.allowPush(worktree, "origin");
         yield* git.blockPush(worktree, "origin");
         yield* shell(
           root,
@@ -970,6 +971,16 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
         yield* git.pushBranch(worktree, yield* git.remoteUrl(checkout, "origin"), branch);
         yield* git.fetch(checkout, "origin", { branches: [branch] });
 
+        assert.deepStrictEqual(yield* git.divergence(worktree, "origin", branch), {
+          ahead: 0,
+          behind: 0,
+        });
+
+        yield* git.allowPush(worktree, "origin");
+        yield* shell(root, worktree, "echo agent >> work.txt && git commit -qam agent");
+        const restoredPush = yield* Effect.exit(shell(root, worktree, `git push -q origin ${branch}`));
+        assert.isTrue(Exit.isSuccess(restoredPush));
+        yield* git.fetch(checkout, "origin", { branches: [branch] });
         assert.deepStrictEqual(yield* git.divergence(worktree, "origin", branch), {
           ahead: 0,
           behind: 0,

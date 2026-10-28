@@ -214,26 +214,16 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const blockDirectPush = Effect.fn("Worktree.blockDirectPush")(function* (
-    worktreePath: string,
-    remote: string,
-    branch: BranchName,
-    created: boolean,
-  ) {
-    yield* git.blockPush(worktreePath, remote);
-    return { branch, path: worktreePath, created } satisfies EnsuredWorktree;
-  });
+  const pushOwnership = {
+    agent: git.allowPush,
+    engine: git.blockPush,
+  } satisfies Record<NonNullable<EnsureOptions["pushOwner"]>, typeof git.blockPush>;
 
-  const finishEnsure = (
+  const configurePush = (
     worktreePath: string,
     remote: string,
-    branch: BranchName,
-    created: boolean,
-    pushOwner: EnsureOptions["pushOwner"],
-  ) =>
-    pushOwner === "engine"
-      ? blockDirectPush(worktreePath, remote, branch, created)
-      : Effect.succeed({ branch, path: worktreePath, created } satisfies EnsuredWorktree);
+    owner: NonNullable<EnsureOptions["pushOwner"]> = "agent",
+  ) => pushOwnership[owner](worktreePath, remote);
 
   const registeredOrDetached = Effect.fn("Worktree.registeredOrDetached")(function* (
     repoPath: string,
@@ -355,7 +345,8 @@ export const make = Effect.gen(function* () {
     const resumesRegisteredWorktree = registered && options?.resume;
 
     if (resumesRegisteredWorktree) {
-      return yield* finishEnsure(worktreePath, remote, branch, false, options?.pushOwner);
+      yield* configurePush(worktreePath, remote, options?.pushOwner);
+      return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
     }
 
     if (registered) yield* refuseOperationInProgress(worktreePath, branch);
@@ -363,14 +354,12 @@ export const make = Effect.gen(function* () {
     const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
     if (!registered) {
       const startPoint = hasRemoteBranch ? `${remote}/${branch}` : `${remote}/${baseBranchOf(config)}`;
-      const setup = runSetup(repoPath, worktreePath, config);
-      const protectedSetup =
-        options?.pushOwner === "engine"
-          ? setup.pipe(Effect.andThen(git.blockPush(worktreePath, remote)))
-          : setup;
       yield* Effect.acquireUseRelease(
         git.addWorktree({ repoPath, worktreePath, branch, startPoint }),
-        () => protectedSetup,
+        () =>
+          runSetup(repoPath, worktreePath, config).pipe(
+            Effect.andThen(configurePush(worktreePath, remote, options?.pushOwner)),
+          ),
         (_created, exit) =>
           Exit.isSuccess(exit)
             ? Effect.void
@@ -382,7 +371,8 @@ export const make = Effect.gen(function* () {
     if (hasRemoteBranch) yield* syncBranch(worktreePath, remote, branch);
     else yield* logMissingRemote(remote, branch);
     yield* runSetup(repoPath, worktreePath, config);
-    return yield* finishEnsure(worktreePath, remote, branch, false, options?.pushOwner);
+    yield* configurePush(worktreePath, remote, options?.pushOwner);
+    return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
   }, Effect.trackDuration(worktreeEnsureDuration));
 
   const pullRequestReadiness = Effect.fn("Worktree.pullRequestReadiness")(function* (

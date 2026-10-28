@@ -282,6 +282,14 @@ export const gitLayer = Layer.effect(
           ),
           Effect.asVoid,
         ),
+      allowPush: (worktreePath, remote) =>
+        runGit(worktreePath, ["config", "extensions.worktreeConfig", "true"]).pipe(
+          Effect.andThen(runGit(worktreePath, ["config", "--local", "--get", `remote.${remote}.url`])),
+          Effect.flatMap((remoteUrl) =>
+            runGit(worktreePath, ["config", "--worktree", `remote.${remote}.pushurl`, remoteUrl.trim()]),
+          ),
+          Effect.asVoid,
+        ),
       pushBranch: (repoPath, remoteUrl, branch) =>
         runGit(repoPath, ["push", remoteUrl, `refs/heads/${branch}:refs/heads/${branch}`]).pipe(
           Effect.asVoid,

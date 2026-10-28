@@ -48,10 +48,7 @@ const profiles: Record<OperationPolicyProfile, SandboxPolicy> = {
 
 const implementPushDeny = "*git*push*";
 const implementProfiles: Record<OperationPolicyProfile, SandboxPolicy> = {
-  "read-only": defineSandboxPolicy({
-    ...readOnlyProfile,
-    commands: { deny: [...hardDenyCommands, implementPushDeny] },
-  }),
+  "read-only": readOnlyProfile,
   full: defineSandboxPolicy({
     ...fullProfile,
     commands: { deny: [...hardDenyCommands, implementPushDeny] },

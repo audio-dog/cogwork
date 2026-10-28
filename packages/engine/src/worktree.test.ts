@@ -56,6 +56,7 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
     fastForwarded: yield* Ref.make<ReadonlyArray<string>>([]),
     rebased: yield* Ref.make<ReadonlyArray<string>>([]),
     blockedPushes: yield* Ref.make<ReadonlyArray<{ readonly path: string; readonly remote: string }>>([]),
+    allowedPushes: yield* Ref.make<ReadonlyArray<{ readonly path: string; readonly remote: string }>>([]),
     pushedBranches: yield* Ref.make<
       ReadonlyArray<{ readonly repoPath: string; readonly remoteUrl: string; readonly branch: string }>
     >([]),
@@ -154,6 +155,8 @@ const fakeGit = (
     remoteUrl: () => Effect.succeed("git@example.com:repo.git"),
     blockPush: (path: string, remote: string) =>
       Ref.update(recorder.blockedPushes, (log) => [...log, { path, remote }]),
+    allowPush: (path: string, remote: string) =>
+      Ref.update(recorder.allowedPushes, (log) => [...log, { path, remote }]),
     pushBranch: (repoPath: string, remoteUrl: string, branch: string) =>
       Ref.update(recorder.pushedBranches, (log) => [...log, { repoPath, remoteUrl, branch }]),
   } satisfies GitService;
@@ -236,6 +239,26 @@ describe("Worktree.ensure", () => {
       ]);
       assert.deepStrictEqual(yield* Ref.get(recorder.blockedPushes), [
         { path: "/repo.worktrees/13-worktree-lifecycle", remote: "origin" },
+      ]);
+    }),
+  );
+
+  it.effect("restores agent push ownership when reusing an implement worktree", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const manager = yield* Effect.provide(
+        Worktree.make,
+        provide(fakeGit(recorder, {}), fakeFs(recorder, {})),
+      );
+
+      yield* manager.ensure(workspaceWith(), item, { pushOwner: "engine" });
+      yield* manager.ensure(workspaceWith(), item, { pushOwner: "agent" });
+
+      assert.deepStrictEqual(yield* Ref.get(recorder.blockedPushes), [
+        { path: worktreePath(), remote: "origin" },
+      ]);
+      assert.deepStrictEqual(yield* Ref.get(recorder.allowedPushes), [
+        { path: worktreePath(), remote: "origin" },
       ]);
     }),
   );

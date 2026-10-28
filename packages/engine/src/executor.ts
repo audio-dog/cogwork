@@ -692,12 +692,18 @@ export const make = Effect.gen(function* () {
   ) {
     return yield* worktrees.pushBranch(workspace, headBranch).pipe(
       Effect.andThen(
-        sourceControl.openPullRequest(workspace, {
-          headBranch,
-          baseBranch,
-          title: result.title,
-          body: result.body,
-        }),
+        sourceControl.findOpenPullRequest(workspace, headBranch).pipe(
+          Effect.flatMap((existing) =>
+            existing
+              ? Effect.succeed(existing)
+              : sourceControl.openPullRequest(workspace, {
+                  headBranch,
+                  baseBranch,
+                  title: result.title,
+                  body: result.body,
+                }),
+          ),
+        ),
       ),
       Effect.matchEffect({
         onFailure: (error) => settleWriteFailure(accepted, acc, error),
@@ -742,15 +748,7 @@ export const make = Effect.gen(function* () {
         acc.handle,
       );
     }
-    return yield* sourceControl.findOpenPullRequest(workspace, branchName(item)).pipe(
-      Effect.matchEffect({
-        onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
-        onSuccess: (existing) =>
-          existing
-            ? settleImplemented(workspace, item, accepted, acc)
-            : createReadyPullRequest(workspace, item, accepted, acc, result),
-      }),
-    );
+    return yield* createReadyPullRequest(workspace, item, accepted, acc, result);
   });
 
   const operationDecision = (

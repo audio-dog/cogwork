@@ -72,6 +72,7 @@ const gitLayer = Layer.succeed(Git, {
   rebase: () => Effect.die("unused"),
   remoteUrl: () => Effect.succeed("git@github.com:owner/repo.git"),
   blockPush: () => Effect.die("unused"),
+  allowPush: () => Effect.die("unused"),
   pushBranch: () => Effect.die("unused"),
 } satisfies GitService);
 

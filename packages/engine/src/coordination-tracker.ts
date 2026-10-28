@@ -9,6 +9,7 @@ import {
   type WorkItemId,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+import { statusReason } from "./comments";
 import type { CommentHost, CoordinationComment, WireCodec } from "./coordination";
 import * as Coordination from "./coordination";
 import type { FollowUpMarker } from "./follow-up";
@@ -111,11 +112,13 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     yield* host.afterRoleChange(ref, changes);
   });
 
-  const writeAttempt = (ref: Ref, attempt: AttemptRecord, reason?: string) =>
-    Coordination.upsertCoordination(codec, host.comments(ref), {
-      status: Coordination.attemptStatus(attempt, reason),
-      marker: Coordination.serializeAttempt(codec, reason ? { ...attempt, reason } : attempt),
+  const writeAttempt = (ref: Ref, attempt: AttemptRecord) => {
+    const recorded = attempt.reason ? { ...attempt, reason: statusReason(attempt.reason) } : attempt;
+    return Coordination.upsertCoordination(codec, host.comments(ref), {
+      status: Coordination.attemptStatus(recorded),
+      marker: Coordination.serializeAttempt(codec, recorded),
     });
+  };
 
   const writeFollowUp = (ref: Ref, marker: FollowUpMarker, detail?: string) =>
     Coordination.upsertCoordination(codec, host.comments(ref), {
@@ -212,16 +215,13 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: AttemptFailedOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* writeAttempt(
-        ref,
-        {
-          workflow: outcome.workflow,
-          operation: outcome.operation,
-          outcome: "failed",
-          atMillis: outcome.atMillis,
-        },
-        outcome.reason,
-      );
+      yield* writeAttempt(ref, {
+        workflow: outcome.workflow,
+        operation: outcome.operation,
+        outcome: "failed",
+        atMillis: outcome.atMillis,
+        reason: outcome.reason,
+      });
     }),
     handOff: Effect.fn("coordinationTracker.handOff")(function* (
       workspace: WorkspaceIssueTrackerBinding,
