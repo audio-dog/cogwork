@@ -429,6 +429,7 @@ const followUpItem = {
   priorFailures: 0,
   workContext: workContext(id("#5")),
   followUp: {
+    previousMarker: null,
     checks: "failing" as const,
     humanCommentAtMillis: 0,
     botTriggerAtMillis: 0,
@@ -538,6 +539,8 @@ interface Call {
   readonly summary?: string;
   readonly noProgress?: number;
   readonly baseDivergence?: string;
+  readonly humanCommentAtMillis?: number;
+  readonly botTriggerAtMillis?: number;
 }
 
 class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<Call>>>()(
@@ -616,6 +619,8 @@ function trackerRecorder(
             reason: outcome.reason,
             baseDivergence: outcome.marker?.baseDivergence,
             noProgress: outcome.marker?.noProgress,
+            humanCommentAtMillis: outcome.marker?.humanCommentAtMillis,
+            botTriggerAtMillis: outcome.marker?.botTriggerAtMillis,
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
         },
@@ -4505,6 +4510,34 @@ describe("Executor.execute", () => {
 
       const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
       assert.strictEqual(attempt?.noProgress, 1);
+    }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
+  });
+
+  it.effect("does not consume follow-up wakes when a follow-up fails", () => {
+    const previousMarker = {
+      checks: "passing" as const,
+      humanCommentAtMillis: 3,
+      botTriggerAtMillis: 4,
+      noProgress: 0,
+      baseDivergence: "none" as const,
+    };
+    const item = {
+      ...followUpItem,
+      followUp: {
+        ...followUpItem.followUp,
+        previousMarker,
+        humanCommentAtMillis: 10,
+        botTriggerAtMillis: 20,
+      },
+    };
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, item);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.humanCommentAtMillis, 3);
+      assert.strictEqual(attempt?.botTriggerAtMillis, 4);
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
   });
 

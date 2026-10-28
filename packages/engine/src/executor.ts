@@ -108,6 +108,7 @@ export { meteredTotalTokens } from "./resume-policy";
 class SessionRestarted extends Data.TaggedError("SessionRestarted")<Record<string, never>> {}
 
 const defaultFollowUp: FollowUpContext = {
+  previousMarker: null,
   checks: "pending",
   humanCommentAtMillis: 0,
   botTriggerAtMillis: 0,
@@ -418,11 +419,7 @@ export const make = Effect.gen(function* () {
       reason,
       ...(item.stage === "follow-up"
         ? {
-            marker: followUpMarker(
-              failedFollowUp ?? defaultFollowUp,
-              Math.max((failedFollowUp?.noProgress ?? 0) - 1, 0),
-              endedAtMillis,
-            ),
+            marker: failedFollowUpMarker(failedFollowUp ?? defaultFollowUp, endedAtMillis),
           }
         : {}),
     });
@@ -536,6 +533,17 @@ export const make = Effect.gen(function* () {
     noProgress,
     baseDivergence: context.baseDivergence,
   });
+
+  const failedFollowUpMarker = (context: FollowUpContext, attemptAtMillis: number) =>
+    followUpMarker(
+      {
+        ...context,
+        humanCommentAtMillis: context.previousMarker?.humanCommentAtMillis ?? 0,
+        botTriggerAtMillis: context.previousMarker?.botTriggerAtMillis ?? 0,
+      },
+      Math.max(context.noProgress - 1, 0),
+      attemptAtMillis,
+    );
 
   const followUpContextAtFailure = Effect.fn("Executor.followUpContextAtFailure")(function* (
     workspace: RegisteredWorkspace,
