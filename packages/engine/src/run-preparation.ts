@@ -152,7 +152,9 @@ export const make = Effect.gen(function* () {
     }
     const hasPullRequestBranch = item.followUpBranch !== undefined && branch !== null;
     const freshOptions = hasPullRequestBranch ? { branch } : undefined;
-    const options = item.resume?.session ? resumeWorktreeOptions(item) : freshOptions;
+    const baseOptions = item.resume?.session ? resumeWorktreeOptions(item) : freshOptions;
+    const options =
+      item.stage === "implement" ? { ...baseOptions, pushOwner: "engine" as const } : baseOptions;
     const checkout = yield* worktrees.ensure(workspace, item, options);
     return { ...checkout, branch };
   });

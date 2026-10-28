@@ -5,6 +5,7 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import {
+  attemptStatus,
   type CommentHost,
   type CoordinationComment,
   coordinationDetail,
@@ -93,6 +94,21 @@ for (const [wire, codec] of codecs) {
       assert.deepStrictEqual(parseClaim(codec, body), claim);
       assert.deepStrictEqual(parseAttempts(codec, body), [attempt]);
       assert.deepStrictEqual(parseHandback(codec, body), handback);
+    });
+
+    it("round-trips a failure reason and puts it on the status line", () => {
+      const failed = { ...attempt, reason: "head is not ahead of origin/main" };
+      const body = formatCoordinationBody(codec, {
+        status: attemptStatus(failed),
+        markers: [serializeAttempt(codec, failed)],
+        detail: null,
+      });
+
+      assert.deepStrictEqual(parseAttempts(codec, body), [failed]);
+      assert.strictEqual(
+        coordinationStatus(codec, body),
+        "Last implement attempt failed: `head is not ahead of origin/main`",
+      );
     });
 
     it("drops malformed persisted records", () => {

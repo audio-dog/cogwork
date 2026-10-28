@@ -15,6 +15,9 @@ const baseGitLayer = Layer.succeed(Git, {
   operationInProgress: () => Effect.succeed(null),
   rebase: () => Effect.void,
   remoteUrl: () => Effect.succeed("file:///repo.git"),
+  blockPush: () => Effect.void,
+  allowPush: () => Effect.void,
+  pushBranch: () => Effect.void,
 } satisfies GitService);
 
 layer(countingLayer.pipe(Layer.provide(baseGitLayer)))((it) => {
@@ -39,6 +42,9 @@ layer(countingLayer.pipe(Layer.provide(baseGitLayer)))((it) => {
       yield* git.operationInProgress("/worktree");
       yield* git.rebase("/worktree", "origin", "branch");
       yield* git.remoteUrl("/repo", "origin");
+      yield* git.blockPush("/worktree", "origin");
+      yield* git.allowPush("/worktree", "origin");
+      yield* git.pushBranch("/repo", "file:///repo.git", "branch");
 
       assert.deepStrictEqual(yield* counter.read, {
         fetch: 2,
@@ -51,6 +57,9 @@ layer(countingLayer.pipe(Layer.provide(baseGitLayer)))((it) => {
         operationInProgress: 1,
         rebase: 1,
         remoteUrl: 1,
+        blockPush: 1,
+        allowPush: 1,
+        pushBranch: 1,
       });
 
       yield* counter.reset;
@@ -66,6 +75,9 @@ layer(countingLayer.pipe(Layer.provide(baseGitLayer)))((it) => {
         operationInProgress: 0,
         rebase: 0,
         remoteUrl: 0,
+        blockPush: 0,
+        allowPush: 0,
+        pushBranch: 0,
       });
     }),
   );

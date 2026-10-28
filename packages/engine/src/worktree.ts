@@ -101,6 +101,7 @@ export interface EnsuredWorktree {
 export interface EnsureOptions {
   readonly resume?: boolean;
   readonly branch?: BranchName;
+  readonly pushOwner?: "agent" | "engine";
 }
 
 export interface ReconcileOutcome {
@@ -212,6 +213,17 @@ export const make = Effect.gen(function* () {
       discard: true,
     });
   });
+
+  const pushOwnership = {
+    agent: git.allowPush,
+    engine: git.blockPush,
+  } satisfies Record<NonNullable<EnsureOptions["pushOwner"]>, typeof git.blockPush>;
+
+  const configurePush = (
+    worktreePath: string,
+    remote: string,
+    owner: NonNullable<EnsureOptions["pushOwner"]> = "agent",
+  ) => pushOwnership[owner](worktreePath, remote);
 
   const registeredOrDetached = Effect.fn("Worktree.registeredOrDetached")(function* (
     repoPath: string,
@@ -333,6 +345,7 @@ export const make = Effect.gen(function* () {
     const resumesRegisteredWorktree = registered && options?.resume;
 
     if (resumesRegisteredWorktree) {
+      yield* configurePush(worktreePath, remote, options?.pushOwner);
       return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
     }
 
@@ -343,7 +356,10 @@ export const make = Effect.gen(function* () {
       const startPoint = hasRemoteBranch ? `${remote}/${branch}` : `${remote}/${baseBranchOf(config)}`;
       yield* Effect.acquireUseRelease(
         git.addWorktree({ repoPath, worktreePath, branch, startPoint }),
-        () => runSetup(repoPath, worktreePath, config),
+        () =>
+          runSetup(repoPath, worktreePath, config).pipe(
+            Effect.andThen(configurePush(worktreePath, remote, options?.pushOwner)),
+          ),
         (_created, exit) =>
           Exit.isSuccess(exit)
             ? Effect.void
@@ -355,6 +371,7 @@ export const make = Effect.gen(function* () {
     if (hasRemoteBranch) yield* syncBranch(worktreePath, remote, branch);
     else yield* logMissingRemote(remote, branch);
     yield* runSetup(repoPath, worktreePath, config);
+    yield* configurePush(worktreePath, remote, options?.pushOwner);
     return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
   }, Effect.trackDuration(worktreeEnsureDuration));
 
@@ -370,7 +387,7 @@ export const make = Effect.gen(function* () {
 
     const refreshFailure = yield* git
       .fetch(repoPath, remote, {
-        branches: [baseBranch, headBranch],
+        branches: [baseBranch],
       })
       .pipe(
         Effect.match({
@@ -384,23 +401,28 @@ export const make = Effect.gen(function* () {
         message: refreshFailure.message,
       });
     }
-    const confirmedMissing = [
-      { branch: baseBranch, reason: `base ${baseBranch} does not exist on ${remote}` },
-      { branch: headBranch, reason: `head ${headBranch} has not been pushed to ${remote}` },
-    ].find(({ branch }) => refreshFailure?.missingBranches?.includes(branch));
-    if (confirmedMissing) return declinedPullRequestReadiness(confirmedMissing.reason);
-    const remoteHeadExists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
-    if (!remoteHeadExists) {
-      return declinedPullRequestReadiness(`head ${headBranch} has not been pushed to ${remote}`);
-    }
+    const confirmedMissing = refreshFailure?.missingBranches?.includes(baseBranch)
+      ? `base ${baseBranch} does not exist on ${remote}`
+      : null;
+    if (confirmedMissing) return declinedPullRequestReadiness(confirmedMissing);
     const divergence = yield* git.divergence(repoPath, remote, baseBranch, {
       branch: headBranch,
-      remote,
     });
     if (divergence.ahead === 0) {
       return declinedPullRequestReadiness(`head ${headBranch} is not ahead of ${remote}/${baseBranch}`);
     }
     return PullRequestReadiness.Ready({ headBranch, baseBranch });
+  });
+
+  const pushBranch = Effect.fn("Worktree.pushBranch")(function* (
+    workspace: RegisteredWorkspace,
+    headBranch: string,
+  ) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    const remote = remoteOf(config);
+    const remoteUrl = yield* git.remoteUrl(repoPath, remote);
+    yield* git.pushBranch(repoPath, remoteUrl, headBranch);
   });
 
   const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {
@@ -477,6 +499,7 @@ export const make = Effect.gen(function* () {
   return {
     ensure,
     pullRequestReadiness,
+    pushBranch,
     list,
     remove,
     reconcile,

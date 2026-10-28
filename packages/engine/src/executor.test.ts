@@ -890,6 +890,7 @@ const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
     Effect.succeed({ branch: branchName(item), path: `/wt/${branchName(item)}`, created }),
   pullRequestReadiness: (_workspace, item) =>
     Effect.succeed(PullRequestReadiness.Ready({ headBranch: branchName(item), baseBranch: "main" })),
+  pushBranch: () => Effect.void,
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -899,6 +900,7 @@ const worktreeStub = worktreeStubCreated(true);
 
 interface WorktreeProbeState {
   readonly ensureCount: Ref.Ref<number>;
+  readonly pushes: Ref.Ref<ReadonlyArray<string>>;
   readonly entered: Deferred.Deferred<void>;
   readonly release: Deferred.Deferred<void>;
 }
@@ -910,6 +912,7 @@ class WorktreeProbe extends Context.Service<WorktreeProbe, WorktreeProbeState>()
     WorktreeProbe,
     Effect.all({
       ensureCount: Ref.make(0),
+      pushes: Ref.make<ReadonlyArray<string>>([]),
       entered: Deferred.make<void>(),
       release: Deferred.make<void>(),
     }),
@@ -921,7 +924,10 @@ const worktreeDouble = (make: (probe: WorktreeProbeState) => WorktreeManagerServ
     Layer.provideMerge(WorktreeProbe.layer),
   );
 
-const worktreeStubLayer: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeDouble(() => worktreeStub);
+const worktreeStubLayer: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeDouble((probe) => ({
+  ...worktreeStub,
+  pushBranch: (_workspace, branch) => Ref.update(probe.pushes, (pushes) => [...pushes, branch]),
+}));
 
 const cancellationWhileWaitingForOwnership = () => {
   const entered = Deferred.makeUnsafe<void>();
@@ -982,11 +988,13 @@ const preparedWorktreeRemovedLayer = Layer.effect(
               ),
             ),
           fastForward: () => Effect.void,
-          divergence: (_path, _remote, _base, head) =>
-            Effect.succeed(head?.remote ? { ahead: 1, behind: 0 } : { ahead: 0, behind: 0 }),
+          divergence: () => Effect.succeed({ ahead: 1, behind: 0 }),
           operationInProgress: () => Effect.succeed(null),
           rebase: () => Effect.die("unexpected rebase"),
-          remoteUrl: () => Effect.die("unexpected remoteUrl"),
+          remoteUrl: () => Effect.succeed("file:///repo.git"),
+          blockPush: () => Effect.void,
+          allowPush: () => Effect.void,
+          pushBranch: () => Effect.void,
         }) satisfies GitService,
     ),
   ),
@@ -1006,38 +1014,6 @@ const preparedWorktreeRemoved = Layer.merge(
   WorktreeProbe.layer,
 );
 
-const readinessRefreshFailure = new GitError({
-  command: "fetch origin main implement-branch",
-  message: "cannot lock ref refs/remotes/origin/main",
-  retryable: true,
-});
-
-const refreshFailureWorktree = (readinessAhead: number) => {
-  const git = Layer.succeed(Git, {
-    fetch: (_repoPath, _remote, options) => (options ? Effect.fail(readinessRefreshFailure) : Effect.void),
-    remoteBranchExists: () => Effect.succeed(true),
-    addWorktree: () => Effect.die("unexpected addWorktree"),
-    removeWorktree: () => Effect.die("unexpected removeWorktree"),
-    listWorktrees: () =>
-      Effect.succeed([
-        {
-          path: worktreePathFor(worktreeRoot(implementWorkspace.config.checkoutPath), implementBranch),
-          branch: implementBranch,
-        },
-      ]),
-    fastForward: () => Effect.void,
-    divergence: (_path, _remote, _base, head) =>
-      Effect.succeed(head?.remote ? { ahead: readinessAhead, behind: 0 } : { ahead: 0, behind: 0 }),
-    operationInProgress: () => Effect.succeed(null),
-    rebase: () => Effect.die("unexpected rebase"),
-    remoteUrl: () => Effect.die("unexpected remoteUrl"),
-  } satisfies GitService);
-  return Layer.merge(
-    Layer.effect(WorktreeManager, makeWorktreeManager).pipe(Layer.provide(Layer.merge(git, worktreeFsStub))),
-    WorktreeProbe.layer,
-  );
-};
-
 const declinedPullRequestWorktree = (reason: string) =>
   worktreeDouble(() => ({
     ...worktreeStub,
@@ -1048,6 +1024,12 @@ const failedPullRequestReadinessWorktree = (failure: GitError) =>
   worktreeDouble(() => ({
     ...worktreeStub,
     pullRequestReadiness: () => Effect.fail(failure),
+  }));
+
+const failedPushWorktree = (failure: GitError) =>
+  worktreeDouble(() => ({
+    ...worktreeStub,
+    pushBranch: () => Effect.fail(failure),
   }));
 
 const divergedWorktree = worktreeDouble(() => ({
@@ -1231,6 +1213,7 @@ interface PullRequestProviderOptions {
   readonly existingHead?: string;
   readonly findError?: IssueTrackerError;
   readonly openError?: IssueTrackerError;
+  readonly beforeOpen?: Effect.Effect<void>;
 }
 
 const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
@@ -1251,7 +1234,8 @@ const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
             ),
           comment: () => Effect.void,
           openPullRequest: (_workspace, input) =>
-            Ref.update(probe.opened, (opened) => [...opened, input]).pipe(
+            (options.beforeOpen ?? Effect.void).pipe(
+              Effect.andThen(Ref.update(probe.opened, (opened) => [...opened, input])),
               Effect.flatMap(() =>
                 options.openError
                   ? Effect.fail(options.openError)
@@ -3066,8 +3050,16 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
-  it.effect("opens the pull request when its ref refresh fails", () =>
-    Effect.gen(function* () {
+  it.effect("pushes the branch before opening the pull request", () => {
+    const order = Ref.makeUnsafe<ReadonlyArray<"open" | "push">>([]);
+    const worktree = worktreeDouble(() => ({
+      ...worktreeStub,
+      pushBranch: () => Ref.update(order, (writes) => [...writes, "push" as const]),
+    }));
+    const sourceControl = pullRequestProvider({
+      beforeOpen: Ref.update(order, (writes) => [...writes, "open" as const]),
+    });
+    return Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
@@ -3082,6 +3074,7 @@ describe("Executor.execute", () => {
           body: "Closes #15",
         },
       ]);
+      assert.deepStrictEqual(yield* Ref.get(order), ["push", "open"]);
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((call) => call.method === "implemented"));
       assert.isTrue(log.some((call) => call.method === "release"));
@@ -3089,12 +3082,12 @@ describe("Executor.execute", () => {
       assert.strictEqual(run?.status, "succeeded");
     }).pipe(
       Effect.provide(
-        provide([runner(readyForPrEvents)], refreshFailureWorktree(1), pullRequestProvider()).pipe(
+        provide([runner(readyForPrEvents)], worktree, sourceControl).pipe(
           Layer.provideMerge(PullRequestCalls.layer),
         ),
       ),
-    ),
-  );
+    );
+  });
 
   it.effect("opens the pull request after its prepared worktree disappears", () =>
     Effect.gen(function* () {
@@ -3132,13 +3125,12 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
 
-      const error = yield* Effect.flip(execute(executor, implementWorkspace, implementItem));
+      yield* execute(executor, implementWorkspace, implementItem);
 
-      assert.strictEqual(error.message, "tracker endpoint unavailable");
       assert.lengthOf(yield* Ref.get(probe.opened), 1);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "implemented"));
-      assert.isTrue(log.some((call) => call.method === "attemptFailed"));
+      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
       assert.isTrue(log.some((call) => call.method === "release"));
       const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
       assert.strictEqual(run?.status, "failed");
@@ -3153,15 +3145,41 @@ describe("Executor.execute", () => {
               message: "pull request endpoint unavailable",
             }),
           }),
-          trackerRecorder(
-            undefined,
-            undefined,
-            new IssueTrackerError({ reason: "unavailable", message: "tracker endpoint unavailable" }),
-          ),
+          trackerRecorder(),
         ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
       ),
     ),
   );
+
+  it.effect("settles a push failure as a write failure without failing the attempt", () => {
+    const failure = new GitError({
+      command: "push",
+      message: "remote unavailable",
+      reason: "timeout",
+      retryable: true,
+    });
+    return Effect.gen(function* () {
+      const probe = yield* PullRequestCalls;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
+      const log = yield* Ref.get(calls);
+      assert.isFalse(log.some((call) => call.method === "implemented"));
+      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
+      assert.isTrue(log.some((call) => call.method === "release"));
+      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide([runner(readyForPrEvents)], failedPushWorktree(failure), pullRequestProvider()).pipe(
+          Layer.provideMerge(PullRequestCalls.layer),
+        ),
+      ),
+    );
+  });
 
   it.effect("records and releases a retryable failure when the git gate fails", () => {
     const failure = new GitError({
@@ -3196,13 +3214,14 @@ describe("Executor.execute", () => {
     );
   });
 
-  it.effect("records and releases a retryable failure when pull request lookup fails", () => {
+  it.effect("settles a pull request lookup write failure without failing the attempt", () => {
     const failure = new IssueTrackerError({
       reason: "unavailable",
       message: "pull request lookup unavailable",
     });
     return Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
+      const worktree = yield* WorktreeProbe;
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
 
@@ -3210,10 +3229,10 @@ describe("Executor.execute", () => {
 
       assert.strictEqual(yield* Ref.get(probe.observations), 1);
       assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
+      assert.deepStrictEqual(yield* Ref.get(worktree.pushes), [implementBranch]);
       const log = yield* Ref.get(calls);
-      assert.strictEqual(log.find((call) => call.method === "attemptFailed")?.reason, failure.message);
+      assert.isFalse(log.some((call) => call.method === "attemptFailed"));
       assert.isTrue(log.some((call) => call.method === "release"));
-      assert.isFalse(log.some((call) => call.method === "handOff"));
       const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
       assert.strictEqual(run?.status, "failed");
     }).pipe(
@@ -3390,7 +3409,7 @@ describe("Executor.execute", () => {
 
       yield* execute(executor, implementWorkspace, implementItem);
 
-      assert.strictEqual(yield* Ref.get(probe.observations), 1);
+      assert.strictEqual(yield* Ref.get(probe.observations), 0);
       assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "implemented"));
@@ -3407,37 +3426,8 @@ describe("Executor.execute", () => {
         provide(
           [runner(readyForPrEvents)],
           declinedPullRequestWorktree("head has not been pushed to origin"),
-          pullRequestProvider(),
+          pullRequestProvider({ existingHead: implementBranch }),
         ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
-      ),
-    ),
-  );
-
-  it.effect("declines when the cached head is not ahead after its ref refresh fails", () =>
-    Effect.gen(function* () {
-      const probe = yield* PullRequestCalls;
-      const calls = yield* TrackerCalls;
-      const executor = yield* Executor.Executor;
-
-      yield* execute(executor, implementWorkspace, implementItem);
-
-      assert.strictEqual(yield* Ref.get(probe.observations), 1);
-      assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
-      const log = yield* Ref.get(calls);
-      assert.isFalse(log.some((call) => call.method === "implemented"));
-      assert.isTrue(log.some((call) => call.method === "release"));
-      assert.strictEqual(
-        log.find((call) => call.method === "attemptFailed")?.reason,
-        `head ${implementBranch} is not ahead of origin/main`,
-      );
-      assert.isFalse(log.some((call) => call.method === "note"));
-      const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
-      assert.strictEqual(run?.status, "declined");
-    }).pipe(
-      Effect.provide(
-        provide([runner(readyForPrEvents)], refreshFailureWorktree(0), pullRequestProvider()).pipe(
-          Layer.provideMerge(PullRequestCalls.layer),
-        ),
       ),
     ),
   );
@@ -3488,37 +3478,30 @@ describe("Executor.execute", () => {
     ),
   );
 
-  it.effect("settles successfully when an open pull request already exists despite a gate decline", () =>
+  it.effect("pushes before settling when an open pull request already exists", () =>
     Effect.gen(function* () {
       const probe = yield* PullRequestCalls;
+      const worktree = yield* WorktreeProbe;
       const calls = yield* TrackerCalls;
-      const observation = yield* HarnessObservation;
-      const logger = Logger.make<unknown, void>(({ message }) => {
-        observation.logs.push({ message, annotations: {} });
-      });
       const executor = yield* Executor.Executor;
 
-      yield* execute(executor, implementWorkspace, implementItem).pipe(Effect.withLogger(logger));
+      yield* execute(executor, implementWorkspace, implementItem);
 
       assert.strictEqual(yield* Ref.get(probe.observations), 1);
       assert.deepStrictEqual(yield* Ref.get(probe.opened), []);
+      assert.deepStrictEqual(yield* Ref.get(worktree.pushes), [implementBranch]);
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((call) => call.method === "implemented"));
       assert.isTrue(log.some((call) => call.method === "release"));
       assert.isFalse(log.some((call) => call.method === "attemptFailed"));
       assert.isFalse(log.some((call) => call.method === "note"));
-      assert.isFalse(
-        observation.logs.some(({ message }) =>
-          Array.isArray(message) ? message.includes("pull request gate declined") : false,
-        ),
-      );
       const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
       assert.strictEqual(run?.status, "succeeded");
     }).pipe(
       Effect.provide(
         provide(
           [runner(readyForPrEvents)],
-          declinedPullRequestWorktree("head has not been pushed to origin"),
+          worktreeStubLayer,
           pullRequestProvider({ existingHead: implementBranch }),
         ).pipe(Layer.provideMerge(PullRequestCalls.layer)),
       ),

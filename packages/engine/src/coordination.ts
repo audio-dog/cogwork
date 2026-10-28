@@ -19,6 +19,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { markdownCode, parseTriageProposal, statusReason } from "./comments";
@@ -350,10 +351,10 @@ export const claimStatusFor = (claim: ClaimType) => {
   return isCodingStage ? claimStatus(stage) : `In progress — claimed by ${claim.by}.`;
 };
 
-export const attemptStatus = (attempt: AttemptRecord, reason?: string | null) => {
+export const attemptStatus = (attempt: AttemptRecord) => {
   if (attempt.outcome === "succeeded") return `${attempt.operation.operation} completed.`;
   if (attempt.outcome === "abandoned") return `${attempt.operation.operation} abandoned.`;
-  const trimmed = reason ? statusReason(reason) : "";
+  const trimmed = attempt.reason ? statusReason(attempt.reason) : "";
   if (trimmed) return `Last ${attempt.operation.operation} attempt failed: ${markdownCode(trimmed)}`;
   return `Last ${attempt.operation.operation} attempt failed.`;
 };
@@ -408,6 +409,7 @@ const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
 const decodeHandback = Schema.decodeUnknownResult(HandbackRecord);
 const decodePark = Schema.decodeUnknownResult(Schema.fromJsonString(ParkRecordSchema));
 const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
+const decodeReason = Option.liftThrowable(decodeURIComponent);
 const lineageParentOf = (parent: string) => (parent === "none" ? null : parent);
 
 const lineagePairs = (pairs: Record<string, string>) => ({
@@ -447,6 +449,7 @@ export const parseAttempts = (codec: WireCodec, body: string) =>
         outcome: pairs.outcome,
         atMillis: Number(pairs.at),
         lineage: lineagePairs(pairs),
+        ...(pairs.reason === undefined ? {} : { reason: Option.getOrUndefined(decodeReason(pairs.reason)) }),
       }),
     ),
   );
@@ -521,7 +524,7 @@ export const serializeClaim = (codec: WireCodec, claim: ClaimType) =>
 export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
   codec.encode({
     name: "attempt",
-    pairs: `workflow=${attempt.operation.workflow} operation=${attempt.operation.operation} outcome=${attempt.outcome} at=${attempt.atMillis} root=${attempt.lineage.root} parent=${attempt.lineage.parent ?? "none"} hop=${attempt.lineage.hop}`,
+    pairs: `workflow=${attempt.operation.workflow} operation=${attempt.operation.operation} outcome=${attempt.outcome} at=${attempt.atMillis} root=${attempt.lineage.root} parent=${attempt.lineage.parent ?? "none"} hop=${attempt.lineage.hop}${attempt.reason ? ` reason=${encodeURIComponent(attempt.reason)}` : ""}`,
   });
 
 export const serializeHandback = (codec: WireCodec, handback: HandbackRecordType) =>

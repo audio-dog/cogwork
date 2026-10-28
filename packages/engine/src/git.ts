@@ -73,6 +73,9 @@ export interface GitService {
   ) => Effect.Effect<GitOperationInProgress | null, GitError>;
   readonly rebase: (worktreePath: string, remote: string, branch: string) => Effect.Effect<void, GitError>;
   readonly remoteUrl: (repoPath: string, remote: string) => Effect.Effect<string, GitError>;
+  readonly blockPush: (worktreePath: string, remote: string) => Effect.Effect<void, GitError>;
+  readonly allowPush: (worktreePath: string, remote: string) => Effect.Effect<void, GitError>;
+  readonly pushBranch: (repoPath: string, remoteUrl: string, branch: string) => Effect.Effect<void, GitError>;
 }
 
 export const withTransitionLogging = (service: GitService) =>
@@ -97,6 +100,18 @@ export const withTransitionLogging = (service: GitService) =>
     rebase: Effect.fn("Git.rebase")(function* (worktreePath, remote, branch) {
       yield* service.rebase(worktreePath, remote, branch);
       yield* Effect.logInfo("rebased Git branch", { worktreePath, remote, branch });
+    }),
+    blockPush: Effect.fn("Git.blockPush")(function* (worktreePath, remote) {
+      yield* service.blockPush(worktreePath, remote);
+      yield* Effect.logInfo("blocked direct Git pushes", { worktreePath, remote });
+    }),
+    allowPush: Effect.fn("Git.allowPush")(function* (worktreePath, remote) {
+      yield* service.allowPush(worktreePath, remote);
+      yield* Effect.logInfo("allowed direct Git pushes", { worktreePath, remote });
+    }),
+    pushBranch: Effect.fn("Git.pushBranch")(function* (repoPath, remoteUrl, branch) {
+      yield* service.pushBranch(repoPath, remoteUrl, branch);
+      yield* Effect.logInfo("pushed Git branch", { repoPath, branch });
     }),
   }) satisfies GitService;
 

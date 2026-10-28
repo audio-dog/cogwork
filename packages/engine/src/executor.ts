@@ -666,6 +666,20 @@ export const make = Effect.gen(function* () {
   ) =>
     applySuccessfulOutcome(accepted.record, acc, (atMillis) => applyImplemented(workspace, item, atMillis));
 
+  const settleWriteFailure = Effect.fn("Executor.settleWriteFailure")(function* (
+    accepted: AcceptedRun,
+    acc: RunAccumulator,
+    error: { readonly message: string },
+  ) {
+    yield* Effect.logError("pull request write failed", { message: error.message });
+    const endedAtMillis = yield* Clock.currentTimeMillis;
+    yield* settleRun(accepted.record.id, {
+      status: "failed",
+      usage: acc.usage,
+      endedAtMillis,
+    });
+  });
+
   const createPullRequest = Effect.fn("Executor.createPullRequest")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -675,19 +689,26 @@ export const make = Effect.gen(function* () {
     headBranch: string,
     baseBranch: string,
   ) {
-    return yield* sourceControl
-      .openPullRequest(workspace, {
-        headBranch,
-        baseBranch,
-        title: result.title,
-        body: result.body,
-      })
-      .pipe(
-        Effect.matchEffect({
-          onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
-          onSuccess: () => settleImplemented(workspace, item, accepted, acc),
-        }),
-      );
+    return yield* worktrees.pushBranch(workspace, headBranch).pipe(
+      Effect.andThen(
+        sourceControl.findOpenPullRequest(workspace, headBranch).pipe(
+          Effect.flatMap((existing) =>
+            existing
+              ? Effect.succeed(existing)
+              : sourceControl.openPullRequest(workspace, {
+                  headBranch,
+                  baseBranch,
+                  title: result.title,
+                  body: result.body,
+                }),
+          ),
+        ),
+      ),
+      Effect.matchEffect({
+        onFailure: (error) => settleWriteFailure(accepted, acc, error),
+        onSuccess: () => settleImplemented(workspace, item, accepted, acc),
+      }),
+    );
   });
 
   const createReadyPullRequest = Effect.fn("Executor.createReadyPullRequest")(function* (
@@ -726,15 +747,7 @@ export const make = Effect.gen(function* () {
         acc.handle,
       );
     }
-    return yield* sourceControl.findOpenPullRequest(workspace, branchName(item)).pipe(
-      Effect.matchEffect({
-        onFailure: (error) => applyFailure(workspace, item, accepted, error, acc.handle),
-        onSuccess: (existing) =>
-          existing
-            ? settleImplemented(workspace, item, accepted, acc)
-            : createReadyPullRequest(workspace, item, accepted, acc, result),
-      }),
-    );
+    return yield* createReadyPullRequest(workspace, item, accepted, acc, result);
   });
 
   const operationDecision = (

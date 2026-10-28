@@ -179,6 +179,19 @@ const coordinationViewOf = (item: ObservedItem) =>
 export const consecutiveFailures = (item: ObservedItem, key: ReturnType<typeof codingOperation>) =>
   coordinationViewOf(item).counters(key).consecutiveFailures;
 
+const latestFailureReason = (item: ObservedItem, key: ReturnType<typeof codingOperation>) => {
+  const barrierAtMillis = coordinationViewOf(item).barrierAtMillis;
+  const latest = item.attempts
+    .filter(
+      (attempt) =>
+        attempt.atMillis > barrierAtMillis &&
+        attempt.operation.workflow === key.workflow &&
+        attempt.operation.operation === key.operation,
+    )
+    .at(-1);
+  return latest?.outcome === "failed" ? (latest.reason ?? null) : null;
+};
+
 const ownedByActor = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined) =>
   !allowlist || item.assignees.some((assignee) => allowlist.includes(assignee));
 
@@ -243,7 +256,8 @@ export const classifiedItemOf = (item: ObservedItem) =>
   });
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
-  const priorFailures = coordinationViewOf(item).counters(codingOperation(stage)).consecutiveFailures;
+  const operation = codingOperation(stage);
+  const priorFailures = coordinationViewOf(item).counters(operation).consecutiveFailures;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   const followUpBranch = followUpBranchFor(item, stage);
   return {
@@ -265,6 +279,7 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
         claim: item.claim,
         priority: item.priority,
         pr: item.pr ? prSummaryOf(item.pr) : null,
+        failureReason: latestFailureReason(item, operation),
       },
     },
   };

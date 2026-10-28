@@ -15,6 +15,7 @@ import {
   type WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+import { statusReason } from "./comments";
 import type { CommentHost, CoordinationComment, WireCodec } from "./coordination";
 import * as Coordination from "./coordination";
 import type { FollowUpMarker } from "./follow-up";
@@ -103,11 +104,14 @@ interface TrackerRecords<Ref, CommentId> {
 const makeTrackerRecords = <Ref, CommentId>(
   host: CoordinationHost<Ref, CommentId>,
 ): TrackerRecords<Ref, CommentId> => {
-  const appendAttemptWithReason = (ref: Ref, attempt: AttemptRecord, reason?: string) =>
-    Coordination.upsertCoordination(host.codec, host.comments(ref), {
-      status: Coordination.attemptStatus(attempt, reason),
-      marker: Coordination.serializeAttempt(host.codec, attempt),
+  const appendAttemptWithReason = (ref: Ref, attempt: AttemptRecord, reason?: string) => {
+    const recordedReason = reason ? statusReason(reason) : undefined;
+    const recorded = recordedReason ? { ...attempt, reason: recordedReason } : attempt;
+    return Coordination.upsertCoordination(host.codec, host.comments(ref), {
+      status: Coordination.attemptStatus(recorded),
+      marker: Coordination.serializeAttempt(host.codec, recorded),
     });
+  };
 
   const appendHandbackWithNote = (ref: Ref, handback: HandbackRecord, note?: string) =>
     Coordination.editCoordination(host.codec, host.comments(ref), {

@@ -374,8 +374,8 @@ layer(NodeFileSystem.layer)((it) => {
         id: "#15",
         title: "Implement playbook",
       });
-      assert.include(prompt, "The engine opens the pull request");
-      assert.include(prompt, "Push the prepared branch");
+      assert.include(prompt, "The engine verifies and pushes it");
+      assert.include(prompt, "Do not push or open one yourself");
       assert.include(prompt, "Return a ready-for-pr result");
       assert.notInclude(prompt, "open a pull request that references");
     });
@@ -450,7 +450,7 @@ layer(NodeFileSystem.layer)((it) => {
 
         assert.lengthOf(pullRequestOpeningLines, 4);
         assert.include(instructions, "Never open or merge a pull request");
-        assert.include(instructions, "Commit and push the engine-owned branch");
+        assert.include(instructions, "Commit the engine-owned branch");
         assert.include(instructions, "Return `ready-for-pr` with that title and body");
       }),
     );
@@ -505,7 +505,8 @@ describe("buildContinuationNudge", () => {
     assert.include(nudge, "Do not trust the ragged tail");
     assert.include(nudge, "say COMPLETE and stop");
     assert.include(nudge, "prepare the pull request title and body for the engine");
-    assert.include(nudge, "push the prepared branch");
+    assert.include(nudge, "commit the prepared branch");
+    assert.include(nudge, "Do not push it");
     assert.notInclude(nudge, "open a second one");
     assert.notInclude(nudge, "implement-agent");
   });

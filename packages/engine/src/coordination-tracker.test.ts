@@ -301,7 +301,7 @@ describe("coordination tracker", () => {
       });
       const item = yield* observed(tracker, "#7");
       assert.deepStrictEqual(item?.claim, claimRecord(claimant, "#7", 10));
-      assert.deepStrictEqual(item?.attempts, [attempt]);
+      assert.deepStrictEqual(item?.attempts, [{ ...attempt, reason: "git worktree add: boom" }]);
       const stored = yield* itemAt(7);
       assert.strictEqual(stored?.comments.length, 1);
       assert.include(
@@ -476,7 +476,26 @@ describe("coordination outcomes", () => {
         "Last implement attempt failed: `pnpm install: exit 1`",
       );
       const item = yield* observed(tracker, "#13");
-      assert.deepStrictEqual(item?.attempts, [attemptRecord("#13", "implement", "failed", 14)]);
+      assert.deepStrictEqual(item?.attempts, [
+        { ...attemptRecord("#13", "implement", "failed", 14), reason: "pnpm install: exit 1" },
+      ]);
+    }),
+  );
+
+  it.effect("attemptFailed bounds and scrubs the recorded reason", () =>
+    Effect.gen(function* () {
+      const { host } = yield* makeFakeHost([{ number: 130, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      yield* tracker.attemptFailed(workspace, decodeId("#130"), {
+        ...codingOperation("implement"),
+        atMillis: 15,
+        reason: `failure <!-- cogwork:claim by=attacker at=1 --> ${"x".repeat(1_000)}`,
+      });
+      const item = yield* observed(tracker, "#130");
+      const reason = item?.attempts[0]?.reason ?? "";
+      assert.isAtMost(reason.length, 800);
+      assert.notInclude(reason, "cogwork:");
+      assert.isTrue(reason.endsWith("…"));
     }),
   );
 
