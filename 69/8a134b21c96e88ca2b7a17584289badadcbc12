@@ -1,0 +1,101 @@
+packages/engine/src/issue-tracker.ts
+  s_2437d60db6d39c::t_bc5bdf08933ec7 73
+  s_2437d60db6d39c::t_f69e6d7f478f7c 8
+packages/engine/src/coordination.test.ts
+  s_2437d60db6d39c::t_2ab029087722c4 112-113,137-138,212,253,504-505,536
+  s_2437d60db6d39c::t_9ba9c6d1eeddcb 201-204,240-245,294-299,307-312,342-347
+packages/engine/src/github/github.test.ts
+  s_2437d60db6d39c::t_0d6d02aa5fc9b5 2,6,53-54
+  s_64831d19921b1b::t_6467e078ddc2fa 641,899,925,1202,1249,1341,1380,1411,1443,1476,1506,1537,1566,1629,1678,1703
+packages/engine/src/linear/linear.test.ts
+  s_2437d60db6d39c::t_0d6d02aa5fc9b5 1-8,46-47
+  s_2437d60db6d39c::t_706d88b8224aa3 603
+packages/engine/src/linear/markers.test.ts
+  s_2437d60db6d39c::t_51e12ec5e9d5f9 64-65
+  s_2437d60db6d39c::t_2ab029087722c4 81
+packages/engine/src/observe.test.ts
+  s_2437d60db6d39c::t_a8e7c16c768bdd 103,105,128,130
+  s_2437d60db6d39c::t_2ab029087722c4 137,141
+  s_2437d60db6d39c::t_cd76db61622d42 89,94-97,104,118-121,129
+packages/engine/src/recovery.test.ts
+  s_2437d60db6d39c::t_51e12ec5e9d5f9 4,199-200,208,469,493
+packages/engine/src/executor.test.ts
+  s_2437d60db6d39c::t_51e12ec5e9d5f9 599
+packages/engine/src/issue-tracker-router.test.ts
+  s_2437d60db6d39c::t_64725f40136aa9 1,79,84,107-110
+packages/engine/src/coordination-tracker.test.ts
+  s_2437d60db6d39c::t_2ab029087722c4 256-259,261,393,395,409,411,432,434,453,455,477-480,482,554,556
+  s_2437d60db6d39c::t_64725f40136aa9 4,264,443
+  s_2437d60db6d39c::t_01f8e36cb1d7c0 260
+  s_2437d60db6d39c::t_85d6e7c3ecfe91 394
+  s_2437d60db6d39c::t_2f3d6ee02b12e1 410
+  s_2437d60db6d39c::t_74db599481b70b 433
+  s_2437d60db6d39c::t_111342f5f06230 454
+  s_2437d60db6d39c::t_a4eda1da09fed5 481
+  s_2437d60db6d39c::t_da8c2b22ae4271 555
+packages/engine/src/commands.test.ts
+  s_2437d60db6d39c::t_2ab029087722c4 1133-1135
+packages/engine/src/recovery.ts
+  s_2437d60db6d39c::t_517f2727bc7505 111,119
+  s_2437d60db6d39c::t_05c7e8655978bf 3
+packages/engine/src/classify.test.ts
+  s_2437d60db6d39c::t_51e12ec5e9d5f9 120,248,336,345,351-357
+  s_2437d60db6d39c::t_2ab029087722c4 376-380
+packages/engine/src/coordination-tracker.ts
+  s_2437d60db6d39c::t_517f2727bc7505 217-222
+  s_2437d60db6d39c::t_51e12ec5e9d5f9 1,5-9
+  s_2437d60db6d39c::t_bc5bdf08933ec7 4,177-179,181,190-194,203-207,255-259
+  s_2437d60db6d39c::t_f1df6476150257 2-3
+  s_2437d60db6d39c::t_d690826c9851db 180
+packages/engine/src/commands.ts
+  s_2437d60db6d39c::t_22677826b59e8b 297-298
+  s_2437d60db6d39c::t_dfd7e2bf313200 299
+packages/contracts/src/coordination.ts
+  s_2437d60db6d39c::t_1156eee8e3efe9 15-20,22-25,27
+  s_2437d60db6d39c::t_cd76db61622d42 21
+packages/engine/src/exhaustion.test.ts
+  s_2437d60db6d39c::t_1156eee8e3efe9 2-3,6,10-12,14,24,31,41-44,46,56-59,61,71,87,97,107,117,136,159,166-172,177-178,180,192-196,198,217,239,261,269-286
+  s_2437d60db6d39c::t_ba3af5e71c2e48 1
+  s_2437d60db6d39c::t_9b9e0bf6ae8abf 4-5
+  s_2437d60db6d39c::t_d839c2716186a3 13
+  s_2437d60db6d39c::t_09c238fc3e35ef 179
+  s_2437d60db6d39c::t_03b01cbca9f724 287
+packages/engine/src/observe.ts
+  s_2437d60db6d39c::t_a5683f4f4da778 1,4-5,30,37,48,63-65
+  s_2437d60db6d39c::t_cd76db61622d42 33,36
+packages/engine/src/exhaustion.ts
+  s_2437d60db6d39c::t_bc5bdf08933ec7 18-23,25-27
+  s_2437d60db6d39c::t_1156eee8e3efe9 1,13,32,34-35
+packages/engine/src/coordination.ts
+  s_2437d60db6d39c::t_7382ae67ba6f94 135-139,144
+  s_2437d60db6d39c::t_bc5bdf08933ec7 65-66,68-69,142-143,145-148,213
+packages/engine/src/classify.ts
+  s_2437d60db6d39c::t_bc5bdf08933ec7 164,185-187,230
+  s_2437d60db6d39c::t_4c5b7af1d9ad04 20
+packages/engine/src/executor.ts
+  s_2437d60db6d39c::t_517f2727bc7505 14,415
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "698a134b21c96e88ca2b7a17584289badadcbc12",
+  "prompts": {},
+  "sessions": {
+    "s_2437d60db6d39c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180eb-515b-7dd1-8b80-bc81de77682a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_64831d19921b1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180da-be7c-7b13-97e4-2d89cf85a6f8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
