@@ -277,6 +277,7 @@ function EditorHeader() {
         />
         <Switch
           checked={workflow.enabled}
+          disabled={workflow.publishedRevision === null}
           onCheckedChange={(enabled) => actions.switchEnabled(workflow.id, enabled)}
           aria-label="Turn this Workflow on"
         />

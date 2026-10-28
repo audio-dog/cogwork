@@ -14,6 +14,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkflowEditor } from "../components/workflow-editor";
+import { WorkflowsList } from "../components/workflows-list";
 import { type WorkflowClient, WorkflowProvider, workflowProviderValue } from "./workflow-session";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -422,6 +423,43 @@ describe("WorkflowProvider", () => {
     expect(
       container.querySelector('[aria-label="Turn this Workflow on"]')?.getAttribute("aria-checked"),
     ).toBe("true");
+    await act(async () => root.unmount());
+  });
+
+  it("disables enable controls until the Workflow is published", async () => {
+    const switchEnabled = vi.fn<WorkflowClient["switchEnabled"]>(async () => record);
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled,
+      delete: unused,
+      listOptions: unused,
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider
+          value={workflowProviderValue(
+            { workflows: [record], catalog: null, machine: null, templates: [], loading: false },
+            client,
+          )}
+        >
+          <WorkflowEditor workflow={record} />
+          <WorkflowsList />
+        </WorkflowProvider>,
+      );
+    });
+
+    const switches = [...container.querySelectorAll<HTMLElement>('[role="switch"]')];
+    expect(switches).toHaveLength(2);
+    expect(switches.every((control) => control.getAttribute("aria-disabled") === "true")).toBe(true);
+    switches.forEach((control) => {
+      control.click();
+    });
+    expect(switchEnabled).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 

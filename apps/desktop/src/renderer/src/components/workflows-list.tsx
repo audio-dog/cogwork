@@ -51,6 +51,7 @@ function WorkflowRow({ id }: { readonly id: string }) {
         {incomplete.length > 0 ? <Badge variant="secondary">Incomplete</Badge> : null}
         <Switch
           checked={workflow.enabled}
+          disabled={workflow.publishedRevision === null}
           onCheckedChange={(enabled) => actions.switchEnabled(workflow.id, enabled)}
           aria-label={`Turn ${workflow.workingCopy.name} on`}
         />
