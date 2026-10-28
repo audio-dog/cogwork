@@ -138,6 +138,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         stateType: issue.stateType ?? "unstarted",
         openBlockers: issue.openBlockers ?? 0,
         priority: issue.priority ?? "medium",
+        updatedAtMillis: 0,
       }),
     ),
   );

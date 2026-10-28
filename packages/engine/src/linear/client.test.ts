@@ -316,6 +316,20 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("passes the modified-since watermark through Linear's updatedAt filter", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, null, null, Date.UTC(2026, 9, 28, 12));
+      const [request] = sentRequests(fetchStub);
+
+      assert.deepStrictEqual(request?.variables?.filter, {
+        state: { type: { nin: ["completed"] } },
+        updatedAt: { gte: "2026-10-28T12:00:00.000Z" },
+      });
+    }).pipe(withToken()),
+  );
+
   it.effect("follows the issues cursor until the backlog is exhausted", () =>
     Effect.gen(function* () {
       const pageOf = (nodes: ReadonlyArray<unknown>, endCursor: string | null) => ({

@@ -49,6 +49,7 @@ export interface RawIssue {
   readonly stateType: string;
   readonly openBlockers: number;
   readonly priority: Priority;
+  readonly updatedAtMillis: number;
 }
 
 export interface ObservedRawIssue extends RawIssue {
@@ -142,6 +143,7 @@ const IssueNode = Schema.Struct({
   title: Schema.String,
   url: Schema.String,
   priority: Schema.optional(Schema.Finite),
+  updatedAt: Schema.optional(Schema.String),
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
   }),
@@ -351,6 +353,7 @@ const issueFields = `
       title
       url
       priority
+      updatedAt
       labels(first: ${labelPageSize}) { nodes { name } }
       assignee { id }
       state { name type }
@@ -386,9 +389,12 @@ const issuesArgs = ", $filter: IssueFilter, $after: String";
 
 // Mirrors the classify-side assignee ownership gate: when the workspace names an allowlist, an
 // issue owned by anyone else can never classify, so fetching it only costs pages.
-const issuesFilter = (assigneeIds: ReadonlyArray<string> | null) => ({
+const issuesFilter = (assigneeIds: ReadonlyArray<string> | null, updatedSince?: number) => ({
   state: { type: { nin: ["completed"] } },
   ...(assigneeIds !== null && assigneeIds.length > 0 ? { assignee: { id: { in: assigneeIds } } } : {}),
+  ...(updatedSince === undefined
+    ? {}
+    : { updatedAt: { gte: DateTime.formatIso(DateTime.makeUnsafe(updatedSince)) } }),
 });
 
 const metaSelection = `
@@ -529,6 +535,7 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   stateType: issue.state.type,
   openBlockers,
   priority: linearPriority(issue.priority),
+  updatedAtMillis: millisFromIso(issue.updatedAt ?? ""),
 });
 
 const toRawComment = (comment: typeof CommentNode.Type) => {
@@ -762,6 +769,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     ref: LinearTeamRef,
     coordination: CoordinationScope | null,
     assigneeIds: ReadonlyArray<string> | null = null,
+    updatedSince?: number,
   ) {
     const shape = coordination ? coordinatedIssuesShape : issuesShape;
     const scopeVariables = coordination
@@ -771,7 +779,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
           proposal: coordination.proposalMarker,
         }
       : {};
-    const filter = issuesFilter(assigneeIds);
+    const filter = issuesFilter(assigneeIds, updatedSince);
     const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
     const issues = yield* Stream.paginate<string | null, typeof IssueNode.Type, IssueTrackerError>(
       null,
