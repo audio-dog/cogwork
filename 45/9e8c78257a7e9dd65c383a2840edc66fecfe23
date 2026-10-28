@@ -1,0 +1,20 @@
+packages/engine/src/coordination-tracker.test.ts
+  s_a4dafed776d91c::t_4f0cf8e83de86e 560,565-567
+  s_a4dafed776d91c::t_b54ea06076acda 568
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "459e8c78257a7e9dd65c383a2840edc66fecfe23",
+  "prompts": {},
+  "sessions": {
+    "s_a4dafed776d91c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a183a7-8c22-7913-9bb3-da77bab7286f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
