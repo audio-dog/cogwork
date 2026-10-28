@@ -107,6 +107,24 @@ describe("AgUiEvent", () => {
     });
   });
 
+  it("uses TanStack's Anthropic prompt total without adding cache counts again", () => {
+    const finished = decodeEvent({
+      type: "RUN_FINISHED",
+      usage: {
+        promptTokens: 17,
+        completionTokens: 3,
+        totalTokens: 20,
+        promptTokensDetails: { cachedTokens: 5, cacheWriteTokens: 7 },
+      },
+    });
+
+    assert.deepStrictEqual(agUiUsage(finished), {
+      inputTokens: 17,
+      outputTokens: 3,
+      totalTokens: 20,
+    });
+  });
+
   it("owns the shared file-diff event contract", () => {
     const event = agUiFileDiffEvent("src/index.ts", "@@ changed @@");
 
