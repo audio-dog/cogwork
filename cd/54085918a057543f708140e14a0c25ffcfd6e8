@@ -1,0 +1,139 @@
+apps/cli/src/classified-item.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 16-21
+packages/engine/src/daemon-composition.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 7-16,158,160,209-211,216-219,222,249-251,329-376,398-401
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 19-20,40
+packages/engine/src/linear/linear.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 4-5,7,40-50,61,556-557,735-739
+packages/engine/src/coordination-tracker.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 3,6-7,9-10,15,36,80-106,113,115-121,123-281,283,286-291,296,324-355,370-376,383,401-402,405,415-416,419,429-430,433,442-451,468-472,483-484,487
+  s_e5d8f701c0c31e::t_a5f7184a19782a 108
+  s_e5d8f701c0c31e::t_7b05b3661f33ba 107,110-112,114
+  s_e5d8f701c0c31e::t_a361d827e0ecf7 109
+packages/engine/src/observe.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1,4,14-20,38-49,56,65,67-71
+packages/contracts/src/index.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 22
+packages/engine/src/workflow-machine-readiness.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-108
+packages/engine/src/coordination.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1,5-6,34-48,52,54,56-57,60-63,65,68-80,83,88-89,94-96,114,116-124,127-128,131,133-135,138-139,141,144-151,155-163,166-168
+  s_e5d8f701c0c31e::t_ee4da7b9d33e43 99-100,102-103,107,109
+  s_57ba1d69a7a159::t_49ab3cc220236a 110,171
+packages/contracts/src/board.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 125-126
+packages/engine/src/coordination-control-store.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-399
+packages/engine/src/daemon.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 109-111,190,228-234,242,334-339,363-369,455-462,475
+packages/engine/src/coordination.ts
+  s_e5d8f701c0c31e::t_7b63936c09c1ed 527
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-19,21,70-336,348-352,355-356,358-359,362-363,410,413-425,428-433,438-439,448,451,458,462-471,518,521,530,533-539
+packages/engine/src/engine.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 574,636,1562,1599,1635
+packages/engine/src/workflow.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-450
+apps/cli/src/cli.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 15-27
+packages/contracts/src/workflow.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-556
+packages/engine/src/recovery.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 20-26,52-54,120,249
+packages/engine/src/coordination-control-store.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-126
+packages/contracts/src/daemon-event.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 19,72-73
+packages/engine/src/commands.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 10,18,313,740,752-765,871,917,1036,1147-1148
+packages/contracts/src/workflow.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-1366
+packages/engine/src/control-store.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 124-129,134-139,148
+packages/engine/src/coordination-fold.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-96
+packages/engine/src/event-publisher.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 376
+packages/engine/src/issue-tracker.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 17,26-29,32-37,99
+apps/desktop/src/renderer/src/features/item-tab.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 93-98
+apps/cli/src/workflow-commands.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-185
+packages/contracts/src/coordination.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 2-4,6-27,29,31-51,62-82,84-87,90,93,101,104-128
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 148-149
+apps/cli/src/cli.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 20,44
+packages/engine/src/linear/markers.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1,59,63-64,67,70,81-82,85
+packages/engine/src/recovery.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 7,53-59,106-107,123-124,140,157-158,204,208,211,513,542
+packages/engine/src/classify.test.ts
+  s_e5d8f701c0c31e::t_ee4da7b9d33e43 21,27,401
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-8,16-20,22-26,28-34,42,146,185,233,241,274,310,330,362,371,377-378,397-400,520,548
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 68-73
+packages/engine/src/commands.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 60,175,297-312
+packages/engine/src/workflow-catalog.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-51
+packages/engine/src/executor.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 37,407
+packages/engine/src/index.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 6-7,45
+packages/engine/src/control-store-schema.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1,3,107-264
+  s_e5d8f701c0c31e::t_3f8585b888a795 265
+packages/engine/src/read-model.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 5,35-40
+apps/cli/src/status.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 2,11,257-262
+docs/spec/customizable-workflows.md
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 131-132,199,236,240-241,248,268,384,410-568,573,613
+packages/engine/src/workflow.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-355
+packages/engine/src/coordination-tracker.test.ts
+  s_e5d8f701c0c31e::t_ee4da7b9d33e43 480
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 5-6,19,25,177-194,199-212,220-223,249,284,295,303,365,388,425,439,460,520,546-550,596
+packages/engine/src/classify.ts
+  s_e5d8f701c0c31e::t_691fe619e92d27 182-193,260
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 23,164-180,206,214
+  s_e5d8f701c0c31e::t_8ed28e388a55db 181
+packages/engine/src/observe.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1,13-18,44,100-103,109-112,125-128,135-138,145,149-153,159
+packages/contracts/src/rpc.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 37-49,115-147,162-167,305-334,355-359
+  s_e5d8f701c0c31e::t_a7dad6ba844014 36
+packages/engine/src/github/github.test.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 5,8,51-57,63,996,1017
+packages/engine/src/control-store.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1115-1117
+packages/engine/src/coordination-contract.ts
+  s_e5d8f701c0c31e::t_a0a2d212e814e8 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cd54085918a057543f708140e14a0c25ffcfd6e8",
+  "prompts": {},
+  "sessions": {
+    "s_57ba1d69a7a159": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18342-7714-7b42-a1c1-a8dff923aa83",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e5d8f701c0c31e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18315-79b7-7810-9966-c6fe9bc24f12",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
