@@ -62,7 +62,7 @@ type PrepareCandidateInput = Omit<PrepareRunInput, "item"> & {
 const isReplayHarness = (harness: HarnessName) => harness === "replay";
 
 const resumeWorktreeOptions = (item: AdmittedWork) => {
-  if (item.stage === "follow-up" && item.followUpBranch) {
+  if (item.followUpBranch) {
     return { resume: true, branch: item.followUpBranch };
   }
   return { resume: true };

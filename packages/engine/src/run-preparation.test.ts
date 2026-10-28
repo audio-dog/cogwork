@@ -427,6 +427,21 @@ describe("RunPreparation.prepare", () => {
   });
 
   it.layer(testLayer())((it) => {
+    it.effect("resumes a full pull request Operation on its head branch", () => {
+      const base = { ...implementItem(116), followUpBranch: externalBranch };
+      const stored = session("session-pull-request-recovery");
+      const item = resume(base, stored);
+      return Effect.gen(function* () {
+        yield* seedBranchSession(item, stored, 1_000, externalBranch);
+        const prepared = yield* prepare(item);
+        const calls = yield* Ref.get(yield* WorktreeCalls);
+        assert.strictEqual(prepared.branch, externalBranch);
+        assert.deepStrictEqual(calls, [{ item: item.id, options: { resume: true, branch: externalBranch } }]);
+      });
+    });
+  });
+
+  it.layer(testLayer())((it) => {
     it.effect("starts a fresh Session for an explicit fresh follow-up", () => {
       const item = followUpItem(107, true);
       const stored = session("session-follow-up");
