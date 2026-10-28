@@ -1,0 +1,21 @@
+docs/adr/0007-autonomous-with-override-triage-self-halts.md
+  s_6abf90fba859e5::t_90eada09c5c519 6-10
+docs/adr/0030-work-context-carries-the-work-item-prose.md
+  s_6abf90fba859e5::t_90eada09c5c519 6-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d96b5f4f425cb3be666e9ea3bb3882206cb485bb",
+  "prompts": {},
+  "sessions": {
+    "s_6abf90fba859e5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180c6-e076-7143-b4ba-3720140e146a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
