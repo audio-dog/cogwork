@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/features/connection-form.ts
+  s_57ba1d69a7a159::t_da861aeceafeb0 33
+apps/desktop/src/renderer/src/features/connection-form.test.ts
+  s_57ba1d69a7a159::t_65e9f63d3fdaa3 46,48
+  s_57ba1d69a7a159::t_76290ac4daa09d 47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb6206792fbbefc6a328b9ef3c4e5e03c983f0fe",
+  "prompts": {},
+  "sessions": {
+    "s_57ba1d69a7a159": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18342-7714-7b42-a1c1-a8dff923aa83",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
