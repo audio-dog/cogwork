@@ -45,6 +45,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   attempts: over.attempts ?? [],
   handback: over.handback ?? null,
   engineHandoffAtMillis: over.engineHandoffAtMillis ?? null,
+  followUpTrigger: over.followUpTrigger ?? null,
   pr: over.pr ?? null,
   openBlockers: over.openBlockers ?? 0,
   proposal: over.proposal ?? null,
@@ -494,6 +495,34 @@ describe("classify", () => {
 
     assert.strictEqual(result.eligible.length, 0);
     assert.strictEqual(result.needsHuman.length, 1);
+  });
+
+  it("omits a wake trigger after its reopened follow-up has run", () => {
+    const attempts = [
+      ...[1, 2, 3].map((atMillis) => attemptRecord("follow-up", "failed", atMillis)),
+      attemptRecord("follow-up", "succeeded", 7),
+    ];
+    const { eligible } = classify([
+      item({
+        id: "1",
+        roles: ["ready-for-agent"],
+        attempts,
+        handback: { by: "cogwork", atMillis: 6 },
+        followUpTrigger: { kind: "human-feedback", atMillis: 4 },
+        pr: pr("changes-requested", {
+          latestHumanCommentAtMillis: 8,
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 4,
+            noProgress: 0,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+          },
+        }),
+      }),
+    ]);
+
+    assert.isNull(eligible[0]?.workContext.facts.followUpTrigger ?? null);
   });
 
   it("keeps an item eligible while it is still under the failed-attempt cap", () => {

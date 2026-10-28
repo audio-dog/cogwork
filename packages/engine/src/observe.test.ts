@@ -130,6 +130,32 @@ describe("observeWorkspace handback barrier", () => {
     }),
   );
 
+  it.effect.each([
+    { name: "draft pull request", signals: { draft: true } },
+    { name: "unfollowable pull request", signals: { followable: false } },
+  ])("keeps an engine follow-up park for a $name", ({ signals }) =>
+    Effect.gen(function* () {
+      const handbacks = yield* Ref.make<ReadonlyArray<Parameters<IssueTrackerService["handBack"]>[2]>>([]);
+      const attempts = [1, 2, 3].map((atMillis) => attempt("follow-up", "failed", atMillis));
+      const observed = yield* observeWorkspace(
+        tracker(
+          {
+            ...item(attempts),
+            roles: ["ready-for-human"],
+            handback: null,
+            engineHandoffAtMillis: 5,
+            followUp: { ...followUp, attemptAtMillis: 3 },
+          },
+          (_workspace, _id, outcome) => Ref.update(handbacks, (all) => [...all, outcome]),
+        ),
+        provider({ ...pr, latestHumanCommentAtMillis: 4, observedAtMillis: 6, ...signals }),
+      )(workspace);
+
+      assert.isEmpty(yield* Ref.get(handbacks));
+      assert.deepStrictEqual(observed[0]?.roles, ["ready-for-human"]);
+    }),
+  );
+
   it.effect("keeps a persisted wake trigger in work context on the next observation", () =>
     Effect.gen(function* () {
       const attempts = [1, 2, 3].map((atMillis) => attempt("follow-up", "failed", atMillis));

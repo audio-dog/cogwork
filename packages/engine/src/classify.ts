@@ -191,9 +191,25 @@ const newestFailedFollowUpAttempt = (item: ObservedItem) => {
   );
 };
 
+const pendingFollowUpTrigger = (item: ObservedItem) => {
+  if (!item.followUpTrigger) return null;
+  const barrierAtMillis = coordinationViewOf(item).barrierAtMillis;
+  const triggerConsumed = item.attempts.some(
+    (attempt) =>
+      attempt.atMillis > barrierAtMillis &&
+      attempt.operation.workflow === "coding" &&
+      attempt.operation.operation === "follow-up",
+  );
+  return triggerConsumed ? null : item.followUpTrigger;
+};
+
 export const failedFollowUpReopen = (item: ObservedItem) => {
   const isFailedFollowUpPark =
-    item.pr && !item.roles.includes("needs-info") && item.roles.includes("ready-for-human");
+    item.pr &&
+    !item.pr.draft &&
+    item.pr.followable !== false &&
+    !item.roles.includes("needs-info") &&
+    item.roles.includes("ready-for-human");
   if (!isFailedFollowUpPark) return null;
   const attempt = newestFailedFollowUpAttempt(item);
   if (!attempt) return null;
@@ -287,7 +303,7 @@ export const classifiedItemOf = (item: ObservedItem) =>
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   const operation = codingOperation(stage);
   const reopen = failedFollowUpReopen(item);
-  const trigger = item.followUpTrigger ?? reopen;
+  const trigger = reopen ?? pendingFollowUpTrigger(item);
   const priorFailures = reopen ? 0 : coordinationViewOf(item).counters(operation).consecutiveFailures;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   const followUpBranch = followUpBranchFor(item, stage);
