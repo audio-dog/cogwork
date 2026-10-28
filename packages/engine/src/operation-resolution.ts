@@ -680,7 +680,12 @@ export const make = Effect.gen(function* () {
       workspace: facts.workspace.config.name,
       cwd: facts.checkoutPath,
       projectRoot: facts.checkoutPath,
-      operatingInstructions: resolved.stage.skill,
+      operatingInstructions: {
+        instructionPackage: resolved.stage.skill,
+        instruction: "",
+        questions: [],
+        hints: [],
+      },
       contributions,
     });
     const admittedIdentities = new Set(builder.contributions.map(({ id }) => id));

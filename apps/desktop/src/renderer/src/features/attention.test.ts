@@ -65,7 +65,12 @@ describe("attentionEntries", () => {
             id: "5",
             title: "In flight",
             url: null,
-            claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+            claim: {
+              by: "cogwork",
+              claimedAtMillis: 0,
+              operation: { workflow: "coding", operation: "implement" },
+              lineage: { root: "run-1", parent: null, hop: 0 },
+            },
             pr: pr(1),
           },
         },

@@ -108,6 +108,9 @@ import {
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
+import { Workflows, layer as workflowsLayer } from "./workflow";
+import { workflowCatalogContributionsLayer } from "./workflow-catalog";
+import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
 import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -186,6 +189,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const plugins = yield* PluginManager;
   const connections = yield* ConnectionStore;
   const harnesses = yield* HarnessReadinessCache;
+  const workflows = yield* Workflows;
   const ledger = yield* RunLedger;
   const emittedAtMillis = yield* Clock.currentTimeMillis;
   const snapshot = yield* worker.snapshot;
@@ -223,6 +227,13 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
       controlStore.health === "available" ? controlStore.seed.harnessSettings : [],
     ),
   };
+  const workflowEvents = yield* workflows.list.pipe(
+    Effect.matchEffect({
+      onFailure: (error) => Effect.logError("Workflow seed failed", { error }).pipe(Effect.map(() => [])),
+      onSuccess: ({ workflows }) =>
+        Effect.succeed(workflows.map((workflow) => ({ _tag: "WorkflowChanged", workflow }) as const)),
+    }),
+  );
   return [
     ...items,
     ...workspaces,
@@ -230,6 +241,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     ...controlStoreEvents,
     ...pluginEvents,
     ...connectionEvents,
+    ...workflowEvents,
     harnessEvent,
     scheduling,
   ].map((event) => ({
@@ -321,6 +333,12 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)).pipe(Stream.orDie),
   WatchEvents: () => Stream.unwrap(watchEvents()),
+  ListWorkflows: () => Effect.flatMap(Workflows, ({ list }) => list),
+  GetWorkflow: (payload) => Effect.flatMap(Workflows, ({ get }) => get(payload)),
+  ValidateWorkflow: (payload) => Effect.flatMap(Workflows, ({ validate }) => validate(payload)),
+  GetWorkflowCatalog: () => Effect.flatMap(Workflows, ({ catalog }) => catalog),
+  GetWorkflowTemplates: () => Effect.flatMap(Workflows, ({ templates }) => templates),
+  ListWorkflowOptions: (payload) => Effect.flatMap(Workflows, ({ listOptions }) => listOptions(payload)),
   CancelRun: cancelRun,
   HandBack: handBack,
   Reclassify: reclassify,
@@ -345,6 +363,13 @@ export const handlersLayer = DaemonRpcs.toLayer({
   RemoveConnection: removeConnection,
   DeregisterWorkspace: deregisterWorkspace,
   RebindWorkspace: rebindWorkspace,
+  CreateWorkflow: (payload) => Effect.flatMap(Workflows, ({ create }) => create(payload)),
+  EditWorkflow: (payload) => Effect.flatMap(Workflows, ({ edit }) => edit(payload)),
+  PublishWorkflow: (payload) => Effect.flatMap(Workflows, ({ publish }) => publish(payload)),
+  SwitchWorkflow: (payload) =>
+    Effect.flatMap(Workflows, ({ switch: switchWorkflow }) => switchWorkflow(payload)),
+  DeleteWorkflow: (payload) =>
+    Effect.flatMap(Workflows, ({ delete: deleteWorkflow }) => deleteWorkflow(payload)),
 });
 
 export const serializationLayer = RpcSerialization.layerNdjson;
@@ -431,6 +456,14 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     daemonEventBusLayer,
   );
   const harnessReadiness = harnessReadinessLayer.pipe(Layer.provideMerge(harnessRuntime));
+  const machineReadiness = machineReadinessLayer.pipe(
+    Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness)),
+  );
+  const workflows = workflowsLayer.pipe(
+    Layer.provide(workflowCatalogContributionsLayer),
+    Layer.provide(machineReadiness),
+    Layer.provide(Layer.mergeAll(controlStore, daemonEventBusLayer, harness)),
+  );
   const base = Layer.mergeAll(
     registry,
     plugins,
@@ -444,6 +477,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     runLedger,
     runRecorder,
     harnessReadiness,
+    workflows,
     McpSkill.layer.pipe(Layer.provide(credentials)),
     runControlLayer,
   );

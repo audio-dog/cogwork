@@ -118,7 +118,7 @@ The owned tools the engine hands a run instead of leaning on the harness's built
 _Avoid_: Built-in tools (those are the harness's), MCP server (one server exposes Tools; this set is native)
 
 **Worktree sandbox**:
-An `ai-sandbox` `localProcessSandbox` opened onto a run's worktree, so the owned tools read, write, and exec against that checkout and nothing else. Opened as an Effect resource (acquire the handle, release on scope close); the release only tears down the sandbox handle, never the checkout itself. The base SHA it reports is `git rev-parse HEAD`, or `""` when the checkout is not a git repo.
+An `ai-sandbox` `localProcessSandbox` opened onto a Run Plan's Workspace checkout, so the owned tools read, write, and exec against that checkout and nothing else. With no Workspace it owns an empty scratch directory instead. It is an Effect resource: scope close removes an owned scratch directory, but never a Workspace checkout. The base SHA it reports is `git rev-parse HEAD`, or `""` when the checkout is not a git repo.
 _Avoid_: Worktree manager (that owns the git lifecycle; this is the process boundary a run's tools execute inside), container
 
 **Path confinement**:

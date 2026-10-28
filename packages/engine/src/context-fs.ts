@@ -15,6 +15,7 @@ export interface ContextFsService {
     target: string,
     options?: { readonly recursive?: boolean },
   ) => Effect.Effect<ReadonlyArray<string>, ContextFsError>;
+  readonly writeFile: (target: string, content: string) => Effect.Effect<void, ContextFsError>;
   readonly copyDirectory: (source: string, dest: string) => Effect.Effect<void, ContextFsError>;
   readonly removeDirectory: (target: string) => Effect.Effect<void, ContextFsError>;
 }

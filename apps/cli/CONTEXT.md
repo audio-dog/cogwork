@@ -24,7 +24,7 @@ The process responsible for booting the server layer and keeping the daemon aliv
 _Avoid_: Treating the CLI as the product's always-on host; embedding the long-lived engine inside a UI renderer
 
 **Server layer**:
-The full composition of engine layers a daemon host boots. It now lives in the engine (`Daemon.serverLayer`), not here — the CLI is one **host adapter**: it builds the file credential store, the SQLite ledger, the git/worktree platform, the Claude Code, Codex, Cursor, and configured replay Harness runners, and the socket-server transport, then hands them to the engine. The workspace registry is engine-owned and loaded from the Control store. The desktop app is the second host.
+The full composition of engine layers a daemon host boots. It now lives in the engine (`Daemon.serverLayer`), not here — the CLI is one **host adapter**: it builds the file credential store, the SQLite ledger, the git/worktree platform, the provider runner, Claude Code, Codex, Cursor, and configured replay Harness runners, and the socket-server transport, then hands them to the engine. The workspace registry is engine-owned and loaded from the Control store. The desktop app is the second host.
 _Avoid_: Daemon (the running process is the daemon; this is how it's assembled), owning the composition here (it moved to the engine)
 
 **Stop signal**:

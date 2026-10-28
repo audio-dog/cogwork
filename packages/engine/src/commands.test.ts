@@ -7,6 +7,7 @@ import {
   ContributionSettingUpdate,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
+  codingOperation,
   connectionIdOf,
   DaemonEvent,
   type DaemonLimitUpdate,
@@ -14,6 +15,7 @@ import {
   type HarnessModelOptionDescriptor,
   HarnessName,
   IssueTrackerError,
+  LineageId,
   type LocalContribution,
   localOwnerId,
   type ModelOptionSelections,
@@ -316,7 +318,7 @@ class WorkspaceRefreshProbe extends Context.Service<WorkspaceRefreshProbe, Works
           Ref.update(probe.reconciles, (count) => count + 1).pipe(
             Effect.andThen(Deferred.succeed(probe.started, undefined)),
             Effect.andThen(Deferred.await(probe.release)),
-            Effect.map(() => [trackerItem({ claimLabeled: false, claimedByUs: false })]),
+            Effect.map(() => [trackerItem({ claimHeld: false, claimedByUs: false })]),
           ),
       });
     }),
@@ -768,7 +770,7 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   url: "https://linear.app/acme/issue/AUD-1",
   roles: ["ready-for-agent"],
   assignees: [],
-  claimLabeled: true,
+  claimHeld: true,
   claim: null,
   claimedByUs: true,
   attempts: [],
@@ -778,6 +780,20 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   proposal: null,
   priority: "medium",
   ...over,
+});
+
+const coordinationLineage = { root: LineageId.make("issue:AUD-1"), parent: null, hop: 0 };
+const activeClaim = {
+  by: "cogwork",
+  claimedAtMillis: 0,
+  operation: codingOperation("implement"),
+  lineage: coordinationLineage,
+} as const;
+const failedAttempt = (atMillis: number) => ({
+  operation: codingOperation("implement"),
+  outcome: "failed" as const,
+  atMillis,
+  lineage: coordinationLineage,
 });
 
 describe("CancelRun", () => {
@@ -885,7 +901,7 @@ describe("CancelRun", () => {
   it.effect("keeps the claim while interrupted work is still draining", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
     const claimed = trackerItem({
-      claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+      claim: activeClaim,
     });
     return Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
@@ -931,7 +947,7 @@ describe("CancelRun", () => {
   it.effect("settles cancellation after the RPC caller disconnects", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
     const claimed = trackerItem({
-      claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+      claim: activeClaim,
     });
     return Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
@@ -1050,7 +1066,7 @@ describe("Reclassify", () => {
       id: id("AUD-2"),
       roles: ["needs-triage"],
       claimedByUs: false,
-      claimLabeled: false,
+      claimHeld: false,
     });
     return Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;
@@ -1161,12 +1177,8 @@ describe("HandBack", () => {
       id: id("AUD-5"),
       roles: ["ready-for-human"],
       claimedByUs: false,
-      claimLabeled: false,
-      attempts: [
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 2 },
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 3 },
-      ],
+      claimHeld: false,
+      attempts: [failedAttempt(1), failedAttempt(2), failedAttempt(3)],
     });
     return Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;

@@ -2,6 +2,7 @@ import {
   type BlockedItem,
   type Claim,
   type ClaimedItem,
+  LineageId,
   type NeedsHumanItem,
   PrSummary,
   type ReadyToMergeItem,
@@ -31,7 +32,12 @@ const prSummary = Schema.decodeSync(PrSummary)({
   waitingSinceMillis: 0,
 });
 
-const claim: Claim = { by: "cogwork", claimedAtMillis: 1000 };
+const claim: Claim = {
+  by: "cogwork",
+  claimedAtMillis: 1000,
+  operation: { workflow: "coding", operation: "implement" },
+  lineage: { root: LineageId.make("issue:test"), parent: null, hop: 0 },
+};
 
 const eligibleWithPr: EligibleWork = {
   id: id("e-pr"),

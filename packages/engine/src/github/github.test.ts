@@ -2,8 +2,10 @@ import {
   type AttemptOutcome,
   type AttemptRecord,
   type Claim,
+  codingOperation,
   GitHubIssueFieldId,
   type LifecycleStage,
+  LineageId,
   type Priority,
   WorkItemId,
   WorkspaceConfig,
@@ -46,12 +48,19 @@ import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
 import { layer as providerLayer } from "./provider";
 
 const id = Schema.decodeSync(WorkItemId);
+const lineage = { root: LineageId.make("issue:test"), parent: null, hop: 0 };
+const claimRecord = (by: string, claimedAtMillis: number) => ({
+  by,
+  claimedAtMillis,
+  operation: codingOperation("implement"),
+  lineage,
+});
 
 const defaultStatus = Coordination.defaultStatus;
 const serializeClaim = (claim: Claim) => Coordination.serializeClaim(wireCodec, claim);
 const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
 const serializeCodingAttempt = (operation: LifecycleStage, outcome: AttemptOutcome, atMillis: number) =>
-  serializeAttempt({ workflow: "coding", operation, outcome, atMillis });
+  serializeAttempt({ operation: codingOperation(operation), outcome, atMillis, lineage });
 const serializeFollowUp = (marker: FollowUpMarker) => Coordination.serializeFollowUp(wireCodec, marker);
 
 const coordinationBody = (markers: ReadonlyArray<string>) =>
@@ -984,9 +993,7 @@ describe("GitHub adapters", () => {
             {
               issue: 33,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeClaim({ by: "other-agent[bot]", claimedAtMillis: 1, stage: "implement" }),
-              ]),
+              body: coordinationBody([serializeClaim(claimRecord("other-agent[bot]", 1))]),
             },
           ],
         }),
@@ -1007,13 +1014,7 @@ describe("GitHub adapters", () => {
             {
               issue: 34,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeClaim({
-                  by: Coordination.defaultClaimant,
-                  claimedAtMillis: 1,
-                  stage: "implement",
-                }),
-              ]),
+              body: coordinationBody([serializeClaim(claimRecord(Coordination.defaultClaimant, 1))]),
             },
           ],
         }),

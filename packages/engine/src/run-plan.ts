@@ -938,7 +938,7 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
       }),
       instructions: instructions(input.context),
       operatingInstructions: RunPlanOperatingInstructions.make({
-        name: input.resolved.stage.skill,
+        name: input.context.operatingInstructionsName,
         path: input.context.operatingInstructionsPath,
         resources: input.context.operatingInstructionResources.map((resource) =>
           RunPlanResource.make(resource),
