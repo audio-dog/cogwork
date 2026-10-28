@@ -386,6 +386,7 @@ function GranolaConnectionActions({ item }: { readonly item: ConnectionItem }) {
     <div className="flex items-center gap-2">
       <GranolaLoginDialog item={item} />
       <ConnectionEstablishmentDialog
+        key={account}
         system="granola"
         account={account}
         triggerLabel="Add key"
