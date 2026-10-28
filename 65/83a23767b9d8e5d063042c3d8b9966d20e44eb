@@ -1,0 +1,30 @@
+packages/engine/src/tools/policy.ts
+  s_e5d8f701c0c31e::t_2665111b61c647 49
+packages/engine/src/tools/policy.test.ts
+  s_e5d8f701c0c31e::t_b822fffdd576a8 88,93-100,102-104
+  s_29ddf2caebf207::t_84bec0fc2b4aa8 101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6583a23767b9d8e5d063042c3d8b9966d20e44eb",
+  "prompts": {},
+  "sessions": {
+    "s_29ddf2caebf207": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "06a104f9-7ac7-4af1-8e9c-3b051c142b6d",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e5d8f701c0c31e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18315-79b7-7810-9966-c6fe9bc24f12",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
