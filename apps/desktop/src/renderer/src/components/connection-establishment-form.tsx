@@ -104,8 +104,37 @@ function LinearCredentialSources({ id }: { readonly id: string }) {
   );
 }
 
+function GranolaCredentialSources({ id }: { readonly id: string }) {
+  return (
+    <>
+      <CredentialSourceOption id={id} value="ApiKey">
+        <FieldTitle>API key</FieldTitle>
+        <FieldDescription>Kept in the Credential store, never the Control store.</FieldDescription>
+      </CredentialSourceOption>
+      <CredentialSourceOption id={id} value="Env">
+        <FieldTitle>Environment variable</FieldTitle>
+        <FieldDescription>
+          Cogwork stores the variable&apos;s name, never its value. The daemon reads it from its process
+          environment.
+        </FieldDescription>
+      </CredentialSourceOption>
+      <CredentialSourceOption id={id} value="Stored">
+        <FieldTitle>Saved browser login</FieldTitle>
+        <FieldDescription>Uses the Granola browser grant in the Credential store.</FieldDescription>
+      </CredentialSourceOption>
+    </>
+  );
+}
+
+const credentialSources = {
+  github: GitHubCredentialSources,
+  linear: LinearCredentialSources,
+  granola: GranolaCredentialSources,
+} satisfies Record<ConnectionSystem, typeof GitHubCredentialSources>;
+
 function CredentialSourceOptions({ id, system }: { readonly id: string; readonly system: ConnectionSystem }) {
-  return system === "github" ? <GitHubCredentialSources id={id} /> : <LinearCredentialSources id={id} />;
+  const Sources = credentialSources[system];
+  return <Sources id={id} />;
 }
 
 function CredentialSourceField({
@@ -183,7 +212,7 @@ export function ConnectionEstablishmentDialog({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <FieldGroup>
-            {system === "linear" && account === undefined ? (
+            {system !== "github" && account === undefined ? (
               <form.Field name="account">
                 {(field) => {
                   const invalid = field.state.meta.isTouched && !field.state.meta.isValid;

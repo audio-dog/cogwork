@@ -122,6 +122,8 @@ export const uninstallPluginAtom = DaemonAtomRpc.mutation("UninstallPlugin");
 
 export const establishConnectionAtom = DaemonAtomRpc.mutation("EstablishConnection");
 
+export const loginGranolaAtom = DaemonAtomRpc.mutation("LoginGranola");
+
 export const reconnectConnectionAtom = DaemonAtomRpc.mutation("ReconnectConnection");
 
 export const removeConnectionAtom = DaemonAtomRpc.mutation("RemoveConnection");

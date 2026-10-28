@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   connectionAction,
   connectionStatus,
+  connectionSystemLabel,
   pluginRequiring,
   workspaceConnectionChoices,
 } from "./connections-view";
@@ -15,6 +16,10 @@ const item = (over: Partial<ConnectionItem>): ConnectionItem => ({
 });
 
 describe("Connections view", () => {
+  it("labels Granola in the read model", () => {
+    expect(connectionSystemLabel("granola")).toBe("Granola");
+  });
+
   it("presents establish, ready, and re-connect states", () => {
     expect(connectionStatus(item({})).label).toBe("Not connected");
     expect(connectionAction(item({}))).toBe("establish");
