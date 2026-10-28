@@ -7,6 +7,7 @@ import {
   availabilityOf,
   decodeWorkflowDocument,
   MachineReadiness,
+  matchWorkflowTransitions,
   NeedIdentity,
   validateWorkflow,
   validateWorkflowInput,
@@ -17,6 +18,8 @@ import {
   WorkflowDocument as WorkflowDocumentSchema,
   WorkflowEditBatch,
   WorkflowNodeId,
+  workflowOperationResultJsonSchema,
+  workflowOperationResultSchema,
 } from "./workflow";
 
 const decodeDocument = Schema.decodeUnknownSync(WorkflowDocumentSchema);
@@ -576,5 +579,56 @@ describe("Workflow edits", () => {
   it("decodes documents as data", () => {
     assert.strictEqual(decodeWorkflowDocument(baseDocument)._tag, "Ok");
     assert.strictEqual(decodeWorkflowDocument({ ...baseDocument, extra: true })._tag, "Refused");
+  });
+});
+
+describe("Workflow Operation result", () => {
+  const schema = workflowOperationResultSchema(operation, baseCatalog);
+
+  it("decodes the flat result and refuses missing answers", () => {
+    const decoded = Schema.decodeSync(schema)({
+      summary: "Ready to continue",
+      stuck: false,
+      answers: { decision: decodeNodeId("yes") },
+      inputs: { comment: "Proceed." },
+    });
+
+    assert.strictEqual(decoded.answers.decision, "yes");
+    assert.throws(() =>
+      Schema.decodeSync(schema)({
+        summary: "Ready to continue",
+        stuck: false,
+        answers: {},
+        inputs: { comment: "Proceed." },
+      }),
+    );
+  });
+
+  it("builds one strict object with required fields", () => {
+    const json = workflowOperationResultJsonSchema(operation, baseCatalog)["~standard"].jsonSchema.input({
+      target: "draft-2020-12",
+    });
+
+    assert.strictEqual(json.type, "object");
+    assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs"]);
+    assert.strictEqual(json.additionalProperties, false);
+  });
+
+  it("matches every Transition whose answers hold", () => {
+    const document = replaceOperation({
+      transitions: [
+        { when: [], actions: [], handOff: null },
+        {
+          when: [{ question: decodeNodeId("decision"), choice: decodeNodeId("yes") }],
+          actions: [{ entry: baseCatalog.entries[1]?.key ?? baseCatalog.entries[0]?.key, parameters: [] }],
+          handOff: null,
+        },
+      ],
+    });
+    const target = document.operations[0];
+    if (!target) return assert.fail("missing Operation");
+
+    assert.lengthOf(matchWorkflowTransitions(target, { decision: "yes" }), 2);
+    assert.lengthOf(matchWorkflowTransitions(target, { decision: "no" }), 1);
   });
 });

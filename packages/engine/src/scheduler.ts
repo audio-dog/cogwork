@@ -2,6 +2,7 @@ import {
   byStageThenPriority as byStageThenPriorityOf,
   type ControlStore,
   type DaemonLimitUpdate,
+  keyOf,
   PollState,
   type RunPlanObservation,
   type WorkItemId,
@@ -25,6 +26,8 @@ import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { day } from "./time";
+import { type TriggerAdmission, TriggerObservation } from "./trigger-observation";
+import { WorkflowRun } from "./workflow-run";
 import { branchName, ticketSlug } from "./worktree";
 
 const runsInFlight = Metric.gauge("cogwork_scheduler_runs_in_flight", {
@@ -110,15 +113,42 @@ export interface Candidate {
   readonly observation: RunPlanObservation;
 }
 
+interface WorkflowCandidate {
+  readonly admission: TriggerAdmission;
+  readonly keys: ReadonlyArray<string>;
+}
+
+type Schedulable = Candidate | WorkflowCandidate;
+
+const isWorkflowCandidate = (candidate: Schedulable): candidate is WorkflowCandidate =>
+  "admission" in candidate;
+
+const workflowKeyFor = (admission: TriggerAdmission) => `workflow:${keyOf(admission.event.key)}`;
+
+const workflowCandidateOf = (admission: TriggerAdmission): WorkflowCandidate => ({
+  admission,
+  keys: [workflowKeyFor(admission)],
+});
+
+const workspaceReservation = (candidate: Schedulable) =>
+  isWorkflowCandidate(candidate)
+    ? null
+    : { workspace: candidate.workspace.config.name, limit: candidate.workspaceLimit };
+
 const byStageThenPriority = (a: Candidate, b: Candidate) => byStageThenPriorityOf(a.work, b.work);
 
-const fits = (candidate: Candidate, state: SchedulerState, config: SchedulerConfig) =>
-  !state.stopping &&
-  !state.paused &&
-  state.global < config.globalLimit &&
-  (state.perWorkspace.get(candidate.workspace.config.name) ?? 0) < candidate.workspaceLimit &&
-  state.budgetUsed < config.dailyBudget &&
-  candidate.keys.every((key) => !state.inflight.has(key) && !state.acted.has(key));
+const fits = (candidate: Schedulable, state: SchedulerState, config: SchedulerConfig) => {
+  const reservation = workspaceReservation(candidate);
+  const schedulerAvailable =
+    !state.stopping &&
+    !state.paused &&
+    state.global < config.globalLimit &&
+    state.budgetUsed < config.dailyBudget;
+  const workspaceAvailable =
+    reservation === null || (state.perWorkspace.get(reservation.workspace) ?? 0) < reservation.limit;
+  const keysAvailable = candidate.keys.every((key) => !state.inflight.has(key) && !state.acted.has(key));
+  return schedulerAvailable && workspaceAvailable && keysAvailable;
+};
 
 const bumped = (map: ReadonlyMap<WorkspaceId, number>, key: WorkspaceId, delta: number) => {
   const next = new Map(map);
@@ -128,21 +158,29 @@ const bumped = (map: ReadonlyMap<WorkspaceId, number>, key: WorkspaceId, delta: 
   return next;
 };
 
-const reserve = (state: SchedulerState, candidate: Candidate) => ({
-  ...state,
-  global: state.global + 1,
-  perWorkspace: bumped(state.perWorkspace, candidate.workspace.config.name, 1),
-  inflight: new Set([...state.inflight, ...candidate.keys]),
-  acted: new Set([...state.acted, ...candidate.keys]),
-  budgetUsed: state.budgetUsed + 1,
-});
+const reserve = (state: SchedulerState, candidate: Schedulable) => {
+  const reservation = workspaceReservation(candidate);
+  return {
+    ...state,
+    global: state.global + 1,
+    perWorkspace:
+      reservation === null ? state.perWorkspace : bumped(state.perWorkspace, reservation.workspace, 1),
+    inflight: new Set([...state.inflight, ...candidate.keys]),
+    acted: new Set([...state.acted, ...candidate.keys]),
+    budgetUsed: state.budgetUsed + 1,
+  };
+};
 
-const release = (state: SchedulerState, candidate: Candidate) => ({
-  ...state,
-  global: Math.max(0, state.global - 1),
-  perWorkspace: bumped(state.perWorkspace, candidate.workspace.config.name, -1),
-  inflight: new Set([...state.inflight].filter((key) => !candidate.keys.includes(key))),
-});
+const release = (state: SchedulerState, candidate: Schedulable) => {
+  const reservation = workspaceReservation(candidate);
+  return {
+    ...state,
+    global: Math.max(0, state.global - 1),
+    perWorkspace:
+      reservation === null ? state.perWorkspace : bumped(state.perWorkspace, reservation.workspace, -1),
+    inflight: new Set([...state.inflight].filter((key) => !candidate.keys.includes(key))),
+  };
+};
 
 const refundBudget = (state: SchedulerState) => ({
   ...state,
@@ -152,11 +190,15 @@ const refundBudget = (state: SchedulerState) => ({
 const rolledOver = (state: SchedulerState, day: number) =>
   state.budgetDay === day ? state : { ...state, budgetDay: day, budgetUsed: 0 };
 
-const liveKeys = (state: SchedulerState, candidates: ReadonlyArray<Candidate>) =>
+const liveKeys = (state: SchedulerState, candidates: ReadonlyArray<Schedulable>) =>
   new Set([...candidates.flatMap((candidate) => candidate.keys), ...state.inflight]);
 
-const atGeneration = (state: SchedulerState, generation: number, candidates: ReadonlyArray<Candidate>) => {
-  const carried = state.generation === generation ? state.acted : new Set<string>();
+const atGeneration = (state: SchedulerState, generation: number, candidates: ReadonlyArray<Schedulable>) => {
+  const workflowKeys = new Set(candidates.filter(isWorkflowCandidate).flatMap((candidate) => candidate.keys));
+  const carried =
+    state.generation === generation
+      ? state.acted
+      : new Set([...state.acted].filter((key) => workflowKeys.has(key)));
   const live = liveKeys(state, candidates);
   return { ...state, generation, acted: new Set([...carried].filter((key) => live.has(key))) };
 };
@@ -166,7 +208,7 @@ export interface TickStamp {
   readonly generation: number;
 }
 
-const refreshed = (state: SchedulerState, stamp: TickStamp, candidates: ReadonlyArray<Candidate>) =>
+const refreshed = (state: SchedulerState, stamp: TickStamp, candidates: ReadonlyArray<Schedulable>) =>
   atGeneration(rolledOver(state, stamp.day), stamp.generation, candidates);
 
 const updateStateMetrics = (state: SchedulerState) =>
@@ -183,9 +225,9 @@ const jobOutcome = <A, E>(exit: Exit.Exit<A, E>) => {
 const recordJobOutcome = <A, E>(exit: Exit.Exit<A, E>) =>
   Metric.update(Metric.withAttributes(jobOutcomes, { outcome: jobOutcome(exit) }), 1);
 
-const isBudgetExhaustedTick = (
-  planned: Plan,
-  candidates: ReadonlyArray<Candidate>,
+const isBudgetExhaustedTick = <A extends Schedulable>(
+  planned: { readonly state: SchedulerState; readonly picks: ReadonlyArray<A> },
+  candidates: ReadonlyArray<A>,
   config: SchedulerConfig,
 ) =>
   !planned.state.stopping &&
@@ -199,21 +241,26 @@ export interface Plan {
   readonly picks: ReadonlyArray<Candidate>;
 }
 
+const planCandidates = <A extends Schedulable>(
+  candidates: ReadonlyArray<A>,
+  state: SchedulerState,
+  config: SchedulerConfig,
+  stamp: TickStamp,
+) =>
+  candidates.reduce<{ readonly state: SchedulerState; readonly picks: ReadonlyArray<A> }>(
+    (acc, candidate) =>
+      fits(candidate, acc.state, config)
+        ? { state: reserve(acc.state, candidate), picks: [...acc.picks, candidate] }
+        : acc,
+    { state: refreshed(state, stamp, candidates), picks: [] },
+  );
+
 export const plan = (
   candidates: ReadonlyArray<Candidate>,
   state: SchedulerState,
   config: SchedulerConfig,
   stamp: TickStamp,
-) =>
-  [...candidates]
-    .sort(byStageThenPriority)
-    .reduce<Plan>(
-      (acc, candidate) =>
-        fits(candidate, acc.state, config)
-          ? { state: reserve(acc.state, candidate), picks: [...acc.picks, candidate] }
-          : acc,
-      { state: refreshed(state, stamp, candidates), picks: [] },
-    );
+) => planCandidates([...candidates].sort(byStageThenPriority), state, config, stamp);
 
 const ticketKeyFor = (workspace: RegisteredWorkspace, itemId: WorkItemId) =>
   `${workspace.config.name}:ticket:${ticketSlug(itemId)}`;
@@ -256,19 +303,20 @@ export const make = (config: SchedulerConfig) =>
     const worker = yield* ReconcileWorker;
     const executor = yield* Executor;
     const ledger = yield* RunLedger;
+    const triggerObservation = yield* TriggerObservation;
+    const workflowRun = yield* WorkflowRun;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(seedState(config));
     const stateMetricsGate = Semaphore.makeUnsafe(1);
     const configRef = yield* Ref.make(config);
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
-    const runJob = (candidate: Candidate) => {
-      const correlation = {
-        workspace: candidate.workspace.config.name,
-        item: candidate.work.id,
-        stage: candidate.work.stage,
-      };
-      return executor.execute(candidate.workspace, candidate.work, candidate.observation).pipe(
+    const runReserved = <E, R>(
+      candidate: Schedulable,
+      correlation: Readonly<Record<string, string>>,
+      execute: Effect.Effect<boolean, E, R>,
+    ) =>
+      execute.pipe(
         Effect.flatMap((started) =>
           started
             ? Effect.void
@@ -291,37 +339,76 @@ export const make = (config: SchedulerConfig) =>
         Effect.annotateLogs(correlation),
         Effect.annotateSpans(correlation),
       );
+
+    const runJob = (candidate: Candidate) =>
+      runReserved(
+        candidate,
+        {
+          workspace: candidate.workspace.config.name,
+          item: candidate.work.id,
+          stage: candidate.work.stage,
+        },
+        executor.execute(candidate.workspace, candidate.work, candidate.observation),
+      );
+
+    const runWorkflow = (candidate: WorkflowCandidate) =>
+      runReserved(
+        candidate,
+        {
+          workflow: candidate.admission.subscription.workflow,
+          item: keyOf(candidate.admission.event.key),
+          operation: candidate.admission.subscription.operation,
+        },
+        workflowRun.execute(candidate.admission).pipe(Effect.map(() => true)),
+      );
+
+    const dispatch = (candidate: Schedulable) => {
+      if (isWorkflowCandidate(candidate)) {
+        return FiberSet.run(jobs, runWorkflow(candidate)).pipe(Effect.asVoid);
+      }
+      return FiberSet.run(jobs, runJob(candidate)).pipe(Effect.asVoid);
     };
 
     const tick = Effect.fn("Scheduler.tick")(function* () {
       const config = yield* Ref.get(configRef);
       const snapshot = yield* worker.snapshot;
       const candidates = candidatesOf(yield* registry.state, snapshot, config);
+      const workflowCandidates = (yield* triggerObservation.eligible).map(workflowCandidateOf);
+      const schedulable = [...candidates.sort(byStageThenPriority), ...workflowCandidates];
       const day = utcDay(yield* Clock.currentTimeMillis);
       const planned = yield* stateMetricsGate.withPermit(
         Ref.modify(stateRef, (state) => {
-          const next = plan(candidates, state, config, { day, generation: snapshot.generation });
+          const next = planCandidates(schedulable, state, config, {
+            day,
+            generation: snapshot.generation,
+          });
           return [next, next.state];
         }).pipe(Effect.tap((planned) => updateStateMetrics(planned.state))),
       );
-      if (isBudgetExhaustedTick(planned, candidates, config)) {
+      if (isBudgetExhaustedTick(planned, schedulable, config)) {
         yield* Metric.update(budgetExhaustedTicks, 1);
       }
       if (planned.picks.length > 0) {
         yield* Effect.logInfo("scheduled jobs", {
-          picked: planned.picks.map((c) => ({
-            workspace: c.workspace.config.name,
-            item: c.work.id,
-            stage: c.work.stage,
-          })),
+          picked: planned.picks.map((candidate) =>
+            isWorkflowCandidate(candidate)
+              ? {
+                  workflow: candidate.admission.subscription.workflow,
+                  item: keyOf(candidate.admission.event.key),
+                  operation: candidate.admission.subscription.operation,
+                }
+              : {
+                  workspace: candidate.workspace.config.name,
+                  item: candidate.work.id,
+                  stage: candidate.work.stage,
+                },
+          ),
           generation: snapshot.generation,
           inFlight: planned.state.global,
           budgetUsed: planned.state.budgetUsed,
         });
       }
-      yield* Effect.forEach(planned.picks, (candidate) => FiberSet.run(jobs, runJob(candidate)), {
-        discard: true,
-      });
+      yield* Effect.forEach(planned.picks, dispatch, { discard: true });
       return planned.picks.length;
     }, Effect.trackDuration(schedulerTickDuration));
 

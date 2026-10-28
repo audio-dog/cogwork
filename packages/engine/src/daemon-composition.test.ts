@@ -367,7 +367,8 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 5);
+      assert.lengthOf(catalog.catalog.entries, 8);
+      assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
       assert.isTrue(
         [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
       );
@@ -398,7 +399,16 @@ describe("daemon server composition", () => {
       );
       assert.deepStrictEqual(
         result.workflowCatalog.catalog.entries.map(({ name }) => name),
-        ["Notify me", "Wait for my approval", "Withdraw the pending approval", "Hand to me", "Stop"],
+        [
+          "Notify me",
+          "Wait for my approval",
+          "Withdraw the pending approval",
+          "Hand to me",
+          "Stop",
+          "Every hour",
+          "Every day",
+          "Every week",
+        ],
       );
       assert.isTrue(Result.isFailure(result.readiness));
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),

@@ -1,10 +1,15 @@
 import {
   DaemonEvent,
   HarnessName,
+  keyOf,
   type LifecycleStage,
+  LineageId,
   type Priority,
   RunId,
   type RunRecord,
+  WorkflowCatalogKey,
+  WorkflowId,
+  WorkflowNodeId,
   WorkItemId,
   WorkspaceConfig,
   type WorkspaceId,
@@ -29,8 +34,14 @@ import * as Registry from "./registry";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { type TriggerAdmission, TriggerObservation } from "./trigger-observation";
+import { WorkflowRun } from "./workflow-run";
 
 const id = Schema.decodeSync(WorkItemId);
+const workflowId = Schema.decodeSync(WorkflowId)("scheduled-workflow");
+const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
+const operationId = Schema.decodeSync(WorkflowNodeId)("run");
+const scheduleEntry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
 
 const never = Latch.makeUnsafe(false).await;
 
@@ -338,6 +349,8 @@ const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileS
 interface SchedulerProbeState {
   readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
   readonly executions: Ref.Ref<ReadonlyArray<string>>;
+  readonly workflowAdmissions: Ref.Ref<ReadonlyArray<TriggerAdmission>>;
+  readonly workflowExecutions: Ref.Ref<ReadonlyArray<string>>;
   readonly gate: Latch.Latch;
 }
 
@@ -345,13 +358,18 @@ class SchedulerProbe extends Context.Service<SchedulerProbe, SchedulerProbeState
   "@cogwork/engine/scheduler.test/SchedulerProbe",
 ) {}
 
-const probeLayer = (entries: ReadonlyArray<SnapshotEntry>) =>
+const probeLayer = (
+  entries: ReadonlyArray<SnapshotEntry>,
+  workflowAdmissions: ReadonlyArray<TriggerAdmission>,
+) =>
   Layer.effect(
     SchedulerProbe,
     Effect.gen(function* () {
       return {
         snapshots: yield* Ref.make(snapshotOf(entries)),
         executions: yield* Ref.make<ReadonlyArray<string>>([]),
+        workflowAdmissions: yield* Ref.make(workflowAdmissions),
+        workflowExecutions: yield* Ref.make<ReadonlyArray<string>>([]),
         gate: yield* Latch.make(),
       };
     }),
@@ -431,6 +449,8 @@ interface SchedulerLayerDependencies {
   readonly registryService?: Registry.WorkspaceRegistryService;
   readonly snapshots: ReadonlyArray<SnapshotEntry>;
   readonly execute: ExecuteStub;
+  readonly workflowAdmissions?: ReadonlyArray<TriggerAdmission>;
+  readonly workflowExecute?: (probe: SchedulerProbeState, admission: TriggerAdmission) => Effect.Effect<void>;
 }
 
 const providedRegistryLayer = (deps: SchedulerLayerDependencies) => {
@@ -440,14 +460,29 @@ const providedRegistryLayer = (deps: SchedulerLayerDependencies) => {
 
 const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerDependencies) => {
   const engineServices = engineTestLayer();
-  const probe = probeLayer(deps.snapshots);
-  const executor = executorStubLayer(deps.execute).pipe(Layer.provide(Layer.merge(probe, engineServices)));
+  const probe = probeLayer(deps.snapshots, deps.workflowAdmissions ?? []);
   return Scheduler.layer(config).pipe(
     Layer.provide(
       Layer.mergeAll(
         providedRegistryLayer(deps),
         workerLayer.pipe(Layer.provide(probe)),
-        executor,
+        executorStubLayer(deps.execute).pipe(Layer.provide(Layer.merge(probe, engineServices))),
+        Layer.effect(
+          TriggerObservation,
+          Effect.map(SchedulerProbe, (state) => ({
+            eligible: Ref.get(state.workflowAdmissions),
+            changes: Stream.empty,
+            health: Effect.succeed([]),
+            catalog: [],
+            refresh: Effect.void,
+          })),
+        ).pipe(Layer.provide(probe)),
+        Layer.effect(
+          WorkflowRun,
+          Effect.map(SchedulerProbe, (state) => ({
+            execute: (admission: TriggerAdmission) => deps.workflowExecute?.(state, admission) ?? Effect.void,
+          })),
+        ).pipe(Layer.provide(probe)),
         engineServices,
       ),
     ),
@@ -456,9 +491,136 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
   );
 };
 
+const workflowAdmission = (instantMillis: number): TriggerAdmission => {
+  const item = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis } as const;
+  return {
+    event: {
+      key: item,
+      revision: String(instantMillis),
+      cause: { _tag: "Unknown" },
+      atMillis: instantMillis,
+      entry: scheduleEntry,
+      workspace: null,
+    },
+    subscription: {
+      workflow: workflowId,
+      trigger: triggerId,
+      operation: operationId,
+      entry: scheduleEntry,
+      parameters: [],
+      workspaces: [],
+      catchUp: { since: 0 },
+    },
+    lineage: {
+      root: Schema.decodeSync(LineageId)(keyOf(item)),
+      parent: null,
+      hop: 0,
+    },
+  };
+};
+
 describe("Scheduler.tick", () => {
   const wsA = workspaceOf("a", 2);
   const wsB = workspaceOf("b", 2);
+
+  it.effect("reserves Workflow admissions under the shared concurrency and budget limits", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+      const admissions = [workflowAdmission(1_000), workflowAdmission(2_000), workflowAdmission(3_000)];
+
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      assert.strictEqual(yield* scheduler.tick(), 0);
+      assert.strictEqual((yield* scheduler.stats).global, 1);
+
+      yield* probe.gate.open;
+      yield* scheduler.awaitIdle;
+      yield* Ref.set(probe.workflowAdmissions, admissions.slice(0, 1));
+      yield* republish(probe);
+      assert.strictEqual(yield* scheduler.tick(), 0);
+      yield* Ref.set(probe.workflowAdmissions, admissions.slice(1));
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      yield* Ref.set(probe.workflowAdmissions, admissions.slice(2));
+
+      assert.strictEqual(yield* scheduler.tick(), 0);
+      assert.strictEqual((yield* scheduler.stats).budgetUsed, 2);
+      assert.deepStrictEqual(yield* Ref.get(probe.workflowExecutions), ["1000", "2000"]);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 2 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [
+              workflowAdmission(1_000),
+              workflowAdmission(2_000),
+              workflowAdmission(3_000),
+            ],
+            workflowExecute: (probe, admission) =>
+              Ref.update(probe.workflowExecutions, (executions) => [
+                ...executions,
+                admission.event.revision,
+              ]).pipe(Effect.andThen(probe.gate.await)),
+          },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("isolates a crashing Workflow Run from other scheduled work", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+      const success = Metric.withAttributes(jobOutcomes, { outcome: "success" });
+      const failure = Metric.withAttributes(jobOutcomes, { outcome: "failure" });
+      const before = {
+        success: (yield* Metric.value(success)).count,
+        failure: (yield* Metric.value(failure)).count,
+      };
+
+      assert.strictEqual(yield* scheduler.tick(), 2);
+      yield* Effect.yieldNow;
+      yield* probe.gate.open;
+      yield* scheduler.awaitIdle;
+
+      assert.include(yield* Ref.get(probe.workflowExecutions), "2000:finished");
+      assert.strictEqual((yield* scheduler.stats).global, 0);
+      assert.strictEqual((yield* Metric.value(success)).count, before.success + 1);
+      assert.strictEqual((yield* Metric.value(failure)).count, before.failure + 1);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 2, perWorkspaceLimit: 1, dailyBudget: 2 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [workflowAdmission(1_000), workflowAdmission(2_000)],
+            workflowExecute: (probe, admission) => {
+              const revision = admission.event.revision;
+              const execution = Ref.update(probe.workflowExecutions, (executions) => [
+                ...executions,
+                `${revision}:started`,
+              ]);
+              if (revision === "1000") return execution.pipe(Effect.andThen(Effect.die("boom")));
+              return execution.pipe(
+                Effect.andThen(probe.gate.await),
+                Effect.andThen(
+                  Ref.update(probe.workflowExecutions, (executions) => [
+                    ...executions,
+                    `${revision}:finished`,
+                  ]),
+                ),
+              );
+            },
+          },
+        ),
+      ),
+    ),
+  );
 
   it.effect("enforces global and per-workspace caps across two workspaces", () =>
     Effect.gen(function* () {
@@ -772,6 +934,11 @@ describe("Scheduler.drain", () => {
   const draining = (deps: {
     readonly snapshots: ReadonlyArray<SnapshotEntry>;
     readonly execute: ExecuteStub;
+    readonly workflowAdmissions?: ReadonlyArray<TriggerAdmission>;
+    readonly workflowExecute?: (
+      probe: SchedulerProbeState,
+      admission: TriggerAdmission,
+    ) => Effect.Effect<void>;
   }) =>
     schedulerLayer({ globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 }, { registry: [wsA], ...deps });
 
@@ -885,7 +1052,13 @@ describe("Scheduler.drain", () => {
       yield* republish(probe);
       assert.strictEqual(yield* scheduler.tick(), 0);
     }).pipe(
-      Effect.provide(draining({ snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: succeed })),
+      Effect.provide(
+        draining({
+          snapshots: [{ workspace: wsA, eligible: [work(1)] }],
+          execute: succeed,
+          workflowAdmissions: [workflowAdmission(1_000)],
+        }),
+      ),
     ),
   );
 });

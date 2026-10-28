@@ -394,6 +394,18 @@ const trackerAuthority = {
   markProcessed: (_ref: WorkItemRef, _revision: string) => Effect.fail(notThisAuthority()),
 };
 
-export const makeControlStoreCoordination = Effect.map(makeControlStoreAuthority(), (control) =>
-  makeCoordination(trackerAuthority, control, defaultClaimant),
-);
+const unavailableAuthority = (error: CoordinationError) => ({
+  read: (_ref: WorkItemRef) => Effect.fail(error),
+  claim: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(error),
+  release: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(error),
+  recordAttempt: (_ref: WorkItemRef, _attempt: AttemptRecord, _reason?: string) => Effect.fail(error),
+  park: (_ref: WorkItemRef, _park: ParkRecord) => Effect.fail(error),
+  handBack: (_ref: WorkItemRef, _record: HandbackRecord) => Effect.fail(error),
+  observe: (_ref: WorkItemRef, _revision: string, _cause: Cause) => Effect.fail(error),
+  markProcessed: (_ref: WorkItemRef, _revision: string) => Effect.fail(error),
+});
+
+export const makeControlStoreCoordination = Effect.match(makeControlStoreAuthority(), {
+  onFailure: (error) => makeCoordination(trackerAuthority, unavailableAuthority(error), defaultClaimant),
+  onSuccess: (control) => makeCoordination(trackerAuthority, control, defaultClaimant),
+});

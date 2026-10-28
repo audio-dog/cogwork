@@ -42,6 +42,7 @@ import {
   WorkflowFailure,
   WorkflowId,
   WorkflowList,
+  WorkflowNotification,
   WorkflowOptionList,
   WorkflowRecord,
   WorkflowSwitchResult,
@@ -117,6 +118,10 @@ export const ListWorkflows = Rpc.make("ListWorkflows", {
   error: ControlStoreFailure,
 });
 
+export const ListWorkflowNotifications = Rpc.make("ListWorkflowNotifications", {
+  success: Schema.Array(WorkflowNotification),
+});
+
 export const GetWorkflow = Rpc.make("GetWorkflow", {
   payload: { id: WorkflowId },
   success: WorkflowRecord,
@@ -160,6 +165,7 @@ export const DaemonQueries = RpcGroup.make(
   WatchActivity,
   WatchEvents,
   ListWorkflows,
+  ListWorkflowNotifications,
   GetWorkflow,
   ValidateWorkflow,
   GetWorkflowCatalog,

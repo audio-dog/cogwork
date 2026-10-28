@@ -35,6 +35,7 @@ import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { Availability } from "./availability";
+import { clockSource } from "./clock-source";
 import {
   cancelRun,
   deregisterWorkspace,
@@ -60,6 +61,8 @@ import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
 import { bootControlStoreLayer, ControlStore, type ControlStoreService } from "./control-store";
+import { Coordination } from "./coordination";
+import { makeControlStoreCoordination } from "./coordination-control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
 import {
@@ -108,9 +111,16 @@ import {
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
+import {
+  controlStoreTriggerObservationStoreLayer,
+  layer as triggerObservationLayer,
+} from "./trigger-observation";
+import { TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
+import { WorkflowNotifications, layer as workflowNotificationsLayer } from "./workflow-notification";
+import { layer as workflowRunLayer } from "./workflow-run";
 import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -334,6 +344,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)).pipe(Stream.orDie),
   WatchEvents: () => Stream.unwrap(watchEvents()),
   ListWorkflows: () => Effect.flatMap(Workflows, ({ list }) => list),
+  ListWorkflowNotifications: () =>
+    Effect.flatMap(WorkflowNotifications, ({ list }) => list).pipe(Effect.orDie),
   GetWorkflow: (payload) => Effect.flatMap(Workflows, ({ get }) => get(payload)),
   ValidateWorkflow: (payload) => Effect.flatMap(Workflows, ({ validate }) => validate(payload)),
   GetWorkflowCatalog: () => Effect.flatMap(Workflows, ({ catalog }) => catalog),
@@ -464,6 +476,24 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(machineReadiness),
     Layer.provide(Layer.mergeAll(controlStore, daemonEventBusLayer, harness)),
   );
+  const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
+    Layer.provide(controlStore),
+  );
+  const triggerSources = Layer.succeed(TriggerSources, [clockSource]);
+  const triggerObservationStore = controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
+  const workflowNotifications = workflowNotificationsLayer.pipe(
+    Layer.provide(Layer.merge(runLedger, runRecorder)),
+  );
+  const triggerObservation = triggerObservationLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(workflows, coordination, triggerSources, triggerObservationStore, daemonEventBusLayer),
+    ),
+  );
+  const workflowRun = workflowRunLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(workflows, coordination, harnessRuntime, runLedger, runRecorder, workflowNotifications),
+    ),
+  );
   const base = Layer.mergeAll(
     registry,
     plugins,
@@ -478,6 +508,11 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     runRecorder,
     harnessReadiness,
     workflows,
+    coordination,
+    triggerSources,
+    triggerObservation,
+    workflowNotifications,
+    workflowRun,
     McpSkill.layer.pipe(Layer.provide(credentials)),
     runControlLayer,
   );

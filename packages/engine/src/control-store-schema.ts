@@ -125,6 +125,33 @@ export const coordinationSourceRevisions = sqliteTable(
   ],
 );
 
+export const triggerAdmissions = sqliteTable(
+  "trigger_admissions",
+  {
+    workItem: text("work_item").notNull(),
+    revision: text("revision").notNull(),
+    payload: text("payload").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workItem, table.revision] }),
+    check("trigger_admissions_payload_json", sql`json_valid(${table.payload})`),
+  ],
+);
+
+export const triggerSubscriptionCheckpoints = sqliteTable(
+  "trigger_subscription_checkpoints",
+  {
+    workflow: text("workflow").notNull(),
+    trigger: text("trigger").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull(),
+    checkpointMillis: integer("checkpoint_millis").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workflow, table.trigger] }),
+    check("trigger_subscription_checkpoints_millis", sql`${table.checkpointMillis} >= 0`),
+  ],
+);
+
 export const coordinationClaimEvents = sqliteTable(
   "coordination_claim_events",
   {

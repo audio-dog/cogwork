@@ -1,11 +1,24 @@
-import { type WorkflowCatalogEntry, WorkflowCatalogKey, type WorkflowTemplate } from "@cogwork/contracts";
+import {
+  type WorkflowCatalogEntry,
+  WorkflowCatalogKey,
+  type WorkflowOptionList,
+  type WorkflowTemplate,
+  type WorkspaceId,
+} from "@cogwork/contracts";
 import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { clockEntries, clockSource } from "./clock-source";
 
 export interface WorkflowCatalogContribution {
   readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
   readonly templates: ReadonlyArray<WorkflowTemplate>;
+  readonly listOptions?: (
+    entry: WorkflowCatalogKey,
+    parameter: string,
+    workspaces: ReadonlyArray<WorkspaceId>,
+  ) => Effect.Effect<WorkflowOptionList>;
 }
 
 export class WorkflowCatalogContributions extends Context.Service<
@@ -48,4 +61,13 @@ export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
 
 export const workflowCatalogContributionsLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
+  {
+    entries: clockEntries,
+    templates: [],
+    listOptions: (entry, parameter, workspaces) =>
+      clockSource.listOptions(entry, parameter).pipe(
+        Effect.map((options) => options.map((option) => ({ ...option, listedIn: workspaces }))),
+        Effect.catchTag("SourceFailure", () => Effect.succeed([])),
+      ),
+  },
 ]);

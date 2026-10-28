@@ -112,6 +112,16 @@ export const WorkflowOperation = Schema.Struct({
 });
 export type WorkflowOperation = typeof WorkflowOperation.Type;
 
+export const WorkflowNotification = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  workflow: WorkflowId,
+  operation: WorkflowNodeId,
+  summary: TrimmedNonEmptyString,
+  answers: Schema.Record(Schema.String, Schema.String),
+  atMillis: Schema.Natural,
+});
+export type WorkflowNotification = typeof WorkflowNotification.Type;
+
 export const WorkflowDocument = Schema.Struct({
   name: TrimmedNonEmptyString,
   workspaces: WorkflowWorkspaceSelection,
@@ -295,6 +305,55 @@ export const WorkflowCatalog = Schema.Struct({
   harnesses: Schema.Array(WorkflowCatalogHarness),
 });
 export type WorkflowCatalog = typeof WorkflowCatalog.Type;
+
+const unique = <A>(values: ReadonlyArray<A>) => [...new Set(values)];
+
+const objectFields = <A extends Schema.Top>(entries: ReadonlyArray<readonly [string, A]>) =>
+  Object.fromEntries(entries);
+
+const answerFields = (operation: WorkflowOperation) =>
+  objectFields(
+    operation.questions.map(
+      (question) => [question.id, Schema.Literals(question.choices.map(({ id }) => id))] as const,
+    ),
+  );
+
+const inputFields = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
+  const actionKeys = new Set(
+    operation.transitions.flatMap(({ actions }) => actions.map(({ entry }) => entry)),
+  );
+  const inputs = unique(
+    catalog.entries
+      .filter(({ key, kind }) => kind === "action" && actionKeys.has(key))
+      .flatMap(({ agentInputs }) => agentInputs),
+  );
+  return objectFields(inputs.map((input) => [input, Schema.String] as const));
+};
+
+export const workflowOperationResultSchema = (operation: WorkflowOperation, catalog: WorkflowCatalog) =>
+  Schema.Struct({
+    summary: TrimmedNonEmptyString,
+    stuck: Schema.Boolean,
+    answers: Schema.Struct(answerFields(operation)),
+    inputs: Schema.Struct(inputFields(operation, catalog)),
+  }).annotate({ parseOptions: { onExcessProperty: "error" } });
+
+export const workflowOperationResultJsonSchema = (operation: WorkflowOperation, catalog: WorkflowCatalog) =>
+  Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog)));
+
+export const matchWorkflowTransitions = (
+  operation: WorkflowOperation,
+  answers: Readonly<Record<string, string>>,
+) =>
+  operation.transitions.filter((transition) =>
+    transitionMatches(
+      transition,
+      Object.entries(answers).map(([question, choice]) => ({
+        question: Schema.decodeSync(WorkflowNodeId)(question),
+        choice: Schema.decodeSync(WorkflowNodeId)(choice),
+      })),
+    ),
+  );
 
 export const MachineReadiness = Schema.Struct({
   workspaces: Schema.Array(Schema.Struct({ id: WorkspaceId, binds: Schema.Array(TrimmedNonEmptyString) })),
