@@ -74,6 +74,7 @@ import * as Executor from "./executor";
 import * as GitHub from "./github";
 import * as Harness from "./harness";
 import { HarnessReadinessCache, layer as harnessReadinessLayer } from "./harness-readiness";
+import { IssueTracker } from "./issue-tracker";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
@@ -111,11 +112,12 @@ import {
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
+import { SourceControlProvider } from "./source-control";
 import {
   controlStoreTriggerObservationStoreLayer,
   layer as triggerObservationLayer,
 } from "./trigger-observation";
-import { TriggerSources } from "./trigger-source";
+import { combineTriggerSources, TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
@@ -408,6 +410,20 @@ export interface HostAdapters<E = never, R = never> {
   readonly performanceIssueWorkspace?: WorkspaceId;
 }
 
+const triggerSourcesLayer = <E, R>(issueTracker: Layer.Layer<IssueTracker | SourceControlProvider, E, R>) =>
+  Layer.effect(
+    TriggerSources,
+    Effect.all([IssueTracker, SourceControlProvider]).pipe(
+      Effect.map(([tracker, provider]) =>
+        combineTriggerSources([
+          ...(tracker.triggerSources ?? []),
+          ...(provider.triggerSources ?? []),
+          clockSource,
+        ]),
+      ),
+    ),
+  ).pipe(Layer.provide(issueTracker));
+
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
   // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
@@ -416,7 +432,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // One GitHub client, built once: the issue tracker and the establish-time credential check must
   // share it, or the second instance resolves its own credentials and drifts from the first.
   const githubClient = GitHub.clientLayer.pipe(Layer.provide(credentials));
-  const issueTracker = Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
+  const issueTrackerAdapters = Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
     Layer.provide(githubClient),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
@@ -435,6 +451,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
   );
+  const issueTracker = issueTrackerAdapters.pipe(Layer.provide(registry));
+  const triggerSources = triggerSourcesLayer(issueTracker);
   const performanceIssueFiler = GitHub.performanceIssueFilerLayer(adapters.performanceIssueWorkspace).pipe(
     Layer.provide(githubClient),
     Layer.provide(registry),
@@ -472,21 +490,28 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness)),
   );
   const workflows = workflowsLayer.pipe(
-    Layer.provide(workflowCatalogContributionsLayer),
+    Layer.provide(workflowCatalogContributionsLayer.pipe(Layer.provide(triggerSources))),
     Layer.provide(machineReadiness),
     Layer.provide(Layer.mergeAll(controlStore, daemonEventBusLayer, harness)),
   );
   const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
     Layer.provide(controlStore),
   );
-  const triggerSources = Layer.succeed(TriggerSources, [clockSource]);
   const triggerObservationStore = controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
   const workflowNotifications = workflowNotificationsLayer.pipe(
     Layer.provide(Layer.merge(runLedger, runRecorder)),
   );
   const triggerObservation = triggerObservationLayer.pipe(
     Layer.provide(
-      Layer.mergeAll(workflows, coordination, triggerSources, triggerObservationStore, daemonEventBusLayer),
+      Layer.mergeAll(
+        workflows,
+        coordination,
+        triggerSources,
+        triggerObservationStore,
+        daemonEventBusLayer,
+        issueTracker,
+        registry,
+      ),
     ),
   );
   const workflowRun = workflowRunLayer.pipe(

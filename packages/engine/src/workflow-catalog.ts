@@ -9,7 +9,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { clockEntries, clockSource } from "./clock-source";
+import { type TriggerSource, TriggerSources } from "./trigger-source";
 
 export interface WorkflowCatalogContribution {
   readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
@@ -59,15 +59,31 @@ export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
   templates: [],
 };
 
-export const workflowCatalogContributionsLayer = Layer.succeed(WorkflowCatalogContributions, [
-  cogworkWorkflowCatalogContribution,
-  {
-    entries: clockEntries,
-    templates: [],
-    listOptions: (entry, parameter, workspaces) =>
-      clockSource.listOptions(entry, parameter).pipe(
-        Effect.map((options) => options.map((option) => ({ ...option, listedIn: workspaces }))),
-        Effect.catchTag("SourceFailure", () => Effect.succeed([])),
-      ),
+const sourceContribution = (source: TriggerSource): WorkflowCatalogContribution => ({
+  entries: source.entries,
+  templates: [],
+  listOptions: (entry, parameter, workspaces) => {
+    const reads = workspaces.length === 0 ? [undefined] : workspaces;
+    return Effect.forEach(reads, (workspace) => source.listOptions(entry, parameter, workspace)).pipe(
+      Effect.map((listed) => {
+        const byValue = listed.flat().reduce((options, option) => {
+          const current = options.get(option.value);
+          return options.set(option.value, {
+            ...option,
+            listedIn: [...new Set([...(current?.listedIn ?? []), ...option.listedIn])],
+          });
+        }, new Map<string, WorkflowOptionList[number]>());
+        return [...byValue.values()];
+      }),
+      Effect.catchTag("SourceFailure", () => Effect.succeed([])),
+    );
   },
-]);
+});
+
+export const workflowCatalogContributionsLayer = Layer.effect(
+  WorkflowCatalogContributions,
+  Effect.map(TriggerSources, (sources) => [
+    cogworkWorkflowCatalogContribution,
+    ...sources.map(sourceContribution),
+  ]),
+);
