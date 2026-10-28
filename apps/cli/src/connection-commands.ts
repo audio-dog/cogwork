@@ -139,12 +139,19 @@ export const establishmentOf = Effect.fn("connection.establishment")(function* (
     });
   }
   if (system === "github") return { system, source } satisfies ConnectionEstablishment;
+  if (system === "granola" && source._tag === "ApiKey" && !Redacted.value(source.key).startsWith("grn_")) {
+    return yield* new ConnectionFailure({
+      operation: "parse Connection API key",
+      connectionId: null,
+      message: "Granola API keys must start with grn_",
+    });
+  }
   if (Option.isSome(account))
     return { system, account: account.value, source } satisfies ConnectionEstablishment;
   return yield* new ConnectionFailure({
     operation: "parse Connection account",
     connectionId: null,
-    message: "Linear Connections require an account argument",
+    message: `${system === "linear" ? "Linear" : "Granola"} Connections require an account argument`,
   });
 });
 

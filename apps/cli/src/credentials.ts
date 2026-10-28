@@ -107,7 +107,7 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
   ) {
     const contents = yield* readForWrite(credential.connectionId);
     const others = contents.connectionCredentials.filter(
-      (entry) => entry.connectionId !== credential.connectionId,
+      (entry) => entry.connectionId !== credential.connectionId || entry._tag !== credential._tag,
     );
     yield* write(credential.connectionId, {
       ...contents,

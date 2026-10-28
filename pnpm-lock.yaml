@@ -162,6 +162,9 @@ importers:
       '@effect/sql-sqlite-node':
         specifier: catalog:effect
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)
+      '@modelcontextprotocol/sdk':
+        specifier: 1.30.0
+        version: 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4)
       '@opentelemetry/api':
         specifier: ~1.9.1
         version: 1.9.1

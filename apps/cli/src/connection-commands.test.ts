@@ -119,6 +119,26 @@ describe("Connection commands", () => {
     }),
   );
 
+  it.effect("builds a Granola establishment from a pasted key", () =>
+    Effect.gen(function* () {
+      const invalid = yield* Effect.flip(
+        establishmentOf("granola", Option.some("person@example.com"), {
+          _tag: "ApiKey",
+          key: Redacted.make("wrong-prefix"),
+        }),
+      );
+      const source = yield* readApiKeyFrom(
+        Stream.toAsyncIterable(Stream.make(new TextEncoder().encode("grn_secret\n"))),
+      );
+      const establishment = yield* establishmentOf("granola", Option.some("person@example.com"), source);
+
+      assert.strictEqual(invalid.message, "Granola API keys must start with grn_");
+      assert.strictEqual(establishment.system, "granola");
+      assert.strictEqual(establishment.account, "person@example.com");
+      assert.strictEqual(establishment.source._tag, "ApiKey");
+    }),
+  );
+
   it.effect("rejects API key input larger than 64 KiB", () =>
     Effect.gen(function* () {
       const input = Stream.toAsyncIterable(Stream.make(new Uint8Array(65_537)));

@@ -28,6 +28,7 @@ import * as RpcMiddleware from "effect/unstable/rpc/RpcMiddleware";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { layer as credentialsLayer } from "./credentials";
+import { granolaLoginLayer } from "./granola-login";
 import { layer as ledgerLayer } from "./ledger";
 import { defaultTelemetryStorePath } from "./paths";
 import { readPerformanceHealthSnapshot } from "./performance-health";
@@ -356,6 +357,7 @@ export const serverLayer = (options: DaemonOptions) =>
         Daemon.serverLayer({
           transport: transportLayer(options.socketPath),
           credentials: credentialsLayer(options.credentialsPath),
+          granolaLogin: granolaLoginLayer(),
           contextAssembler: contextAssemblerLayer(nodePath.dirname(options.controlStorePath)),
           runLedger: ledgerLayer,
           controlStorePath: options.controlStorePath,
