@@ -1,0 +1,51 @@
+packages/contracts/CONTEXT.md
+  s_bbbf37884d5fc4::t_6bd7066b38aa83 45
+  s_bbbf37884d5fc4::t_ba01ced7c81989 284
+  s_bbbf37884d5fc4::t_a9b407ea4f63bd 388
+  s_bbbf37884d5fc4::t_6ecfe4ba423a83 200,203-277,279-281,285,287-289,292-294,298,301-327
+  s_bbbf37884d5fc4::t_7235bd25e48fda 330,334
+  s_bbbf37884d5fc4::t_56a10873b6598f 522
+  s_bbbf37884d5fc4::t_b068c4c68b8f53 591-592
+  s_bbbf37884d5fc4::t_bb9faf0e8c0f86 437
+  s_bbbf37884d5fc4::t_c5c0f6a12e60d0 297
+  s_bbbf37884d5fc4::t_9891d7e722e106 278
+  s_bbbf37884d5fc4::t_c78e19e1c7bfff 122-123
+  s_bbbf37884d5fc4::t_ea119af0ce1094 486
+  s_bbbf37884d5fc4::t_ffbba3883300a1 596
+  s_bbbf37884d5fc4::t_712226205cfa5a 56
+  s_bbbf37884d5fc4::t_7a186cfbefaae7 449
+  s_bbbf37884d5fc4::t_a9207f11da6f54 450
+  s_bbbf37884d5fc4::t_dfa03ad4a6dee8 35
+  s_bbbf37884d5fc4::t_3a92ef96b962ef 619
+  s_bbbf37884d5fc4::t_a45a390d00cd40 445
+  s_bbbf37884d5fc4::t_211b6816c93b74 482
+  s_bbbf37884d5fc4::t_a944ba4083ace1 407
+  s_bbbf37884d5fc4::t_89e5d15abc2ea2 20-22
+  s_bbbf37884d5fc4::t_546780a8f1e133 464
+  s_bbbf37884d5fc4::t_1907c7e8cd647b 49
+  s_bbbf37884d5fc4::t_bdb94c3aad98ce 150
+  s_bbbf37884d5fc4::t_b68f7057c31151 379,408-410,412-432
+  s_bbbf37884d5fc4::t_0004baf8997c80 453-459
+  s_bbbf37884d5fc4::t_de39260cbfa3d0 614
+  s_bbbf37884d5fc4::t_44818054f1d528 411
+  s_bbbf37884d5fc4::t_471ae5cc1a9e31 405-406
+  s_bbbf37884d5fc4::t_718442d87da459 345-362
+  s_bbbf37884d5fc4::t_2d83c5be83eb75 328
+  s_bbbf37884d5fc4::t_d6174b85bc7e54 460
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b0c251735c69b413e59d6c18a6b5504ece663845",
+  "prompts": {},
+  "sessions": {
+    "s_bbbf37884d5fc4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ee66da9c-6d71-4c64-8bd4-0e6d3a5b7cd3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
