@@ -219,7 +219,7 @@ export const buildTriagePrompt = (resolved: OperationDefinition, item: PromptIte
 
 const implementFooter = [
   "",
-  "Push the prepared branch. The engine opens the pull request after it verifies that branch. Do not open one yourself.",
+  "Commit the prepared branch. The engine verifies and pushes it, then opens the pull request. Do not push or open one yourself.",
   "Return a ready-for-pr result with the title and body the engine should use.",
 ].join("\n");
 
@@ -233,7 +233,7 @@ export const buildContinuationNudge = (worktreePath: string) =>
     "treat the prepared Worktree as ground truth, including files already written. Do not trust the ragged tail",
     "of the interrupted native transcript over that state. Then",
     "continue from exactly where you stopped. Do not start over and do not redo completed work. When the task",
-    "is complete, push the prepared branch and prepare the pull request title and body for the engine. Then say COMPLETE and stop.",
+    "is complete, commit the prepared branch and prepare the pull request title and body for the engine. Do not push it. Then say COMPLETE and stop.",
   ].join("\n");
 
 export const buildFollowUpPrompt = (
