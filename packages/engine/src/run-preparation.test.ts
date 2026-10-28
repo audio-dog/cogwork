@@ -493,12 +493,15 @@ describe("RunPreparation.prepare", () => {
   });
 
   it.layer(testLayer(cursor, {}, "full"))((it) => {
-    it.effect("uses a worktree for a full triage Operation", () => {
+    it.effect("keeps a full triage Operation outside branch Session lineage", () => {
       const item = triageItem(117);
+      const stored = session("session-triage-branch");
       return Effect.gen(function* () {
+        yield* seedBranchSession(item, stored);
         const prepared = yield* prepare(item, cursor, "full");
+        assert.notStrictEqual(prepared.session, stored.id);
         assert.strictEqual(prepared.checkoutPath, `/worktrees/${branchName(item)}`);
-        assert.strictEqual(prepared.branch, branchName(item));
+        assert.isNull(prepared.branch);
         assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), [{ item: item.id, options: undefined }]);
       });
     });

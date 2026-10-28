@@ -82,6 +82,9 @@ const checkoutPathForBranch = (workspace: RegisteredWorkspace, branch: BranchNam
     ? worktreePathFor(worktreeRoot(workspace.config.checkoutPath, workspace.config.worktrees), branch)
     : workspace.config.checkoutPath;
 
+const sessionBranchFor = (item: AdmittedWork, checkoutBranch: BranchName | null) =>
+  item.stage === "triage" ? null : checkoutBranch;
+
 const logSessionChoice = Effect.fn("RunPreparation.logSessionChoice")(function* (
   session: Session | null,
   operation: ResolvedOperation,
@@ -173,8 +176,8 @@ export const make = Effect.gen(function* () {
     replay,
   }: PrepareCandidateInput) {
     const checkout = yield* prepareCheckout(workspace, item, operation);
-    const { branch } = checkout;
-    const facts = yield* branchSessionFacts(workspace, branch);
+    const sessionBranch = sessionBranchFor(item, checkout.branch);
+    const facts = yield* branchSessionFacts(workspace, sessionBranch);
     const storedSession = yield* candidateSession(item, facts);
     const session = item.stage === "follow-up" && replay ? null : storedSession;
     const fullPrompt = buildOperationPrompt(operation.stage, item, workspace.config.linearHistory);
@@ -204,7 +207,7 @@ export const make = Effect.gen(function* () {
         applyResumePolicy,
       },
     });
-    yield* logSessionChoice(session, accepted.resolved, branch, accepted.sessionChoice);
+    yield* logSessionChoice(session, accepted.resolved, sessionBranch, accepted.sessionChoice);
     return {
       request: {
         plan: accepted.plan,
@@ -214,7 +217,7 @@ export const make = Effect.gen(function* () {
       plan: accepted.plan,
       session: accepted.session,
       operation: accepted.resolved,
-      branch,
+      branch: sessionBranch,
       checkoutPath: checkout.path,
       failureSession: storedSession,
     } satisfies PreparedRun;
@@ -222,12 +225,13 @@ export const make = Effect.gen(function* () {
 
   const prepare = Effect.fn("RunPreparation.prepare")(function* (input: PrepareRunInput) {
     const { item } = input;
-    const branch = branchFor(input.workspace, item, input.operation);
-    const checkoutPath = checkoutPathForBranch(input.workspace, branch);
+    const checkoutBranch = branchFor(input.workspace, item, input.operation);
+    const sessionBranch = sessionBranchFor(item, checkoutBranch);
+    const checkoutPath = checkoutPathForBranch(input.workspace, checkoutBranch);
     const replay = isReplayHarness(input.operation.stage.harness);
     return yield* prepareCandidate({ ...input, item, replay }).pipe(
       Effect.catch((error) =>
-        branchSessionFacts(input.workspace, branch).pipe(
+        branchSessionFacts(input.workspace, sessionBranch).pipe(
           Effect.flatMap((facts) => candidateSession(item, facts)),
           Effect.flatMap((session) => Effect.fail(new PreparationFailure({ error, session, checkoutPath }))),
         ),
