@@ -1,0 +1,21 @@
+docs/agents/technical-disposition.md
+  s_6abf90fba859e5::t_90eada09c5c519 203-206,290-297
+docs/agents/product.md
+  s_6abf90fba859e5::t_90eada09c5c519 104-107,127-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5dccedd6928fe1bfb5e9d6ecf302e529d3dcb05a",
+  "prompts": {},
+  "sessions": {
+    "s_6abf90fba859e5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180c6-e076-7143-b4ba-3720140e146a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
