@@ -270,6 +270,22 @@ export const gitLayer = Layer.effect(
         runGit(repoPath, ["config", "--local", "--get", `remote.${remote}.url`]).pipe(
           Effect.map((value) => value.trim()),
         ),
+      blockPush: (worktreePath, remote) =>
+        runGit(worktreePath, ["config", "extensions.worktreeConfig", "true"]).pipe(
+          Effect.andThen(
+            runGit(worktreePath, [
+              "config",
+              "--worktree",
+              `remote.${remote}.pushurl`,
+              "cogwork-invalid://engine-owned-push",
+            ]),
+          ),
+          Effect.asVoid,
+        ),
+      pushBranch: (repoPath, remoteUrl, branch) =>
+        runGit(repoPath, ["push", remoteUrl, `refs/heads/${branch}:refs/heads/${branch}`]).pipe(
+          Effect.asVoid,
+        ),
     } satisfies Git.GitService);
   }),
 );
