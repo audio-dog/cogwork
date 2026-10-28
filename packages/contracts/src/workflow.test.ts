@@ -321,7 +321,10 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
       return codesOf(
         decodeDocument({
           ...next,
-          triggers: [{ ...baseDocument.triggers[0], start: "next" }],
+          triggers: [
+            { ...baseDocument.triggers[0], start: "next" },
+            { ...baseDocument.triggers[0], id: "same-entry", start: "triage" },
+          ],
           operations: [
             { ...operation, transitions: [{ ...transition, handOff: "next" }] },
             ...next.operations.slice(1),

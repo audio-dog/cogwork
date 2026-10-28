@@ -938,13 +938,14 @@ const unreachableDiagnostics = (document: WorkflowDocument) => {
 
 const handOffTriggerDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
   const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
-  const startsByEntry = new Map(document.triggers.map((trigger) => [trigger.entry, trigger.start]));
   return document.operations.flatMap((operation) =>
     operation.transitions.flatMap((transition) => {
       if (transition.handOff === null) return [];
       const emitsHandOffTrigger = transition.actions.some((action) =>
-        (entries.get(action.entry)?.emits ?? []).some(
-          (entry) => startsByEntry.get(entry) === transition.handOff,
+        (entries.get(action.entry)?.emits ?? []).some((entry) =>
+          document.triggers.some(
+            (trigger) => trigger.entry === entry && trigger.start === transition.handOff,
+          ),
         ),
       );
       return emitsHandOffTrigger
