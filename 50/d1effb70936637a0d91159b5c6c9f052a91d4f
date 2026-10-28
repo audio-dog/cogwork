@@ -1,0 +1,58 @@
+apps/desktop/src/renderer/src/features/workflow-defaults.ts
+  s_37bdafd0796541::t_016d19d85f4192 1-18
+apps/desktop/package.json
+  s_37bdafd0796541::t_ef52dd18209058 73
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_37bdafd0796541::t_08f07a455cb666 1,16,19-20,23
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_37bdafd0796541::t_9c41c7e52a567b 41,85
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_37bdafd0796541::t_c01df03a2248fd 17
+  s_37bdafd0796541::t_59a6e9da5993bf 18
+  s_37bdafd0796541::t_77a5b717aebc44 1-2,11-14,16,19-23,53-56,58,75-91,93-99,103-104
+  s_37bdafd0796541::t_65d145c1f90ba3 15,30,40,61-64
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_37bdafd0796541::t_9c41c7e52a567b 142-144
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_37bdafd0796541::t_083d22cdd724f8 327-331,334,336,338,345,458,1038-1041,1081-1083
+  s_37bdafd0796541::t_08f07a455cb666 39,498,1215-1217
+  s_37bdafd0796541::t_c01df03a2248fd 1244-1254
+  s_37bdafd0796541::t_305237b28c44c3 947-984,994-1008,1037,1042-1080,1084-1102,1105,1190
+  s_37bdafd0796541::t_48d139f0fc9209 713-739,741-763,796,798-819,847,1106
+  s_37bdafd0796541::t_9c41c7e52a567b 40,112-113,116,119,123,125-126,1240,1275,1277,1281-1283,1286-1288,1291-1294
+  s_37bdafd0796541::t_02156b0a64f086 8,46-49,202,208,217,382,385,439,441,448,451,510,513,537,554,768,772,838,841,1112,1114,1298-1301,1303-1304
+  s_37bdafd0796541::t_14855ee6bd38cd 1276,1289-1290
+  s_37bdafd0796541::t_ea9c457834015f 1229-1237,1242-1243,1255-1258,1261,1265-1274,1278-1280,1284-1285
+  s_37bdafd0796541::t_d2b3bf5fbbef69 563-566,627,858-863
+  s_37bdafd0796541::t_73ae7f374ecef3 332-333
+  s_37bdafd0796541::t_c940f588c17e06 335
+  s_37bdafd0796541::t_fa4dcea8467318 740
+  s_37bdafd0796541::t_a399b89345b307 1103-1104
+  s_37bdafd0796541::t_d1c255292f064f 1107
+  s_37bdafd0796541::t_ed6e8900a3d688 1302
+  s_37bdafd0796541::t_cfc7362ec720a6 4
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId.tsx
+  s_37bdafd0796541::t_9c41c7e52a567b 35
+apps/desktop/src/renderer/src/components/workflow-catalog-menu.tsx
+  s_37bdafd0796541::t_8383e535f36e69 7-8,10,12,26,52-57,79,81-86,92-95,114-117,119-152,155-167
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_37bdafd0796541::t_b0f587e62b20b7 90,251,261,264-270,308,314
+pnpm-lock.yaml
+  s_37bdafd0796541::t_b6c9b9819ab40c 207,219,295,350-352,370,394,409,418,437,440,443,456,459,465,480,483,486,499,502,508,521,527,545,548,551,561,564,573,600,603,606,634,643,659,668,2788-2790,3185-3188,3737-3740,4049-4052,5711-5714,6323,6326,6328,6331,7246,7250,7262,7265,7267,7270,7303,7308,7310,7312,7315,7319,7322-7323,7329,7334,7743-7744,8102-8105,8521-8522,8953-8965,10331,10356,10360,10385,10401-10402
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "50d1effb70936637a0d91159b5c6c9f052a91d4f",
+  "prompts": {},
+  "sessions": {
+    "s_37bdafd0796541": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18358-8a25-7891-a2bf-38f296669467",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
