@@ -1,0 +1,73 @@
+packages/engine/src/coordination.ts
+  s_e5d8f701c0c31e::t_ba69bbb86731de 65,68
+apps/cli/src/platform.ts
+  s_e5d8f701c0c31e::t_534759e2febf82 285-292
+packages/engine/src/workspace-registry.test.ts
+  s_e5d8f701c0c31e::t_20ee7c25905893 43
+packages/engine/src/tools/policy.ts
+  s_e5d8f701c0c31e::t_fbdc1fb3b26af6 51
+packages/engine/src/coordination-tracker.ts
+  s_e5d8f701c0c31e::t_fbdc1fb3b26af6 115,218-224
+  s_e5d8f701c0c31e::t_e05589f0926d9e 116
+  s_e5d8f701c0c31e::t_ba69bbb86731de 12,117-119,121
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_e5d8f701c0c31e::t_9f0959cc841685 46,61,79
+  s_e5d8f701c0c31e::t_20ee7c25905893 19
+packages/engine/src/worktree.test.ts
+  s_e5d8f701c0c31e::t_bbc7d96bde7ca4 242,246-261
+  s_e5d8f701c0c31e::t_34abdc2789b128 59,158-159
+  s_e5d8f701c0c31e::t_53e44c62bac5c1 243-245
+packages/engine/src/executor.test.ts
+  s_e5d8f701c0c31e::t_20ee7c25905893 993
+  s_e5d8f701c0c31e::t_8127da7483d942 3047,3050
+  s_e5d8f701c0c31e::t_8b926e6e59e2a6 3043-3046,3048-3049,3051-3052,3075,3079-3080
+  s_e5d8f701c0c31e::t_1d1015c51b9ad1 3207,3214,3222,3224,3402,3419,3471,3474,3478,3482,3494
+  s_e5d8f701c0c31e::t_45be7030356e19 1213,1234-1235,3067
+packages/engine/src/coordination-tracker.test.ts
+  s_e5d8f701c0c31e::t_8127da7483d942 478
+  s_e5d8f701c0c31e::t_26e76b08f66818 465-477,479-481
+apps/cli/src/platform.test.ts
+  s_e5d8f701c0c31e::t_fbdc1fb3b26af6 959
+  s_e5d8f701c0c31e::t_34abdc2789b128 978-980,983-987
+  s_e5d8f701c0c31e::t_47690777752886 981-982
+packages/engine/src/worktree.ts
+  s_e5d8f701c0c31e::t_5565f13a1d73c9 217,219-220,348-349,374-375
+  s_e5d8f701c0c31e::t_567f7522397190 218
+  s_e5d8f701c0c31e::t_398ca617997ad1 359-362
+  s_e5d8f701c0c31e::t_fbdc1fb3b26af6 222,225-226
+packages/engine/src/testing/git-invocation-counting.ts
+  s_e5d8f701c0c31e::t_9f0959cc841685 31,80
+packages/contracts/src/coordination.ts
+  s_e5d8f701c0c31e::t_fbdc1fb3b26af6 21-23,33
+packages/engine/src/coordination.test.ts
+  s_e5d8f701c0c31e::t_ba69bbb86731de 214-220,227-233,522-528,557-562
+  s_e5d8f701c0c31e::t_6f2c0916eb8853 563
+packages/engine/src/git.ts
+  s_e5d8f701c0c31e::t_5565f13a1d73c9 77,108-110
+  s_e5d8f701c0c31e::t_7e0f99ed5c3fdb 111
+packages/engine/src/daemon-composition.test.ts
+  s_e5d8f701c0c31e::t_20ee7c25905893 75
+packages/engine/src/git.test.ts
+  s_e5d8f701c0c31e::t_20ee7c25905893 18
+packages/engine/src/executor.ts
+  s_e5d8f701c0c31e::t_267995b5949ff2 751
+  s_e5d8f701c0c31e::t_58c230179dcfdf 695-706
+packages/engine/src/engine.test.ts
+  s_e5d8f701c0c31e::t_20ee7c25905893 1140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7ab8c60b06fb071518d0f671d3b4d4e4242a321f",
+  "prompts": {},
+  "sessions": {
+    "s_e5d8f701c0c31e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18315-79b7-7810-9966-c6fe9bc24f12",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
