@@ -495,13 +495,23 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: HandBackOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* records.appendHandbackWithNote(
-        ref,
-        { ...outcome.record, note: outcome.note ?? null },
-        outcome.note,
-        outcome.trigger,
-      );
       yield* applyRoles(ref, outcome.changes);
+      yield* records
+        .appendHandbackWithNote(
+          ref,
+          { ...outcome.record, note: outcome.note ?? null },
+          outcome.note,
+          outcome.trigger,
+        )
+        .pipe(
+          Effect.tapError(() =>
+            applyRoles(ref, { remove: outcome.changes.add, add: outcome.changes.remove }).pipe(
+              Effect.catchTag("IssueTrackerError", (error) =>
+                Effect.logWarning("handback role rollback failed", { message: error.message }),
+              ),
+            ),
+          ),
+        );
     }),
     stalled: Effect.fn("coordinationTracker.stalled")(function* (
       workspace: WorkspaceIssueTrackerBinding,

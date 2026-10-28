@@ -591,7 +591,44 @@ describe("coordination outcomes", () => {
       );
 
       assert.strictEqual(error._tag, "IssueTrackerError");
-      assert.strictEqual((yield* itemAt(18))?.comments.length, 0);
+      const item = yield* itemAt(18);
+      assert.strictEqual(item?.comments.length, 0);
+      assert.deepStrictEqual(item?.labels, ["ready-for-human"]);
+    }),
+  );
+
+  it.effect("handBack leaves no barrier when the role transition fails", () =>
+    Effect.gen(function* () {
+      const failed = attemptRecord("#19", "follow-up", "failed", 2);
+      const { host } = yield* makeFakeHost(
+        [
+          {
+            number: 19,
+            labels: ["ready-for-human"],
+            comments: [
+              {
+                id: 1,
+                isBot: true,
+                createdAtMillis: 1,
+                body: coordinationBody([Coordination.serializeAttempt(codec, failed)]),
+              },
+            ],
+          },
+        ],
+        "ready-for-human",
+      );
+      const tracker = makeCoordinationTracker(host);
+      const error = yield* Effect.flip(
+        tracker.handBack(workspace, decodeId("#19"), {
+          record: { by: "cogwork", atMillis: 5 },
+          changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
+        }),
+      );
+
+      assert.strictEqual(error._tag, "IssueTrackerError");
+      const item = yield* observed(tracker, "#19");
+      assert.isNull(item?.handback ?? null);
+      assert.deepStrictEqual(item?.roles, ["ready-for-human"]);
     }),
   );
 
