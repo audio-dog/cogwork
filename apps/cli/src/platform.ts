@@ -419,8 +419,9 @@ export const contextFsLayer = Layer.effect(
       readDirectory: readFiles,
       writeFile: (target, content) =>
         fs
-          .makeDirectory(path.dirname(target), { recursive: true })
+          .remove(target, { force: true })
           .pipe(
+            Effect.andThen(fs.makeDirectory(path.dirname(target), { recursive: true })),
             Effect.andThen(fs.writeFileString(target, content)),
             Effect.mapError(fail(`write ${target}`)),
           ),
