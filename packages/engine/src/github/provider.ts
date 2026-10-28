@@ -1,7 +1,8 @@
 import type { ConnectionBindingId, ConnectionId, WorkItem, WorkItemId } from "@cogwork/contracts";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { checkState } from "../ci";
+import { checkState, latestFailingCheckAtMillis } from "../ci";
 import type { BaseDivergence, PrReview } from "../follow-up";
 import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace } from "../projector";
@@ -190,6 +191,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     const feedback = [...pullRequestFeedback, ...reviewComments];
     const human = humanCommentSignal(feedback, target.botAllowlist);
     const bot = botTriggerSignal(reviewComments, pullRequestFeedback, target.botAllowlist);
+    const observedAtMillis = yield* Clock.currentTimeMillis;
     return {
       number: pull.number,
       url: pull.url,
@@ -197,6 +199,8 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
       checks: checkState(checks),
       latestHumanCommentAtMillis: human.latestAtMillis,
       latestBotTriggerAtMillis: bot.latestAtMillis,
+      latestFailingCheckAtMillis: latestFailingCheckAtMillis(checks, observedAtMillis),
+      observedAtMillis,
       fresh: human.fresh,
       baseDivergence: baseDivergenceOf(mergeableState),
       waitingSinceMillis: pull.updatedAtMillis,
