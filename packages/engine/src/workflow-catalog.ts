@@ -2,6 +2,7 @@ import { type WorkflowCatalogEntry, WorkflowCatalogKey, type WorkflowTemplate } 
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { clockEntries } from "./clock-source";
 
 export interface WorkflowCatalogContribution {
   readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
@@ -48,4 +49,5 @@ export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
 
 export const workflowCatalogContributionsLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
+  { entries: clockEntries, templates: [] },
 ]);

@@ -25,6 +25,8 @@ import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { day } from "./time";
+import { TriggerObservation } from "./trigger-observation";
+import { WorkflowRun } from "./workflow-run";
 import { branchName, ticketSlug } from "./worktree";
 
 const runsInFlight = Metric.gauge("cogwork_scheduler_runs_in_flight", {
@@ -256,6 +258,8 @@ export const make = (config: SchedulerConfig) =>
     const worker = yield* ReconcileWorker;
     const executor = yield* Executor;
     const ledger = yield* RunLedger;
+    const triggerObservation = yield* TriggerObservation;
+    const workflowRun = yield* WorkflowRun;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(seedState(config));
     const stateMetricsGate = Semaphore.makeUnsafe(1);
@@ -322,7 +326,13 @@ export const make = (config: SchedulerConfig) =>
       yield* Effect.forEach(planned.picks, (candidate) => FiberSet.run(jobs, runJob(candidate)), {
         discard: true,
       });
-      return planned.picks.length;
+      const workflowAdmissions = (yield* Ref.get(stateRef)).paused ? [] : yield* triggerObservation.eligible;
+      yield* Effect.forEach(
+        workflowAdmissions,
+        (admission) => FiberSet.run(jobs, workflowRun.execute(admission)),
+        { discard: true },
+      );
+      return planned.picks.length + workflowAdmissions.length;
     }, Effect.trackDuration(schedulerTickDuration));
 
     const awaitIdle = FiberSet.awaitEmpty(jobs);
