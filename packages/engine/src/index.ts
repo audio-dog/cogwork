@@ -3,6 +3,8 @@ export * as ContextAssembler from "./context-assembler";
 export * as ContextFs from "./context-fs";
 export { bootControlStoreLayer, controlStoreClientLayer, readControlStore } from "./control-store";
 export * as ControlStoreSchema from "./control-store-schema";
+export * as Coordination from "./coordination-adapter";
+export * as ControlStoreCoordination from "./coordination-control-store";
 export * as CredentialStore from "./credential-store";
 export * as Daemon from "./daemon";
 export * as DaemonEventBus from "./daemon-event-bus";
