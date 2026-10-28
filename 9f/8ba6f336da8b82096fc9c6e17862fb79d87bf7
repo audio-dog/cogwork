@@ -1,0 +1,21 @@
+packages/contracts/src/board.ts
+  s_5d25df11763a72::t_a95f30126d35ca 125-126
+packages/contracts/src/daemon-event.ts
+  s_5d25df11763a72::t_a51dcd00045dfe 19,72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9f8ba6f336da8b82096fc9c6e17862fb79d87bf7",
+  "prompts": {},
+  "sessions": {
+    "s_5d25df11763a72": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180c6-e4e6-7001-9655-8376eb62863e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
