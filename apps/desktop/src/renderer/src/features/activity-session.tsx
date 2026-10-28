@@ -8,6 +8,8 @@ import {
   type RunStatus,
   type RunSummary,
   type SchedulerStats,
+  type WorkflowId,
+  type WorkflowRecord,
   type WorkItemId,
   type WorkspaceId,
   WorkspaceState,
@@ -78,6 +80,7 @@ export interface NowState {
 
 export interface ActivitySession {
   readonly board: Board;
+  readonly workflows: ReadonlyMap<WorkflowId, WorkflowRecord>;
   readonly previews: RunPreviewState;
   readonly log: readonly ActivityRow[];
   readonly engine: EnginePhase;
@@ -237,6 +240,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
 
 export const initialActivitySession: ActivitySession = {
   board: initialBoard,
+  workflows: new Map(),
   previews: new Map(),
   log: [],
   engine: "off",
@@ -249,6 +253,7 @@ export const initialActivitySession: ActivitySession = {
 export const resetActivityFolds = (session: ActivitySession): ActivitySession => ({
   ...session,
   board: initialBoard,
+  workflows: new Map(),
   previews: new Map(),
   seed: true,
 });
@@ -270,10 +275,31 @@ export const ingestDaemonEvent = (
     DaemonEvent.guards.RunChanged(event) && terminal(event.run.status)
       ? withoutRunPreview(updatedPreviews, event.run.id)
       : updatedPreviews;
+  const workflows = DaemonEvent.match(event, {
+    SeedEnd: () => session.workflows,
+    RunActivity: () => session.workflows,
+    ItemChanged: () => session.workflows,
+    ItemRemoved: () => session.workflows,
+    RunChanged: () => session.workflows,
+    WorkspaceChanged: () => session.workflows,
+    WorkspaceRemoved: () => session.workflows,
+    ControlStoreChanged: () => session.workflows,
+    PluginsChanged: () => session.workflows,
+    ConnectionsChanged: () => session.workflows,
+    HarnessesChanged: () => session.workflows,
+    SchedulerChanged: () => session.workflows,
+    WorkflowChanged: ({ workflow }) => new Map(session.workflows).set(workflow.id, workflow),
+    WorkflowDeleted: ({ id }) => {
+      const next = new Map(session.workflows);
+      next.delete(id);
+      return next;
+    },
+  });
   return {
     ...session,
     board,
     previews,
+    workflows,
     log: row ? bound([...session.log, row]) : session.log,
     ordinal: row ? nextOrdinal : session.ordinal,
   };

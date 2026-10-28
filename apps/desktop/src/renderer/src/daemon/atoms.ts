@@ -3,6 +3,9 @@ import {
   DaemonRpcs,
   type OperationSettingBatch,
   type RunId,
+  type WorkflowCatalogKey,
+  type WorkflowEditBatch,
+  type WorkflowId,
   type WorkItemId,
   type WorkspaceId,
 } from "@cogwork/contracts";
@@ -133,3 +136,35 @@ export const updateWorkspaceAtom = DaemonAtomRpc.mutation("UpdateWorkspace");
 export const deregisterWorkspaceAtom = DaemonAtomRpc.mutation("DeregisterWorkspace");
 
 export const rebindWorkspaceAtom = DaemonAtomRpc.mutation("RebindWorkspace");
+
+export const workflowsAtom = DaemonAtomRpc.query("ListWorkflows", undefined);
+
+export const workflowCatalogAtom = Atom.keepAlive(DaemonAtomRpc.query("GetWorkflowCatalog", undefined));
+
+export const workflowTemplatesAtom = Atom.keepAlive(DaemonAtomRpc.query("GetWorkflowTemplates", undefined));
+
+export const createWorkflowAtom = DaemonAtomRpc.mutation("CreateWorkflow");
+
+export const editWorkflowAtom = DaemonAtomRpc.mutation("EditWorkflow");
+
+export const publishWorkflowAtom = DaemonAtomRpc.mutation("PublishWorkflow");
+
+export const switchWorkflowAtom = DaemonAtomRpc.mutation("SwitchWorkflow");
+
+export const deleteWorkflowAtom = DaemonAtomRpc.mutation("DeleteWorkflow");
+
+export const listWorkflowOptionsAtom = DaemonAtomRpc.runtime.fn<{
+  readonly payload: {
+    readonly entry: WorkflowCatalogKey;
+    readonly parameter: string;
+    readonly workspaces: ReadonlyArray<WorkspaceId>;
+  };
+}>()(({ payload }) => Effect.flatMap(DaemonAtomRpc, (client) => client("ListWorkflowOptions", payload)), {
+  concurrent: true,
+});
+
+export const applyWorkflowEditAtom = DaemonAtomRpc.runtime.fn<{
+  readonly payload: { readonly id: WorkflowId; readonly edits: WorkflowEditBatch };
+}>()(({ payload }) => Effect.flatMap(DaemonAtomRpc, (client) => client("EditWorkflow", payload)), {
+  concurrent: true,
+});

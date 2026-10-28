@@ -1,0 +1,127 @@
+import type {
+  MachineReadiness,
+  WorkflowCatalog,
+  WorkflowCatalogKey,
+  WorkflowDocument,
+  WorkflowEditBatch,
+  WorkflowId,
+  WorkflowOption,
+  WorkflowRecord,
+  WorkflowTemplate,
+  WorkspaceId,
+} from "@cogwork/contracts";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { createContext, type ReactNode, use } from "react";
+import {
+  applyWorkflowEditAtom,
+  createWorkflowAtom,
+  deleteWorkflowAtom,
+  listWorkflowOptionsAtom,
+  publishWorkflowAtom,
+  switchWorkflowAtom,
+  workflowCatalogAtom,
+  workflowsAtom,
+  workflowTemplatesAtom,
+} from "../daemon/atoms";
+import { useActivitySession } from "./activity-session";
+
+export interface WorkflowClient {
+  readonly create: (document: WorkflowDocument) => Promise<WorkflowRecord>;
+  readonly edit: (id: WorkflowId, edits: WorkflowEditBatch) => Promise<WorkflowRecord>;
+  readonly publish: (id: WorkflowId, revision: number) => Promise<WorkflowRecord>;
+  readonly switchEnabled: (id: WorkflowId, enabled: boolean) => Promise<WorkflowRecord>;
+  readonly delete: (id: WorkflowId) => Promise<WorkflowId>;
+  readonly listOptions: (
+    entry: WorkflowCatalogKey,
+    parameter: string,
+    workspaces: ReadonlyArray<WorkspaceId>,
+  ) => Promise<ReadonlyArray<WorkflowOption>>;
+}
+
+export const submitWorkflowField = async (
+  submitted: { current: string },
+  draft: string,
+  save: (text: string) => Promise<string>,
+) => {
+  if (draft === submitted.current) return null;
+  submitted.current = draft;
+  return save(draft);
+};
+
+export interface WorkflowSessionState {
+  readonly workflows: ReadonlyArray<WorkflowRecord>;
+  readonly catalog: WorkflowCatalog | null;
+  readonly machine: MachineReadiness | null;
+  readonly templates: ReadonlyArray<WorkflowTemplate>;
+  readonly loading: boolean;
+}
+
+interface WorkflowSessionValue {
+  readonly state: WorkflowSessionState;
+  readonly actions: WorkflowClient;
+  readonly meta: { readonly unreadable: ReadonlyArray<{ readonly id: string; readonly message: string }> };
+}
+
+const WorkflowSessionContext = createContext<WorkflowSessionValue | null>(null);
+
+export function WorkflowProvider({
+  value,
+  children,
+}: {
+  readonly value: WorkflowSessionValue;
+  readonly children: ReactNode;
+}) {
+  return <WorkflowSessionContext value={value}>{children}</WorkflowSessionContext>;
+}
+
+export const workflowProviderValue = (
+  state: WorkflowSessionState,
+  client: WorkflowClient,
+  unreadable: WorkflowSessionValue["meta"]["unreadable"] = [],
+) => ({ state, actions: client, meta: { unreadable } });
+
+export function useWorkflowSession() {
+  const value = use(WorkflowSessionContext);
+  if (!value) throw new Error("useWorkflowSession must render inside WorkflowProvider");
+  return value;
+}
+
+const successValue = <Value,>(result: { readonly _tag: string; readonly value?: Value }) =>
+  result._tag === "Success" ? (result.value ?? null) : null;
+
+export function DaemonWorkflowProvider({ children }: { readonly children: ReactNode }) {
+  const session = useActivitySession();
+  const listed = useAtomValue(workflowsAtom);
+  const catalogResult = useAtomValue(workflowCatalogAtom);
+  const templatesResult = useAtomValue(workflowTemplatesAtom);
+  const create = useAtomSet(createWorkflowAtom, { mode: "promise" });
+  const edit = useAtomSet(applyWorkflowEditAtom, { mode: "promise" });
+  const publish = useAtomSet(publishWorkflowAtom, { mode: "promise" });
+  const switchEnabled = useAtomSet(switchWorkflowAtom, { mode: "promise" });
+  const deleteWorkflow = useAtomSet(deleteWorkflowAtom, { mode: "promise" });
+  const listOptions = useAtomSet(listWorkflowOptionsAtom, { mode: "promise" });
+  const queried = successValue(listed);
+  const catalog = successValue(catalogResult);
+  const templates = successValue(templatesResult);
+  const workflows = !session.seed ? [...session.workflows.values()] : (queried?.workflows ?? []);
+  const client: WorkflowClient = {
+    create: (document) => create({ payload: { document } }),
+    edit: (id, edits) => edit({ payload: { id, edits } }),
+    publish: (id, revision) => publish({ payload: { id, revision } }),
+    switchEnabled: async (id, enabled) => (await switchEnabled({ payload: { id, enabled } })).workflow,
+    delete: (id) => deleteWorkflow({ payload: { id } }),
+    listOptions: (entry, parameter, workspaces) => listOptions({ payload: { entry, parameter, workspaces } }),
+  };
+  const value = workflowProviderValue(
+    {
+      workflows,
+      catalog: catalog?.catalog ?? null,
+      machine: catalog?.machine ?? null,
+      templates: templates ?? [],
+      loading: listed._tag === "Initial" || catalogResult._tag === "Initial",
+    },
+    client,
+    queried?.unreadable ?? [],
+  );
+  return <WorkflowProvider value={value}>{children}</WorkflowProvider>;
+}
