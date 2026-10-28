@@ -1,5 +1,6 @@
 import { AttemptRecord, Claim, HandbackRecord, type LifecycleStage } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { markdownCode, parseTriageProposal, statusReason } from "./comments";
@@ -118,6 +119,7 @@ const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
 const decodeHandback = Schema.decodeUnknownResult(HandbackRecord);
 const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
+const decodeReason = Option.liftThrowable(decodeURIComponent);
 
 export const parseClaim = (codec: WireCodec, body: string) => {
   const candidates = pairsNamed(codec, body, "claim").flatMap((pairs) =>
@@ -140,6 +142,7 @@ export const parseAttempts = (codec: WireCodec, body: string) =>
         operation: pairs.operation,
         outcome: pairs.outcome,
         atMillis: Number(pairs.at),
+        ...(pairs.reason === undefined ? {} : { reason: Option.getOrUndefined(decodeReason(pairs.reason)) }),
       }),
     ),
   );
@@ -206,7 +209,7 @@ export const serializeClaim = (codec: WireCodec, claim: Claim) =>
 export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
   codec.encode({
     name: "attempt",
-    pairs: `workflow=${attempt.workflow} operation=${attempt.operation} outcome=${attempt.outcome} at=${attempt.atMillis}`,
+    pairs: `workflow=${attempt.workflow} operation=${attempt.operation} outcome=${attempt.outcome} at=${attempt.atMillis}${attempt.reason ? ` reason=${encodeURIComponent(attempt.reason)}` : ""}`,
   });
 
 export const serializeHandback = (codec: WireCodec, handback: HandbackRecord) =>

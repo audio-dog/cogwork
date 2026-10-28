@@ -27,6 +27,7 @@ export const AttemptRecord = Schema.Struct({
   ...OperationKey.fields,
   outcome: AttemptOutcome,
   atMillis: Schema.Natural,
+  reason: Schema.optional(TrimmedNonEmptyString),
 });
 export type AttemptRecord = typeof AttemptRecord.Type;
 

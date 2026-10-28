@@ -267,7 +267,7 @@ describe("coordination tracker", () => {
       });
       const item = yield* observed(tracker, "#7");
       assert.deepStrictEqual(item?.claim, { by: claimant, ...claim });
-      assert.deepStrictEqual(item?.attempts, [attempt]);
+      assert.deepStrictEqual(item?.attempts, [{ ...attempt, reason: "git worktree add: boom" }]);
       const stored = yield* itemAt(7);
       assert.strictEqual(stored?.comments.length, 1);
       assert.include(
@@ -451,7 +451,13 @@ describe("coordination outcomes", () => {
       );
       const item = yield* observed(tracker, "#13");
       assert.deepStrictEqual(item?.attempts, [
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 14 },
+        {
+          workflow: "coding",
+          operation: "implement",
+          outcome: "failed",
+          atMillis: 14,
+          reason: "pnpm install: exit 1",
+        },
       ]);
     }),
   );

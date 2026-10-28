@@ -114,7 +114,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
   const writeAttempt = (ref: Ref, attempt: AttemptRecord, reason?: string) =>
     Coordination.upsertCoordination(codec, host.comments(ref), {
       status: Coordination.attemptStatus(attempt, reason),
-      marker: Coordination.serializeAttempt(codec, attempt),
+      marker: Coordination.serializeAttempt(codec, reason ? { ...attempt, reason } : attempt),
     });
 
   const writeFollowUp = (ref: Ref, marker: FollowUpMarker, detail?: string) =>
