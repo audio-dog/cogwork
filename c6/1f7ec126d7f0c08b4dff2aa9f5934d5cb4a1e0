@@ -1,0 +1,33 @@
+packages/engine/src/daemon-composition.test.ts
+  s_6d851846e46a79::t_dfdb3210d4ee5f 366
+  s_6d851846e46a79::t_ba25a3cbba7621 367
+  s_6d851846e46a79::t_a1e3aa920130b6 398-407
+packages/engine/src/daemon.ts
+  s_6d851846e46a79::t_9691c36a3839c6 37,471-483,497-501
+  s_6d851846e46a79::t_6642c134014e02 112,118
+  s_6d851846e46a79::t_88e6911bc9d23d 62-63,113,117,342
+packages/engine/src/scheduler.ts
+  s_6d851846e46a79::t_ec0b5ef9cbee77 28-29,261-262,329-335
+packages/engine/src/workflow-catalog.ts
+  s_6d851846e46a79::t_ec0b5ef9cbee77 5
+  s_6d851846e46a79::t_00cc5479fcc3c9 52
+packages/engine/src/index.ts
+  s_6d851846e46a79::t_d70806d2fb4616 43,47-48,50-51
+  s_6d851846e46a79::t_6b2e48422b815b 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c61f7ec126d7f0c08b4dff2aa9f5934d5cb4a1e0",
+  "prompts": {},
+  "sessions": {
+    "s_6d851846e46a79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1837f-c252-7533-8147-6d91dbd5b188",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
