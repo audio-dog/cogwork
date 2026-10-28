@@ -91,51 +91,43 @@ function Diagnostics({ diagnostics }: { readonly diagnostics: ReadonlyArray<Work
   ));
 }
 
-interface BufferedTextValue {
+interface BufferedTextState {
+  readonly server: string;
   readonly text: string;
-  readonly setText: (text: string) => void;
-  readonly blur: () => void;
+  readonly dirty: boolean;
 }
 
-const useBufferedText = (value: string, save: (text: string) => Promise<string>): BufferedTextValue => {
-  const [text, setTextState] = useState(value);
-  const server = useRef(value);
+const useBufferedText = (value: string, save: (text: string) => Promise<string>) => {
+  const [state, setState] = useState<BufferedTextState>({ server: value, text: value, dirty: false });
   const submitted = useRef(value);
   const generation = useRef(0);
-  const dirty = useRef(false);
-  if (server.current !== value && !dirty.current) {
-    server.current = value;
-    submitted.current = value;
-    setTextState(value);
-  }
+  const draft = state.server === value || state.dirty ? state : { server: value, text: value, dirty: false };
   const submit = async (draft: string) => {
     if (draft === submitted.current) return;
     submitted.current = draft;
     const atGeneration = generation.current;
     try {
       const daemonValue = await save(draft);
-      server.current = daemonValue;
       if (atGeneration !== generation.current) return;
       submitted.current = daemonValue;
-      dirty.current = false;
-      setTextState(daemonValue);
+      setState({ server: daemonValue, text: daemonValue, dirty: false });
     } catch {
       if (atGeneration !== generation.current) return;
-      submitted.current = server.current;
-      dirty.current = false;
-      setTextState(server.current);
+      submitted.current = value;
+      setState({ server: value, text: value, dirty: false });
     }
   };
   const submitAfterPause = useDebouncedCallback(submit, [save], 500);
   return {
-    text,
-    setText: (next) => {
-      generation.current += 1;
-      dirty.current = true;
-      setTextState(next);
+    text: draft.text,
+    setText: (next: string) => {
+      const nextGeneration = generation.current + 1;
+      generation.current = nextGeneration;
+      if (!draft.dirty) submitted.current = draft.text;
+      setState({ server: draft.server, text: next, dirty: true });
       submitAfterPause(next);
     },
-    blur: () => submit(text),
+    blur: () => (draft.dirty ? submit(draft.text) : undefined),
   };
 };
 
@@ -202,10 +194,15 @@ function WorkspaceSelect() {
     meta: { machine },
   } = useWorkflowEditor();
   const current = workflow.workingCopy.workspaces;
-  const value = current._tag === "Every" ? "every" : (current.workspaces[0] ?? "none");
+  const currentWorkspace = current._tag === "Listed" ? current.workspaces[0] : undefined;
+  const value = current._tag === "Every" ? "every" : (currentWorkspace ?? "none");
+  const machineItems = machine?.workspaces.map(({ id }) => ({ value: id, label: id })) ?? [];
+  const currentWorkspaceIsMissing =
+    currentWorkspace !== undefined && !machineItems.some(({ value: id }) => id === currentWorkspace);
   const items = [
     { value: "none", label: "No workspace" },
-    ...(machine?.workspaces.map(({ id }) => ({ value: id, label: id })) ?? []),
+    ...(currentWorkspaceIsMissing ? [{ value: currentWorkspace, label: currentWorkspace }] : []),
+    ...machineItems,
     { value: "every", label: "Every workspace" },
   ];
   return (
@@ -214,7 +211,10 @@ function WorkspaceSelect() {
       value={value}
       onValueChange={(next) => {
         if (!next) return;
-        const selected = machine?.workspaces.find(({ id }) => id === next)?.id;
+        const selected =
+          next === currentWorkspace
+            ? currentWorkspace
+            : machine?.workspaces.find(({ id }) => id === next)?.id;
         const workspaces = decodeWorkspaceSelection(
           next === "every" ? { _tag: "Every" } : { _tag: "Listed", workspaces: selected ? [selected] : [] },
         );
@@ -1233,17 +1233,14 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
       readonly edits: Parameters<WorkflowClient["edit"]>[1];
     }>
   >([]);
-  const remoteIsNewer = remote.workingRevision > accepted.current.workingRevision;
-  if (pending.current.length === 0 && remoteIsNewer) accepted.current = remote;
+  const latestAccepted = () =>
+    remote.workingRevision > accepted.current.workingRevision ? remote : accepted.current;
   const workflow = preview && preview.workingRevision > remote.workingRevision ? preview : remote;
-  const current = useRef(workflow);
   const editQueue = useRef(Promise.resolve(workflow));
-  current.current = workflow;
   const refreshPreview = () => {
-    const base = accepted.current;
+    const base = latestAccepted();
     const [first, ...rest] = pending.current;
     if (!first) {
-      current.current = base;
       setPreview(base);
       return;
     }
@@ -1263,7 +1260,6 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
           readiness: adviseReadiness(applied.value, state.catalog, state.machine),
         }
       : base;
-    current.current = next;
     setPreview(next);
   };
   const editorActions: WorkflowClient = {
@@ -1290,8 +1286,13 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
       return settled;
     },
     publish: async (id) => {
-      const latest = await editQueue.current;
-      return actions.publish(id, latest.workingRevision);
+      const queued = await editQueue.current;
+      const latestRevision = Math.max(
+        workflow.workingRevision,
+        queued.workingRevision,
+        accepted.current.workingRevision,
+      );
+      return actions.publish(id, latestRevision);
     },
   };
   return (

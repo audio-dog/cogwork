@@ -103,4 +103,81 @@ describe("WorkflowProvider", () => {
     expect(input.value).toBe("Daemon name");
     await act(async () => root.unmount());
   });
+
+  it("publishes the latest live revision", async () => {
+    const live = { ...record, workingRevision: 3 };
+    const publish = vi.fn<WorkflowClient["publish"]>(async () => live);
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const renderEditor = (workflow: WorkflowRecord) => (
+      <WorkflowProvider
+        value={workflowProviderValue(
+          { workflows: [workflow], catalog: null, machine: null, templates: [], loading: false },
+          client,
+        )}
+      >
+        <WorkflowEditor workflow={workflow} />
+      </WorkflowProvider>
+    );
+    await act(async () => root.render(renderEditor(record)));
+    await act(async () => root.render(renderEditor(live)));
+    const publishButton = [...container.querySelectorAll("button")].find(
+      ({ textContent }) => textContent === "Publish",
+    );
+    if (!publishButton) throw new Error("Publish button did not render");
+
+    await act(async () => {
+      publishButton.click();
+      await Promise.resolve();
+    });
+
+    expect(publish).toHaveBeenCalledWith(record.id, 3);
+    await act(async () => root.unmount());
+  });
+
+  it("keeps a stored workspace in the menu before readiness loads", async () => {
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider
+          value={workflowProviderValue(
+            { workflows: [record], catalog: null, machine: null, templates: [], loading: false },
+            client,
+          )}
+        >
+          <WorkflowEditor workflow={record} />
+        </WorkflowProvider>,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Workspaces"]');
+    if (!trigger) throw new Error("Workspace menu did not render");
+    await act(async () => trigger.click());
+
+    expect(
+      [...document.querySelectorAll('[role="option"]')].some(({ textContent }) =>
+        textContent?.includes("cogwork"),
+      ),
+    ).toBe(true);
+    await act(async () => root.unmount());
+  });
 });
