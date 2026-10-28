@@ -43,6 +43,9 @@ describe("Connection form", () => {
     expect(
       issuesOf(validate({ system: "linear", account: "acme", source: "Stored", environment: "" })),
     ).toEqual([]);
+    expect(
+      issuesOf(validate({ system: "granola", account: "person@example.com", apiKey: "  grn_secret  " })),
+    ).toEqual([]);
   });
 
   it("builds an Establishment whose key is redacted", () => {

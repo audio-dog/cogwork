@@ -30,7 +30,7 @@ export const EstablishmentFields = Schema.Struct({
       return { path: ["account"], issue: "Name the account this Connection signs in as." };
     if (fields.source === "ApiKey" && fields.apiKey.trim() === "")
       return { path: ["apiKey"], issue: "Paste the API key." };
-    if (fields.system === "granola" && fields.source === "ApiKey" && !fields.apiKey.startsWith("grn_"))
+    if (fields.system === "granola" && fields.source === "ApiKey" && !fields.apiKey.trim().startsWith("grn_"))
       return { path: ["apiKey"], issue: "Granola API keys start with grn_." };
     if (fields.source === "Env" && fields.environment.trim() === "")
       return { path: ["environment"], issue: "Name the environment variable to read." };
