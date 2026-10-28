@@ -1,0 +1,20 @@
+packages/engine/src/github/source-control-target.ts
+  s_f4abcd25549e05::t_91cb0668134dff 1-3,5-11,13-52
+  s_f4abcd25549e05::t_80777c1acb144e 4,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "52dfa4ca438d34bd7910d36ce4a717158628f399",
+  "prompts": {},
+  "sessions": {
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
