@@ -1,3 +1,4 @@
+import { connectionSystemOf } from "@cogwork/contracts";
 import { CredentialStore, GitHub, Linear } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -107,8 +108,11 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
     credential: CredentialStore.StoredConnectionCredential,
   ) {
     const contents = yield* readForWrite(credential.connectionId);
+    const preservesGranolaLogin =
+      credential._tag === "ApiKey" && connectionSystemOf(credential.connectionId) === "granola";
     const others = contents.connectionCredentials.filter(
-      (entry) => entry.connectionId !== credential.connectionId || entry._tag !== credential._tag,
+      (entry) =>
+        entry.connectionId !== credential.connectionId || (preservesGranolaLogin && entry._tag === "Stored"),
     );
     yield* write(credential.connectionId, {
       ...contents,

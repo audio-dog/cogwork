@@ -186,6 +186,29 @@ describe("file-backed credential store", () => {
     ),
   );
 
+  it.effect("browser login replaces a Connection's previous source", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        const save = file.saveConnectionCredential;
+        if (!save) return assert.fail("Expected Connection credential persistence");
+        const linearId = connectionIdOf("linear", "acme");
+        const granolaId = connectionIdOf("granola", "person@example.com");
+
+        yield* Effect.forEach([linearId, granolaId], (connectionId) =>
+          save({ _tag: "ApiKey", connectionId, key: Redacted.make("old-key") }).pipe(
+            Effect.andThen(save({ _tag: "Stored", connectionId })),
+          ),
+        );
+
+        assert.deepStrictEqual(yield* file.loadConnectionCredentials, [
+          { _tag: "Stored", connectionId: linearId },
+          { _tag: "Stored", connectionId: granolaId },
+        ]);
+      }),
+    ),
+  );
+
   it.effect("tightens the permissions of an existing world-readable file", () =>
     onDisk(({ filePath, fs }) =>
       Effect.gen(function* () {
