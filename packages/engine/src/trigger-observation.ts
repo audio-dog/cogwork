@@ -1,4 +1,5 @@
 import {
+  DaemonEvent,
   keyOf,
   Lineage,
   LineageId,
@@ -16,11 +17,13 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { matchesScheduledInstant } from "./clock-source";
 import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
+import { DaemonEventBus } from "./daemon-event-bus";
 import {
   type SourceFailure,
   TriggerEvent,
@@ -291,6 +294,7 @@ export interface TriggerObservationService {
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
   const coordination = yield* Coordination;
+  const bus = yield* DaemonEventBus;
   const store = yield* TriggerObservationStore;
   const sources = yield* TriggerSources;
   const fibers = yield* FiberMap.make<TriggerSource["id"]>();
@@ -299,6 +303,7 @@ export const make = Effect.gen(function* () {
     new Map(sources.map(({ id }) => [id, { source: id, status: "idle", message: null }])),
   );
   const changes = yield* PubSub.unbounded<TriggerAdmission>();
+  const refreshGate = Semaphore.makeUnsafe(1);
 
   const setHealth = (
     source: TriggerSource["id"],
@@ -306,11 +311,9 @@ export const make = Effect.gen(function* () {
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
 
-  const admit = Effect.fn("TriggerObservation.admit")(function* (
-    subscriptions: ReadonlyArray<TriggerSubscription>,
-    event: TriggerEvent,
-  ) {
-    const matched = matchTriggerEvent(subscriptions, event);
+  const admit = Effect.fn("TriggerObservation.admit")(function* (event: TriggerEvent) {
+    const listed = yield* workflows.list;
+    const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
     yield* Effect.forEach(matched, (subscription) =>
       coordination.observe(event.key, event.revision, event.cause).pipe(
         Effect.flatMap(() => {
@@ -327,7 +330,7 @@ export const make = Effect.gen(function* () {
     fingerprint: string,
   ) =>
     source.observe(subscriptions).pipe(
-      Stream.runForEach((event) => admit(subscriptions, event)),
+      Stream.runForEach(admit),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(
           Effect.andThen(waitForRetry(error.retryAfterMillis)),
@@ -367,23 +370,35 @@ export const make = Effect.gen(function* () {
   });
 
   const refresh = () =>
-    workflows.list.pipe(
-      Effect.flatMap((listed) =>
-        Clock.currentTimeMillis.pipe(
-          Effect.flatMap((atMillis) => store.activate(subscriptionsOf(listed.workflows), atMillis)),
-          Effect.flatMap((subscriptions) =>
-            Effect.forEach(
-              sources,
-              (source) => syncSource(source, sourceSubscriptions(source, subscriptions)),
-              { discard: true },
+    refreshGate.withPermit(
+      workflows.list.pipe(
+        Effect.flatMap((listed) =>
+          Clock.currentTimeMillis.pipe(
+            Effect.flatMap((atMillis) => store.activate(subscriptionsOf(listed.workflows), atMillis)),
+            Effect.flatMap((subscriptions) =>
+              Effect.forEach(
+                sources,
+                (source) => syncSource(source, sourceSubscriptions(source, subscriptions)),
+                { discard: true },
+              ),
             ),
           ),
         ),
+        Effect.catchCause((cause) => Effect.logError("trigger subscription refresh failed", { cause })),
       ),
-      Effect.catchCause((cause) => Effect.logError("trigger subscription refresh failed", { cause })),
     );
 
-  yield* Effect.forkScoped(refresh().pipe(Effect.repeat(Schedule.spaced("5 seconds"))));
+  const workflowChanged = (event: DaemonEvent) =>
+    DaemonEvent.guards.WorkflowChanged(event) || DaemonEvent.guards.WorkflowDeleted(event);
+  yield* Effect.forkScoped(
+    Effect.all(
+      [
+        refresh().pipe(Effect.repeat(Schedule.spaced("5 seconds"))),
+        bus.events.pipe(Stream.filter(workflowChanged), Stream.runForEach(refresh)),
+      ],
+      { concurrency: "unbounded", discard: true },
+    ),
+  );
 
   return {
     eligible: Effect.all([workflows.list, store.admissions]).pipe(

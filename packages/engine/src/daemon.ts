@@ -481,7 +481,9 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(Layer.merge(runLedger, runRecorder)),
   );
   const triggerObservation = triggerObservationLayer.pipe(
-    Layer.provide(Layer.mergeAll(workflows, coordination, triggerSources, triggerObservationStore)),
+    Layer.provide(
+      Layer.mergeAll(workflows, coordination, triggerSources, triggerObservationStore, daemonEventBusLayer),
+    ),
   );
   const workflowRun = workflowRunLayer.pipe(
     Layer.provide(

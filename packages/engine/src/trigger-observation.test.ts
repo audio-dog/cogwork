@@ -13,13 +13,16 @@ import { assert, describe, it, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { clockEntries } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
+import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
 import { makeScriptedSource } from "./scripted-source";
 import {
   make,
@@ -150,12 +153,15 @@ describe("TriggerObservation", () => {
       const observed = yield* Ref.make(0);
       const scripted = yield* makeScriptedSource("clock", clockEntries);
       const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
         Effect.provideService(Coordination, coordinationService(processed, observed)),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
       );
+      yield* Effect.yieldNow;
       yield* observation.refresh;
       const changed = yield* observation.changes.pipe(
         Stream.take(1),
@@ -170,7 +176,26 @@ describe("TriggerObservation", () => {
       assert.lengthOf(yield* scripted.subscriptions, 1);
 
       yield* Ref.set(current, record(false));
-      yield* observation.refresh;
+      const declined = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      const nextInstant = scheduledInstant + 86_400_000;
+      yield* scripted.emit({
+        ...event,
+        key: { ...event.key, instantMillis: nextInstant },
+        revision: String(nextInstant),
+        atMillis: nextInstant,
+      });
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(declined)));
+      assert.strictEqual(yield* Ref.get(observed), 1);
+
+      yield* bus.publish({ _tag: "WorkflowChanged", workflow: record(false) });
+      yield* Effect.yieldNow;
 
       assert.deepStrictEqual(yield* observation.eligible, []);
       assert.deepStrictEqual(yield* scripted.subscriptions, []);
