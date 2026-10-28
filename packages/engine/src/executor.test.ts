@@ -615,6 +615,7 @@ function trackerRecorder(
             stage: outcome.operation,
             reason: outcome.reason,
             baseDivergence: outcome.marker?.baseDivergence,
+            noProgress: outcome.marker?.noProgress,
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
         },
@@ -4492,6 +4493,18 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
+    }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
+  });
+
+  it.effect("does not advance the stall count when a follow-up fails", () => {
+    const item = { ...followUpItem, followUp: { ...followUpItem.followUp, noProgress: 2 } };
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, item);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.noProgress, 1);
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
   });
 

@@ -420,7 +420,7 @@ export const make = Effect.gen(function* () {
         ? {
             marker: followUpMarker(
               failedFollowUp ?? defaultFollowUp,
-              failedFollowUp?.noProgress ?? 0,
+              Math.max((failedFollowUp?.noProgress ?? 0) - 1, 0),
               endedAtMillis,
             ),
           }
