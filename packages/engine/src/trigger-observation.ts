@@ -13,6 +13,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
@@ -24,6 +25,8 @@ import { matchesScheduledInstant } from "./clock-source";
 import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
+import { IssueTracker } from "./issue-tracker";
+import { WorkspaceRegistry } from "./registry";
 import {
   type SourceFailure,
   TriggerEvent,
@@ -225,13 +228,26 @@ export interface TriggerSourceHealth {
 }
 
 export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) => {
+  const observed = new Map((event.parameters ?? []).map(({ id, value }) => [id, value]));
   const matched = subscriptions.filter((subscription) => {
     const sameScheduleWorkflow =
       event.key._tag !== "ScheduleInstant" || event.key.workflow === subscription.workflow;
-    const sameWorkspace = event.workspace === null || subscription.workspaces.includes(event.workspace);
+    const sameWorkspace =
+      event.workspace === null ||
+      subscription.workspaces.length === 0 ||
+      subscription.workspaces.includes(event.workspace);
     const sameSchedule =
       event.key._tag !== "ScheduleInstant" || matchesScheduledInstant(subscription, event.key.instantMillis);
-    return subscription.entry === event.entry && sameScheduleWorkflow && sameWorkspace && sameSchedule;
+    const sameParameters = [...observed].every(([id, value]) =>
+      subscription.parameters.some((parameter) => parameter.id === id && parameter.value === value),
+    );
+    return (
+      subscription.entry === event.entry &&
+      sameScheduleWorkflow &&
+      sameWorkspace &&
+      sameSchedule &&
+      sameParameters
+    );
   });
   return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
 };
@@ -297,6 +313,8 @@ export const make = Effect.gen(function* () {
   const bus = yield* DaemonEventBus;
   const store = yield* TriggerObservationStore;
   const sources = yield* TriggerSources;
+  const tracker = Option.getOrUndefined(yield* Effect.serviceOption(IssueTracker));
+  const registry = Option.getOrUndefined(yield* Effect.serviceOption(WorkspaceRegistry));
   const fibers = yield* FiberMap.make<TriggerSource["id"]>();
   const fingerprints = yield* Ref.make<ReadonlyMap<TriggerSource["id"], string>>(new Map());
   const health = yield* Ref.make<ReadonlyMap<TriggerSource["id"], TriggerSourceHealth>>(
@@ -311,7 +329,30 @@ export const make = Effect.gen(function* () {
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
 
+  const passesAssigneeGate = Effect.fn("TriggerObservation.passesAssigneeGate")(function* (
+    event: TriggerEvent,
+  ) {
+    if (event.workspace === null || tracker === undefined || registry === undefined) return true;
+    const state = yield* registry.state;
+    const workspace = state.workspaces.find(({ config }) => config.name === event.workspace);
+    if (workspace === undefined) return false;
+    const allowlist = workspace?.config.issueTracker.assigneeAllowlist;
+    if (allowlist === undefined) return true;
+    if (event.key._tag !== "Issue") return false;
+    const issueId = event.key.id;
+    return yield* tracker.observe(workspace).pipe(
+      Effect.map(
+        (items) =>
+          items
+            .find(({ id }) => id === issueId)
+            ?.assignees.some((assignee) => allowlist.includes(assignee)) ?? false,
+      ),
+      Effect.catchTag("IssueTrackerError", () => Effect.succeed(false)),
+    );
+  });
+
   const admit = Effect.fn("TriggerObservation.admit")(function* (event: TriggerEvent) {
+    if (!(yield* passesAssigneeGate(event))) return;
     const listed = yield* workflows.list;
     const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
     yield* Effect.forEach(matched, (subscription) =>

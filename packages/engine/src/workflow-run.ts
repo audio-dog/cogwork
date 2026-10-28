@@ -124,7 +124,7 @@ export const make = Effect.gen(function* () {
     );
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(randomUUID());
-    const workspace = workspaceId(admission.subscription.workflow);
+    const workspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
     const item = workItemId(keyOf(admission.event.key));
     const session = yield* sessions.mint(
       { workspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
@@ -177,7 +177,7 @@ export const make = Effect.gen(function* () {
       workContext: {
         reference: { workItem: item, url: null },
         facts: { roles: [], assignees: [], openBlockers: 0, claim, priority: "medium", pr: null },
-        prose: {
+        prose: admission.event.prose ?? {
           body: `Scheduled instant ${admission.event.revision} for Workflow ${record.id}.`,
           comments: [],
         },
