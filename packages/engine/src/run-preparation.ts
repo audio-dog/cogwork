@@ -14,7 +14,7 @@ import * as FileSystem from "effect/FileSystem";
 import type { AdmittedWork } from "./classify";
 import type { HarnessRequest } from "./harness";
 import * as OperationResolution from "./operation-resolution";
-import { buildContinuationNudge, buildOperationPrompt, type OperationOutcomeTable } from "./playbook";
+import { buildContinuationNudge, buildOperationPrompt } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { meteredTotalTokens } from "./resume-policy";
 import type { PrepareError } from "./retry-policy";
@@ -44,7 +44,6 @@ export interface PreparedRun {
   readonly plan: RunPlan;
   readonly session: SessionId;
   readonly operation: ResolvedOperation;
-  readonly outcomeTable: OperationOutcomeTable;
   readonly branch: BranchName | null;
   readonly checkoutPath: string;
   readonly failureSession: Session | null;
@@ -215,7 +214,6 @@ export const make = Effect.gen(function* () {
       plan: accepted.plan,
       session: accepted.session,
       operation: accepted.resolved,
-      outcomeTable: accepted.resolved.stage.outcomeTable,
       branch,
       checkoutPath: checkout.path,
       failureSession: storedSession,

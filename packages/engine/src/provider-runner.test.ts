@@ -213,7 +213,7 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
         observation: { generation: 1, observedAtMillis: 1 },
       },
     }),
-    session: overrides.session ?? null,
+    session: "session" in overrides ? (overrides.session ?? null) : sessionId,
     mcpCredentials: new Map(),
   };
 };
@@ -314,7 +314,7 @@ describe("providerRunner", { timeout: 30_000 }, () => {
     30000,
   );
 
-  it.live("keys a fresh chat thread by its Run when no Session resumes", () =>
+  it.live("keys a fresh chat thread by its Session", () =>
     Effect.gen(function* () {
       const checkoutPath = yield* scratchCheckout();
       const capturedOptions: Array<RunChatOptions> = [];
@@ -328,7 +328,23 @@ describe("providerRunner", { timeout: 30_000 }, () => {
         Effect.provide(providerRunnerLayer()),
       );
 
-      assert.strictEqual(capturedOptions[0]?.threadId, "run-provider-test");
+      assert.strictEqual(capturedOptions[0]?.threadId, sessionId);
+    }),
+  );
+
+  it.live("refuses to open a chat without a Session", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const runner = providerRunner({ name: harnessName, runChat: () => toAsyncIterable(scriptedChunks) });
+
+      const error = yield* Effect.flip(
+        Stream.runDrain(runner.run(request({ checkoutPath, session: null }))).pipe(
+          Effect.provide(providerRunnerLayer()),
+        ),
+      );
+
+      assert.strictEqual(error.reason, "launch");
+      assert.include(error.message, "Session");
     }),
   );
 

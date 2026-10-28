@@ -1,4 +1,3 @@
-import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { StructuredOutputCompleteValue } from "./ag-ui";
 import { TrimmedNonEmptyString } from "./base-schemas";
@@ -199,38 +198,19 @@ export type StageResultCompletionSchema =
   | typeof ImplementStageResultCompletion
   | typeof FollowUpStageResultCompletion;
 
-interface StageResultSchemas {
-  readonly json: StageResultJsonSchema;
-  readonly completion: StageResultCompletionSchema;
-}
-
-const stageResultSchemas: Record<LifecycleStage, StageResultSchemas> = {
+export const stageResultSchemas = {
   triage: { json: triageStageResultSchema, completion: TriageStageResultCompletion },
   implement: { json: implementStageResultSchema, completion: ImplementStageResultCompletion },
   "follow-up": { json: followUpStageResultSchema, completion: FollowUpStageResultCompletion },
-};
+} satisfies Record<
+  LifecycleStage,
+  { readonly json: StageResultJsonSchema; readonly completion: StageResultCompletionSchema }
+>;
+export type StageResultSchemas = typeof stageResultSchemas;
 
 export const stageResultJsonSchema = (stage: LifecycleStage) => stageResultSchemas[stage].json;
 
 export const stageResultCompletionSchema = (stage: LifecycleStage) => stageResultSchemas[stage].completion;
-
-type StageResultCompletion =
-  | typeof TriageStageResultCompletion.Type
-  | typeof ImplementStageResultCompletion.Type
-  | typeof FollowUpStageResultCompletion.Type;
-
-type StageResultCompletionDecoder = (
-  input: unknown,
-) => Effect.Effect<StageResultCompletion, Schema.SchemaError>;
-
-const stageResultCompletionDecoders: Record<LifecycleStage, StageResultCompletionDecoder> = {
-  triage: Schema.decodeUnknownEffect(TriageStageResultCompletion),
-  implement: Schema.decodeUnknownEffect(ImplementStageResultCompletion),
-  "follow-up": Schema.decodeUnknownEffect(FollowUpStageResultCompletion),
-};
-
-export const decodeStageResultCompletion = (stage: LifecycleStage, input: unknown) =>
-  stageResultCompletionDecoders[stage](input);
 
 export const NeedsHumanReason = Schema.Literals(["needs-info", "ready-for-human"]);
 export type NeedsHumanReason = typeof NeedsHumanReason.Type;

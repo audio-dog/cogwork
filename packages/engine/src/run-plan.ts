@@ -55,7 +55,7 @@ import {
   type SessionKind,
   SettingLevel as SettingLevelSchema,
   SettingScope as SettingScopeSchema,
-  stageResultJsonSchema,
+  type StageResultJsonSchema,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import type * as Redacted from "effect/Redacted";
@@ -688,8 +688,8 @@ const deepFreeze = <A>(value: A): A => {
 
 export const freezeRunPlan = (plan: RunPlan) => deepFreeze(plan);
 
-const structuredOutput = (operation: LifecycleStage) =>
-  stageResultJsonSchema(operation)["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+const structuredOutput = (schema: StageResultJsonSchema) =>
+  schema["~standard"].jsonSchema.input({ target: "draft-2020-12" });
 
 const projectionFor = (projectedMembers: ReadonlyArray<RunPlanMemberType>) => {
   const projected = new Set(projectedMembers);
@@ -922,7 +922,7 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
     contentStamp("Engine Tools", ownedToolNames),
     contentStamp("Engine Middleware", input.middleware),
     contentStamp("Engine Sandbox", { workspace: input.checkoutPath, policy: input.resolved.profile }),
-    contentStamp("Engine Structured Output", structuredOutput(input.item.stage)),
+    contentStamp("Engine Structured Output", structuredOutput(input.resolved.stage.resultSchema.json)),
     contentStamp("Engine Persistence", { sessionKind: input.sessionKind }),
     contentStamp("Engine Connections", connectionNames),
   ];
@@ -952,7 +952,7 @@ const assemble = <McpServer extends { readonly identity: string | null }>(
       commands,
       hooks: [],
       middleware: [...input.middleware],
-      structuredOutput: structuredOutput(input.item.stage),
+      structuredOutput: structuredOutput(input.resolved.stage.resultSchema.json),
       connections: connectionNames,
       workContext: RunPlanWorkContext.make({
         reference: RunPlanWorkContextReference.make({ ...workContext.reference }),

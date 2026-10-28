@@ -200,9 +200,10 @@ check being deterministic is a reason to hand it to the model, not a reason to w
 (engine ADR [0007](../../packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md)
 is this rule implemented.)
 
-**Utility calls skip the harness.** Triage routing, ranking, drafting, summaries — anything that is
-not a coding session — goes through the owned provider layer and must not depend on an external agent
-CLI being installed. Harnesses exist solely to run coding sessions.
+**Utility calls skip the harness.** Direct model calls the app makes for itself — triage routing,
+ranking, drafting, summaries — go through the owned provider layer and must not depend on an external
+agent CLI being installed. This rule does not cover Operations; each Operation uses the Harness its
+author chose.
 (engine ADR [0006](../../packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md))
 
 ### What runs where
@@ -286,12 +287,14 @@ a note. Work already in flight finishes as it always did, and the next poll simp
 up. Honouring a changed condition by declining is cheap and safe; unwinding is neither.
 (engine ADR [0008](../../packages/engine/docs/adr/0008-assignee-ownership-gate.md))
 
-**Self-halt over gates.** Agents run end-to-end unattended, and the one hard human gate is pull
-request review and merge. Triage exercises judgment — it drives well-defined work straight to a PR
-and *self-halts*, parking as `needs-info` or `ready-for-human` **with its reasoning**, when
-requirements are unclear, conflict with the code, or the work is too big for one session. A new
-surface's default posture is to inform and offer override; when autonomy quality is the question,
-invest in the agent's self-halt judgment rather than building a gate.
+**Self-halt over gates.** Agents run end-to-end unattended unless the Workflow author adds a human
+gate. The shipped coding template ends with a person reviewing and merging the pull request, as does
+the process used to build Cogwork. Cogwork does not enforce that gate; branch protection can enforce
+it when wanted. Triage exercises judgment — it drives well-defined work straight to a PR and
+*self-halts*, parking as `needs-info` or `ready-for-human` **with its reasoning**, when requirements
+are unclear, conflict with the code, or the work is too big for one session. A new surface's default
+posture is to inform and offer override; when autonomy quality is the question, invest in the agent's
+self-halt judgment rather than building a gate.
 (ADR [0007](../adr/0007-autonomous-with-override-triage-self-halts.md))
 
 ### Limits and cost
