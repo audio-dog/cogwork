@@ -19,4 +19,5 @@ export * from "./scheduler-defaults";
 export * from "./settings";
 export * from "./triage";
 export * from "./work-item";
+export * from "./workflow";
 export * from "./workspace";

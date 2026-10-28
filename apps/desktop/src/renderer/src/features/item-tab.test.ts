@@ -90,7 +90,12 @@ describe("describeItemState", () => {
       id: "42",
       title: "t",
       url: null,
-      claim: { by: "agent", claimedAtMillis: 0, stage: "implement" },
+      claim: {
+        by: "agent",
+        claimedAtMillis: 0,
+        operation: { workflow: "coding", operation: "implement" },
+        lineage: { root: "run-1", parent: null, hop: 0 },
+      },
       pr: readyPr,
     });
     expect(describeItemState(claimed, null).label).toBe("Working · implement");

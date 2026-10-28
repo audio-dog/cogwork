@@ -4,7 +4,16 @@ import { tmpdir } from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { connectionIdOf, DaemonRpcs, HarnessName, WorkspaceConfig } from "@cogwork/contracts";
+import {
+  connectionIdOf,
+  DaemonEvent,
+  DaemonRpcs,
+  HarnessName,
+  WorkflowDocument,
+  WorkflowPublishRefused,
+  WorkflowSwitchRefused,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -146,8 +155,9 @@ const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(func
   const runs = yield* rpc.ListRuns();
   const status = yield* rpc.GetStatus();
   const catalogs = yield* rpc.GetHarnessCatalogs();
+  const workflowCatalog = yield* rpc.GetWorkflowCatalog();
   const readiness = yield* Effect.result(rpc.GetHarnessReadiness());
-  return { runs, status, reconciled, heartbeatsExit, catalogs, readiness };
+  return { runs, status, reconciled, heartbeatsExit, catalogs, workflowCatalog, readiness };
 });
 
 const connectedWorkspace: RegisteredWorkspace = {
@@ -196,12 +206,20 @@ function makeGitHubServerFixture() {
     vi.stubGlobal("fetch", fetchStub);
     const toServer = new TransformStream<Uint8Array, Uint8Array>();
     const toClient = new TransformStream<Uint8Array, Uint8Array>();
+    const client = yield* Socket.fromTransformStream(
+      Effect.succeed({ readable: toClient.readable, writable: toServer.writable }),
+    );
     const server = yield* Socket.fromTransformStream(
       Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
     );
     const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
+    const clientLayer = RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(Layer.succeed(Socket.Socket, client)),
+      Layer.provide(Daemon.serializationLayer),
+    );
     return {
       fetchStub,
+      clientLayer,
       serverLayer: Daemon.serverLayer({
         transport,
         credentials: storedGitHubCredentials,
@@ -228,7 +246,9 @@ class GitHubServerFixture extends Context.Service<
 
 const githubServerTestLayer = () =>
   Layer.unwrap(
-    Effect.map(GitHubServerFixture, ({ serverLayer }) => serverLayer.pipe(Layer.provide(NodeServices.layer))),
+    Effect.map(GitHubServerFixture, ({ clientLayer, serverLayer }) =>
+      Layer.merge(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer)),
+    ),
   ).pipe(Layer.provideMerge(GitHubServerFixture.layer));
 
 function makeUnavailableServerFixture() {
@@ -306,6 +326,54 @@ describe("daemon server composition", () => {
     }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
   );
 
+  it.effect("authors and observes an incomplete Workflow through DaemonRpcs", () =>
+    Effect.gen(function* () {
+      yield* Daemon.bootstrap;
+      const rpc = yield* RpcClient.make(DaemonRpcs);
+      const document = yield* Schema.decodeEffect(WorkflowDocument)({
+        name: "Draft",
+        workspaces: { _tag: "Every" },
+        triggers: [],
+        operations: [],
+      });
+      const created = yield* rpc.CreateWorkflow({ document });
+      const edited = yield* rpc.EditWorkflow({
+        id: created.id,
+        edits: [{ _tag: "Rename", name: "Edited" }],
+      });
+      const listed = yield* rpc.ListWorkflows();
+      const fetched = yield* rpc.GetWorkflow({ id: created.id });
+      const diagnostics = yield* rpc.ValidateWorkflow({ document: { name: "Malformed" } });
+      const publish = yield* Effect.result(
+        rpc.PublishWorkflow({ id: created.id, revision: edited.workingRevision }),
+      );
+      const switched = yield* Effect.result(rpc.SwitchWorkflow({ id: created.id, enabled: true }));
+      const catalog = yield* rpc.GetWorkflowCatalog();
+      const seed = yield* rpc
+        .WatchEvents()
+        .pipe(Stream.takeUntil(DaemonEvent.guards.SeedEnd), Stream.runCollect);
+      const deleted = yield* rpc.DeleteWorkflow({ id: created.id });
+
+      assert.strictEqual(edited.workingCopy.name, "Edited");
+      assert.deepStrictEqual(
+        listed.workflows.map(({ id }) => id),
+        [created.id],
+      );
+      assert.strictEqual(fetched.id, created.id);
+      assert.deepStrictEqual(
+        diagnostics.map(({ code }) => code),
+        ["schema"],
+      );
+      assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
+      assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
+      assert.lengthOf(catalog.catalog.entries, 5);
+      assert.isTrue(
+        [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
+      );
+      assert.strictEqual(deleted, created.id);
+    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
+  );
+
   it.effect("serves RPC without booting dispatch when the Control store is unavailable", () =>
     Effect.gen(function* () {
       const result = yield* inspectUnavailableDaemon();
@@ -326,6 +394,10 @@ describe("daemon server composition", () => {
       assert.deepStrictEqual(
         result.catalogs.map(({ harness }) => harness),
         ["cursor"],
+      );
+      assert.deepStrictEqual(
+        result.workflowCatalog.catalog.entries.map(({ name }) => name),
+        ["Notify me", "Wait for my approval", "Withdraw the pending approval", "Hand to me", "Stop"],
       );
       assert.isTrue(Result.isFailure(result.readiness));
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),

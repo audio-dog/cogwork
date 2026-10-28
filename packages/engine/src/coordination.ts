@@ -1,5 +1,24 @@
-import { AttemptRecord, Claim, HandbackRecord, type LifecycleStage } from "@cogwork/contracts";
+import {
+  type AttemptOutcome,
+  AttemptRecord,
+  type Cause,
+  Claim,
+  type Claim as ClaimType,
+  HandbackRecord,
+  type HandbackRecord as HandbackRecordType,
+  type LifecycleStage,
+  type Lineage,
+  type OperationKey,
+  type ParkReason,
+  type ParkRecord,
+  ParkRecord as ParkRecordSchema,
+  type SourceRevision,
+  type WorkItemRef,
+} from "@cogwork/contracts";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -48,6 +67,273 @@ export interface CoordinationBody {
 const attribution = "> *This was posted by cogwork.*";
 
 export const defaultClaimant = "cogwork";
+export const maxAttemptsPerOperation = 3;
+export const maxLineageHops = 25;
+
+export interface CoordinationLedger {
+  readonly claim: ClaimType | null;
+  readonly latestClaimAtMillis?: number;
+  readonly attempts: ReadonlyArray<AttemptRecord>;
+  readonly handbacks: ReadonlyArray<HandbackRecordType>;
+  readonly parks: ReadonlyArray<ParkRecord>;
+  readonly revision: SourceRevision | null;
+}
+
+export interface CoordinationCounters {
+  readonly consecutiveFailures: number;
+  readonly exhausted: boolean;
+  readonly hop: number;
+  readonly hopCapped: boolean;
+}
+
+export type CoordinationGate =
+  | { readonly _tag: "Open" }
+  | { readonly _tag: "Claimed"; readonly claim: ClaimType }
+  | { readonly _tag: "Quiet" }
+  | { readonly _tag: "Parked"; readonly reason: ParkReason };
+
+export interface CoordinationView {
+  readonly claim: ClaimType | null;
+  readonly claimedByUs: boolean;
+  readonly barrierAtMillis: number;
+  readonly park: ParkRecord | null;
+  readonly revision: SourceRevision | null;
+  readonly counters: (key: OperationKey) => CoordinationCounters;
+  readonly gate: (key: OperationKey) => CoordinationGate;
+}
+
+const sameOperation = (left: OperationKey, right: OperationKey) =>
+  left.workflow === right.workflow && left.operation === right.operation;
+
+const failuresFor = (attempts: ReadonlyArray<AttemptRecord>, barrierAtMillis: number, key: OperationKey) => {
+  const relevant = attempts.filter(
+    (attempt) => attempt.atMillis > barrierAtMillis && sameOperation(attempt.operation, key),
+  );
+  const lastNonFailure = relevant.findLastIndex((attempt) => attempt.outcome !== "failed");
+  return relevant.length - lastNonFailure - 1;
+};
+
+const newestByTime = <A extends { readonly atMillis: number }>(records: ReadonlyArray<A>) =>
+  records.reduce<A | null>(
+    (latest, record) => (latest === null || record.atMillis > latest.atMillis ? record : latest),
+    null,
+  );
+
+interface GateInput {
+  readonly ledger: CoordinationLedger;
+  readonly park: ParkRecord | null;
+  readonly counters: CoordinationCounters;
+}
+
+const gateRules = [
+  {
+    when: ({ ledger }: GateInput) => ledger.claim !== null,
+    resolve: ({ ledger }: GateInput): CoordinationGate => ({
+      _tag: "Claimed",
+      claim: ledger.claim as ClaimType,
+    }),
+  },
+  {
+    when: ({ ledger }: GateInput) =>
+      ledger.revision !== null && ledger.revision.observed === ledger.revision.processed,
+    resolve: (): CoordinationGate => ({ _tag: "Quiet" }),
+  },
+  {
+    when: ({ park }: GateInput) => park !== null,
+    resolve: ({ park }: GateInput): CoordinationGate => ({
+      _tag: "Parked",
+      reason: (park as ParkRecord).reason,
+    }),
+  },
+  {
+    when: ({ counters }: GateInput) => counters.hopCapped,
+    resolve: (): CoordinationGate => ({ _tag: "Parked", reason: { _tag: "HopCap" } }),
+  },
+  {
+    when: ({ counters }: GateInput) => counters.exhausted,
+    resolve: (): CoordinationGate => ({
+      _tag: "Parked",
+      reason: { _tag: "Exhausted", reason: "failure limit" },
+    }),
+  },
+] as const;
+
+export const fold = (ledger: CoordinationLedger, claimant: string): CoordinationView => {
+  const handback = newestByTime(ledger.handbacks);
+  const barrierAtMillis = handback?.atMillis ?? 0;
+  const latestPark = newestByTime(ledger.parks.filter((park) => park.atMillis > barrierAtMillis));
+  const claimTimes = [ledger.latestClaimAtMillis, ledger.claim?.claimedAtMillis].filter(
+    (atMillis): atMillis is number => atMillis !== undefined,
+  );
+  const latestClaimAtMillis = claimTimes.length === 0 ? null : Math.max(...claimTimes);
+  const claimClearedPark =
+    latestPark !== null && latestClaimAtMillis !== null && latestClaimAtMillis >= latestPark.atMillis;
+  const park = claimClearedPark ? null : latestPark;
+  const claimAfterBarrier =
+    ledger.claim && ledger.claim.claimedAtMillis > barrierAtMillis ? ledger.claim : null;
+  const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > barrierAtMillis);
+  const hop = claimAfterBarrier?.lineage.hop ?? newestByTime(attemptsAfterBarrier)?.lineage.hop ?? 0;
+  const counters = (key: OperationKey): CoordinationCounters => {
+    const consecutiveFailures = failuresFor(ledger.attempts, barrierAtMillis, key);
+    return {
+      consecutiveFailures,
+      exhausted: consecutiveFailures >= maxAttemptsPerOperation,
+      hop,
+      hopCapped: hop >= maxLineageHops,
+    };
+  };
+  const gate = (key: OperationKey): CoordinationGate => {
+    const input = { ledger, park, counters: counters(key) };
+    return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
+  };
+  return {
+    claim: ledger.claim,
+    claimedByUs: ledger.claim?.by === claimant,
+    barrierAtMillis,
+    park,
+    revision: ledger.revision,
+    counters,
+    gate,
+  };
+};
+
+export class CoordinationError extends Schema.TaggedError<CoordinationError>()("CoordinationError", {
+  reason: Schema.Literals(["unavailable", "refused", "claim-held", "stale-claim", "not-this-authority"]),
+  retryable: Schema.Boolean,
+  message: Schema.String,
+}) {}
+
+interface CoordinationAuthority {
+  readonly read: (ref: WorkItemRef) => Effect.Effect<CoordinationLedger, CoordinationError>;
+  readonly claim: (ref: WorkItemRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
+  readonly release: (ref: WorkItemRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
+  readonly recordAttempt: (
+    ref: WorkItemRef,
+    attempt: AttemptRecord,
+    reason?: string,
+  ) => Effect.Effect<void, CoordinationError>;
+  readonly park: (ref: WorkItemRef, park: ParkRecord) => Effect.Effect<void, CoordinationError>;
+  readonly handBack: (ref: WorkItemRef, record: HandbackRecordType) => Effect.Effect<void, CoordinationError>;
+  readonly observe: (
+    ref: WorkItemRef,
+    revision: string,
+    cause: Cause,
+  ) => Effect.Effect<"moved" | "redelivered", CoordinationError>;
+  readonly markProcessed: (ref: WorkItemRef, revision: string) => Effect.Effect<void, CoordinationError>;
+}
+
+export interface CoordinationService {
+  readonly fold: typeof fold;
+  readonly read: (ref: WorkItemRef) => Effect.Effect<CoordinationView, CoordinationError>;
+  readonly claim: (
+    ref: WorkItemRef,
+    input: { readonly operation: OperationKey; readonly lineage: Lineage },
+  ) => Effect.Effect<ClaimType, CoordinationError>;
+  readonly release: (ref: WorkItemRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
+  readonly recordAttempt: (
+    ref: WorkItemRef,
+    input: {
+      readonly operation: OperationKey;
+      readonly outcome: AttemptOutcome;
+      readonly lineage: Lineage;
+      readonly reason?: string;
+    },
+  ) => Effect.Effect<CoordinationView, CoordinationError>;
+  readonly park: (ref: WorkItemRef, reason: ParkReason) => Effect.Effect<CoordinationView, CoordinationError>;
+  readonly handBack: (
+    ref: WorkItemRef,
+    input: { readonly by: string; readonly note?: string },
+  ) => Effect.Effect<CoordinationView, CoordinationError>;
+  readonly observe: (
+    ref: WorkItemRef,
+    revision: string,
+    cause: Cause,
+  ) => Effect.Effect<"moved" | "redelivered", CoordinationError>;
+  readonly markProcessed: (ref: WorkItemRef, revision: string) => Effect.Effect<void, CoordinationError>;
+}
+
+type AuthorityByTag = { [Tag in WorkItemRef["_tag"]]: CoordinationAuthority };
+
+export const makeCoordination = (
+  tracker: CoordinationAuthority,
+  control: CoordinationAuthority,
+  claimant = defaultClaimant,
+): CoordinationService => {
+  const authorities = {
+    Issue: tracker,
+    PullRequest: control,
+    GranolaNote: control,
+    SlackMessage: control,
+    SlackConversation: control,
+    ScheduleInstant: control,
+    FanOutChild: control,
+  } satisfies AuthorityByTag;
+  const authority = (ref: WorkItemRef) => authorities[ref._tag];
+  const read = (ref: WorkItemRef) =>
+    authority(ref)
+      .read(ref)
+      .pipe(Effect.map((ledger) => fold(ledger, claimant)));
+  const claim = Effect.fn("Coordination.claim")(function* (
+    ref: WorkItemRef,
+    input: { readonly operation: OperationKey; readonly lineage: Lineage },
+  ) {
+    const claimedAtMillis = yield* Clock.currentTimeMillis;
+    const record = Claim.make({ ...input, by: claimant, claimedAtMillis });
+    yield* authority(ref).claim(ref, record);
+    return record;
+  });
+  const recordAttempt = Effect.fn("Coordination.recordAttempt")(function* (
+    ref: WorkItemRef,
+    input: {
+      readonly operation: OperationKey;
+      readonly outcome: AttemptOutcome;
+      readonly lineage: Lineage;
+      readonly reason?: string;
+    },
+  ) {
+    const atMillis = yield* Clock.currentTimeMillis;
+    const attempt = AttemptRecord.make({
+      operation: input.operation,
+      outcome: input.outcome,
+      lineage: input.lineage,
+      atMillis,
+    });
+    yield* authority(ref).recordAttempt(ref, attempt, input.reason);
+    return yield* read(ref);
+  });
+  const park = Effect.fn("Coordination.park")(function* (ref: WorkItemRef, reason: ParkReason) {
+    yield* authority(ref).park(ref, { reason, atMillis: yield* Clock.currentTimeMillis });
+    return yield* read(ref);
+  });
+  const handBack = Effect.fn("Coordination.handBack")(function* (
+    ref: WorkItemRef,
+    input: { readonly by: string; readonly note?: string },
+  ) {
+    yield* authority(ref).handBack(ref, {
+      by: input.by,
+      note: input.note ?? null,
+      atMillis: yield* Clock.currentTimeMillis,
+    });
+    return yield* read(ref);
+  });
+  return {
+    fold,
+    read,
+    claim,
+    release: (ref, record) => authority(ref).release(ref, record),
+    recordAttempt,
+    park,
+    handBack,
+    observe: (ref, revision, cause) => authority(ref).observe(ref, revision, cause),
+    markProcessed: (ref, revision) => authority(ref).markProcessed(ref, revision),
+  };
+};
+
+export class Coordination extends Context.Service<Coordination, CoordinationService>()(
+  "@cogwork/engine/coordination",
+) {}
+
+export const layer = (service: CoordinationService) => Layer.succeed(Coordination, service);
 
 const stageGerund: Record<LifecycleStage, string> = {
   triage: "triaging",
@@ -59,19 +345,22 @@ export const defaultStatus = "Working on this issue.";
 
 export const claimStatus = (stage: LifecycleStage) => `Currently ${stageGerund[stage]} this issue.`;
 
-export const claimStatusFor = (claim: Claim) =>
-  claim.stage ? claimStatus(claim.stage) : `In progress — claimed by ${claim.by}.`;
-
-export const attemptStatus = (attempt: AttemptRecord) => {
-  if (attempt.outcome === "succeeded") return `${attempt.operation} completed.`;
-  if (attempt.outcome === "abandoned") return `${attempt.operation} abandoned.`;
-  const trimmed = attempt.reason ? statusReason(attempt.reason) : "";
-  if (trimmed) return `Last ${attempt.operation} attempt failed: ${markdownCode(trimmed)}`;
-  return `Last ${attempt.operation} attempt failed.`;
+export const claimStatusFor = (claim: ClaimType) => {
+  const stage = claim.operation.operation as LifecycleStage;
+  const isCodingStage = claim.operation.workflow === "coding" && Object.hasOwn(stageGerund, stage);
+  return isCodingStage ? claimStatus(stage) : `In progress — claimed by ${claim.by}.`;
 };
 
-export const handbackStatus = (handback: HandbackRecord, note?: string) => {
-  const detail = note ? statusReason(note) : "";
+export const attemptStatus = (attempt: AttemptRecord) => {
+  if (attempt.outcome === "succeeded") return `${attempt.operation.operation} completed.`;
+  if (attempt.outcome === "abandoned") return `${attempt.operation.operation} abandoned.`;
+  const trimmed = attempt.reason ? statusReason(attempt.reason) : "";
+  if (trimmed) return `Last ${attempt.operation.operation} attempt failed: ${markdownCode(trimmed)}`;
+  return `Last ${attempt.operation.operation} attempt failed.`;
+};
+
+export const handbackStatus = (handback: HandbackRecordType, note?: string) => {
+  const detail = note ? statusReason(note) : statusReason(handback.note ?? "");
   return detail ? `Handed back by ${handback.by}: ${detail}` : `Handed back by ${handback.by}.`;
 };
 
@@ -118,41 +407,67 @@ const pairsNamed = (codec: WireCodec, body: string, name: string) =>
 const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
 const decodeHandback = Schema.decodeUnknownResult(HandbackRecord);
+const decodePark = Schema.decodeUnknownResult(Schema.fromJsonString(ParkRecordSchema));
 const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
 const decodeReason = Option.liftThrowable(decodeURIComponent);
+const lineageParentOf = (parent: string) => (parent === "none" ? null : parent);
+
+const lineagePairs = (pairs: Record<string, string>) => ({
+  root: pairs.root,
+  parent: pairs.parent === undefined ? undefined : lineageParentOf(pairs.parent),
+  hop: Number(pairs.hop),
+});
+
+const decodeNote = (note: string | undefined) => {
+  if (note === undefined) return null;
+  const result = Result.try(() => decodeURIComponent(note));
+  return Result.isSuccess(result) ? result.success : null;
+};
 
 export const parseClaim = (codec: WireCodec, body: string) => {
-  const candidates = pairsNamed(codec, body, "claim").flatMap((pairs) =>
+  const candidates = parseClaims(codec, body);
+  return candidates.at(-1) ?? null;
+};
+
+export const parseClaims = (codec: WireCodec, body: string) =>
+  pairsNamed(codec, body, "claim").flatMap((pairs) =>
     okToArray(
       decodeClaim({
         by: pairs.by,
         claimedAtMillis: Number(pairs.at),
-        ...(pairs.stage === undefined ? {} : { stage: pairs.stage }),
+        operation: { workflow: pairs.workflow, operation: pairs.operation },
+        lineage: lineagePairs(pairs),
       }),
     ),
   );
-  return candidates.at(-1) ?? null;
-};
 
 export const parseAttempts = (codec: WireCodec, body: string) =>
   pairsNamed(codec, body, "attempt").flatMap((pairs) =>
     okToArray(
       decodeAttempt({
-        workflow: pairs.workflow,
-        operation: pairs.operation,
+        operation: { workflow: pairs.workflow, operation: pairs.operation },
         outcome: pairs.outcome,
         atMillis: Number(pairs.at),
+        lineage: lineagePairs(pairs),
         ...(pairs.reason === undefined ? {} : { reason: Option.getOrUndefined(decodeReason(pairs.reason)) }),
       }),
     ),
   );
 
 export const parseHandback = (codec: WireCodec, body: string) => {
-  const candidates = pairsNamed(codec, body, "handback").flatMap((pairs) =>
-    okToArray(decodeHandback({ by: pairs.by, atMillis: Number(pairs.at) })),
-  );
+  const candidates = parseHandbacks(codec, body);
   return candidates.at(-1) ?? null;
 };
+
+export const parseHandbacks = (codec: WireCodec, body: string) =>
+  pairsNamed(codec, body, "handback").flatMap((pairs) =>
+    okToArray(decodeHandback({ by: pairs.by, atMillis: Number(pairs.at), note: decodeNote(pairs.note) })),
+  );
+
+export const parseParks = (codec: WireCodec, body: string) =>
+  pairsNamed(codec, body, "park").flatMap((pairs) =>
+    pairs.record === undefined ? [] : okToArray(decodePark(decodeNote(pairs.record))),
+  );
 
 export const parseFollowUp = (codec: WireCodec, body: string) => {
   const candidates = pairsNamed(codec, body, "follow-up").flatMap((pairs) =>
@@ -200,22 +515,28 @@ const stripMarkers = (codec: WireCodec, text: string): string => {
   return stripMarkers(codec, stripped);
 };
 
-export const serializeClaim = (codec: WireCodec, claim: Claim) =>
+export const serializeClaim = (codec: WireCodec, claim: ClaimType) =>
   codec.encode({
     name: "claim",
-    pairs: `by=${claim.by} at=${claim.claimedAtMillis}${claim.stage ? ` stage=${claim.stage}` : ""}`,
+    pairs: `by=${claim.by} at=${claim.claimedAtMillis} workflow=${claim.operation.workflow} operation=${claim.operation.operation} root=${claim.lineage.root} parent=${claim.lineage.parent ?? "none"} hop=${claim.lineage.hop}`,
   });
 
 export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
   codec.encode({
     name: "attempt",
-    pairs: `workflow=${attempt.workflow} operation=${attempt.operation} outcome=${attempt.outcome} at=${attempt.atMillis}${attempt.reason ? ` reason=${encodeURIComponent(attempt.reason)}` : ""}`,
+    pairs: `workflow=${attempt.operation.workflow} operation=${attempt.operation.operation} outcome=${attempt.outcome} at=${attempt.atMillis} root=${attempt.lineage.root} parent=${attempt.lineage.parent ?? "none"} hop=${attempt.lineage.hop}${attempt.reason ? ` reason=${encodeURIComponent(attempt.reason)}` : ""}`,
   });
 
-export const serializeHandback = (codec: WireCodec, handback: HandbackRecord) =>
+export const serializeHandback = (codec: WireCodec, handback: HandbackRecordType) =>
   codec.encode({
     name: "handback",
-    pairs: `by=${handback.by} at=${handback.atMillis}`,
+    pairs: `by=${handback.by} at=${handback.atMillis}${handback.note === null ? "" : ` note=${encodeURIComponent(handback.note)}`}`,
+  });
+
+export const serializePark = (codec: WireCodec, park: ParkRecord) =>
+  codec.encode({
+    name: "park",
+    pairs: `record=${encodeURIComponent(Schema.encodeSync(Schema.fromJsonString(ParkRecordSchema))(park))}`,
   });
 
 export const serializeFollowUp = (codec: WireCodec, marker: FollowUpMarker) =>

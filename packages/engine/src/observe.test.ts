@@ -1,4 +1,4 @@
-import { WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
+import { codingOperation, LineageId, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -10,6 +10,12 @@ import type { RegisteredWorkspace } from "./projector";
 import type { PrSignals, SourceControlProviderService } from "./source-control";
 
 const id = Schema.decodeSync(WorkItemId);
+const lineage = { root: LineageId.make("issue:7"), parent: null, hop: 0 };
+const attempt = (
+  stage: "implement" | "follow-up",
+  outcome: "succeeded" | "failed" | "abandoned",
+  atMillis: number,
+) => ({ operation: codingOperation(stage), outcome, atMillis, lineage });
 
 const workspace: RegisteredWorkspace = {
   source: "fake.workspace.ts",
@@ -35,7 +41,7 @@ const item = (attempts: TrackerItem["attempts"]): TrackerItem => ({
   url: "https://github.com/owner/repo/issues/7",
   roles: ["ready-for-agent"],
   assignees: [],
-  claimLabeled: false,
+  claimHeld: false,
   claim: null,
   claimedByUs: false,
   attempts,
@@ -91,18 +97,19 @@ describe("observeWorkspace handback barrier", () => {
       const observed = yield* observeWorkspace(
         tracker(
           item([
-            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 3 },
-            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 4 },
-            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 6 },
+            attempt("implement", "failed", 1),
+            attempt("implement", "failed", 3),
+            attempt("implement", "failed", 4),
+            attempt("implement", "failed", 6),
           ]),
         ),
         provider(pr),
       )(workspace);
 
-      assert.deepStrictEqual(observed[0]?.attempts, [
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 6 },
-      ]);
+      assert.strictEqual(
+        observed[0]?.coordination?.counters(codingOperation("implement")).consecutiveFailures,
+        1,
+      );
       assert.deepStrictEqual(
         classify(observed).eligible.map((work) => work.id),
         [id("#7")],
@@ -115,35 +122,41 @@ describe("observeWorkspace handback barrier", () => {
       const observed = yield* observeWorkspace(
         tracker({
           ...item([
-            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 6 },
-            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 7 },
-            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 9 },
+            attempt("implement", "failed", 1),
+            attempt("implement", "failed", 6),
+            attempt("implement", "failed", 7),
+            attempt("implement", "failed", 9),
           ]),
           handback: { by: "local-owner", atMillis: 8 },
         }),
         provider(pr),
       )(workspace);
 
-      assert.deepStrictEqual(observed[0]?.attempts, [
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 9 },
-      ]);
+      assert.strictEqual(
+        observed[0]?.coordination?.counters(codingOperation("implement")).consecutiveFailures,
+        1,
+      );
     }),
   );
 
   it.effect("zeros no progress until a follow-up marker write happens after the handback", () =>
     Effect.gen(function* () {
       const beforeWrite = yield* observeWorkspace(
-        tracker(item([{ workflow: "coding", operation: "follow-up", outcome: "succeeded", atMillis: 4 }])),
+        tracker(item([attempt("follow-up", "succeeded", 4)])),
         provider(pr),
       )(workspace);
       const afterWrite = yield* observeWorkspace(
-        tracker(item([{ workflow: "coding", operation: "follow-up", outcome: "abandoned", atMillis: 6 }])),
+        tracker(item([attempt("follow-up", "abandoned", 6)])),
+        provider(pr),
+      )(workspace);
+      const afterOtherOperation = yield* observeWorkspace(
+        tracker(item([attempt("implement", "succeeded", 6)])),
         provider(pr),
       )(workspace);
 
       assert.strictEqual(beforeWrite[0]?.pr?.followUp?.noProgress, 0);
       assert.strictEqual(afterWrite[0]?.pr?.followUp?.noProgress, 3);
+      assert.strictEqual(afterOtherOperation[0]?.pr?.followUp?.noProgress, 0);
     }),
   );
 });

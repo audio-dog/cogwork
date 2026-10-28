@@ -20,7 +20,7 @@ import type {
 import { BranchName as BranchNameSchema, byStageThenPriority, codingOperation } from "@cogwork/contracts";
 import * as Chunk from "effect/Chunk";
 import * as Data from "effect/Data";
-import { exhaustionOf, latestFailureReason } from "./exhaustion";
+import { fold, maxAttemptsPerOperation } from "./coordination";
 import {
   type FollowUpContext,
   followUpContext,
@@ -161,7 +161,36 @@ export const observedStage = (item: ObservedItem) => {
   return null;
 };
 
-export { consecutiveFailures, maxAttemptsPerOperation } from "./exhaustion";
+export { maxAttemptsPerOperation };
+
+const coordinationViewOf = (item: ObservedItem) =>
+  item.coordination ??
+  fold(
+    {
+      claim: item.claim,
+      attempts: item.attempts,
+      handbacks: item.handback ? [{ ...item.handback, note: null }] : [],
+      parks: [],
+      revision: null,
+    },
+    "cogwork",
+  );
+
+export const consecutiveFailures = (item: ObservedItem, key: ReturnType<typeof codingOperation>) =>
+  coordinationViewOf(item).counters(key).consecutiveFailures;
+
+const latestFailureReason = (item: ObservedItem, key: ReturnType<typeof codingOperation>) => {
+  const barrierAtMillis = coordinationViewOf(item).barrierAtMillis;
+  const latest = item.attempts
+    .filter(
+      (attempt) =>
+        attempt.atMillis > barrierAtMillis &&
+        attempt.operation.workflow === key.workflow &&
+        attempt.operation.operation === key.operation,
+    )
+    .at(-1);
+  return latest?.outcome === "failed" ? (latest.reason ?? null) : null;
+};
 
 const ownedByActor = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined) =>
   !allowlist || item.assignees.some((assignee) => allowlist.includes(assignee));
@@ -174,7 +203,7 @@ const classifyOne = (
   if (!ownedByActor(item, allowlist)) return Outcome.Drop({});
   if (item.roles.includes("wontfix")) return Outcome.Drop({});
   if (item.claim) return Outcome.Claimed({ claim: item.claim });
-  if (item.claimLabeled) return Outcome.Drop({});
+  if (item.claimHeld) return Outcome.Drop({});
   if (item.roles.includes("needs-info")) return Outcome.NeedsHuman({ reason: "needs-info" });
   if (item.roles.includes("ready-for-human")) return Outcome.NeedsHuman({ reason: "ready-for-human" });
   const readyToMergePr = readyToMergePrOf(item);
@@ -182,7 +211,7 @@ const classifyOne = (
   const stage = observedStage(item);
   if (!stage) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
-  if (exhaustionOf(item, codingOperation(stage)).exhausted) {
+  if (coordinationViewOf(item).counters(codingOperation(stage)).exhausted) {
     return Outcome.NeedsHuman({ reason: "ready-for-human" });
   }
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
@@ -228,7 +257,7 @@ export const classifiedItemOf = (item: ObservedItem) =>
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   const operation = codingOperation(stage);
-  const priorFailures = exhaustionOf(item, operation).failedAttempts;
+  const priorFailures = coordinationViewOf(item).counters(operation).consecutiveFailures;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   const followUpBranch = followUpBranchFor(item, stage);
   return {

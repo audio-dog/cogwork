@@ -1,6 +1,5 @@
 import {
   ClassifiedItem,
-  type LifecycleStage,
   type RunId,
   type RunStatus,
   type RunSummary,
@@ -17,8 +16,8 @@ export interface ItemStateDescriptor {
   readonly running: boolean;
 }
 
-const calmDescriptor = (verb: "Queued" | "Working", stage: LifecycleStage | null): ItemStateDescriptor => {
-  return { label: stage ? `${verb} · ${stage}` : verb, tone: "muted", running: false };
+const calmDescriptor = (verb: "Queued" | "Working", detail: string | null): ItemStateDescriptor => {
+  return { label: detail ? `${verb} · ${detail}` : verb, tone: "muted", running: false };
 };
 
 export function describeItemState(item: ClassifiedItem, run: RunSummary | null): ItemStateDescriptor {
@@ -38,7 +37,7 @@ export function describeItemState(item: ClassifiedItem, run: RunSummary | null):
     }),
     ReadyToMerge: () => ({ label: "Ready to merge", tone: "ready", running: false }),
     Eligible: (eligible) => calmDescriptor("Queued", eligible.stage),
-    Claimed: (claimed) => calmDescriptor("Working", claimed.claim.stage ?? null),
+    Claimed: (claimed) => calmDescriptor("Working", claimed.claim.operation.operation),
   });
 }
 
