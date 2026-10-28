@@ -1,4 +1,4 @@
-import type { FileContribution, RunId, WorkspaceId } from "@cogwork/contracts";
+import type { FileContribution, RunId, WorkflowOperation, WorkspaceId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -15,6 +15,7 @@ export interface InstructionLayer {
 
 export interface AssembledContext {
   readonly layers: ReadonlyArray<InstructionLayer>;
+  readonly operatingInstructionsName: string;
   readonly operatingInstructionsPath: string;
   readonly operatingInstructionResources: ReadonlyArray<{
     readonly source: string;
@@ -23,12 +24,17 @@ export interface AssembledContext {
   readonly sources: ReadonlyArray<{ readonly source: string; readonly content: string }>;
 }
 
+export type WorkflowOperatingInstructions = Pick<
+  WorkflowOperation,
+  "instructionPackage" | "instruction" | "questions" | "hints"
+>;
+
 export interface AssembleRequest {
   readonly runId: RunId;
   readonly workspace: WorkspaceId;
   readonly cwd: string;
   readonly projectRoot: string;
-  readonly operatingInstructions: string;
+  readonly operatingInstructions: string | WorkflowOperatingInstructions;
   readonly contributions: ReadonlyArray<FileContribution>;
 }
 
@@ -80,6 +86,55 @@ const sharedResourceBundles: Readonly<Record<string, ReadonlyArray<string>>> = {
   "follow-up-agent": ["test-value"],
   "implement-agent": ["test-value"],
 };
+
+const workflowInstructionFraming = [
+  "Use the Work Context as the brief.",
+  "Return the answer through the structured result.",
+  "Cogwork performs the output actions.",
+].join("\n");
+
+const workflowQuestionContent = (questions: WorkflowOperatingInstructions["questions"]) =>
+  [
+    "Questions:",
+    ...questions.flatMap((question) => [
+      `- \`${question.id}\`: ${question.text}`,
+      ...question.choices.map((choice) => `  - \`${choice.id}\`: ${choice.name}`),
+    ]),
+  ].join("\n");
+
+const workflowHintContent = (hints: WorkflowOperatingInstructions["hints"]) =>
+  ["Input hints:", ...hints.map((hint) => `- \`${hint.field}\`: ${hint.text}`)].join("\n");
+
+const workflowInstructionLayers = (instructions: WorkflowOperatingInstructions) => {
+  const inline = instructions.instruction.trim();
+  const layers = [
+    { source: "Workflow Operation inline instruction", content: inline },
+    {
+      source: "Engine Workflow framing",
+      content: workflowInstructionFraming,
+    },
+    {
+      source: "Workflow Operation questions",
+      content: instructions.questions.length > 0 ? workflowQuestionContent(instructions.questions) : "",
+    },
+    {
+      source: "Workflow Operation input hints",
+      content: instructions.hints.length > 0 ? workflowHintContent(instructions.hints) : "",
+    },
+  ];
+  return layers
+    .filter(({ content }) => content.length > 0)
+    .map(
+      ({ source, content }) =>
+        ({ kind: "operating-instructions", source, content }) satisfies InstructionLayer,
+    );
+};
+
+const instructionPackageOf = (instructions: AssembleRequest["operatingInstructions"]) =>
+  typeof instructions === "string" ? instructions : instructions.instructionPackage;
+
+const generatedInstructionLayers = (instructions: AssembleRequest["operatingInstructions"]) =>
+  typeof instructions === "string" ? [] : workflowInstructionLayers(instructions);
 
 const runPathSegment = (runId: RunId) =>
   `run-${Array.from(runId, (character) => character.codePointAt(0)?.toString(16) ?? "").join("-")}`;
@@ -182,13 +237,11 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
   });
 
   const operatingInstructionsSource = Effect.fn("ContextAssembler.operatingInstructionsSource")(function* (
-    request: AssembleRequest,
+    workspace: WorkspaceId,
+    instructionPackage: string,
   ) {
-    const workspaceDir = joinPath(joinPath(config.homeDir, "workspaces"), request.workspace);
-    const overrideDir = joinPath(
-      joinPath(workspaceDir, "operating-instructions"),
-      request.operatingInstructions,
-    );
+    const workspaceDir = joinPath(joinPath(config.homeDir, "workspaces"), workspace);
+    const overrideDir = joinPath(joinPath(workspaceDir, "operating-instructions"), instructionPackage);
     if (yield* fs.directoryExists(overrideDir)) {
       return {
         packageDir: overrideDir,
@@ -197,9 +250,9 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
       };
     }
     return {
-      packageDir: joinPath(config.operatingInstructionsDir, request.operatingInstructions),
+      packageDir: joinPath(config.operatingInstructionsDir, instructionPackage),
       provenanceDir: null,
-      errorSource: request.operatingInstructions,
+      errorSource: instructionPackage,
     };
   });
 
@@ -223,12 +276,44 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
     return joinPath(provenanceDir, source.slice(provisionedDir.length + 1));
   };
 
+  const provisionOperatingInstructions = Effect.fn("ContextAssembler.provisionOperatingInstructions")(
+    function* (request: AssembleRequest, instructionPackage: string, operatingInstructionsPath: string) {
+      const source = yield* operatingInstructionsSource(request.workspace, instructionPackage);
+      yield* operatingInstructionsLayer(instructionPackage, source.packageDir, source.errorSource);
+      yield* fs.copyDirectory(source.packageDir, operatingInstructionsPath);
+      const provisionedInstructions = yield* operatingInstructionsLayer(
+        instructionPackage,
+        operatingInstructionsPath,
+        instructionPackage,
+      );
+      const sharedBundles =
+        source.provenanceDir === null ? (sharedResourceBundles[instructionPackage] ?? []) : [];
+      yield* Effect.forEach(sharedBundles, (bundle) =>
+        fs.copyDirectory(
+          joinPath(joinPath(config.operatingInstructionsDir, "shared"), bundle),
+          joinPath(operatingInstructionsPath, bundle),
+        ),
+      );
+      const provisionedResources = yield* operatingInstructionResources(operatingInstructionsPath);
+      const sourcePath = (provisionedPath: string) =>
+        provenancePath(source.provenanceDir, operatingInstructionsPath, provisionedPath);
+      return {
+        layer: { ...provisionedInstructions, source: sourcePath(provisionedInstructions.source) },
+        resources: provisionedResources.map((resource) => ({
+          ...resource,
+          source: sourcePath(resource.source),
+        })),
+      };
+    },
+  );
+
   return {
     assemble: Effect.fn("ContextAssembler.assemble")(function* (request: AssembleRequest) {
-      if (!isSafePathSegment(request.operatingInstructions)) {
+      const instructionPackage = instructionPackageOf(request.operatingInstructions);
+      if (instructionPackage !== null && !isSafePathSegment(instructionPackage)) {
         return yield* new ContextAssemblerError({
-          source: request.operatingInstructions,
-          message: `Operating Instructions name "${request.operatingInstructions}" is not a single path segment`,
+          source: instructionPackage,
+          message: `Operating Instructions name "${instructionPackage}" is not a single path segment`,
           retryable: false,
         });
       }
@@ -239,37 +324,22 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
           retryable: false,
         });
       }
-      const source = yield* operatingInstructionsSource(request);
+      const operatingInstructionsName = instructionPackage ?? "workflow-operation";
       const operatingInstructionsPath = joinPath(
         runPath(request.runId),
-        `operating-instructions/${request.operatingInstructions}`,
+        `operating-instructions/${operatingInstructionsName}`,
       );
-      yield* operatingInstructionsLayer(request.operatingInstructions, source.packageDir, source.errorSource);
-      yield* fs.copyDirectory(source.packageDir, operatingInstructionsPath);
-      const provisionedInstructions = yield* operatingInstructionsLayer(
-        request.operatingInstructions,
-        operatingInstructionsPath,
-        request.operatingInstructions,
-      );
-      const sharedBundles =
-        source.provenanceDir === null ? (sharedResourceBundles[request.operatingInstructions] ?? []) : [];
-      yield* Effect.forEach(sharedBundles, (bundle) =>
-        fs.copyDirectory(
-          joinPath(joinPath(config.operatingInstructionsDir, "shared"), bundle),
-          joinPath(operatingInstructionsPath, bundle),
-        ),
-      );
-      const provisionedResources = yield* operatingInstructionResources(operatingInstructionsPath);
-      const sourcePath = (provisionedPath: string) =>
-        provenancePath(source.provenanceDir, operatingInstructionsPath, provisionedPath);
-      const operatingInstructions = {
-        ...provisionedInstructions,
-        source: sourcePath(provisionedInstructions.source),
-      };
-      const resources = provisionedResources.map((resource) => ({
-        ...resource,
-        source: sourcePath(resource.source),
-      }));
+      const provisioned = instructionPackage
+        ? yield* provisionOperatingInstructions(request, instructionPackage, operatingInstructionsPath)
+        : { layer: null, resources: [] };
+      const workflowLayers = generatedInstructionLayers(request.operatingInstructions);
+      const operatingLayers = presentLayers([provisioned.layer, ...workflowLayers]);
+      if (typeof request.operatingInstructions !== "string") {
+        yield* fs.writeFile(
+          joinPath(operatingInstructionsPath, "INSTRUCTIONS.md"),
+          operatingLayers.map(({ content }) => content).join("\n\n"),
+        );
+      }
       const rules = yield* userRules();
       const repo = yield* repoLayers(request);
       const repoRules = yield* contributionRules(request.contributions, "local:repo");
@@ -285,18 +355,12 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
       const pluginRules = yield* Effect.forEach(pluginAuthorities, (authority) =>
         contributionRules(request.contributions, authority),
       ).pipe(Effect.map((groups) => groups.flat()));
-      const layers = [
-        ...rules,
-        ...repo,
-        ...repoRules,
-        ...privateRules,
-        ...pluginRules,
-        operatingInstructions,
-      ];
+      const layers = [...rules, ...repo, ...repoRules, ...privateRules, ...pluginRules, ...operatingLayers];
       return {
         layers,
+        operatingInstructionsName,
         operatingInstructionsPath,
-        operatingInstructionResources: resources,
+        operatingInstructionResources: provisioned.resources,
         sources,
       } satisfies AssembledContext;
     }),

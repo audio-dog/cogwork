@@ -93,6 +93,8 @@ const document = decodeDocument({
 const incompleteDocument = decodeDocument({ ...document, triggers: [] });
 const trigger = document.triggers[0];
 if (!trigger) throw new Error("missing test Trigger");
+const operation = document.operations[0];
+if (!operation) throw new Error("missing test Operation");
 
 const temporaryStore = Effect.fn("test.temporaryWorkflowsStore")(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -183,6 +185,60 @@ layer(NodeServices.layer)((it) => {
       const unchanged = yield* withWorkflows(storePath, ({ get }) => get({ id: created.id }));
       assert.strictEqual(unchanged.workingRevision, 1);
       assert.deepStrictEqual(unchanged.workingCopy, document);
+    }),
+  );
+
+  it.effect("refuses an unknown instruction package", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const created = yield* withWorkflows(storePath, ({ create }) => create({ document }));
+      const refused = yield* Effect.flip(
+        withWorkflows(storePath, ({ edit }) =>
+          edit({
+            id: created.id,
+            edits: [
+              {
+                _tag: "SetInstructionPackage",
+                operation: operation.id,
+                package: "missing-agent",
+              },
+            ],
+          }),
+        ),
+      );
+
+      assert.isTrue(Schema.is(WorkflowEditRefused)(refused));
+      if (!Schema.is(WorkflowEditRefused)(refused)) return;
+      assert.deepStrictEqual(
+        refused.diagnostics.map(({ code }) => code),
+        ["unknown-catalog-entry"],
+      );
+    }),
+  );
+
+  it.effect("publishes a listed instruction package without inline text", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const created = yield* withWorkflows(storePath, ({ create }) => create({ document }));
+      const edited = yield* withWorkflows(storePath, ({ edit }) =>
+        edit({
+          id: created.id,
+          edits: [
+            {
+              _tag: "SetInstructionPackage",
+              operation: operation.id,
+              package: "implement-agent",
+            },
+            { _tag: "SetInstruction", operation: operation.id, instruction: "" },
+          ],
+        }),
+      );
+      const published = yield* withWorkflows(storePath, ({ publish }) =>
+        publish({ id: created.id, revision: edited.workingRevision }),
+      );
+
+      assert.strictEqual(published.publishedCopy?.operations[0]?.instructionPackage, "implement-agent");
+      assert.strictEqual(published.publishedCopy?.operations[0]?.instruction, "");
     }),
   );
 

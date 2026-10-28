@@ -3,6 +3,7 @@ import {
   RunId,
   RunPlanInstruction,
   RunPlanResource,
+  WorkflowNodeId,
   WorkspaceId,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
@@ -17,9 +18,15 @@ interface CopyCall {
   readonly dest: string;
 }
 
+interface WriteCall {
+  readonly target: string;
+  readonly content: string;
+}
+
 interface StubFsOptions {
   readonly directories?: ReadonlyArray<string>;
   readonly removals?: Ref.Ref<ReadonlyArray<string>>;
+  readonly writes?: Ref.Ref<ReadonlyArray<WriteCall>>;
 }
 
 const config = {
@@ -36,6 +43,7 @@ const request: AssembleRequest = {
   operatingInstructions: "implement-agent",
   contributions: [],
 };
+const workflowNodeId = Schema.decodeSync(WorkflowNodeId);
 
 const workspaceOverrideDir = "/home/.cogwork/workspaces/gh/operating-instructions/implement-agent";
 const engineInstructions = {
@@ -45,7 +53,7 @@ const engineInstructions = {
 const stubFs = (
   files: Record<string, string>,
   copies: Ref.Ref<ReadonlyArray<CopyCall>>,
-  { directories = [], removals }: StubFsOptions = {},
+  { directories = [], removals, writes }: StubFsOptions = {},
 ): ContextFsService => ({
   directoryExists: (target) =>
     Effect.succeed(
@@ -77,6 +85,8 @@ const stubFs = (
         return [...entries, ...mountedEntries].filter((name) => options?.recursive || !name.includes("/"));
       }),
     ),
+  writeFile: (target, content) =>
+    writes ? Ref.update(writes, (calls) => [...calls, { target, content }]) : Effect.void,
   copyDirectory: (source, dest) => Ref.update(copies, (xs) => [...xs, { source, dest }]),
   removeDirectory: (target) =>
     removals ? Ref.update(removals, (targets) => [...targets, target]) : Effect.void,
@@ -371,6 +381,120 @@ describe("ContextAssembler.assemble", () => {
           content: "example body",
         },
       ]);
+    }),
+  );
+
+  it.effect("builds the Workflow Operating Instructions ladder and host entry point", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const writes = yield* Ref.make<ReadonlyArray<WriteCall>>([]);
+      const assembler = make(
+        config,
+        stubFs(
+          {
+            "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "package entry point",
+            "/engine/operating-instructions/implement-agent/GUIDE.md": "package guide",
+            "/engine/operating-instructions/shared/test-value/TEST-VALUE.md": "test-value bar",
+          },
+          copies,
+          { writes },
+        ),
+      );
+
+      const assembled = yield* assembler.assemble({
+        ...request,
+        operatingInstructions: {
+          instructionPackage: "implement-agent",
+          instruction: "Keep the change focused.",
+          questions: [
+            {
+              id: workflowNodeId("decision"),
+              text: "What should happen?",
+              choices: [
+                { id: workflowNodeId("ship"), name: "Ship it" },
+                { id: workflowNodeId("stop"), name: "Stop" },
+              ],
+            },
+          ],
+          hints: [{ field: "summary", text: "Keep it short." }],
+        },
+      });
+
+      assert.deepStrictEqual(
+        assembled.layers.slice(-5).map(({ source, content }) => ({ source, content })),
+        [
+          {
+            source: `${assembled.operatingInstructionsPath}/INSTRUCTIONS.md`,
+            content: "package entry point",
+          },
+          {
+            source: "Workflow Operation inline instruction",
+            content: "Keep the change focused.",
+          },
+          {
+            source: "Engine Workflow framing",
+            content:
+              "Use the Work Context as the brief.\nReturn the answer through the structured result.\nCogwork performs the output actions.",
+          },
+          {
+            source: "Workflow Operation questions",
+            content: "Questions:\n- `decision`: What should happen?\n  - `ship`: Ship it\n  - `stop`: Stop",
+          },
+          {
+            source: "Workflow Operation input hints",
+            content: "Input hints:\n- `summary`: Keep it short.",
+          },
+        ],
+      );
+      assert.deepStrictEqual(assembled.operatingInstructionResources, [
+        { source: `${assembled.operatingInstructionsPath}/GUIDE.md`, content: "package guide" },
+        {
+          source: `${assembled.operatingInstructionsPath}/test-value/TEST-VALUE.md`,
+          content: "test-value bar",
+        },
+      ]);
+      assert.deepStrictEqual(yield* Ref.get(writes), [
+        {
+          target: `${assembled.operatingInstructionsPath}/INSTRUCTIONS.md`,
+          content: assembled.layers
+            .slice(-5)
+            .map(({ content }) => content)
+            .join("\n\n"),
+        },
+      ]);
+    }),
+  );
+
+  it.effect("builds host Operating Instructions without a package", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const writes = yield* Ref.make<ReadonlyArray<WriteCall>>([]);
+      const assembler = make(config, stubFs({}, copies, { writes }));
+
+      const assembled = yield* assembler.assemble({
+        ...request,
+        operatingInstructions: {
+          instructionPackage: null,
+          instruction: "Summarize the item.",
+          questions: [],
+          hints: [],
+        },
+      });
+
+      assert.strictEqual(
+        assembled.operatingInstructionsPath,
+        "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/workflow-operation",
+      );
+      assert.deepStrictEqual(
+        assembled.layers.slice(-2).map(({ content }) => content),
+        [
+          "Summarize the item.",
+          "Use the Work Context as the brief.\nReturn the answer through the structured result.\nCogwork performs the output actions.",
+        ],
+      );
+      assert.deepStrictEqual(assembled.operatingInstructionResources, []);
+      assert.deepStrictEqual(yield* Ref.get(copies), []);
+      assert.lengthOf(yield* Ref.get(writes), 1);
     }),
   );
 

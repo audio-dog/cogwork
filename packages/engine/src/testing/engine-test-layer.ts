@@ -92,6 +92,7 @@ export const engineTestLayerWithOperationResolution = ({
   policyProfiles = ["read-only", "full"],
   context = {
     layers: [],
+    operatingInstructionsName: "implement-agent",
     operatingInstructionsPath: "/operations",
     operatingInstructionResources: [],
     sources: [],

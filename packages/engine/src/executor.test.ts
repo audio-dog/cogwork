@@ -258,6 +258,7 @@ class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<R
           Ref.update(requests, (calls) => [...calls, request]).pipe(
             Effect.map(() => ({
               layers: [],
+              operatingInstructionsName: "implement-agent",
               operatingInstructionsPath: "/",
               operatingInstructionResources: [],
               sources: [],
@@ -273,6 +274,7 @@ const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () =>
     Effect.succeed({
       layers: [],
+      operatingInstructionsName: "implement-agent",
       operatingInstructionsPath: "/",
       operatingInstructionResources: [],
       sources: [],
@@ -309,6 +311,7 @@ const contributionContext = Layer.succeed(ContextAssembler.ContextAssembler, {
           source: contribution.file,
           content: contribution.id,
         })),
+      operatingInstructionsName: "implement-agent",
       operatingInstructionsPath: "/",
       operatingInstructionResources: [],
       sources: [],
@@ -2675,7 +2678,14 @@ describe("Executor.execute", () => {
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
 
-      assert.strictEqual((yield* Ref.get(assemblyRequests))[0]?.workspace, implementWorkspace.config.name);
+      const [assemblyRequest] = yield* Ref.get(assemblyRequests);
+      assert.strictEqual(assemblyRequest?.workspace, implementWorkspace.config.name);
+      assert.deepStrictEqual(assemblyRequest?.operatingInstructions, {
+        instructionPackage: "implement-agent",
+        instruction: "",
+        questions: [],
+        hints: [],
+      });
       const [request] = yield* Ref.get(requests);
       assert.strictEqual(request?.plan.harness.model, "refreshed-model");
       const model = request?.plan.provenance.resolution.find(({ key }) => key === "model");

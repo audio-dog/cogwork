@@ -474,15 +474,12 @@ const gitWritablePaths = (
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
   descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
   request: HarnessRequest,
+  checkoutPath: string,
   session: SessionId,
   authentication: ExternalHarnessAuthentication,
 ) {
   const resumeHandle = yield* resolveResumeHandle(session);
-  const writablePaths = yield* gitWritablePaths(
-    descriptor,
-    request.plan.harness.profile,
-    request.plan.sandbox.workspace,
-  );
+  const writablePaths = yield* gitWritablePaths(descriptor, request.plan.harness.profile, checkoutPath);
   return {
     identity: { run: request.plan.id, session, resumeHandle },
     selection: { model: request.plan.harness.model, options: request.plan.harness.options },
@@ -492,7 +489,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     operatingInstructions: request.plan.operatingInstructions,
     mcp: resolvedMcpSkills(request),
     secrets: { mcp: request.mcpCredentials },
-    checkout: { path: request.plan.sandbox.workspace, gitWritablePaths: writablePaths },
+    checkout: { path: checkoutPath, gitWritablePaths: writablePaths },
     prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
   } satisfies ExternalHarnessResolvedRequest;
@@ -505,9 +502,10 @@ const resolveExternalLaunch = Effect.fn("ExternalHarnessRuntime.resolveLaunch")(
   inputs: ExternalHarnessRuntimeInputs,
   request: HarnessRequest,
 ) {
+  const checkoutPath = yield* validateCheckoutDirectory(descriptor.name, request.plan.sandbox.workspace);
   const session = yield* requireSession(request.session);
   const authentication = yield* inputs.authentication(request);
-  const resolved = yield* resolvedRequest(descriptor, request, session, authentication);
+  const resolved = yield* resolvedRequest(descriptor, request, checkoutPath, session, authentication);
   yield* validateExternalRequest(descriptor, request, resolved);
   const workspaceDefinition = harnessWorkspace(descriptor, resolved);
   const provider = localProcessSandboxProvider(resolved.checkout.path, {
@@ -695,7 +693,8 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
     ...(descriptor.signIn ? { signIn: descriptor.signIn } : {}),
     catalog: descriptor.catalog,
     readiness: descriptor.readiness,
-    validateLaunch: (request) => validateCheckoutDirectory(descriptor.name, request.plan.sandbox.workspace),
+    validateLaunch: (request) =>
+      validateCheckoutDirectory(descriptor.name, request.plan.sandbox.workspace).pipe(Effect.asVoid),
     preflight,
     run: (request) =>
       Stream.unwrap(

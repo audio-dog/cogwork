@@ -122,6 +122,7 @@ const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () =>
     Effect.succeed({
       layers: [],
+      operatingInstructionsName: "implement-agent",
       operatingInstructionsPath: "/skills",
       operatingInstructionResources: [],
       sources: [],

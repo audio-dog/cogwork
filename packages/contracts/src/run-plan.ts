@@ -179,7 +179,7 @@ export class RunPlanProvenance extends Schema.Class<RunPlanProvenance>("RunPlanP
 }) {}
 
 export class RunPlanSandbox extends Schema.Class<RunPlanSandbox>("RunPlanSandbox")({
-  workspace: TrimmedNonEmptyString,
+  workspace: Schema.NullOr(TrimmedNonEmptyString),
   policy: RunPlanPolicyProfile,
 }) {}
 
