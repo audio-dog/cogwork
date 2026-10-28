@@ -6,7 +6,7 @@ import { claudeCodeRunner } from "@cogwork/claude-code";
 import { codexRunner } from "@cogwork/codex-cli";
 import { DaemonRpcs, HarnessName, type WorkspaceId } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
-import { ContextAssembler, Daemon, PerformanceHealth, Replay } from "@cogwork/engine";
+import { ContextAssembler, Daemon, PerformanceHealth, Provider, Replay } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Cause from "effect/Cause";
@@ -85,12 +85,14 @@ export const transportLayer = (socketPath: string) =>
     Layer.provide(restrictSocket(socketPath).pipe(Layer.provideMerge(boundSocketServer(socketPath)))),
   );
 
+const providerName = Schema.decodeSync(HarnessName)("provider");
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
 const claudeName = Schema.decodeSync(HarnessName)("claude");
 const codexName = Schema.decodeSync(HarnessName)("codex");
 const replayName = Schema.decodeSync(HarnessName)("replay");
 
 const standardHarnessRunners = [
+  Provider.providerRunner({ name: providerName }),
   cursorRunner({ name: cursorName }),
   claudeCodeRunner({ name: claudeName, authentication: { mode: "host" } }),
   codexRunner({ name: codexName }),
