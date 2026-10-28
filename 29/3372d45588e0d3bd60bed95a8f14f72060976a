@@ -1,0 +1,27 @@
+packages/engine/src/coordination.ts
+  s_900d1c79999f29::t_f9dfdbbc14bee0 489-490,556
+  s_900d1c79999f29::t_778b2d860f9243 472-477,550-551
+  s_900d1c79999f29::t_94ecee5c4529ea 552
+packages/engine/src/coordination-tracker.test.ts
+  s_900d1c79999f29::t_a765fd98f97d84 485-501,529,614
+packages/engine/src/coordination-tracker.ts
+  s_900d1c79999f29::t_a233fbc3b5e61a 17,319-338,482,505
+  s_900d1c79999f29::t_62160662f00cb7 367
+  s_900d1c79999f29::t_6ac0732e2eb250 464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "293372d45588e0d3bd60bed95a8f14f72060976a",
+  "prompts": {},
+  "sessions": {
+    "s_900d1c79999f29": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1839e-d6d8-7a83-bab6-6c60b8e6f01f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
