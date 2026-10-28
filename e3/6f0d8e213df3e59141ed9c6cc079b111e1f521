@@ -1,0 +1,20 @@
+packages/engine/src/run-preparation.test.ts
+  s_64831d19921b1b::t_86055c136b255d 495-501,503-506
+  s_64831d19921b1b::t_0abc2ce36d852d 502
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e36f0d8e213df3e59141ed9c6cc079b111e1f521",
+  "prompts": {},
+  "sessions": {
+    "s_64831d19921b1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180da-be7c-7b13-97e4-2d89cf85a6f8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
