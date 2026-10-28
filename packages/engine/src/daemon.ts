@@ -109,7 +109,10 @@ import {
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
-import { layer as triggerObservationLayer } from "./trigger-observation";
+import {
+  controlStoreTriggerObservationStoreLayer,
+  layer as triggerObservationLayer,
+} from "./trigger-observation";
 import { TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
@@ -339,7 +342,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)).pipe(Stream.orDie),
   WatchEvents: () => Stream.unwrap(watchEvents()),
   ListWorkflows: () => Effect.flatMap(Workflows, ({ list }) => list),
-  ListWorkflowNotifications: () => Effect.flatMap(WorkflowNotifications, ({ list }) => list),
+  ListWorkflowNotifications: () =>
+    Effect.flatMap(WorkflowNotifications, ({ list }) => list).pipe(Effect.orDie),
   GetWorkflow: (payload) => Effect.flatMap(Workflows, ({ get }) => get(payload)),
   ValidateWorkflow: (payload) => Effect.flatMap(Workflows, ({ validate }) => validate(payload)),
   GetWorkflowCatalog: () => Effect.flatMap(Workflows, ({ catalog }) => catalog),
@@ -472,9 +476,12 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(controlStore),
   );
   const triggerSources = Layer.succeed(TriggerSources, [clockSource]);
-  const workflowNotifications = workflowNotificationsLayer;
+  const triggerObservationStore = controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
+  const workflowNotifications = workflowNotificationsLayer.pipe(
+    Layer.provide(Layer.merge(runLedger, runRecorder)),
+  );
   const triggerObservation = triggerObservationLayer.pipe(
-    Layer.provide(Layer.mergeAll(workflows, coordination, triggerSources)),
+    Layer.provide(Layer.mergeAll(workflows, coordination, triggerSources, triggerObservationStore)),
   );
   const workflowRun = workflowRunLayer.pipe(
     Layer.provide(

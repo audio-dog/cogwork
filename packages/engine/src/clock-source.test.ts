@@ -19,6 +19,7 @@ const subscription = (
 ): TriggerSubscription => ({
   workflow: decodeWorkflow("daily-summary"),
   trigger: decodeNode("schedule"),
+  operation: decodeNode("summarize"),
   entry: decodeEntry(entry),
   parameters,
   workspaces: [],

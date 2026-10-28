@@ -49,7 +49,7 @@ const document = Schema.decodeSync(WorkflowDocument)({
     {
       id: operation,
       name: "Summarize",
-      instructionPackage: null,
+      instructionPackage: "implement-agent",
       instruction: "Summarize the day.",
       permissionProfile: "read-only",
       requires: [],
@@ -138,6 +138,7 @@ const admission: TriggerAdmission = {
   subscription: {
     workflow,
     trigger,
+    operation,
     entry: scheduleEntry,
     parameters: [],
     workspaces: [],
@@ -208,7 +209,23 @@ const requirements = Layer.mergeAll(
   NodeServices.layer,
   FetchHttpClient.layer,
   Layer.mock(ContextAssembler, {
-    assemble: () => Effect.die("unused"),
+    assemble: ({ operatingInstructions }) =>
+      Effect.succeed({
+        layers: [
+          {
+            kind: "operating-instructions",
+            source: "workflow-operation",
+            content:
+              typeof operatingInstructions === "string"
+                ? operatingInstructions
+                : `${operatingInstructions.instructionPackage}:${operatingInstructions.instruction}`,
+          },
+        ],
+        operatingInstructionsName: "workflow-operation",
+        operatingInstructionsPath: "/tmp/workflow-operation",
+        operatingInstructionResources: [],
+        sources: [],
+      }),
     cleanup: () => Effect.void,
   }),
 );
@@ -262,7 +279,7 @@ const testProgram = (objects: ReadonlyArray<unknown>) =>
 describe("WorkflowRun", () => {
   it.effect("writes Notify me output and keeps the Run workspace-free", () =>
     Effect.gen(function* () {
-      const { runner, notifications } = yield* testProgram([
+      const { runner } = yield* testProgram([
         {
           summary: "All clear",
           stuck: false,
@@ -274,11 +291,16 @@ describe("WorkflowRun", () => {
       const ledger = yield* RunLedger;
       const [run] = yield* ledger.listRuns(10);
       const plan = run ? yield* ledger.getRunPlan(run.id) : null;
+      const restartedNotifications = yield* makeNotifications;
 
       assert.strictEqual(run?.status, "succeeded");
       assert.isNull(plan?.sandbox.workspace);
+      assert.strictEqual(
+        plan?.instructions.find(({ source }) => source === "workflow-operation")?.content,
+        "implement-agent:Summarize the day.",
+      );
       assert.deepStrictEqual(
-        (yield* notifications.list).map(({ summary, answers }) => ({ summary, answers })),
+        (yield* restartedNotifications.list).map(({ summary, answers }) => ({ summary, answers })),
         [{ summary: "All clear", answers: { done: "yes" } }],
       );
     }).pipe(Effect.provide(requirements), Effect.scoped),

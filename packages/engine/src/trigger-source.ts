@@ -1,11 +1,11 @@
-import type {
+import {
   Cause,
-  WorkflowAvailability,
-  WorkflowCatalogEntry,
+  type WorkflowAvailability,
+  type WorkflowCatalogEntry,
   WorkflowCatalogKey,
   WorkflowId,
   WorkflowNodeId,
-  WorkflowOption,
+  type WorkflowOption,
   WorkflowParameterValue,
   WorkItemRef,
   WorkspaceId,
@@ -18,23 +18,26 @@ import type * as Stream from "effect/Stream";
 export const TriggerSourceId = Schema.Literals(["github", "linear", "granola", "slack", "clock"]);
 export type TriggerSourceId = typeof TriggerSourceId.Type;
 
-export interface TriggerSubscription {
-  readonly workflow: WorkflowId;
-  readonly trigger: WorkflowNodeId;
-  readonly entry: WorkflowCatalogKey;
-  readonly parameters: ReadonlyArray<WorkflowParameterValue>;
-  readonly workspaces: ReadonlyArray<WorkspaceId>;
-  readonly catchUp: { readonly since: number } | null;
-}
+export const TriggerSubscription = Schema.Struct({
+  workflow: WorkflowId,
+  trigger: WorkflowNodeId,
+  operation: WorkflowNodeId,
+  entry: WorkflowCatalogKey,
+  parameters: Schema.Array(WorkflowParameterValue),
+  workspaces: Schema.Array(WorkspaceId),
+  catchUp: Schema.NullOr(Schema.Struct({ since: Schema.Natural })),
+});
+export type TriggerSubscription = typeof TriggerSubscription.Type;
 
-export interface TriggerEvent {
-  readonly key: WorkItemRef;
-  readonly revision: string;
-  readonly cause: Cause;
-  readonly atMillis: number;
-  readonly entry: WorkflowCatalogKey;
-  readonly workspace: WorkspaceId | null;
-}
+export const TriggerEvent = Schema.Struct({
+  key: WorkItemRef,
+  revision: Schema.String,
+  cause: Cause,
+  atMillis: Schema.Natural,
+  entry: WorkflowCatalogKey,
+  workspace: Schema.NullOr(WorkspaceId),
+});
+export type TriggerEvent = typeof TriggerEvent.Type;
 
 export class SourceFailure extends Schema.TaggedError<SourceFailure>()("SourceFailure", {
   source: TriggerSourceId,

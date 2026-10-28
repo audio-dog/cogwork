@@ -112,14 +112,6 @@ export const WorkflowOperation = Schema.Struct({
 });
 export type WorkflowOperation = typeof WorkflowOperation.Type;
 
-export const WorkflowOperationResult = Schema.Struct({
-  summary: TrimmedNonEmptyString,
-  stuck: Schema.Boolean,
-  answers: Schema.Record(Schema.String, Schema.String),
-  inputs: Schema.Record(Schema.String, Schema.String),
-}).annotate({ parseOptions: { onExcessProperty: "error" } });
-export type WorkflowOperationResult = typeof WorkflowOperationResult.Type;
-
 export const WorkflowNotification = Schema.Struct({
   id: TrimmedNonEmptyString,
   workflow: WorkflowId,
@@ -353,8 +345,14 @@ export const matchWorkflowTransitions = (
   operation: WorkflowOperation,
   answers: Readonly<Record<string, string>>,
 ) =>
-  operation.transitions.filter(({ when }) =>
-    when.every(({ question, choice }) => answers[question] === choice),
+  operation.transitions.filter((transition) =>
+    transitionMatches(
+      transition,
+      Object.entries(answers).map(([question, choice]) => ({
+        question: Schema.decodeSync(WorkflowNodeId)(question),
+        choice: Schema.decodeSync(WorkflowNodeId)(choice),
+      })),
+    ),
   );
 
 export const MachineReadiness = Schema.Struct({

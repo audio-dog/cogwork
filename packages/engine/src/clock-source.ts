@@ -4,6 +4,7 @@ import {
   type WorkflowParameterValue,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
+import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -70,28 +71,18 @@ export const clockEntries: ReadonlyArray<WorkflowCatalogEntry> = [
   ]),
 ];
 
-interface HourlySchedule {
-  readonly _tag: "Hourly";
-  readonly minute: number;
-  readonly zone: string;
-}
+type ClockSchedule = Data.TaggedEnum<{
+  Hourly: { readonly minute: number; readonly zone: string };
+  Daily: { readonly hour: number; readonly minute: number; readonly zone: string };
+  Weekly: {
+    readonly weekdays: ReadonlySet<number>;
+    readonly hour: number;
+    readonly minute: number;
+    readonly zone: string;
+  };
+}>;
 
-interface DailySchedule {
-  readonly _tag: "Daily";
-  readonly hour: number;
-  readonly minute: number;
-  readonly zone: string;
-}
-
-interface WeeklySchedule {
-  readonly _tag: "Weekly";
-  readonly weekdays: ReadonlySet<number>;
-  readonly hour: number;
-  readonly minute: number;
-  readonly zone: string;
-}
-
-type ClockSchedule = HourlySchedule | DailySchedule | WeeklySchedule;
+const ClockSchedule = Data.taggedEnum<ClockSchedule>();
 
 const valuesOf = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
   parameters.filter((parameter) => parameter.id === id).map(({ value }) => value);
@@ -115,13 +106,15 @@ const scheduleParsers: Readonly<Record<string, ScheduleParser>> = {
   [hourlyKey]: (parameters) => {
     const minute = integerOf(parameters, "minute", 60);
     const zone = zoneOf(parameters);
-    return minute === null || zone === null ? null : { _tag: "Hourly", minute, zone };
+    return minute === null || zone === null ? null : ClockSchedule.Hourly({ minute, zone });
   },
   [dailyKey]: (parameters) => {
     const hour = integerOf(parameters, "hour", 24);
     const minute = integerOf(parameters, "minute", 60);
     const zone = zoneOf(parameters);
-    return hour === null || minute === null || zone === null ? null : { _tag: "Daily", hour, minute, zone };
+    return hour === null || minute === null || zone === null
+      ? null
+      : ClockSchedule.Daily({ hour, minute, zone });
   },
   [weeklyKey]: (parameters) => {
     const hour = integerOf(parameters, "hour", 24);
@@ -132,7 +125,7 @@ const scheduleParsers: Readonly<Record<string, ScheduleParser>> = {
       .filter((day) => weekdays.includes(String(day)));
     return hour === null || minute === null || zone === null || days.length === 0
       ? null
-      : { _tag: "Weekly", hour, minute, zone, weekdays: new Set(days) };
+      : ClockSchedule.Weekly({ hour, minute, zone, weekdays: new Set(days) });
   },
 };
 
@@ -174,10 +167,18 @@ const nextValidLocalMinute = (parts: DateTime.DateTime.Parts, zone: string) => {
 };
 
 const hoursFor = (schedule: ClockSchedule) =>
-  schedule._tag === "Hourly" ? Array.from({ length: 24 }, (_, hour) => hour) : [schedule.hour];
+  ClockSchedule.$match(schedule, {
+    Hourly: () => Array.from({ length: 24 }, (_, hour) => hour),
+    Daily: ({ hour }) => [hour],
+    Weekly: ({ hour }) => [hour],
+  });
 
 const includesDay = (schedule: ClockSchedule, weekDay: number) =>
-  schedule._tag !== "Weekly" || schedule.weekdays.has(weekDay);
+  ClockSchedule.$match(schedule, {
+    Hourly: () => true,
+    Daily: () => true,
+    Weekly: ({ weekdays }) => weekdays.has(weekDay),
+  });
 
 const candidatesNear = (schedule: ClockSchedule, aroundMillis: number) => {
   const around = localPartsAt(aroundMillis, schedule.zone);

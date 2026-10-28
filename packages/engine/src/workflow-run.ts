@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import {
-  type AgUiEvent,
   agUiIsStructuredOutputComplete,
   keyOf,
   matchWorkflowTransitions,
@@ -16,12 +15,19 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as HttpClient from "effect/unstable/http/HttpClient";
+import { ContextAssembler } from "./context-assembler";
 import { Coordination } from "./coordination";
+import { CredentialStore } from "./credential-store";
 import { Harness, type HarnessRunnerEnv } from "./harness";
+import { defaultRunBudget } from "./provider-runner";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
@@ -37,21 +43,6 @@ const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
   workflow: admission.subscription.workflow,
   operation,
 });
-
-const resultEvent = (events: ReadonlyArray<AgUiEvent>) => events.findLast(agUiIsStructuredOutputComplete);
-
-const operationResources = (
-  instruction: string,
-  questions: unknown,
-  hints: unknown,
-  decodeIssues: string | null,
-) => [
-  { source: "framing", content: "Complete this Workflow Operation and return only the required result." },
-  { source: "instruction", content: instruction.trim() || "Complete the named Workflow Operation." },
-  { source: "questions", content: JSON.stringify(questions) },
-  { source: "hints", content: JSON.stringify(hints) },
-  ...(decodeIssues === null ? [] : [{ source: "previous-result-issues", content: decodeIssues }]),
-];
 
 const projection = [
   "Harness Adapter",
@@ -72,8 +63,20 @@ export const make = Effect.gen(function* () {
   const sessions = yield* SessionStore;
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
+  const contextAssembler = yield* ContextAssembler;
   const notifications = yield* WorkflowNotifications;
-  const executionContext = yield* Effect.context<HarnessRunnerEnv>();
+  const executionContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
+    Effect.map(
+      Context.pick(
+        SessionStore,
+        ContextAssembler,
+        CredentialStore,
+        FileSystem.FileSystem,
+        Path.Path,
+        HttpClient.HttpClient,
+      ),
+    ),
+  );
   const decodeIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
 
   const settle = (record: RunRecord, status: RunRecord["status"]) =>
@@ -85,7 +88,7 @@ export const make = Effect.gen(function* () {
     const record = yield* workflows.get({ id: admission.subscription.workflow });
     const document = record.publishedCopy;
     const trigger = document?.triggers.find(({ id }) => id === admission.subscription.trigger);
-    const operation = document?.operations.find(({ id }) => id === trigger?.start);
+    const operation = document?.operations.find(({ id }) => id === admission.subscription.operation);
     if (!record.enabled || document === null || trigger === undefined || operation === undefined) {
       yield* coordination.markProcessed(admission.event.key, admission.event.revision);
       return;
@@ -96,10 +99,13 @@ export const make = Effect.gen(function* () {
     if (selectedHarness === null) return yield* Effect.die("Workflow Operation has no Harness");
 
     const key = operationKeyOf(admission, operation.id);
-    const claim = yield* coordination.claim(admission.event.key, {
-      operation: key,
-      lineage: admission.lineage,
-    });
+    const claim = yield* Effect.acquireRelease(
+      coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
+      (activeClaim) =>
+        coordination
+          .release(admission.event.key, activeClaim)
+          .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
+    );
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(randomUUID());
     const workspace = workspaceId(admission.subscription.workflow);
@@ -109,6 +115,15 @@ export const make = Effect.gen(function* () {
       harness.sessionKind,
     );
     const priorIssues = (yield* Ref.get(decodeIssues)).get(keyOf(admission.event.key)) ?? null;
+    const assembled = yield* contextAssembler.assemble({
+      runId: id,
+      workspace,
+      cwd: "/",
+      projectRoot: "/",
+      operatingInstructions: operation,
+      contributions: [],
+    });
+    yield* Effect.addFinalizer(() => contextAssembler.cleanup(id).pipe(Effect.ignore));
     const observation = {
       generation: record.publishedRevision ?? 0,
       observedAtMillis: admission.event.atMillis,
@@ -122,16 +137,14 @@ export const make = Effect.gen(function* () {
         options: Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value])),
         profile: operation.permissionProfile,
       },
-      instructions: [],
+      instructions: assembled.layers,
       operatingInstructions: {
-        name: operation.name,
-        path: `workflow/${record.id}/${operation.id}`,
-        resources: operationResources(
-          operation.instruction,
-          operation.questions,
-          operation.hints,
-          priorIssues,
-        ),
+        name: assembled.operatingInstructionsName,
+        path: assembled.operatingInstructionsPath,
+        resources: [
+          ...assembled.operatingInstructionResources,
+          ...(priorIssues === null ? [] : [{ source: "previous-result-issues", content: priorIssues }]),
+        ],
       },
       messages: [{ role: "user", content: `Run Workflow Operation: ${operation.name}` }],
       tools: [],
@@ -181,22 +194,29 @@ export const make = Effect.gen(function* () {
 
     const eventsExit = yield* harness.run({ plan, session, mcpCredentials: new Map() }).pipe(
       Stream.tap((event) => recorder.record(run, event)),
-      Stream.runCollect,
+      Stream.filter(agUiIsStructuredOutputComplete),
+      Stream.runLast,
+      Effect.timeout(defaultRunBudget(operation.permissionProfile)),
       Effect.exit,
     );
     if (Exit.isFailure(eventsExit)) {
-      yield* coordination.recordAttempt(admission.event.key, {
+      const reason = String(eventsExit.cause);
+      const view = yield* coordination.recordAttempt(admission.event.key, {
         operation: key,
         outcome: "failed",
         lineage: admission.lineage,
-        reason: String(eventsExit.cause),
+        reason,
       });
-      yield* settle(run, "failed");
-      yield* coordination.release(admission.event.key, claim);
+      const exhausted = view.counters(key).exhausted;
+      yield* settle(run, exhausted ? "exhausted" : "failed");
+      if (exhausted) {
+        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason });
+        yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+      }
       return;
     }
 
-    const output = resultEvent(eventsExit.value);
+    const output = Option.getOrUndefined(eventsExit.value);
     const decoded = Schema.decodeUnknownExit(workflowOperationResultSchema(operation, catalogResult.catalog))(
       output?.value.object,
     );
@@ -215,7 +235,6 @@ export const make = Effect.gen(function* () {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues });
         yield* coordination.markProcessed(admission.event.key, admission.event.revision);
       }
-      yield* coordination.release(admission.event.key, claim);
       return;
     }
 
@@ -234,7 +253,6 @@ export const make = Effect.gen(function* () {
       yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary });
       yield* coordination.markProcessed(admission.event.key, admission.event.revision);
       yield* settle(run, "failed");
-      yield* coordination.release(admission.event.key, claim);
       return;
     }
 
@@ -242,7 +260,7 @@ export const make = Effect.gen(function* () {
       ({ actions }) => actions,
     );
     if (actions.some(({ entry }) => entry === "cogwork.notify")) {
-      yield* notifications.write({
+      yield* notifications.write(run, {
         id: `${record.id}:${operation.id}:${admission.event.revision}`,
         workflow: record.id,
         operation: operation.id,
@@ -258,12 +276,11 @@ export const make = Effect.gen(function* () {
     });
     yield* coordination.markProcessed(admission.event.key, admission.event.revision);
     yield* settle(run, "succeeded");
-    yield* coordination.release(admission.event.key, claim);
   });
 
   return {
     execute: (admission: TriggerAdmission) =>
-      executeRaw(admission).pipe(Effect.provide(executionContext), Effect.asVoid),
+      executeRaw(admission).pipe(Effect.provide(executionContext), Effect.scoped, Effect.asVoid),
   } as const;
 });
 

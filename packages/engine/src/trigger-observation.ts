@@ -1,12 +1,13 @@
 import {
   keyOf,
-  type Lineage,
+  Lineage,
   LineageId,
   type WorkflowCatalog,
   type WorkflowRecord,
   type WorkItemRef,
 } from "@cogwork/contracts";
-import * as Cause from "effect/Cause";
+import * as EffectCause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
@@ -16,16 +17,172 @@ import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
-import type { TriggerEvent, TriggerSource, TriggerSubscription } from "./trigger-source";
-import { TriggerSources } from "./trigger-source";
+import {
+  type SourceFailure,
+  TriggerEvent,
+  type TriggerSource,
+  TriggerSources,
+  TriggerSubscription,
+} from "./trigger-source";
 import { Workflows } from "./workflow";
 
-export interface TriggerAdmission {
-  readonly event: TriggerEvent;
-  readonly subscription: TriggerSubscription;
-  readonly lineage: Lineage;
+export const TriggerAdmission = Schema.Struct({
+  event: TriggerEvent,
+  subscription: TriggerSubscription,
+  lineage: Lineage,
+});
+export type TriggerAdmission = typeof TriggerAdmission.Type;
+
+export class TriggerObservationStoreError extends Schema.TaggedError<TriggerObservationStoreError>()(
+  "TriggerObservationStoreError",
+  { message: Schema.String },
+) {}
+
+interface StoredCheckpoint {
+  readonly workflow: string;
+  readonly trigger: string;
+  readonly active: number;
+  readonly checkpointMillis: number;
 }
+
+interface StoredAdmission {
+  readonly payload: string;
+}
+
+export interface TriggerObservationStoreService {
+  readonly admissions: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
+  readonly put: (admission: TriggerAdmission) => Effect.Effect<void, TriggerObservationStoreError>;
+  readonly activate: (
+    subscriptions: ReadonlyArray<TriggerSubscription>,
+    atMillis: number,
+  ) => Effect.Effect<ReadonlyArray<TriggerSubscription>, TriggerObservationStoreError>;
+}
+
+export class TriggerObservationStore extends Context.Service<
+  TriggerObservationStore,
+  TriggerObservationStoreService
+>()("@cogwork/engine/trigger-observation/TriggerObservationStore") {}
+
+const admissionJson = Schema.fromJsonString(TriggerAdmission);
+const encodeAdmission = Schema.encodeSync(admissionJson);
+const decodeAdmission = Schema.decodeUnknownEffect(admissionJson);
+const storeError = (error: unknown) => new TriggerObservationStoreError({ message: String(error) });
+const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workflow}:${trigger}`;
+
+const activateSubscriptions = (
+  subscriptions: ReadonlyArray<TriggerSubscription>,
+  checkpoints: ReadonlyMap<string, { readonly active: boolean; readonly checkpointMillis: number }>,
+  atMillis: number,
+) =>
+  subscriptions.map((subscription) => {
+    const checkpoint = checkpoints.get(subscriptionKey(subscription));
+    const since = checkpoint?.active ? checkpoint.checkpointMillis : atMillis;
+    return { ...subscription, catchUp: { since } };
+  });
+
+export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
+  const admissions = yield* Ref.make<ReadonlyMap<string, TriggerAdmission>>(new Map());
+  const checkpoints = yield* Ref.make<
+    ReadonlyMap<string, { readonly active: boolean; readonly checkpointMillis: number }>
+  >(new Map());
+  return {
+    admissions: Effect.map(Ref.get(admissions), (current) => [...current.values()]),
+    put: (admission) =>
+      Ref.update(admissions, (current) =>
+        new Map(current).set(`${keyOf(admission.event.key)}:${admission.event.revision}`, admission),
+      ),
+    activate: (subscriptions, atMillis) =>
+      Ref.modify(checkpoints, (current) => {
+        const activated = activateSubscriptions(subscriptions, current, atMillis);
+        const activeKeys = new Set(subscriptions.map(subscriptionKey));
+        const inactive = [...current].map(
+          ([key, value]) =>
+            [key, activeKeys.has(key) ? value : { active: false, checkpointMillis: atMillis }] as const,
+        );
+        const next = subscriptions.reduce(
+          (result, subscription) =>
+            result.set(subscriptionKey(subscription), { active: true, checkpointMillis: atMillis }),
+          new Map(inactive),
+        );
+        return [activated, next];
+      }),
+  } satisfies TriggerObservationStoreService;
+});
+
+export const memoryTriggerObservationStoreLayer = Layer.effect(
+  TriggerObservationStore,
+  makeMemoryTriggerObservationStore,
+);
+
+export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const controlStore = yield* ControlStore;
+  return {
+    admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions`.pipe(
+      Effect.mapError(storeError),
+      Effect.flatMap((rows) =>
+        Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),
+      ),
+    ),
+    put: (admission) =>
+      controlStore
+        .withWrite(sql`
+          INSERT INTO trigger_admissions (work_item, revision, payload)
+          VALUES (${keyOf(admission.event.key)}, ${admission.event.revision}, ${encodeAdmission(admission)})
+          ON CONFLICT (work_item, revision) DO UPDATE SET payload = excluded.payload
+        `)
+        .pipe(Effect.asVoid, Effect.mapError(storeError)),
+    activate: (subscriptions, atMillis) =>
+      controlStore
+        .withWrite(
+          sql.withTransaction(
+            sql<StoredCheckpoint>`
+                SELECT workflow, trigger, active, checkpoint_millis AS checkpointMillis
+                FROM trigger_subscription_checkpoints
+              `.pipe(
+              Effect.flatMap((rows) => {
+                const checkpoints = new Map(
+                  rows.map(({ workflow, trigger, active, checkpointMillis }) => [
+                    `${workflow}:${trigger}`,
+                    { active: active === 1, checkpointMillis },
+                  ]),
+                );
+                const activated = activateSubscriptions(subscriptions, checkpoints, atMillis);
+                return sql`
+                  UPDATE trigger_subscription_checkpoints
+                  SET active = 0, checkpoint_millis = ${atMillis}
+                `.pipe(
+                  Effect.andThen(
+                    Effect.forEach(
+                      subscriptions,
+                      (subscription) => sql`
+                  INSERT INTO trigger_subscription_checkpoints
+                    (workflow, trigger, active, checkpoint_millis)
+                  VALUES (${subscription.workflow}, ${subscription.trigger}, 1, ${atMillis})
+                  ON CONFLICT (workflow, trigger) DO UPDATE SET
+                    active = 1,
+                    checkpoint_millis = excluded.checkpoint_millis
+                `,
+                      { discard: true },
+                    ),
+                  ),
+                  Effect.map(() => activated),
+                );
+              }),
+            ),
+          ),
+        )
+        .pipe(Effect.mapError(storeError)),
+  } satisfies TriggerObservationStoreService;
+});
+
+export const controlStoreTriggerObservationStoreLayer = Layer.effect(
+  TriggerObservationStore,
+  makeControlStoreTriggerObservationStore,
+);
 
 export interface TriggerSourceHealth {
   readonly source: TriggerSource["id"];
@@ -51,6 +208,7 @@ const subscriptionsOf = (records: ReadonlyArray<WorkflowRecord>) =>
         ({
           workflow: record.id,
           trigger: trigger.id,
+          operation: trigger.start,
           entry: trigger.entry,
           parameters: trigger.parameters,
           workspaces,
@@ -66,13 +224,13 @@ const sourceSubscriptions = (source: TriggerSource, subscriptions: ReadonlyArray
 
 const fingerprintOf = (subscriptions: ReadonlyArray<TriggerSubscription>) =>
   JSON.stringify(
-    subscriptions.map(({ workflow, trigger, entry, parameters, workspaces, catchUp }) => ({
+    subscriptions.map(({ workflow, trigger, operation, entry, parameters, workspaces }) => ({
       workflow,
       trigger,
+      operation,
       entry,
       parameters,
       workspaces,
-      catchUp,
     })),
   );
 
@@ -81,6 +239,11 @@ const lineageOf = (ref: WorkItemRef): Lineage => ({
   parent: null,
   hop: 0,
 });
+
+const waitForRetry = (retryAtMillis: number | null) =>
+  retryAtMillis === null
+    ? Effect.void
+    : Clock.currentTimeMillis.pipe(Effect.flatMap((now) => Effect.sleep(Math.max(0, retryAtMillis - now))));
 
 export interface TriggerObservationService {
   readonly eligible: Effect.Effect<ReadonlyArray<TriggerAdmission>>;
@@ -93,10 +256,10 @@ export interface TriggerObservationService {
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
   const coordination = yield* Coordination;
+  const store = yield* TriggerObservationStore;
   const sources = yield* TriggerSources;
   const fibers = yield* FiberMap.make<TriggerSource["id"]>();
   const fingerprints = yield* Ref.make<ReadonlyMap<TriggerSource["id"], string>>(new Map());
-  const admissions = yield* Ref.make<ReadonlyMap<string, TriggerAdmission>>(new Map());
   const health = yield* Ref.make<ReadonlyMap<TriggerSource["id"], TriggerSourceHealth>>(
     new Map(sources.map(({ id }) => [id, { source: id, status: "idle", message: null }])),
   );
@@ -117,24 +280,32 @@ export const make = Effect.gen(function* () {
       coordination.observe(event.key, event.revision, event.cause).pipe(
         Effect.flatMap(() => {
           const admission = { event, subscription, lineage: lineageOf(event.key) } satisfies TriggerAdmission;
-          const key = `${keyOf(event.key)}:${event.revision}`;
-          return Ref.update(admissions, (current) => new Map(current).set(key, admission)).pipe(
-            Effect.andThen(PubSub.publish(changes, admission)),
-            Effect.asVoid,
-          );
+          return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
         }),
       ),
     );
   });
 
-  const observe = (source: TriggerSource, subscriptions: ReadonlyArray<TriggerSubscription>) =>
+  const observe = (
+    source: TriggerSource,
+    subscriptions: ReadonlyArray<TriggerSubscription>,
+    fingerprint: string,
+  ) =>
     source.observe(subscriptions).pipe(
       Stream.runForEach((event) => admit(subscriptions, event)),
+      Effect.catchTag("SourceFailure", (error: SourceFailure) =>
+        setHealth(source.id, "failed", error.message).pipe(
+          Effect.andThen(waitForRetry(error.retryAfterMillis)),
+        ),
+      ),
       Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause) ? Effect.void : setHealth(source.id, "failed", Cause.pretty(cause)),
+        EffectCause.hasInterruptsOnly(cause)
+          ? Effect.void
+          : setHealth(source.id, "failed", EffectCause.pretty(cause)),
       ),
       Effect.ensuring(
         Ref.update(fingerprints, (current) => {
+          if (current.get(source.id) !== fingerprint) return current;
           const next = new Map(current);
           next.delete(source.id);
           return next;
@@ -157,36 +328,40 @@ export const make = Effect.gen(function* () {
       return;
     }
     yield* setHealth(source.id, "observing", null);
-    yield* FiberMap.run(fibers, source.id, observe(source, subscriptions));
+    yield* FiberMap.run(fibers, source.id, observe(source, subscriptions, nextFingerprint));
   });
 
   const refresh = () =>
     workflows.list.pipe(
-      Effect.flatMap((listed) => {
-        const subscriptions = subscriptionsOf(listed.workflows);
-        return Effect.forEach(
-          sources,
-          (source) => syncSource(source, sourceSubscriptions(source, subscriptions)),
-          { discard: true },
-        );
-      }),
+      Effect.flatMap((listed) =>
+        Clock.currentTimeMillis.pipe(
+          Effect.flatMap((atMillis) => store.activate(subscriptionsOf(listed.workflows), atMillis)),
+          Effect.flatMap((subscriptions) =>
+            Effect.forEach(
+              sources,
+              (source) => syncSource(source, sourceSubscriptions(source, subscriptions)),
+              { discard: true },
+            ),
+          ),
+        ),
+      ),
       Effect.catchCause((cause) => Effect.logError("trigger subscription refresh failed", { cause })),
     );
 
   yield* Effect.forkScoped(refresh().pipe(Effect.repeat(Schedule.spaced("5 seconds"))));
 
   return {
-    eligible: Effect.all([workflows.list, Ref.get(admissions)]).pipe(
+    eligible: Effect.all([workflows.list, store.admissions]).pipe(
       Effect.flatMap(([listed, current]) => {
         const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
-        return Effect.forEach([...current.values()], (admission) =>
+        return Effect.forEach(current, (admission) =>
           coordination.read(admission.event.key).pipe(
             Effect.map((view) => ({
               admission,
               enabled: enabled.has(admission.subscription.workflow),
               gate: view.gate({
                 workflow: admission.subscription.workflow,
-                operation: admission.subscription.trigger,
+                operation: admission.subscription.operation,
               }),
             })),
           ),
