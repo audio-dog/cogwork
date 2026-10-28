@@ -16,6 +16,7 @@ import {
 import { HarnessReadiness } from "./harness";
 import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
+import { WorkflowId, WorkflowRecord } from "./workflow";
 import { WorkspaceRegistration } from "./workspace";
 
 export const ClassifiedItem = Schema.TaggedUnion({
@@ -68,5 +69,7 @@ export const DaemonEvent = Schema.TaggedUnion({
   },
   HarnessesChanged: { emittedAtMillis: Schema.Finite, readiness: HarnessReadiness },
   SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },
+  WorkflowChanged: { emittedAtMillis: Schema.Finite, workflow: WorkflowRecord },
+  WorkflowDeleted: { emittedAtMillis: Schema.Finite, id: WorkflowId },
 });
 export type DaemonEvent = typeof DaemonEvent.Type;

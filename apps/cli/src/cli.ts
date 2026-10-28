@@ -17,6 +17,7 @@ import { harnessCommand } from "./harness-commands";
 import { loginCommand } from "./login-commands";
 import { pluginCommand } from "./plugin-commands";
 import { replayCommand } from "./replay-commands";
+import { workflowCommand } from "./workflow-commands";
 import { workspaceCommand } from "./workspace-commands";
 import { worktreeCommand } from "./worktree-commands";
 
@@ -40,5 +41,6 @@ export const cli = Command.make("cogwork").pipe(
     connectionCommand,
     harnessCommand,
     replayCommand,
+    workflowCommand,
   ]),
 );

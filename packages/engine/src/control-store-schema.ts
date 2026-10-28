@@ -1,4 +1,4 @@
-import { maxSchedulerLimit } from "@cogwork/contracts";
+import { maxSchedulerLimit, type WorkflowDocument } from "@cogwork/contracts";
 import { desc, sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -169,6 +169,35 @@ export const coordinationClaimEvents = sqliteTable(
     check(
       "coordination_claim_events_lineage_hop",
       sql`${table.lineageHop} IS NULL OR ${table.lineageHop} >= 0`,
+    ),
+  ],
+);
+
+export const workflows = sqliteTable(
+  "workflows",
+  {
+    id: text("id").primaryKey(),
+    principal: text("principal").notNull(),
+    workingCopy: text("working_copy", { mode: "json" }).$type<WorkflowDocument>().notNull(),
+    workingRevision: integer("working_revision").notNull(),
+    publishedCopy: text("published_copy", { mode: "json" }).$type<WorkflowDocument>(),
+    publishedRevision: integer("published_revision"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  },
+  (table) => [
+    check("workflows_working_copy_json", sql`json_valid(${table.workingCopy})`),
+    check("workflows_working_revision", sql`${table.workingRevision} >= 1`),
+    check(
+      "workflows_published_copy_json",
+      sql`${table.publishedCopy} IS NULL OR json_valid(${table.publishedCopy})`,
+    ),
+    check(
+      "workflows_published_pair",
+      sql`(${table.publishedCopy} IS NULL) = (${table.publishedRevision} IS NULL)`,
+    ),
+    check(
+      "workflows_published_revision",
+      sql`${table.publishedRevision} IS NULL OR ${table.publishedRevision} >= 1`,
     ),
   ],
 );

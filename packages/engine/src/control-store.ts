@@ -1112,8 +1112,9 @@ export const bootControlStoreLayer = (storePath: string, options: ControlStoreCl
   Layer.unwrap(
     Effect.map(prepareSchemaFallback(storePath, options), (preflightError) => {
       const client = controlStoreClientLayer(storePath, options);
-      return Layer.effect(ControlStore, bootControlStore(storePath, preflightError)).pipe(
-        Layer.provideMerge(client),
+      return Layer.merge(
+        Layer.effect(ControlStore, bootControlStore(storePath, preflightError)).pipe(Layer.provide(client)),
+        client,
       );
     }),
   );

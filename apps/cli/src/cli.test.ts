@@ -12,6 +12,19 @@ import { cli } from "./cli";
 import { operationSettingError, reportDaemonTransportError } from "./commands";
 
 layer(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer))((it) => {
+  it.effect("offers every Workflow RPC command", () =>
+    Effect.gen(function* () {
+      yield* Command.runWith(cli, { version: "0.0.1" })(["workflow", "--help"]);
+
+      const output = (yield* TestConsole.logLines).join("\n");
+      ["create", "edit", "publish", "switch", "delete", "list", "get", "validate", "catalog"].forEach(
+        (command) => {
+          assert.include(output, command);
+        },
+      );
+    }),
+  );
+
   it.effect("does not offer BYOK model listing while its Harness is unregistered", () =>
     Effect.gen(function* () {
       yield* Command.runWith(cli, { version: "0.0.1" })(["--help"]);

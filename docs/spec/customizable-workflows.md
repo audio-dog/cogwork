@@ -128,6 +128,8 @@ Every decision on the map was made under these, and the build keeps them:
 - **The engine runs only what a person publishes.** Publish and switch-on are a person's acts. (#783 items 6 and 7)
 - **Human gates are the author's choice.** The engine has no approval guard of its own. ([Grill: shipped default Workflows](https://github.com/colonylabs/cogwork/issues/790), item 17)
 - **Models are for intelligence; the engine owns coordination.** Only "is this the same work?" and "which Workspace is this about?" go to the model; identity, dedupe, retry, caps, and routing are deterministic engine code. ([Grill: the item behind a Workflow Run](https://github.com/colonylabs/cogwork/issues/782))
+- **Fix forward; keep nothing for compatibility.** Nothing is released, so a breaking change costs a migration of zero installs (`docs/agents/technical-disposition.md`, *Take the shape that survives the turn you can see coming*). When a ticket meets a choice between a clean shape and a shape that also reads the old one, it takes the clean shape: no union that still decodes a record with a missing field, no decoder for an old marker form, no cancel-on-read of old rows. A stored record or row that does not decode is ignored and reported; at worst an item gets three fresh attempts, and a Workflow row that does not decode is unreadable while the others load. The fixed pipeline's own records are current until the cut-over and are written in the new form from the first prefactor. Where a ticket says "resolve or drop", read "drop".
+- **Every module is named by its interface, not its package.** §20 states the interface of each module the build creates: inputs, outputs, invariants, ordering, and error modes. A ticket builds behind that interface and tests through it. A module whose interface is as wide as its implementation, or that passes a call through to another module without adding a rule, fails the deletion test and is sent back (`/codebase-design`).
 
 ### 2. The Workflow document
 
@@ -194,7 +196,7 @@ WorkflowDocument {
 
 ### 5. Validation and diagnostics
 
-- **One validator, a pure function in `@cogwork/contracts`**: document and catalog in, diagnostics out. The daemon runs it on every create, edit, and publish, and its answer is final; the editor and the agent run the same function only to show problems earlier. (#783 item 8)
+- **One validator, a pure function in `@cogwork/contracts`**: document and catalog **content** in, diagnostics out. The catalog it reads holds entries, instruction packages, and Harness model catalogs — never machine state. The daemon runs it on every create, edit, and publish, and its answer is final; the editor and the agent run the same function only to show problems earlier. **Advisory diagnostics that depend on the machine** — `connection-not-ready`, `need-not-ready`, `harness-unavailable`, `no-harness`, `workspace-not-registered`, `system-unbound`, `option-not-listed` — come from a second pure function, `adviseReadiness(document, catalog, machine)`, over a `MachineReadiness` snapshot the daemon assembles; they ride on the record as `readiness`, beside the document's `diagnostics`, and a machine change never republishes the Workflow (#783 items 8–9; §20). The document-only advisories (`unreachable-operation`, `hand-off-and-trigger`) stay in the validator.
 - **A diagnostic carries a stable code, a location by stable ids, a message, and a class.** An unknown key is a diagnostic that names the key. A Connection that is not ready is never a fault in the document. (#783 item 9)
 - **One rule: the working copy may be incomplete, never malformed.** Malformed refuses the whole edit batch (atomic). Incomplete blocks publish. Advisory never blocks. **Enable has no diagnostic gate**: it refuses only when no published revision exists; the switch result reports how many items match a condition Trigger now, as information. (#784 items 21–22)
 
@@ -231,19 +233,19 @@ WorkflowDocument {
 ADR 0033 ([#793](https://github.com/colonylabs/cogwork/pull/793)) records the coordination decision.
 
 - **A Work item is the one thing a Run acts on.** A tracker supplies it, or the engine mints it from a Trigger event. Identity derives from an immutable source identity; the author writes no key: issue → `WorkItemId`; pull request → the linked item by link key, else its own item; Granola → `note_id` under its Connection (revision `updated_at`); Slack → `(team_id, channel, ts)`, or for an ambient conversation `(team, channel, thread_ts)` / the first message's `ts`; schedule → `(Workflow, scheduled instant)`; fan-out child → parent item + Run + element position. (#782; #787)
-- **One coordination interface, two adapters.** Tracker items keep ADR 0003. Engine-minted items keep the same Claim, Attempt record, and Handback record shapes in the Control store, outside the Run ledger's disposable region, append-only (engine ADR 0011). Classification, the failure limit, and the handback barrier never branch on where an item came from.
+- **One coordination interface, two adapters.** Tracker items keep ADR 0003. Engine-minted items keep the same Claim, Attempt record, and Handback record shapes in the Control store, outside the Run ledger's disposable region, append-only (engine ADR 0011). Classification, the failure limit, and the handback barrier never branch on where an item came from: they hold a `WorkItemRef`, and the `Coordination` module in §20.2 chooses the authority inside.
 - **Level-triggered.** An item is eligible when its observed source revision is newer than its processed revision and no claim is held. A redelivered event starts no Run; edits during a Run combine into one next Run.
 - **Fan-out.** An Operation declares `once` or `for each ⟨finding⟩`. The engine splits the list and routes each element by itself; an empty list means nothing to do. A child is a full Work item with its own id (never a key from model output). List cap 50, enforced at decode. (#782)
 - **Dedupe has three layers:** the revision (exact, engine); the write key on each output action (engine; a retry after success never creates the artifact twice); and the model's "is this the same work?", which the author routes on and the engine makes answerable (Work context carries the artifacts this lineage already created; the issue search Tool). (#782; #788 item 5)
-- **Lineage.** Every Claim and Attempt record carries a root and parent. A hand-off, a fan-out child, and an event whose cause is Cogwork's own write (found through the origin record) keep the lineage; an event a person caused, a schedule tick, and a sweep start a new root. (#782; #787)
-- **Hop cap 25 per lineage**, engine policy, a fourth failure counter that takes the handback barrier at engine ADR 0011's one composition point. A hop is a hand-off, a fan-out child, a Workflow start that inherits a lineage, **or a Run admitted on a source revision the lineage itself caused** (follow-up pushes, CI fails on the new head, follow-up runs again). A revision a person causes starts a new root. Reaching the cap parks with `hop-cap`. Accepted: 25 rounds can cost a lot; a separate per-Operation round cap can come later. (#782; #789 item 7)
+- **Lineage.** Every Claim and Attempt record carries a required `lineage: { root, parent, hop }` — the root, the parent hop, and **this hop's depth**, written by the engine when it claims (the parent's depth plus one, or zero at a new root). A hand-off, a fan-out child, and an event whose cause is Cogwork's own write (found through the origin record) keep the lineage; an event a person caused, a schedule tick, and a sweep start a new root. A record with no lineage does not decode and is ignored (fix forward). (#782; #787; §20)
+- **Hop cap 25 per lineage**, engine policy, a fourth failure counter that takes the handback barrier at engine ADR 0011's one composition point. A hop is a hand-off, a fan-out child, a Workflow start that inherits a lineage, **or a Run admitted on a source revision the lineage itself caused** (follow-up pushes, CI fails on the new head, follow-up runs again). A revision a person causes starts a new root. Because depth is stored on the record, the cap is a field read, never a search across items. Reaching the cap parks with `hop-cap`. Accepted: 25 rounds can cost a lot; a separate per-Operation round cap can come later. (#782; #789 item 7)
 - **Order of waiting work** replaces engine ADR 0009's stage key: items this Workflow already acted on (a succeeded attempt) first, then priority, then the oldest observed revision. (#789 item 8)
 - **The assignee allowlist (engine ADR 0008) stays a Workspace setting**, applied by the tracker and source-control Trigger sources before the matcher, for every Workflow over that Workspace. (#789 item 4)
 
 ### 7. Trigger observation
 
 - **Every Trigger is level-triggered on a source revision**: a value from the source that changes only when the event happens again (newest comment id, head SHA, head SHA plus check conclusion, review id, merge or close time, the label-applied moment, Granola `updated_at`, Slack `ts`, the scheduled instant). A Trigger fires once per new revision of a Work item. The engine owns revisions; the author writes none. Pushed events join later as a second transport that makes a Trigger source read now; the revision still decides, so push and poll cannot both fire. (#787 item 1; ADR-worthy — see §17)
-- **The Trigger source seam.** One module per source: tracker, source control, Granola, Slack, clock. Interface: its catalog entries, and `observe(subscriptions)` → a stream of Trigger events (Work item key, revision, cause, time). A subscription is an entry, its parameter values, and its Workspaces, derived from published, switched-on Workflows; a source runs only while it has one. A source writes nothing; one admission module moves observed revisions in the Control store; a pure matcher pairs events with Workflow Triggers. The catalog comes from the modules, so it cannot list an entry nothing observes. Each source is its own supervised fiber in the daemon (ADR 0022); a failure is data in daemon status. (#787 item 2)
+- **The Trigger source seam.** One module per source: tracker, source control, Granola, Slack, clock. Interface: its catalog entries, and `observe(subscriptions)` → a stream of Trigger events (Work item key, revision, cause, time). A subscription is an entry, its parameter values, and its Workspaces, derived from published, switched-on Workflows; a source runs only while it has one. A source writes nothing; one admission module moves observed revisions in the Control store; a pure matcher pairs events with Workflow Triggers. The catalog comes from the modules, so it cannot list an entry nothing observes. Each source is its own supervised fiber in the daemon (ADR 0022); a failure is data in daemon status. The interface is §20.3. (#787 item 2)
 - **Tracker and pull request Triggers** sit on the Issue tracker and Source control provider ports and use a modified-since read per Workspace port (GitHub `since`/`sort=updated`, Linear `updatedAt`) with a watermark cursor, a short grace window, and conditional requests. Catalog keys name the connected app first (`github.issue-has-label`, `linear.issue-has-label`); the adapter stays on the port. An entry observes only in Workspaces whose port binds that app; a Workflow over GitHub and Linear Workspaces needs one Trigger per app. (#787 items 3–4; #788 item 1)
 - **Receiving instead of polling** is a transport change inside one adapter; webhooks need a public address, which is hosting, so it waits. Every receive path keeps a poll backstop. (#787 item 5)
 - **No read cuts items.** Every read goes to the last page; only the number of Runs in one tick waits. Each waiting or skipped item shows in the read model. (#787 item 6)
@@ -263,6 +265,7 @@ ADR 0033 ([#793](https://github.com/colonylabs/cogwork/pull/793)) records the co
 ### 8. Operations
 
 - **There is no Operation kind.** Every Operation is a Run with a Run Plan, a Session, Tools, and a structured result. Any registered Harness runs any Operation; the owned runner must be able to run every Operation, so none depends on an external CLI (engine ADR 0006). The one thing that varies is the **permission profile** (`read-only` default | `full`), and the engine derives the checkout from it: no Workspace → an empty scratch directory; `read-only` → the Workspace's own checkout; `full` → a branch worktree derived from the item, or the pull request's head branch when the item is a pull request. A `full` Run in the person's shared checkout cannot be expressed. (#785)
+- **The owned runner's sandbox is the local-process sandbox, accepted.** The owned runner runs in the daemon on the TanStack local-process sandbox — no process isolation; confinement comes from the owned-tool policy (path confinement, symlink checks, the permission profile deciding what may be written) — as Cursor already does in the daemon today. Registering it adds a Harness to an exposure that exists, not a new kind of exposure. A stronger isolation provider is a later ticket, not a precondition of any ticket on this spec. (Maintainer's decision, 2026-10-28, on #809.)
 - **Work context is one frozen shape per item kind**, read once at admission (ADR 0030, generalized to every source), plus which Trigger fired and when, and the artifacts this lineage already created. Issue: body, comments, coordination facts. Pull request: title, description, review comments, checks, review state, mergeability, head and base, changed files with line counts, the linked issue's prose — **never the diff**. Transcript: title, attendees, calendar event, summary, the full transcript. Slack: the message or conversation, its full thread, resolved names, channel name, permalink. Schedule tick: the scheduled instant and fire time, no item prose. No per-source options; if size bites, the fix is a loading mechanism, never a setting. Resource references (ADR 0032) derive from all frozen prose. After a hand-off, the next Operation re-reads the item at its own admission and receives the previous Operation's frozen result (its answers and inputs). (#785)
 - **Required needs, never an allowlist.** The Tools placeholder becomes "Requires". The engine derives needs the author never writes: the source's Connection, each action's Connection, each resource reference's reader, Harness readiness. A user-authored Operation may add concrete identities (an MCP server, a Skill, a Subagent, a Command, a Hook, a Connection) with no binding row and no levels. An unready need is a Run Plan rejection, never a failed attempt. Known limit: a Workflow over every Workspace cannot name one tracker MCP server where Workspaces use different trackers. (#785)
 - **Instruction ladder.** The engine composes the Operating Instructions layer — a short fixed framing (the brief is in Work context; answer through the structured result; the engine performs the outputs), then the package entry point if any, then the inline instruction, then the questions with their choices and each input's hint. It is last and highest, above every Rule. No engine guarantee rests on ladder position. (#785; #786; #789 item 11)
@@ -378,7 +381,7 @@ From #789, in `/prefactor` order: a structural (S) pull request never changes ou
 
 **Behaviour**
 
-- **B5. The engine pushes**, first on the fixed pipeline. Also: pass the `SessionId` as TanStack `threadId` unconditionally; resolve or drop pending interrupt rows (TanStack 1.0 landed in [#792](https://github.com/colonylabs/cogwork/pull/792)).
+- **B5. The engine pushes**, first on the fixed pipeline. Also: pass the `SessionId` as TanStack `threadId` unconditionally; pending interrupt rows from before TanStack 1.0 are dropped, not resolved, and no code detects them (TanStack 1.0 landed in [#792](https://github.com/colonylabs/cogwork/pull/792)).
 - **B6. The Workflow engine, proven on Granola → Issue.** A build effort of several pull requests, engine first: the document schema, validator, edit vocabulary, and result-schema derivation in contracts; the Control store row and RPCs; the Trigger source seam with the Granola and clock sources; engine-minted items and lineage with the hop rule; the action plan executor; Create an issue and Comment on an existing issue; the issue search Tool; the Granola Connection (login + optional key) and `connections_system` widening; the owned runner registered in the daemon and able to run in a scratch directory; then the editor wired to the RPCs and the Attention page wired to the read model and the touchpoint commands; the Granola → Issue templates. Needs S3.
 - **B7. The catalog entries for the coding Workflow:** the tracker and source-control Trigger sources on modified-since reads; the follow-up entries and "New comment from a person"; Push to this pull request; the label actions; Hand to me; Choose an answer; the coding templates.
 - **B8. The cut-over**, one pull request that ships the coding default and deletes the fixed pipeline: the reconcile snapshot and its generation (engine ADR 0001), classification, the stages, the hand-written stage schemas, `Reclassify`, `HandBack.role`, Linear `roleLabels`, the Workflow and Operation setting levels and `bindings` and the `"coding"` hard-code, the no-progress limit and `stalled`, the `ready-for-human` label on exhaustion, the needs-human reason. The order of waiting work (§6) and the "Ready to merge" view (§11) land here. The engine glossary's older sense of *hand-off* (`handOff`, "hand-off explanation") is rewritten with the code. The cut-over happens with no Runs in flight; new code ignores old stage-keyed attempt records (at worst an item gets three fresh attempts); rollback is a revert; no switch runs both systems. **At the cut-over the coding pipeline stops until the person creates it from a template, publishes it, and switches it on.**
@@ -404,11 +407,170 @@ From #789, in `/prefactor` order: a structural (S) pull request never changes ou
 
 The daemon does not register the owned runner; only Cursor, Claude Code, and Codex run. ADR 0030's amendment (freeze the pull request's description and review comments) and ADR 0032 (resource references) are not built. There is no event stream, no inbound listener, no wall-clock scheduler, and no Granola, Slack, or watermark code. The Issue tracker port cannot create or close an issue; the Source control port writes only a comment and a pull request; the engine has no Slack write code. The desktop has a tray and no OS notifications, and its app id is set in two places with two values. The agent pushes the branch today. Cogwork ships no model choice for any Operation. Operation-settings resolution hard-codes the Workflow id `"coding"`.
 
+### 20. Interfaces
+
+The modules the build creates, each named by its interface (`/codebase-design`): what a caller must know — types, invariants, ordering, error modes — and nothing about what is inside. Three designs were drawn for each of the three seams that carry the most weight and compared on depth, locality, and seam placement; the result is below. A ticket builds behind one of these and tests through it. Type sketches are decision-bearing and belong here; names may change, shapes may not without a spec change.
+
+**Common rule.** Every service below is an Effect service with a `Layer`. Its external interface is the test surface: a test provides the dependencies the interface names and asserts on what the interface returns. Internal seams (a row codec, a marker codec, a socket) are private to the module and tested, where they must be, by the module's own tests, never exposed for a caller's convenience.
+
+#### 20.1 Workflows
+
+Two modules: the pure functions in `@cogwork/contracts`, and one deep `Workflows` service in the engine. There is no `WorkflowStore` service; the row and its codec are an internal seam of `Workflows`. The RPC handlers are one line each.
+
+```ts
+// contracts — pure; the editor, the CLI, an agent, and the daemon run the same code
+type WorkflowCatalog = {                      // content only; no machine state
+  entries: CatalogEntry[]                     // key, name, description, kind, requires, yields | target, actsOn,
+                                              // needsWorkspace, needsFull, parameters, agentInputs
+  instructionPackages: string[]
+  harnesses: { name: HarnessName; models: { id: string; options: { id: string; values: (string | boolean)[] }[] }[] }[]
+}
+type MachineReadiness = {                     // the daemon assembles it; a client may also fold it from events
+  workspaces: { id: WorkspaceId; binds: string[] }[]
+  connections: { system: string; ready: boolean; reason: string | null }[]
+  harnesses: { name: HarnessName; available: boolean }[]
+  defaultHarness: HarnessName | null
+  readyNeeds: NeedIdentity[]
+}
+type Decoded<A> = { _tag: "Ok"; value: A } | { _tag: "Refused"; diagnostics: Diagnostic[] }
+
+decodeWorkflowDocument(input: unknown): Decoded<WorkflowDocument>                        // `schema`
+applyWorkflowEdits(document, edits: NonEmptyArray<WorkflowEdit>): Decoded<WorkflowDocument>
+validateWorkflow(document, catalog: WorkflowCatalog): Diagnostic[]                       // Malformed, Incomplete, document-only Advisory
+adviseReadiness(document, catalog, machine: MachineReadiness): Diagnostic[]              // machine Advisory only
+availabilityOf(entry: CatalogEntry, machine: MachineReadiness): Availability             // available | connection-needed | unavailable(reason)
+```
+
+- `applyWorkflowEdits` applies the batch in order and judges only the final document: `[RemoveOperation, RemoveTrigger]` passes where `[RemoveOperation]` alone is `unknown-reference`. One Malformed in the result refuses the whole batch and the input is unchanged. Cascades keep a single edit well-formed: `RemoveOperation` sets hand-offs that named it to null; `RemoveQuestion` and `RemoveChoice` drop the Transitions whose answers named them. A Trigger whose `start` is removed is `unknown-reference`, so the client sends both edits in one batch.
+- **The edit vocabulary is flat: one tag per field or list membership.** A node is addressed by its slug; a Transition by `{ operation, when }`. Each tag becomes one `toolDefinition` for an agent and one MCP tool later, which is why there is no `ReplaceOperation` and no patch object. A whole node enters only through `Add*`, with its identity and the fields it needs to exist.
+
+```ts
+type WorkflowEdit =
+  | Rename { name } | SelectWorkspaces { workspaces }
+  | AddTrigger { trigger } | RemoveTrigger { trigger } | SetTriggerEntry { trigger; entry }      // resets parameters
+  | SetTriggerParameter { trigger; parameter; values: string[] }                                // [] removes; `many` repeats
+  | SetTriggerStart { trigger; start }
+  | AddOperation { operation } | RemoveOperation { operation } | RenameOperation { operation; name }
+  | SetInstruction { operation; instruction } | SetInstructionPackage { operation; package: string | null }
+  | SetPermissionProfile { operation; profile } | SetRequires { operation; requires }
+  | SetModel { operation; model } | SetForEach { operation; forEach: string | null }
+  | AddQuestion { operation; question } | RemoveQuestion { operation; question } | SetQuestionText { operation; question; text }
+  | AddChoice { operation; question; choice } | RemoveChoice { operation; question; choice } | RenameChoice { operation; question; choice; name }
+  | AddTransition { operation; when } | RemoveTransition { operation; when }
+  | SetTransitionActions { operation; when; actions } | SetTransitionHandOff { operation; when; handOff }
+  | SetHint { operation; field; text: string | null }
+```
+
+```ts
+// engine — the one deep module behind the RPCs
+interface Workflows {
+  create(document):                 Effect<WorkflowRecord, WorkflowRefused | ControlStoreFailure>
+  edit(id, edits):                  Effect<WorkflowRecord, WorkflowNotFound | WorkflowRefused | ControlStoreFailure>
+  publish(id, revision):            Effect<WorkflowRecord, WorkflowNotFound | WorkflowPublishRefused /* stale-revision | incomplete */ | ControlStoreFailure>
+  switch(id, enabled):              Effect<WorkflowSwitchResult, WorkflowNotFound | WorkflowSwitchRefused /* no-published-revision */ | ControlStoreFailure>
+  delete(id):                       Effect<WorkflowId, WorkflowNotFound | ControlStoreFailure>
+  list:                             Effect<{ workflows: WorkflowRecord[]; unreadable: { id; message }[] }, ControlStoreFailure>
+  get(id):                          Effect<WorkflowRecord, WorkflowNotFound | WorkflowUnreadable | ControlStoreFailure>
+  catalog:                          Effect<{ catalog: WorkflowCatalog; machine: MachineReadiness }>
+  templates:                        Effect<WorkflowTemplate[]>
+  listOptions(entry, parameter, workspaces): Effect<{ value; name; listedIn: WorkspaceId[] }[], never>   // source failures as data
+}
+type WorkflowRecord = { id; principal; workingCopy; workingRevision; publishedCopy; publishedRevision; enabled;
+  diagnostics: Diagnostic[]      // validateWorkflow(workingCopy); deterministic for a revision
+  readiness:   Diagnostic[] }    // adviseReadiness as of this read; never blocks
+```
+
+- Invariants: every command runs inside the Control store write gate, so batches apply in arrival order and `workingRevision` rises by one per applied batch; `WorkflowChanged` is published inside the gate after the commit, so event order is commit order; a refused command changes no row and emits no event; `delete` also switches off; reads take no gate. A row that does not decode appears in `list.unreadable` and makes `get` fail `WorkflowUnreadable`; the others load.
+- Dependencies: the Control store (local-substitutable — the in-memory SQLite layer in tests; an internal seam, no port); `DaemonEventBus` (in-process); **catalog contributions** — a `WorkflowCatalogContribution { entries; templates }` Layer per Trigger source and per action port adapter, folded by `Workflows` (two adapters from the first source, so a real seam); **`MachineReadinessSource { current: Effect<MachineReadiness> }`** — the production adapter folds Connection readiness, the Harness readiness cache and catalogs, and the Workspace registry; the test adapter is a `Ref` (two adapters, a real seam; its type lives in contracts because the editor folds a second value from the events it already receives).
+- Tests: the contracts functions as tables (every §5 code once positive, once negative; batch atomicity; cascades); `Workflows` through `DaemonRpcs` over the test store (lifecycle, event order, unreadable row, a Connection flipping in the `Ref` moves a `readiness` entry and never blocks publish).
+
+#### 20.2 Coordination
+
+One `Coordination` module keyed by a tagged **`WorkItemRef`**. The kind is on the ref; the module alone knows which authority backs it. No type parameters, no adapter in any caller's hands.
+
+```ts
+// contracts
+type WorkItemRef =
+  | Issue { workspace; id: WorkItemId }                         // tracker authority (ADR 0003)
+  | PullRequest { workspace; number }                           // no linked issue → engine-minted
+  | GranolaNote { connection; noteId }
+  | SlackMessage { team; channel; ts } | SlackConversation { team; channel; threadTs }
+  | ScheduleInstant { workflow; instantMillis }
+  | FanOutChild { parent: WorkItemKey; run: RunId; position }
+type WorkItemKey = string & Brand<"WorkItemKey">                 // keyOf(ref): deterministic, engine-minted
+type OperationKey = { workflow: string; operation: string }     // the fixed pipeline passes ("coding", stage)
+type Lineage = { root: LineageId; parent: LineageId | null; hop: number }   // required everywhere
+
+Claim          = { by; claimedAtMillis; operation: OperationKey; lineage: Lineage }
+AttemptRecord  = { operation: OperationKey; outcome: "succeeded" | "failed" | "abandoned"; atMillis; lineage: Lineage }
+HandbackRecord = { by; atMillis; note: string | null }
+ParkRecord     = { reason: ParkReason; atMillis }               // §11's tagged set, with its payload
+SourceRevision = { observed: string; processed: string | null } // engine-minted items only; null on a tracker ref
+
+// engine
+interface CoordinationView {                                     // folded; the handback barrier already applied
+  claim: Claim | null; claimedByUs: boolean
+  barrierAtMillis: number                                        // newest handback; 0 when none
+  park: ParkRecord | null                                        // newest park after the barrier; a Claim clears it
+  revision: SourceRevision | null
+  counters(key: OperationKey): { consecutiveFailures: number; exhausted: boolean; hop: number; hopCapped: boolean }
+  gate(key: OperationKey): Open | Claimed { claim } | Quiet | Parked { reason }   // Claimed → Quiet → Parked → Open
+}
+interface Coordination {
+  fold(ledger: Ledger, claimant: string): CoordinationView       // pure; the one composition point (engine ADR 0011)
+  read(ref): Effect<CoordinationView, CoordinationError>
+  claim(ref, { operation; lineage }): Effect<Claim, CoordinationError>                       // claim-held | refused
+  release(ref, claim): Effect<void, CoordinationError>                                        // stale-claim
+  recordAttempt(ref, { operation; outcome; lineage; reason? }): Effect<CoordinationView, CoordinationError>
+  park(ref, reason: ParkReason): Effect<CoordinationView, CoordinationError>
+  handBack(ref, { by; note? }): Effect<CoordinationView, CoordinationError>
+  observe(ref, revision: string, cause: Cause): Effect<"moved" | "redelivered", CoordinationError>   // minted items; not-this-authority on a tracker ref
+  markProcessed(ref, revision: string): Effect<void, CoordinationError>
+}
+CoordinationError = { reason: "unavailable" | "refused" | "claim-held" | "stale-claim" | "not-this-authority"; retryable: boolean; message }
+```
+
+- Invariants: records are appended, never deleted; `fold` is total and deterministic and counts only records with `atMillis` after the barrier; `hop` on a Claim is the parent's depth plus one, so `hopCapped` is a field read; a record that does not decode is dropped at read and reported once (no legacy branch); a tracker ref's `read` reflects the newest poll, not a live fetch — a performance fact callers must know; writes return the post-write view so no caller computes `priorFailures + 1`.
+- Behind the seam: the dispatch on the ref's kind (the only place origin is named); the marker wire codecs, comment ledger, claim label, and status text for a tracker item; the SQL tables and write gate for an engine-minted item; the barrier and all four counters, which deletes `exhaustion.ts`, `applyHandbackBarrier`, and the crash counter's own barrier read.
+- Dependencies: the tracker port (true external) through the existing comment host, with the existing mock hosts in tests; the Control store (local-substitutable, internal seam); the clock (in-process).
+- Tests: `fold` as tables (replaces `exhaustion.test.ts` and the barrier tests in `observe.test.ts`); one contract suite over `read` and the writes, **run once per authority layer** with the same assertions — the second run is the caller that makes the seam real.
+
+#### 20.3 Trigger observation
+
+A **Trigger source is a value**, not a service; one `TriggerObservation` module owns everything else.
+
+```ts
+interface TriggerSource {
+  id: "github" | "linear" | "granola" | "slack" | "clock"
+  entries: ReadonlyArray<TriggerEntry>                           // key, name, description, kind, requires, yields, parameters
+  availability(entry: CatalogKey): Effect<Availability>          // never fails; reasons are data
+  listOptions(entry, parameter, workspace?): Effect<Option[], SourceFailure>
+  observe(subscriptions: ReadonlyArray<Subscription>): Stream<TriggerEvent, SourceFailure>
+}
+type Subscription = { entry: CatalogKey; parameters: { id; value }[]; workspaces: WorkspaceId[];   // already narrowed to ports binding the app
+                      catchUp: { since: number } | null }                                           // occurrence: max(last seen, switch-on, now − window)
+type TriggerEvent = { key: WorkItemRef; revision: string /* opaque; equality */; cause: Person | Cogwork { origin } | Unknown; atMillis; entry: CatalogKey; workspace: WorkspaceId | null }
+SourceFailure = { reason: "auth" | "unavailable" | "rate-limited" | "decode" | "connection-not-ready"; retryAfterMillis: number | null; message }
+
+interface TriggerObservation {
+  eligible: Effect<ReadonlyArray<Admission>>                     // level read: observed ≠ processed, no claim; §6 order
+  changes:  Stream<void>                                         // a tick after each admission; the scheduler may wake on it
+  health:   Effect<ReadonlyArray<SourceHealth>>                  // one row per source → DaemonStatus
+  catalog:  Effect<ReadonlyArray<CatalogEntry & { availability }>>
+}
+type Admission = { item: WorkItemRef; trigger: { workflow: WorkflowId; triggerId: Slug }; operation: OperationId; revision: string; lineage: Lineage }
+```
+
+- Invariants a source adapter must honour: `observe` runs only while called, with a non-empty set; the observer re-invokes it with the new set on every subscription change (publish, switch, Workspace change) and interrupts the previous run — a Slack reconnect per publish is accepted; a source writes nothing and holds no durable state (`catchUp` makes it stateless across restarts); an occurrence adapter emits nothing before `catchUp.since`; a condition adapter emits every matching item on every read; events may repeat, and admission is idempotent (same key and revision is a no-op, so push and poll cannot double-fire); a `Cogwork` cause on an ambient Slack entry moves nothing; a typed `SourceFailure` ends the stream and the observer alone restarts it — `rate-limited` sleeps `retryAfterMillis` for that source only, `connection-not-ready` waits for the Connection event; a defect is logged, counted, and restarted on a schedule; interruption is not a failure.
+- Behind the seam: fan-in of the source streams; one supervised fiber per source in a `FiberMap`; subscription derivation from published, switched-on Workflows; the pure matcher (parameters AND, Triggers OR); admission through `Coordination.observe` and item minting; lineage seeding from cause; the single poll interval and per-source cooldown; catalog assembly; health projection.
+- Dependencies: the five sources (`TriggerSources` is a `Context.Service<ReadonlyArray<TriggerSource>>`; five production values plus a `ScriptedSource` probe with `emit`, `fail`, and `subscriptions` — a real seam); each source's port or client is injected into that source's own Layer (true external; mocked in the source's own tests); the clock (in-process; `ClockSource` runs for real under `TestClock`); the Control store through `Coordination`; `DaemonEventBus`.
+- Tests: the engine suite swaps one Layer (`ScriptedSource`) and asserts over `DaemonRpcs` — a redelivered event starts no Run, a source runs only while subscribed, an unready Connection pauses one source and `health` says so; `ClockSource` is tested under `TestClock` with no script; pagination, `since`, and decode are each source module's own tests at its internal seam.
+
 ## Testing Decisions
 
 A good test checks external behaviour through a production seam and would fail loudly if the behaviour broke ([`docs/agent-patterns/test-value.md`](../agent-patterns/test-value.md); the shipped `TEST-VALUE.md`). It never implements the outcome under assertion in a stub. After `Effect.flip`, it asserts the failure's `_tag` or `reason`.
 
-**Two seams, and no third:**
+**Two seams, and no third** (the module interfaces in §20 sit between them and are each module's own test surface; nothing is tested past them):
 
 1. **The daemon's RPC surface, with the external ports stubbed.** A daemon composed from test layers — an in-memory Control store, stub Issue tracker and Source control ports, a stub Granola client, a stub Slack socket, a TestClock, and a scripted Harness that returns a chosen Operation result — is driven through the same `DaemonRpcs` the app and CLI use, and observed through its queries, its event stream, and the writes the stub ports recorded. This is the highest seam: it covers Trigger observation, admission, coordination, the plan executor, the touchpoint commands, and the read model in one place, and it is what "a client that has only the RPC can author every Workflow" means. Prior art: `daemon-composition.test.ts`, `engine.test.ts`, `commands.test.ts`, `read-model.test.ts`, `scheduler.test.ts`, `follow-up.test.ts`, `coordination-tracker.test.ts`, `recovery.test.ts` in `packages/engine`.
 2. **The pure functions in `@cogwork/contracts`.** The validator, the edit vocabulary, Transition matching and `uncovered`, and result-schema derivation are pure, so they are tested as functions: a document in, diagnostics or a schema out. These are wire contracts the daemon and the desktop share, which the retention bar keeps. Prior art: `triage.test.ts`, `settings.test.ts`, `board.test.ts` in `packages/contracts`; `workflow-model.test.ts` and `workflow-parks.test.ts` in the desktop.
@@ -448,6 +610,6 @@ From the map, and confirmed by the grills:
 
 - **Build order.** S1–S4 may run in parallel. B5 first. **B6 proves the Workflow engine on Granola → Issue**, as the map named; it is the first Workflow a person can create, publish, switch on, and watch file an issue. B7 and B8 follow; Slack and the sweep after.
 - **Provenance.** Each section names its ticket. The full reasoning — sources from [`docs/agents/technical-disposition.md`](../agents/technical-disposition.md), rejected options, prior art, convergences and borrows — is in the resolution comment of each ticket on [the map](https://github.com/colonylabs/cogwork/issues/656) and in the research documents on `research/feldspar-workflow-ideas`, `research/agents-author-automations`, `research/granola-slack-trigger-sources`, `research/tanstack-ai-agent-authoring`, and `research/os-notifications` (never merged). Read the ticket before you change a decision.
-- **Decisions this spec made beyond the map:** the engine computes plan digests (§11); the diagnostic rename `duplicate-condition` → `duplicate-transition` (§5); a late Trigger whose item the source no longer has is a Run Plan rejection with the event shown as skipped (§7); the side-panel Attention tab and the "Ready to merge" placement are build decisions (§11–12).
+- **Decisions this spec made beyond the map:** the engine computes plan digests (§11); the diagnostic rename `duplicate-condition` → `duplicate-transition` (§5); a late Trigger whose item the source no longer has is a Run Plan rejection with the event shown as skipped (§7); the side-panel Attention tab and the "Ready to merge" placement are build decisions (§11–12); the fix-forward rule and the module interfaces in §20, added 2026-10-28 after the first build batch showed shallow modules and compatibility shims — machine-state advisories leave the validator, lineage carries its hop depth, the edit vocabulary is flat and field-level, and a Trigger source is a value under one observation module.
 - **Open UI details for the build:** whether an approval opens every step's agent text by default; the exact copy of the Attention cards. Both are reversible and need no decision here.
 - **Glossary.** [`packages/contracts/CONTEXT.md`](../../packages/contracts/CONTEXT.md) states the settled model in present tense and marks each fixed-pipeline term the cut-over replaces. Use its words: *hand-off* is a Transition passing its item on, giving it to a person is a *park*; *condition* is a Trigger entry kind; *revision* is always *source* or *published*; *parameter*, not option, for Trigger and action values; *Trigger source*, not sensor; the *Trigger and action catalog*, not bare catalog.
