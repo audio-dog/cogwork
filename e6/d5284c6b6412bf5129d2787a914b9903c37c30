@@ -1,0 +1,176 @@
+packages/engine/src/github/github.test.ts
+  s_638f6f3aaaa58b::t_f2c60160e38875 5,52-57,63,996,1017
+  s_638f6f3aaaa58b::t_37728f3292dfe9 51
+  s_638f6f3aaaa58b::t_4e30df217525b0 8
+packages/engine/src/linear/markers.test.ts
+  s_638f6f3aaaa58b::t_8fa299d4a7ca08 63-64,67,70,81-82,85
+  s_638f6f3aaaa58b::t_37728f3292dfe9 1,59
+packages/engine/src/coordination-contract.ts
+  s_638f6f3aaaa58b::t_b4979765929727 2-10,12-32,40-46
+  s_638f6f3aaaa58b::t_fbc7a498e10fa9 33-39
+  s_638f6f3aaaa58b::t_492d878b2e1932 1,11
+packages/engine/src/classify.test.ts
+  s_638f6f3aaaa58b::t_f7c8fb707063bc 17-19,21,144,272,360,369,375
+  s_638f6f3aaaa58b::t_302a5a786eed19 376
+  s_638f6f3aaaa58b::t_2aa32569464ae1 183,231,308,328,517,545
+  s_638f6f3aaaa58b::t_a32b600f782114 395-399
+  s_638f6f3aaaa58b::t_5d2ec44828efcd 16
+  s_638f6f3aaaa58b::t_9a39df8ba93ee4 1-8,22-24,26-32
+  s_638f6f3aaaa58b::t_f564f6c23565f9 20
+  s_638f6f3aaaa58b::t_beda597decd3f9 25
+packages/engine/src/recovery.ts
+  s_638f6f3aaaa58b::t_a6e2fb9cc34939 20-26,120
+  s_638f6f3aaaa58b::t_de70455118e960 52-54,249
+packages/engine/src/observe.ts
+  s_638f6f3aaaa58b::t_a50cd42803b1f4 4,31-42,58,61
+  s_638f6f3aaaa58b::t_03b1c70ab84440 66
+  s_638f6f3aaaa58b::t_1092628d741996 1,60,62-65,67
+packages/engine/src/recovery.test.ts
+  s_638f6f3aaaa58b::t_5d2ec44828efcd 53
+  s_638f6f3aaaa58b::t_482f7f7e6ff48f 55,57-59,107,124,158,204,208,211
+  s_638f6f3aaaa58b::t_f1d4f1741f4e62 54,56,513,542
+  s_57ba1d69a7a159::t_c9c1829a3340ba 7
+packages/engine/src/issue-tracker.ts
+  s_638f6f3aaaa58b::t_1aae16e9d5ff24 2,17,26-29,31-35,37,99
+  s_638f6f3aaaa58b::t_57317b02a366bd 36
+packages/engine/src/classify.ts
+  s_638f6f3aaaa58b::t_206810ec64e8f6 23,164-180,201,246
+packages/engine/src/index.ts
+  s_638f6f3aaaa58b::t_9bee8b55b7f17b 6
+packages/engine/src/coordination.test.ts
+  s_638f6f3aaaa58b::t_8b6a77182b5ab4 34-47,49-68,72,82,87-88,93-95,98,101-107,111-112,115,117-119,122-123,125,128-135,139-147,150-151,155
+  s_638f6f3aaaa58b::t_03b1c70ab84440 152
+  s_638f6f3aaaa58b::t_492d878b2e1932 1,33
+packages/engine/src/linear/linear.test.ts
+  s_638f6f3aaaa58b::t_f8e6ddf4fcd360 5,41,45,47-49,556,735-738
+  s_638f6f3aaaa58b::t_37728f3292dfe9 40,46
+  s_638f6f3aaaa58b::t_8fa299d4a7ca08 4,42-44,50,61
+  s_57ba1d69a7a159::t_ec8fb998f3ca48 7
+packages/engine/src/control-store-schema.ts
+  s_638f6f3aaaa58b::t_fd70d3389644ab 221
+  s_638f6f3aaaa58b::t_b3f2edc88149ce 138-139,142,150,158-163,169-172,183-184,189,193-194,198,211,220,222-233
+  s_638f6f3aaaa58b::t_d924de0e55e011 234-236
+packages/engine/src/read-model.test.ts
+  s_638f6f3aaaa58b::t_482f7f7e6ff48f 35-38,40
+  s_638f6f3aaaa58b::t_5d2ec44828efcd 39
+  s_4a8aec668ff95d::t_0477da239f43dd 5
+packages/engine/src/control-store.test.ts
+  s_638f6f3aaaa58b::t_03b1c70ab84440 127,138
+packages/engine/src/coordination-tracker.test.ts
+  s_638f6f3aaaa58b::t_37728f3292dfe9 6,178
+  s_638f6f3aaaa58b::t_4b2e89453a593a 365,425,439,460,479,501,527-531,577
+  s_638f6f3aaaa58b::t_e50222f3ff3311 199-212
+  s_638f6f3aaaa58b::t_57317b02a366bd 303
+  s_638f6f3aaaa58b::t_343154e5d19f5c 177,179-194,220-223
+  s_638f6f3aaaa58b::t_6384da6951e72a 295,388
+  s_57ba1d69a7a159::t_1f54e3d9b6aacd 5,19,25
+packages/engine/src/executor.ts
+  s_638f6f3aaaa58b::t_a6e2fb9cc34939 37,407
+packages/engine/src/commands.ts
+  s_638f6f3aaaa58b::t_1092628d741996 60,297-312
+packages/contracts/src/coordination.ts
+  s_638f6f3aaaa58b::t_d5da644c6a36c3 31-48,51
+  s_638f6f3aaaa58b::t_87ddc4aae8e2ba 2-4,6-7,12-13,15-29,59-61,64,66,74-87,90-91,97,100-124
+  s_638f6f3aaaa58b::t_4895a543bede34 14
+  s_638f6f3aaaa58b::t_08309217bcf9e9 9-10,62-63,68-73
+  s_638f6f3aaaa58b::t_e4e0ee97e39878 30
+packages/engine/src/coordination-fold.test.ts
+  s_638f6f3aaaa58b::t_28eb26fcba821f 92
+  s_638f6f3aaaa58b::t_492d878b2e1932 1,6
+  s_638f6f3aaaa58b::t_834b1346c92d96 20-31,33-34,36-59,61-63
+  s_638f6f3aaaa58b::t_330a1a4ddaa6a2 3-5,7-12,14-19,60,67-74,76,78-81,83,94
+  s_638f6f3aaaa58b::t_61cb248ac8a2b6 64,87
+  s_638f6f3aaaa58b::t_065a75b36aefd7 75
+  s_638f6f3aaaa58b::t_2ce1f0b2649a79 84-86
+  s_638f6f3aaaa58b::t_6eb5f406082867 89-90
+packages/engine/src/coordination-control-store.ts
+  s_638f6f3aaaa58b::t_c083d4ea64c67e 38-42,123-131,143-144,150
+  s_638f6f3aaaa58b::t_6dbb4c5500abdb 134-135,145,149,244-245,251-252,254-255
+  s_638f6f3aaaa58b::t_08309217bcf9e9 4,380,393
+  s_638f6f3aaaa58b::t_a94897034a153b 65,79-83
+  s_638f6f3aaaa58b::t_d5e90355c1c64f 14,331
+  s_638f6f3aaaa58b::t_41338015dcf852 239
+  s_638f6f3aaaa58b::t_08e198d70e9882 397
+  s_638f6f3aaaa58b::t_738c7ebaa67c65 88-122,133,148,151,153-158,160-161,169-185,187-188,195-203,205-206,213-225,227-228,238,240,242-243,246-250,253,256-261,263-269,279,281-290,294,296-302,311,313-319,323,325-329,333,335-342,347-348,350-354,361,363-371,373-379,381-382
+  s_638f6f3aaaa58b::t_d41ea21d53ab2c 2,46
+  s_638f6f3aaaa58b::t_b61eb299850690 7-9,11,18-23,30-31,34,44-45,50,56,59-61,67-71,73-74,84-87,136-138,140,162-163,165,168,189,191-194,204,207-212,226,229-235,271-272,274-276,292,304-305,307-308,320-321,330,343-346,356-357,372,385-392,394-396,398-399
+packages/engine/src/coordination.ts
+  s_638f6f3aaaa58b::t_7ceae1172f0ad9 1-3,11-13,15-19,21,68-72,75,77-89,91-94,96-103,106,108-115,120,160-163,175-184,187-206,209-214,216-218,220-229,232-248,250-271,275-279,281-331,333-335
+  s_638f6f3aaaa58b::t_934d09c180bac3 104-105
+  s_638f6f3aaaa58b::t_c5a60767f958c7 173
+  s_638f6f3aaaa58b::t_fc4aab6bed3864 9,107,116-119,272-274
+  s_638f6f3aaaa58b::t_f323a86f9cb5e7 524
+  s_638f6f3aaaa58b::t_21333ac1378b9e 165-172,174
+  s_638f6f3aaaa58b::t_df256448751e28 347-351,354-355,357-358,361-362,414-416,419-423,436-437,446,449,515,518,527,530
+  s_638f6f3aaaa58b::t_79d38988be90ea 121-129,131-137,139-141,143-148,150-152,154-159,185
+  s_638f6f3aaaa58b::t_fbd3d146eb356d 14,409,455,459-468,531-536
+  s_638f6f3aaaa58b::t_a11ea7f72ab58f 5-8,73,76,90,95,207-208,215,230-231,280,332
+  s_638f6f3aaaa58b::t_08309217bcf9e9 4,219,249
+  s_638f6f3aaaa58b::t_b5fae9c8e8d2be 130,138,142,149,153,186
+  s_638f6f3aaaa58b::t_d16e35dffbac14 426-431
+  s_638f6f3aaaa58b::t_5e0ed37739b95f 164
+  s_638f6f3aaaa58b::t_6dbb4c5500abdb 74
+  s_57ba1d69a7a159::t_b24ed206deceb5 10,424
+packages/engine/src/coordination-tracker.ts
+  s_638f6f3aaaa58b::t_492d878b2e1932 283
+  s_638f6f3aaaa58b::t_08309217bcf9e9 3,269
+  s_638f6f3aaaa58b::t_62d4b7e5d6e82d 282,284-287,366-371,398,401,412,415,426,429,441,444,465-468,480,483
+  s_638f6f3aaaa58b::t_0d01a281ed7dbe 79,103,105,165,231,242,248,264
+  s_638f6f3aaaa58b::t_d16e35dffbac14 168-169,171
+  s_638f6f3aaaa58b::t_5ae8e810f1d7e4 167,170,172-176,204-209,213,215-221,223-224
+  s_638f6f3aaaa58b::t_1540dd80295798 148,177,188,210-212,214
+  s_638f6f3aaaa58b::t_934bc9d92229fa 144-147,163,195-197,232-233,249-250,265-266,279
+  s_638f6f3aaaa58b::t_b5fae9c8e8d2be 222
+  s_638f6f3aaaa58b::t_6920c8e39c8774 324-330,334-348
+  s_638f6f3aaaa58b::t_3b8d19cedffaed 7,349
+  s_638f6f3aaaa58b::t_7ab9250f0a1417 10,15,149,159-162,164,166,178,181-187,189-194,198-203,225-230,235-237,239-241,243-247,251-263,267-268,270-278
+  s_638f6f3aaaa58b::t_6dbb4c5500abdb 150-158,179-180,234,238
+  s_638f6f3aaaa58b::t_e2ce2938f4bda1 292,321,372,379,397,411,425,438,464,479
+  s_638f6f3aaaa58b::t_ba4c5a9d644e26 35,331-333
+  s_638f6f3aaaa58b::t_ca7f95a88522d0 80-90
+  s_57ba1d69a7a159::t_5f72e0abd053ef 9,280-281
+packages/engine/src/coordination-control-store.test.ts
+  s_638f6f3aaaa58b::t_d17b7391bef680 90-104,106-107
+  s_638f6f3aaaa58b::t_e50222f3ff3311 10,28,33-36
+  s_638f6f3aaaa58b::t_492d878b2e1932 1,20
+  s_638f6f3aaaa58b::t_ae0a9f9e8d11df 8,11,13-19,24,41,46,48-55,59-61,63-65,68-71,73-75,83,89,119
+packages/engine/src/observe.test.ts
+  s_638f6f3aaaa58b::t_5d2ec44828efcd 1,13
+  s_638f6f3aaaa58b::t_c7368d9ff7221f 14-18,100-103,109-112,125-128,135-138,145,149
+packages/engine/src/commands.test.ts
+  s_638f6f3aaaa58b::t_5d2ec44828efcd 752
+  s_638f6f3aaaa58b::t_096c92ca9cdaf0 753-765,871,917,1148
+  s_4a8aec668ff95d::t_c2d9e243296bb2 10,18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e6d5284c6b6412bf5129d2787a914b9903c37c30",
+  "prompts": {},
+  "sessions": {
+    "s_4a8aec668ff95d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18349-2754-7791-a950-d0b3c77001a5",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_57ba1d69a7a159": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18342-7714-7b42-a1c1-a8dff923aa83",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_638f6f3aaaa58b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180d5-02dc-7393-ad93-78e3fc7162e7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
