@@ -1,15 +1,11 @@
+import { availabilityOf, type MachineReadiness, type WorkflowCatalogEntry } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { GithubIcon, LinearIcon } from "@cogwork/ui/components/brand-icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuEmpty,
-  DropdownMenuFilter,
   DropdownMenuGroup,
-  DropdownMenuInput,
   DropdownMenuItem,
-  DropdownMenuList,
-  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -23,17 +19,8 @@ import {
   RiSlackLine,
   RiWebhookLine,
 } from "@remixicon/react";
-import { type ComponentType, createContext, type ReactNode, use, useRef, useState } from "react";
-import {
-  allChoicesIn,
-  type Catalog,
-  type CatalogChoice,
-  type CatalogGroup,
-  type CatalogIcon,
-  type CatalogItem,
-  choiceKey,
-  choiceOf,
-} from "../features/workflow-catalog";
+import { type ComponentType, createContext, type ReactNode, use } from "react";
+import type { CatalogIcon } from "../features/workflow-catalog";
 
 const catalogIcons: Record<CatalogIcon, ComponentType<{ className?: string }>> = {
   schedule: RiCalendarScheduleLine,
@@ -48,165 +35,96 @@ const catalogIcons: Record<CatalogIcon, ComponentType<{ className?: string }>> =
 
 export const catalogIconFor = (icon: CatalogIcon) => catalogIcons[icon];
 
-interface CatalogMenuContextValue {
-  readonly state: { readonly query: string };
-  readonly actions: {
-    readonly choose: (choice: CatalogChoice) => void;
-    readonly takeFinalFocus: () => boolean;
-  };
-  readonly meta: { readonly catalog: Catalog };
+const systemIcons: Readonly<Record<string, ComponentType<{ className?: string }>>> = catalogIcons;
+
+const iconOf = (system: string | null) => systemIcons[system ?? ""] ?? catalogIcons.cogwork;
+
+const appName = (system: string | null) => {
+  const name = system ?? "Cogwork";
+  return `${name.slice(0, 1).toUpperCase()}${name.slice(1)}`;
+};
+
+interface CatalogMenuValue {
+  readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
+  readonly machine: MachineReadiness;
+  readonly choose: (entry: WorkflowCatalogEntry) => void;
 }
 
-const CatalogMenuContext = createContext<CatalogMenuContextValue | null>(null);
+const CatalogMenuContext = createContext<CatalogMenuValue | null>(null);
 
 const useCatalogMenu = () => {
   const value = use(CatalogMenuContext);
-  if (!value) throw new Error("CatalogMenu parts need a CatalogMenu.Root");
+  if (!value) throw new Error("CatalogMenu parts need a CatalogMenu.Provider");
   return value;
 };
 
-function Root({
-  catalog,
+function Provider({
+  entries,
+  machine,
   onChoose,
   children,
 }: {
-  readonly catalog: Catalog;
-  readonly onChoose: (choice: CatalogChoice) => void;
+  readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
+  readonly machine: MachineReadiness;
+  readonly onChoose: (entry: WorkflowCatalogEntry) => void;
   readonly children: ReactNode;
 }) {
-  const [query, setQuery] = useState("");
-  const lastPick = useRef<CatalogChoice | null>(null);
-  const choose = (choice: CatalogChoice) => {
-    lastPick.current = choice;
-    onChoose(choice);
-  };
-  // A pick with agent inputs moves the cursor into its instruction; returning focus to the trigger
-  // would take it back.
-  const takeFinalFocus = () => {
-    const movedToInstruction = (lastPick.current?.agentInputs.length ?? 0) > 0;
-    lastPick.current = null;
-    return !movedToInstruction;
-  };
   return (
-    <CatalogMenuContext value={{ state: { query }, actions: { choose, takeFinalFocus }, meta: { catalog } }}>
-      <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery} autoHighlight>
-        <DropdownMenu>{children}</DropdownMenu>
-      </DropdownMenuFilter>
+    <CatalogMenuContext value={{ entries, machine, choose: onChoose }}>
+      <DropdownMenu>{children}</DropdownMenu>
     </CatalogMenuContext>
   );
 }
 
-function SearchResults() {
-  const {
-    state: { query },
-    actions: { choose },
-    meta: { catalog },
-  } = useCatalogMenu();
-  const needle = query.trim().toLowerCase();
-  const results = allChoicesIn(catalog).filter((choice) =>
-    `${choice.groupName} ${choice.itemName} ${choice.optionName ?? ""}`.toLowerCase().includes(needle),
-  );
+function Entry({ entry }: { readonly entry: WorkflowCatalogEntry }) {
+  const { machine, choose } = useCatalogMenu();
+  const availability = availabilityOf(entry, machine);
+  const disabled = availability._tag === "Unavailable";
+  const status = {
+    Available: null,
+    ConnectionNeeded: "Connect",
+    Unavailable: availability._tag === "Unavailable" ? availability.reason : null,
+  }[availability._tag];
   return (
-    <DropdownMenuGroup>
-      {results.map((choice) => {
-        const Icon = catalogIcons[choice.icon];
-        return (
-          <DropdownMenuItem key={choiceKey(choice)} onClick={() => choose(choice)}>
-            <Icon className="text-muted-foreground" />
-            <span className="truncate">{choice.itemName}</span>
-            {choice.optionName ? (
-              <Badge variant="secondary" className="font-normal">
-                {choice.optionName}
-              </Badge>
-            ) : null}
-          </DropdownMenuItem>
-        );
-      })}
-    </DropdownMenuGroup>
+    <DropdownMenuItem disabled={disabled} label={entry.name} onClick={() => choose(entry)}>
+      <span className="flex-1 truncate">{entry.name}</span>
+      {entry.requires.length > 0 ? (
+        <Badge variant="outline">Requires {entry.requires.join(", ")}</Badge>
+      ) : null}
+      {status ? <Badge variant="secondary">{status}</Badge> : null}
+    </DropdownMenuItem>
   );
 }
 
-function CatalogEntry({ group, entry }: { readonly group: CatalogGroup; readonly entry: CatalogItem }) {
-  const {
-    actions: { choose },
-  } = useCatalogMenu();
-  if (entry.options.length === 0) {
-    return (
-      <DropdownMenuItem label={entry.name} onClick={() => choose(choiceOf(group, entry, null))}>
-        {entry.name}
-      </DropdownMenuItem>
-    );
-  }
+function Content() {
+  const { entries } = useCatalogMenu();
+  const systems = [...new Set(entries.map(({ system }) => system))];
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger label={entry.name}>{entry.name}…</DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="min-w-40">
-        {entry.options.map((option) => (
-          <DropdownMenuItem
-            key={option}
-            label={option}
-            onClick={() => choose(choiceOf(group, entry, option))}
-          >
-            {option}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  );
-}
-
-function ConnectorCascade() {
-  const {
-    meta: { catalog },
-  } = useCatalogMenu();
-  return (
-    <DropdownMenuGroup>
-      {catalog.map((group) => {
-        const Icon = catalogIcons[group.icon];
-        return (
-          <DropdownMenuSub key={group.id}>
-            <DropdownMenuSubTrigger label={group.name}>
-              <Icon className="text-muted-foreground" />
-              <span className="flex-1 truncate">{group.name}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="min-w-48">
-              <DropdownMenuGroup>
-                {group.items.map((entry) => (
-                  <CatalogEntry key={entry.id} group={group} entry={entry} />
-                ))}
-              </DropdownMenuGroup>
-              {group.connectorOnly.length > 0 ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    {group.connectorOnly.map((entry) => (
-                      <CatalogEntry key={entry.id} group={group} entry={entry} />
+    <DropdownMenuContent className="min-w-64">
+      <DropdownMenuGroup>
+        {systems.map((system) => {
+          const Icon = iconOf(system);
+          return (
+            <DropdownMenuSub key={system ?? "cogwork"}>
+              <DropdownMenuSubTrigger label={appName(system)}>
+                <Icon className="text-muted-foreground" />
+                {appName(system)}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-72">
+                <DropdownMenuGroup>
+                  {entries
+                    .filter((entry) => entry.system === system)
+                    .map((entry) => (
+                      <Entry key={entry.key} entry={entry} />
                     ))}
-                  </DropdownMenuGroup>
-                </>
-              ) : null}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        );
-      })}
-    </DropdownMenuGroup>
-  );
-}
-
-function Content({ placeholder }: { readonly placeholder: string }) {
-  const {
-    state: { query },
-    actions: { takeFinalFocus },
-  } = useCatalogMenu();
-  return (
-    <DropdownMenuContent className="w-64" finalFocus={takeFinalFocus}>
-      <DropdownMenuInput placeholder={placeholder} aria-label={placeholder} />
-      <DropdownMenuEmpty>No matches</DropdownMenuEmpty>
-      <DropdownMenuList>
-        {query.trim().length > 0 ? <SearchResults /> : <ConnectorCascade />}
-      </DropdownMenuList>
+                </DropdownMenuGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          );
+        })}
+      </DropdownMenuGroup>
     </DropdownMenuContent>
   );
 }
 
-export const CatalogMenu = { Root, Trigger: DropdownMenuTrigger, Content };
+export const CatalogMenu = { Provider, Trigger: DropdownMenuTrigger, Content };
