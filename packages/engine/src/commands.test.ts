@@ -7,6 +7,7 @@ import {
   ContributionSettingUpdate,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
+  codingOperation,
   connectionIdOf,
   DaemonEvent,
   type DaemonLimitUpdate,
@@ -14,6 +15,7 @@ import {
   type HarnessModelOptionDescriptor,
   HarnessName,
   IssueTrackerError,
+  LineageId,
   type LocalContribution,
   localOwnerId,
   type ModelOptionSelections,
@@ -747,6 +749,20 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   ...over,
 });
 
+const coordinationLineage = { root: LineageId.make("issue:AUD-1"), parent: null, hop: 0 };
+const activeClaim = {
+  by: "cogwork",
+  claimedAtMillis: 0,
+  operation: codingOperation("implement"),
+  lineage: coordinationLineage,
+} as const;
+const failedAttempt = (atMillis: number) => ({
+  operation: codingOperation("implement"),
+  outcome: "failed" as const,
+  atMillis,
+  lineage: coordinationLineage,
+});
+
 describe("CancelRun", () => {
   it.effect("settles the run, hands the item off to a human, and releases the claim", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
@@ -852,7 +868,7 @@ describe("CancelRun", () => {
   it.effect("keeps the claim while interrupted work is still draining", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
     const claimed = trackerItem({
-      claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+      claim: activeClaim,
     });
     return Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
@@ -898,7 +914,7 @@ describe("CancelRun", () => {
   it.effect("settles cancellation after the RPC caller disconnects", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
     const claimed = trackerItem({
-      claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+      claim: activeClaim,
     });
     return Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
@@ -1129,11 +1145,7 @@ describe("HandBack", () => {
       roles: ["ready-for-human"],
       claimedByUs: false,
       claimHeld: false,
-      attempts: [
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 2 },
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 3 },
-      ],
+      attempts: [failedAttempt(1), failedAttempt(2), failedAttempt(3)],
     });
     return Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;

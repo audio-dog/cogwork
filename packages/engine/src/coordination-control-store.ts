@@ -1,367 +1,399 @@
 import {
+  AttemptOutcome,
   AttemptRecord,
+  type Cause,
   Claim,
-  ControlStoreFailure,
   HandbackRecord,
+  keyOf,
+  ParkReason,
+  ParkRecord,
   TrimmedNonEmptyString,
-  WorkItemId,
+  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { ControlStore } from "./control-store";
-import { type CoordinationAdapter, type CoordinationState, defaultClaimant } from "./coordination-adapter";
+import {
+  CoordinationError,
+  type CoordinationLedger,
+  defaultClaimant,
+  makeCoordination,
+} from "./coordination";
 
 const StoredClaimEvent = Schema.Struct({
   sequence: Schema.Finite,
   action: Schema.Literals(["claim", "release"]),
   by: Schema.NullOr(Schema.String),
   claimedAtMillis: Schema.NullOr(Schema.Finite),
-  stage: Schema.NullOr(Schema.String),
+  workflow: Schema.NullOr(Schema.String),
+  operation: Schema.NullOr(Schema.String),
   lineageRoot: Schema.NullOr(Schema.String),
   lineageParent: Schema.NullOr(Schema.String),
+  lineageHop: Schema.NullOr(Schema.Finite),
 });
 type StoredClaimEvent = typeof StoredClaimEvent.Type;
 
+interface DecodedClaimEvent {
+  readonly event: StoredClaimEvent;
+  readonly claim: Claim | null;
+}
+
 const StoredAttempt = Schema.Struct({
-  stage: Schema.String,
-  outcome: Schema.String,
+  workflow: Schema.String,
+  operation: Schema.String,
+  outcome: AttemptOutcome,
   atMillis: Schema.Finite,
   lineageRoot: Schema.String,
   lineageParent: Schema.NullOr(Schema.String),
+  lineageHop: Schema.Finite,
 });
-type StoredAttempt = typeof StoredAttempt.Type;
 
 const StoredHandback = Schema.Struct({
   by: Schema.String,
   atMillis: Schema.Finite,
+  note: Schema.NullOr(Schema.String),
 });
-type StoredHandback = typeof StoredHandback.Type;
 
-const StoredSourceRevisions = Schema.Struct({
+const StoredPark = Schema.Struct({ reason: Schema.String, atMillis: Schema.Finite });
+
+const StoredSourceRevision = Schema.Struct({
   observed: Schema.String,
   processed: Schema.NullOr(Schema.String),
 });
-type StoredSourceRevisions = typeof StoredSourceRevisions.Type;
+const ParkReasonJson = Schema.fromJsonString(ParkReason);
 
-type LineageRecord = {
-  readonly lineageRoot?: WorkItemId;
-  readonly lineageParent?: WorkItemId | null;
-};
+const coordinationError = (
+  reason: CoordinationError["reason"],
+  message: string,
+  retryable = reason === "unavailable",
+) => new CoordinationError({ reason, message, retryable });
 
-export interface SourceRevisions {
-  readonly observed: string;
-  readonly processed: string | null;
-}
-
-export interface ControlStoreCoordinationService
-  extends CoordinationAdapter<WorkItemId, WorkItemId, Claim, ControlStoreFailure> {
-  readonly observeSourceRevision: (
-    item: WorkItemId,
-    revision: string,
-  ) => Effect.Effect<void, ControlStoreFailure>;
-  readonly markSourceRevisionProcessed: (
-    item: WorkItemId,
-    revision: string,
-  ) => Effect.Effect<void, ControlStoreFailure>;
-  readonly readSourceRevisions: (
-    item: WorkItemId,
-  ) => Effect.Effect<SourceRevisions | null, ControlStoreFailure>;
-}
-
-const decodeClaimEvent = Schema.decodeUnknownEffect(StoredClaimEvent);
-const decodeAttempts = Schema.decodeUnknownEffect(Schema.Array(StoredAttempt));
-const decodeHandback = Schema.decodeUnknownEffect(StoredHandback);
-const decodeSourceRevisions = Schema.decodeUnknownEffect(StoredSourceRevisions);
-const decodeItem = Schema.decodeUnknownEffect(WorkItemId);
-const decodeRevision = Schema.decodeUnknownEffect(TrimmedNonEmptyString);
-const decodeClaim = Schema.decodeUnknownEffect(Claim);
-const decodeAttempt = Schema.decodeUnknownEffect(AttemptRecord);
-const decodeHandbackRecord = Schema.decodeUnknownEffect(HandbackRecord);
-const isControlStoreFailure = Schema.is(ControlStoreFailure);
-const unclaimed = { claimHeld: false, claim: null, claimedByUs: false };
-
-const failure =
-  (operation: string, retryable = true) =>
-  (cause: unknown) =>
-    ControlStoreFailure.make({ operation, message: String(cause), retryable });
-
-const mapFailure = (operation: string) => (cause: unknown) =>
-  isControlStoreFailure(cause) ? cause : failure(operation)(cause);
-
-const reject = (operation: string, message: string) => Effect.fail(failure(operation, false)(message));
-
-const lineageOf = (record: LineageRecord, operation: string) => {
-  const hasLineage = record.lineageRoot !== undefined && Object.hasOwn(record, "lineageParent");
-  if (!hasLineage) return reject(operation, "lineage root and parent are required");
-  return Effect.succeed({ root: record.lineageRoot, parent: record.lineageParent ?? null });
-};
+const notThisAuthority = () =>
+  coordinationError("not-this-authority", "tracker items use tracker authority", false);
 
 const claimsMatch = (actual: Claim, expected: Claim) =>
   actual.by === expected.by &&
   actual.claimedAtMillis === expected.claimedAtMillis &&
-  actual.stage === expected.stage &&
-  actual.lineageRoot === expected.lineageRoot &&
-  actual.lineageParent === expected.lineageParent;
+  actual.operation.workflow === expected.operation.workflow &&
+  actual.operation.operation === expected.operation.operation &&
+  actual.lineage.root === expected.lineage.root &&
+  actual.lineage.parent === expected.lineage.parent &&
+  actual.lineage.hop === expected.lineage.hop;
 
-export const makeControlStoreCoordination = Effect.gen(function* () {
-  const store = yield* ControlStore;
-  if (store.health === "unavailable") {
-    return yield* ControlStoreFailure.make({
-      operation: "open Control store",
-      message: store.message,
-      retryable: true,
+const controlRef = (ref: WorkItemRef) =>
+  ref._tag === "Issue" ? Effect.fail(notThisAuthority()) : Effect.succeed(keyOf(ref));
+
+const makeControlStoreAuthority = () =>
+  Effect.gen(function* () {
+    const store = yield* ControlStore;
+    if (store.health === "unavailable") {
+      return yield* coordinationError("unavailable", store.message);
+    }
+    const sql = yield* SqlClient.SqlClient;
+    const reported = new Set<string>();
+
+    const reportInvalid = (kind: string) =>
+      reported.has(kind)
+        ? Effect.void
+        : Effect.sync(() => reported.add(kind)).pipe(
+            Effect.andThen(Effect.logError("invalid persisted coordination record dropped", { kind })),
+          );
+
+    const decoded = Effect.fn("ControlStoreCoordination.decoded")(function* <A>(
+      kind: string,
+      result: Result.Result<A, unknown>,
+    ) {
+      if (Result.isSuccess(result)) return result.success;
+      yield* reportInvalid(kind);
+      return null;
     });
-  }
-  const sql = yield* SqlClient.SqlClient;
 
-  const latestClaimEvent = Effect.fn("ControlStoreCoordination.latestClaimEvent")(function* (
-    item: WorkItemId,
-  ) {
-    const [stored] = yield* sql<StoredClaimEvent>`
-      SELECT
-        sequence,
-        action,
-        by,
-        claimed_at_millis AS claimedAtMillis,
-        stage,
-        lineage_root AS lineageRoot,
-        lineage_parent AS lineageParent
+    const decodeClaim = (row: StoredClaimEvent) =>
+      decoded(
+        "Claim",
+        Schema.decodeUnknownResult(Claim)({
+          by: row.by,
+          claimedAtMillis: row.claimedAtMillis,
+          operation: { workflow: row.workflow, operation: row.operation },
+          lineage: { root: row.lineageRoot, parent: row.lineageParent, hop: row.lineageHop },
+        }),
+      );
+
+    const decodeClaimEvent = Effect.fn("ControlStoreCoordination.decodeClaimEvent")(function* (
+      unknown: Record<string, unknown>,
+    ) {
+      const event = yield* decoded("Claim event", Schema.decodeUnknownResult(StoredClaimEvent)(unknown));
+      if (event === null) return null;
+      if (event.action === "release") return { event, claim: null } satisfies DecodedClaimEvent;
+      const claim = yield* decodeClaim(event);
+      return claim === null ? null : ({ event, claim } satisfies DecodedClaimEvent);
+    });
+
+    const claimEvents = Effect.fn("ControlStoreCoordination.claimEvents")(function* (workItem: string) {
+      const rows = yield* sql<Record<string, unknown>>`
+      SELECT sequence, action, by, claimed_at_millis AS claimedAtMillis,
+        workflow, operation, lineage_root AS lineageRoot,
+        lineage_parent AS lineageParent, lineage_hop AS lineageHop
       FROM coordination_claim_events
-      WHERE work_item = ${item}
+      WHERE work_item = ${workItem}
       ORDER BY sequence DESC
-      LIMIT 1
     `;
-    return stored === undefined ? null : yield* decodeClaimEvent(stored);
-  });
-
-  const claimFromEvent = (event: StoredClaimEvent) =>
-    decodeClaim({
-      by: event.by,
-      claimedAtMillis: event.claimedAtMillis,
-      ...(event.stage === null ? {} : { stage: event.stage }),
-      lineageRoot: event.lineageRoot,
-      lineageParent: event.lineageParent,
+      return yield* Effect.forEach(rows, decodeClaimEvent).pipe(
+        Effect.map((events) => events.filter((event): event is DecodedClaimEvent => event !== null)),
+      );
     });
 
-  const activeClaim = Effect.fn("ControlStoreCoordination.activeClaim")(function* (item: WorkItemId) {
-    const event = yield* latestClaimEvent(item);
-    if (event === null || event.action === "release") return null;
-    return { event, claim: yield* claimFromEvent(event) };
-  });
+    const activeClaim = Effect.fn("ControlStoreCoordination.activeClaim")(function* (workItem: string) {
+      const [latest] = yield* claimEvents(workItem);
+      return latest?.claim ? { event: latest.event, claim: latest.claim } : null;
+    });
 
-  const ensureItem = Effect.fn("ControlStoreCoordination.ensureItem")(function* (
-    item: WorkItemId,
-    operation: string,
-  ) {
-    const rows = yield* sql`SELECT work_item FROM coordination_items WHERE work_item = ${item} LIMIT 1`;
-    if (rows.length === 0) return yield* reject(operation, "source revision must be observed first");
-  });
+    const ensureItem = Effect.fn("ControlStoreCoordination.ensureItem")(function* (workItem: string) {
+      const rows = yield* sql`SELECT work_item FROM coordination_items WHERE work_item = ${workItem} LIMIT 1`;
+      if (rows.length === 0) {
+        return yield* coordinationError("refused", "source revision must be observed first", false);
+      }
+    });
 
-  const readClaim = Effect.fn("ControlStoreCoordination.readClaim")(function* (item: WorkItemId) {
-    const active = yield* activeClaim(item);
-    if (active === null) return unclaimed;
-    return {
-      claimHeld: true,
-      claim: active.claim,
-      claimedByUs: active.claim.by === defaultClaimant,
-    };
-  });
-
-  const readAttempts = Effect.fn("ControlStoreCoordination.readAttempts")(function* (item: WorkItemId) {
-    const stored = yield* sql<StoredAttempt>`
-      SELECT
-        stage,
-        outcome,
-        at_millis AS atMillis,
-        lineage_root AS lineageRoot,
-        lineage_parent AS lineageParent
+    const readAttempts = Effect.fn("ControlStoreCoordination.readAttempts")(function* (workItem: string) {
+      const rows = yield* sql<Record<string, unknown>>`
+      SELECT workflow, operation, outcome, at_millis AS atMillis,
+        lineage_root AS lineageRoot, lineage_parent AS lineageParent, lineage_hop AS lineageHop
       FROM coordination_attempts
-      WHERE work_item = ${item}
+      WHERE work_item = ${workItem}
       ORDER BY sequence
     `;
-    const rows = yield* decodeAttempts(stored);
-    return yield* Effect.forEach(rows, (row) => decodeAttempt(row));
-  });
+      return yield* Effect.forEach(rows, (unknown) =>
+        decoded("Attempt row", Schema.decodeUnknownResult(StoredAttempt)(unknown)).pipe(
+          Effect.flatMap((row) =>
+            row === null
+              ? Effect.succeed(null)
+              : decoded(
+                  "Attempt",
+                  Schema.decodeResult(AttemptRecord)({
+                    operation: { workflow: row.workflow, operation: row.operation },
+                    outcome: row.outcome,
+                    atMillis: row.atMillis,
+                    lineage: { root: row.lineageRoot, parent: row.lineageParent, hop: row.lineageHop },
+                  }),
+                ),
+          ),
+        ),
+      ).pipe(Effect.map((records) => records.filter((record): record is AttemptRecord => record !== null)));
+    });
 
-  const readHandback = Effect.fn("ControlStoreCoordination.readHandback")(function* (item: WorkItemId) {
-    const [stored] = yield* sql<StoredHandback>`
-      SELECT by, at_millis AS atMillis
+    const readHandbacks = Effect.fn("ControlStoreCoordination.readHandbacks")(function* (workItem: string) {
+      const rows = yield* sql<Record<string, unknown>>`
+      SELECT by, at_millis AS atMillis, note
       FROM coordination_handbacks
-      WHERE work_item = ${item}
-      ORDER BY sequence DESC
-      LIMIT 1
+      WHERE work_item = ${workItem}
+      ORDER BY sequence
     `;
-    return stored === undefined ? null : yield* decodeHandbackRecord(yield* decodeHandback(stored));
-  });
+      return yield* Effect.forEach(rows, (unknown) =>
+        decoded("Handback row", Schema.decodeUnknownResult(StoredHandback)(unknown)).pipe(
+          Effect.flatMap((row) =>
+            row === null
+              ? Effect.succeed(null)
+              : decoded("Handback", Schema.decodeResult(HandbackRecord)(row)),
+          ),
+        ),
+      ).pipe(Effect.map((records) => records.filter((record): record is HandbackRecord => record !== null)));
+    });
 
-  const read = Effect.fn("ControlStoreCoordination.read")(function* (input: WorkItemId) {
-    const item = yield* decodeItem(input);
-    const [claim, attempts, handback] = yield* Effect.all([
-      readClaim(item),
-      readAttempts(item),
-      readHandback(item),
-    ]);
-    return { ...claim, attempts, handback } satisfies CoordinationState;
-  });
-
-  const insertClaim = Effect.fn("ControlStoreCoordination.insertClaim")(function* (
-    item: WorkItemId,
-    record: Claim,
-    root: WorkItemId,
-    parent: WorkItemId | null,
-  ) {
-    yield* ensureItem(item, "write Claim");
-    const active = yield* activeClaim(item);
-    if (active !== null) return yield* reject("write Claim", "item already has an active Claim");
-    yield* sql`
-      INSERT INTO coordination_claim_events (
-        work_item, action, by, claimed_at_millis, stage, lineage_root, lineage_parent
-      ) VALUES (
-        ${item}, 'claim', ${defaultClaimant}, ${record.claimedAtMillis}, ${record.stage ?? null},
-        ${root}, ${parent}
-      )
+    const readParks = Effect.fn("ControlStoreCoordination.readParks")(function* (workItem: string) {
+      const rows = yield* sql<Record<string, unknown>>`
+      SELECT reason, at_millis AS atMillis
+      FROM coordination_parks
+      WHERE work_item = ${workItem}
+      ORDER BY sequence
     `;
-  });
+      return yield* Effect.forEach(rows, (unknown) =>
+        decoded("Park row", Schema.decodeUnknownResult(StoredPark)(unknown)).pipe(
+          Effect.flatMap((row) =>
+            row === null
+              ? Effect.succeed(null)
+              : decoded("Park reason", Schema.decodeResult(ParkReasonJson)(row.reason)).pipe(
+                  Effect.map((reason) =>
+                    reason === null ? null : ParkRecord.make({ reason, atMillis: row.atMillis }),
+                  ),
+                ),
+          ),
+        ),
+      ).pipe(Effect.map((records) => records.filter((record): record is ParkRecord => record !== null)));
+    });
 
-  const claim = Effect.fn("ControlStoreCoordination.claim")(function* (
-    itemInput: WorkItemId,
-    recordInput: Claim,
-  ) {
-    const item = yield* decodeItem(itemInput);
-    const record = yield* decodeClaim(recordInput);
-    const lineage = yield* lineageOf(record, "write Claim");
-    if (record.by !== defaultClaimant) return yield* reject("write Claim", "claimant is not this daemon");
-    yield* sql.withTransaction(insertClaim(item, record, lineage.root, lineage.parent));
-  });
-
-  const insertRelease = Effect.fn("ControlStoreCoordination.insertRelease")(function* (
-    item: WorkItemId,
-    expected: Claim,
-  ) {
-    yield* ensureItem(item, "release Claim");
-    const active = yield* activeClaim(item);
-    if (active === null || !claimsMatch(active.claim, expected)) {
-      return yield* reject("release Claim", "active Claim does not match the expected Claim");
-    }
-    yield* sql`
-      INSERT INTO coordination_claim_events (work_item, action, released_claim_sequence)
-      VALUES (${item}, 'release', ${active.event.sequence})
-    `;
-  });
-
-  const release = Effect.fn("ControlStoreCoordination.release")(function* (
-    itemInput: WorkItemId,
-    expectedInput: Claim,
-  ) {
-    const item = yield* decodeItem(itemInput);
-    const expected = yield* decodeClaim(expectedInput);
-    yield* lineageOf(expected, "release Claim");
-    yield* sql.withTransaction(insertRelease(item, expected));
-  });
-
-  const appendAttempt = Effect.fn("ControlStoreCoordination.appendAttempt")(function* (
-    itemInput: WorkItemId,
-    recordInput: AttemptRecord,
-  ) {
-    const item = yield* decodeItem(itemInput);
-    const record = yield* decodeAttempt(recordInput);
-    const lineage = yield* lineageOf(record, "append Attempt record");
-    yield* ensureItem(item, "append Attempt record");
-    yield* sql`
-      INSERT INTO coordination_attempts (
-        work_item, stage, outcome, at_millis, lineage_root, lineage_parent
-      ) VALUES (
-        ${item}, ${record.stage}, ${record.outcome}, ${record.atMillis}, ${lineage.root}, ${lineage.parent}
-      )
-    `;
-  });
-
-  const appendHandback = Effect.fn("ControlStoreCoordination.appendHandback")(function* (
-    itemInput: WorkItemId,
-    recordInput: HandbackRecord,
-  ) {
-    const item = yield* decodeItem(itemInput);
-    const record = yield* decodeHandbackRecord(recordInput);
-    yield* ensureItem(item, "append Handback record");
-    yield* sql`
-      INSERT INTO coordination_handbacks (work_item, by, at_millis)
-      VALUES (${item}, ${record.by}, ${record.atMillis})
-    `;
-  });
-
-  const insertSourceRevision = Effect.fn("ControlStoreCoordination.insertSourceRevision")(function* (
-    item: WorkItemId,
-    revision: string,
-  ) {
-    yield* sql`INSERT OR IGNORE INTO coordination_items (work_item) VALUES (${item})`;
-    yield* sql`
-      INSERT OR IGNORE INTO coordination_source_revisions (work_item, revision)
-      VALUES (${item}, ${revision})
-    `;
-  });
-
-  const observeSourceRevision = Effect.fn("ControlStoreCoordination.observeSourceRevision")(function* (
-    itemInput: WorkItemId,
-    revisionInput: string,
-  ) {
-    const item = yield* decodeItem(itemInput);
-    const revision = yield* decodeRevision(revisionInput);
-    yield* sql.withTransaction(insertSourceRevision(item, revision));
-  });
-
-  const markSourceRevisionProcessed = Effect.fn("ControlStoreCoordination.markSourceRevisionProcessed")(
-    function* (itemInput: WorkItemId, revisionInput: string) {
-      const item = yield* decodeItem(itemInput);
-      const revision = yield* decodeRevision(revisionInput);
-      const updated = yield* sql`
-      UPDATE coordination_source_revisions
-      SET processed = 1
-      WHERE work_item = ${item} AND revision = ${revision}
-      RETURNING revision
-    `;
-      if (updated.length === 0) {
-        return yield* reject("mark source revision processed", "source revision was not observed");
-      }
-    },
-  );
-
-  const readSourceRevisions = Effect.fn("ControlStoreCoordination.readSourceRevisions")(function* (
-    itemInput: WorkItemId,
-  ) {
-    const item = yield* decodeItem(itemInput);
-    const [stored] = yield* sql<StoredSourceRevisions>`
-      SELECT
-        current.revision AS observed,
-        (
-          SELECT processed.revision
-          FROM coordination_source_revisions AS processed
-          WHERE processed.work_item = ${item} AND processed.processed = 1
-          ORDER BY processed.sequence DESC
-          LIMIT 1
-        ) AS processed
+    const readRevision = Effect.fn("ControlStoreCoordination.readRevision")(function* (workItem: string) {
+      const [unknown] = yield* sql<Record<string, unknown>>`
+      SELECT current.revision AS observed,
+        (SELECT processed.revision FROM coordination_source_revisions AS processed
+          WHERE processed.work_item = ${workItem} AND processed.processed = 1
+          ORDER BY processed.sequence DESC LIMIT 1) AS processed
       FROM coordination_source_revisions AS current
-      WHERE current.work_item = ${item}
+      WHERE current.work_item = ${workItem}
       ORDER BY current.sequence DESC
       LIMIT 1
     `;
-    return stored === undefined ? null : yield* decodeSourceRevisions(stored);
+      if (unknown === undefined) return null;
+      return yield* decoded("Source revision", Schema.decodeUnknownResult(StoredSourceRevision)(unknown));
+    });
+
+    const read = Effect.fn("ControlStoreCoordination.read")(function* (ref: WorkItemRef) {
+      const workItem = yield* controlRef(ref);
+      const [claims, attempts, handbacks, parks, revision] = yield* Effect.all([
+        claimEvents(workItem),
+        readAttempts(workItem),
+        readHandbacks(workItem),
+        readParks(workItem),
+        readRevision(workItem),
+      ]);
+      const [latest] = claims;
+      const latestClaim = claims.find(({ claim }) => claim !== null)?.claim ?? null;
+      return {
+        claim: latest?.claim ?? null,
+        latestClaimAtMillis: latestClaim?.claimedAtMillis,
+        attempts,
+        handbacks,
+        parks,
+        revision,
+      } satisfies CoordinationLedger;
+    });
+
+    const claim = Effect.fn("ControlStoreCoordination.claim")(function* (ref: WorkItemRef, record: Claim) {
+      const workItem = yield* controlRef(ref);
+      yield* ensureItem(workItem);
+      if ((yield* activeClaim(workItem)) !== null) {
+        return yield* coordinationError("claim-held", "item already has an active Claim", false);
+      }
+      yield* sql`
+      INSERT INTO coordination_claim_events (
+        work_item, action, by, claimed_at_millis, workflow, operation,
+        lineage_root, lineage_parent, lineage_hop
+      ) VALUES (
+        ${workItem}, 'claim', ${record.by}, ${record.claimedAtMillis},
+        ${record.operation.workflow}, ${record.operation.operation}, ${record.lineage.root},
+        ${record.lineage.parent}, ${record.lineage.hop}
+      )
+    `;
+    });
+
+    const release = Effect.fn("ControlStoreCoordination.release")(function* (
+      ref: WorkItemRef,
+      expected: Claim,
+    ) {
+      const workItem = yield* controlRef(ref);
+      const active = yield* activeClaim(workItem);
+      if (active === null || !claimsMatch(active.claim, expected)) {
+        return yield* coordinationError("stale-claim", "active Claim does not match expected Claim", false);
+      }
+      yield* sql`
+      INSERT INTO coordination_claim_events (work_item, action, released_claim_sequence)
+      VALUES (${workItem}, 'release', ${active.event.sequence})
+    `;
+    });
+
+    const recordAttempt = Effect.fn("ControlStoreCoordination.recordAttempt")(function* (
+      ref: WorkItemRef,
+      record: AttemptRecord,
+    ) {
+      const workItem = yield* controlRef(ref);
+      yield* ensureItem(workItem);
+      yield* sql`
+      INSERT INTO coordination_attempts (
+        work_item, workflow, operation, outcome, at_millis,
+        lineage_root, lineage_parent, lineage_hop
+      ) VALUES (
+        ${workItem}, ${record.operation.workflow}, ${record.operation.operation}, ${record.outcome},
+        ${record.atMillis}, ${record.lineage.root}, ${record.lineage.parent}, ${record.lineage.hop}
+      )
+    `;
+    });
+
+    const handBack = Effect.fn("ControlStoreCoordination.handBack")(function* (
+      ref: WorkItemRef,
+      record: HandbackRecord,
+    ) {
+      const workItem = yield* controlRef(ref);
+      yield* ensureItem(workItem);
+      yield* sql`
+      INSERT INTO coordination_handbacks (work_item, by, at_millis, note)
+      VALUES (${workItem}, ${record.by}, ${record.atMillis}, ${record.note})
+    `;
+    });
+
+    const park = Effect.fn("ControlStoreCoordination.park")(function* (ref: WorkItemRef, record: ParkRecord) {
+      const workItem = yield* controlRef(ref);
+      yield* ensureItem(workItem);
+      const reason = yield* Schema.encodeEffect(ParkReasonJson)(record.reason);
+      yield* sql`
+      INSERT INTO coordination_parks (work_item, reason, at_millis)
+      VALUES (${workItem}, ${reason}, ${record.atMillis})
+    `;
+    });
+
+    const observe = Effect.fn("ControlStoreCoordination.observe")(function* (
+      ref: WorkItemRef,
+      revision: string,
+    ) {
+      const workItem = yield* controlRef(ref);
+      const decodedRevision = yield* Schema.decodeEffect(TrimmedNonEmptyString)(revision);
+      yield* sql`INSERT OR IGNORE INTO coordination_items (work_item) VALUES (${workItem})`;
+      const inserted = yield* sql`
+      INSERT OR IGNORE INTO coordination_source_revisions (work_item, revision)
+      VALUES (${workItem}, ${decodedRevision})
+      RETURNING revision
+    `;
+      return inserted.length === 0 ? "redelivered" : "moved";
+    });
+
+    const markProcessed = Effect.fn("ControlStoreCoordination.markProcessed")(function* (
+      ref: WorkItemRef,
+      revision: string,
+    ) {
+      const workItem = yield* controlRef(ref);
+      const updated = yield* sql`
+      UPDATE coordination_source_revisions SET processed = 1
+      WHERE work_item = ${workItem} AND revision = ${revision}
+      RETURNING revision
+    `;
+      if (updated.length === 0) {
+        return yield* coordinationError("refused", "source revision was not observed", false);
+      }
+    });
+
+    const mapFailure = (cause: unknown) =>
+      Schema.is(CoordinationError)(cause)
+        ? cause
+        : coordinationError("unavailable", cause instanceof Error ? cause.message : String(cause));
+    const write = <A, E>(effect: Effect.Effect<A, E>) =>
+      store.withWrite(effect).pipe(Effect.mapError(mapFailure));
+    const safeRead = <A, E>(effect: Effect.Effect<A, E>) => effect.pipe(Effect.mapError(mapFailure));
+
+    return {
+      read: (ref: WorkItemRef) => safeRead(read(ref)),
+      claim: (ref: WorkItemRef, record: Claim) => write(claim(ref, record)),
+      release: (ref: WorkItemRef, record: Claim) => write(release(ref, record)),
+      recordAttempt: (ref: WorkItemRef, record: AttemptRecord) => write(recordAttempt(ref, record)),
+      park: (ref: WorkItemRef, record: ParkRecord) => write(park(ref, record)),
+      handBack: (ref: WorkItemRef, record: HandbackRecord) => write(handBack(ref, record)),
+      observe: (ref: WorkItemRef, revision: string, _cause: Cause) => write(observe(ref, revision)),
+      markProcessed: (ref: WorkItemRef, revision: string) => write(markProcessed(ref, revision)),
+    };
   });
 
-  const write = <A, E>(operation: string, effect: Effect.Effect<A, E>) =>
-    store.withWrite(effect).pipe(Effect.mapError(mapFailure(operation)));
+const trackerAuthority = {
+  read: (_ref: WorkItemRef) => Effect.fail(notThisAuthority()),
+  claim: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(notThisAuthority()),
+  release: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(notThisAuthority()),
+  recordAttempt: (_ref: WorkItemRef, _attempt: AttemptRecord, _reason?: string) =>
+    Effect.fail(notThisAuthority()),
+  park: (_ref: WorkItemRef, _park: ParkRecord) => Effect.fail(notThisAuthority()),
+  handBack: (_ref: WorkItemRef, _record: HandbackRecord) => Effect.fail(notThisAuthority()),
+  observe: (_ref: WorkItemRef, _revision: string, _cause: Cause) => Effect.fail(notThisAuthority()),
+  markProcessed: (_ref: WorkItemRef, _revision: string) => Effect.fail(notThisAuthority()),
+};
 
-  return {
-    read: (item) => read(item).pipe(Effect.mapError(mapFailure("read coordination"))),
-    claim: (item, record) => write("write Claim", claim(item, record)),
-    release: (item, expected) => write("release Claim", release(item, expected)),
-    appendAttempt: (item, record) => write("append Attempt record", appendAttempt(item, record)),
-    appendHandback: (item, record) => write("append Handback record", appendHandback(item, record)),
-    observeSourceRevision: (item, revision) =>
-      write("observe source revision", observeSourceRevision(item, revision)),
-    markSourceRevisionProcessed: (item, revision) =>
-      write("mark source revision processed", markSourceRevisionProcessed(item, revision)),
-    readSourceRevisions: (item) =>
-      readSourceRevisions(item).pipe(Effect.mapError(mapFailure("read source revisions"))),
-  } satisfies ControlStoreCoordinationService;
-});
+export const makeControlStoreCoordination = Effect.map(makeControlStoreAuthority(), (control) =>
+  makeCoordination(trackerAuthority, control, defaultClaimant),
+);

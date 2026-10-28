@@ -1,3 +1,4 @@
+import { codingOperation, LineageId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Coordination from "../coordination";
 import { claimLabel, defaultRoleLabels, hasClaimLabel, roleLabelsFor, rolesFrom, wireCodec } from "./markers";
@@ -55,16 +56,18 @@ describe("linear wire codec", () => {
   });
 
   it("carries markers forward through a formatted body, the read-modify-write the tracker relies on", () => {
+    const lineage = { root: LineageId.make("issue:test"), parent: null, hop: 0 };
     const claim = Coordination.serializeClaim(wireCodec, {
       by: "cogwork",
       claimedAtMillis: 1,
-      stage: "implement",
+      operation: codingOperation("implement"),
+      lineage,
     });
     const attempt = Coordination.serializeAttempt(wireCodec, {
-      workflow: "coding",
-      operation: "implement",
+      operation: codingOperation("implement"),
       outcome: "failed",
       atMillis: 2,
+      lineage,
     });
     const body = Coordination.formatCoordinationBody(wireCodec, {
       status: "Last implement attempt failed.",
@@ -75,10 +78,11 @@ describe("linear wire codec", () => {
     assert.deepStrictEqual(Coordination.parseClaim(wireCodec, body), {
       by: "cogwork",
       claimedAtMillis: 1,
-      stage: "implement",
+      operation: codingOperation("implement"),
+      lineage,
     });
     assert.deepStrictEqual(Coordination.parseAttempts(wireCodec, body), [
-      { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 2 },
+      { operation: codingOperation("implement"), outcome: "failed", atMillis: 2, lineage },
     ]);
   });
 });

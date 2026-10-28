@@ -34,7 +34,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { Availability, availabilityCauseSummary } from "./availability";
-import type { AdmittedWork, EligibleWork } from "./classify";
+import { type AdmittedWork, type EligibleWork, maxAttemptsPerOperation } from "./classify";
 import {
   followUpNoteBody,
   handoffNote,
@@ -46,7 +46,6 @@ import { ContextAssembler } from "./context-assembler";
 import { ControlStore } from "./control-store";
 import * as Cooldown from "./cooldown";
 import { CredentialStore } from "./credential-store";
-import { isExhausted } from "./exhaustion";
 import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
 import { Harness, HarnessError, type HarnessRequest, type HarnessRunnerEnv } from "./harness";
 import { HarnessReadinessCache } from "./harness-readiness";
@@ -405,7 +404,7 @@ export const make = Effect.gen(function* () {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     const attempts = item.priorFailures + 1;
     const { retryable, handoffCause } = decision;
-    const exhausted = !retryable || isExhausted(attempts);
+    const exhausted = !retryable || attempts >= maxAttemptsPerOperation;
     yield* Effect.logWarning("stage attempt failed", {
       reason,
       retryable,

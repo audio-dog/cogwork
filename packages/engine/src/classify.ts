@@ -20,7 +20,7 @@ import type {
 import { BranchName as BranchNameSchema, byStageThenPriority, codingOperation } from "@cogwork/contracts";
 import * as Chunk from "effect/Chunk";
 import * as Data from "effect/Data";
-import { exhaustionOf } from "./exhaustion";
+import { fold, maxAttemptsPerOperation } from "./coordination";
 import {
   type FollowUpContext,
   followUpContext,
@@ -161,7 +161,23 @@ export const observedStage = (item: ObservedItem) => {
   return null;
 };
 
-export { consecutiveFailures, maxAttemptsPerOperation } from "./exhaustion";
+export { maxAttemptsPerOperation };
+
+const coordinationViewOf = (item: ObservedItem) =>
+  item.coordination ??
+  fold(
+    {
+      claim: item.claim,
+      attempts: item.attempts,
+      handbacks: item.handback ? [{ ...item.handback, note: null }] : [],
+      parks: [],
+      revision: null,
+    },
+    "cogwork",
+  );
+
+export const consecutiveFailures = (item: ObservedItem, key: ReturnType<typeof codingOperation>) =>
+  coordinationViewOf(item).counters(key).consecutiveFailures;
 
 const ownedByActor = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined) =>
   !allowlist || item.assignees.some((assignee) => allowlist.includes(assignee));
@@ -182,7 +198,7 @@ const classifyOne = (
   const stage = observedStage(item);
   if (!stage) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
-  if (exhaustionOf(item, codingOperation(stage)).exhausted) {
+  if (coordinationViewOf(item).counters(codingOperation(stage)).exhausted) {
     return Outcome.NeedsHuman({ reason: "ready-for-human" });
   }
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
@@ -227,7 +243,7 @@ export const classifiedItemOf = (item: ObservedItem) =>
   });
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
-  const priorFailures = exhaustionOf(item, codingOperation(stage)).failedAttempts;
+  const priorFailures = coordinationViewOf(item).counters(codingOperation(stage)).consecutiveFailures;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   const followUpBranch = followUpBranchFor(item, stage);
   return {

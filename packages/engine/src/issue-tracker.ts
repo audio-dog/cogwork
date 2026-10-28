@@ -1,6 +1,6 @@
 import {
+  type AttemptRecord,
   type Claim,
-  type HandbackRecord,
   IssueTrackerError,
   type LifecycleStage,
   linearTeams,
@@ -14,7 +14,7 @@ import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { CoordinationState } from "./coordination-adapter";
+import type { CoordinationView } from "./coordination";
 import type { FollowUpMarker, ObservedPr } from "./follow-up";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
@@ -23,10 +23,18 @@ export { IssueTrackerError };
 
 export const defaultTrackerCooldown = Duration.minutes(1);
 
-type WithoutClaimant<T> = T extends Claim ? Omit<T, "by"> : never;
-export type ClaimRequest = WithoutClaimant<Claim>;
+export interface ClaimRequest {
+  readonly claimedAtMillis: number;
+  readonly stage: LifecycleStage;
+}
 
-interface ObservedItemBase extends CoordinationState {
+interface ObservedItemBase {
+  readonly claimHeld: boolean;
+  readonly claim: Claim | null;
+  readonly claimedByUs: boolean;
+  readonly attempts: ReadonlyArray<AttemptRecord>;
+  readonly handback: { readonly by: string; readonly atMillis: number; readonly note?: string | null } | null;
+  readonly coordination?: CoordinationView;
   readonly id: WorkItemId;
   readonly title: string;
   readonly url: string;
@@ -88,7 +96,7 @@ export interface ReclassifyOutcome {
 }
 
 export interface HandBackOutcome {
-  readonly record: HandbackRecord;
+  readonly record: { readonly by: string; readonly atMillis: number };
   readonly changes: RoleChanges;
   readonly note?: string;
 }

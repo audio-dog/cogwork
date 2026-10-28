@@ -1,18 +1,22 @@
 import {
   type AttemptRecord,
+  type Cause,
   type Claim,
   codingOperation,
   type HandbackRecord,
+  keyOf,
   type LifecycleStage,
+  LineageId,
+  type ParkRecord,
   type Priority,
   type RunPlanWorkContextProse,
   type TriageRole,
   type WorkItemId,
+  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import type { CommentHost, CoordinationComment, WireCodec } from "./coordination";
 import * as Coordination from "./coordination";
-import type { CoordinationAdapter } from "./coordination-adapter";
 import type { FollowUpMarker } from "./follow-up";
 import type {
   AttemptFailedOutcome,
@@ -21,7 +25,6 @@ import type {
   HandBackOutcome,
   HandOffOutcome,
   ImplementedOutcome,
-  IssueTrackerError,
   IssueTrackerService,
   ReclassifyOutcome,
   RoleChanges,
@@ -29,6 +32,7 @@ import type {
   TrackerItem,
   TriagedOutcome,
 } from "./issue-tracker";
+import { IssueTrackerError } from "./issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 const handoffRoles = {
@@ -72,8 +76,18 @@ export interface CoordinationHost<Ref, CommentId> {
   readonly afterRoleChange: (ref: Ref, changes: RoleChanges) => Effect.Effect<void, IssueTrackerError>;
 }
 
-interface TrackerCoordinationAdapter<Ref, CommentId>
-  extends CoordinationAdapter<ListedItem<CommentId>, Ref, undefined, IssueTrackerError> {
+interface TrackerRecords<Ref, CommentId> {
+  readonly read: (item: ListedItem<CommentId>) => Effect.Effect<{
+    readonly claimHeld: boolean;
+    readonly claim: Claim | null;
+    readonly claimedByUs: boolean;
+    readonly attempts: ReadonlyArray<AttemptRecord>;
+    readonly handback: HandbackRecord | null;
+  }>;
+  readonly claim: (ref: Ref, claim: Claim) => Effect.Effect<void, IssueTrackerError>;
+  readonly release: (ref: Ref) => Effect.Effect<void, IssueTrackerError>;
+  readonly appendAttempt: (ref: Ref, attempt: AttemptRecord) => Effect.Effect<void, IssueTrackerError>;
+  readonly appendHandback: (ref: Ref, handback: HandbackRecord) => Effect.Effect<void, IssueTrackerError>;
   readonly appendAttemptWithReason: (
     ref: Ref,
     attempt: AttemptRecord,
@@ -86,9 +100,9 @@ interface TrackerCoordinationAdapter<Ref, CommentId>
   ) => Effect.Effect<void, IssueTrackerError>;
 }
 
-const makeTrackerCoordinationAdapter = <Ref, CommentId>(
+const makeTrackerRecords = <Ref, CommentId>(
   host: CoordinationHost<Ref, CommentId>,
-): TrackerCoordinationAdapter<Ref, CommentId> => {
+): TrackerRecords<Ref, CommentId> => {
   const appendAttemptWithReason = (ref: Ref, attempt: AttemptRecord, reason?: string) =>
     Coordination.upsertCoordination(host.codec, host.comments(ref), {
       status: Coordination.attemptStatus(attempt, reason),
@@ -127,11 +141,155 @@ const makeTrackerCoordinationAdapter = <Ref, CommentId>(
   };
 };
 
+const trackerAuthorityError = (
+  message: string,
+  reason: Coordination.CoordinationError["reason"] = "unavailable",
+) => new Coordination.CoordinationError({ reason, message, retryable: reason === "unavailable" });
+const reportedInvalidTrackerRecords = new Set<string>();
+
+const claimsMatch = (actual: Claim, expected: Claim) =>
+  actual.by === expected.by &&
+  actual.claimedAtMillis === expected.claimedAtMillis &&
+  actual.operation.workflow === expected.operation.workflow &&
+  actual.operation.operation === expected.operation.operation &&
+  actual.lineage.root === expected.lineage.root &&
+  actual.lineage.parent === expected.lineage.parent &&
+  actual.lineage.hop === expected.lineage.hop;
+
+export const makeTrackerCoordination = <Ref, CommentId>(
+  host: CoordinationHost<Ref, CommentId>,
+  workspace: WorkspaceIssueTrackerBinding,
+  item: ListedItem<CommentId>,
+  claimant = Coordination.defaultClaimant,
+) => {
+  const records = makeTrackerRecords(host);
+  const body = Coordination.selectLedger(host.codec, item.comments)?.body ?? "";
+  const spans = host.codec.scan(body);
+  const parsedClaims = Coordination.parseClaims(host.codec, body);
+  const parsedClaim = parsedClaims.at(-1) ?? null;
+  const invalidRecord =
+    spans.filter((span) => span.name === "claim").length !== parsedClaims.length ||
+    spans.filter((span) => span.name === "attempt").length !==
+      Coordination.parseAttempts(host.codec, body).length ||
+    spans.filter((span) => span.name === "handback").length !==
+      Coordination.parseHandbacks(host.codec, body).length ||
+    spans.filter((span) => span.name === "park").length !== Coordination.parseParks(host.codec, body).length;
+  const state: { ledger: Coordination.CoordinationLedger } = {
+    ledger: {
+      claim: item.claimLabeled ? parsedClaim : null,
+      latestClaimAtMillis: parsedClaim?.claimedAtMillis,
+      attempts: Coordination.parseAttempts(host.codec, body),
+      handbacks: Coordination.parseHandbacks(host.codec, body),
+      parks: Coordination.parseParks(host.codec, body),
+      revision: null,
+    },
+  };
+  const issueRef = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
+  const invalidRecordKey = keyOf(issueRef);
+  const matches = (ref: WorkItemRef) =>
+    ref._tag === "Issue" && ref.workspace === issueRef.workspace && ref.id === issueRef.id;
+  const target = Effect.fn("TrackerCoordination.target")(function* (ref: WorkItemRef) {
+    if (!matches(ref)) {
+      return yield* trackerAuthorityError("item is not held by this tracker authority", "not-this-authority");
+    }
+    return yield* host
+      .resolve(workspace, item.id)
+      .pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
+  });
+  const update = (next: Coordination.CoordinationLedger) =>
+    Effect.sync(() => {
+      state.ledger = next;
+    });
+  const authority = {
+    read: (ref: WorkItemRef) => {
+      if (!matches(ref)) {
+        return Effect.fail(
+          trackerAuthorityError("item is not held by this tracker authority", "not-this-authority"),
+        );
+      }
+      if (!invalidRecord || reportedInvalidTrackerRecords.has(invalidRecordKey)) {
+        return Effect.succeed(state.ledger);
+      }
+      return Effect.sync(() => {
+        reportedInvalidTrackerRecords.add(invalidRecordKey);
+      }).pipe(
+        Effect.andThen(
+          Effect.logError("invalid persisted coordination record dropped", {
+            authority: "tracker",
+            item: item.id,
+          }),
+        ),
+        Effect.map(() => state.ledger),
+      );
+    },
+    claim: (ref: WorkItemRef, record: Claim) =>
+      Effect.gen(function* () {
+        if (state.ledger.claim !== null) {
+          return yield* trackerAuthorityError("item already has an active Claim", "claim-held");
+        }
+        const native = yield* target(ref);
+        yield* records
+          .claim(native, record)
+          .pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
+        yield* update({ ...state.ledger, claim: record, latestClaimAtMillis: record.claimedAtMillis });
+      }),
+    release: (ref: WorkItemRef, record: Claim) =>
+      Effect.gen(function* () {
+        if (state.ledger.claim === null || !claimsMatch(state.ledger.claim, record)) {
+          return yield* trackerAuthorityError("active Claim does not match expected Claim", "stale-claim");
+        }
+        const native = yield* target(ref);
+        yield* records.release(native).pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
+        yield* update({ ...state.ledger, claim: null });
+      }),
+    recordAttempt: (ref: WorkItemRef, record: AttemptRecord, reason?: string) =>
+      Effect.gen(function* () {
+        const native = yield* target(ref);
+        yield* records
+          .appendAttemptWithReason(native, record, reason)
+          .pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
+        yield* update({ ...state.ledger, attempts: [...state.ledger.attempts, record] });
+      }),
+    park: (ref: WorkItemRef, record: ParkRecord) =>
+      Effect.gen(function* () {
+        const native = yield* target(ref);
+        yield* Coordination.upsertCoordination(host.codec, host.comments(native), {
+          marker: Coordination.serializePark(host.codec, record),
+        }).pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
+        yield* update({ ...state.ledger, parks: [...state.ledger.parks, record] });
+      }),
+    handBack: (ref: WorkItemRef, record: HandbackRecord) =>
+      Effect.gen(function* () {
+        const native = yield* target(ref);
+        yield* records
+          .appendHandbackWithNote(native, record, record.note ?? undefined)
+          .pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
+        yield* update({ ...state.ledger, handbacks: [...state.ledger.handbacks, record] });
+      }),
+    observe: (_ref: WorkItemRef, _revision: string, _cause: Cause) =>
+      Effect.fail(trackerAuthorityError("tracker authority owns source revisions", "not-this-authority")),
+    markProcessed: (_ref: WorkItemRef, _revision: string) =>
+      Effect.fail(trackerAuthorityError("tracker authority owns source revisions", "not-this-authority")),
+  };
+  const control = {
+    ...authority,
+    read: (_ref: WorkItemRef) =>
+      Effect.fail(trackerAuthorityError("engine-minted item requires Control store", "not-this-authority")),
+  };
+  return Coordination.makeCoordination(authority, control, claimant);
+};
+
+const lineageFor = (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) => ({
+  root: LineageId.make(keyOf({ _tag: "Issue", workspace: workspace.config.name, id })),
+  parent: null,
+  hop: 0,
+});
+
 export const makeCoordinationTracker = <Ref, CommentId>(
   host: CoordinationHost<Ref, CommentId>,
 ): IssueTrackerService => {
   const { codec } = host;
-  const coordination = makeTrackerCoordinationAdapter(host);
+  const records = makeTrackerRecords(host);
 
   const applyRoles = Effect.fn("coordinationTracker.applyRoles")(function* (ref: Ref, changes: RoleChanges) {
     yield* Effect.forEach(changes.add, (role) => host.addRole(ref, role));
@@ -160,21 +318,35 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     observe: Effect.fn("coordinationTracker.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
       const listed = yield* host.list(workspace);
       return yield* Effect.forEach(listed, (item) =>
-        Effect.map(coordination.read(item), (state): TrackerItem => {
+        Effect.flatMap(records.read(item), (state) => {
           const ledger = Coordination.selectLedger(codec, item.comments);
           const body = ledger?.body ?? "";
-          return {
-            id: item.id,
-            title: item.title,
-            url: item.url,
-            roles: item.roles,
-            assignees: item.assignees,
-            ...state,
-            followUp: Coordination.parseFollowUp(codec, body),
-            openBlockers: item.openBlockers,
-            proposal: Coordination.selectTriageProposal(item.comments),
-            priority: item.priority,
-          };
+          const claimant =
+            state.claim && item.acceptedClaimants.includes(state.claim.by)
+              ? state.claim.by
+              : Coordination.defaultClaimant;
+          const service = makeTrackerCoordination(host, workspace, item, claimant);
+          const ref = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
+          return service.read(ref).pipe(
+            Effect.mapError(
+              (error) => new IssueTrackerError({ reason: "unavailable", message: error.message }),
+            ),
+            Effect.map(
+              (view): TrackerItem => ({
+                id: item.id,
+                title: item.title,
+                url: item.url,
+                roles: item.roles,
+                assignees: item.assignees,
+                ...state,
+                coordination: view,
+                followUp: Coordination.parseFollowUp(codec, body),
+                openBlockers: item.openBlockers,
+                proposal: Coordination.selectTriageProposal(item.comments),
+                priority: item.priority,
+              }),
+            ),
+          );
         }),
       );
     }),
@@ -191,15 +363,20 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       request: ClaimRequest,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      const claim: Claim = { ...request, by: host.claimIdentity(ref) };
-      yield* coordination.claim(ref, claim);
+      const claim: Claim = {
+        by: host.claimIdentity(ref),
+        claimedAtMillis: request.claimedAtMillis,
+        operation: codingOperation(request.stage),
+        lineage: lineageFor(workspace, id),
+      };
+      yield* records.claim(ref, claim);
     }),
     release: Effect.fn("coordinationTracker.release")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* coordination.release(ref, undefined);
+      yield* records.release(ref);
     }),
     note: Effect.fn("coordinationTracker.note")(function* (
       workspace: WorkspaceIssueTrackerBinding,
@@ -217,10 +394,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       const ref = yield* host.resolve(workspace, id);
       yield* writeNote(ref, outcome.proposal);
       yield* applyRoles(ref, { remove: ["needs-triage"], add: [outcome.role] });
-      yield* coordination.appendAttempt(ref, {
-        ...codingOperation("triage"),
+      yield* records.appendAttempt(ref, {
+        operation: codingOperation("triage"),
         outcome: "succeeded",
         atMillis: outcome.atMillis,
+        lineage: lineageFor(workspace, id),
       });
     }),
     implemented: Effect.fn("coordinationTracker.implemented")(function* (
@@ -230,10 +408,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ) {
       const ref = yield* host.resolve(workspace, id);
       yield* applyRoles(ref, { remove: ["ready-for-agent"], add: [] });
-      yield* coordination.appendAttempt(ref, {
-        ...codingOperation("implement"),
+      yield* records.appendAttempt(ref, {
+        operation: codingOperation("implement"),
         outcome: "succeeded",
         atMillis: outcome.atMillis,
+        lineage: lineageFor(workspace, id),
       });
     }),
     followedUp: Effect.fn("coordinationTracker.followedUp")(function* (
@@ -243,10 +422,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ) {
       const ref = yield* host.resolve(workspace, id);
       yield* writeFollowUp(ref, outcome.marker, outcome.summary);
-      yield* coordination.appendAttempt(ref, {
-        ...codingOperation("follow-up"),
+      yield* records.appendAttempt(ref, {
+        operation: codingOperation("follow-up"),
         outcome: "succeeded",
         atMillis: outcome.atMillis,
+        lineage: lineageFor(workspace, id),
       });
     }),
     attemptFailed: Effect.fn("coordinationTracker.attemptFailed")(function* (
@@ -255,13 +435,13 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: AttemptFailedOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* coordination.appendAttemptWithReason(
+      yield* records.appendAttemptWithReason(
         ref,
         {
-          workflow: outcome.workflow,
-          operation: outcome.operation,
+          operation: { workflow: outcome.workflow, operation: outcome.operation },
           outcome: "failed",
           atMillis: outcome.atMillis,
+          lineage: lineageFor(workspace, id),
         },
         outcome.reason,
       );
@@ -281,7 +461,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: HandBackOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* coordination.appendHandbackWithNote(ref, outcome.record, outcome.note);
+      yield* records.appendHandbackWithNote(
+        ref,
+        { ...outcome.record, note: outcome.note ?? null },
+        outcome.note,
+      );
       yield* applyRoles(ref, outcome.changes);
     }),
     stalled: Effect.fn("coordinationTracker.stalled")(function* (
@@ -292,10 +476,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       const ref = yield* host.resolve(workspace, id);
       yield* writeFollowUp(ref, outcome.marker, outcome.detail);
       yield* applyRoles(ref, { remove: [handoffRoleFor("follow-up")], add: ["ready-for-human"] });
-      yield* coordination.appendAttempt(ref, {
-        ...codingOperation("follow-up"),
+      yield* records.appendAttempt(ref, {
+        operation: codingOperation("follow-up"),
         outcome: "abandoned",
         atMillis: outcome.atMillis,
+        lineage: lineageFor(workspace, id),
       });
     }),
     reclassify: Effect.fn("coordinationTracker.reclassify")(function* (

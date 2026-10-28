@@ -1,8 +1,7 @@
-import { codingOperation, IssueTrackerError, type OperationKey, type WorkItemId } from "@cogwork/contracts";
+import { IssueTrackerError, type WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
-import { observedStage } from "./classify";
-import { attemptsAfterHandback } from "./exhaustion";
+import { fold } from "./coordination";
 import type { IssueTrackerService, ObservedItem, TrackerItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import type { PrSignals, SourceControlProviderService } from "./source-control";
@@ -27,24 +26,20 @@ export const reconcilePhaseDuration = (
   phase: "tracker" | "source-control" | "availability",
 ) => Metric.withAttributes(reconcilePollPhaseDuration, { ...reconcilePollAttributes(workspace), phase });
 
-export const applyHandbackBarrier = (item: ObservedItem, key: OperationKey) => {
-  const handback = item.handback;
-  if (handback === null) return item;
-  const attempts = item.attempts.filter((attempt) => attempt.atMillis > handback.atMillis);
-  const pr = item.pr;
-  if (!pr?.followUp) return { ...item, attempts };
-  const markerWritten = attemptsAfterHandback(item, key).some(
-    (attempt) => attempt.outcome === "succeeded" || attempt.outcome === "abandoned",
-  );
-  return {
-    ...item,
-    attempts,
-    pr: { ...pr, followUp: markerWritten ? pr.followUp : { ...pr.followUp, noProgress: 0 } },
-  };
-};
-
 const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>): ObservedItem => {
   const pr = signals.get(item.id);
+  const coordination =
+    item.coordination ??
+    fold(
+      {
+        claim: item.claim,
+        attempts: item.attempts,
+        handbacks: item.handback ? [{ ...item.handback, note: item.handback.note ?? null }] : [],
+        parks: [],
+        revision: null,
+      },
+      "cogwork",
+    );
   const observed: ObservedItem = {
     id: item.id,
     title: item.title,
@@ -60,9 +55,16 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
     proposal: item.proposal,
     priority: item.priority,
     pr: pr ? { ...pr, followUp: item.followUp } : null,
+    coordination,
   };
-  const stage = observedStage(observed);
-  return stage ? applyHandbackBarrier(observed, codingOperation(stage)) : observed;
+  const followUp = observed.pr?.followUp;
+  const barrier = coordination.barrierAtMillis;
+  const markerWritten = observed.attempts.some(
+    (attempt) =>
+      attempt.atMillis > barrier && (attempt.outcome === "succeeded" || attempt.outcome === "abandoned"),
+  );
+  if (!followUp || barrier === 0 || markerWritten) return observed;
+  return { ...observed, pr: { ...observed.pr, followUp: { ...followUp, noProgress: 0 } } };
 };
 
 export const observeWorkspace = (tracker: IssueTrackerService, provider: SourceControlProviderService) =>
