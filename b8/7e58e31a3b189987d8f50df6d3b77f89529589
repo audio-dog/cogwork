@@ -1,0 +1,61 @@
+packages/engine/src/coordination-tracker.ts
+  s_638f6f3aaaa58b::t_8735656d214609 75,88,121,201
+packages/engine/src/coordination-adapter.ts
+  s_638f6f3aaaa58b::t_8735656d214609 4-5,14,17
+packages/engine/src/coordination-control-store.ts
+  s_638f6f3aaaa58b::t_d742b612ffd6f2 340
+  s_638f6f3aaaa58b::t_0a81bef10002e6 299
+  s_638f6f3aaaa58b::t_10363074d92673 6-7,13,16,47-51,58,76-77,81,84-90,92-94,96,106,116,118-120,123,135-139,146-168,198-199,227-232,234,253-259,261-262,264-265,267-268,270,281-282,284-286,304-309,311-312,314-321,323-325,330,332,335-339,341-346,351-352,355,357,365
+  s_638f6f3aaaa58b::t_87db7cff30eadf 100-105
+  s_638f6f3aaaa58b::t_072e33266b647d 208-215,221-222,235-246,248-249,260,310
+  s_638f6f3aaaa58b::t_3bc53891eba88b 109-115
+  s_638f6f3aaaa58b::t_433d32b3472647 293,297
+  s_638f6f3aaaa58b::t_2aeed9d7d9b6a2 216
+  s_638f6f3aaaa58b::t_d8e52d0d4af970 233
+packages/engine/src/coordination.test.ts
+  s_638f6f3aaaa58b::t_871de573ac59a6 5,48,53
+  s_638f6f3aaaa58b::t_7fa4b649f0edd0 1,45-47,49-52,54-62
+  s_638f6f3aaaa58b::t_effefb43729ba0 63
+packages/engine/src/coordination.ts
+  s_638f6f3aaaa58b::t_8735656d214609 49
+packages/contracts/src/coordination.ts
+  s_638f6f3aaaa58b::t_dcf2c197496c91 6-7
+  s_638f6f3aaaa58b::t_8735656d214609 5,10-15,19-24,30,34-39
+packages/engine/src/coordination-control-store.test.ts
+  s_638f6f3aaaa58b::t_2a609d9ab2ae6e 7,200-201,203-205
+  s_638f6f3aaaa58b::t_7fa4b649f0edd0 1,9,32-38,41,43-44,59,94-95,101-120,129-149,174-185,195-199,202,206-211
+  s_638f6f3aaaa58b::t_12971621454c9d 121-128
+  s_638f6f3aaaa58b::t_388d9dc89dc444 150-173,186,188-194
+  s_7c2cbf2b95d5ac::t_b7dfbd7adc0f34 187
+packages/engine/src/control-store.test.ts
+  s_638f6f3aaaa58b::t_7fa4b649f0edd0 127-128,137
+packages/engine/src/control-store-schema.ts
+  s_638f6f3aaaa58b::t_71443a4c062315 111-127,132-134,141,148-161,170-172,181,183-184,192-194,198-202
+  s_638f6f3aaaa58b::t_6a37d664c9ab67 3
+packages/engine/src/issue-tracker.ts
+  s_638f6f3aaaa58b::t_871de573ac59a6 25-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b87e58e31a3b189987d8f50df6d3b77f89529589",
+  "prompts": {},
+  "sessions": {
+    "s_638f6f3aaaa58b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180d5-02dc-7393-ad93-78e3fc7162e7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7c2cbf2b95d5ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180eb-b341-7b00-ab45-6593a417782c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
