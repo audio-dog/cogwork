@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { WorkspaceId } from "./base-schemas";
+import { HarnessName, WorkspaceId } from "./base-schemas";
 import {
   applyWorkflowEdits,
   validateWorkflow,
@@ -16,6 +16,7 @@ import {
 
 const decodeDocument = Schema.decodeUnknownSync(WorkflowDocumentSchema);
 const decodeCatalog = Schema.decodeUnknownSync(WorkflowCatalogSchema);
+const decodeHarness = Schema.decodeUnknownSync(HarnessName);
 const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
 const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
 
@@ -190,10 +191,7 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
   {
     code: "unknown-model",
     produce: () =>
-      codesOf(
-        replaceOperation({ model: { harness: null, model: "missing", options: [] } }),
-        catalogWith({ defaultHarness: null }),
-      ),
+      codesOf(replaceOperation({ model: { harness: decodeHarness("missing"), model: null, options: [] } })),
   },
   { code: "no-trigger", produce: () => codesOf(documentWith({ triggers: [] })) },
   {

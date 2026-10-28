@@ -676,11 +676,13 @@ const modelDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) 
           ]
         : [];
     const model = harness?.models.find((candidate) => candidate.id === operation.model.model);
+    const invalidHarness = harnessName !== null && !harness;
     const invalidModel = operation.model.model !== null && (!harness || !model);
     const invalidOptions = operation.model.options.some((option) => {
       const catalogOption = model?.options.find((candidate) => candidate.id === option.id);
       return !catalogOption?.values.includes(option.value);
     });
+    const invalidSelection = invalidHarness || invalidModel || invalidOptions;
     const unknownModel = diagnostic(
       "unknown-model",
       "malformed",
@@ -702,7 +704,7 @@ const modelDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) 
         },
         { matches: harnessName === null, diagnostics: [noHarness] },
         {
-          matches: invalidModel || invalidOptions,
+          matches: invalidSelection,
           diagnostics: [...availability, unknownModel],
         },
         { matches: operation.model.model === null, diagnostics: availability },
