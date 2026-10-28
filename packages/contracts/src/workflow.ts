@@ -931,7 +931,7 @@ const catalogDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog
     !catalog.instructionPackages.includes(operation.instructionPackage)
       ? [
           diagnostic(
-            "unknown-option",
+            "unknown-catalog-entry",
             "malformed",
             `Unknown instruction package ${operation.instructionPackage}`,
             location("instructionPackage", { operation: operation.id }),
