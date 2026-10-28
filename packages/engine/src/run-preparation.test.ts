@@ -492,6 +492,18 @@ describe("RunPreparation.prepare", () => {
     });
   });
 
+  it.layer(testLayer(cursor, {}, "full"))((it) => {
+    it.effect("uses a worktree for a full triage Operation", () => {
+      const item = triageItem(117);
+      return Effect.gen(function* () {
+        const prepared = yield* prepare(item, cursor, "full");
+        assert.strictEqual(prepared.checkoutPath, `/worktrees/${branchName(item)}`);
+        assert.strictEqual(prepared.branch, branchName(item));
+        assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), [{ item: item.id, options: undefined }]);
+      });
+    });
+  });
+
   it.layer(testLayer(replay, {}, "read-only"))((it) => {
     it.effect("uses the workspace checkout without touching a worktree for replay", () => {
       const item = implementItem(109);
