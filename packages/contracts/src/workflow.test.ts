@@ -362,6 +362,17 @@ describe("Workflow validator", () => {
     assert.deepStrictEqual(validateWorkflow(baseDocument, baseCatalog), []);
   });
 
+  it("requires node ids to be unique across the document", () => {
+    const documents = [
+      documentWith({ triggers: [{ ...baseDocument.triggers[0], id: operation.id }] }),
+      documentWith({ operations: [operation, { ...operation, id: decodeNodeId("next") }] }),
+    ];
+
+    documents.forEach((document) => {
+      assert.include(codesOf(document), "duplicate-id");
+    });
+  });
+
   it("produces every section 5 code", () => {
     diagnosticCases.forEach((testCase) => {
       assert.include(testCase.produce(), testCase.code);

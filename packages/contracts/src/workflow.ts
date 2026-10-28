@@ -446,16 +446,28 @@ export const uncovered = (operation: WorkflowOperation) =>
   );
 
 const duplicateIdDiagnostics = (document: WorkflowDocument) => {
-  const duplicateOperations = duplicateValues(document.operations.map(({ id }) => id));
-  const duplicateTriggers = duplicateValues(document.triggers.map(({ id }) => id));
-  const duplicateQuestions = document.operations.flatMap((operation) =>
-    duplicateValues(operation.questions.map(({ id }) => id)).map((id) =>
-      diagnostic(
-        "duplicate-id",
-        "malformed",
-        `Operation ${operation.id} has duplicate question id ${id}`,
-        location("question", { operation: operation.id, question: id }),
-      ),
+  const nodes = [
+    ...document.operations.map(({ id }) => ({
+      id,
+      location: location("operation", { operation: id }),
+    })),
+    ...document.triggers.map(({ id }) => ({
+      id,
+      location: location("trigger", { trigger: id }),
+    })),
+    ...document.operations.flatMap((operation) =>
+      operation.questions.map(({ id }) => ({
+        id,
+        location: location("question", { operation: operation.id, question: id }),
+      })),
+    ),
+  ];
+  const duplicateNodes = duplicateValues(nodes.map(({ id }) => id)).map((id) =>
+    diagnostic(
+      "duplicate-id",
+      "malformed",
+      `Duplicate node id ${id}`,
+      nodes.find((node) => node.id === id)?.location,
     ),
   );
   const duplicateChoices = document.operations.flatMap((operation) =>
@@ -470,26 +482,7 @@ const duplicateIdDiagnostics = (document: WorkflowDocument) => {
       ),
     ),
   );
-  return [
-    ...duplicateOperations.map((id) =>
-      diagnostic(
-        "duplicate-id",
-        "malformed",
-        `Duplicate Operation id ${id}`,
-        location("operation", { operation: id }),
-      ),
-    ),
-    ...duplicateTriggers.map((id) =>
-      diagnostic(
-        "duplicate-id",
-        "malformed",
-        `Duplicate Trigger id ${id}`,
-        location("trigger", { trigger: id }),
-      ),
-    ),
-    ...duplicateQuestions,
-    ...duplicateChoices,
-  ];
+  return [...duplicateNodes, ...duplicateChoices];
 };
 
 const duplicateTransitionDiagnostics = (document: WorkflowDocument) =>
