@@ -15,7 +15,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type { CoordinationView } from "./coordination";
-import type { FollowUpMarker, ObservedPr } from "./follow-up";
+import type { FollowUpMarker, FollowUpTrigger, ObservedPr } from "./follow-up";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
@@ -34,6 +34,8 @@ interface ObservedItemBase {
   readonly claimedByUs: boolean;
   readonly attempts: ReadonlyArray<AttemptRecord>;
   readonly handback: { readonly by: string; readonly atMillis: number; readonly note?: string | null } | null;
+  readonly engineHandoffAtMillis?: number | null;
+  readonly followUpTrigger?: FollowUpTrigger | null;
   readonly coordination?: CoordinationView;
   readonly id: WorkItemId;
   readonly title: string;
@@ -77,6 +79,7 @@ export interface FollowedUpOutcome {
 export interface AttemptFailedOutcome extends OperationKey {
   readonly atMillis: number;
   readonly reason?: string;
+  readonly marker?: FollowUpMarker;
 }
 
 export interface HandOffOutcome {

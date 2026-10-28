@@ -537,6 +537,7 @@ interface Call {
   readonly detail?: string;
   readonly summary?: string;
   readonly noProgress?: number;
+  readonly baseDivergence?: string;
 }
 
 class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<Call>>>()(
@@ -613,6 +614,7 @@ function trackerRecorder(
             item: itemId,
             stage: outcome.operation,
             reason: outcome.reason,
+            baseDivergence: outcome.marker?.baseDivergence,
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
         },
@@ -1251,6 +1253,37 @@ const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
 const noopProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
   SourceControlProvider,
   noopProvider,
+).pipe(Layer.provideMerge(PostedComments.layer));
+
+const conflictingProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
+  SourceControlProvider,
+  {
+    ...noopProvider,
+    observe: () =>
+      Effect.succeed(
+        new Map([
+          [
+            id("#5"),
+            {
+              number: 5,
+              url: "https://example.test/pull/5",
+              review: "changes-requested" as const,
+              checks: "failing" as const,
+              latestHumanCommentAtMillis: null,
+              latestBotTriggerAtMillis: null,
+              latestFailingCheckAtMillis: null,
+              observedAtMillis: 1,
+              fresh: false,
+              baseDivergence: "conflict" as const,
+              waitingSinceMillis: 0,
+              headRef: "5-follow-up",
+              followable: true,
+              draft: false,
+            },
+          ],
+        ]),
+      ),
+  },
 ).pipe(Layer.provideMerge(PostedComments.layer));
 
 const recordingProvider: Layer.Layer<SourceControlProvider | PostedComments> = Layer.effect(
@@ -4460,6 +4493,19 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
+  });
+
+  it.effect("snapshots a conflict that starts before a failed follow-up ends", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, followUpItem);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.baseDivergence, "conflict");
+    }).pipe(
+      Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, conflictingProviderLayer)),
+    );
   });
 
   it.effect("names the prepared linked-branch checkout in a follow-up hand-off", () => {

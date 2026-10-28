@@ -401,6 +401,8 @@ export const make = Effect.gen(function* () {
     handle: string | null,
     checkoutPath: string | undefined,
   ) {
+    const failedFollowUp =
+      item.stage === "follow-up" ? yield* followUpContextAtFailure(workspace, item) : null;
     const endedAtMillis = yield* Clock.currentTimeMillis;
     const attempts = item.priorFailures + 1;
     const { retryable, handoffCause } = decision;
@@ -414,6 +416,15 @@ export const make = Effect.gen(function* () {
       ...codingOperation(item.stage),
       atMillis: endedAtMillis,
       reason,
+      ...(item.stage === "follow-up"
+        ? {
+            marker: followUpMarker(
+              failedFollowUp ?? defaultFollowUp,
+              failedFollowUp?.noProgress ?? 0,
+              endedAtMillis,
+            ),
+          }
+        : {}),
     });
     if (exhausted && (yield* handOffAllowed(workspace, item))) {
       yield* issueTracker.handOff(workspace, item.id, {
@@ -517,12 +528,28 @@ export const make = Effect.gen(function* () {
     return acc.structuredOutputs[0];
   });
 
-  const followUpMarker = (context: FollowUpContext, noProgress: number) => ({
+  const followUpMarker = (context: FollowUpContext, noProgress: number, attemptAtMillis: number) => ({
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
     botTriggerAtMillis: context.botTriggerAtMillis,
+    attemptAtMillis,
     noProgress,
     baseDivergence: context.baseDivergence,
+  });
+
+  const followUpContextAtFailure = Effect.fn("Executor.followUpContextAtFailure")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const baseDivergence = yield* sourceControl.observe(workspace, [{ id: item.id, title: item.title }]).pipe(
+      Effect.map((signals) => signals.get(item.id)?.baseDivergence ?? "conflict"),
+      Effect.catchTag("IssueTrackerError", (error) =>
+        Effect.logWarning("failed to refresh pull request before recording follow-up failure", {
+          message: error.message,
+        }).pipe(Effect.map(() => "conflict" as const)),
+      ),
+    );
+    return { ...(item.followUp ?? defaultFollowUp), baseDivergence };
   });
 
   const postFollowUpSummary = Effect.fn("Executor.postFollowUpSummary")(function* (
@@ -607,7 +634,7 @@ export const make = Effect.gen(function* () {
     if (shouldPost) yield* postFollowUpSummary(workspace, item, result.summary);
     const context = item.followUp ?? defaultFollowUp;
     yield* issueTracker.followedUp(workspace, item.id, {
-      marker: followUpMarker(context, noProgressAfterRound(context, result.outcome)),
+      marker: followUpMarker(context, noProgressAfterRound(context, result.outcome), atMillis),
       summary: result.summary,
       atMillis,
     });
@@ -836,15 +863,15 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
+    const context = yield* followUpContextAtFailure(workspace, item);
     const atMillis = yield* Clock.currentTimeMillis;
-    const context = item.followUp ?? defaultFollowUp;
     // The count is spent the moment the hand-off lands: a human owns the PR now, and while it wears
     // `ready-for-human` no poll can reach a follow-up round to move the count again. Parking it at 0
     // makes the hand-off a door that opens both ways — whoever hands it back, by any route, gets a
     // fresh three rounds instead of an item that claims and abandons in the same breath. The detail
     // still reports the count that parked it.
     yield* issueTracker.stalled(workspace, item.id, {
-      marker: followUpMarker(context, 0),
+      marker: followUpMarker(context, 0, atMillis),
       atMillis,
       detail: `Follow-up made no progress after ${context.noProgress} attempts — neither the checks turned green nor a human responded. Handing this to a human.`,
     });

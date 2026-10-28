@@ -12,6 +12,7 @@ export const FollowUpMarker = Schema.Struct({
   humanCommentAtMillis: Schema.Finite,
   noProgress: Schema.Finite,
   baseDivergence: Schema.Literals(["conflict", "clean", "none"]),
+  attemptAtMillis: Schema.optional(Schema.Finite),
   // Optional-with-default so markers persisted without a bot-trigger time still decode (as 0).
   botTriggerAtMillis: Schema.Finite.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
 });
@@ -25,6 +26,8 @@ export interface ObservedPr {
   readonly checks: CheckState;
   readonly latestHumanCommentAtMillis: number | null;
   readonly latestBotTriggerAtMillis: number | null;
+  readonly latestFailingCheckAtMillis?: number | null;
+  readonly observedAtMillis?: number;
   readonly fresh: boolean;
   readonly baseDivergence: BaseDivergence;
   readonly waitingSinceMillis: number;
@@ -59,6 +62,45 @@ const hasNewHumanComment = (pr: ObservedPr) => humanCommentAt(pr) > (pr.followUp
 // What settles the count is what the round then does about it — see `noProgressAfterRound` — so a
 // bot exchange that keeps producing real fixes keeps going, and one that produces nothing hands off.
 const hasNewBotTrigger = (pr: ObservedPr) => botTriggerAt(pr) > (pr.followUp?.botTriggerAtMillis ?? 0);
+
+export type FollowUpTrigger = {
+  readonly kind: "human-feedback" | "trusted-bot-finding" | "failing-check" | "merge-conflict";
+  readonly atMillis: number;
+};
+
+interface TriggerInput {
+  readonly pr: ObservedPr;
+  readonly attemptAtMillis: number;
+}
+
+const conflictTriggerAtMillis = ({ pr, attemptAtMillis }: TriggerInput) => {
+  const conflictStartedAfterAttempt =
+    pr.baseDivergence === "conflict" &&
+    pr.followUp?.attemptAtMillis === attemptAtMillis &&
+    pr.followUp.baseDivergence !== "conflict";
+  return conflictStartedAfterAttempt ? (pr.observedAtMillis ?? 0) : 0;
+};
+
+const triggerSources = [
+  { kind: "human-feedback", atMillis: ({ pr }: TriggerInput) => humanCommentAt(pr) },
+  { kind: "trusted-bot-finding", atMillis: ({ pr }: TriggerInput) => botTriggerAt(pr) },
+  {
+    kind: "failing-check",
+    atMillis: ({ pr }: TriggerInput) => pr.latestFailingCheckAtMillis ?? 0,
+  },
+  { kind: "merge-conflict", atMillis: conflictTriggerAtMillis },
+] as const;
+
+export const followUpTriggerAfter = (pr: ObservedPr, atMillis: number): FollowUpTrigger | null => {
+  const input = { pr, attemptAtMillis: atMillis };
+  return (
+    triggerSources
+      .map(({ kind, atMillis }) => ({ kind, atMillis: atMillis(input) }))
+      .filter((candidate) => candidate.atMillis > atMillis)
+      .toSorted((left, right) => right.atMillis - left.atMillis)
+      .at(0) ?? null
+  );
+};
 
 export const triggersFollowUp = (pr: ObservedPr) =>
   pr.checks === "failing" ||
