@@ -113,14 +113,10 @@ layer(NodeServices.layer)((it) => {
   );
 
   it.effect("fails closed when the Control store is unavailable", () =>
-    Effect.result(makeControlStoreCoordination).pipe(
-      Effect.tap((result) =>
-        Effect.sync(() => {
-          assert.isTrue(Result.isFailure(result) && result.failure.reason === "unavailable");
-        }),
-      ),
-      Effect.provide(controlStoreClientLayer(":memory:")),
-      Effect.scoped,
-    ),
+    Effect.gen(function* () {
+      const coordination = yield* makeControlStoreCoordination;
+      const result = yield* Effect.result(coordination.read(item));
+      assert.isTrue(Result.isFailure(result) && result.failure.reason === "unavailable");
+    }).pipe(Effect.provide(controlStoreClientLayer(":memory:")), Effect.scoped),
   );
 });
