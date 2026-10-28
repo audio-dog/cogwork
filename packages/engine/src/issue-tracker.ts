@@ -102,6 +102,7 @@ export interface HandBackOutcome {
   readonly record: { readonly by: string; readonly atMillis: number };
   readonly changes: RoleChanges;
   readonly note?: string;
+  readonly trigger?: FollowUpTrigger;
 }
 
 const noAdapter = (workspace: WorkspaceIssueTrackerBinding) =>

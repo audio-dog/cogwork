@@ -482,6 +482,23 @@ describe("coordination outcomes", () => {
     }),
   );
 
+  it.effect("attemptFailed snapshots the pull request state for a follow-up failure", () =>
+    Effect.gen(function* () {
+      const { host } = yield* makeFakeHost([{ number: 131, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      const failedMarker = { ...marker, attemptAtMillis: 14 };
+      yield* tracker.attemptFailed(workspace, decodeId("#131"), {
+        ...codingOperation("follow-up"),
+        atMillis: 14,
+        reason: "CI is still red",
+        marker: failedMarker,
+      });
+
+      const item = yield* observed(tracker, "#131");
+      assert.deepStrictEqual(item?.followUp, failedMarker);
+    }),
+  );
+
   it.effect("attemptFailed bounds and scrubs the recorded reason", () =>
     Effect.gen(function* () {
       const { host } = yield* makeFakeHost([{ number: 130, labels: ["ready-for-agent"] }]);
@@ -509,6 +526,7 @@ describe("coordination outcomes", () => {
       });
       const item = yield* observed(tracker, "#14");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-human"]);
+      assert.strictEqual(item?.engineHandoffAtMillis, 0);
       const stored = yield* itemAt(14);
       const note = stored?.comments.find((comment) => !Coordination.hasLedgerMarker(codec, comment.body));
       assert.strictEqual(note?.body, "Handing this to a human.");
@@ -538,6 +556,7 @@ describe("coordination outcomes", () => {
         record: { by: "local-owner", atMillis: 5 },
         changes,
         note: "Try the repaired worktree setup.",
+        trigger: { kind: "human-feedback", atMillis: 4 },
       });
 
       const item = yield* observed(tracker, "#17");
@@ -548,6 +567,7 @@ describe("coordination outcomes", () => {
         atMillis: 5,
         note: "Try the repaired worktree setup.",
       });
+      assert.deepStrictEqual(item?.followUpTrigger, { kind: "human-feedback", atMillis: 4 });
       assert.deepStrictEqual(yield* roleLog, [{ number: 17, changes }]);
 
       const stored = yield* itemAt(17);
@@ -593,6 +613,7 @@ describe("coordination outcomes", () => {
       );
       const item = yield* observed(tracker, "#15");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-human"]);
+      assert.strictEqual(item?.engineHandoffAtMillis, 16);
       assert.deepStrictEqual(item?.attempts, [attemptRecord("#15", "follow-up", "abandoned", 16)]);
     }),
   );
@@ -617,14 +638,29 @@ describe("coordination outcomes", () => {
 
   it.effect("reclassify applies the role changes and posts the note", () =>
     Effect.gen(function* () {
-      const { host, itemAt, roleLog } = yield* makeFakeHost([{ number: 16, labels: ["needs-triage"] }]);
+      const { host, itemAt, roleLog } = yield* makeFakeHost([
+        {
+          number: 16,
+          labels: ["needs-triage"],
+          comments: [
+            {
+              id: 1,
+              isBot: true,
+              createdAtMillis: 1,
+              body: coordinationBody([Coordination.serializeEngineHandoff(codec, 1)]),
+            },
+          ],
+        },
+      ]);
       const tracker = makeCoordinationTracker(host);
       const changes: RoleChanges = { remove: ["needs-triage"], add: ["wontfix"] };
       yield* tracker.reclassify(workspace, decodeId("#16"), { changes, note: "Not planned." });
       const item = yield* observed(tracker, "#16");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["wontfix"]);
       assert.deepStrictEqual(yield* roleLog, [{ number: 16, changes }]);
+      assert.strictEqual(item?.engineHandoffAtMillis, null);
       const stored = yield* itemAt(16);
+      assert.include(ledgerBody(stored?.comments ?? []), "engine-handoff at=none");
       const note = stored?.comments.find((comment) => !Coordination.hasLedgerMarker(codec, comment.body));
       assert.strictEqual(note?.body, "Not planned.");
     }),
