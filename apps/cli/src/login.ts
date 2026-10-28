@@ -75,7 +75,7 @@ export const browserOpenerLayer = Layer.effect(
             "TimeoutError",
             () =>
               new LinearOAuthError({
-                message: `Opening the browser timed out after ${browserOpenDeadline}; retry cogwork login linear.`,
+                message: `Opening the browser timed out after ${browserOpenDeadline}; retry the login.`,
               }),
           ),
         ),

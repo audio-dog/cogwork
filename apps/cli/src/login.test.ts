@@ -256,8 +256,7 @@ describe("browser opener", () => {
       const error = yield* Fiber.join(fiber);
 
       assert.strictEqual(error._tag, "LinearOAuthError");
-      assert.include(error.message, "timed out");
-      assert.include(error.message, "retry");
+      assert.strictEqual(error.message, "Opening the browser timed out after 30 seconds; retry the login.");
     }).pipe(
       Effect.provide(
         browserOpenerLayer.pipe(
