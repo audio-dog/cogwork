@@ -1,0 +1,24 @@
+apps/cli/src/platform.ts
+  s_4a8aec668ff95d::t_b673738dc73ce0 420-423,425-426
+  s_4a8aec668ff95d::t_b624215cf713a5 424
+packages/engine/src/context-fs.ts
+  s_4a8aec668ff95d::t_b673738dc73ce0 18
+apps/cli/src/platform.test.ts
+  s_4a8aec668ff95d::t_2df9691c4b9d82 1267-1280
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "93d336ead747a189ea640cb5187ccb61e981da28",
+  "prompts": {},
+  "sessions": {
+    "s_4a8aec668ff95d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18349-2754-7791-a950-d0b3c77001a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
