@@ -82,6 +82,7 @@ export class RunPlanWorkContextFacts extends Schema.Class<RunPlanWorkContextFact
     claim: Schema.NullOr(Claim),
     priority: Priority,
     pr: Schema.NullOr(PrSummary),
+    failureReason: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   },
 ) {}
 

@@ -100,7 +100,11 @@ export const gitLayer = Layer.effect(
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
-    const runGit = (cwd: string, args: ReadonlyArray<string>) => {
+    const runGit = (
+      cwd: string,
+      args: ReadonlyArray<string>,
+      successfulExitCodes: ReadonlyArray<number> = [0],
+    ) => {
       const command = `git ${args.join(" ")}`;
       const fail = (message: string) => new Git.GitError({ command, message, retryable: true });
       return capture(ChildProcess.make("git", [...args], { cwd })).pipe(
@@ -117,7 +121,7 @@ export const gitLayer = Layer.effect(
             }),
         ),
         Effect.flatMap((result) =>
-          result.exitCode === 0
+          successfulExitCodes.includes(result.exitCode)
             ? Effect.succeed(result.stdout)
             : fail(result.stderr.trim() || `exited with code ${result.exitCode}`),
         ),
@@ -269,6 +273,29 @@ export const gitLayer = Layer.effect(
       remoteUrl: (repoPath, remote) =>
         runGit(repoPath, ["config", "--local", "--get", `remote.${remote}.url`]).pipe(
           Effect.map((value) => value.trim()),
+        ),
+      blockPush: (worktreePath, remote) =>
+        runGit(worktreePath, ["config", "extensions.worktreeConfig", "true"]).pipe(
+          Effect.andThen(
+            runGit(worktreePath, [
+              "config",
+              "--worktree",
+              `remote.${remote}.pushurl`,
+              "cogwork-invalid://engine-owned-push",
+            ]),
+          ),
+          Effect.asVoid,
+        ),
+      allowPush: (worktreePath, remote) =>
+        runGit(worktreePath, ["config", "extensions.worktreeConfig", "true"]).pipe(
+          Effect.andThen(
+            runGit(worktreePath, ["config", "--worktree", "--unset-all", `remote.${remote}.pushurl`], [0, 5]),
+          ),
+          Effect.asVoid,
+        ),
+      pushBranch: (repoPath, remoteUrl, branch) =>
+        runGit(repoPath, ["push", remoteUrl, `refs/heads/${branch}:refs/heads/${branch}`]).pipe(
+          Effect.asVoid,
         ),
     } satisfies Git.GitService);
   }),

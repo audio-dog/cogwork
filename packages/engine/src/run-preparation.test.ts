@@ -192,6 +192,7 @@ const worktreeLayer = ({
           ),
         pullRequestReadiness: (_workspace, item) =>
           Effect.succeed(PullRequestReadiness.Ready({ headBranch: branchName(item), baseBranch: "main" })),
+        pushBranch: () => Effect.void,
         list: () => Effect.succeed([]),
         remove: () => Effect.void,
         reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -315,6 +316,9 @@ describe("RunPreparation.prepare", () => {
         yield* seedBranchSession(item, stored);
         const prepared = yield* prepare(item);
         assert.strictEqual(prepared.session, stored.id);
+        assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), [
+          { item: item.id, options: { pushOwner: "engine" } },
+        ]);
       });
     });
   });
@@ -436,7 +440,12 @@ describe("RunPreparation.prepare", () => {
         const prepared = yield* prepare(item);
         const calls = yield* Ref.get(yield* WorktreeCalls);
         assert.strictEqual(prepared.branch, externalBranch);
-        assert.deepStrictEqual(calls, [{ item: item.id, options: { resume: true, branch: externalBranch } }]);
+        assert.deepStrictEqual(calls, [
+          {
+            item: item.id,
+            options: { resume: true, branch: externalBranch, pushOwner: "engine" },
+          },
+        ]);
       });
     });
   });

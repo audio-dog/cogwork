@@ -63,6 +63,7 @@ const worktreeLayer = Layer.succeed(WorktreeManager, {
   tryWithMaintenanceLock: Effect.asSome,
   ensure: () => Effect.die("unused"),
   pullRequestReadiness: () => Effect.die("unused"),
+  pushBranch: () => Effect.die("unused"),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -79,6 +80,9 @@ const gitLayer = Layer.succeed(Git, {
   operationInProgress: () => Effect.die("unused"),
   rebase: () => Effect.die("unused"),
   remoteUrl: () => Effect.succeed("git@github.com:owner/repo.git"),
+  blockPush: () => Effect.die("unused"),
+  allowPush: () => Effect.die("unused"),
+  pushBranch: () => Effect.die("unused"),
 } satisfies GitService);
 
 const stubRunner: HarnessRunner = {

@@ -18,11 +18,13 @@ const attemptRecord = (
   stage: LifecycleStage,
   outcome: "succeeded" | "failed" | "abandoned",
   atMillis: number,
+  reason?: string,
 ) => ({
   operation: codingOperation(stage),
   outcome,
   atMillis,
   lineage,
+  ...(reason ? { reason } : {}),
 });
 const claimFor = (stage: LifecycleStage, claimedAtMillis: number): Claim => ({
   by: "cogwork",
@@ -396,11 +398,12 @@ describe("classify", () => {
           attemptRecord("triage", "failed", 2),
           attemptRecord("triage", "succeeded", 3),
           attemptRecord("triage", "failed", 4),
-          attemptRecord("triage", "failed", 5),
+          attemptRecord("triage", "failed", 5, "head is not ahead of origin/main"),
         ],
       }),
     ]);
     assert.strictEqual(eligible[0]?.priorFailures, 2);
+    assert.strictEqual(eligible[0]?.workContext.facts.failureReason, "head is not ahead of origin/main");
   });
 
   it("routes a bot PR with failing checks to follow-up even without a changes-requested review", () => {
