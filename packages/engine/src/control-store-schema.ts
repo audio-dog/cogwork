@@ -104,6 +104,62 @@ export const pluginInstalls = sqliteTable("plugin_installs", {
   installedAtMillis: integer("installed_at_millis").notNull(),
 });
 
+export const coordinationItems = sqliteTable("coordination_items", {
+  workItem: text("work_item").primaryKey(),
+  observedSourceRevision: text("observed_source_revision").notNull(),
+  processedSourceRevision: text("processed_source_revision"),
+});
+
+export const coordinationClaimEvents = sqliteTable(
+  "coordination_claim_events",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item").notNull(),
+    action: text("action").notNull(),
+    by: text("by"),
+    claimedAtMillis: integer("claimed_at_millis"),
+    stage: text("stage"),
+    lineageRoot: text("lineage_root"),
+    lineageParent: text("lineage_parent"),
+  },
+  (table) => [
+    index("coordination_claim_events_item_sequence").on(table.workItem, desc(table.sequence)),
+    check("coordination_claim_events_action", sql`${table.action} IN ('claim', 'release')`),
+    check(
+      "coordination_claim_events_shape",
+      sql`(${table.action} = 'claim' AND ${table.by} IS NOT NULL AND ${table.claimedAtMillis} IS NOT NULL AND ${table.lineageRoot} IS NOT NULL) OR (${table.action} = 'release' AND ${table.by} IS NULL AND ${table.claimedAtMillis} IS NULL AND ${table.stage} IS NULL AND ${table.lineageRoot} IS NULL AND ${table.lineageParent} IS NULL)`,
+    ),
+  ],
+);
+
+export const coordinationAttempts = sqliteTable(
+  "coordination_attempts",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item").notNull(),
+    stage: text("stage").notNull(),
+    outcome: text("outcome").notNull(),
+    atMillis: integer("at_millis").notNull(),
+    lineageRoot: text("lineage_root").notNull(),
+    lineageParent: text("lineage_parent"),
+  },
+  (table) => [
+    index("coordination_attempts_item_sequence").on(table.workItem, table.sequence),
+    check("coordination_attempts_outcome", sql`${table.outcome} IN ('succeeded', 'failed', 'abandoned')`),
+  ],
+);
+
+export const coordinationHandbacks = sqliteTable(
+  "coordination_handbacks",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item").notNull(),
+    by: text("by").notNull(),
+    atMillis: integer("at_millis").notNull(),
+  },
+  (table) => [index("coordination_handbacks_item_sequence").on(table.workItem, desc(table.sequence))],
+);
+
 // Effect's `Migrator` creates and owns its own bookkeeping table, so it is deliberately absent
 // here: including it would make drizzle-kit generate a rival definition of the same table.
 export const runs = sqliteTable(

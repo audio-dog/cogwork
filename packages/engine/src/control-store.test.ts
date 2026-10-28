@@ -121,10 +121,17 @@ const schemaOf = (storePath: string) =>
   );
 
 const expectedSchemaObjects = [
+  { type: "index", name: "coordination_attempts_item_sequence" },
+  { type: "index", name: "coordination_claim_events_item_sequence" },
+  { type: "index", name: "coordination_handbacks_item_sequence" },
   { type: "index", name: "run_events_at" },
   { type: "index", name: "runs_started_at" },
   { type: "table", name: "connections" },
   { type: "table", name: "contribution_settings" },
+  { type: "table", name: "coordination_attempts" },
+  { type: "table", name: "coordination_claim_events" },
+  { type: "table", name: "coordination_handbacks" },
+  { type: "table", name: "coordination_items" },
   { type: "table", name: "daemon_limits" },
   { type: "table", name: "harness_settings" },
   { type: "table", name: "operation_settings" },
