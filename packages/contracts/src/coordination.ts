@@ -89,6 +89,7 @@ export type AttemptOutcome = typeof AttemptOutcome.Type;
 export const AttemptRecord = Schema.Struct({
   operation: OperationKey,
   outcome: AttemptOutcome,
+  terminal: Schema.optional(Schema.Boolean),
   atMillis: Schema.Natural,
   lineage: Lineage,
   reason: Schema.optional(AttemptReason),
