@@ -121,10 +121,6 @@ const progressSince = (marker: FollowUpMarker, pr: ObservedPr) => {
 export const noProgressCount = (pr: ObservedPr) =>
   pr.followUp && !progressSince(pr.followUp, pr) ? pr.followUp.noProgress + 1 : 0;
 
-// The count measures consecutive rounds that changed nothing, so the round's own verdict settles it:
-// a round that pushed did work and starts the count over, whatever the world around the PR did. Only
-// a no-op carries the count forward for the next poll to increment. `stuck` never reaches here — it
-// is a failed attempt, and a failed attempt writes no follow-up marker.
 export const noProgressAfterRound = (context: FollowUpContext, outcome: FollowUpResultOutcome) =>
   outcome === "pushed" ? 0 : context.noProgress;
 
