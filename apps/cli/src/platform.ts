@@ -417,6 +417,13 @@ export const contextFsLayer = Layer.effect(
       readFile: (target) =>
         fs.readFileString(target).pipe(Effect.catch(recoverNotFound(null, fail(`read ${target}`)))),
       readDirectory: readFiles,
+      writeFile: (target, content) =>
+        fs
+          .makeDirectory(path.dirname(target), { recursive: true })
+          .pipe(
+            Effect.andThen(fs.writeFileString(target, content)),
+            Effect.mapError(fail(`write ${target}`)),
+          ),
       copyDirectory: (source, dest) =>
         fs
           .remove(dest, { recursive: true, force: true })
