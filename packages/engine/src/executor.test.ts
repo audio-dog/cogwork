@@ -1442,15 +1442,8 @@ const replayHarness: OperationSettingRow = {
   value: "replay",
 };
 
-const replayProfile: OperationSettingRow = {
-  setting: "permission-profile",
-  level: { _tag: "Default" },
-  scope: { _tag: "SettingsProfile" },
-  value: "read-only",
-};
-
 const runnableStages = [stagesEnabled, cursorHarness];
-const runnableReplayStages = [stagesEnabled, replayHarness, replayProfile];
+const runnableReplayStages = [stagesEnabled, replayHarness];
 
 const controlStoreLayer = (
   operationSettings: ReadonlyArray<OperationSettingRow>,
