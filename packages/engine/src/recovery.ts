@@ -127,6 +127,7 @@ export const make = Effect.gen(function* () {
       ...codingOperation(stage),
       atMillis: endedAtMillis,
       reason: recoveryReason,
+      terminal: exhausted,
     });
     if (!exhausted) return;
     yield* handOffExhausted(workspace, item, stage, { kind: "max-attempts", attempts }, session);

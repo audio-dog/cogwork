@@ -414,6 +414,7 @@ export const make = Effect.gen(function* () {
       ...codingOperation(item.stage),
       atMillis: endedAtMillis,
       reason,
+      terminal: exhausted,
     });
     if (exhausted && (yield* handOffAllowed(workspace, item))) {
       yield* issueTracker.handOff(workspace, item.id, {

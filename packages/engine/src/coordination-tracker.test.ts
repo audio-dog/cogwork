@@ -28,6 +28,7 @@ import type { FollowUpMarker } from "./follow-up";
 import { wireCodec } from "./github/markers";
 import { IssueTrackerError, type RoleChanges } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
+import { LogProbe } from "./testing/log-probe";
 
 const codec = wireCodec;
 const decodeId = Schema.decodeSync(WorkItemId);
@@ -469,6 +470,7 @@ describe("coordination outcomes", () => {
         ...codingOperation("implement"),
         atMillis: 14,
         reason: "pnpm install: exit 1",
+        terminal: true,
       });
       const stored = yield* itemAt(13);
       assert.include(
@@ -477,7 +479,11 @@ describe("coordination outcomes", () => {
       );
       const item = yield* observed(tracker, "#13");
       assert.deepStrictEqual(item?.attempts, [
-        { ...attemptRecord("#13", "implement", "failed", 14), reason: "pnpm install: exit 1" },
+        {
+          ...attemptRecord("#13", "implement", "failed", 14),
+          reason: "pnpm install: exit 1",
+          terminal: true,
+        },
       ]);
     }),
   );
@@ -514,6 +520,68 @@ describe("coordination outcomes", () => {
       assert.strictEqual(note?.body, "Handing this to a human.");
     }),
   );
+
+  it.layer(LogProbe.captureLayer)("hand-off failure logging", (it) => {
+    it.effect("logs the item, tracker message, and failed write step", () =>
+      Effect.gen(function* () {
+        const addFailure = new IssueTrackerError({ reason: "unavailable", message: "add rejected" });
+        const removeFailure = new IssueTrackerError({ reason: "unavailable", message: "remove rejected" });
+        const noteFailure = new IssueTrackerError({ reason: "unavailable", message: "note rejected" });
+        const add = yield* makeFakeHost([{ number: 151, labels: ["ready-for-agent"] }]);
+        const remove = yield* makeFakeHost([{ number: 152, labels: ["ready-for-agent"] }]);
+        const note = yield* makeFakeHost([{ number: 153, labels: ["ready-for-agent"] }]);
+        const noteComments = note.host.comments;
+        const cases = [
+          {
+            id: "#151",
+            tracker: makeCoordinationTracker({
+              ...add.host,
+              addRole: (ref, role) =>
+                role === "ready-for-human" ? Effect.fail(addFailure) : add.host.addRole(ref, role),
+            }),
+          },
+          {
+            id: "#152",
+            tracker: makeCoordinationTracker({
+              ...remove.host,
+              removeRole: (ref, role) =>
+                role === "ready-for-agent" ? Effect.fail(removeFailure) : remove.host.removeRole(ref, role),
+            }),
+          },
+          {
+            id: "#153",
+            tracker: makeCoordinationTracker({
+              ...note.host,
+              comments: (ref) => ({ ...noteComments(ref), create: () => Effect.fail(noteFailure) }),
+            }),
+          },
+        ];
+
+        const errors = yield* Effect.forEach(cases, ({ id, tracker }) =>
+          tracker
+            .handOff(workspace, decodeId(id), { stage: "follow-up", note: "Needs a person." })
+            .pipe(Effect.flip),
+        );
+        assert.deepStrictEqual(
+          errors.map((error) => error.reason),
+          ["unavailable", "unavailable", "unavailable"],
+        );
+
+        const logs = yield* LogProbe;
+        const failures = (yield* logs.entries)
+          .map(({ message }) => message)
+          .filter(
+            (message): message is ReadonlyArray<unknown> =>
+              Array.isArray(message) && message.includes("hand-off write failed"),
+          );
+        assert.deepStrictEqual(failures, [
+          ["hand-off write failed", { item: "#151", step: "add role", message: "add rejected" }],
+          ["hand-off write failed", { item: "#152", step: "remove role", message: "remove rejected" }],
+          ["hand-off write failed", { item: "#153", step: "note", message: "note rejected" }],
+        ]);
+      }),
+    );
+  });
 
   it.effect("handBack appends its record, applies one role, and keeps its note in the ledger", () =>
     Effect.gen(function* () {

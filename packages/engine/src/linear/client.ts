@@ -211,10 +211,15 @@ const IssueRelationsPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ inverseRelations: RelationConnection })),
 });
 
+const IssueLabelPayload = Schema.Struct({
+  issue: Schema.NullOr(Schema.Struct({ labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }) })),
+});
+
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
+const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
 
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
@@ -399,6 +404,13 @@ const workspaceLabelQuery = `
 query WorkspaceLabelByName($label: String!) {
   issueLabels(filter: { name: { eq: $label }, team: { null: true } }, first: 1) {
     nodes { id name }
+  }
+}`;
+
+const issueLabelQuery = `
+query IssueLabelByName($id: String!, $label: String!) {
+  issue(id: $id) {
+    labels(filter: { name: { eq: $label } }, first: 1) { nodes { id name } }
   }
 }`;
 
@@ -813,6 +825,17 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return payload.issueLabelId;
   });
 
+  const issueLabelId = Effect.fn("linear.issueLabelId")(function* (
+    ref: LinearTeamRef,
+    issueId: string,
+    label: string,
+  ) {
+    const data = yield* rawData(ref, issueLabelQuery, { id: issueId, label });
+    const payload = yield* Effect.mapError(decodeIssueLabel(data), toUnavailable);
+    if (payload.issue === null) return yield* unavailable(`Linear issue not found: ${issueId}`);
+    return payload.issue.labels.nodes.at(0)?.id ?? null;
+  });
+
   const readProse = (ref: LinearTeamRef, issueId: string) => {
     const loadPage = Effect.fn("linear.loadCommentPage")(function* (state: CommentPaginationState) {
       const data = yield* rawData(ref, commentsQuery, { id: issueId, after: state.after });
@@ -908,7 +931,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       }),
     removeLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
-        const { labelId } = yield* resolveLabel(ref, label);
+        const labelId = yield* issueLabelId(ref, issueId, label);
         if (labelId === null) return;
         yield* mutate(ref, "issueRemoveLabel", (sdk) => sdk.issueRemoveLabel(issueId, labelId));
       }),

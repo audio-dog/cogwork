@@ -153,6 +153,21 @@ describe("classify", () => {
     assert.strictEqual(result.needsHuman[0]?.reason, "ready-for-human");
   });
 
+  it("parks one terminal follow-up failure until a hand-back", () => {
+    const terminal = { ...attemptRecord("follow-up", "failed", 1), terminal: true };
+    const observed = item({
+      id: "1",
+      attempts: [terminal],
+      pr: pr("changes-requested", { checks: "failing" }),
+    });
+
+    const parked = classify([observed]);
+    const handedBack = classify([{ ...observed, handback: { by: "maintainer", atMillis: 2 } }]);
+
+    assert.deepStrictEqual([parked.eligible.length, parked.needsHuman.length], [0, 1]);
+    assert.strictEqual(handedBack.eligible[0]?.stage, "follow-up");
+  });
+
   it("routes needs-triage with no PR to triage", () => {
     const { eligible } = classify([item({ id: "1", roles: ["needs-triage"] })]);
     assert.strictEqual(eligible[0]?.stage, "triage");

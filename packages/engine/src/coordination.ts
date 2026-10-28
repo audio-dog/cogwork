@@ -105,12 +105,20 @@ export interface CoordinationView {
 const sameOperation = (left: OperationKey, right: OperationKey) =>
   left.workflow === right.workflow && left.operation === right.operation;
 
-const failuresFor = (attempts: ReadonlyArray<AttemptRecord>, barrierAtMillis: number, key: OperationKey) => {
+const failureStateFor = (
+  attempts: ReadonlyArray<AttemptRecord>,
+  barrierAtMillis: number,
+  key: OperationKey,
+) => {
   const relevant = attempts.filter(
     (attempt) => attempt.atMillis > barrierAtMillis && sameOperation(attempt.operation, key),
   );
   const lastNonFailure = relevant.findLastIndex((attempt) => attempt.outcome !== "failed");
-  return relevant.length - lastNonFailure - 1;
+  const failures = relevant.slice(lastNonFailure + 1);
+  return {
+    consecutiveFailures: failures.length,
+    terminal: failures.some((attempt) => attempt.terminal === true),
+  };
 };
 
 const newestByTime = <A extends { readonly atMillis: number }>(records: ReadonlyArray<A>) =>
@@ -174,10 +182,10 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
   const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > barrierAtMillis);
   const hop = claimAfterBarrier?.lineage.hop ?? newestByTime(attemptsAfterBarrier)?.lineage.hop ?? 0;
   const counters = (key: OperationKey): CoordinationCounters => {
-    const consecutiveFailures = failuresFor(ledger.attempts, barrierAtMillis, key);
+    const { consecutiveFailures, terminal } = failureStateFor(ledger.attempts, barrierAtMillis, key);
     return {
       consecutiveFailures,
-      exhausted: consecutiveFailures >= maxAttemptsPerOperation,
+      exhausted: terminal || consecutiveFailures >= maxAttemptsPerOperation,
       hop,
       hopCapped: hop >= maxLineageHops,
     };
@@ -447,6 +455,7 @@ export const parseAttempts = (codec: WireCodec, body: string) =>
       decodeAttempt({
         operation: { workflow: pairs.workflow, operation: pairs.operation },
         outcome: pairs.outcome,
+        ...(pairs.terminal === "true" ? { terminal: true } : {}),
         atMillis: Number(pairs.at),
         lineage: lineagePairs(pairs),
         ...(pairs.reason === undefined ? {} : { reason: Option.getOrUndefined(decodeReason(pairs.reason)) }),
@@ -524,7 +533,7 @@ export const serializeClaim = (codec: WireCodec, claim: ClaimType) =>
 export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
   codec.encode({
     name: "attempt",
-    pairs: `workflow=${attempt.operation.workflow} operation=${attempt.operation.operation} outcome=${attempt.outcome} at=${attempt.atMillis} root=${attempt.lineage.root} parent=${attempt.lineage.parent ?? "none"} hop=${attempt.lineage.hop}${attempt.reason ? ` reason=${encodeURIComponent(attempt.reason)}` : ""}`,
+    pairs: `workflow=${attempt.operation.workflow} operation=${attempt.operation.operation} outcome=${attempt.outcome}${attempt.terminal === true ? " terminal=true" : ""} at=${attempt.atMillis} root=${attempt.lineage.root} parent=${attempt.lineage.parent ?? "none"} hop=${attempt.lineage.hop}${attempt.reason ? ` reason=${encodeURIComponent(attempt.reason)}` : ""}`,
   });
 
 export const serializeHandback = (codec: WireCodec, handback: HandbackRecordType) =>

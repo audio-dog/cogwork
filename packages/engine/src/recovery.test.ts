@@ -691,6 +691,7 @@ describe("Recovery.recover", () => {
         handoffs.map(({ outcome }) => outcome.stage),
         ["implement"],
       );
+      assert.isTrue((yield* Ref.get(probe.attempts))[0]?.outcome.terminal);
     }).pipe(Effect.provide(recoveryLayer({ observed: [withAttempts(claimedByUs, 2)] }))),
   );
 

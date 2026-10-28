@@ -1,4 +1,4 @@
-import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
+import { issueTrackerErrorIsPermanent, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -7,15 +7,19 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
+import { makeCoordinationTracker } from "../coordination-tracker";
 import {
   CredentialError,
   type CredentialIdentity,
   type CredentialSource,
   CredentialStore,
 } from "../credential-store";
+import type { RegisteredWorkspace } from "../projector";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
+import { makeHost } from "./host";
 
 const ref: LinearTeamRef = {
   team: "AUD",
@@ -162,6 +166,15 @@ const withToken = (token: string | null = "test-key", source: CredentialSource =
   );
 
 const claimLabelName = "cogwork:claimed";
+const workspace: RegisteredWorkspace = {
+  source: "linear.workspace.ts",
+  contributions: [],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "lin",
+    checkoutPath: "/repos/lin",
+    issueTracker: { type: "linear", teams: ["AUD"] },
+  }),
+};
 
 const lastPage = { hasNextPage: false, endCursor: null };
 
@@ -1196,20 +1209,63 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("skips the remove when neither the team nor the workspace holds the label", () =>
+  it.effect("skips the remove when the issue does not hold the label", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear((document) => {
-        if (document.includes("TeamsByKey")) {
-          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        if (document.includes("IssueLabelByName")) {
+          return { body: { data: { issue: { labels: { nodes: [] } } } } };
         }
-        if (document.includes("WorkspaceLabelByName")) {
-          return { body: { data: { issueLabels: { nodes: [] } } } };
+        if (document.includes("issueRemoveLabel")) {
+          return { body: { data: { issueRemoveLabel: { success: true } } } };
         }
         return { body: { errors: [{ message: `unexpected document: ${document}` }] } };
       });
       const client = yield* LinearClient;
       yield* client.removeLabel(ref, "issue-uuid", claimLabelName);
       assert.isFalse(sentRequests(fetchStub).some((request) => request.query.includes("issueRemoveLabel")));
+    }).pipe(withToken()),
+  );
+
+  it.effect("hands off a follow-up whose ready-for-agent label is already absent", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document, variables) => {
+        if (document.includes("viewer")) {
+          return { body: { data: { viewer: { id: "bot-user" } } } };
+        }
+        if (document.includes("TeamsByKey")) {
+          return {
+            body: {
+              data: {
+                teams: {
+                  nodes: [
+                    {
+                      id: "team-uuid",
+                      labels: { nodes: [{ id: `label-${String(variables.label)}`, name: variables.label }] },
+                    },
+                  ],
+                },
+              },
+            },
+          };
+        }
+        if (document.includes("IssueLabelByName")) {
+          return { body: { data: { issue: { labels: { nodes: [] } } } } };
+        }
+        if (document.includes("issueAddLabel")) {
+          return { body: { data: { issueAddLabel: { success: true } } } };
+        }
+        if (document.includes("issueRemoveLabel")) {
+          return { body: { data: { issueRemoveLabel: { success: false } } } };
+        }
+        return { body: { errors: [{ message: `unexpected document: ${document}` }] } };
+      });
+      const tracker = makeCoordinationTracker(makeHost(yield* LinearClient));
+
+      yield* tracker.handOff(workspace, WorkItemId.make("AUD-1"), { stage: "follow-up" });
+
+      const requests = sentRequests(fetchStub);
+      assert.isTrue(requests.some((request) => request.query.includes("issueAddLabel")));
+      assert.isFalse(requests.some((request) => request.query.includes("issueRemoveLabel")));
     }).pipe(withToken()),
   );
 });

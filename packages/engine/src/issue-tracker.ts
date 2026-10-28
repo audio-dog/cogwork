@@ -77,6 +77,7 @@ export interface FollowedUpOutcome {
 export interface AttemptFailedOutcome extends OperationKey {
   readonly atMillis: number;
   readonly reason?: string;
+  readonly terminal?: boolean;
 }
 
 export interface HandOffOutcome {
