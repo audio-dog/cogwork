@@ -532,6 +532,7 @@ interface Call {
   readonly proposal?: string;
   readonly stage?: string;
   readonly reason?: string;
+  readonly terminal?: boolean;
   readonly note?: string;
   readonly checks?: string;
   readonly detail?: string;
@@ -613,6 +614,7 @@ function trackerRecorder(
             item: itemId,
             stage: outcome.operation,
             reason: outcome.reason,
+            terminal: outcome.terminal,
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
         },
@@ -2477,6 +2479,7 @@ describe("Executor.execute", () => {
       const attempt = log.find((c) => c.method === "attemptFailed");
       assert.strictEqual(attempt?.stage, "triage");
       assert.strictEqual(attempt?.reason, "no cli");
+      assert.isTrue(attempt?.terminal);
       const handOff = log.find((c) => c.method === "handOff");
       assert.isDefined(handOff);
       assert.include(handOff?.note ?? "", "non-retryable failure");
@@ -2536,6 +2539,7 @@ describe("Executor.execute", () => {
       const attempt = log.find((c) => c.method === "attemptFailed");
       assert.strictEqual(attempt?.stage, "triage");
       assert.strictEqual(attempt?.reason, "network blip");
+      assert.isFalse(attempt?.terminal);
       assert.isFalse(log.some((c) => c.method === "handOff"));
 
       const ledger = yield* RunLedger.RunLedger;
@@ -2595,7 +2599,9 @@ describe("Executor.execute", () => {
       yield* execute(executor, workspace, atCap);
 
       const log = yield* Ref.get(calls);
-      assert.strictEqual(log.find((c) => c.method === "attemptFailed")?.stage, "triage");
+      const attempt = log.find((c) => c.method === "attemptFailed");
+      assert.strictEqual(attempt?.stage, "triage");
+      assert.isTrue(attempt?.terminal);
       const handOff = log.find((c) => c.method === "handOff");
       assert.isDefined(handOff);
       assert.include(handOff?.note ?? "", "3 failed triage attempts");
