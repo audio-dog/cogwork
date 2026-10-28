@@ -41,7 +41,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { Harness } from "./harness";
-import { WorkflowCatalogContributions } from "./workflow-catalog";
+import { firstPartyInstructionPackages, WorkflowCatalogContributions } from "./workflow-catalog";
 import { MachineReadinessSource } from "./workflow-machine-readiness";
 
 type WorkflowsError = ControlStoreFailure | WorkflowFailure;
@@ -165,7 +165,7 @@ const catalogOf = (
   harness: typeof Harness.Service,
 ): WorkflowCatalog => ({
   entries: contributions.flatMap(({ entries }) => entries),
-  instructionPackages: [],
+  instructionPackages: firstPartyInstructionPackages,
   harnesses: [...harness.catalogs].map(([name, catalog]) => ({
     name,
     models: catalog.models.map(({ value: id, options = [] }) => ({ id, options: modelOptions(options) })),

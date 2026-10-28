@@ -311,6 +311,11 @@ layer(NodeServices.layer)((it) => {
       const result = yield* withWorkflows(storePath, ({ catalog }) => catalog);
 
       assert.lengthOf(result.catalog.entries, 6);
+      assert.deepStrictEqual(result.catalog.instructionPackages, [
+        "triage-agent",
+        "implement-agent",
+        "follow-up-agent",
+      ]);
       assert.deepStrictEqual(result.machine, machine);
     }),
   );

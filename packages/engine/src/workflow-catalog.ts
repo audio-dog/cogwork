@@ -13,6 +13,8 @@ export class WorkflowCatalogContributions extends Context.Service<
   ReadonlyArray<WorkflowCatalogContribution>
 >()("@cogwork/engine/workflow-catalog/WorkflowCatalogContributions") {}
 
+export const firstPartyInstructionPackages = ["triage-agent", "implement-agent", "follow-up-agent"];
+
 const cogworkAction = (
   key: string,
   name: string,
