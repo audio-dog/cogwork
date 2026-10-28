@@ -4,7 +4,16 @@ import { tmpdir } from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { connectionIdOf, DaemonRpcs, HarnessName, WorkspaceConfig } from "@cogwork/contracts";
+import {
+  connectionIdOf,
+  DaemonEvent,
+  DaemonRpcs,
+  HarnessName,
+  WorkflowDocument,
+  WorkflowPublishRefused,
+  WorkflowSwitchRefused,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -193,12 +202,20 @@ function makeGitHubServerFixture() {
     vi.stubGlobal("fetch", fetchStub);
     const toServer = new TransformStream<Uint8Array, Uint8Array>();
     const toClient = new TransformStream<Uint8Array, Uint8Array>();
+    const client = yield* Socket.fromTransformStream(
+      Effect.succeed({ readable: toClient.readable, writable: toServer.writable }),
+    );
     const server = yield* Socket.fromTransformStream(
       Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
     );
     const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
+    const clientLayer = RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(Layer.succeed(Socket.Socket, client)),
+      Layer.provide(Daemon.serializationLayer),
+    );
     return {
       fetchStub,
+      clientLayer,
       serverLayer: Daemon.serverLayer({
         transport,
         credentials: storedGitHubCredentials,
@@ -225,7 +242,9 @@ class GitHubServerFixture extends Context.Service<
 
 const githubServerTestLayer = () =>
   Layer.unwrap(
-    Effect.map(GitHubServerFixture, ({ serverLayer }) => serverLayer.pipe(Layer.provide(NodeServices.layer))),
+    Effect.map(GitHubServerFixture, ({ clientLayer, serverLayer }) =>
+      Layer.merge(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer)),
+    ),
   ).pipe(Layer.provideMerge(GitHubServerFixture.layer));
 
 function makeUnavailableServerFixture() {
@@ -300,6 +319,54 @@ describe("daemon server composition", () => {
       yield* (yield* IssueTracker).observe(connectedWorkspace);
       const authorization = new Headers(fetchStub.mock.calls[0]?.[1]?.headers).get("authorization");
       assert.strictEqual(authorization, "Bearer stored-token");
+    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
+  );
+
+  it.effect("authors and observes an incomplete Workflow through DaemonRpcs", () =>
+    Effect.gen(function* () {
+      yield* Daemon.bootstrap;
+      const rpc = yield* RpcClient.make(DaemonRpcs);
+      const document = yield* Schema.decodeEffect(WorkflowDocument)({
+        name: "Draft",
+        workspaces: { _tag: "Every" },
+        triggers: [],
+        operations: [],
+      });
+      const created = yield* rpc.CreateWorkflow({ document });
+      const edited = yield* rpc.EditWorkflow({
+        id: created.id,
+        edits: [{ _tag: "SetName", name: "Edited" }],
+      });
+      const listed = yield* rpc.ListWorkflows();
+      const fetched = yield* rpc.GetWorkflow({ id: created.id });
+      const diagnostics = yield* rpc.ValidateWorkflow({ document: { name: "Malformed" } });
+      const publish = yield* Effect.result(
+        rpc.PublishWorkflow({ id: created.id, revision: edited.workingRevision }),
+      );
+      const switched = yield* Effect.result(rpc.SwitchWorkflow({ id: created.id, enabled: true }));
+      const catalog = yield* rpc.GetWorkflowCatalog();
+      const seed = yield* rpc
+        .WatchEvents()
+        .pipe(Stream.takeUntil(DaemonEvent.guards.SeedEnd), Stream.runCollect);
+      const deleted = yield* rpc.DeleteWorkflow({ id: created.id });
+
+      assert.strictEqual(edited.workingCopy.name, "Edited");
+      assert.deepStrictEqual(
+        listed.workflows.map(({ id }) => id),
+        [created.id],
+      );
+      assert.strictEqual(fetched.id, created.id);
+      assert.deepStrictEqual(
+        diagnostics.map(({ code }) => code),
+        ["schema"],
+      );
+      assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
+      assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
+      assert.lengthOf(catalog.entries, 5);
+      assert.isTrue(
+        [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
+      );
+      assert.strictEqual(deleted, created.id);
     }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
   );
 

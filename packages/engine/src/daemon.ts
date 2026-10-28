@@ -57,7 +57,12 @@ import {
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
-import { bootControlStoreLayer, ControlStore, type ControlStoreService } from "./control-store";
+import {
+  bootControlStoreLayer,
+  ControlStore,
+  type ControlStoreService,
+  WorkflowStore,
+} from "./control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
 import {
@@ -117,6 +122,7 @@ import {
   switchWorkflow,
   validateWorkflowDocument,
 } from "./workflow";
+import { workflowCatalog } from "./workflow-catalog";
 import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -195,6 +201,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const plugins = yield* PluginManager;
   const connections = yield* ConnectionStore;
   const harnesses = yield* HarnessReadinessCache;
+  const workflowStore = yield* WorkflowStore;
   const ledger = yield* RunLedger;
   const emittedAtMillis = yield* Clock.currentTimeMillis;
   const snapshot = yield* worker.snapshot;
@@ -232,6 +239,13 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
       controlStore.health === "available" ? controlStore.seed.harnessSettings : [],
     ),
   };
+  const workflowEvents = yield* workflowStore.listWorkflows(workflowCatalog).pipe(
+    Effect.matchEffect({
+      onFailure: (error) => Effect.logError("Workflow seed failed", { error }).pipe(Effect.map(() => [])),
+      onSuccess: ({ workflows }) =>
+        Effect.succeed(workflows.map((workflow) => ({ _tag: "WorkflowChanged", workflow }) as const)),
+    }),
+  );
   return [
     ...items,
     ...workspaces,
@@ -239,6 +253,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     ...controlStoreEvents,
     ...pluginEvents,
     ...connectionEvents,
+    ...workflowEvents,
     harnessEvent,
     scheduling,
   ].map((event) => ({

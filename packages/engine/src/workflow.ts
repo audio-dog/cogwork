@@ -69,7 +69,8 @@ export const switchWorkflow = Effect.fn("Daemon.SwitchWorkflow")(function* (payl
   readonly enabled: boolean;
 }) {
   const store = yield* WorkflowStore;
-  return yield* writeWorkflow(store.switchWorkflow(payload.id, payload.enabled, workflowCatalog));
+  const workflow = yield* writeWorkflow(store.switchWorkflow(payload.id, payload.enabled, workflowCatalog));
+  return { workflow, matchingItems: 0 };
 });
 
 export const deleteWorkflow = Effect.fn("Daemon.DeleteWorkflow")(function* (payload: {
