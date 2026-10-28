@@ -438,11 +438,23 @@ const verifyGranolaRpcLifecycle = Effect.fn("test.verifyGranolaRpcLifecycle")(fu
   id: Connection["id"],
   stored: Ref.Ref<StoredCredential | null>,
   configured: Ref.Ref<boolean>,
+  connection: Ref.Ref<Connection | null>,
   plugins: Ref.Ref<PluginOverview>,
+  loginStarted: Deferred.Deferred<void>,
+  releaseLogin: Deferred.Deferred<void>,
 ) {
   const client = yield* RpcTest.makeClient(DaemonRpcs);
 
-  const connected = yield* client.LoginGranola({ account });
+  const loggingIn = yield* Effect.forkChild(client.LoginGranola({ account }));
+  yield* Deferred.await(loginStarted);
+  yield* Ref.set(connection, Connection.make({ id, system: "granola", account, status: "established" }));
+  yield* Ref.set(plugins, {
+    plugins: [{ ...installedPlugin("granola"), requiredConnections: ["granola"] }],
+  });
+  yield* Deferred.succeed(releaseLogin, undefined);
+  assert.strictEqual((yield* Fiber.await(loggingIn))._tag, "Success");
+
+  const connected = yield* Fiber.join(loggingIn);
   assert.strictEqual(connected.overview.connections[0]?.connection?.id, id);
   assert.strictEqual(
     Redacted.value((yield* Ref.get(stored))?.token.accessToken ?? Redacted.make("")),
@@ -2376,7 +2388,7 @@ describe("Connection mutations", () => {
     source: { _tag: "Stored" },
   };
 
-  it.effect("logs in Granola through RPC and cascades Plugin removal", () =>
+  it.effect("keeps a browser grant after a concurrent Granola key connect, then cascades removal", () =>
     Effect.gen(function* () {
       const account = "person@example.com";
       const id = connectionIdOf("granola", account);
@@ -2396,6 +2408,8 @@ describe("Connection mutations", () => {
       const stored = yield* Ref.make<StoredCredential | null>(null);
       const configured = yield* Ref.make(false);
       const connection = yield* Ref.make<Connection | null>(null);
+      const loginStarted = yield* Deferred.make<void>();
+      const releaseLogin = yield* Deferred.make<void>();
       const plugins = yield* Ref.make<PluginOverview>({
         plugins: [
           {
@@ -2464,7 +2478,13 @@ describe("Connection mutations", () => {
         contributions: () => Effect.succeed([]),
       });
       const credentials = Layer.succeed(CredentialStore, credentialStore);
-      const services = Layer.succeed(GranolaLogin, { login: () => Effect.succeed(credential) });
+      const services = Layer.succeed(GranolaLogin, {
+        login: () =>
+          Deferred.succeed(loginStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseLogin)),
+            Effect.map(() => credential),
+          ),
+      });
       const rpcLayer = daemonLayer(
         trackerLayer({}),
         schedulerStub(),
@@ -2478,10 +2498,16 @@ describe("Connection mutations", () => {
         credentials,
       ).pipe(Layer.provideMerge(services));
 
-      yield* verifyGranolaRpcLifecycle(account, id, stored, configured, plugins).pipe(
-        Effect.provide(rpcLayer),
-        Effect.scoped,
-      );
+      yield* verifyGranolaRpcLifecycle(
+        account,
+        id,
+        stored,
+        configured,
+        connection,
+        plugins,
+        loginStarted,
+        releaseLogin,
+      ).pipe(Effect.provide(rpcLayer), Effect.scoped);
     }),
   );
 

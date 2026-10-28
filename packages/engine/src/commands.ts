@@ -55,7 +55,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { ConnectionStore } from "./connection";
+import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import { fold } from "./coordination";
 import { CredentialStore } from "./credential-store";
@@ -938,18 +938,25 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
   );
 });
 
+const findGranolaConnection = Effect.fn("Daemon.findGranolaConnection")(function* (
+  connections: ConnectionStoreService,
+  account: string,
+) {
+  const connection = yield* connections.findSystem("granola");
+  const accountChanged = connection !== null && connection.account !== account;
+  if (!accountChanged) return connection;
+  return yield* connectionFailure(
+    "login Granola",
+    connection.id,
+    `Connection is established for "${connection.account}". Remove it before connecting to "${account}".`,
+  );
+});
+
 export const loginGranola = Effect.fn("Daemon.LoginGranola")(function* (payload: {
   readonly account: string;
 }) {
   const connections = yield* ConnectionStore;
-  const existing = yield* connections.findSystem("granola");
-  if (existing && existing.account !== payload.account) {
-    return yield* connectionFailure(
-      "login Granola",
-      existing.id,
-      `Connection is established for "${existing.account}". Remove it before connecting to "${payload.account}".`,
-    );
-  }
+  const existing = yield* findGranolaConnection(connections, payload.account);
   const credential = yield* (yield* GranolaLogin).login(payload.account);
   const store = yield* CredentialStore;
   const withStoredCredential = store.withStoredCredential;
@@ -960,18 +967,19 @@ export const loginGranola = Effect.fn("Daemon.LoginGranola")(function* (payload:
       "Credential store cannot stage a browser login",
     );
   }
+  const current = yield* findGranolaConnection(connections, payload.account);
   const establishment = {
     system: "granola",
     account: payload.account,
     source: { _tag: "Stored" },
   } as const;
-  const connect = existing ? reconnectConnection({ establishment }) : establishConnection({ establishment });
+  const connect = current ? reconnectConnection({ establishment }) : establishConnection({ establishment });
   return yield* withStoredCredential(credential, connect).pipe(
     Effect.mapError((error) =>
       error._tag === "CredentialError"
         ? new ConnectionFailure({
             operation: "login Granola",
-            connectionId: existing?.id ?? null,
+            connectionId: current?.id ?? null,
             message: error.message,
           })
         : error,
