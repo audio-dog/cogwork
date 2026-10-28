@@ -5,7 +5,7 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`CONTEXT-MAP.md`** at the repo root — read this **first**. It lists the contexts and, in its Relationships section, traces how work flows across them end to end. This is where the high-level architecture lives; the per-context glossaries do not.
-- **`packages/contracts/CONTEXT.md`** — the shared kernel. It owns the cross-cutting orchestration vocabulary (`WorkItem`, `Run`, `Claim`, harness terms, lifecycle stages). Read it alongside any orchestration context (`engine`, `cli`, `cursor-acp`).
+- **`packages/contracts/CONTEXT.md`** — the shared kernel. It owns the cross-cutting orchestration vocabulary (`WorkItem`, `Run`, `Claim`, harness terms, Workflows). Read it alongside any orchestration context (`engine`, `cli`, `cursor-acp`).
 - **`CONTEXT.md`** for the specific context you're working in (`packages/<name>/CONTEXT.md`, or `apps/cli/CONTEXT.md`). Each defines only that context's own terms.
 - **`docs/adr/`** — read ADRs that touch the area you're about to work in. Also check `<context>/docs/adr/` for context-scoped decisions.
 
