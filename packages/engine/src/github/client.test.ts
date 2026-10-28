@@ -223,6 +223,7 @@ describe("GitHub client", () => {
           body: "<!-- cogwork:selfperf fingerprint=daemon.heap-headroom.below -->",
           state: "closed",
           createdAtMillis: Date.UTC(2026, 8, 9, 12),
+          updatedAtMillis: Date.UTC(2026, 8, 9, 12),
         },
       ]);
     }).pipe(withFetchClient(fetch));

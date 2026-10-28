@@ -61,7 +61,15 @@ export interface RawIssue {
   readonly body: string;
   readonly state: "open" | "closed";
   readonly createdAtMillis: number;
+  readonly updatedAtMillis?: number;
   readonly authorLogin?: string;
+}
+
+export interface RawIssueEvent {
+  readonly id: number;
+  readonly event: string;
+  readonly labelName: string | null;
+  readonly createdAtMillis: number;
 }
 
 export interface RawIssuePullReference {
@@ -77,6 +85,7 @@ export interface RawPull {
   readonly authorAssociation: string;
   readonly draft: boolean;
   readonly headSha: string;
+  readonly baseSha?: string;
   readonly headRef: string;
   readonly headRepository: string | null;
   readonly closingIssueNumbers: ReadonlyArray<number>;
@@ -87,6 +96,7 @@ interface RawCommentFields {
   readonly id: number;
   readonly authorLogin: string;
   readonly authorAssociation: string;
+  readonly authorType?: string;
   readonly body: string;
   readonly createdAtMillis: number;
 }
@@ -103,6 +113,7 @@ export type RawReviewComment = RawCommentFields & {
 export interface RawReview {
   readonly authorLogin: string;
   readonly authorAssociation: string;
+  readonly authorType?: string;
   readonly state: string;
   readonly body: string;
   readonly submittedAtMillis: number;
@@ -134,6 +145,7 @@ const IssueSchema = Schema.Struct({
   body: Schema.NullOr(Schema.String),
   state: Schema.Union([Schema.Literal("open"), Schema.Literal("closed")]),
   created_at: Schema.String,
+  updated_at: Schema.optional(Schema.String),
   user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
 });
 
@@ -165,6 +177,7 @@ const PullSchema = Schema.Struct({
     ref: Schema.String,
     repo: Schema.optional(Schema.NullOr(Schema.Struct({ full_name: Schema.String }))),
   }),
+  base: Schema.optional(Schema.Struct({ sha: Schema.String })),
   author_association: Schema.optional(Schema.String),
   updated_at: Schema.optional(Schema.NullOr(Schema.String)),
 });
@@ -175,10 +188,17 @@ const PullDetailSchema = Schema.Struct({
 
 const ReviewSchema = Schema.Struct({
   state: Schema.String,
-  user: Schema.Struct({ login: Schema.String }),
+  user: Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) }),
   body: Schema.NullOr(Schema.String),
   author_association: Schema.optional(Schema.String),
   submitted_at: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
+const IssueEventSchema = Schema.Struct({
+  id: Schema.Finite,
+  event: Schema.String,
+  label: Schema.optional(Schema.NullOr(Schema.Struct({ name: Schema.String }))),
+  created_at: Schema.String,
 });
 
 const CommentFields = {
@@ -190,12 +210,12 @@ const CommentFields = {
 
 const IssueCommentSchema = Schema.Struct({
   ...CommentFields,
-  user: Schema.NullOr(Schema.Struct({ login: Schema.String })),
+  user: Schema.NullOr(Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) })),
 });
 
 const ReviewCommentSchema = Schema.Struct({
   ...CommentFields,
-  user: Schema.Struct({ login: Schema.String }),
+  user: Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) }),
   in_reply_to_id: Schema.NullOr(Schema.Finite).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
   subject_type: Schema.Union([Schema.Literal("line"), Schema.Literal("file")]),
 });
@@ -204,6 +224,7 @@ const toRawIssueComment = (comment: typeof IssueCommentSchema.Type) => ({
   id: comment.id,
   authorLogin: comment.user?.login ?? null,
   authorAssociation: comment.author_association ?? "NONE",
+  ...(comment.user?.type ? { authorType: comment.user.type } : {}),
   body: comment.body ?? "",
   createdAtMillis: commentMillis(comment.created_at),
 });
@@ -215,6 +236,7 @@ const toRawReviewComment = (comment: typeof ReviewCommentSchema.Type) =>
           id: comment.id,
           authorLogin: comment.user.login,
           authorAssociation: comment.author_association ?? "NONE",
+          ...(comment.user.type ? { authorType: comment.user.type } : {}),
           body: comment.body,
           createdAtMillis: commentMillis(comment.created_at),
           inReplyToId: comment.in_reply_to_id,
@@ -587,6 +609,7 @@ const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIss
   body: issue.body ?? "",
   state: issue.state,
   createdAtMillis: millisFromIso(issue.created_at),
+  updatedAtMillis: millisFromIso(issue.updated_at ?? issue.created_at),
   ...(issue.user ? { authorLogin: issue.user.login } : {}),
 });
 
@@ -1022,6 +1045,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       (review): RawReview => ({
         authorLogin: review.user.login,
         authorAssociation: review.author_association ?? "NONE",
+        ...(review.user.type ? { authorType: review.user.type } : {}),
         state: review.state,
         body: review.body ?? "",
         submittedAtMillis: review.submitted_at ? commentMillis(review.submitted_at) : 0,
@@ -1241,6 +1265,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   interface IssueQuery {
     readonly state: "open" | "all";
     readonly label?: string;
+    readonly since?: number;
   }
 
   const issuePagePath = (query: IssueQuery, page: number) => {
@@ -1250,6 +1275,11 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       page: String(page),
     });
     if (query.label) parameters.set("labels", query.label);
+    if (query.since !== undefined) {
+      parameters.set("sort", "updated");
+      parameters.set("direction", "asc");
+      parameters.set("since", isoMillis(query.since));
+    }
     return `/issues?${parameters}`;
   };
 
@@ -1348,6 +1378,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           authorAssociation: pull.author_association ?? "NONE",
           draft: pull.draft ?? false,
           headSha: pull.head.sha,
+          baseSha: pull.base?.sha,
           headRef: pull.head.ref,
           headRepository: pull.head.repo?.full_name ?? null,
           closingIssueNumbers: references.get(pull.number) ?? [],
@@ -1365,6 +1396,31 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     listComments: Effect.fn("github.listComments")(function* (repo: GitHubRepoRef, issueNumber: number) {
       const json = yield* fetchJson(repo, repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`));
       return yield* parseIssueComments(json);
+    }),
+    listIssueEvents: Effect.fn("github.listIssueEvents")(function* (
+      repo: GitHubRepoRef,
+      issueNumber: number,
+    ) {
+      const collect: (page?: number) => Effect.Effect<ReadonlyArray<RawIssueEvent>, IssueTrackerError> =
+        Effect.fn("github.collectIssueEventPages")(function* (page = 1) {
+          const json = yield* fetchJson(
+            repo,
+            repoPath(repo, `/issues/${issueNumber}/events?per_page=100&page=${page}`),
+          );
+          const decoded = yield* Effect.mapError(
+            Schema.decodeUnknownEffect(Schema.Array(IssueEventSchema))(json),
+            toUnavailable,
+          );
+          const current = decoded.map((event) => ({
+            id: event.id,
+            event: event.event,
+            labelName: event.label?.name ?? null,
+            createdAtMillis: millisFromIso(event.created_at),
+          }));
+          if (current.length < 100) return current;
+          return [...current, ...(yield* collect(page + 1))];
+        });
+      return yield* withPaginationDeadline(collect());
     }),
     listAllComments: Effect.fn("github.listAllComments")(function* (
       repo: GitHubRepoRef,

@@ -277,6 +277,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
     listComments: (_repo, number) =>
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
+    listIssueEvents: () => Effect.succeed([]),
     listAllComments: (_repo, number) =>
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
