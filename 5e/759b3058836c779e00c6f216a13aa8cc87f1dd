@@ -1,0 +1,21 @@
+CONTEXT-MAP.md
+  s_bbbf37884d5fc4::t_3843c349aaede1 17
+docs/agents/domain.md
+  s_bbbf37884d5fc4::t_7b2f9cf016b172 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5e759b3058836c779e00c6f216a13aa8cc87f1dd",
+  "prompts": {},
+  "sessions": {
+    "s_bbbf37884d5fc4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ee66da9c-6d71-4c64-8bd4-0e6d3a5b7cd3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
