@@ -7,11 +7,21 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { fullHarnessExecution, HarnessError, type HarnessReadiness, type HarnessRunner } from "./harness";
+import {
+  fullHarnessExecution,
+  HarnessError,
+  type HarnessExecution,
+  type HarnessReadiness,
+  type HarnessRunner,
+} from "./harness";
 import { decodeStoredRunEvent } from "./run-event-codec";
 
 const replaySampleMinimum = 10;
 const replaySampleMaximum = 1_000;
+const replayHarnessExecution = {
+  ...fullHarnessExecution,
+  profiles: ["read-only"],
+} satisfies HarnessExecution;
 const positiveMillis = Schema.Finite.check(Schema.isGreaterThan(0));
 const timedMillis = Schema.Array(positiveMillis).check(
   Schema.isLengthBetween(replaySampleMinimum, replaySampleMaximum),
@@ -376,7 +386,7 @@ export const replayRunner = Effect.fn("ReplayHarness.runner")(function* (options
         ({
           name: options.name,
           sessionKind: "owned-transcript",
-          execution: fullHarnessExecution,
+          execution: replayHarnessExecution,
           capabilities: {
             authenticationModes: ["host"],
             session: { affinity: "portable", fork: false, humanAttach: false },

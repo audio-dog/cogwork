@@ -746,10 +746,14 @@ const runner = (
 });
 
 const recordOnlyRunner = (events: ReadonlyArray<AgUiEvent>) =>
-  runner(events, fullHarnessExecution, {
-    sessionKind: "owned-transcript",
-    name: replay,
-  });
+  runner(
+    events,
+    { ...fullHarnessExecution, profiles: ["read-only"] },
+    {
+      sessionKind: "owned-transcript",
+      name: replay,
+    },
+  );
 
 const capturingRunner = (
   events: ReadonlyArray<AgUiEvent>,
@@ -1438,8 +1442,15 @@ const replayHarness: OperationSettingRow = {
   value: "replay",
 };
 
+const replayProfile: OperationSettingRow = {
+  setting: "permission-profile",
+  level: { _tag: "Default" },
+  scope: { _tag: "SettingsProfile" },
+  value: "read-only",
+};
+
 const runnableStages = [stagesEnabled, cursorHarness];
-const runnableReplayStages = [stagesEnabled, replayHarness];
+const runnableReplayStages = [stagesEnabled, replayHarness, replayProfile];
 
 const controlStoreLayer = (
   operationSettings: ReadonlyArray<OperationSettingRow>,
