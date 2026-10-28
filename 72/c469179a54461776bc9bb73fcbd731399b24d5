@@ -1,0 +1,54 @@
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_37bdafd0796541::t_4bc55e50458a65 279-290
+  s_37bdafd0796541::t_8b84d4adb2ab1c 11-12,83,243,256,278,292-297,302
+  s_37bdafd0796541::t_9a0752f3e81687 291
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_37bdafd0796541::t_44319038636a8b 47
+  s_37bdafd0796541::t_2f6fb83720bc64 41-46,48-50
+  s_37bdafd0796541::t_92dcde4e72ba90 2-40,51-127
+  s_638f6f3aaaa58b::t_6bd551a7a2610d 1
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_37bdafd0796541::t_8b84d4adb2ab1c 6-8,139-143,145-162,165-170
+  s_8ae8bc2667d0f7::t_cbe2d132d51633 144,163-164
+apps/desktop/src/renderer/src/features/activity-session.test.ts
+  s_37bdafd0796541::t_95ed565d40ac77 1-8,23,59-80,82-86
+  s_37bdafd0796541::t_2ab7cf96d63a6b 81
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_37bdafd0796541::t_127c70093edf4e 62,64,77-78
+  s_37bdafd0796541::t_3eab822128152c 1-7,22,24,26,29
+  s_37bdafd0796541::t_0e47b0a954b8db 8-11,14-21,23,25,27-28,30-61,63,65-76,79,87-89,91-92
+  s_37bdafd0796541::t_2f6fb83720bc64 12,80-86,90
+  s_37bdafd0796541::t_bf6e079c9fe868 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "72c469179a54461776bc9bb73fcbd731399b24d5",
+  "prompts": {},
+  "sessions": {
+    "s_37bdafd0796541": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18358-8a25-7891-a2bf-38f296669467",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_638f6f3aaaa58b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180d5-02dc-7393-ad93-78e3fc7162e7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8ae8bc2667d0f7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "df24167c-0afd-4f8d-9796-60ce0bc94c01",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
