@@ -40,5 +40,6 @@ export * as Scheduler from "./scheduler";
 export * as SessionStore from "./session-store";
 export * as SourceControl from "./source-control";
 export * as Tools from "./tools";
+export * as Workflows from "./workflow";
 export * as Worktree from "./worktree";
 export * as WorktreeFs from "./worktree-fs";

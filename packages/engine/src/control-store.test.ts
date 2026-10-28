@@ -133,6 +133,7 @@ const expectedSchemaObjects = [
   { type: "table", name: "run_plans" },
   { type: "table", name: "runs" },
   { type: "table", name: "sessions" },
+  { type: "table", name: "workflows" },
   { type: "table", name: "workspaces" },
 ];
 
