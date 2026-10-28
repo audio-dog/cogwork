@@ -1,7 +1,8 @@
-import type { AttemptRecord, Claim, HandbackRecord } from "@cogwork/contracts";
+import { type AttemptRecord, type Claim, type HandbackRecord, WorkItemId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import { triageProposalBody } from "./comments";
 import {
   attemptStatus,
@@ -38,6 +39,7 @@ const codecs = [
   ["github", githubCodec],
   ["linear", linearCodec],
 ] as const satisfies ReadonlyArray<readonly [string, WireCodec]>;
+const itemId = Schema.decodeSync(WorkItemId);
 
 const makeStore = () =>
   Effect.gen(function* () {
@@ -66,8 +68,14 @@ const makeStore = () =>
 
 for (const [wire, codec] of codecs) {
   describe(`coordination (${wire} wire)`, () => {
-    it("round-trips a claim, carrying its stage on both hosts", () => {
-      const claim: Claim = { by: "cogwork", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
+    it("round-trips a claim with its stage and lineage on both hosts", () => {
+      const claim: Claim = {
+        by: "cogwork",
+        claimedAtMillis: 1_722_000_000_000,
+        stage: "implement",
+        lineageRoot: itemId("#1"),
+        lineageParent: null,
+      };
       const body = formatCoordinationBody(codec, {
         status: claimStatus("implement"),
         markers: [serializeClaim(codec, claim)],
@@ -109,8 +117,22 @@ for (const [wire, codec] of codecs) {
 
     it("round-trips attempt records and preserves their order", () => {
       const attempts: ReadonlyArray<AttemptRecord> = [
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
-        { workflow: "coding", operation: "follow-up", outcome: "succeeded", atMillis: 2 },
+        {
+          workflow: "coding",
+          operation: "implement",
+          outcome: "failed",
+          atMillis: 1,
+          lineageRoot: itemId("#1"),
+          lineageParent: null,
+        },
+        {
+          workflow: "coding",
+          operation: "follow-up",
+          outcome: "succeeded",
+          atMillis: 2,
+          lineageRoot: itemId("#1"),
+          lineageParent: itemId("#2"),
+        },
       ];
       const body = formatCoordinationBody(codec, {
         status: defaultStatus,

@@ -1,11 +1,17 @@
 import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString } from "./base-schemas";
+import { TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
 import { LifecycleStage } from "./triage";
+
+const Lineage = {
+  lineageRoot: Schema.optionalKey(WorkItemId),
+  lineageParent: Schema.optionalKey(Schema.NullOr(WorkItemId)),
+};
 
 export const Claim = Schema.Struct({
   by: TrimmedNonEmptyString,
   claimedAtMillis: Schema.Natural,
   stage: Schema.optional(LifecycleStage),
+  ...Lineage,
 });
 export type Claim = typeof Claim.Type;
 
@@ -27,6 +33,7 @@ export const AttemptRecord = Schema.Struct({
   ...OperationKey.fields,
   outcome: AttemptOutcome,
   atMillis: Schema.Natural,
+  ...Lineage,
 });
 export type AttemptRecord = typeof AttemptRecord.Type;
 

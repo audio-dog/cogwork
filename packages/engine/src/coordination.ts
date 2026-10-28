@@ -118,6 +118,12 @@ const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
 const decodeHandback = Schema.decodeUnknownResult(HandbackRecord);
 const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
+const lineageParentOf = (parent: string) => (parent === "none" ? null : parent);
+
+const lineagePairs = (pairs: Record<string, string>) => ({
+  ...(pairs.root === undefined ? {} : { lineageRoot: pairs.root }),
+  ...(pairs.parent === undefined ? {} : { lineageParent: lineageParentOf(pairs.parent) }),
+});
 
 export const parseClaim = (codec: WireCodec, body: string) => {
   const candidates = pairsNamed(codec, body, "claim").flatMap((pairs) =>
@@ -126,6 +132,7 @@ export const parseClaim = (codec: WireCodec, body: string) => {
         by: pairs.by,
         claimedAtMillis: Number(pairs.at),
         ...(pairs.stage === undefined ? {} : { stage: pairs.stage }),
+        ...lineagePairs(pairs),
       }),
     ),
   );
@@ -140,6 +147,7 @@ export const parseAttempts = (codec: WireCodec, body: string) =>
         operation: pairs.operation,
         outcome: pairs.outcome,
         atMillis: Number(pairs.at),
+        ...lineagePairs(pairs),
       }),
     ),
   );
@@ -200,13 +208,13 @@ const stripMarkers = (codec: WireCodec, text: string): string => {
 export const serializeClaim = (codec: WireCodec, claim: Claim) =>
   codec.encode({
     name: "claim",
-    pairs: `by=${claim.by} at=${claim.claimedAtMillis}${claim.stage ? ` stage=${claim.stage}` : ""}`,
+    pairs: `by=${claim.by} at=${claim.claimedAtMillis}${claim.stage ? ` stage=${claim.stage}` : ""}${claim.lineageRoot ? ` root=${claim.lineageRoot} parent=${claim.lineageParent ?? "none"}` : ""}`,
   });
 
 export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
   codec.encode({
     name: "attempt",
-    pairs: `workflow=${attempt.workflow} operation=${attempt.operation} outcome=${attempt.outcome} at=${attempt.atMillis}`,
+    pairs: `workflow=${attempt.workflow} operation=${attempt.operation} outcome=${attempt.outcome} at=${attempt.atMillis}${attempt.lineageRoot ? ` root=${attempt.lineageRoot} parent=${attempt.lineageParent ?? "none"}` : ""}`,
   });
 
 export const serializeHandback = (codec: WireCodec, handback: HandbackRecord) =>
