@@ -1,0 +1,61 @@
+packages/engine/src/workflow.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1-450
+packages/engine/src/daemon-composition.test.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 7-16,154,156,205-207,212-215,218,245-247,325-372,394-397
+packages/contracts/src/daemon-event.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 19,72-73
+packages/contracts/src/index.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 22
+packages/engine/src/workflow-machine-readiness.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1-108
+docs/spec/customizable-workflows.md
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 131-132,199,236,240-241,248,268,384,410-568,573,613
+packages/engine/src/workflow-catalog.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1-51
+packages/engine/src/control-store.test.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 148
+apps/cli/src/cli.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 20,44
+apps/cli/src/workflow-commands.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1-185
+packages/contracts/src/rpc.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 37-49,115-147,162-167,305-334,355-359
+  s_638f6f3aaaa58b::t_4dac371cc7c932 36
+packages/contracts/src/workflow.test.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1-556
+packages/contracts/src/workflow.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1-1366
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 148-149
+packages/engine/src/control-store-schema.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1,176-201
+  s_638f6f3aaaa58b::t_b89132d1f6f319 202-204
+packages/engine/src/daemon.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 109-111,190,228-234,242,334-339,363-369,455-462,475
+packages/contracts/src/board.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 125-126
+packages/engine/src/control-store.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1115-1117
+apps/cli/src/cli.test.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 15-27
+packages/engine/src/index.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 45
+packages/engine/src/workflow.test.ts
+  s_638f6f3aaaa58b::t_05eb8c9cd65efb 1-355
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "650146c6f1a74ac5f2a609f930cbb83b04f003ae",
+  "prompts": {},
+  "sessions": {
+    "s_638f6f3aaaa58b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180d5-02dc-7393-ad93-78e3fc7162e7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
