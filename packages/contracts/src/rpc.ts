@@ -34,15 +34,18 @@ import {
 } from "./settings";
 import { TriageRole } from "./triage";
 import {
-  WorkflowCatalog,
+  WorkflowCatalogKey,
+  WorkflowCatalogResult,
   WorkflowDiagnostic,
   WorkflowDocument,
   WorkflowEditBatch,
   WorkflowFailure,
   WorkflowId,
   WorkflowList,
+  WorkflowOptionList,
   WorkflowRecord,
   WorkflowSwitchResult,
+  WorkflowTemplate,
 } from "./workflow";
 import {
   GitHubPriorityField,
@@ -126,7 +129,20 @@ export const ValidateWorkflow = Rpc.make("ValidateWorkflow", {
 });
 
 export const GetWorkflowCatalog = Rpc.make("GetWorkflowCatalog", {
-  success: WorkflowCatalog,
+  success: WorkflowCatalogResult,
+});
+
+export const GetWorkflowTemplates = Rpc.make("GetWorkflowTemplates", {
+  success: Schema.Array(WorkflowTemplate),
+});
+
+export const ListWorkflowOptions = Rpc.make("ListWorkflowOptions", {
+  payload: {
+    entry: WorkflowCatalogKey,
+    parameter: TrimmedNonEmptyString,
+    workspaces: Schema.Array(WorkspaceId),
+  },
+  success: WorkflowOptionList,
 });
 
 export const DaemonQueries = RpcGroup.make(
@@ -147,6 +163,8 @@ export const DaemonQueries = RpcGroup.make(
   GetWorkflow,
   ValidateWorkflow,
   GetWorkflowCatalog,
+  GetWorkflowTemplates,
+  ListWorkflowOptions,
 ).middleware(PrincipalMiddleware);
 
 export class CancelRunError extends Schema.TaggedError<CancelRunError>()("CancelRunError", {

@@ -1,7 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import {
-  applyWorkflowEdits,
   type Connection,
   type ConnectionId,
   Connection as ConnectionSchema,
@@ -28,27 +26,8 @@ import {
   OperationSettingUpdate,
   type PluginInstall,
   PluginInstall as PluginInstallSchema,
-  type PrincipalId,
-  PrincipalId as PrincipalIdSchema,
   SettingLevel,
   StaleControlStoreWrite,
-  validateWorkflow,
-  type WorkflowCatalog,
-  type WorkflowDocument,
-  WorkflowDocument as WorkflowDocumentSchema,
-  type WorkflowEdit,
-  WorkflowEditRefused,
-  type WorkflowFailure,
-  WorkflowFailure as WorkflowFailureSchema,
-  type WorkflowId,
-  WorkflowId as WorkflowIdSchema,
-  type WorkflowList,
-  WorkflowNotFound,
-  WorkflowPublishRefused,
-  type WorkflowRecord,
-  WorkflowRecord as WorkflowRecordSchema,
-  WorkflowSwitchRefused,
-  WorkflowUnreadable,
 } from "@cogwork/contracts";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as DrizzleSqlite from "drizzle-kit/payload/sqlite";
@@ -99,38 +78,6 @@ type ControlStoreMutators<Picture> = {
     update: ContributionSettingUpdate,
   ) => Effect.Effect<Picture, ControlStoreFailure>;
 };
-
-type WorkflowStoreError = ControlStoreFailure | WorkflowFailure;
-
-export interface WorkflowStoreService {
-  readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
-  readonly listWorkflows: (catalog: WorkflowCatalog) => Effect.Effect<WorkflowList, ControlStoreFailure>;
-  readonly getWorkflow: (
-    id: WorkflowId,
-    catalog: WorkflowCatalog,
-  ) => Effect.Effect<WorkflowRecord, WorkflowStoreError>;
-  readonly createWorkflow: (
-    principal: PrincipalId,
-    document: WorkflowDocument,
-    catalog: WorkflowCatalog,
-  ) => Effect.Effect<WorkflowRecord, WorkflowStoreError>;
-  readonly editWorkflow: (
-    id: WorkflowId,
-    edits: ReadonlyArray<WorkflowEdit>,
-    catalog: WorkflowCatalog,
-  ) => Effect.Effect<WorkflowRecord, WorkflowStoreError>;
-  readonly publishWorkflow: (
-    id: WorkflowId,
-    revision: number,
-    catalog: WorkflowCatalog,
-  ) => Effect.Effect<WorkflowRecord, WorkflowStoreError>;
-  readonly switchWorkflow: (
-    id: WorkflowId,
-    enabled: boolean,
-    catalog: WorkflowCatalog,
-  ) => Effect.Effect<WorkflowRecord, WorkflowStoreError>;
-  readonly deleteWorkflow: (id: WorkflowId) => Effect.Effect<WorkflowId, WorkflowStoreError>;
-}
 
 export type ControlStoreService = {
   readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
@@ -282,24 +229,7 @@ const decodePluginInstall = Schema.decodeUnknownEffect(PluginInstallSchema);
 const JsonValue = Schema.fromJsonString(Schema.Unknown);
 const decodeJson = Schema.decodeUnknownEffect(JsonValue);
 const encodeJson = Schema.encodeUnknownEffect(JsonValue);
-const WorkflowDocumentJson = Schema.fromJsonString(WorkflowDocumentSchema);
-const encodeWorkflowDocument = Schema.encodeEffect(WorkflowDocumentJson);
-const isWorkflowDomainFailure = Schema.is(WorkflowFailureSchema);
 const isStaleControlStoreWrite = Schema.is(StaleControlStoreWrite);
-
-const workflowFailure = (operation: string) => (error: unknown) =>
-  isWorkflowDomainFailure(error) ? error : storeFailure(operation)(error);
-
-const StoredWorkflowRow = Schema.Struct({
-  id: Schema.String,
-  principal: Schema.String,
-  working_copy: Schema.String,
-  working_revision: Schema.Int,
-  published_copy: Schema.NullOr(Schema.String),
-  published_revision: Schema.NullOr(Schema.Int),
-  enabled: Schema.Union([Schema.Boolean, Schema.Literals([0, 1])]),
-});
-type StoredWorkflowRow = typeof StoredWorkflowRow.Type;
 
 const setDaemonLimitFailure = (error: unknown) =>
   isStaleControlStoreWrite(error) ? error : storeFailure("set daemon limit")(error);
@@ -501,73 +431,6 @@ const readPicture = (sql: SqlClient.SqlClient) =>
       contributionSettings,
     };
   });
-
-type StoredWorkflowInput = Record<string, unknown>;
-
-const decodeStoredWorkflow = Schema.decodeUnknownEffect(StoredWorkflowRow);
-
-const storedWorkflowId = (row: StoredWorkflowInput) => (typeof row.id === "string" ? row.id : "<unreadable>");
-
-const readStoredWorkflows = Effect.fn("ControlStore.readStoredWorkflows")(function* (
-  sql: SqlClient.SqlClient,
-) {
-  return yield* sql<StoredWorkflowInput>`
-    SELECT id, principal, working_copy, working_revision, published_copy, published_revision, enabled
-    FROM workflows
-    ORDER BY id
-  `;
-});
-
-const readStoredWorkflow = Effect.fn("ControlStore.readStoredWorkflow")(function* (
-  sql: SqlClient.SqlClient,
-  id: WorkflowId,
-) {
-  const rows = yield* sql<StoredWorkflowInput>`
-    SELECT id, principal, working_copy, working_revision, published_copy, published_revision, enabled
-    FROM workflows
-    WHERE id = ${id}
-  `;
-  const row = rows[0];
-  if (row) return row;
-  return yield* new WorkflowNotFound({ id });
-});
-
-const decodeWorkflowRecord = Effect.fn("ControlStore.decodeWorkflowRecord")(function* (
-  row: StoredWorkflowRow,
-  catalog: WorkflowCatalog,
-) {
-  const id = yield* Schema.decodeEffect(WorkflowIdSchema)(row.id);
-  const principal = yield* Schema.decodeEffect(PrincipalIdSchema)(row.principal);
-  const workingCopy = yield* Schema.decodeEffect(WorkflowDocumentJson)(row.working_copy);
-  const publishedCopy =
-    row.published_copy === null ? null : yield* Schema.decodeEffect(WorkflowDocumentJson)(row.published_copy);
-  return yield* Schema.decodeEffect(WorkflowRecordSchema)({
-    id,
-    principal,
-    workingCopy,
-    workingRevision: row.working_revision,
-    publishedCopy,
-    publishedRevision: row.published_revision,
-    enabled: row.enabled === true || row.enabled === 1,
-    diagnostics: validateWorkflow(workingCopy, catalog),
-  });
-});
-
-const unreadableWorkflow = (id: WorkflowId) => (error: unknown) =>
-  new WorkflowUnreadable({ id, message: messageOf(error) });
-
-const getDecodedWorkflow = (sql: SqlClient.SqlClient, id: WorkflowId, catalog: WorkflowCatalog) =>
-  readStoredWorkflow(sql, id).pipe(
-    Effect.flatMap((row) =>
-      decodeStoredWorkflow(row).pipe(
-        Effect.flatMap((stored) => decodeWorkflowRecord(stored, catalog)),
-        Effect.mapError(unreadableWorkflow(id)),
-      ),
-    ),
-  );
-
-const blockingDiagnostics = (record: WorkflowRecord) =>
-  record.diagnostics.filter(({ class: diagnosticClass }) => diagnosticClass !== "advisory");
 
 const writeHarnessEnabled = Effect.fn("ControlStore.writeHarnessEnabled")(function* (
   sql: SqlClient.SqlClient,
@@ -879,125 +742,6 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       }),
     );
   });
-  const listWorkflows = Effect.fn("ControlStore.listWorkflows")(function* (catalog: WorkflowCatalog) {
-    const rows = yield* readStoredWorkflows(sql);
-    const [failures, workflows] = yield* Effect.partition(rows, (row) =>
-      decodeStoredWorkflow(row).pipe(
-        Effect.flatMap((stored) => decodeWorkflowRecord(stored, catalog)),
-        Effect.mapError((error) => ({ id: storedWorkflowId(row), message: messageOf(error) })),
-      ),
-    );
-    return { workflows, failures } satisfies WorkflowList;
-  });
-  const createWorkflow = Effect.fn("ControlStore.createWorkflow")(function* (
-    principal: PrincipalId,
-    document: WorkflowDocument,
-    catalog: WorkflowCatalog,
-  ) {
-    const diagnostics = validateWorkflow(document, catalog);
-    const malformed = diagnostics.filter(({ class: diagnosticClass }) => diagnosticClass === "malformed");
-    if (malformed.length > 0) return yield* new WorkflowEditRefused({ diagnostics: malformed });
-    const id = yield* Schema.decodeEffect(WorkflowIdSchema)(randomUUID());
-    const workingCopy = yield* encodeWorkflowDocument(document);
-    yield* sql.withTransaction(sql`
-      INSERT INTO workflows (
-        id, principal, working_copy, working_revision, published_copy, published_revision, enabled
-      ) VALUES (${id}, ${principal}, ${workingCopy}, 1, NULL, NULL, 0)
-    `);
-    return yield* getDecodedWorkflow(sql, id, catalog);
-  });
-  const editWorkflow = Effect.fn("ControlStore.editWorkflow")(function* (
-    id: WorkflowId,
-    edits: ReadonlyArray<WorkflowEdit>,
-    catalog: WorkflowCatalog,
-  ) {
-    return yield* sql.withTransaction(
-      Effect.gen(function* () {
-        const current = yield* getDecodedWorkflow(sql, id, catalog);
-        const applied = applyWorkflowEdits(current.workingCopy, edits);
-        if (applied._tag === "Refused") {
-          return yield* new WorkflowEditRefused({ diagnostics: applied.diagnostics });
-        }
-        const diagnostics = validateWorkflow(applied.document, catalog);
-        const malformed = diagnostics.filter(({ class: diagnosticClass }) => diagnosticClass === "malformed");
-        if (malformed.length > 0) return yield* new WorkflowEditRefused({ diagnostics: malformed });
-        const workingCopy = yield* encodeWorkflowDocument(applied.document);
-        yield* sql`
-          UPDATE workflows
-          SET working_copy = ${workingCopy}, working_revision = working_revision + 1
-          WHERE id = ${id}
-        `;
-        return {
-          ...current,
-          workingCopy: applied.document,
-          workingRevision: current.workingRevision + 1,
-          diagnostics,
-        } satisfies WorkflowRecord;
-      }),
-    );
-  });
-  const publishWorkflow = Effect.fn("ControlStore.publishWorkflow")(function* (
-    id: WorkflowId,
-    revision: number,
-    catalog: WorkflowCatalog,
-  ) {
-    return yield* sql.withTransaction(
-      Effect.gen(function* () {
-        const current = yield* getDecodedWorkflow(sql, id, catalog);
-        const blocking = blockingDiagnostics(current);
-        const refusal = [
-          {
-            matches: revision !== current.workingRevision,
-            reason: "stale-revision" as const,
-            diagnostics: current.diagnostics,
-          },
-          {
-            matches: blocking.length > 0,
-            reason: "incomplete" as const,
-            diagnostics: blocking,
-          },
-        ].find(({ matches }) => matches);
-        if (refusal) {
-          return yield* new WorkflowPublishRefused({
-            reason: refusal.reason,
-            expectedRevision: revision,
-            actualRevision: current.workingRevision,
-            diagnostics: refusal.diagnostics,
-          });
-        }
-        const publishedCopy = yield* encodeWorkflowDocument(current.workingCopy);
-        yield* sql`
-          UPDATE workflows
-          SET published_copy = ${publishedCopy}, published_revision = ${current.workingRevision}
-          WHERE id = ${id}
-        `;
-        return yield* getDecodedWorkflow(sql, id, catalog);
-      }),
-    );
-  });
-  const switchWorkflow = Effect.fn("ControlStore.switchWorkflow")(function* (
-    id: WorkflowId,
-    enabled: boolean,
-    catalog: WorkflowCatalog,
-  ) {
-    return yield* sql.withTransaction(
-      Effect.gen(function* () {
-        const current = yield* getDecodedWorkflow(sql, id, catalog);
-        if (enabled && current.publishedRevision === null) {
-          return yield* new WorkflowSwitchRefused({ id, reason: "no-published-revision" });
-        }
-        yield* sql`UPDATE workflows SET enabled = ${enabled ? 1 : 0} WHERE id = ${id}`;
-        return yield* getDecodedWorkflow(sql, id, catalog);
-      }),
-    );
-  });
-  const deleteWorkflow = Effect.fn("ControlStore.deleteWorkflow")(function* (id: WorkflowId) {
-    const deleted = yield* sql<{ readonly id: string }>`
-      DELETE FROM workflows WHERE id = ${id} RETURNING id
-    `;
-    if (deleted.length === 0) return yield* new WorkflowNotFound({ id });
-    return id;
-  });
   return {
     health: "available" as const,
     seed,
@@ -1026,20 +770,6 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       uninstallPlugin(pluginId).pipe(Effect.mapError(storeFailure("uninstall Plugin"))),
     updateContributionSetting: (update: ContributionSettingUpdate) =>
       updateContributionSetting(update).pipe(Effect.mapError(storeFailure("update contribution setting"))),
-    listWorkflows: (catalog: WorkflowCatalog) =>
-      listWorkflows(catalog).pipe(Effect.mapError(storeFailure("list Workflows"))),
-    getWorkflow: (id: WorkflowId, catalog: WorkflowCatalog) =>
-      getDecodedWorkflow(sql, id, catalog).pipe(Effect.mapError(workflowFailure("get Workflow"))),
-    createWorkflow: (principal: PrincipalId, document: WorkflowDocument, catalog: WorkflowCatalog) =>
-      createWorkflow(principal, document, catalog).pipe(Effect.mapError(workflowFailure("create Workflow"))),
-    editWorkflow: (id: WorkflowId, edits: ReadonlyArray<WorkflowEdit>, catalog: WorkflowCatalog) =>
-      editWorkflow(id, edits, catalog).pipe(Effect.mapError(workflowFailure("edit Workflow"))),
-    publishWorkflow: (id: WorkflowId, revision: number, catalog: WorkflowCatalog) =>
-      publishWorkflow(id, revision, catalog).pipe(Effect.mapError(workflowFailure("publish Workflow"))),
-    switchWorkflow: (id: WorkflowId, enabled: boolean, catalog: WorkflowCatalog) =>
-      switchWorkflow(id, enabled, catalog).pipe(Effect.mapError(workflowFailure("switch Workflow"))),
-    deleteWorkflow: (id: WorkflowId) =>
-      deleteWorkflow(id).pipe(Effect.mapError(workflowFailure("delete Workflow"))),
     withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       Effect.acquireUseRelease(
         writeGate.take(1).pipe(Effect.trackDuration(controlStoreWriteGateWaitDuration)),
@@ -1338,7 +1068,7 @@ const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
     ).pipe(Effect.catchCause(recoverSchemaPreflightFailure)),
 );
 
-const unavailable = (message: string): ControlStoreService & WorkflowStoreService => {
+const unavailable = (message: string): ControlStoreService => {
   const failure = ControlStoreFailure.make({ operation: "open Control store", message, retryable: true });
   return {
     health: "unavailable",
@@ -1354,24 +1084,12 @@ const unavailable = (message: string): ControlStoreService & WorkflowStoreServic
     installPlugin: () => Effect.fail(failure),
     uninstallPlugin: () => Effect.fail(failure),
     updateContributionSetting: () => Effect.fail(failure),
-    listWorkflows: () => Effect.fail(failure),
-    getWorkflow: () => Effect.fail(failure),
-    createWorkflow: () => Effect.fail(failure),
-    editWorkflow: () => Effect.fail(failure),
-    publishWorkflow: () => Effect.fail(failure),
-    switchWorkflow: () => Effect.fail(failure),
-    deleteWorkflow: () => Effect.fail(failure),
     withWrite: (effect) => effect,
   };
 };
 
 export const ControlStore = Context.Reference<ControlStoreService>(
   "@cogwork/engine/control-store/ControlStore",
-  { defaultValue: () => unavailable("Control store did not boot") },
-);
-
-export const WorkflowStore = Context.Reference<WorkflowStoreService>(
-  "@cogwork/engine/control-store/WorkflowStore",
   { defaultValue: () => unavailable("Control store did not boot") },
 );
 
@@ -1395,11 +1113,7 @@ export const bootControlStoreLayer = (storePath: string, options: ControlStoreCl
     Effect.map(prepareSchemaFallback(storePath, options), (preflightError) => {
       const client = controlStoreClientLayer(storePath, options);
       return Layer.merge(
-        Layer.effectContext(
-          Effect.map(bootControlStore(storePath, preflightError), (store) =>
-            Context.make(ControlStore, store).pipe(Context.add(WorkflowStore, store)),
-          ),
-        ).pipe(Layer.provide(client)),
+        Layer.effect(ControlStore, bootControlStore(storePath, preflightError)).pipe(Layer.provide(client)),
         client,
       );
     }),

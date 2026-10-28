@@ -2,7 +2,12 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { HarnessName, WorkspaceId } from "./base-schemas";
 import {
+  adviseReadiness,
   applyWorkflowEdits,
+  availabilityOf,
+  decodeWorkflowDocument,
+  MachineReadiness,
+  NeedIdentity,
   validateWorkflow,
   validateWorkflowInput,
   type WorkflowCatalog,
@@ -16,7 +21,9 @@ import {
 
 const decodeDocument = Schema.decodeUnknownSync(WorkflowDocumentSchema);
 const decodeCatalog = Schema.decodeUnknownSync(WorkflowCatalogSchema);
+const decodeMachine = Schema.decodeUnknownSync(MachineReadiness);
 const decodeHarness = Schema.decodeUnknownSync(HarnessName);
+const decodeNeed = Schema.decodeUnknownSync(NeedIdentity);
 const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
 const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
 
@@ -97,17 +104,19 @@ const baseCatalog = decodeCatalog({
     },
   ],
   instructionPackages: ["triage-agent"],
-  models: [
+  harnesses: [
     {
-      harness: "codex",
-      available: true,
+      name: "codex",
       models: [{ id: "gpt-5", options: [] }],
     },
   ],
+});
+
+const baseMachine = decodeMachine({
+  workspaces: [{ id: "cogwork", binds: ["github"] }],
+  connections: [{ system: "github", ready: true, reason: null }],
+  harnesses: [{ name: "codex", available: true }],
   defaultHarness: "codex",
-  registeredWorkspaces: ["cogwork"],
-  systemBindings: [{ system: "github", workspaces: ["cogwork"] }],
-  readyConnections: ["github/main"],
   readyNeeds: ["tools"],
 });
 
@@ -118,11 +127,15 @@ if (!transition) throw new Error("missing base Transition");
 
 const documentWith = (change: Partial<WorkflowDocument>) => decodeDocument({ ...baseDocument, ...change });
 const catalogWith = (change: Partial<WorkflowCatalog>) => decodeCatalog({ ...baseCatalog, ...change });
+const machineWith = (change: Partial<typeof baseMachine>) => decodeMachine({ ...baseMachine, ...change });
 const replaceOperation = (change: Partial<(typeof baseDocument.operations)[number]>) =>
   documentWith({ operations: [{ ...operation, ...change }] });
 
 const codesOf = (document = baseDocument, catalog = baseCatalog) =>
   validateWorkflow(document, catalog).map(({ code }) => code);
+
+const readinessCodesOf = (document = baseDocument, catalog = baseCatalog, machine = baseMachine) =>
+  adviseReadiness(document, catalog, machine).map(({ code }) => code);
 
 interface DiagnosticCase {
   readonly code: WorkflowDiagnosticCode;
@@ -139,7 +152,7 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
     code: "unknown-target",
     produce: () => {
       const result = applyWorkflowEdits(baseDocument, [
-        { _tag: "RemoveOperation", id: decodeNodeId("missing") },
+        { _tag: "RemoveOperation", operation: decodeNodeId("missing") },
       ]);
       return result._tag === "Refused" ? result.diagnostics.map(({ code }) => code) : [];
     },
@@ -254,33 +267,40 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
   },
   {
     code: "connection-not-ready",
-    produce: () => codesOf(baseDocument, catalogWith({ readyConnections: [] })),
+    produce: () => readinessCodesOf(baseDocument, baseCatalog, machineWith({ connections: [] })),
   },
   {
     code: "need-not-ready",
-    produce: () => codesOf(replaceOperation({ requires: ["missing"] })),
+    produce: () => readinessCodesOf(replaceOperation({ requires: [decodeNeed("missing")] })),
   },
   {
     code: "harness-unavailable",
     produce: () =>
-      codesOf(baseDocument, catalogWith({ models: [{ ...baseCatalog.models[0], available: false }] })),
+      readinessCodesOf(
+        baseDocument,
+        baseCatalog,
+        machineWith({ harnesses: [{ name: decodeHarness("codex"), available: false }] }),
+      ),
   },
   {
     code: "no-harness",
     produce: () =>
-      codesOf(
+      readinessCodesOf(
         replaceOperation({ model: { harness: null, model: null, options: [] } }),
-        catalogWith({ defaultHarness: null }),
+        baseCatalog,
+        machineWith({ defaultHarness: null }),
       ),
   },
   {
     code: "workspace-not-registered",
     produce: () =>
-      codesOf(documentWith({ workspaces: { _tag: "Listed", workspaces: [decodeWorkspaceId("missing")] } })),
+      readinessCodesOf(
+        documentWith({ workspaces: { _tag: "Listed", workspaces: [decodeWorkspaceId("missing")] } }),
+      ),
   },
   {
     code: "system-unbound",
-    produce: () => codesOf(baseDocument, catalogWith({ systemBindings: [] })),
+    produce: () => readinessCodesOf(baseDocument, baseCatalog, machineWith({ workspaces: [] })),
   },
   {
     code: "unreachable-operation",
@@ -308,7 +328,7 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
             : entry,
         ),
       }).entries;
-      return codesOf(baseDocument, catalogWith({ entries }));
+      return readinessCodesOf(baseDocument, catalogWith({ entries }));
     },
   },
   {
@@ -360,6 +380,29 @@ describe("Workflow validator", () => {
 
   it("does not produce a section 5 code for the complete worked document", () => {
     assert.deepStrictEqual(validateWorkflow(baseDocument, baseCatalog), []);
+    assert.deepStrictEqual(adviseReadiness(baseDocument, baseCatalog, baseMachine), []);
+  });
+
+  it("keeps machine advisories out of document validation", () => {
+    const machine = machineWith({ connections: [], workspaces: [], harnesses: [], readyNeeds: [] });
+
+    assert.deepStrictEqual(validateWorkflow(baseDocument, baseCatalog), []);
+    assert.isAbove(adviseReadiness(baseDocument, baseCatalog, machine).length, 0);
+  });
+
+  it("reports catalog entry availability from machine state", () => {
+    const entry = baseCatalog.entries[0];
+    if (!entry) throw new Error("missing test Catalog entry");
+    const unavailable = machineWith({
+      connections: [{ system: "github", ready: false, reason: "Token expired" }],
+    });
+
+    assert.strictEqual(availabilityOf(entry, baseMachine)._tag, "Available");
+    assert.strictEqual(availabilityOf(entry, machineWith({ connections: [] }))._tag, "ConnectionNeeded");
+    assert.deepStrictEqual(availabilityOf(entry, unavailable), {
+      _tag: "Unavailable",
+      reason: "Token expired",
+    });
   });
 
   it("requires node ids to be unique across the document", () => {
@@ -382,17 +425,78 @@ describe("Workflow validator", () => {
 
 describe("Workflow edits", () => {
   it("rejects excess edit keys at the Schema boundary", () => {
-    assert.isFalse(Schema.is(WorkflowEditBatch)([{ _tag: "SetName", name: "Edited", extra: true }]));
+    assert.isFalse(Schema.is(WorkflowEditBatch)([{ _tag: "Rename", name: "Edited", extra: true }]));
+    assert.isFalse(Schema.is(WorkflowEditBatch)([{ _tag: "ReplaceOperation", id: "triage", operation }]));
   });
 
   it("applies a batch in arrival order", () => {
     const result = applyWorkflowEdits(baseDocument, [
-      { _tag: "SetName", name: "First" },
-      { _tag: "SetName", name: "Second" },
+      { _tag: "Rename", name: "First" },
+      { _tag: "Rename", name: "Second" },
     ]);
 
-    assert.strictEqual(result._tag, "Applied");
-    if (result._tag !== "Applied") return;
-    assert.strictEqual(result.document.name, "Second");
+    assert.strictEqual(result._tag, "Ok");
+    if (result._tag !== "Ok") return;
+    assert.strictEqual(result.value.name, "Second");
+  });
+
+  it("applies removal cascades before validating the final document", () => {
+    const withNext = decodeDocument({
+      ...baseDocument,
+      triggers: [{ ...baseDocument.triggers[0], start: "next" }],
+      operations: [
+        { ...operation, transitions: [{ ...transition, handOff: "next" }] },
+        { ...operation, id: "next" },
+      ],
+    });
+    const result = applyWorkflowEdits(withNext, [
+      { _tag: "RemoveOperation", operation: decodeNodeId("next") },
+      { _tag: "RemoveTrigger", trigger: decodeNodeId("issue-opened") },
+    ]);
+
+    assert.strictEqual(result._tag, "Ok");
+    if (result._tag !== "Ok") return;
+    assert.isNull(result.value.operations[0]?.transitions[0]?.handOff);
+    assert.notInclude(codesOf(result.value), "unknown-reference");
+  });
+
+  it("drops transitions that name a removed question or choice", () => {
+    const document = decodeDocument({
+      ...baseDocument,
+      operations: [
+        {
+          ...operation,
+          transitions: [
+            {
+              ...transition,
+              when: [{ question: "decision", choice: "yes" }],
+            },
+          ],
+        },
+      ],
+    });
+    const edits = [
+      [{ _tag: "RemoveQuestion", operation: operation.id, question: decodeNodeId("decision") }],
+      [
+        {
+          _tag: "RemoveChoice",
+          operation: operation.id,
+          question: decodeNodeId("decision"),
+          choice: decodeNodeId("yes"),
+        },
+      ],
+    ] as const;
+
+    edits.forEach((batch) => {
+      const result = applyWorkflowEdits(document, batch);
+      assert.strictEqual(result._tag, "Ok");
+      if (result._tag !== "Ok") return;
+      assert.isEmpty(result.value.operations[0]?.transitions ?? []);
+    });
+  });
+
+  it("decodes documents as data", () => {
+    assert.strictEqual(decodeWorkflowDocument(baseDocument)._tag, "Ok");
+    assert.strictEqual(decodeWorkflowDocument({ ...baseDocument, extra: true })._tag, "Refused");
   });
 });

@@ -335,7 +335,7 @@ describe("daemon server composition", () => {
       const created = yield* rpc.CreateWorkflow({ document });
       const edited = yield* rpc.EditWorkflow({
         id: created.id,
-        edits: [{ _tag: "SetName", name: "Edited" }],
+        edits: [{ _tag: "Rename", name: "Edited" }],
       });
       const listed = yield* rpc.ListWorkflows();
       const fetched = yield* rpc.GetWorkflow({ id: created.id });
@@ -362,7 +362,7 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.entries, 5);
+      assert.lengthOf(catalog.catalog.entries, 5);
       assert.isTrue(
         [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
       );
@@ -392,7 +392,7 @@ describe("daemon server composition", () => {
         ["cursor"],
       );
       assert.deepStrictEqual(
-        result.workflowCatalog.entries.map(({ name }) => name),
+        result.workflowCatalog.catalog.entries.map(({ name }) => name),
         ["Notify me", "Wait for my approval", "Withdraw the pending approval", "Hand to me", "Stop"],
       );
       assert.isTrue(Result.isFailure(result.readiness));
