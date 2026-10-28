@@ -46,7 +46,26 @@ const profiles: Record<OperationPolicyProfile, SandboxPolicy> = {
   full: fullProfile,
 };
 
+const implementPushDeny = "*git*push*";
+const implementProfiles: Record<OperationPolicyProfile, SandboxPolicy> = {
+  "read-only": defineSandboxPolicy({
+    ...readOnlyProfile,
+    commands: { deny: [...hardDenyCommands, implementPushDeny] },
+  }),
+  full: defineSandboxPolicy({
+    ...fullProfile,
+    commands: { deny: [...hardDenyCommands, implementPushDeny] },
+  }),
+};
+
+const operationProfiles: Partial<Record<LifecycleStage, Record<OperationPolicyProfile, SandboxPolicy>>> = {
+  implement: implementProfiles,
+};
+
 export const policyForProfile = (profile: OperationPolicyProfile) => profiles[profile];
+
+export const policyForOperation = (operation: LifecycleStage, profile: OperationPolicyProfile) =>
+  operationProfiles[operation]?.[profile] ?? policyForProfile(profile);
 
 export const profileForStage = (stage: LifecycleStage) => policyForProfile(operationDefaultProfile(stage));
 

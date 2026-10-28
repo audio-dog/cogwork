@@ -33,6 +33,7 @@ export {
   isPolicyDenied,
   type OwnedToolName,
   type PolicyDenied,
+  policyForOperation,
   policyForProfile,
   profileForStage,
   readOnlyProfile,

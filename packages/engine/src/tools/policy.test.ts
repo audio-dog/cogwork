@@ -13,6 +13,7 @@ import {
   hardDenyCommands,
   isPolicyDenied,
   type OwnedToolName,
+  policyForOperation,
   profileForStage,
   readOnlyProfile,
 } from "./policy";
@@ -82,6 +83,17 @@ describe("policy profiles", () => {
     for (const tool of allowed) {
       assert.strictEqual(gateDecision(fullProfile, tool, "pnpm test"), "allow", tool);
     }
+  });
+
+  it("reserves push for the engine during implement", () => {
+    assert.strictEqual(
+      gateDecision(policyForOperation("implement", "full"), "bash", "git push origin feature"),
+      "deny",
+    );
+    assert.strictEqual(
+      gateDecision(policyForOperation("follow-up", "full"), "bash", "git push origin feature"),
+      "allow",
+    );
   });
 });
 
