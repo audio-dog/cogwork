@@ -258,6 +258,7 @@ class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<R
           Ref.update(requests, (calls) => [...calls, request]).pipe(
             Effect.map(() => ({
               layers: [],
+              operatingInstructionsName: "implement-agent",
               operatingInstructionsPath: "/",
               operatingInstructionResources: [],
               sources: [],
@@ -273,6 +274,7 @@ const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () =>
     Effect.succeed({
       layers: [],
+      operatingInstructionsName: "implement-agent",
       operatingInstructionsPath: "/",
       operatingInstructionResources: [],
       sources: [],
@@ -309,6 +311,7 @@ const contributionContext = Layer.succeed(ContextAssembler.ContextAssembler, {
           source: contribution.file,
           content: contribution.id,
         })),
+      operatingInstructionsName: "implement-agent",
       operatingInstructionsPath: "/",
       operatingInstructionResources: [],
       sources: [],

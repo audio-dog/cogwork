@@ -251,6 +251,7 @@ const context: AssembledContext = {
       content: "operating-instructions",
     },
   ],
+  operatingInstructionsName: "implement-agent",
   operatingInstructionsPath: "/home/.cogwork/run-plans/run-228/operating-instructions/implement-agent",
   operatingInstructionResources: [
     {

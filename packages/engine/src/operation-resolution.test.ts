@@ -108,6 +108,7 @@ const testLayer = (
           content: "implement instructions",
         },
       ],
+      operatingInstructionsName: "implement-agent",
       operatingInstructionsPath: "/operations/implement-agent",
       operatingInstructionResources: [],
       sources: [],

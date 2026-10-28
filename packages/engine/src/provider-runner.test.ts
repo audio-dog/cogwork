@@ -143,6 +143,7 @@ const contextService = (layers: ReadonlyArray<InstructionLayer>): ContextAssembl
   assemble: () =>
     Effect.succeed({
       layers,
+      operatingInstructionsName: "implement-agent",
       operatingInstructionsPath: "/operating-instructions/implement-agent",
       operatingInstructionResources: [],
       sources: [],
