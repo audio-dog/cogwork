@@ -1,0 +1,35 @@
+packages/engine/src/daemon-composition.test.ts
+  s_e5d8f701c0c31e::t_2d8eafbdcd9d17 57
+  s_e5d8f701c0c31e::t_cf608f96dd6356 74-75
+packages/engine/src/git.test.ts
+  s_e5d8f701c0c31e::t_cf608f96dd6356 17-18
+packages/engine/src/engine.test.ts
+  s_e5d8f701c0c31e::t_cf608f96dd6356 1139-1140
+  s_e5d8f701c0c31e::t_2d8eafbdcd9d17 1167
+packages/engine/src/workspace-registry.test.ts
+  s_e5d8f701c0c31e::t_cf608f96dd6356 42-43
+packages/engine/src/git.ts
+  s_e5d8f701c0c31e::t_5753878f05e6d3 76,103-110
+  s_e5d8f701c0c31e::t_2421fd0f54fb8c 77
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_e5d8f701c0c31e::t_cf608f96dd6356 18-19
+  s_e5d8f701c0c31e::t_358ac414efc511 44-45,58-59,75-76
+packages/engine/src/testing/git-invocation-counting.ts
+  s_e5d8f701c0c31e::t_358ac414efc511 30-31,78-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3c9570bcde43334b92864c2df61b32202d0edbb2",
+  "prompts": {},
+  "sessions": {
+    "s_e5d8f701c0c31e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18315-79b7-7810-9966-c6fe9bc24f12",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
