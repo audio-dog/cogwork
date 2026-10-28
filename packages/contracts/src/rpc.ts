@@ -42,6 +42,7 @@ import {
   WorkflowId,
   WorkflowList,
   WorkflowRecord,
+  WorkflowSwitchResult,
 } from "./workflow";
 import {
   GitHubPriorityField,
@@ -303,7 +304,7 @@ export const PublishWorkflow = Rpc.make("PublishWorkflow", {
 
 export const SwitchWorkflow = Rpc.make("SwitchWorkflow", {
   payload: { id: WorkflowId, enabled: Schema.Boolean },
-  success: WorkflowRecord,
+  success: WorkflowSwitchResult,
   error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
 });
 

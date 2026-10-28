@@ -49,6 +49,14 @@ export const WorkflowQuestion = Schema.Struct({
 });
 export type WorkflowQuestion = typeof WorkflowQuestion.Type;
 
+const boundedAnswerSpace = Schema.makeFilter((questions: ReadonlyArray<WorkflowQuestion>) => {
+  const combinations = questions.reduce(
+    (count, question) => Math.min(count * question.choices.length, 4097),
+    1,
+  );
+  return combinations <= 4096 ? undefined : "Expected at most 4096 answer combinations";
+});
+
 export const WorkflowTransitionAnswer = Schema.Struct({
   question: WorkflowNodeId,
   choice: WorkflowNodeId,
@@ -95,7 +103,7 @@ export const WorkflowOperation = Schema.Struct({
   requires: Schema.Array(TrimmedNonEmptyString),
   model: WorkflowModelSelection,
   forEach: Schema.NullOr(TrimmedNonEmptyString),
-  questions: Schema.Array(WorkflowQuestion),
+  questions: Schema.Array(WorkflowQuestion).check(boundedAnswerSpace),
   transitions: Schema.Array(WorkflowTransition),
   hints: Schema.Array(WorkflowHint),
 });
@@ -106,7 +114,7 @@ export const WorkflowDocument = Schema.Struct({
   workspaces: WorkflowWorkspaceSelection,
   triggers: Schema.Array(WorkflowTrigger),
   operations: Schema.Array(WorkflowOperation),
-});
+}).annotate({ parseOptions: { onExcessProperty: "error" } });
 export type WorkflowDocument = typeof WorkflowDocument.Type;
 
 export const WorkflowEdit = Schema.TaggedUnion({
@@ -121,7 +129,9 @@ export const WorkflowEdit = Schema.TaggedUnion({
 });
 export type WorkflowEdit = typeof WorkflowEdit.Type;
 
-export const WorkflowEditBatch = Schema.NonEmptyArray(WorkflowEdit);
+export const WorkflowEditBatch = Schema.NonEmptyArray(WorkflowEdit).annotate({
+  parseOptions: { onExcessProperty: "error" },
+});
 export type WorkflowEditBatch = typeof WorkflowEditBatch.Type;
 
 export const WorkflowDiagnosticCode = Schema.Literals([
@@ -253,6 +263,12 @@ export const WorkflowList = Schema.Struct({
   failures: Schema.Array(WorkflowReadFailure),
 });
 export type WorkflowList = typeof WorkflowList.Type;
+
+export const WorkflowSwitchResult = Schema.Struct({
+  workflow: WorkflowRecord,
+  matchingItems: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+});
+export type WorkflowSwitchResult = typeof WorkflowSwitchResult.Type;
 
 export class WorkflowNotFound extends Schema.TaggedError<WorkflowNotFound>()("WorkflowNotFound", {
   id: WorkflowId,
@@ -595,21 +611,38 @@ const catalogDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog
         ),
       ];
     }
+    const unknownParameters = usage.parameters
+      .filter(({ id }) => !entry.parameters.some((parameter) => parameter.id === id))
+      .map(({ id }) => diagnostic("unknown-option", "malformed", `Unknown parameter ${id}`, usage.location));
     const parameters = new Map(usage.parameters.map((parameter) => [parameter.id, parameter.value]));
-    return entry.parameters.flatMap((parameter) => {
+    const parameterDiagnostics = entry.parameters.flatMap((parameter) => {
       const value = parameters.get(parameter.id);
-      if (parameter.required && value === undefined) {
-        return [
-          diagnostic("missing-option", "incomplete", `Missing parameter ${parameter.id}`, usage.location),
-        ];
-      }
-      if (value === undefined || parameter.values.includes(value)) return [];
-      const code = parameter.source === "fixed" ? "unknown-option" : "option-not-listed";
-      const diagnosticClass = parameter.source === "fixed" ? "malformed" : "advisory";
-      return [
-        diagnostic(code, diagnosticClass, `Parameter ${parameter.id} does not list ${value}`, usage.location),
-      ];
+      const invalidParameter = {
+        fixed: { code: "unknown-option", class: "malformed" },
+        live: { code: "option-not-listed", class: "advisory" },
+      } as const;
+      const result = [
+        {
+          matches: parameter.required && value === undefined,
+          make: () =>
+            diagnostic("missing-option", "incomplete", `Missing parameter ${parameter.id}`, usage.location),
+        },
+        {
+          matches: value !== undefined && !parameter.values.includes(value),
+          make: () => {
+            const invalid = invalidParameter[parameter.source];
+            return diagnostic(
+              invalid.code,
+              invalid.class,
+              `Parameter ${parameter.id} does not list ${value}`,
+              usage.location,
+            );
+          },
+        },
+      ].find(({ matches }) => matches);
+      return result ? [result.make()] : [];
     });
+    return [...unknownParameters, ...parameterDiagnostics];
   });
   const instructionDiagnostics = document.operations.flatMap((operation) =>
     operation.instructionPackage !== null &&
@@ -630,16 +663,6 @@ const catalogDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog
 const modelDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) =>
   document.operations.flatMap((operation) => {
     const harnessName = operation.model.harness ?? catalog.defaultHarness;
-    if (harnessName === null) {
-      return [
-        diagnostic(
-          "no-harness",
-          "advisory",
-          `Operation ${operation.id} has no Harness`,
-          location("model", { operation: operation.id }),
-        ),
-      ];
-    }
     const harness = catalog.models.find((candidate) => candidate.harness === harnessName);
     const availability =
       harness?.available === false
@@ -652,24 +675,40 @@ const modelDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) 
             ),
           ]
         : [];
-    if (operation.model.model === null) return availability;
     const model = harness?.models.find((candidate) => candidate.id === operation.model.model);
-    const invalidModel = !harness || !model;
+    const invalidModel = operation.model.model !== null && (!harness || !model);
     const invalidOptions = operation.model.options.some((option) => {
       const catalogOption = model?.options.find((candidate) => candidate.id === option.id);
       return !catalogOption?.values.includes(option.value);
     });
-    return invalidModel || invalidOptions
-      ? [
-          ...availability,
-          diagnostic(
-            "unknown-model",
-            "malformed",
-            `Unknown model selection for Operation ${operation.id}`,
-            location("model", { operation: operation.id }),
-          ),
-        ]
-      : availability;
+    const unknownModel = diagnostic(
+      "unknown-model",
+      "malformed",
+      `Unknown model selection for Operation ${operation.id}`,
+      location("model", { operation: operation.id }),
+    );
+    const noHarness = diagnostic(
+      "no-harness",
+      "advisory",
+      `Operation ${operation.id} has no Harness`,
+      location("model", { operation: operation.id }),
+    );
+    return (
+      [
+        {
+          matches:
+            harnessName === null && (operation.model.model !== null || operation.model.options.length > 0),
+          diagnostics: [unknownModel],
+        },
+        { matches: harnessName === null, diagnostics: [noHarness] },
+        {
+          matches: invalidModel || invalidOptions,
+          diagnostics: [...availability, unknownModel],
+        },
+        { matches: operation.model.model === null, diagnostics: availability },
+        { matches: true, diagnostics: availability },
+      ].find(({ matches }) => matches)?.diagnostics ?? availability
+    );
   });
 
 const noTriggerDiagnostics = (document: WorkflowDocument) =>

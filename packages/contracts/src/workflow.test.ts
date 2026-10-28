@@ -10,6 +10,7 @@ import {
   type WorkflowDiagnosticCode,
   type WorkflowDocument,
   WorkflowDocument as WorkflowDocumentSchema,
+  WorkflowEditBatch,
   WorkflowNodeId,
 } from "./workflow";
 
@@ -180,7 +181,7 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
           triggers: [
             {
               ...baseDocument.triggers[0],
-              parameters: [{ id: "label", value: "missing" }],
+              parameters: [{ id: "unexpected", value: "value" }],
             },
           ],
         }),
@@ -188,7 +189,11 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
   },
   {
     code: "unknown-model",
-    produce: () => codesOf(replaceOperation({ model: { ...operation.model, model: "missing" } })),
+    produce: () =>
+      codesOf(
+        replaceOperation({ model: { harness: null, model: "missing", options: [] } }),
+        catalogWith({ defaultHarness: null }),
+      ),
   },
   { code: "no-trigger", produce: () => codesOf(documentWith({ triggers: [] })) },
   {
@@ -331,6 +336,27 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
 ];
 
 describe("Workflow validator", () => {
+  it("rejects excess document keys at the Schema boundary", () => {
+    assert.isFalse(Schema.is(WorkflowDocumentSchema)({ ...baseDocument, extra: true }));
+  });
+
+  it("bounds the answer combinations expanded by validation", () => {
+    const questions = Array.from({ length: 13 }, (_, index) => ({
+      id: `question-${index}`,
+      text: `Question ${index}`,
+      choices: [
+        { id: "yes", name: "Yes" },
+        { id: "no", name: "No" },
+      ],
+    }));
+    const document = {
+      ...baseDocument,
+      operations: [{ ...operation, questions }],
+    };
+
+    assert.isFalse(Schema.is(WorkflowDocumentSchema)(document));
+  });
+
   it("does not produce a section 5 code for the complete worked document", () => {
     assert.deepStrictEqual(validateWorkflow(baseDocument, baseCatalog), []);
   });
@@ -343,6 +369,10 @@ describe("Workflow validator", () => {
 });
 
 describe("Workflow edits", () => {
+  it("rejects excess edit keys at the Schema boundary", () => {
+    assert.isFalse(Schema.is(WorkflowEditBatch)([{ _tag: "SetName", name: "Edited", extra: true }]));
+  });
+
   it("applies a batch in arrival order", () => {
     const result = applyWorkflowEdits(baseDocument, [
       { _tag: "SetName", name: "First" },
