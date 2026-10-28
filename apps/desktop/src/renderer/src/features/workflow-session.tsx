@@ -12,7 +12,7 @@ import type {
 } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useUpdateEffect } from "@react-hookz/web";
-import { createContext, type ReactNode, use } from "react";
+import { createContext, type ReactNode, use, useState } from "react";
 import {
   applyWorkflowEditAtom,
   createWorkflowAtom,
@@ -89,6 +89,9 @@ const mergeWorkflowRecords = (...groups: ReadonlyArray<ReadonlyArray<WorkflowRec
 
 export function DaemonWorkflowProvider({ children }: { readonly children: ReactNode }) {
   const session = useActivitySession();
+  const [createdWorkflows, setCreatedWorkflows] = useState<ReadonlyMap<WorkflowId, WorkflowRecord>>(
+    new Map(),
+  );
   const listed = useAtomValue(workflowsAtom);
   const catalogResult = useAtomValue(workflowCatalogAtom);
   const refreshCatalog = useAtomRefresh(workflowCatalogAtom);
@@ -104,13 +107,34 @@ export function DaemonWorkflowProvider({ children }: { readonly children: ReactN
   const catalog = successValue(catalogResult);
   const templates = successValue(templatesResult);
   const queriedWorkflows = session.seed ? (queried?.workflows ?? []) : [];
-  const workflows = [...mergeWorkflowRecords(queriedWorkflows, [...session.workflows.values()]).values()];
+  const observedWorkflows = mergeWorkflowRecords(queriedWorkflows, [...session.workflows.values()]);
+  const createdBeforeEvent = [...createdWorkflows.values()].filter(({ id }) => !observedWorkflows.has(id));
+  const workflows = [...observedWorkflows.values(), ...createdBeforeEvent];
+  useUpdateEffect(() => {
+    setCreatedWorkflows((current) => {
+      const pending = new Map([...current].filter(([id]) => !observedWorkflows.has(id)));
+      return pending.size === current.size ? current : pending;
+    });
+  }, [queried?.workflows, session.workflows]);
   const client: WorkflowClient = {
-    create: (document) => create({ payload: { document } }),
+    create: async (document) => {
+      const workflow = await create({ payload: { document } });
+      setCreatedWorkflows((current) => new Map(current).set(workflow.id, workflow));
+      return workflow;
+    },
     edit: (id, edits) => edit({ payload: { id, edits } }),
     publish: (id, revision) => publish({ payload: { id, revision } }),
     switchEnabled: async (id, enabled) => (await switchEnabled({ payload: { id, enabled } })).workflow,
-    delete: (id) => deleteWorkflow({ payload: { id } }),
+    delete: async (id) => {
+      const deleted = await deleteWorkflow({ payload: { id } });
+      setCreatedWorkflows((current) => {
+        if (!current.has(deleted)) return current;
+        const pending = new Map(current);
+        pending.delete(deleted);
+        return pending;
+      });
+      return deleted;
+    },
     listOptions: (entry, parameter, workspaces) => listOptions({ payload: { entry, parameter, workspaces } }),
   };
   const value = workflowProviderValue(
