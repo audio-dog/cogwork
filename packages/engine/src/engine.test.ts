@@ -1136,6 +1136,8 @@ describe("daemon heartbeats", () => {
             operationInProgress: () => Effect.die("unused"),
             rebase: () => Effect.die("unused"),
             remoteUrl: () => Effect.die("unused"),
+            blockPush: () => Effect.die("unused"),
+            pushBranch: () => Effect.die("unused"),
           }) satisfies GitService,
       ),
     ).pipe(Layer.provideMerge(WorktreeMaintenanceProbe.layer));
@@ -1162,6 +1164,7 @@ describe("daemon heartbeats", () => {
     tryWithMaintenanceLock: Effect.asSome,
     ensure: () => Effect.die("unused"),
     pullRequestReadiness: () => Effect.die("unused"),
+    pushBranch: () => Effect.die("unused"),
     list: () => Effect.succeed([]),
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),

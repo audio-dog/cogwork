@@ -39,6 +39,8 @@ const gitService = (remoteUrl: GitService["remoteUrl"]) =>
     operationInProgress: () => Effect.die("unused"),
     rebase: () => Effect.die("unused"),
     remoteUrl,
+    blockPush: () => Effect.die("unused"),
+    pushBranch: () => Effect.die("unused"),
   }) satisfies GitService;
 
 const gitLayerFor = (remoteUrl: GitService["remoteUrl"]) => Layer.succeed(Git, gitService(remoteUrl));

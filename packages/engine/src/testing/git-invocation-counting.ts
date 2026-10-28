@@ -27,6 +27,8 @@ const makeEmptyCounts = () =>
     operationInProgress: 0,
     rebase: 0,
     remoteUrl: 0,
+    blockPush: 0,
+    pushBranch: 0,
   }) satisfies GitInvocationCounts;
 
 export class GitInvocationCounter extends Context.Service<
@@ -73,6 +75,9 @@ export const countingLayer = Layer.effect(
       rebase: (worktreePath, remote, branch) =>
         counter.track("rebase", git.rebase(worktreePath, remote, branch)),
       remoteUrl: (repoPath, remote) => counter.track("remoteUrl", git.remoteUrl(repoPath, remote)),
+      blockPush: (worktreePath, remote) => counter.track("blockPush", git.blockPush(worktreePath, remote)),
+      pushBranch: (repoPath, remoteUrl, branch) =>
+        counter.track("pushBranch", git.pushBranch(repoPath, remoteUrl, branch)),
     } satisfies GitService;
 
     return countedGit;
