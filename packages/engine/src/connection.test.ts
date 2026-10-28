@@ -15,6 +15,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import { ConnectionStore, connectionOverview, layer } from "./connection";
 import { acceptingLayer as acceptingVerifierLayer, ConnectionVerifier } from "./connection-verify";
 import { ControlStore, type ControlStoreService } from "./control-store";
@@ -249,6 +250,60 @@ describe("Connection verification", () => {
       ),
     );
   });
+
+  it.effect("establishes Granola while its verifier is unavailable", () =>
+    Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const result = yield* Effect.result(
+        connections.establish({
+          system: "granola",
+          account: "person@example.com",
+          source: { _tag: "Stored" },
+        }),
+      );
+
+      assert.isTrue(Result.isSuccess(result));
+      if (Result.isFailure(result)) return;
+      const connection = result.success;
+      assert.strictEqual(connection.id, connectionIdOf("granola", "person@example.com"));
+      assert.deepStrictEqual(yield* Ref.get(yield* ConfiguredCredentials), [connection.id]);
+      assert.deepStrictEqual(yield* Ref.get(yield* EstablishedConnections), [connection.id]);
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(unavailableVerifier),
+          Layer.provideMerge(
+            Layer.effect(
+              CredentialStore,
+              Effect.map(ConfiguredCredentials, (configured) => ({
+                ...unusedCredentialStore,
+                resolveSource: () =>
+                  Effect.succeed({
+                    source: "stored-oauth" as const,
+                    token: Redacted.make("valid"),
+                    identity: { organization: "person@example.com", actorUserId: "person@example.com" },
+                  }),
+                configureConnection: (connectionId) =>
+                  Ref.update(configured, (current) => [...current, connectionId]),
+              })),
+            ).pipe(Layer.provideMerge(ConfiguredCredentials.layer)),
+          ),
+          Layer.provideMerge(
+            Layer.effect(
+              ControlStore,
+              Effect.map(EstablishedConnections, (established) => ({
+                ...controlStoreService,
+                establishConnection: (connection: Connection) =>
+                  Ref.update(established, (current) => [...current, connection.id]).pipe(
+                    Effect.map(() => defaultControlStore),
+                  ),
+              })),
+            ).pipe(Layer.provideMerge(EstablishedConnections.layer)),
+          ),
+        ),
+      ),
+    ),
+  );
 
   it.effect("keeps a revoked Granola grant as a not-ready Connection", () => {
     const granola = Connection.make({

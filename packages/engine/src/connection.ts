@@ -210,22 +210,33 @@ export const layer = Layer.effect(
       return yield* credentials.bearerToken(credentialAccountFor(connection));
     });
 
+    const verifyGranolaWhenAvailable = (credential: Credential) =>
+      verifier.verify("granola", credential).pipe(
+        Effect.catchIf(
+          (error) => error.reason === "unavailable",
+          () => Effect.succeed(null),
+        ),
+      );
+
     const readinessVerifiers: Record<
       ConnectionSystem,
       (credential: Credential) => Effect.Effect<string | null, IssueTrackerError>
     > = {
       github: (_credential) => Effect.succeed(null),
       linear: (_credential) => Effect.succeed(null),
-      granola: (credential) =>
-        verifier.verify("granola", credential).pipe(
-          Effect.catchIf(
-            (error) => error.reason === "unavailable",
-            () => Effect.succeed(null),
-          ),
-        ),
+      granola: verifyGranolaWhenAvailable,
     };
     const verifyReadiness = (connection: Connection, credential: Credential) =>
       readinessVerifiers[connection.system](credential);
+
+    const establishmentVerifiers: Record<
+      ConnectionSystem,
+      (credential: Credential) => Effect.Effect<string | null, IssueTrackerError>
+    > = {
+      github: (credential) => verifier.verify("github", credential),
+      linear: (credential) => verifier.verify("linear", credential),
+      granola: verifyGranolaWhenAvailable,
+    };
 
     const readiness = Effect.fn("ConnectionStore.readiness")(function* (connectionId: ConnectionId) {
       return yield* find(connectionId).pipe(
@@ -286,9 +297,9 @@ export const layer = Layer.effect(
       const candidate = yield* credentials
         .resolveSource(credentialAccountForEstablishment(input), input.source)
         .pipe(Effect.mapError((error) => unreadable(expectedConnectionId, error)));
-      const discoveredAccount = yield* verifier
-        .verify(input.system, candidate)
-        .pipe(Effect.mapError((error) => refused(expectedConnectionId, input.system, error)));
+      const discoveredAccount = yield* establishmentVerifiers[input.system](candidate).pipe(
+        Effect.mapError((error) => refused(expectedConnectionId, input.system, error)),
+      );
       const account = ConnectionEstablishment.match(input, {
         github: () => discoveredAccount,
         linear: ({ account }) => account,
