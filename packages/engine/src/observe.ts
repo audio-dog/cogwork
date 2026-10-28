@@ -1,4 +1,4 @@
-import { IssueTrackerError, type WorkItemId } from "@cogwork/contracts";
+import { type AttemptRecord, codingOperation, IssueTrackerError, type WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
 import { fold } from "./coordination";
@@ -11,6 +11,13 @@ export const reconcilePollPhaseDuration = Metric.timer("cogwork_reconcile_poll_p
 });
 
 const implicitSourceControls: Readonly<Record<string, string>> = { github: "github" };
+const followUpOperation = codingOperation("follow-up");
+
+const isFollowUpMarkerWrite = (attempt: AttemptRecord, barrierAtMillis: number) =>
+  attempt.atMillis > barrierAtMillis &&
+  attempt.operation.workflow === followUpOperation.workflow &&
+  attempt.operation.operation === followUpOperation.operation &&
+  (attempt.outcome === "succeeded" || attempt.outcome === "abandoned");
 
 export const reconcilePollAttributes = (workspace: RegisteredWorkspace) => ({
   workspace: workspace.config.name,
@@ -59,10 +66,7 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
   };
   const followUp = observed.pr?.followUp;
   const barrier = coordination.barrierAtMillis;
-  const markerWritten = observed.attempts.some(
-    (attempt) =>
-      attempt.atMillis > barrier && (attempt.outcome === "succeeded" || attempt.outcome === "abandoned"),
-  );
+  const markerWritten = observed.attempts.some((attempt) => isFollowUpMarkerWrite(attempt, barrier));
   if (!followUp || barrier === 0 || markerWritten) return observed;
   return { ...observed, pr: { ...observed.pr, followUp: { ...followUp, noProgress: 0 } } };
 };

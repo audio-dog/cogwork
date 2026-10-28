@@ -149,9 +149,14 @@ describe("observeWorkspace handback barrier", () => {
         tracker(item([attempt("follow-up", "abandoned", 6)])),
         provider(pr),
       )(workspace);
+      const afterOtherOperation = yield* observeWorkspace(
+        tracker(item([attempt("implement", "succeeded", 6)])),
+        provider(pr),
+      )(workspace);
 
       assert.strictEqual(beforeWrite[0]?.pr?.followUp?.noProgress, 0);
       assert.strictEqual(afterWrite[0]?.pr?.followUp?.noProgress, 3);
+      assert.strictEqual(afterOtherOperation[0]?.pr?.followUp?.noProgress, 0);
     }),
   );
 });
