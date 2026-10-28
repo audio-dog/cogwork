@@ -132,16 +132,12 @@ export const parseClaim = (codec: WireCodec, body: string) => {
   return candidates.at(-1) ?? null;
 };
 
-const attemptKeyFromPairs = (pairs: Record<string, string>) =>
-  pairs.stage === undefined
-    ? { workflow: pairs.workflow, operation: pairs.operation }
-    : { workflow: "coding", operation: pairs.stage };
-
 export const parseAttempts = (codec: WireCodec, body: string) =>
   pairsNamed(codec, body, "attempt").flatMap((pairs) =>
     okToArray(
       decodeAttempt({
-        ...attemptKeyFromPairs(pairs),
+        workflow: pairs.workflow,
+        operation: pairs.operation,
         outcome: pairs.outcome,
         atMillis: Number(pairs.at),
       }),

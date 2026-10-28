@@ -120,6 +120,19 @@ for (const [wire, codec] of codecs) {
       assert.deepStrictEqual(parseAttempts(codec, body), attempts);
     });
 
+    it("ignores attempt markers without a Workflow and Operation", () => {
+      const marker = codec.encode({
+        name: "attempt",
+        pairs: "stage=implement outcome=failed at=1",
+      });
+      const body = formatCoordinationBody(codec, {
+        status: defaultStatus,
+        markers: [marker],
+        detail: null,
+      });
+      assert.deepStrictEqual(parseAttempts(codec, body), []);
+    });
+
     it("round-trips handback records and keeps the most recent one", () => {
       const older: HandbackRecord = { by: "local-owner", atMillis: 2 };
       const newer: HandbackRecord = { by: "local-owner", atMillis: 5 };
