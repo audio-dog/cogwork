@@ -21,12 +21,13 @@ import type { PrepareError } from "./retry-policy";
 import { RunLedger } from "./run-ledger";
 import type { ResolvedOperation } from "./run-plan";
 import { SessionChoice } from "./session-choice";
-import { branchName, WorktreeManager } from "./worktree";
+import { branchName, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
 import { WorktreeFsError } from "./worktree-fs";
 
 class PreparationFailure extends Data.TaggedError("PreparationFailure")<{
   readonly error: PrepareError | OperationResolution.OperationUnavailable;
   readonly session: Session | null;
+  readonly checkoutPath: string;
 }> {}
 
 interface PrepareRunInput {
@@ -76,6 +77,11 @@ const branchFor = (
   if (!workspace || operation.profile === "read-only") return null;
   return item.followUpBranch ?? branchName(item);
 };
+
+const checkoutPathForBranch = (workspace: RegisteredWorkspace, branch: BranchName | null) =>
+  branch
+    ? worktreePathFor(worktreeRoot(workspace.config.checkoutPath, workspace.config.worktrees), branch)
+    : workspace.config.checkoutPath;
 
 const logSessionChoice = Effect.fn("RunPreparation.logSessionChoice")(function* (
   session: Session | null,
@@ -219,12 +225,13 @@ export const make = Effect.gen(function* () {
   const prepare = Effect.fn("RunPreparation.prepare")(function* (input: PrepareRunInput) {
     const { item } = input;
     const branch = branchFor(input.workspace, item, input.operation);
+    const checkoutPath = checkoutPathForBranch(input.workspace, branch);
     const replay = isReplayHarness(input.operation.stage.harness);
     return yield* prepareCandidate({ ...input, item, replay }).pipe(
       Effect.catch((error) =>
         branchSessionFacts(input.workspace, branch).pipe(
           Effect.flatMap((facts) => candidateSession(item, facts)),
-          Effect.flatMap((session) => Effect.fail(new PreparationFailure({ error, session }))),
+          Effect.flatMap((session) => Effect.fail(new PreparationFailure({ error, session, checkoutPath }))),
         ),
       ),
     );
