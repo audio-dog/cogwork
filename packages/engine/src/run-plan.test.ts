@@ -437,6 +437,67 @@ describe("stage settings come from Operation settings", () => {
 });
 
 describe("Run Plan assembly", () => {
+  it("keeps the Workflow Operating Instructions ladder and package resources in the plan", () => {
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+    const workflowContext: AssembledContext = {
+      ...context,
+      operatingInstructionsName: "triage-agent",
+      layers: [
+        ...context.layers,
+        {
+          kind: "operating-instructions",
+          source: "Workflow Operation inline instruction",
+          content: "Keep the change focused.",
+        },
+        {
+          kind: "operating-instructions",
+          source: "Engine Workflow framing",
+          content: "Use the Work Context as the brief.",
+        },
+        {
+          kind: "operating-instructions",
+          source: "Workflow Operation questions",
+          content: "Questions:\n- `decision`: What should happen?",
+        },
+        {
+          kind: "operating-instructions",
+          source: "Workflow Operation input hints",
+          content: "Input hints:\n- `summary`: Keep it short.",
+        },
+      ],
+    };
+
+    const plan = assembleRunPlan({
+      runId: Schema.decodeSync(RunId)("run-workflow-instructions"),
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["Instructions"],
+      middleware: [],
+      context: workflowContext,
+      contributions: [],
+      mcpServers: [],
+      provenanceStamps: [],
+    });
+
+    assert.deepStrictEqual(
+      plan.instructions.map(({ source }) => source),
+      workflowContext.layers.map(({ source }) => source),
+    );
+    assert.strictEqual(plan.operatingInstructions.name, "triage-agent");
+    assert.strictEqual(plan.operatingInstructions.path, workflowContext.operatingInstructionsPath);
+    assert.deepStrictEqual(
+      plan.operatingInstructions.resources.map(({ source }) => source),
+      workflowContext.operatingInstructionResources.map(({ source }) => source),
+    );
+  });
+
   it("pairs admitted MCP credentials by contribution identity regardless of server order", () => {
     const contributions = [
       {
