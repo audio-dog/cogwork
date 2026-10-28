@@ -87,6 +87,7 @@ export interface ActivitySession {
   readonly hasEngineSample: boolean;
   readonly connection: ConnectionState;
   readonly seed: boolean;
+  readonly workflowInputsRevision: number;
   readonly ordinal: number;
 }
 
@@ -247,6 +248,7 @@ export const initialActivitySession: ActivitySession = {
   hasEngineSample: false,
   connection: "connecting",
   seed: true,
+  workflowInputsRevision: 0,
   ordinal: 0,
 };
 
@@ -256,7 +258,15 @@ export const resetActivityFolds = (session: ActivitySession): ActivitySession =>
   workflows: new Map(),
   previews: new Map(),
   seed: true,
+  workflowInputsRevision: session.workflowInputsRevision + 1,
 });
+
+const workflowInputEventTags: ReadonlyArray<DaemonEvent["_tag"]> = [
+  "WorkspaceChanged",
+  "WorkspaceRemoved",
+  "ConnectionsChanged",
+  "HarnessesChanged",
+];
 
 export const ingestDaemonEvent = (
   session: ActivitySession,
@@ -295,11 +305,13 @@ export const ingestDaemonEvent = (
       return next;
     },
   });
+  const workflowInputsChanged = workflowInputEventTags.some((tag) => tag === event._tag);
   return {
     ...session,
     board,
     previews,
     workflows,
+    workflowInputsRevision: session.workflowInputsRevision + Number(workflowInputsChanged),
     log: row ? bound([...session.log, row]) : session.log,
     ordinal: row ? nextOrdinal : session.ordinal,
   };

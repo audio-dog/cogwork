@@ -1,4 +1,4 @@
-import { type WorkflowDocument, WorkflowNodeId } from "@cogwork/contracts";
+import type { WorkflowDocument } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@cogwork/ui/components/card";
@@ -13,30 +13,14 @@ import {
 import { Switch } from "@cogwork/ui/components/switch";
 import { RiAddLine, RiNodeTree } from "@remixicon/react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import * as Schema from "effect/Schema";
+import { newWorkflowOperation } from "../features/workflow-defaults";
 import { useWorkflowSession } from "../features/workflow-session";
 
-const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
-
-export const blankWorkflowDocument = (name = "Untitled Workflow"): WorkflowDocument => ({
-  name,
+const blankWorkflowDocument = (): WorkflowDocument => ({
+  name: "Untitled Workflow",
   workspaces: { _tag: "Every" },
   triggers: [],
-  operations: [
-    {
-      id: decodeNodeId(`operation-${crypto.randomUUID()}`),
-      name: "New Operation",
-      instructionPackage: null,
-      instruction: "",
-      permissionProfile: "full",
-      requires: [],
-      model: { harness: null, model: null, options: [] },
-      forEach: null,
-      questions: [],
-      transitions: [],
-      hints: [],
-    },
-  ],
+  operations: [newWorkflowOperation()],
 });
 
 function WorkflowRow({ id }: { readonly id: string }) {

@@ -139,13 +139,13 @@ export const rebindWorkspaceAtom = DaemonAtomRpc.mutation("RebindWorkspace");
 
 export const workflowsAtom = DaemonAtomRpc.query("ListWorkflows", undefined);
 
-export const workflowCatalogAtom = Atom.keepAlive(DaemonAtomRpc.query("GetWorkflowCatalog", undefined));
+export const workflowCatalogAtom = Atom.family((_revision: number) =>
+  DaemonAtomRpc.query("GetWorkflowCatalog", undefined),
+);
 
 export const workflowTemplatesAtom = Atom.keepAlive(DaemonAtomRpc.query("GetWorkflowTemplates", undefined));
 
 export const createWorkflowAtom = DaemonAtomRpc.mutation("CreateWorkflow");
-
-export const editWorkflowAtom = DaemonAtomRpc.mutation("EditWorkflow");
 
 export const publishWorkflowAtom = DaemonAtomRpc.mutation("PublishWorkflow");
 

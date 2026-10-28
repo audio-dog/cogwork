@@ -1,9 +1,11 @@
 import {
   adviseReadiness,
   applyWorkflowEdits,
+  type MachineReadiness,
   NeedIdentity,
   RunPlanPolicyProfile,
   validateWorkflow,
+  type WorkflowCatalog,
   type WorkflowCatalogEntry,
   type WorkflowDiagnostic,
   type WorkflowEdit,
@@ -34,12 +36,17 @@ import { RiAddLine, RiArrowLeftLine, RiCloseLine, RiDeleteBinLine, RiRobot2Line 
 import { Link, useNavigate } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import { createContext, use, useRef, useState } from "react";
-import { submitWorkflowField, useWorkflowSession, type WorkflowClient } from "../features/workflow-session";
+import { newWorkflowOperation } from "../features/workflow-defaults";
+import { useWorkflowSession, type WorkflowClient } from "../features/workflow-session";
 import { CatalogMenu } from "./workflow-catalog-menu";
 
 interface WorkflowEditorValue {
   readonly state: { readonly workflow: WorkflowRecord };
   readonly actions: WorkflowClient;
+  readonly meta: {
+    readonly catalog: WorkflowCatalog | null;
+    readonly machine: MachineReadiness | null;
+  };
 }
 
 const WorkflowEditorContext = createContext<WorkflowEditorValue | null>(null);
@@ -102,17 +109,21 @@ const useBufferedText = (value: string, save: (text: string) => Promise<string>)
     setTextState(value);
   }
   const submit = async (draft: string) => {
+    if (draft === submitted.current) return;
+    submitted.current = draft;
     const atGeneration = generation.current;
     try {
-      const daemonValue = await submitWorkflowField(submitted, draft, save);
-      if (daemonValue === null) return;
+      const daemonValue = await save(draft);
       server.current = daemonValue;
-      submitted.current = daemonValue;
       if (atGeneration !== generation.current) return;
+      submitted.current = daemonValue;
       dirty.current = false;
       setTextState(daemonValue);
     } catch {
+      if (atGeneration !== generation.current) return;
       submitted.current = server.current;
+      dirty.current = false;
+      setTextState(server.current);
     }
   };
   const submitAfterPause = useDebouncedCallback(submit, [save], 500);
@@ -188,13 +199,13 @@ function WorkspaceSelect() {
   const {
     state: { workflow },
     actions,
+    meta: { machine },
   } = useWorkflowEditor();
-  const { state } = useWorkflowSession();
   const current = workflow.workingCopy.workspaces;
   const value = current._tag === "Every" ? "every" : (current.workspaces[0] ?? "none");
   const items = [
     { value: "none", label: "No workspace" },
-    ...(state.machine?.workspaces.map(({ id }) => ({ value: id, label: id })) ?? []),
+    ...(machine?.workspaces.map(({ id }) => ({ value: id, label: id })) ?? []),
     { value: "every", label: "Every workspace" },
   ];
   return (
@@ -203,7 +214,7 @@ function WorkspaceSelect() {
       value={value}
       onValueChange={(next) => {
         if (!next) return;
-        const selected = state.machine?.workspaces.find(({ id }) => id === next)?.id;
+        const selected = machine?.workspaces.find(({ id }) => id === next)?.id;
         const workspaces = decodeWorkspaceSelection(
           next === "every" ? { _tag: "Every" } : { _tag: "Listed", workspaces: selected ? [selected] : [] },
         );
@@ -313,17 +324,25 @@ function TriggerParameter({
   const trigger = workflow.workingCopy.triggers.find(({ id }) => id === triggerId);
   const [liveOptions, setLiveOptions] = useState<
     ReadonlyArray<{ readonly value: string; readonly label: string }>
-  >([]);
+  >(
+    parameterValue(trigger?.parameters ?? [], parameter.id)
+      ? [
+          {
+            value: parameterValue(trigger?.parameters ?? [], parameter.id),
+            label: parameterValue(trigger?.parameters ?? [], parameter.id),
+          },
+        ]
+      : [],
+  );
   if (!trigger) return null;
-  const fixedOptions = parameter.values.map((value) => ({ value, label: value }));
-  const options = parameter.source === "fixed" ? fixedOptions : liveOptions;
+  const options = liveOptions;
   const selected = parameterValue(trigger.parameters, parameter.id);
   return (
     <Select
       items={options}
       value={selected}
       onOpenChange={async (open) => {
-        if (!open || parameter.source !== "live") return;
+        if (!open) return;
         setLiveOptions(
           (await actions.listOptions(entry.key, parameter.id, workspaceIds(workflow))).map(
             ({ value, name }) => ({ value, label: name }),
@@ -360,10 +379,10 @@ function TriggerRow({ triggerId }: { readonly triggerId: WorkflowNodeId }) {
   const {
     state: { workflow },
     actions,
+    meta: { catalog },
   } = useWorkflowEditor();
-  const { state } = useWorkflowSession();
   const trigger = workflow.workingCopy.triggers.find(({ id }) => id === triggerId);
-  const entry = state.catalog?.entries.find(({ key }) => key === trigger?.entry);
+  const entry = catalog?.entries.find(({ key }) => key === trigger?.entry);
   if (!trigger) return null;
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-muted/50 px-3 py-2.5">
@@ -417,29 +436,26 @@ function Triggers() {
   const {
     state: { workflow },
     actions,
+    meta: { catalog, machine },
   } = useWorkflowEditor();
-  const { state } = useWorkflowSession();
-  const entries = state.catalog?.entries.filter(({ kind }) => kind === "trigger") ?? [];
+  const entries = catalog?.entries.filter(({ kind }) => kind === "trigger") ?? [];
   const start = workflow.workingCopy.operations[0]?.id;
   return (
     <section aria-label="Triggers" className="flex flex-col gap-1.5">
       {workflow.workingCopy.triggers.map((trigger) => (
         <TriggerRow key={trigger.id} triggerId={trigger.id} />
       ))}
-      {state.machine && start ? (
+      {machine && start ? (
         <CatalogMenu.Provider
           entries={entries}
-          machine={state.machine}
+          machine={machine}
           onChoose={(entry) =>
             editOne(actions, workflow, {
               _tag: "AddTrigger",
               trigger: {
                 id: freshNodeId("trigger"),
                 entry: entry.key,
-                parameters: entry.parameters.map((parameter) => ({
-                  id: parameter.id,
-                  value: parameter.values[0] ?? "",
-                })),
+                parameters: [],
                 start,
               },
             })
@@ -462,20 +478,6 @@ function Triggers() {
   );
 }
 
-const blankOperation = (): WorkflowOperation => ({
-  id: freshNodeId("operation"),
-  name: "New Operation",
-  instructionPackage: null,
-  instruction: "",
-  permissionProfile: "full",
-  requires: [],
-  model: { harness: null, model: null, options: [] },
-  forEach: null,
-  questions: [],
-  transitions: [],
-  hints: [],
-});
-
 const operationPath = (
   id: WorkflowNodeId,
   operations: ReadonlyArray<WorkflowOperation>,
@@ -493,7 +495,7 @@ const operationPath = (
   ];
 };
 
-export const orderedOperations = (workflow: WorkflowRecord) => {
+const orderedOperations = (workflow: WorkflowRecord) => {
   const seen = new Set<WorkflowNodeId>();
   const reached = workflow.workingCopy.triggers.flatMap(({ start }) =>
     operationPath(start, workflow.workingCopy.operations, seen),
@@ -505,10 +507,10 @@ function OperationSettings({ operation }: { readonly operation: WorkflowOperatio
   const {
     state: { workflow },
     actions,
+    meta: { catalog },
   } = useWorkflowEditor();
-  const { state } = useWorkflowSession();
   const models =
-    state.catalog?.harnesses.flatMap((harness) =>
+    catalog?.harnesses.flatMap((harness) =>
       harness.models.map((model) => ({ value: `${harness.name}/${model.id}`, harness: harness.name, model })),
     ) ?? [];
   const selectedModel =
@@ -532,7 +534,7 @@ function OperationSettings({ operation }: { readonly operation: WorkflowOperatio
         <Select
           items={[
             { value: "none", label: "No package" },
-            ...(state.catalog?.instructionPackages.map((value) => ({ value, label: value })) ?? []),
+            ...(catalog?.instructionPackages.map((value) => ({ value, label: value })) ?? []),
           ]}
           value={operation.instructionPackage ?? "none"}
           onValueChange={(value) =>
@@ -549,7 +551,7 @@ function OperationSettings({ operation }: { readonly operation: WorkflowOperatio
           <SelectContent>
             <SelectGroup>
               <SelectItem value="none">No package</SelectItem>
-              {state.catalog?.instructionPackages.map((value) => (
+              {catalog?.instructionPackages.map((value) => (
                 <SelectItem key={value} value={value}>
                   {value}
                 </SelectItem>
@@ -558,6 +560,10 @@ function OperationSettings({ operation }: { readonly operation: WorkflowOperatio
           </SelectContent>
         </Select>
         <Select
+          items={RunPlanPolicyProfile.literals.map((value) => ({
+            value,
+            label: value === "read-only" ? "Read only" : "Full",
+          }))}
           value={operation.permissionProfile}
           onValueChange={(profile) => {
             const selected = RunPlanPolicyProfile.literals.find((value) => value === profile);
@@ -618,6 +624,7 @@ function OperationSettings({ operation }: { readonly operation: WorkflowOperatio
         return (
           <Select
             key={descriptor.id}
+            items={descriptor.values.map((value) => ({ value: String(value), label: String(value) }))}
             value={String(selected)}
             onValueChange={(value) =>
               editOne(actions, workflow, {
@@ -703,15 +710,66 @@ const transitionLabel = (
     .join(" · ");
 };
 
-function Transition({ operation, index }: { readonly operation: WorkflowOperation; readonly index: number }) {
+function ActionParameter({
+  entry,
+  parameter,
+  value,
+  onChange,
+}: {
+  readonly entry: WorkflowCatalogEntry;
+  readonly parameter: WorkflowCatalogEntry["parameters"][number];
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}) {
   const {
     state: { workflow },
     actions,
   } = useWorkflowEditor();
-  const { state } = useWorkflowSession();
+  const [options, setOptions] = useState<ReadonlyArray<{ readonly value: string; readonly label: string }>>(
+    value ? [{ value, label: value }] : [],
+  );
+  return (
+    <Select
+      items={options}
+      value={value}
+      onOpenChange={async (open) => {
+        if (!open) return;
+        setOptions(
+          (await actions.listOptions(entry.key, parameter.id, workspaceIds(workflow))).map((option) => ({
+            value: option.value,
+            label: option.name,
+          })),
+        );
+      }}
+      onValueChange={(selected) => {
+        if (selected !== null) onChange(selected);
+      }}
+    >
+      <SelectTrigger size="sm" aria-label={`${entry.name} ${parameter.id}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function Transition({ operation, index }: { readonly operation: WorkflowOperation; readonly index: number }) {
+  const {
+    state: { workflow },
+    actions,
+    meta: { catalog, machine },
+  } = useWorkflowEditor();
   const transition = operation.transitions[index];
   if (!transition) return null;
-  const entries = state.catalog?.entries.filter(({ kind }) => kind === "action") ?? [];
+  const entries = catalog?.entries.filter(({ kind }) => kind === "action") ?? [];
   return (
     <div className="flex flex-col gap-2 rounded-lg px-2 py-1.5">
       <div className="flex items-center gap-2 text-sm font-medium">
@@ -735,8 +793,30 @@ function Transition({ operation, index }: { readonly operation: WorkflowOperatio
       {transition.actions.map((action, actionIndex) => {
         const entry = entries.find(({ key }) => key === action.entry);
         return (
-          <div key={`${action.entry}:${actionIndex}`} className="flex items-center gap-2 text-sm">
+          <div key={`${action.entry}:${actionIndex}`} className="flex flex-wrap items-center gap-2 text-sm">
             <span>{entry?.name ?? action.entry}</span>
+            {entry?.parameters.map((parameter) => (
+              <ActionParameter
+                key={parameter.id}
+                entry={entry}
+                parameter={parameter}
+                value={parameterValue(action.parameters, parameter.id)}
+                onChange={(value) => {
+                  const parameters = [
+                    ...action.parameters.filter(({ id }) => id !== parameter.id),
+                    { id: parameter.id, value },
+                  ];
+                  editOne(actions, workflow, {
+                    _tag: "SetTransitionActions",
+                    operation: operation.id,
+                    when: transition.when,
+                    actions: transition.actions.map((candidate, candidateIndex) =>
+                      candidateIndex === actionIndex ? { ...candidate, parameters } : candidate,
+                    ),
+                  });
+                }}
+              />
+            ))}
             <Button
               size="icon-xs"
               variant="ghost"
@@ -755,25 +835,16 @@ function Transition({ operation, index }: { readonly operation: WorkflowOperatio
           </div>
         );
       })}
-      {state.machine ? (
+      {machine ? (
         <CatalogMenu.Provider
           entries={entries}
-          machine={state.machine}
+          machine={machine}
           onChoose={(entry) =>
             editOne(actions, workflow, {
               _tag: "SetTransitionActions",
               operation: operation.id,
               when: transition.when,
-              actions: [
-                ...transition.actions,
-                {
-                  entry: entry.key,
-                  parameters: entry.parameters.map((parameter) => ({
-                    id: parameter.id,
-                    value: parameter.values[0] ?? "",
-                  })),
-                },
-              ],
+              actions: [...transition.actions, { entry: entry.key, parameters: [] }],
             })
           }
         >
@@ -784,6 +855,12 @@ function Transition({ operation, index }: { readonly operation: WorkflowOperatio
         </CatalogMenu.Provider>
       ) : null}
       <Select
+        items={[
+          { value: "none", label: "No hand-off" },
+          ...workflow.workingCopy.operations
+            .filter(({ id }) => id !== operation.id)
+            .map(({ id, name }) => ({ value: id, label: name })),
+        ]}
         value={transition.handOff ?? "none"}
         onValueChange={(handOff) => {
           const target = workflow.workingCopy.operations.find(({ id }) => id === handOff)?.id ?? null;
@@ -867,26 +944,44 @@ function OperationQuestions({ operation }: { readonly operation: WorkflowOperati
           />
           {question.choices.map((choice) => (
             <div key={choice.id} className="flex flex-col gap-1">
-              <BufferedInput
-                value={choice.name}
-                label={`${question.text} ${choice.id}`}
-                save={async (name) => {
-                  if (!name.trim()) return choice.name;
-                  const updated = await editOne(actions, workflow, {
-                    _tag: "RenameChoice",
-                    operation: operation.id,
-                    question: question.id,
-                    choice: choice.id,
-                    name,
-                  });
-                  return (
-                    updated.workingCopy.operations
-                      .find(({ id }) => id === operation.id)
-                      ?.questions.find(({ id }) => id === question.id)
-                      ?.choices.find(({ id }) => id === choice.id)?.name ?? name
-                  );
-                }}
-              />
+              <div className="flex items-center gap-1">
+                <BufferedInput
+                  value={choice.name}
+                  label={`${question.text} ${choice.id}`}
+                  className="flex-1"
+                  save={async (name) => {
+                    if (!name.trim()) return choice.name;
+                    const updated = await editOne(actions, workflow, {
+                      _tag: "RenameChoice",
+                      operation: operation.id,
+                      question: question.id,
+                      choice: choice.id,
+                      name,
+                    });
+                    return (
+                      updated.workingCopy.operations
+                        .find(({ id }) => id === operation.id)
+                        ?.questions.find(({ id }) => id === question.id)
+                        ?.choices.find(({ id }) => id === choice.id)?.name ?? name
+                    );
+                  }}
+                />
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label={`Remove ${choice.name}`}
+                  onClick={() =>
+                    editOne(actions, workflow, {
+                      _tag: "RemoveChoice",
+                      operation: operation.id,
+                      question: question.id,
+                      choice: choice.id,
+                    })
+                  }
+                >
+                  <RiCloseLine />
+                </Button>
+              </div>
               <Diagnostics
                 diagnostics={diagnosticsAt(workflow, {
                   operation: operation.id,
@@ -896,6 +991,21 @@ function OperationQuestions({ operation }: { readonly operation: WorkflowOperati
               />
             </div>
           ))}
+          <Button
+            size="xs"
+            variant="ghost"
+            className="self-start"
+            onClick={() =>
+              editOne(actions, workflow, {
+                _tag: "AddChoice",
+                operation: operation.id,
+                question: question.id,
+                choice: { id: freshNodeId("answer"), name: "New answer" },
+              })
+            }
+          >
+            <RiAddLine data-icon="inline-start" /> Add Answer
+          </Button>
         </div>
       ))}
       <Button
@@ -924,13 +1034,84 @@ function OperationQuestions({ operation }: { readonly operation: WorkflowOperati
   );
 }
 
-function OperationHints({ operation }: { readonly operation: WorkflowOperation }) {
+const transitionKey = (answers: WorkflowOperation["transitions"][number]["when"]) =>
+  answers
+    .map(({ question, choice }) => `${question}:${choice}`)
+    .sort()
+    .join("|");
+
+function AddTransition({ operation }: { readonly operation: WorkflowOperation }) {
   const {
     state: { workflow },
     actions,
   } = useWorkflowEditor();
-  const { state } = useWorkflowSession();
-  const entryByKey = new Map(state.catalog?.entries.map((entry) => [entry.key, entry]) ?? []);
+  const [answers, setAnswers] = useState<WorkflowOperation["transitions"][number]["when"]>([]);
+  const orderedAnswers = operation.questions.flatMap((question) => {
+    const answer = answers.find((candidate) => candidate.question === question.id);
+    return answer ? [answer] : [];
+  });
+  const duplicate = operation.transitions.some(
+    ({ when }) => transitionKey(when) === transitionKey(orderedAnswers),
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-2">
+      {operation.questions.map((question) => {
+        const selected = answers.find((answer) => answer.question === question.id)?.choice ?? "any";
+        const items = [
+          { value: "any", label: `Any ${question.text}` },
+          ...question.choices.map(({ id, name }) => ({ value: id, label: name })),
+        ];
+        return (
+          <Select
+            key={question.id}
+            items={items}
+            value={selected}
+            onValueChange={(value) => {
+              const choice = question.choices.find(({ id }) => id === value);
+              const remaining = answers.filter((answer) => answer.question !== question.id);
+              setAnswers(choice ? [...remaining, { question: question.id, choice: choice.id }] : remaining);
+            }}
+          >
+            <SelectTrigger size="sm" aria-label={`${question.text} Transition answer`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {items.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        );
+      })}
+      <Button
+        size="xs"
+        variant="ghost"
+        disabled={duplicate}
+        onClick={() =>
+          editOne(actions, workflow, {
+            _tag: "AddTransition",
+            operation: operation.id,
+            when: orderedAnswers,
+          })
+        }
+      >
+        <RiAddLine data-icon="inline-start" /> Add Transition
+      </Button>
+    </div>
+  );
+}
+
+function OperationHints({ operation }: { readonly operation: WorkflowOperation }) {
+  const {
+    state: { workflow },
+    actions,
+    meta: { catalog },
+  } = useWorkflowEditor();
+  const entryByKey = new Map(catalog?.entries.map((entry) => [entry.key, entry]) ?? []);
   const fields = [
     ...new Set(
       operation.transitions.flatMap(({ actions: transitionActions }) =>
@@ -1006,22 +1187,7 @@ function OperationCard({ operation }: { readonly operation: WorkflowOperation })
       {operation.transitions.map((_, index) => (
         <Transition key={index} operation={operation} index={index} />
       ))}
-      <Button
-        size="xs"
-        variant="ghost"
-        className="self-start"
-        onClick={() =>
-          editOne(actions, workflow, {
-            _tag: "AddTransition",
-            operation: operation.id,
-            when: operation.questions.flatMap((question) =>
-              question.choices[0] ? [{ question: question.id, choice: question.choices[0].id }] : [],
-            ),
-          })
-        }
-      >
-        <RiAddLine data-icon="inline-start" /> Add Transition
-      </Button>
+      <AddTransition operation={operation} />
       <Diagnostics
         diagnostics={diagnosticsAt(workflow, {
           operation: operation.id,
@@ -1046,7 +1212,9 @@ function Operations() {
       <Button
         variant="ghost"
         className="w-full justify-start rounded-xl bg-muted/50 py-3 font-normal text-muted-foreground hover:bg-muted"
-        onClick={() => editOne(actions, workflow, { _tag: "AddOperation", operation: blankOperation() })}
+        onClick={() =>
+          editOne(actions, workflow, { _tag: "AddOperation", operation: newWorkflowOperation() })
+        }
       >
         <RiAddLine data-icon="inline-start" /> Add Operation
       </Button>
@@ -1058,44 +1226,82 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
   const { state, actions } = useWorkflowSession();
   const remote = state.workflows.find(({ id }) => id === initial.id) ?? initial;
   const [preview, setPreview] = useState<WorkflowRecord | null>(null);
+  const accepted = useRef(remote);
+  const pending = useRef<
+    ReadonlyArray<{
+      readonly key: symbol;
+      readonly edits: Parameters<WorkflowClient["edit"]>[1];
+    }>
+  >([]);
+  const remoteIsNewer = remote.workingRevision > accepted.current.workingRevision;
+  if (pending.current.length === 0 && remoteIsNewer) accepted.current = remote;
   const workflow = preview && preview.workingRevision > remote.workingRevision ? preview : remote;
   const current = useRef(workflow);
+  const editQueue = useRef(Promise.resolve(workflow));
   current.current = workflow;
+  const refreshPreview = () => {
+    const base = accepted.current;
+    const [first, ...rest] = pending.current;
+    if (!first) {
+      current.current = base;
+      setPreview(base);
+      return;
+    }
+    const edits: Parameters<WorkflowClient["edit"]>[1] = [
+      first.edits[0],
+      ...first.edits.slice(1),
+      ...rest.flatMap((entry) => entry.edits),
+    ];
+    const applied = applyWorkflowEdits(base.workingCopy, edits);
+    const canPreview = applied._tag === "Ok" && state.catalog !== null && state.machine !== null;
+    const next = canPreview
+      ? {
+          ...base,
+          workingCopy: applied.value,
+          workingRevision: base.workingRevision + pending.current.length,
+          diagnostics: validateWorkflow(applied.value, state.catalog),
+          readiness: adviseReadiness(applied.value, state.catalog, state.machine),
+        }
+      : base;
+    current.current = next;
+    setPreview(next);
+  };
   const editorActions: WorkflowClient = {
     ...actions,
     edit: async (id, edits) => {
-      const base = current.current;
-      const pendingRevision = base.workingRevision + 1;
-      const applied = applyWorkflowEdits(base.workingCopy, edits);
-      if (applied._tag === "Ok" && state.catalog && state.machine) {
-        const next = {
-          ...base,
-          workingCopy: applied.value,
-          workingRevision: pendingRevision,
-          diagnostics: validateWorkflow(applied.value, state.catalog),
-          readiness: adviseReadiness(applied.value, state.catalog, state.machine),
-        };
-        current.current = next;
-        setPreview(next);
-      }
-      try {
-        const accepted = await actions.edit(id, edits);
-        if (accepted.workingRevision >= current.current.workingRevision) {
-          current.current = accepted;
-          setPreview(accepted);
-        }
-        return accepted;
-      } catch (error) {
-        if (current.current.workingRevision <= pendingRevision) {
-          current.current = remote;
-          setPreview(remote);
-        }
-        throw error;
-      }
+      const key = Symbol();
+      pending.current = [...pending.current, { key, edits }];
+      refreshPreview();
+      const request = editQueue.current.then(() => actions.edit(id, edits));
+      const settled = request.then(
+        (next) => {
+          accepted.current = next;
+          pending.current = pending.current.filter((entry) => entry.key !== key);
+          refreshPreview();
+          return next;
+        },
+        (error) => {
+          pending.current = pending.current.filter((entry) => entry.key !== key);
+          refreshPreview();
+          throw error;
+        },
+      );
+      editQueue.current = settled.catch(() => accepted.current);
+      return settled;
+    },
+    publish: async (id) => {
+      const latest = await editQueue.current;
+      return actions.publish(id, latest.workingRevision);
     },
   };
   return (
-    <WorkflowEditorContext value={{ state: { workflow }, actions: editorActions }}>
+    <WorkflowEditorContext
+      value={{
+        state: { workflow },
+        actions: editorActions,
+        meta: { catalog: state.catalog, machine: state.machine },
+      }}
+    >
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-8 py-8">
         <EditorHeader />
         <Triggers />

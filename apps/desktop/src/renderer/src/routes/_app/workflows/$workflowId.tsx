@@ -32,5 +32,5 @@ function WorkflowRoute() {
       </div>
     );
   }
-  return <WorkflowEditor workflow={workflow} />;
+  return <WorkflowEditor key={workflowId} workflow={workflow} />;
 }

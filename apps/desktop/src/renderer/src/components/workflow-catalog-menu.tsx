@@ -4,8 +4,12 @@ import { GithubIcon, LinearIcon } from "@cogwork/ui/components/brand-icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuEmpty,
+  DropdownMenuFilter,
   DropdownMenuGroup,
+  DropdownMenuInput,
   DropdownMenuItem,
+  DropdownMenuList,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -19,7 +23,7 @@ import {
   RiSlackLine,
   RiWebhookLine,
 } from "@remixicon/react";
-import { type ComponentType, createContext, type ReactNode, use } from "react";
+import { type ComponentType, createContext, type ReactNode, use, useState } from "react";
 import type { CatalogIcon } from "../features/workflow-catalog";
 
 const catalogIcons: Record<CatalogIcon, ComponentType<{ className?: string }>> = {
@@ -45,9 +49,12 @@ const appName = (system: string | null) => {
 };
 
 interface CatalogMenuValue {
-  readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
-  readonly machine: MachineReadiness;
-  readonly choose: (entry: WorkflowCatalogEntry) => void;
+  readonly state: {
+    readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
+    readonly query: string;
+  };
+  readonly actions: { readonly choose: (entry: WorkflowCatalogEntry) => void };
+  readonly meta: { readonly machine: MachineReadiness };
 }
 
 const CatalogMenuContext = createContext<CatalogMenuValue | null>(null);
@@ -69,15 +76,23 @@ function Provider({
   readonly onChoose: (entry: WorkflowCatalogEntry) => void;
   readonly children: ReactNode;
 }) {
+  const [query, setQuery] = useState("");
   return (
-    <CatalogMenuContext value={{ entries, machine, choose: onChoose }}>
-      <DropdownMenu>{children}</DropdownMenu>
+    <CatalogMenuContext
+      value={{ state: { entries, query }, actions: { choose: onChoose }, meta: { machine } }}
+    >
+      <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery} autoHighlight>
+        <DropdownMenu>{children}</DropdownMenu>
+      </DropdownMenuFilter>
     </CatalogMenuContext>
   );
 }
 
 function Entry({ entry }: { readonly entry: WorkflowCatalogEntry }) {
-  const { machine, choose } = useCatalogMenu();
+  const {
+    actions: { choose },
+    meta: { machine },
+  } = useCatalogMenu();
   const availability = availabilityOf(entry, machine);
   const disabled = availability._tag === "Unavailable";
   const status = {
@@ -96,33 +111,60 @@ function Entry({ entry }: { readonly entry: WorkflowCatalogEntry }) {
   );
 }
 
-function Content() {
-  const { entries } = useCatalogMenu();
+function AppCascade() {
+  const {
+    state: { entries },
+  } = useCatalogMenu();
   const systems = [...new Set(entries.map(({ system }) => system))];
   return (
+    <DropdownMenuGroup>
+      {systems.map((system) => {
+        const Icon = iconOf(system);
+        return (
+          <DropdownMenuSub key={system ?? "cogwork"}>
+            <DropdownMenuSubTrigger label={appName(system)}>
+              <Icon className="text-muted-foreground" />
+              {appName(system)}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="min-w-72">
+              <DropdownMenuGroup>
+                {entries
+                  .filter((entry) => entry.system === system)
+                  .map((entry) => (
+                    <Entry key={entry.key} entry={entry} />
+                  ))}
+              </DropdownMenuGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        );
+      })}
+    </DropdownMenuGroup>
+  );
+}
+
+function Content() {
+  const {
+    state: { entries, query },
+  } = useCatalogMenu();
+  const needle = query.trim().toLowerCase();
+  const results = entries.filter((entry) =>
+    `${appName(entry.system)} ${entry.name}`.toLowerCase().includes(needle),
+  );
+  return (
     <DropdownMenuContent className="min-w-64">
-      <DropdownMenuGroup>
-        {systems.map((system) => {
-          const Icon = iconOf(system);
-          return (
-            <DropdownMenuSub key={system ?? "cogwork"}>
-              <DropdownMenuSubTrigger label={appName(system)}>
-                <Icon className="text-muted-foreground" />
-                {appName(system)}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="min-w-72">
-                <DropdownMenuGroup>
-                  {entries
-                    .filter((entry) => entry.system === system)
-                    .map((entry) => (
-                      <Entry key={entry.key} entry={entry} />
-                    ))}
-                </DropdownMenuGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          );
-        })}
-      </DropdownMenuGroup>
+      <DropdownMenuInput placeholder="Search" aria-label="Search" />
+      <DropdownMenuEmpty>No matches</DropdownMenuEmpty>
+      <DropdownMenuList>
+        {needle ? (
+          <DropdownMenuGroup>
+            {results.map((entry) => (
+              <Entry key={entry.key} entry={entry} />
+            ))}
+          </DropdownMenuGroup>
+        ) : (
+          <AppCascade />
+        )}
+      </DropdownMenuList>
     </DropdownMenuContent>
   );
 }

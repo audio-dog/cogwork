@@ -38,17 +38,7 @@ export interface WorkflowClient {
   ) => Promise<ReadonlyArray<WorkflowOption>>;
 }
 
-export const submitWorkflowField = async (
-  submitted: { current: string },
-  draft: string,
-  save: (text: string) => Promise<string>,
-) => {
-  if (draft === submitted.current) return null;
-  submitted.current = draft;
-  return save(draft);
-};
-
-export interface WorkflowSessionState {
+interface WorkflowSessionState {
   readonly workflows: ReadonlyArray<WorkflowRecord>;
   readonly catalog: WorkflowCatalog | null;
   readonly machine: MachineReadiness | null;
@@ -92,7 +82,7 @@ const successValue = <Value,>(result: { readonly _tag: string; readonly value?: 
 export function DaemonWorkflowProvider({ children }: { readonly children: ReactNode }) {
   const session = useActivitySession();
   const listed = useAtomValue(workflowsAtom);
-  const catalogResult = useAtomValue(workflowCatalogAtom);
+  const catalogResult = useAtomValue(workflowCatalogAtom(session.workflowInputsRevision));
   const templatesResult = useAtomValue(workflowTemplatesAtom);
   const create = useAtomSet(createWorkflowAtom, { mode: "promise" });
   const edit = useAtomSet(applyWorkflowEditAtom, { mode: "promise" });

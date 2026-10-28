@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import {
   PrincipalId,
   WorkflowDocument,
@@ -6,22 +8,26 @@ import {
   WorkspaceId,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
-import {
-  submitWorkflowField,
-  useWorkflowSession,
-  type WorkflowClient,
-  WorkflowProvider,
-  workflowProviderValue,
-} from "./workflow-session";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { WorkflowEditor } from "../components/workflow-editor";
+import { type WorkflowClient, WorkflowProvider, workflowProviderValue } from "./workflow-session";
+
+Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  Link: () => <a href="/workflows">Workflows</a>,
+  useNavigate: () => async () => undefined,
+}));
 
 const decodeWorkflowId = Schema.decodeUnknownSync(WorkflowId);
 const decodePrincipalId = Schema.decodeUnknownSync(PrincipalId);
 const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
 const decodeDocument = Schema.decodeUnknownSync(WorkflowDocument);
 
-const document = decodeDocument({
+const workflowDocument = decodeDocument({
   name: "Local name",
   workspaces: { _tag: "Listed", workspaces: [decodeWorkspaceId("cogwork")] },
   triggers: [],
@@ -31,7 +37,7 @@ const document = decodeDocument({
 const record: WorkflowRecord = {
   id: decodeWorkflowId("workflow-1"),
   principal: decodePrincipalId("person"),
-  workingCopy: document,
+  workingCopy: workflowDocument,
   workingRevision: 1,
   publishedCopy: null,
   publishedRevision: null,
@@ -44,11 +50,18 @@ const unused = async () => {
   throw new Error("unexpected call");
 };
 
+afterEach(() => {
+  document.body.replaceChildren();
+});
+
 describe("WorkflowProvider", () => {
-  it("sends one tagged field edit and returns the daemon value", async () => {
+  it("sends one tagged edit on blur and renders the daemon value", async () => {
     const edit = vi.fn<WorkflowClient["edit"]>(async (_id, edits) => ({
       ...record,
-      workingCopy: { ...document, name: edits[0]._tag === "Rename" ? "Daemon name" : document.name },
+      workingCopy: {
+        ...workflowDocument,
+        name: edits[0]._tag === "Rename" ? "Daemon name" : workflowDocument.name,
+      },
       workingRevision: 2,
     }));
     const client: WorkflowClient = {
@@ -59,34 +72,35 @@ describe("WorkflowProvider", () => {
       delete: unused,
       listOptions: unused,
     };
-    const captured: { current: ReturnType<typeof useWorkflowSession> | null } = { current: null };
-    function Probe() {
-      captured.current = useWorkflowSession();
-      return null;
-    }
-    renderToStaticMarkup(
-      <WorkflowProvider
-        value={workflowProviderValue(
-          { workflows: [record], catalog: null, machine: null, templates: [], loading: false },
-          client,
-        )}
-      >
-        <Probe />
-      </WorkflowProvider>,
-    );
-    const session = captured.current;
-    if (!session) throw new Error("provider did not render");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider
+          value={workflowProviderValue(
+            { workflows: [record], catalog: null, machine: null, templates: [], loading: false },
+            client,
+          )}
+        >
+          <WorkflowEditor workflow={record} />
+        </WorkflowProvider>,
+      );
+    });
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="Workflow name"]');
+    if (!input) throw new Error("Workflow name input did not render");
 
-    const submitted = { current: record.workingCopy.name };
-    const save = (name: string) =>
-      session.actions.edit(record.id, [{ _tag: "Rename", name }]).then((updated) => updated.workingCopy.name);
-    const returned = await Promise.all([
-      submitWorkflowField(submitted, "Typed name", save),
-      submitWorkflowField(submitted, "Typed name", save),
-    ]);
+    await act(async () => {
+      input.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "Typed name");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.blur();
+      await Promise.resolve();
+    });
 
     expect(edit).toHaveBeenCalledOnce();
     expect(edit).toHaveBeenCalledWith(record.id, [{ _tag: "Rename", name: "Typed name" }]);
-    expect(returned).toContain("Daemon name");
+    expect(input.value).toBe("Daemon name");
+    await act(async () => root.unmount());
   });
 });
