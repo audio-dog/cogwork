@@ -85,10 +85,22 @@ describe("policy profiles", () => {
     }
   });
 
-  it("reserves push for the engine during implement", () => {
+  it("reserves push for the engine without blocking other git commands", () => {
     assert.strictEqual(
       gateDecision(policyForOperation("implement", "full"), "bash", "git push origin feature"),
       "deny",
+    );
+    assert.strictEqual(
+      gateDecision(policyForOperation("implement", "full"), "bash", "git stash push -m checkpoint"),
+      "allow",
+    );
+    assert.strictEqual(
+      gateDecision(
+        policyForOperation("implement", "full"),
+        "bash",
+        'git commit -m "document push ownership"',
+      ),
+      "allow",
     );
     assert.strictEqual(
       gateDecision(policyForOperation("follow-up", "full"), "bash", "git push origin feature"),

@@ -46,7 +46,7 @@ const profiles: Record<OperationPolicyProfile, SandboxPolicy> = {
   full: fullProfile,
 };
 
-const implementPushDeny = "*git*push*";
+const implementPushDeny = "git push*";
 const implementProfiles: Record<OperationPolicyProfile, SandboxPolicy> = {
   "read-only": readOnlyProfile,
   full: defineSandboxPolicy({
