@@ -1264,6 +1264,39 @@ describe("contextFsLayer against a real filesystem", () => {
     }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
   );
 
+  it.effect("writes a context file and creates its parent directory", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-write-" });
+      const target = path.join(root, "nested", "INSTRUCTIONS.md");
+
+      yield* context.writeFile(target, "operating instructions");
+
+      assert.strictEqual(yield* fs.readFileString(target), "operating instructions");
+    }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
+  );
+
+  it.effect("replaces a context-file symlink without writing through it", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-symlink-" });
+      const victim = path.join(root, "victim.md");
+      const target = path.join(root, "run", "INSTRUCTIONS.md");
+      yield* fs.makeDirectory(path.dirname(target), { recursive: true });
+      yield* fs.writeFileString(victim, "keep me");
+      yield* fs.symlink(victim, target);
+
+      yield* context.writeFile(target, "operating instructions");
+
+      assert.strictEqual(yield* fs.readFileString(target), "operating instructions");
+      assert.strictEqual(yield* fs.readFileString(victim), "keep me");
+    }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
+  );
+
   it.effect("copies a skill directory with its siblings and replaces any stale destination", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

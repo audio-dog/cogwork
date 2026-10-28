@@ -404,6 +404,30 @@ describe("Workflow validator", () => {
     assert.deepStrictEqual(adviseReadiness(baseDocument, baseCatalog, baseMachine), []);
   });
 
+  it("accepts a listed instruction package without an inline instruction", () => {
+    const diagnostics = validateWorkflow(
+      replaceOperation({ instructionPackage: "triage-agent", instruction: "" }),
+      baseCatalog,
+    );
+
+    assert.notInclude(
+      diagnostics.map(({ code }) => code),
+      "empty-instruction",
+    );
+  });
+
+  it("reports an unknown instruction package as an unknown catalog entry", () => {
+    const diagnostics = validateWorkflow(
+      replaceOperation({ instructionPackage: "missing-agent" }),
+      baseCatalog,
+    );
+
+    assert.deepStrictEqual(
+      diagnostics.map(({ code }) => code),
+      ["unknown-catalog-entry"],
+    );
+  });
+
   it("keeps machine advisories out of document validation", () => {
     const machine = machineWith({ connections: [], workspaces: [], harnesses: [], readyNeeds: [] });
 
