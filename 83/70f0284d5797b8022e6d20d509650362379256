@@ -1,0 +1,32 @@
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_37bdafd0796541::t_aa180eb669a8dc 111,142-176,399-408,410-419,421-427,429,431-436,438,440-448,456-457
+  s_37bdafd0796541::t_241883a77e0612 430,437,449-453,455
+  s_37bdafd0796541::t_16c9b7069b8daf 181-201,409,420,428,439
+  s_a4dafed776d91c::t_8fd3263394e690 454,458
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_37bdafd0796541::t_029bf54a06d306 1193-1194,1244-1253
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8370f0284d5797b8022e6d20d509650362379256",
+  "prompts": {},
+  "sessions": {
+    "s_37bdafd0796541": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18358-8a25-7891-a2bf-38f296669467",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a4dafed776d91c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a183a7-8c22-7913-9bb3-da77bab7286f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
