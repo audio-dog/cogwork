@@ -1,11 +1,14 @@
 import { localOwner, Principal, validateWorkflowInput, WorkflowDocument } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { bootControlStoreLayer } from "./control-store";
@@ -26,6 +29,39 @@ const temporaryStore = Effect.fn("test.temporaryWorkflowEventStore")(function* (
   const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workflow-events-" });
   return path.join(dir, "control.db");
 });
+
+class WorkflowPublicationProbe extends Context.Service<
+  WorkflowPublicationProbe,
+  {
+    readonly started: Deferred.Deferred<void>;
+    readonly release: Deferred.Deferred<void>;
+    readonly published: Ref.Ref<number>;
+  }
+>()("@cogwork/engine/workflow.test/WorkflowPublicationProbe") {
+  static readonly layer = Layer.effect(
+    WorkflowPublicationProbe,
+    Effect.all({
+      started: Deferred.make<void>(),
+      release: Deferred.make<void>(),
+      published: Ref.make(0),
+    }),
+  );
+
+  static readonly busLayer = Layer.effect(
+    DaemonEventBus.DaemonEventBus,
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.make;
+      const probe = yield* WorkflowPublicationProbe;
+      const publish: DaemonEventBus.DaemonEventBusService["publish"] = () =>
+        Deferred.succeed(probe.started, undefined).pipe(
+          Effect.andThen(Deferred.await(probe.release)),
+          Effect.andThen(Ref.update(probe.published, (count) => count + 1)),
+          Effect.map(() => true),
+        );
+      return { ...bus, publish };
+    }),
+  ).pipe(Layer.provideMerge(WorkflowPublicationProbe.layer));
+}
 
 const assertWorkflowEvents = Effect.fn("test.assertWorkflowEvents")(function* () {
   const bus = yield* DaemonEventBus.DaemonEventBus;
@@ -66,6 +102,33 @@ layer(NodeServices.layer)((it) => {
             Layer.mergeAll(
               bootControlStoreLayer(storePath),
               DaemonEventBus.layer,
+              Layer.succeed(Principal, localOwner),
+            ),
+          ),
+          Effect.scoped,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("publishes a committed Workflow after the caller disconnects", () =>
+    temporaryStore().pipe(
+      Effect.flatMap((storePath) =>
+        Effect.gen(function* () {
+          const probe = yield* WorkflowPublicationProbe;
+          const creating = yield* Effect.forkChild(createWorkflow({ document }));
+          yield* Deferred.await(probe.started);
+          const interrupting = yield* Effect.forkChild(Fiber.interrupt(creating));
+          yield* Effect.yieldNow;
+          yield* Deferred.succeed(probe.release, undefined);
+          yield* Fiber.join(interrupting);
+
+          assert.strictEqual(yield* Ref.get(probe.published), 1);
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              bootControlStoreLayer(storePath),
+              WorkflowPublicationProbe.busLayer,
               Layer.succeed(Principal, localOwner),
             ),
           ),

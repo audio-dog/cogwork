@@ -29,15 +29,21 @@ export const getWorkflowCatalog = Effect.fn("Daemon.GetWorkflowCatalog")(() =>
 );
 
 const publishChanged = Effect.fn("Daemon.publishWorkflowChanged")(function* (workflow: WorkflowRecord) {
-  yield* (yield* DaemonEventBus).publish({ _tag: "WorkflowChanged", workflow });
-  return workflow;
+  return yield* (yield* DaemonEventBus).publish({ _tag: "WorkflowChanged", workflow });
+});
+
+const publishAfterWrite = Effect.fn("Daemon.publishAfterWorkflowWrite")(function* <A, E, R, E2, R2>(
+  write: Effect.Effect<A, E, R>,
+  publish: (written: A) => Effect.Effect<unknown, E2, R2>,
+) {
+  return yield* Effect.uninterruptibleMask((restore) => restore(write).pipe(Effect.tap(publish)));
 });
 
 const writeWorkflow = Effect.fn("Daemon.writeWorkflow")(function* <E, R>(
   write: Effect.Effect<WorkflowRecord, E, R>,
 ) {
   const store = yield* WorkflowStore;
-  return yield* store.withWrite(write.pipe(Effect.flatMap(publishChanged)));
+  return yield* store.withWrite(publishAfterWrite(write, publishChanged));
 });
 
 export const createWorkflow = Effect.fn("Daemon.CreateWorkflow")(function* (payload: {
@@ -78,12 +84,8 @@ export const deleteWorkflow = Effect.fn("Daemon.DeleteWorkflow")(function* (payl
 }) {
   const store = yield* WorkflowStore;
   return yield* store.withWrite(
-    store
-      .deleteWorkflow(payload.id)
-      .pipe(
-        Effect.tap((id) =>
-          Effect.flatMap(DaemonEventBus, (bus) => bus.publish({ _tag: "WorkflowDeleted", id })),
-        ),
-      ),
+    publishAfterWrite(store.deleteWorkflow(payload.id), (id) =>
+      Effect.flatMap(DaemonEventBus, (bus) => bus.publish({ _tag: "WorkflowDeleted", id })),
+    ),
   );
 });
