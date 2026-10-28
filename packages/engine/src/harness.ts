@@ -194,8 +194,15 @@ export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessErr
 
 export const validateCheckoutDirectory = Effect.fn("Harness.validateCheckoutDirectory")(function* (
   harness: HarnessName,
-  checkoutPath: string,
+  checkoutPath: string | null,
 ) {
+  if (checkoutPath === null) {
+    return yield* new HarnessError({
+      reason: "workspace",
+      retryable: false,
+      message: `harness runner ${harness} requires a Workspace checkout`,
+    });
+  }
   const fs = yield* FileSystem.FileSystem;
   const info = yield* fs.stat(checkoutPath).pipe(
     Effect.mapError(
@@ -224,6 +231,7 @@ export const validateCheckoutDirectory = Effect.fn("Harness.validateCheckoutDire
         }),
     ),
   );
+  return checkoutPath;
 });
 
 export interface HarnessRunner {

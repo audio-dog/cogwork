@@ -433,7 +433,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     catalog: generatedCatalog,
     readiness,
     validateLaunch: (request) =>
-      Harness.validateCheckoutDirectory(options.name, request.plan.sandbox.workspace),
+      Harness.validateCheckoutDirectory(options.name, request.plan.sandbox.workspace).pipe(Effect.asVoid),
     preflight: (input) =>
       resolveCursorModel(input).pipe(
         Effect.flatMap((model) =>
