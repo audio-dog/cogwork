@@ -1,0 +1,23 @@
+apps/cli/src/connection-commands.ts
+  s_57ba1d69a7a159::t_3dd71d0e2661b5 40,92,96
+apps/cli/src/connection-commands.test.ts
+  s_57ba1d69a7a159::t_1e80e74db7ed3f 15-16,44
+  s_57ba1d69a7a159::t_be1194d92a50b7 56
+  s_57ba1d69a7a159::t_5661cb48bdb810 42,45-49,52,66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "71dd8de5eecaf80108dbcd6926d9c98d2ba0d541",
+  "prompts": {},
+  "sessions": {
+    "s_57ba1d69a7a159": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18342-7714-7b42-a1c1-a8dff923aa83",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
