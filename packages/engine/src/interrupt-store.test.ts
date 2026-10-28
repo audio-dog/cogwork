@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { TestClock } from "effect/testing";
-import { InterruptStore, layer } from "./interrupt-store";
+import { InterruptStore, layer, make } from "./interrupt-store";
 
 const record = (
   interruptId: string,
@@ -84,30 +84,14 @@ describe("InterruptStore", () => {
     }).pipe(Effect.provide(layer)),
   );
 
-  it.effect("cancels unbound 0.x tool interrupts before listing pending rows", () =>
+  it.effect("drops pending interrupts when its process-scoped store is rebuilt", () =>
     Effect.gen(function* () {
-      const store = yield* InterruptStore;
-      yield* store.create({
-        ...record("legacy", 10),
-        payload: { metadata: { kind: "approval" }, toolCallId: "tool-1" },
-      });
-      yield* store.create({
-        ...record("bound", 20),
-        payload: {
-          metadata: { kind: "approval", "tanstack:interruptBinding": { generation: 1 } },
-          toolCallId: "tool-2",
-        },
-      });
-      yield* TestClock.setTime(1234);
+      const previous = yield* InterruptStore;
+      yield* previous.create(record("pending", 10));
+      assert.lengthOf(yield* previous.listPending("thread-1"), 1);
 
-      assert.deepStrictEqual(
-        (yield* store.listPending("thread-1")).map(({ interruptId }) => interruptId),
-        ["bound"],
-      );
-      assert.deepNestedInclude(yield* store.get("legacy"), {
-        status: "cancelled",
-        resolvedAt: 1234,
-      });
+      const current = yield* make;
+      assert.lengthOf(yield* current.listPending("thread-1"), 0);
     }).pipe(Effect.provide(layer)),
   );
 });
