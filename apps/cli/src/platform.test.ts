@@ -951,10 +951,19 @@ const operationFixtures: ReadonlyArray<{
 // past the 5s default, and a test here is slow because it queued, not because it hung.
 describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, () => {
   layer(testLayer)((it) => {
-    it.effect("blocks the worktree pushurl while an explicit engine push still reaches the remote", () =>
+    it.effect("blocks engine-owned pushes and restores the configured agent pushurl", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
+        const path = yield* Path.Path;
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
         const { root, checkout, worktree, branch } = yield* fixture("807-engine-push");
+        const fetchRemote = path.join(root, "remote.git");
+        const pushRemote = path.join(root, "push.git");
+        const revision = (args: ReadonlyArray<string>) =>
+          spawner.string(ChildProcess.make("git", [...args], { cwd: root, env: gitFixtureEnvironment }));
+
+        yield* executeFixtureCommand(root, `git init -q --bare ${pushRemote}`);
+        yield* shell(root, checkout, `git remote set-url --push origin ${pushRemote}`);
 
         yield* git.allowPush(worktree, "origin");
         yield* git.blockPush(worktree, "origin");
@@ -980,11 +989,21 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
         yield* shell(root, worktree, "echo agent >> work.txt && git commit -qam agent");
         const restoredPush = yield* Effect.exit(shell(root, worktree, `git push -q origin ${branch}`));
         assert.isTrue(Exit.isSuccess(restoredPush));
-        yield* git.fetch(checkout, "origin", { branches: [branch] });
-        assert.deepStrictEqual(yield* git.divergence(worktree, "origin", branch), {
-          ahead: 0,
-          behind: 0,
-        });
+        const localHead = (yield* revision(["-C", worktree, "rev-parse", "HEAD"])).trim();
+        const fetchHead = (yield* revision([
+          "--git-dir",
+          fetchRemote,
+          "rev-parse",
+          `refs/heads/${branch}`,
+        ])).trim();
+        assert.notStrictEqual(fetchHead, localHead);
+        const pushHead = (yield* revision([
+          "--git-dir",
+          pushRemote,
+          "rev-parse",
+          `refs/heads/${branch}`,
+        ])).trim();
+        assert.strictEqual(pushHead, localHead);
       }).pipe(Effect.scoped),
     );
 
