@@ -122,6 +122,8 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
     }),
     HarnessesChanged: ({ readiness }) => ({ ...board, harnesses: readiness }),
     SchedulerChanged: ({ scheduler }) => ({ ...board, scheduler }),
+    WorkflowChanged: () => board,
+    WorkflowDeleted: () => board,
   });
 
 export const liveOnly = <E, R>(events: Stream.Stream<DaemonEvent, E, R>) =>
