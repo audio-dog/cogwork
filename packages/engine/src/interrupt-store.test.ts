@@ -83,4 +83,31 @@ describe("InterruptStore", () => {
       assert.strictEqual((yield* store.get("i1"))?.status, "resolved");
     }).pipe(Effect.provide(layer)),
   );
+
+  it.effect("cancels unbound 0.x tool interrupts before listing pending rows", () =>
+    Effect.gen(function* () {
+      const store = yield* InterruptStore;
+      yield* store.create({
+        ...record("legacy", 10),
+        payload: { metadata: { kind: "approval" }, toolCallId: "tool-1" },
+      });
+      yield* store.create({
+        ...record("bound", 20),
+        payload: {
+          metadata: { kind: "approval", "tanstack:interruptBinding": { generation: 1 } },
+          toolCallId: "tool-2",
+        },
+      });
+      yield* TestClock.setTime(1234);
+
+      assert.deepStrictEqual(
+        (yield* store.listPending("thread-1")).map(({ interruptId }) => interruptId),
+        ["bound"],
+      );
+      assert.deepNestedInclude(yield* store.get("legacy"), {
+        status: "cancelled",
+        resolvedAt: 1234,
+      });
+    }).pipe(Effect.provide(layer)),
+  );
 });
