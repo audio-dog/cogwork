@@ -176,6 +176,38 @@ const rejectingVerifier = Layer.succeed(ConnectionVerifier, {
 });
 
 describe("Connection verification", () => {
+  it.effect("keeps GitHub ready when its remote verifier is unavailable", () =>
+    Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const readiness = yield* connections.readiness(github.id);
+
+      assert.strictEqual(readiness._tag, "Ready");
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(rejectingVerifier),
+          Layer.provide(
+            Layer.succeed(CredentialStore, {
+              ...unusedCredentialStore,
+              bearerToken: () =>
+                Effect.succeed({
+                  source: "stored-key" as const,
+                  token: Redacted.make("valid"),
+                  identity: null,
+                }),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(ControlStore, {
+              ...controlStoreService,
+              picture: Effect.succeed({ ...defaultControlStore, connections: [github] }),
+            }),
+          ),
+        ),
+      ),
+    ),
+  );
+
   it.effect("keeps a revoked Granola grant as a not-ready Connection", () => {
     const granola = Connection.make({
       id: connectionIdOf("granola", "person@example.com"),

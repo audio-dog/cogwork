@@ -8,6 +8,7 @@ import {
   type ConnectionReadiness,
   ConnectionSystem,
   connectionIdOf,
+  type IssueTrackerError,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -209,12 +210,23 @@ export const layer = Layer.effect(
       return yield* credentials.bearerToken(credentialAccountFor(connection));
     });
 
+    const readinessVerifiers: Record<
+      ConnectionSystem,
+      (credential: Credential) => Effect.Effect<string | null, IssueTrackerError>
+    > = {
+      github: (_credential) => Effect.succeed(null),
+      linear: (_credential) => Effect.succeed(null),
+      granola: (credential) => verifier.verify("granola", credential),
+    };
+    const verifyReadiness = (connection: Connection, credential: Credential) =>
+      readinessVerifiers[connection.system](credential);
+
     const readiness = Effect.fn("ConnectionStore.readiness")(function* (connectionId: ConnectionId) {
       return yield* find(connectionId).pipe(
         Effect.flatMap((connection) =>
           connection
             ? bearer(connectionId).pipe(
-                Effect.flatMap((credential) => verifier.verify(connection.system, credential)),
+                Effect.flatMap((credential) => verifyReadiness(connection, credential)),
                 Effect.mapError((error) =>
                   error._tag === "IssueTrackerError"
                     ? refused(connectionId, connection.system, error)
