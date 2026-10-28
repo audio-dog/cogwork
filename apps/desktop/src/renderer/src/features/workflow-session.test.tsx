@@ -108,7 +108,7 @@ const catalog = decodeCatalog({
       system: null,
       connection: null,
       requires: [],
-      parameters: [],
+      parameters: [{ id: "target", required: false, source: "live", values: [] }],
       itemKind: null,
       actsOn: [],
       requiresWorkspace: true,
@@ -139,8 +139,64 @@ const everyRecord: WorkflowRecord = {
   publishedRevision: 1,
 };
 
+const transitionDocument = decodeDocument({
+  ...everyDocument,
+  operations: everyDocument.operations.map((operation) => ({
+    ...operation,
+    questions: [
+      {
+        id: "outcome",
+        text: "Done?",
+        choices: [
+          { id: "yes", name: "Yes" },
+          { id: "no", name: "No" },
+        ],
+      },
+    ],
+    transitions: [
+      {
+        when: [{ question: "outcome", choice: "yes" }],
+        actions: [{ entry: "test.done", parameters: [{ id: "target", value: "first" }] }],
+        handOff: null,
+      },
+      {
+        when: [{ question: "outcome", choice: "no" }],
+        actions: [{ entry: "test.done", parameters: [{ id: "target", value: "second" }] }],
+        handOff: null,
+      },
+    ],
+  })),
+});
+
+const transitionRecord: WorkflowRecord = {
+  ...everyRecord,
+  workingCopy: transitionDocument,
+  publishedCopy: transitionDocument,
+};
+
 const unused = async () => {
   throw new Error("unexpected call");
+};
+
+const mountEditor = async (workflow: WorkflowRecord, client: WorkflowClient) => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const render = (current: WorkflowRecord) =>
+    act(async () => {
+      root.render(
+        <WorkflowProvider
+          value={workflowProviderValue(
+            { workflows: [current], catalog, machine, templates: [], loading: false },
+            client,
+          )}
+        >
+          <WorkflowEditor workflow={current} />
+        </WorkflowProvider>,
+      );
+    });
+  await render(workflow);
+  return { container, render, root };
 };
 
 afterEach(() => {
@@ -337,6 +393,66 @@ describe("WorkflowProvider", () => {
     });
 
     expect(publish).toHaveBeenCalledWith(everyRecord.id, 1);
+    await act(async () => root.unmount());
+  });
+
+  it("shows a live enabled change while an edit preview is pending", async () => {
+    const pending = Promise.withResolvers<WorkflowRecord>();
+    const client: WorkflowClient = {
+      create: unused,
+      edit: () => pending.promise,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const { container, render, root } = await mountEditor(everyRecord, client);
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="Workflow name"]');
+    if (!input) throw new Error("Workflow name input did not render");
+    await act(async () => {
+      input.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "Changed");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.blur();
+      await Promise.resolve();
+    });
+    const live = { ...everyRecord, enabled: true };
+    await render(live);
+
+    expect(
+      container.querySelector('[aria-label="Turn this Workflow on"]')?.getAttribute("aria-checked"),
+    ).toBe("true");
+    await act(async () => root.unmount());
+  });
+
+  it("keeps transition options with their answer after removing an earlier transition", async () => {
+    const pending = Promise.withResolvers<WorkflowRecord>();
+    const loadingOptions = Promise.withResolvers<never>();
+    const client: WorkflowClient = {
+      create: unused,
+      edit: () => pending.promise,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: () => loadingOptions.promise,
+    };
+    const { container, root } = await mountEditor(transitionRecord, client);
+    const remove = container.querySelectorAll<HTMLButtonElement>('[aria-label="Remove Transition"]');
+    expect(remove).toHaveLength(2);
+    await act(async () => {
+      remove[0]?.click();
+      await Promise.resolve();
+    });
+
+    const parameter = container.querySelectorAll<HTMLButtonElement>('[aria-label="Done target"]');
+    expect(parameter).toHaveLength(1);
+    await act(async () => {
+      parameter[0]?.click();
+      await Promise.resolve();
+    });
+    expect([...document.querySelectorAll('[role="option"]')].map(({ textContent }) => textContent)).toContain(
+      "second",
+    );
     await act(async () => root.unmount());
   });
 

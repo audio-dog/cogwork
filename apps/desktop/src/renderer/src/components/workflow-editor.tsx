@@ -1190,8 +1190,8 @@ function OperationCard({ operation }: { readonly operation: WorkflowOperation })
       <OperationQuestions operation={operation} />
       <OperationHints operation={operation} />
       <Separator />
-      {operation.transitions.map((_, index) => (
-        <Transition key={index} operation={operation} index={index} />
+      {operation.transitions.map((transition, index) => (
+        <Transition key={transitionKey(transition.when)} operation={operation} index={index} />
       ))}
       <AddTransition operation={operation} />
       <Diagnostics
@@ -1241,7 +1241,16 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
   >([]);
   const latestAccepted = () =>
     remote.workingRevision > accepted.current.workingRevision ? remote : accepted.current;
-  const workflow = preview && preview.workingRevision > remote.workingRevision ? preview : remote;
+  const hasPreview = preview !== null && preview.workingRevision > remote.workingRevision;
+  const workflow = hasPreview
+    ? {
+        ...remote,
+        workingCopy: preview.workingCopy,
+        workingRevision: preview.workingRevision,
+        diagnostics: preview.diagnostics,
+        readiness: preview.readiness,
+      }
+    : remote;
   const editQueue = useRef(Promise.resolve(workflow));
   const refreshPreview = () => {
     const base = latestAccepted();
