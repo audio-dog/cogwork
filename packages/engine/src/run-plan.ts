@@ -63,7 +63,6 @@ import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import type { AdmittedWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
-import { operationDefaultProfile } from "./operation-policy";
 import { issueTrackerConnectionNeed, type OperationDefinition, resolveStage } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { ownedToolNames } from "./tools";
@@ -367,9 +366,10 @@ export const resolveRunPlanStage = (
   operation: LifecycleStage,
   rows: readonly OperationSettingRow[],
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
-  declaredProfiles: ReadonlyArray<RunPlanPolicyProfile> = [operationDefaultProfile(operation)],
+  declaredProfiles?: ReadonlyArray<RunPlanPolicyProfile>,
 ) => {
   const base = resolveStage(config, operation);
+  const availableProfiles = declaredProfiles ?? [base.permissionProfile];
   const context = { workflow: "coding", operation, workspace: config.name };
   const settings = new Map(
     operationSettingNames.map(
@@ -390,7 +390,7 @@ export const resolveRunPlanStage = (
     },
     profile: policyProfileValue(
       settingValueOf("permission-profile"),
-      defaultPermissionProfile(operation, declaredProfiles) ?? operationDefaultProfile(operation),
+      defaultPermissionProfile(base.permissionProfile, availableProfiles) ?? base.permissionProfile,
     ),
     settings,
     issueTrackerBinding: {
@@ -491,7 +491,7 @@ const resolutionTrace = (
     setting === "bindings" ? [...winners.map(resolutionCandidate), issueTrackerCandidate] : [];
   const effective = effectiveSettingValue(resolved, setting);
   const usesHarnessProfileDefault =
-    setting === "permission-profile" && resolved.profile !== operationDefaultProfile(operation);
+    setting === "permission-profile" && resolved.profile !== resolved.stage.permissionProfile;
   const defaultCandidate = usesHarnessProfileDefault
     ? harnessCandidate(resolved.stage.harness, effective)
     : engineCandidate(operation, effective);

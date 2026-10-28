@@ -4,9 +4,11 @@ import type {
   LifecycleStage,
   McpSkill,
   OperationNeed,
+  RunPlanPolicyProfile,
   TriageResultRole,
   WorkspaceConfig,
 } from "@cogwork/contracts";
+import { operationDefaultProfiles } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import { day } from "./time";
@@ -39,6 +41,7 @@ export interface OperationOutcomeTables {
 export type OperationOutcomeTable = OperationOutcomeTables[LifecycleStage];
 
 export interface OperationDefinition<Stage extends LifecycleStage = LifecycleStage> {
+  readonly permissionProfile: RunPlanPolicyProfile;
   readonly skill: string;
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
@@ -73,6 +76,7 @@ const defaultFollowUpPrompt = [
 ].join("\n");
 
 interface StageDefaults<Stage extends LifecycleStage> {
+  readonly permissionProfile: RunPlanPolicyProfile;
   readonly skill: string;
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
@@ -126,6 +130,7 @@ const resolveStageConfig = <Stage extends LifecycleStage>(
 
 export const resolveTriage = (config: WorkspaceConfig) =>
   resolveStageConfig<"triage">(config, {
+    permissionProfile: operationDefaultProfiles.triage,
     skill: "triage-agent",
     promptTemplate: defaultTriagePrompt,
     resumeMaxAgeMillis: null,
@@ -136,6 +141,7 @@ export const resolveTriage = (config: WorkspaceConfig) =>
 
 export const resolveImplement = (config: WorkspaceConfig) =>
   resolveStageConfig<"implement">(config, {
+    permissionProfile: operationDefaultProfiles.implement,
     skill: "implement-agent",
     promptTemplate: defaultImplementPrompt,
     resumeMaxAgeMillis: null,
@@ -146,6 +152,7 @@ export const resolveImplement = (config: WorkspaceConfig) =>
 
 export const resolveFollowUp = (config: WorkspaceConfig) =>
   resolveStageConfig<"follow-up">(config, {
+    permissionProfile: operationDefaultProfiles["follow-up"],
     skill: "follow-up-agent",
     promptTemplate: defaultFollowUpPrompt,
     resumeMaxAgeMillis: Duration.toMillis(day),

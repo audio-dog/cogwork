@@ -3,6 +3,7 @@ import {
   FollowUpStageResult,
   type ImplementResultOutcome,
   ImplementStageResult,
+  type LifecycleStage,
   type McpSkill,
   type TriageResultRole,
   TriageStageResult,
@@ -76,6 +77,17 @@ describe("resolveStage", () => {
     assert.strictEqual(resolveStage(cfg, "triage").skill, "triage-agent");
     assert.strictEqual(resolveStage(cfg, "implement").skill, "implement-agent");
     assert.strictEqual(resolveStage(cfg, "follow-up").skill, "follow-up-agent");
+  });
+
+  it("declares the fixed pipeline's permission profiles", () => {
+    const cfg = config();
+    const stages: ReadonlyArray<LifecycleStage> = ["triage", "implement", "follow-up"];
+    const profiles = stages.map((stage) => {
+      const resolved = resolveStage(cfg, stage);
+      return "permissionProfile" in resolved ? resolved.permissionProfile : null;
+    });
+
+    assert.deepStrictEqual(profiles, ["read-only", "full", "full"]);
   });
 });
 

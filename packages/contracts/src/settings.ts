@@ -75,12 +75,9 @@ export const operationDefaultProfiles = {
 } as const satisfies Record<LifecycleStage, RunPlanPolicyProfile>;
 
 export const defaultPermissionProfile = (
-  operation: LifecycleStage,
+  preferredProfile: RunPlanPolicyProfile,
   declaredProfiles: ReadonlyArray<RunPlanPolicyProfile>,
-) =>
-  declaredProfiles.find((profile) => profile === operationDefaultProfiles[operation]) ??
-  declaredProfiles[0] ??
-  null;
+) => declaredProfiles.find((profile) => profile === preferredProfile) ?? declaredProfiles[0] ?? null;
 
 export const OperationBinding = Schema.Struct({
   need: TrimmedNonEmptyString,
