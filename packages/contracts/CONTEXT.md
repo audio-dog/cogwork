@@ -17,8 +17,9 @@ The port that answers what trusted pull request belongs to each observed work it
 _Avoid_: Forge, code host, work source, git client (the HTTP client is a lower-level detail)
 
 **Work item**:
-A single unit of backlog work observed from an issue tracker, identified by a branded `WorkItemId` (e.g. a GitHub issue like `#13`, or a Linear identifier like `AUD-1`). Carries a title and, once observed, its roles, claim, and attempts; its pull request is resolved separately by the source control provider, not carried as a tracker property.
-_Avoid_: Task, job, ticket (except when naming the tracker's own UI)
+The one thing a Run acts on. An issue tracker supplies it, identified by a branded `WorkItemId` (e.g. a GitHub issue like `#13`, or a Linear identifier like `AUD-1`), or the engine **mints** it from a Trigger event — a Granola note, a Slack message or conversation, a schedule instant, a pull request no issue links, or a fan-out element. An engine-minted item's identity derives from an immutable source identity, never from model output, and no author writes a key; its coordination lives in the Control store (ADR 0033). Each item has a kind, which fixes its Work context.
+A tracker item carries a title and, once observed, its roles, claim, and attempts; its pull request is resolved separately by the source control provider, not carried as a tracker property.
+_Avoid_: Task, job, ticket (except when naming the tracker's own UI), Trigger event (it names an item; it is not one)
 
 **Link key**:
 The stable key tying a work item to its pull request across systems. GitHub numeric work items first match an open PR's GitHub-resolved closing reference (`Closes #N`); all items retain the `ticketSlug(item.id)` branch-prefix fallback (`fel-157-…`, `13-…`). The engine-cut branch remains stable because it derives from the immutable item id rather than the title. A same-repository closing-reference match carries its actual head branch into follow-up.
@@ -31,6 +32,7 @@ _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:
 Who the daemon acts *as* on a tracker — the authenticated account discovered from the bound **Connection**. It stamps claims and coordination comments and marks which comments and pull requests are the daemon's own. A workspace stores only the Connection binding; it has no separate actor selector.
+Because that account is the person's own, it cannot tell Cogwork's writes from the person's. In a Workflow the **origin record** decides which writes are Cogwork's, never the account.
 _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
@@ -40,18 +42,18 @@ _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 **Bot allowlist**:
 `sourceControl.botAllowlist` (with the same fallback field on `issueTracker` the source-control target already borrows) — an optional, non-empty-when-present list of bot logins whose PR feedback is trusted to *wake a follow-up*. Absent means the gate is off: no bot ever wakes one, exactly as before.
 **A trusted bot wakes a follow-up only when it opens a new thread on a line of the diff.** A bot's narration of the pull request — a summary comment, a review header, an automation note — is not a finding and wakes nothing, and neither is a reply inside a thread somebody else opened. An entry ending in `:any` drops the shape test and takes every comment that bot writes; it is the escape hatch for a bot that only speaks at pull-request level. Human feedback is unaffected: a person's PR-level comment still wakes a follow-up and can still set `/fresh`.
-A listed bot's finding is a wake signal only — it triggers a follow-up but does not reset the no-progress counter and can never set `/fresh`, so a stall still hands off to a human. It grants no steering: a trusted-bot finding is actionable context, like a failing check, never an instruction. Distinct from the actor identity (who the daemon acts as) and the assignee allowlist (whose tickets it may pick up).
+A listed bot's finding is a wake signal only — it triggers a follow-up but does not reset the no-progress counter and can never set `/fresh`, so a stall still parks the item for a person. It grants no steering: a trusted-bot finding is actionable context, like a failing check, never an instruction. Distinct from the actor identity (who the daemon acts as) and the assignee allowlist (whose tickets it may pick up).
 _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot never steers), *bot comment* as a synonym for *finding* (most of what a bot writes on a PR is neither)
 
 **Follow-up trigger**:
-A pull request condition that wakes a follow-up round: failing required checks, a **base divergence**, new human feedback, or a trusted bot's finding.
+A pull request condition that wakes a follow-up round: failing required checks, a **base divergence**, new human feedback, or a trusted bot's finding. At the cut-over the four become source-control **Trigger** entries, and their **source revisions** make the rule below structural: a standing state has no new revision, so it cannot wake follow-up again.
 **A trigger must be a condition the agent can clear** — either by working (a red check, a conflict) or by answering it once, since feedback is compared against the follow-up marker and a marker already past it wakes nothing. A condition the agent has no power to clear is a **state** of the pull request, not a trigger, and belongs to classification. The review decision is the worked example: a standing `changes-requested` review holds until its author approves or dismisses it, and no push clears it — so it travels as the PR summary's `review` and wakes nothing on its own. Its *content* still does, because a review's prose and its inline comments are human feedback like any other, including on an approval. See engine ADR 0013.
 _Avoid_: Follow-up reason; *wake signal* as a synonym (that names a trusted bot's finding in particular); review decision (that's a state a trigger is defined against)
 
 ### Configuration
 
 **Control store**:
-The daemon's single local database of everything Cogwork itself has been told on this machine — install records, Connection records, settings at every Scope that is not a file, Runtime host bindings, minted Scope identities, daemon runtime limits, and the store's own schema metadata. One database per machine, under `~/.cogwork`.
+The daemon's single local database of everything Cogwork itself has been told on this machine — install records, Connection records, settings at every Scope that is not a file, Runtime host bindings, minted Scope identities, daemon runtime limits, Workflows, the coordination of engine-minted Work items and every item's action plans, and the store's own schema metadata. One database per machine, under `~/.cogwork`.
 **It fails closed.** Unlike the Credential store it holds no secrets, and unlike the Run ledger it is not disposable — it is the authority the Engine resolves a Run Plan from, so a store it cannot open or trust stops dispatch rather than degrading it. The Run ledger's rows live here too, and stay disposable by policy rather than by sitting in a separate file. See ADR 0015.
 _Avoid_: Settings store (it holds identities and bindings, not only settings), Run ledger (that one is disposable), Credential store (that one is secret), Settings profile (a Scope, not a store), database, config
 
@@ -117,8 +119,8 @@ _Avoid_: Plugin (the bundle, not the record), install cache, provisioned path, P
 **Plugin catalog**:
 The one first-party document listing the Plugins on offer. It **ships with Cogwork**, as do the bundles it lists, so it is read from disk and never fetched. Each entry carries a name and a pointer to the bundle. It is also the name of the **Plugins** section holding the Plugins a person has not installed.
 **Struck 2026-08-26, and not to be restored:** the computed digest, the `active` / `deprecated` / `deleted` status set, the network fetch and its cache, the stale and never-fetched arms, and the explicit refresh act. All of it served fetching bytes from elsewhere, which Cogwork does not do. Do not re-derive it from prior art or from a future in which third-party install exists; that future gets its own decision. See ADR 0014.
-Qualified because bare *catalog* is spent twice — the desktop's **Surface catalog** and the engine's **Model catalog**.
-_Avoid_: Marketplace, registry, Surface catalog, Model catalog, index
+Qualified because bare *catalog* is spent three times — the desktop's **Surface catalog**, the engine's **Model catalog**, and the **Trigger and action catalog**.
+_Avoid_: Marketplace, registry, Surface catalog, Model catalog, Trigger and action catalog, index
 
 **Plugins**:
 The surface that owns Plugin **membership** — install and uninstall, the whole of it — and the setup that follows an install. It and **Connections** are the only surfaces permitted to change what is installed. Its sections are **Needs Attention**, **Installed**, and **Catalog**. Uninstalling shows a notice naming any **Connection** the Plugin required as still established: removal cascades down the dependency arrow and never up, so Plugins never removes a Connection.
@@ -145,6 +147,7 @@ _Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind b
 
 **Connection**:
 The established, authenticated binding to one external system, keyed by **system and account** (`linear/acme`, `github/octocat`) — engine-owned, and not a contribution kind. It is never the credential itself: its record lives in the Control store (id, system, account, status) and its secret or source marker in the Credential store, reaching a Run over a channel that is never persisted to the run ledger or event log. Both a Plugin's contributions and the Engine's own ports — the issue tracker, the source control provider — authenticate through one and reference it **by id**. A Plugin may *require* a Connection; it may never define one.
+Every **output action** acts through the person's Connection for its app, so a Workflow acts as the person.
 **A Connection has no Scope**, and reference is not scoping: it is machine-level, a workspace references one, and a repository can never connect or override one. One grant serves every port on one account. At connect time, the system itself has to accept the credential before anything is written. GitHub reports the account from the accepted credential; a person never types it. Linear keeps its typed account. At run time, the Credential store acquires the current credential from the selected source. A refused connect or re-connect leaves the credential it would have replaced untouched. Removal cascades to each Plugin that requires it and leaves a bound workspace *dangling*; a grant revoked outside Cogwork is a readiness state, not a removal. See ADR 0017.
 _Avoid_: Plugin (a Plugin requires a Connection, never contains one), credential (that is the secret it holds), MCP server, contribution kind, provider key (that one buys inference, not access to the work), Integration, connector
 
@@ -194,36 +197,141 @@ _Avoid_: Tool, Harness, Operation
 The allow, ask, and deny rules governing Tools, file writes, and network access during a Run.
 _Avoid_: Middleware, Harness execution boundary
 
-### Workflows and operations
+### Workflows
 
 **Workflow**:
-A reusable end-to-end automation made of operations and the transitions between them. Cogwork owns the graph today; user-authored composition may come later without changing the concept.
-_Avoid_: Playbook, pipeline, run
+A person's reusable automation: one or more **Triggers**, the **Operations** they start, and the **Transitions** that route each Operation's answers, over a **Workspace selection**. The engine owns the routing; agent judgement is what separates one Operation from the next. Workflows compose through what they create — an issue, a pull request, or a comment one Workflow makes can trip another's Trigger.
+Each Workflow has its own on / off, which a person sets and which is not part of its document. The daily budget and concurrency limits stay daemon-wide. Until the cut-over, the coding pipeline — triage, implement, follow-up — is the engine's own fixed Workflow; after it, the pipeline is a **Workflow template** like any other, and no engine-authored Workflow remains.
+_Avoid_: Playbook, automation (Cursor's word for the same idea), pipeline (except in the name of the coding pipeline), run
+
+**Workflow document**:
+The one schema-validated definition of a Workflow: its name, Workspace selection, Triggers, and Operations. Every author writes the same document — the editor, a Workflow template, a future agent — through the same command RPCs; the editor is one client, never the contract. It holds references — catalog keys, Workspace ids, Operation ids — never display copies, and it holds neither the Workflow's id nor its on / off, so a document can travel between people. Node ids are author-chosen and never change; a rename changes only the name.
+_Avoid_: Workflow definition, Workflow config, draft (nobody keeps a private copy — see **Working copy**), spec
+
+**Working copy**:
+A Workflow's one shared, editable document. Every author changes it only through **Workflow edits**, which the daemon applies in arrival order, so no write rests on a stale base. It may be incomplete, never malformed.
+_Avoid_: Draft, local copy, unsaved changes
+
+**Workflow edit**:
+One typed change to a working copy, naming its target by stable id. A whole document enters only through *create* — a new Workflow, a copy of a template, an agent's first version; every later change, from a person or an agent, is a list of edits applied as one.
+_Avoid_: Save, patch, update (the whole-document save it replaced)
+
+**Published revision**:
+The revision of a working copy that a person **published**, and the only one the engine runs. Publishing names the revision the person sees and refuses when a newer edit has arrived, so an edit from anyone changes nothing that runs until a person publishes it. Each admission reads the current published revision and each Run records the one it ran; no older revision is kept.
+_Avoid_: Version, release, saved Workflow, *source revision* (the source value a Trigger fires on)
+
+**Diagnostic**:
+One finding of the Workflow validator, returned as data: a stable code, a location by stable ids, a message, and a class. **Malformed** refuses the whole edit; **incomplete** blocks publish; **advisory** never blocks. Machine state — a Connection or a need that is not ready, a missing Harness — is only ever advisory, and switching a Workflow on has no diagnostic gate. One validator serves every client, and the daemon's answer is final.
+_Avoid_: Error, warning, lint, validation failure (an incomplete working copy is not a failure)
+
+**Workspace selection**:
+Which Workspaces a Workflow observes and acts in: every Workspace, or a listed set, which may be empty. A field of the document, not a **Scope** — a Scope is where a setting lives, and this is what the Workflow is about. For a tracker or pull request Trigger it is where the Trigger observes; for a Granola or Slack item, which names no Workspace, it is the candidates the agent chooses from, plus *none recognized*.
+_Avoid_: Scope, workspace filter, target
+
+**Workflow template**:
+A Workflow document that Cogwork ships. Using one is *create* with its document, and the result is the person's own Workflow: an app update never changes that copy, which changes only through what it names — an Operating-instructions package, a catalog entry's code. The Workflow records no template, so a copy is deleted like any other, and nothing installs or switches on by itself.
+_Avoid_: Default Workflow (as a kind), preset, blueprint, built-in Workflow
+
+**Trigger and action catalog**:
+The engine-owned list of every Trigger entry and action entry a Workflow document may name, read through a query and never held as a constant in a client. Each entry is keyed by its connected app first (`github.create-issue`, `linear.issue-has-label`) and declares what it requires and its **parameters**; a Trigger entry also declares the item kind it yields, which fixes the Work context, and an action entry its target, the item kinds it acts on, and its **agent inputs**. A client that has only the RPC can author every Workflow the editor can.
+_Avoid_: Bare *catalog* (spent — see **Plugin catalog**), Plugin catalog, Model catalog, connector list, `connectorOnly` (retired — an entry *requires*, and the catalog hides nothing)
+
+### Triggers
+
+**Trigger**:
+A Workflow's start rule: one Trigger entry, its parameter values, and the Operation it starts. Every Trigger is level-triggered: it fires once for each new **source revision** of a Work item. The parameters on one Trigger must all match; any one Trigger of a Workflow may start it.
+_Avoid_: Event (that is a **Trigger event**), Hook (a contribution kind), webhook, filter, follow-up trigger (the fixed pipeline's wake conditions)
+
+**Condition / occurrence**:
+The two kinds of Trigger entry. A **condition** (*Issue has label*) fires for every item that matches, including items that already match at switch-on; its source revision is the moment it became true. An **occurrence** (*New comment from a person*) fires only for events after switch-on, and events while the Workflow is off are skipped, never replayed. An entry's name states its kind.
+_Avoid_: State / event, filter, *condition* for what a Transition matches (say its answers)
+
+**Parameter**:
+An author-set, typed value on a Trigger or an output action — a label, a channel, a schedule time, a review event — with fixed choices or a live list a Connection supplies. Only the author sets one; where the agent must choose, the author asks a **question** and routes on its answer.
+_Avoid_: Option (that is a **model option**), filter, setting, argument
+
+**Catch-up window**:
+An occurrence entry's parameter that bounds how far back its Trigger source reads after the daemon was down. Events older than the window are skipped, and the read model reports them.
+_Avoid_: Replay window, backfill
+
+**Quiet period**:
+An ambient Slack Trigger's parameter: how long a conversation must stay silent before the Trigger fires, so one Run reads a finished exchange. Beside it, *at most every* bounds how often one conversation fires.
+_Avoid_: Debounce, delay, cooldown (that is *at most every*)
+
+**Sweep**:
+A schedule Trigger with a selector over Work items that already exist — their source, state, and idle time — that gives each selected item one Run. Each sweep starts a new lineage, and the idle time bounds how fast it can repeat.
+_Avoid_: Batch, cron job, scan
+
+**Trigger source**:
+The observer of one source — the issue tracker, source control, Granola, Slack, or the clock — that emits Trigger events for its subscriptions. It sees subscriptions (an entry, its parameter values, and its Workspaces), never Workflows, and writes nothing; the engine admits its events and pairs them with Triggers. Receiving events instead of polling is a change inside one source, never a second model.
+_Avoid_: Sensor (the self-correction layer's health watcher), connector, listener, webhook
+
+**Trigger event**:
+One observation a Trigger source makes: the Work item it names, that item's new source revision, its **cause**, and its time. A redelivered event names a revision already seen and starts nothing.
+_Avoid_: Webhook, delivery, notification, Daemon event (the client feed)
+
+**Source revision**:
+The value from a source that moves only when its event happens again — a newest comment id, a head SHA, a Granola update time, a Slack `ts`, a scheduled instant. Each Work item carries an observed and a processed source revision and is eligible when the first is ahead and no claim is held, so edits during a Run combine into one next Run. The engine owns revisions; no author writes one.
+_Avoid_: Bare *revision* (a Workflow has a **published revision**), version, watermark (a read position, not the authority)
+
+**Origin record**:
+The engine's record on each artifact it creates — an issue, a pull request, a comment, a Slack post — naming the Work item and Run behind it. Cogwork writes through the person's account, so the account cannot tell Cogwork's writes from the person's; the origin record does. It decides a Trigger event's **cause** and carries lineage across Workflows, and a Slack post Cogwork made never moves the source revision of the conversation it lands in.
+_Avoid_: Bot marker, actor check (the account cannot decide), provenance (the Run Plan's stamp)
+
+### Operations
 
 **Operation**:
-One selectable kind of agent work within a workflow, such as triage, implementation, follow-up, or verify. A run executes one operation.
-_Avoid_: Lifecycle stage, stage, step, task type
+One unit of agent work in a Workflow: each Run executes one Operation, with one Work item's context in and one typed **Operation result** out. An Operation has no kind — any registered Harness runs any Operation — and the one thing that varies is its **permission profile**. Triage, implement, and follow-up are the coding pipeline's Operations.
+_Avoid_: Lifecycle stage (retired), stage, step, task type, Operation kind
 
-**Transition**:
-The routing relationship that selects what follows an operation from its outcome and current external state.
-_Avoid_: Operation, workflow step
+**Permission profile**:
+What an Operation may do to files — `read-only`, the default, or `full` — and so the checkout the engine gives it: a scratch directory when no Workspace applies, the Workspace's own checkout for `read-only`, and a branch worktree for the item for `full`. A `full` Run in the person's own checkout cannot be expressed.
+_Avoid_: Sandbox policy (the Tool, file, and network rules), Operation kind, checkout mode
 
 **Operation definition**:
-The engine-authored contract for one operation: its behavior, defaults, required needs, Operating Instructions, and possible outcomes. A required need that cannot be satisfied — including a required Connection or MCP server that is not ready — is a Run Plan rejection, uniform across kinds. Rejection is recorded with its reason, but it is a fact about the machine's readiness, never a failed attempt: it does not move the item toward exhaustion, and it never parks the item waiting for a human. The item waits in view with the reason and is admitted when the need is ready. A failed attempt is work an agent was given and could not do.
-_Avoid_: Playbook, run plan, operation settings
+An Operation's contract, as its Workflow document states it: its Operating Instructions, permission profile, required needs, **questions**, **agent inputs** and their hints, and whether it answers once or for each finding (**fan-out**). The person — or an agent they work with — authors it; before Workflows the engine authored the coding pipeline's three Definitions, and none remains after the cut-over. A required need names a concrete identity — an MCP server, a Skill, a Connection — with no binding, and requiring never narrows what else a Run receives. The engine adds the needs the Operation's Triggers, actions, and resource references imply; the author never writes those.
+A required need that cannot be satisfied — including a required Connection or MCP server that is not ready — is a Run Plan rejection, uniform across kinds. Rejection is recorded with its reason, but it is a fact about the machine's readiness, never a failed attempt: it does not move the item toward exhaustion, and it never parks the item waiting for a human. The item waits in view with the reason and is admitted when the need is ready. A failed attempt is work an agent was given and could not do.
+_Avoid_: Playbook, run plan, operation settings, Operation kind
 
 **Operation settings**:
-The scoped choices that configure an operation: on / off, Harness, model and its options, permission profile, and the contributions **bound** to the Operation Definition's declared needs. Settings bind; the Definition declares what is required; a Plugin only offers, and can never mark itself required for an Operation it does not own.
-Each may be written three ways — as a **default**, for one **Workflow**, or for one **Operation** — and the most specific of the three wins before Scope is consulted. A default must never outrank a value that names the work.
-An Operation Definition may lock a setting against override. That lock **is** Engine policy, not a second mechanism: it constrains rather than overwrites, and refuses with its source named.
+The person's default Harness, model, and model options for every Operation, held at the Scopes the **Scope** table allows. They fill whatever an Operation's model choice in its document leaves empty and never outrank it: a default must never outrank a value that names the work. No setting names a user-authored Workflow, because its document already holds what the Workflow and Operation levels held; its permission profile, required needs, and on / off have no override. A Plugin only offers, and can never mark itself required for an Operation it does not own.
+Until the cut-over the coding pipeline keeps the older shape: settings for one **Workflow** or one **Operation** beside the **default**, the most specific winning before Scope is consulted; on / off and permission profile as settings; the contributions **bound** to an engine Definition's declared needs; and a Definition's lock against override, which is Engine policy that constrains and refuses with its source named. The cut-over deletes the two levels and binding.
 _Avoid_: Playbook, operation definition, run plan, target (say default / Workflow / Operation)
 
+**Question**:
+What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action needs a Workspace — the Workspace the element is about.
+_Avoid_: Outcome (overloaded — say answer, or Operation result for the whole value), route condition, enum, disposition
+
+**Agent input**:
+A field the agent fills in its result for an output action to use — `issue_title`, `pr_body`, `review_comments`. It is a required string, or a list of one engine-defined shape (a review line comment). It is empty when no matched Transition uses it, and refused at decode when a matched Transition needs it and it is empty. Its **hint** is the author's guidance for it, one per field, so two actions that share a field share one value and one hint.
+_Avoid_: Output field, template variable, parameter (the author sets that)
+
+**Fan-out**:
+An Operation that answers *for each* finding instead of *once*. Its result is a list of **elements**, up to an engine cap, each with its own summary, answers, and agent inputs; each element becomes a child Work item that the engine routes by itself, and an empty list means there is nothing to do. The engine does the split; the author writes only the cardinality.
+_Avoid_: Split, map, batch, loop
+
+**Transition**:
+What follows one combination of an Operation's answers: the **output actions** to perform and at most one **hand-off**. A Transition is identified by the answers it matches, and the engine owns the routing. Every combination must reach a Transition that does something — *Stop* is how an author says "nothing" — or the document cannot be published; when several Transitions match, their actions join, and together they may name only one hand-off. A failed Run follows the engine's own failure path — retry, then exhaustion, then a park — on which an author cannot route yet.
+_Avoid_: Route (the prototype's word), edge, branch, workflow step, condition (a Trigger entry kind), Operation
+
+**Hand-off**:
+A Transition passing its Work item to another Operation of the same Workflow. A Transition has at most one, because a Work item holds one Claim; the next Operation reads the item again at its own admission and also receives the previous Operation's result. An Operation never hands off to itself, and every hand-off is a **hop**.
+_Avoid_: Route, next step, *hand off to a person* (the older sense — say **park**), Trigger (the other way to start an Operation, through an artifact)
+
+**Output action**:
+One write a Workflow makes on a shared system — create an issue, open a pull request, post a review, reply in Slack, add a label — named on a Transition by its action entry and parameter values. The engine performs every output action; an agent never writes to a shared system itself. Each acts through the person's **Connection** for its app, so a Workflow acts as the person, within what the person published.
+_Avoid_: Tool (an agent calls that during a Run), side effect, step
+
+**Action plan**:
+The frozen, typed list of writes that one element's matched Transitions produce, recorded before the first write: each step's action entry, parameters, agent inputs, target, and write key. The engine runs it in a fixed order — approval, then writes in document order, then *Notify me*, then the hand-off or *Stop* — and a write key makes a repeated step do nothing. A failed write never runs the agent again: a retryable one is tried again later, and a permanent one parks the item with `write-failed`, whose handback runs the rest of the plan.
+_Avoid_: Run Plan (the resolved input of one Run), outbox, script, batch
+
 **Operating instructions**:
-Reusable guidance an agent must follow when performing an operation, resolved separately from the work-specific facts supplied for one run.
+Reusable guidance an agent must follow when performing an operation, resolved separately from the work-specific facts supplied for one run. For a Workflow Operation they are the **Operating-instructions package** it names, if any, and its inline instruction, with the engine's short framing and the Operation's questions and hints in the same layer — last and highest, above every Rule.
 _Avoid_: Skill, playbook skill, prompt, work context
 
 **Work context**:
-The work-specific facts supplied to a run, such as a work item's body and comments or a pull request's checks and reviews.
+The work-specific facts supplied to a run, in one frozen shape for each item kind: an issue's body and comments; a pull request's description, review comments, checks, and changed files, but never its diff; a Granola transcript; a Slack message or conversation with its thread; a schedule tick's fire times. It also records which Trigger fired and when, and the artifacts this item's lineage already created. After a hand-off, the next Operation gets the item read again plus the previous Operation's result. No source has options: one shape per kind.
 **The engine supplies them; the agent never fetches its own brief.** The work item's prose — and, for follow-up, its pull request's description and review comments — is read once, at admission, and frozen into the Run Plan, so a Run starts with its brief and a tracker MCP server is at most optional context. A steer posted mid-Run reaches the next round, not this one. See ADR 0030.
 _Avoid_: Operating instructions, prompt template, workflow settings
 
@@ -234,16 +342,24 @@ _Avoid_: Link, attachment, design spec, conditional need
 The relationship is:
 
 ```text
-Workflow
-├── Operations and transitions
-│   └── Operation
-│       ├── Operation Definition
-│       │   ├── Operating Instructions
-│       │   └── required needs
-│       └── Operation Settings
-│           └── bound contributions
-│
-└── selected Operation + Work Context
+Workflow                         (id and on / off live outside the document)
+└── Workflow document            (working copy → published revision)
+    ├── Workspace selection
+    ├── Triggers
+    │   └── Trigger entry + parameters → start Operation
+    └── Operations
+        └── Operation
+            ├── Operation Definition
+            │   ├── Operating Instructions
+            │   ├── permission profile
+            │   ├── required needs
+            │   └── questions, agent inputs, cardinality
+            ├── model choice     (empty parts filled by Operation Settings)
+            └── Transitions      (the answers each matches)
+                ├── output actions
+                └── hand-off     (at most one)
+
+Trigger event → Work item → selected Operation + Work Context
     → Run Plan
       ├── Harness Adapter
       ├── Instructions        (Operating Instructions + resolved Rules)
@@ -260,6 +376,7 @@ Workflow
       ├── Connections
       └── Provenance
     → Run
+    → Operation result → Action plan → output actions
 ```
 
 **Priority**:
@@ -268,7 +385,7 @@ For GitHub, `issueTracker.priority.field` is the stable numeric ID of an organiz
 _Avoid_: Operation priority (that's the fixed operation order), severity, weight, rank (alone — `priorityRank` is the ordering, priority is the value)
 
 **Triage role**:
-A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; operations drive execution.
+A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; operations drive execution. At the cut-over roles become label values the coding pipeline's Transitions add and its Triggers match, and the engine stops reading them.
 _Avoid_: Status, state, label (when you mean the role's meaning)
 
 **Requirements digest**:
@@ -285,12 +402,39 @@ _Avoid_: Depends-on (the inverse framing); needs-info / ready-for-human (those a
 
 **Needs-human reason**:
 Why triage parked an item for a person: `needs-info` (waiting on the reporter) or `ready-for-human` (needs a human implementer). A needs-human item is neither eligible, claimed, nor blocked. Where a role parks it, a person clears it by changing the role; where a **failure counter** parks it — exhaustion, stall, or crash loop — changing the role is not enough, and the person **hands the item back**.
-_Avoid_: Block reason (blocking now means open dependencies), error, failure.
+The fixed pipeline's set. In a Workflow the **park reason** replaces it: `needs-info` and `ready-for-human` become labels the coding pipeline adds beside *Hand to me*, and a handback no longer takes a role.
+_Avoid_: Block reason (blocking now means open dependencies), error, failure, park reason (the Workflow set).
+
+### Human touchpoints
+
+**Human touchpoint**:
+A point where a Workflow reaches the person instead of a shared system: the Cogwork action entries *Notify me*, *Wait for my approval*, and *Hand to me*, and the parks the engine makes by itself. An author routes to them like any output action, and every client shows them on the **Board**. Human gates are the author's choice; the engine adds no approval gate of its own.
+_Avoid_: Human-in-the-loop step, checkpoint, gate (the engine has no approval guard)
+
+**Park**:
+The engine holding a Work item for the person, with a **park reason**, until a person acts: approves, rejects, chooses an answer, or hands it back. Any client may send those commands as the Principal; each names what it acts on — a plan digest, a parked attempt — and refuses when that is no longer current. A Workflow Run never gets them as Tools.
+_Avoid_: Needs-human (the fixed pipeline's narrower set), blocked (open dependencies), pause, hold
+
+**Park reason**:
+Why a Work item is parked, as a tagged set: `stuck`, `exhausted`, `hop-cap`, `missing-operation` (a hand-off to an Operation the current published revision lacks), `write-failed`, `no-workspace-recognized`, `awaiting-approval`, and `handed-to-you` (the *Hand to me* action). `stuck`, `exhausted`, and `hop-cap` are failures; `awaiting-approval`, `no-workspace-recognized`, and `handed-to-you` are not, and move no failure counter.
+_Avoid_: Needs-human reason (its two values become labels a Workflow adds), halt reason, error
+
+**Approval**:
+A person's consent to one frozen action plan, named by the plan's digest. *Wait for my approval* on any matched Transition holds the element's whole plan behind it. The person approves (the plan runs verbatim), edits agent-input text and approves the new digest, rejects (as *Stop*), or hands back with a note; a new source revision withdraws the plan and admits the item again.
+_Avoid_: Approve (the fixed pipeline's triage button, which **Choose an answer** replaces), review (a pull request review is an output action), confirmation
+
+**Choose an answer**:
+The command a person uses on a `handed-to-you` park: they choose the parked element's answers and write any empty agent input the matched Transitions need, and the engine builds and runs the plan as if the agent had answered. It names the parked attempt and refuses when that attempt is not current.
+_Avoid_: Approve (that names a plan, not an answer), reclassify
+
+**Notification**:
+The record *Notify me* makes of one element — its summary, the item, the matched answers, and the artifacts its plan created — kept on the Board until dismissed. It does not park the item, and it lives in the disposable Run ledger. The desktop may also raise it as an OS notification; the daemon never does.
+_Avoid_: Alert, park, Daemon event (the client feed)
 
 ### Coordination
 
 **Claim**:
-A coordination record marking an item as being worked: `by`, `claimedAtMillis`, and an optional operation. Persisted onto the issue tracker (a label plus a marker), so it survives a daemon restart.
+A coordination record marking an item as being worked: `by`, `claimedAtMillis`, an optional operation, and its **lineage**. Persisted in the item's one coordination authority — onto the issue tracker (a label plus a marker) for a tracker item, in the Control store for an engine-minted one — so it survives a daemon restart.
 _Avoid_: Lock, lease, reservation
 
 **Refused claim**:
@@ -298,17 +442,26 @@ A claim the issue tracker will not accept — a write the credential is not perm
 _Avoid_: Contended claim, stale claim (one we release), exhausted (a run that gave up after trying)
 
 **Attempt record**:
-A coordination record of one finished operation attempt on an item: its operation, outcome (`succeeded` / `failed` / `abandoned`), and time. Persisted on the issue tracker.
+A coordination record of one finished operation attempt on an item: its Operation — keyed by Workflow and Operation, not by lifecycle stage — its outcome (`succeeded` / `failed` / `abandoned`), its time, and its **lineage**. Persisted in the item's coordination authority, as a **Claim** is.
 _Avoid_: Run — a run is the local execution; an attempt is the durable outcome
 
 **Handback record**:
-A coordination record of a person returning a parked item to the control plane: `by` and `atMillis`. Persisted on the issue tracker. The three failure counters — exhaustion, stall, and crash loop — count only what happened after the newest handback, so a handback discounts an item's failure history without erasing it. The inverse of a hand-off: the control plane hands an item off to a person when it gives up, and a person hands it back. A second handback moves the line forward.
+A coordination record of a person returning a parked item to the control plane: `by` and `atMillis`. Persisted in the item's coordination authority, as a **Claim** is. The failure counters — exhaustion, stall, crash loop, and the **hop** cap — count only what happened after the newest handback, so a handback discounts an item's failure history without erasing it. The inverse of a **park**: the control plane parks an item for a person when it gives up, and a person hands it back. A second handback moves the line forward.
+For a Workflow item a handback resumes the Operation that parked — or, after a `write-failed` park, runs the rest of the action plan — and the resumed Run receives the person's note when the handback carries one.
 _Avoid_: Retry (the control plane's own automatic re-attempt of a *retryable* failure — a handback is a person acting, not the engine), reset, unpark, pardon
+
+**Lineage**:
+The chain of Runs that one person's act or one source event started: a root, and for each Claim and Attempt record its parent, held in the item's own coordination authority. A hand-off, a fan-out child, and an event whose **cause** is Cogwork's own write keep the lineage; an event a person caused, a schedule tick, and a sweep start a new root.
+_Avoid_: Trace, thread, history, Session (one Harness conversation)
+
+**Hop**:
+One step that extends a lineage — a hand-off, a fan-out child, a Workflow start that inherits a lineage, or a Run admitted on a source revision the lineage itself caused, such as a follow-up push that CI then fails. The **hop cap** for each lineage is engine policy and a failure counter: reaching it parks the item with `hop-cap`.
+_Avoid_: Cycle, depth, round
 
 **Round summary**:
 What a follow-up round tells the reviewer, posted by the engine to the pull request under the actor identity with the coordination marker attached. The one control-plane write that lands on the pull request rather than the issue tracker; the marker is what keeps it out of the human-feedback signal, and it stays the engine's to attach.
 **A round speaks to answer a question, never to narrate a state.** A round that pushed always posts. A round that pushed nothing returns a `speak` decision and posts only when it declines or answers something a person or a trusted bot asked — a nit it judged wrong, a finding it judged a false positive — so the asker learns why and does not raise it twice. A round that nobody asked anything of stays silent. Its summary still reaches the coordination comment either way, so a silent round is traceable.
-_Avoid_: Round comment, agent note (that's free-text operator prose), coordination detail (that lives on the tracker and carries hand-off explanations)
+_Avoid_: Round comment, agent note (that's free-text operator prose), coordination detail (that lives on the tracker and carries the reason an item parked)
 
 ### Credentials
 
@@ -326,11 +479,11 @@ _Avoid_: Run manifest, resolved stage, harness request, operation settings
 
 **Run**:
 One execution of one run plan by one harness, captured with its events, outcome, usage, and timings. The run records what was projected and observed without changing its plan.
-A Run is `declined` when the Harness finished its work but the Engine refused the requested pull request because the pushed head was missing or not ahead of its base. The decline is an Engine outcome, records a failed coordination attempt, and releases the claim for normal retry or hand-off.
+A Run is `declined` when the Harness finished its work but the Engine refused the requested pull request because the pushed head was missing or not ahead of its base. The decline is an Engine outcome, records a failed coordination attempt, and releases the claim for normal retry or a park. In a Workflow the same refusal is the precondition of *Open a pull request*, checked when the engine builds the action plan.
 _Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
-The daemon's local store of runs, their immutable Run Plans, and their events — in-memory, or a region of the Control store on disk. A Run and its Plan are accepted together before dispatch, keyed by Run ID. It also holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because the issue tracker stays authoritative for coordination.
+The daemon's local store of runs, their immutable Run Plans, and their events — in-memory, or a region of the Control store on disk. A Run and its Plan are accepted together before dispatch, keyed by Run ID. It also holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because each item's coordination authority — the issue tracker, or the Control store outside the ledger's region — stays authoritative.
 _Avoid_: Source of truth, database, backlog, Control store (the ledger is one disposable region of it). Not the GitHub coordination comment, whose anchor marker is also called a "ledger".
 
 **Run event**:
@@ -366,7 +519,7 @@ A run selecting a different harness from the branch's latest session. It begins 
 _Avoid_: Session migration, session transfer, cross-harness resume
 
 **Exhausted / stalled / stuck**:
-The three failure outcomes — how the control plane stops spending tokens on an item after it has already tried. A run is *exhausted* when it gives up after too many failed attempts or a non-retryable error: the terminal `RunStatus`, which escalates the item to `ready-for-human`. A follow-up is *stalled* when it hits the no-progress limit without the checks going green or a human replying. An agent is *stuck* when its own output reports it cannot proceed — a non-retryable cause that feeds exhaustion. All three are distinct from *blocked*, which is about unresolved dependencies before any attempt.
+The three failure outcomes — how the control plane stops spending tokens on an item after it has already tried. A run is *exhausted* when it gives up after too many failed attempts — counted for each Operation on each item — or a non-retryable error: the terminal `RunStatus`, which escalates the item to `ready-for-human` in the fixed pipeline and parks it as `exhausted` in a Workflow. A follow-up is *stalled* when it hits the no-progress limit without the checks going green or a human replying; the cut-over deletes the limit and *stalled* with it, and the **hop** cap bounds the loop instead. An agent is *stuck* when its own output reports it cannot proceed — a non-retryable cause that feeds exhaustion. Every Operation can report it: the engine adds the flag to every derived result, the author never writes it, and it parks the item at once with the result's summary as the reason. All three are distinct from *blocked*, which is about unresolved dependencies before any attempt.
 _Avoid_: Blocked (dependencies now), failed (the single, still-retryable attempt status).
 
 **Interrupted / crashed**:
@@ -435,11 +588,12 @@ The projection of an accepted Run Plan handed to one Harness: checkout path, wor
 _Avoid_: Run plan (the complete engine-owned input), prompt, job
 
 **Operation result**:
-The tagged, Effect-Schema-defined value an operation returns through the harness stream. The shared kernel owns each operation's schema: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; implement returns `opened-pr`, `stuck`, or `ready-for-pr`, whose pull request title and body the Engine uses after its gate passes; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary, and a `noop` also chooses whether to speak. Prose remains ordinary streamed output and is never parsed as an operation result.
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action needs one, a Workspace. A result that does not decode is a retryable failed attempt, and the next attempt sees the decode issues.
+Until the cut-over the coding pipeline keeps hand-written schemas, which the shared kernel owns: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; implement returns `opened-pr`, `stuck`, or `ready-for-pr`, whose pull request title and body the Engine uses after its gate passes; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary, and a `noop` also chooses whether to speak. Prose remains ordinary streamed output and is never parsed as an operation result.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Operating-instructions package**:
-The Operation-owned instruction document and supporting resources carrying its mandatory Operating Instructions. It is supplied explicitly to every Harness through an instruction-specific content and resource path; `SKILL.md` is reserved for real Skills. The engine ships the default package, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
+The Operation-owned instruction document and supporting resources carrying its mandatory Operating Instructions. It is supplied explicitly to every Harness through an instruction-specific content and resource path; `SKILL.md` is reserved for real Skills. The engine ships the default packages, an Operation in a Workflow document names one by name, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Harness event**:
@@ -457,12 +611,12 @@ The snapshot the daemon reports over RPC: health, uptime, scheduler stats, per-w
 _Avoid_: State, health check
 
 **Actionable / claimed / blocked / needs-human / ready-to-merge item**:
-The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, blocked on open dependencies, parked for a person, and an approved pull request waiting for a person to merge it. Narrowed views of a work item, not new entities. The first four carry an optional **PR summary** when the source control provider resolved a pull request for the item; an item with no PR omits it. A ready-to-merge item carries a required PR summary and is neither eligible, claimed, blocked, nor needs-human. A needs-human item also carries the halt reason and, when triage self-halted it, the **inline triage proposal** — the agent's proposal/question text, re-derived from the tracker on every reconcile so a surface can render the question in place without reading the comment thread. It is `null` when nothing self-halted the item (for example, an exhaustion hand-off).
+The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, blocked on open dependencies, parked for a person, and an approved pull request waiting for a person to merge it. Narrowed views of a work item, not new entities. The first four carry an optional **PR summary** when the source control provider resolved a pull request for the item; an item with no PR omits it. A ready-to-merge item carries a required PR summary and is neither eligible, claimed, blocked, nor needs-human. A needs-human item also carries the halt reason and, when triage self-halted it, the **inline triage proposal** — the agent's proposal/question text, re-derived from the tracker on every reconcile so a surface can render the question in place without reading the comment thread. It is `null` when nothing self-halted the item (for example, an exhaustion park).
 _Avoid_: Reusing "work item" for these narrowed views
 
 **Inline triage proposal**:
 The agent's triage proposal/question text carried on a self-halted item's read model, lifted off the separate conversational tracker comment that still holds the human-facing copy. Present only when triage parked the item; re-derived from the tracker on reconcile, so it survives a daemon restart with no local state.
-_Avoid_: Coordination detail (that carries hand-off explanations, not the proposal), proposal comment (the tracker comment this is lifted from)
+_Avoid_: Coordination detail (that carries the reason an item parked, not the proposal), proposal comment (the tracker comment this is lifted from)
 
 **PR summary**:
 The read-model view of a classified item's pull request, resolved by the source control provider from the item's link key: the PR number, a deep-link URL, its checks and review status, its mergeable / base-divergence signal, and a wait-time signal (the PR's last-activity instant, from which a consumer reads how long it has been waiting). Present only on items that have a PR. Shaped richly enough to host a later in-app review panel; the review and merge actions themselves stay on GitHub, reachable through the URL.
