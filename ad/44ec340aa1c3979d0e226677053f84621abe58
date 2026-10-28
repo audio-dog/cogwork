@@ -1,0 +1,23 @@
+packages/engine/src/executor.test.ts
+  s_64831d19921b1b::t_81699b7eccb49d 749-756,1445-1451,1453
+packages/engine/src/replay-harness.ts
+  s_64831d19921b1b::t_81699b7eccb49d 10-16,21-24,389
+packages/engine/src/replay-harness.test.ts
+  s_64831d19921b1b::t_81699b7eccb49d 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ad44ec340aa1c3979d0e226677053f84621abe58",
+  "prompts": {},
+  "sessions": {
+    "s_64831d19921b1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180da-be7c-7b13-97e4-2d89cf85a6f8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
