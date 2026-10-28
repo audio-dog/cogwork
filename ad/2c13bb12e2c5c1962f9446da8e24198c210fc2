@@ -1,0 +1,47 @@
+packages/contracts/src/ag-ui.test.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 110-127
+docs/agents/product.md
+  s_64831d19921b1b::t_9aa0a195293d3f 104-107,127-128
+docs/adr/0007-autonomous-with-override-triage-self-halts.md
+  s_64831d19921b1b::t_9aa0a195293d3f 6-10
+docs/agents/technical-disposition.md
+  s_64831d19921b1b::t_9aa0a195293d3f 203-206,290-297
+packages/engine/src/executor.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 19,547-552,554,801-802,808
+packages/engine/src/provider-runner.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 1-8,56,105-109,211-212,250
+packages/engine/src/run-preparation.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 17
+packages/engine/src/provider-runner.test.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 216,317,331-347
+packages/engine/src/interrupt-store.test.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 4,86-94
+  s_64831d19921b1b::t_d8364f80cc5a9e 95-96
+docs/adr/0030-work-context-carries-the-work-item-prose.md
+  s_64831d19921b1b::t_9aa0a195293d3f 6-9
+packages/engine/src/playbook.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 8,53,88,143,155,167
+  s_64831d19921b1b::t_733f251f264a84 12
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_64831d19921b1b::t_9aa0a195293d3f 3-7
+packages/engine/src/run-plan.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 58,691-692,925,955
+packages/contracts/src/triage.ts
+  s_64831d19921b1b::t_9aa0a195293d3f 201,205-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ad2c13bb12e2c5c1962f9446da8e24198c210fc2",
+  "prompts": {},
+  "sessions": {
+    "s_64831d19921b1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180da-be7c-7b13-97e4-2d89cf85a6f8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
