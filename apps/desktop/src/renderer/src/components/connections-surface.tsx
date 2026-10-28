@@ -396,7 +396,7 @@ function GranolaConnectionActions({ item }: { readonly item: ConnectionItem }) {
   const account = item.connection?.account;
   return (
     <div className="flex items-center gap-2">
-      <GranolaLoginDialog item={item} />
+      <GranolaLoginDialog key={account} item={item} />
       <ConnectionEstablishmentDialog
         key={account}
         system="granola"
