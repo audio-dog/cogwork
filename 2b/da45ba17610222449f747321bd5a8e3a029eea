@@ -1,0 +1,52 @@
+packages/engine/src/github/trigger-source.test.ts
+  s_f4abcd25549e05::t_ee0920e31d1791 156
+  s_f4abcd25549e05::t_14ea4c63a2e07d 40,219
+  s_f4abcd25549e05::t_f86ff699e5b6bc 1-4,6-36,38-39,41-70,107-110,112-155,157,166-174,176-180,182-200,202-203,205-209,211-213,215,235-236
+  s_f4abcd25549e05::t_2785ad24b0c960 181,216-218,220
+  s_f4abcd25549e05::t_b08297dc17cacc 5
+  s_f4abcd25549e05::t_c62a75887f8baa 37,111,175,204
+  s_f4abcd25549e05::t_472fc2129b2e0b 71-106,201,210,214,221-227,229,231,234
+  s_f4abcd25549e05::t_5f615faefcb30b 228,230,232-233
+  s_f4abcd25549e05::t_e0014eeb846236 158-165
+packages/engine/src/github/provider.ts
+  s_f4abcd25549e05::t_42f3c843b3f3a2 6
+  s_f4abcd25549e05::t_80777c1acb144e 33
+  s_f4abcd25549e05::t_6dec3a8e52f594 4,9-10,25,131-134,270,299-309
+  s_f4abcd25549e05::t_91cb0668134dff 1,26-31
+packages/engine/src/github/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_f81b9dbfbb538d 110-111,116
+  s_f4abcd25549e05::t_0aea65b2525ac3 112-115
+  s_f4abcd25549e05::t_57200f84a42548 18-19,63-109,117-196,222-228
+  s_f4abcd25549e05::t_4dba2d48b87ba9 23-24
+  s_f4abcd25549e05::t_53c271a43fe209 36
+  s_f4abcd25549e05::t_f0e48a47f5c502 2-17,20-22,25-35,37-62,197-221,229-232
+  s_f4abcd25549e05::t_cfdea4bee40c7f 1
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_f4abcd25549e05::t_91cb0668134dff 28
+  s_f4abcd25549e05::t_0aea65b2525ac3 79,97,107,119,207
+  s_f4abcd25549e05::t_b6158024b7f905 331-337
+  s_f4abcd25549e05::t_cfc2ff32370cb2 18-26
+  s_f4abcd25549e05::t_0ba6667d435af8 190
+  s_f4abcd25549e05::t_083e5d76828a78 142-147
+  s_f4abcd25549e05::t_38bbc7255db34b 150-185,187-189,191-206,209-306
+  s_f4abcd25549e05::t_3614b9896041e0 186
+  s_f4abcd25549e05::t_1a56ebc0e6f24f 2-17,27,29-78,80-96,98-106,108-118,120-141,148-149,307-330,338-340
+  s_f4abcd25549e05::t_84b73d7206ccd8 1
+  s_f4abcd25549e05::t_323dad2c552773 208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2bda45ba17610222449f747321bd5a8e3a029eea",
+  "prompts": {},
+  "sessions": {
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
