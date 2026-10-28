@@ -1,0 +1,22 @@
+packages/contracts/src/workflow.ts
+  s_5d25df11763a72::t_0a62cde1405713 679,685,707
+packages/contracts/src/workflow.test.ts
+  s_5d25df11763a72::t_342527a3eea03f 3,19
+  s_5d25df11763a72::t_295ba3316b3368 194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "88e07562cd500def5ea7023e059ce52fcea116a9",
+  "prompts": {},
+  "sessions": {
+    "s_5d25df11763a72": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180c6-e4e6-7001-9655-8376eb62863e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
