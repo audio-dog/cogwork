@@ -11,9 +11,11 @@ import {
   WorkItemId,
   WorkspaceConfig,
 } from "@cogwork/contracts";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -202,13 +204,17 @@ const testLayer = (
   worktree: WorktreeDoubleConfig = {},
   profile?: RunPlanPolicyProfile,
 ): Layer.Layer<
-  OperationResolution.OperationResolution | RunLedger.RunLedger | WorktreeManager | WorktreeCalls
+  | FileSystem.FileSystem
+  | OperationResolution.OperationResolution
+  | RunLedger.RunLedger
+  | WorktreeManager
+  | WorktreeCalls
 > => {
   const engineServices = engineTestLayerWithOperationResolution({
     harness,
     operationSettings: operationSettingsFor(harness, profile),
   });
-  return Layer.merge(engineServices, worktreeLayer(worktree));
+  return Layer.mergeAll(engineServices, worktreeLayer(worktree), FileSystem.layerNoop({}));
 };
 
 const session = (id: string, harness: HarnessName = cursor) =>
@@ -288,6 +294,19 @@ const divergedWorktree = new WorktreeError({
 });
 
 describe("RunPreparation.prepare", () => {
+  it.effect("uses an empty scratch checkout without a Workspace", () =>
+    Effect.gen(function* () {
+      const item = implementItem(115);
+      const preparation = yield* RunPreparation.make;
+      const checkout = yield* preparation.prepareCheckout(null, item, operationFor(item));
+      const fs = yield* FileSystem.FileSystem;
+
+      assert.isNull(checkout.branch);
+      assert.deepStrictEqual(yield* fs.readDirectory(checkout.path), []);
+      assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), []);
+    }).pipe(Effect.provide(Layer.merge(testLayer(), NodeFileSystem.layer))),
+  );
+
   it.layer(testLayer())((it) => {
     it.effect("resumes the branch's persisted Session", () => {
       const item = implementItem(101);
@@ -434,8 +453,8 @@ describe("RunPreparation.prepare", () => {
     });
   });
 
-  it.layer(testLayer(cursor, {}, "read-only"))((it) => {
-    it.effect("uses the workspace checkout for a read-only implement Operation", () => {
+  it.layer(testLayer())((it) => {
+    it.effect("keeps the inspected read-only profile through preparation", () => {
       const item = implementItem(114);
       return Effect.gen(function* () {
         const prepared = yield* prepare(item, cursor, "read-only");

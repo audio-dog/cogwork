@@ -13,6 +13,7 @@ import * as Schema from "effect/Schema";
 import type { AdmittedWork } from "./classify";
 import * as OperationResolution from "./operation-resolution";
 import type { RegisteredWorkspace } from "./projector";
+import { resolveRunPlanStage } from "./run-plan";
 import { engineTestLayerWithOperationResolution } from "./testing/engine-test-layer";
 
 const harness = Schema.decodeSync(HarnessName)("cursor");
@@ -75,6 +76,21 @@ const item: AdmittedWork = {
 
 const credential = Redacted.make("tracker-token");
 
+const operationFor = (
+  candidate: AdmittedWork,
+  policyProfiles: ReadonlyArray<"read-only" | "full"> = ["read-only", "full"],
+) => {
+  const operation = resolveRunPlanStage(
+    workspace.config,
+    candidate.stage,
+    operationSettings,
+    [],
+    policyProfiles,
+  );
+  if (!operation) return assert.fail(`expected ${candidate.stage} operation`);
+  return operation;
+};
+
 const testLayer = (
   settings = operationSettings,
   policyProfiles: ReadonlyArray<"read-only" | "full"> = ["read-only", "full"],
@@ -109,10 +125,12 @@ const testLayer = (
 const candidateFacts = (
   session: OperationResolution.CandidateSessionFacts["session"] = null,
   candidate: AdmittedWork = item,
+  policyProfiles?: ReadonlyArray<"read-only" | "full">,
 ) => ({
   runId,
   workspace,
   item: candidate,
+  operation: operationFor(candidate, policyProfiles),
   observation: { generation: 12, observedAtMillis: 1000 },
   checkoutPath: "/worktrees/491",
   continuationPrompt: "Continue implementation",
@@ -135,7 +153,7 @@ describe("OperationResolution", () => {
       Effect.gen(function* () {
         const resolution = yield* OperationResolution.OperationResolution;
         const triageItem = { ...item, stage: "triage" as const };
-        const accepted = yield* resolution.resolve(candidateFacts(null, triageItem));
+        const accepted = yield* resolution.resolve(candidateFacts(null, triageItem, ["full"]));
 
         assert.strictEqual(accepted.plan.harness.profile, "full");
       }),

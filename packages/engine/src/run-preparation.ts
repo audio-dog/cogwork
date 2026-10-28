@@ -10,6 +10,7 @@ import type {
 } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import type { AdmittedWork } from "./classify";
 import type { HarnessRequest } from "./harness";
 import * as OperationResolution from "./operation-resolution";
@@ -21,6 +22,7 @@ import { RunLedger } from "./run-ledger";
 import type { ResolvedOperation } from "./run-plan";
 import { SessionChoice } from "./session-choice";
 import { branchName, WorktreeManager } from "./worktree";
+import { WorktreeFsError } from "./worktree-fs";
 
 class PreparationFailure extends Data.TaggedError("PreparationFailure")<{
   readonly error: PrepareError | OperationResolution.OperationUnavailable;
@@ -54,21 +56,24 @@ interface BranchSessionFacts {
 
 type PrepareCandidateInput = Omit<PrepareRunInput, "item"> & {
   readonly item: AdmittedWork;
-  readonly branch: BranchName | null;
   readonly replay: boolean;
 };
 
 const isReplayHarness = (harness: HarnessName) => harness === "replay";
 
 const resumeWorktreeOptions = (item: AdmittedWork) => {
-  if (item.followUpBranch) {
+  if (item.stage === "follow-up" && item.followUpBranch) {
     return { resume: true, branch: item.followUpBranch };
   }
   return { resume: true };
 };
 
-const branchFor = (item: AdmittedWork, operation: ResolvedOperation) => {
-  if (operation.profile === "read-only") return null;
+const branchFor = (
+  workspace: RegisteredWorkspace | null,
+  item: AdmittedWork,
+  operation: ResolvedOperation,
+) => {
+  if (!workspace || operation.profile === "read-only") return null;
   return item.followUpBranch ?? branchName(item);
 };
 
@@ -95,6 +100,7 @@ const logSessionChoice = Effect.fn("RunPreparation.logSessionChoice")(function* 
 });
 
 export const make = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
   const ledger = yield* RunLedger;
   const operationResolution = yield* OperationResolution.OperationResolution;
   const worktrees = yield* WorktreeManager;
@@ -114,18 +120,33 @@ export const make = Effect.gen(function* () {
     } satisfies BranchSessionFacts;
   });
 
-  const ensureCheckout = Effect.fn("RunPreparation.ensureCheckout")(function* (
-    workspace: RegisteredWorkspace,
+  const prepareCheckout = Effect.fn("RunPreparation.prepareCheckout")(function* (
+    workspace: RegisteredWorkspace | null,
     item: AdmittedWork,
-    branch: BranchName | null,
-    profile: ResolvedOperation["profile"],
+    operation: ResolvedOperation,
   ) {
-    if (profile === "read-only") {
-      return { path: workspace.config.checkoutPath, created: false };
+    const branch = branchFor(workspace, item, operation);
+    if (!workspace) {
+      const path = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-run-" }).pipe(
+        Effect.mapError(
+          (error) =>
+            new WorktreeFsError({
+              operation: "make scratch checkout",
+              message: error.message,
+              retryable: true,
+            }),
+        ),
+      );
+      return { branch, path, created: true };
     }
-    if (item.resume?.session) return yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    if (item.followUpBranch && branch) return yield* worktrees.ensure(workspace, item, { branch });
-    return yield* worktrees.ensure(workspace, item);
+    if (operation.profile === "read-only") {
+      return { branch, path: workspace.config.checkoutPath, created: false };
+    }
+    const hasPullRequestBranch = item.followUpBranch !== undefined && branch !== null;
+    const freshOptions = hasPullRequestBranch ? { branch } : undefined;
+    const options = item.resume?.session ? resumeWorktreeOptions(item) : freshOptions;
+    const checkout = yield* worktrees.ensure(workspace, item, options);
+    return { ...checkout, branch };
   });
 
   const candidateSession = Effect.fn("RunPreparation.candidateSession")(function* (
@@ -144,22 +165,23 @@ export const make = Effect.gen(function* () {
     operation,
     startedAtMillis,
     observation,
-    branch,
     replay,
   }: PrepareCandidateInput) {
-    const checkout = yield* ensureCheckout(workspace, item, branch, operation.profile);
+    const checkout = yield* prepareCheckout(workspace, item, operation);
+    const { branch } = checkout;
     const facts = yield* branchSessionFacts(workspace, branch);
     const storedSession = yield* candidateSession(item, facts);
-    const session = item.followUp && replay ? null : storedSession;
+    const session = item.stage === "follow-up" && replay ? null : storedSession;
     const fullPrompt = buildOperationPrompt(operation.stage, item, workspace.config.linearHistory);
     const continuationPrompt =
       item.resume?.session && !replay ? buildContinuationNudge(checkout.path) : fullPrompt;
-    const applyResumePolicy = Boolean(item.followUp) && !item.resume?.session && !replay;
+    const applyResumePolicy = item.stage === "follow-up" && !item.resume?.session && !replay;
     const worktreeRecreated = item.resume?.session || applyResumePolicy ? checkout.created : false;
     const accepted = yield* operationResolution.resolve({
       runId,
       workspace,
       item,
+      operation,
       observation,
       checkoutPath: checkout.path,
       continuationPrompt,
@@ -177,8 +199,7 @@ export const make = Effect.gen(function* () {
         applyResumePolicy,
       },
     });
-    const selectedBranch = branchFor(item, accepted.resolved);
-    yield* logSessionChoice(session, accepted.resolved, selectedBranch, accepted.sessionChoice);
+    yield* logSessionChoice(session, accepted.resolved, branch, accepted.sessionChoice);
     return {
       request: {
         plan: accepted.plan,
@@ -189,7 +210,7 @@ export const make = Effect.gen(function* () {
       session: accepted.session,
       operation: accepted.resolved,
       outcomeTable: accepted.resolved.stage.outcomeTable,
-      branch: selectedBranch,
+      branch,
       checkoutPath: checkout.path,
       failureSession: storedSession,
     } satisfies PreparedRun;
@@ -197,9 +218,9 @@ export const make = Effect.gen(function* () {
 
   const prepare = Effect.fn("RunPreparation.prepare")(function* (input: PrepareRunInput) {
     const { item } = input;
-    const branch = branchFor(item, input.operation);
+    const branch = branchFor(input.workspace, item, input.operation);
     const replay = isReplayHarness(input.operation.stage.harness);
-    return yield* prepareCandidate({ ...input, item, branch, replay }).pipe(
+    return yield* prepareCandidate({ ...input, item, replay }).pipe(
       Effect.catch((error) =>
         branchSessionFacts(input.workspace, branch).pipe(
           Effect.flatMap((facts) => candidateSession(item, facts)),
@@ -209,5 +230,5 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  return { prepare };
+  return { prepare, prepareCheckout };
 });
