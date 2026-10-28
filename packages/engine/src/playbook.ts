@@ -4,9 +4,11 @@ import type {
   LifecycleStage,
   McpSkill,
   OperationNeed,
+  StageResultSchemas,
   TriageResultRole,
   WorkspaceConfig,
 } from "@cogwork/contracts";
+import { stageResultSchemas } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import { day } from "./time";
@@ -46,6 +48,7 @@ export interface OperationDefinition<Stage extends LifecycleStage = LifecycleSta
   readonly mcpSkills: ReadonlyArray<McpSkill>;
   readonly needs: ReadonlyArray<OperationNeed>;
   readonly outcomeTable: OperationOutcomeTables[Stage];
+  readonly resultSchema: StageResultSchemas[Stage];
 }
 
 const defaultTriagePrompt = [
@@ -79,6 +82,7 @@ interface StageDefaults<Stage extends LifecycleStage> {
   readonly resumeMaxTokens: number | null;
   readonly needs: ReadonlyArray<OperationNeed>;
   readonly outcomeTable: OperationOutcomeTables[Stage];
+  readonly resultSchema: StageResultSchemas[Stage];
 }
 
 const nonRetryableFailure = OperationOutcome.Failed({
@@ -132,6 +136,7 @@ export const resolveTriage = (config: WorkspaceConfig) =>
     resumeMaxTokens: null,
     needs: [issueTrackerConnectionNeed],
     outcomeTable: operationOutcomeTables.triage,
+    resultSchema: stageResultSchemas.triage,
   });
 
 export const resolveImplement = (config: WorkspaceConfig) =>
@@ -142,6 +147,7 @@ export const resolveImplement = (config: WorkspaceConfig) =>
     resumeMaxTokens: null,
     needs: [issueTrackerConnectionNeed],
     outcomeTable: operationOutcomeTables.implement,
+    resultSchema: stageResultSchemas.implement,
   });
 
 export const resolveFollowUp = (config: WorkspaceConfig) =>
@@ -152,6 +158,7 @@ export const resolveFollowUp = (config: WorkspaceConfig) =>
     resumeMaxTokens: null,
     needs: [issueTrackerConnectionNeed],
     outcomeTable: operationOutcomeTables["follow-up"],
+    resultSchema: stageResultSchemas["follow-up"],
   });
 
 const stageResolvers: {

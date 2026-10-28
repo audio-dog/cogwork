@@ -11,12 +11,12 @@ import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
-  decodeStageResultCompletion,
   FollowUpStageResult,
   ImplementStageResult,
   issueTrackerErrorIsPermanent,
   type LifecycleStage,
   RunId,
+  type StageResultCompletionSchema,
   sessionHandle,
 } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
@@ -543,9 +543,14 @@ export const make = Effect.gen(function* () {
   const outcomeForResult = (table: OperationOutcomeTable, result: string) =>
     table.outcomes.find((outcome) => outcome.result === result) ?? null;
 
-  const decodeOperationOutcome = (stage: LifecycleStage, table: OperationOutcomeTable, acc: RunAccumulator) =>
+  const decodeOperationOutcome = (
+    stage: LifecycleStage,
+    schema: StageResultCompletionSchema,
+    table: OperationOutcomeTable,
+    acc: RunAccumulator,
+  ) =>
     expectSingleStructuredResult(stage, acc).pipe(
-      Effect.flatMap((input) => decodeStageResultCompletion(stage, input)),
+      Effect.flatMap((input) => Schema.decodeUnknownEffect(schema)(input)),
       Effect.mapError((error) =>
         structuredResultError(`invalid structured ${stage} result: ${error.message}`),
       ),
@@ -792,13 +797,14 @@ export const make = Effect.gen(function* () {
     accepted: AcceptedRun,
     acc: RunAccumulator,
   ) {
-    const { outcomeTable, record } = accepted;
+    const { record } = accepted;
+    const { outcomeTable, resultSchema } = accepted.operation.stage;
     const recordCompletionTerminal = (status: "failed" | "succeeded") => {
       if (item.stage !== "triage") return Effect.succeed(null);
       if (status === "failed") return recorder.record(record, failedTerminal);
       return recorder.record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" });
     };
-    return yield* decodeOperationOutcome(item.stage, outcomeTable, acc).pipe(
+    return yield* decodeOperationOutcome(item.stage, resultSchema.completion, outcomeTable, acc).pipe(
       Effect.matchEffect({
         onFailure: (error) =>
           recordCompletionTerminal("failed").pipe(
