@@ -1,0 +1,19 @@
+packages/contracts/src/ag-ui.test.ts
+  s_970f6fa6f3464b::t_c511d6236bdaba 110-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "95cb210ed18c529692147eca49455d1bfea5ccbb",
+  "prompts": {},
+  "sessions": {
+    "s_970f6fa6f3464b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180cc-1ad3-7e41-a588-0e33e33a552f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
