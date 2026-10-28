@@ -13,6 +13,7 @@ export * as Executor from "./executor";
 export * as ExternalHarnessRuntime from "./external-harness-runtime";
 export * as Git from "./git";
 export * as GitHub from "./github";
+export * as Granola from "./granola-login";
 export * as Harness from "./harness";
 export * as IssueTracker from "./issue-tracker";
 export { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";

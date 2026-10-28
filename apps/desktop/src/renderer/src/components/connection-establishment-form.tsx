@@ -104,8 +104,20 @@ function LinearCredentialSources({ id }: { readonly id: string }) {
   );
 }
 
-function CredentialSourceOptions({ id, system }: { readonly id: string; readonly system: ConnectionSystem }) {
-  return system === "github" ? <GitHubCredentialSources id={id} /> : <LinearCredentialSources id={id} />;
+const credentialSources = {
+  github: GitHubCredentialSources,
+  linear: LinearCredentialSources,
+} satisfies Record<Exclude<ConnectionSystem, "granola">, typeof GitHubCredentialSources>;
+
+function CredentialSourceOptions({
+  id,
+  system,
+}: {
+  readonly id: string;
+  readonly system: Exclude<ConnectionSystem, "granola">;
+}) {
+  const Sources = credentialSources[system];
+  return <Sources id={id} />;
 }
 
 function CredentialSourceField({
@@ -115,7 +127,7 @@ function CredentialSourceField({
   onChange,
 }: {
   readonly id: string;
-  readonly system: ConnectionSystem;
+  readonly system: Exclude<ConnectionSystem, "granola">;
   readonly value: CredentialSourceTag;
   readonly onChange: (next: CredentialSourceTag) => void;
 }) {
@@ -183,7 +195,7 @@ export function ConnectionEstablishmentDialog({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <FieldGroup>
-            {system === "linear" && account === undefined ? (
+            {system !== "github" && account === undefined ? (
               <form.Field name="account">
                 {(field) => {
                   const invalid = field.state.meta.isTouched && !field.state.meta.isValid;
@@ -210,16 +222,18 @@ export function ConnectionEstablishmentDialog({
               </form.Field>
             ) : null}
 
-            <form.Field name="source">
-              {(field) => (
-                <CredentialSourceField
-                  id={`${fieldId}-source`}
-                  system={system}
-                  value={field.state.value}
-                  onChange={field.handleChange}
-                />
-              )}
-            </form.Field>
+            {system === "granola" ? null : (
+              <form.Field name="source">
+                {(field) => (
+                  <CredentialSourceField
+                    id={`${fieldId}-source`}
+                    system={system}
+                    value={field.state.value}
+                    onChange={field.handleChange}
+                  />
+                )}
+              </form.Field>
+            )}
 
             <form.Subscribe selector={(state) => state.values.source}>
               {(source) => {

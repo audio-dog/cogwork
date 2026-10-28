@@ -175,6 +175,12 @@ const persistConnectionState = Effect.fn("test.persistConnectionState")((storePa
         status: "established",
       });
       yield* store.revokeConnection(connectionId("linear/acme"));
+      yield* store.establishConnection({
+        id: connectionId("granola/person@example.com"),
+        system: "granola",
+        account: "person@example.com",
+        status: "established",
+      });
     }),
   ),
 );
@@ -695,9 +701,16 @@ layer(NodeServices.layer)((it) => {
       yield* persistConnectionState(storePath);
 
       const reloaded = yield* readControlStore(storePath);
-      assert.strictEqual(reloaded.connections.length, 1);
-      assert.strictEqual(reloaded.connections[0]?.id, "linear/acme");
-      assert.strictEqual(reloaded.connections[0]?.status, "revoked");
+      assert.strictEqual(reloaded.connections.length, 2);
+      assert.deepStrictEqual(
+        reloaded.connections
+          .map(({ id, status }) => ({ id, status }))
+          .sort((left, right) => left.id.localeCompare(right.id)),
+        [
+          { id: "granola/person@example.com", status: "established" },
+          { id: "linear/acme", status: "revoked" },
+        ],
+      );
     }),
   );
 

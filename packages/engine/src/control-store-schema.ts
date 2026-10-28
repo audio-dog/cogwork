@@ -38,7 +38,7 @@ export const connections = sqliteTable(
     status: text("status").notNull(),
   },
   (table) => [
-    check("connections_system", sql`${table.system} IN ('github', 'linear')`),
+    check("connections_system", sql`${table.system} IN ('github', 'linear', 'granola')`),
     check("connections_status", sql`${table.status} IN ('established', 'revoked')`),
   ],
 );

@@ -140,6 +140,75 @@ describe("file-backed credential store", () => {
     ),
   );
 
+  it.effect("keeps OAuth and API key secrets for one Connection", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        const connectionId = connectionIdOf("granola", "person@example.com");
+
+        yield* file.saveConnectionCredential?.({ _tag: "Stored", connectionId });
+        yield* file.saveConnectionCredential?.({
+          _tag: "ApiKey",
+          connectionId,
+          key: Redacted.make("grn_secret"),
+        });
+        yield* file.save({
+          issueTracker: "granola",
+          organization: "person@example.com",
+          actorUserId: "person@example.com",
+          oauthClientId: "granola-client",
+          token: {
+            accessToken: Redacted.make("revoked-token"),
+            refreshToken: Redacted.make("revoked-refresh"),
+            expiresAtMillis: 0,
+            scopes: ["mcp"],
+          },
+        });
+
+        const credentials = yield* file.loadConnectionCredentials ?? Effect.succeed([]);
+        assert.deepStrictEqual(
+          credentials.map((credential) => credential._tag),
+          ["Stored", "ApiKey"],
+        );
+        const store = CredentialStore.make({ stored: file });
+        const credential = yield* store.bearerToken({
+          connectionId,
+          key: connectionId,
+          issueTracker: "granola",
+          organization: "person@example.com",
+          tokenEnv: "GRANOLA_API_KEY",
+          clientCredentials: null,
+          oauthClientId: null,
+        });
+        assert.strictEqual(credential.source, "stored-key");
+        assert.strictEqual(Redacted.value(credential.token), "grn_secret");
+      }),
+    ),
+  );
+
+  it.effect("browser login replaces a Connection's previous source", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        const save = file.saveConnectionCredential;
+        if (!save) return assert.fail("Expected Connection credential persistence");
+        const linearId = connectionIdOf("linear", "acme");
+        const granolaId = connectionIdOf("granola", "person@example.com");
+
+        yield* Effect.forEach([linearId, granolaId], (connectionId) =>
+          save({ _tag: "ApiKey", connectionId, key: Redacted.make("old-key") }).pipe(
+            Effect.andThen(save({ _tag: "Stored", connectionId })),
+          ),
+        );
+
+        assert.deepStrictEqual(yield* file.loadConnectionCredentials, [
+          { _tag: "Stored", connectionId: linearId },
+          { _tag: "Stored", connectionId: granolaId },
+        ]);
+      }),
+    ),
+  );
+
   it.effect("tightens the permissions of an existing world-readable file", () =>
     onDisk(({ filePath, fs }) =>
       Effect.gen(function* () {

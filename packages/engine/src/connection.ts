@@ -6,12 +6,14 @@ import {
   ConnectionNotReady,
   type ConnectionOverview,
   type ConnectionReadiness,
-  type ConnectionSystem,
+  ConnectionSystem,
   connectionIdOf,
+  type IssueTrackerError,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import { ConnectionVerifier } from "./connection-verify";
 import { ControlStore } from "./control-store";
 import {
@@ -21,7 +23,19 @@ import {
   CredentialStore,
 } from "./credential-store";
 
-const knownSystems: ReadonlyArray<ConnectionSystem> = ["github", "linear"];
+const knownSystems: ReadonlyArray<ConnectionSystem> = ConnectionSystem.literals;
+
+const tokenEnvs: Record<ConnectionSystem, string> = {
+  github: "GITHUB_TOKEN",
+  linear: "LINEAR_API_KEY",
+  granola: "GRANOLA_API_KEY",
+};
+
+const systemLabels: Record<ConnectionSystem, string> = {
+  github: "GitHub",
+  linear: "Linear",
+  granola: "Granola",
+};
 
 export const connectionOverview = (
   connections: ReadonlyArray<Connection>,
@@ -42,7 +56,7 @@ export const credentialAccountFor = (connection: Connection): CredentialAccount 
   key: connection.id,
   issueTracker: connection.system,
   organization: connection.account === "default" ? null : connection.account,
-  tokenEnv: connection.system === "github" ? "GITHUB_TOKEN" : "LINEAR_API_KEY",
+  tokenEnv: tokenEnvs[connection.system],
   clientCredentials: null,
   oauthClientId: null,
 });
@@ -65,12 +79,21 @@ const credentialAccountForEstablishment = (input: ConnectionEstablishment) =>
       clientCredentials: null,
       oauthClientId: null,
     }),
+    granola: ({ account }) => ({
+      key: `granola/${account}`,
+      issueTracker: "granola",
+      organization: account,
+      tokenEnv: "GRANOLA_API_KEY",
+      clientCredentials: null,
+      oauthClientId: null,
+    }),
   });
 
 const knownConnectionId = (input: ConnectionEstablishment, expectedAccount?: string) => {
   const requested = ConnectionEstablishment.match(input, {
     github: () => null,
     linear: ({ account }) => account,
+    granola: ({ account }) => account,
   });
   if (requested !== null) return connectionIdOf(input.system, requested);
   if (expectedAccount !== undefined) return connectionIdOf(input.system, expectedAccount);
@@ -96,7 +119,7 @@ const refused = (
 ) =>
   new ConnectionNotReady({
     connectionId,
-    message: `${system === "github" ? "GitHub" : "Linear"} rejected the credential: ${error.message}`,
+    message: `${systemLabels[system]} rejected the credential: ${error.message}`,
   });
 
 export interface ConnectionStoreService {
@@ -187,8 +210,48 @@ export const layer = Layer.effect(
       return yield* credentials.bearerToken(credentialAccountFor(connection));
     });
 
+    const verifyGranolaWhenAvailable = (credential: Credential) =>
+      verifier.verify("granola", credential).pipe(
+        Effect.catchIf(
+          (error) => error.reason === "unavailable",
+          () => Effect.succeed(null),
+        ),
+      );
+
+    const readinessVerifiers: Record<
+      ConnectionSystem,
+      (credential: Credential) => Effect.Effect<string | null, IssueTrackerError>
+    > = {
+      github: (_credential) => Effect.succeed(null),
+      linear: (_credential) => Effect.succeed(null),
+      granola: verifyGranolaWhenAvailable,
+    };
+    const verifyReadiness = (connection: Connection, credential: Credential) =>
+      readinessVerifiers[connection.system](credential);
+
+    const establishmentVerifiers: Record<
+      ConnectionSystem,
+      (credential: Credential) => Effect.Effect<string | null, IssueTrackerError>
+    > = {
+      github: (credential) => verifier.verify("github", credential),
+      linear: (credential) => verifier.verify("linear", credential),
+      granola: verifyGranolaWhenAvailable,
+    };
+
     const readiness = Effect.fn("ConnectionStore.readiness")(function* (connectionId: ConnectionId) {
-      return yield* bearer(connectionId).pipe(
+      return yield* find(connectionId).pipe(
+        Effect.flatMap((connection) =>
+          connection
+            ? bearer(connectionId).pipe(
+                Effect.flatMap((credential) => verifyReadiness(connection, credential)),
+                Effect.mapError((error) =>
+                  error._tag === "IssueTrackerError"
+                    ? refused(connectionId, connection.system, error)
+                    : error,
+                ),
+              )
+            : Effect.fail(new ConnectionNotReady({ connectionId, message: "Connection does not exist" })),
+        ),
         Effect.match({
           onFailure: (error) => ({ _tag: "NotReady", reason: error.message }) satisfies ConnectionReadiness,
           onSuccess: () => ({ _tag: "Ready" }) satisfies ConnectionReadiness,
@@ -219,17 +282,28 @@ export const layer = Layer.effect(
     ) {
       const expectedConnectionId = knownConnectionId(input, expectedAccount);
       const previous = expectedConnectionId ? yield* find(expectedConnectionId) : null;
+      const invalidGranolaKey =
+        input.system === "granola" &&
+        input.source._tag === "ApiKey" &&
+        !Redacted.value(input.source.key).startsWith("grn_");
+      if (invalidGranolaKey) {
+        return yield* new ConnectionNotReady({
+          connectionId: expectedConnectionId,
+          message: "Granola API keys must start with grn_",
+        });
+      }
       // Verification precedes both writes. The Control store writes first so its failure cannot replace a
       // working source; a source-write failure restores the prior Control record.
       const candidate = yield* credentials
         .resolveSource(credentialAccountForEstablishment(input), input.source)
         .pipe(Effect.mapError((error) => unreadable(expectedConnectionId, error)));
-      const discoveredAccount = yield* verifier
-        .verify(input.system, candidate)
-        .pipe(Effect.mapError((error) => refused(expectedConnectionId, input.system, error)));
+      const discoveredAccount = yield* establishmentVerifiers[input.system](candidate).pipe(
+        Effect.mapError((error) => refused(expectedConnectionId, input.system, error)),
+      );
       const account = ConnectionEstablishment.match(input, {
         github: () => discoveredAccount,
         linear: ({ account }) => account,
+        granola: ({ account }) => account,
       });
       if (!account) {
         return yield* new ConnectionNotReady({

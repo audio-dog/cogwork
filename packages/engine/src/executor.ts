@@ -417,6 +417,7 @@ export const make = Effect.gen(function* () {
       ...codingOperation(item.stage),
       atMillis: endedAtMillis,
       reason,
+      terminal: exhausted,
       ...(item.stage === "follow-up"
         ? {
             marker: failedFollowUpMarker(failedFollowUp ?? defaultFollowUp, endedAtMillis),

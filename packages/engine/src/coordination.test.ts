@@ -111,6 +111,17 @@ for (const [wire, codec] of codecs) {
       );
     });
 
+    it("round-trips terminality while decoding older attempts without it", () => {
+      const terminal = { ...attempt, terminal: true };
+      const body = formatCoordinationBody(codec, {
+        status: defaultStatus,
+        markers: [serializeAttempt(codec, attempt), serializeAttempt(codec, terminal)],
+        detail: null,
+      });
+
+      assert.deepStrictEqual(parseAttempts(codec, body), [attempt, terminal]);
+    });
+
     it("drops malformed persisted records", () => {
       const body = formatCoordinationBody(codec, {
         status: defaultStatus,

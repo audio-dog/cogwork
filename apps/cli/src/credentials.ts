@@ -1,3 +1,4 @@
+import { connectionSystemOf } from "@cogwork/contracts";
 import { CredentialStore, GitHub, Linear } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -6,6 +7,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import { makeTokenRefresh as makeGranolaTokenRefresh } from "./granola-login";
 
 const fileMode = 0o600;
 const directoryMode = 0o700;
@@ -106,8 +108,11 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
     credential: CredentialStore.StoredConnectionCredential,
   ) {
     const contents = yield* readForWrite(credential.connectionId);
+    const preservesGranolaLogin =
+      credential._tag === "ApiKey" && connectionSystemOf(credential.connectionId) === "granola";
     const others = contents.connectionCredentials.filter(
-      (entry) => entry.connectionId !== credential.connectionId,
+      (entry) =>
+        entry.connectionId !== credential.connectionId || (preservesGranolaLogin && entry._tag === "Stored"),
     );
     yield* write(credential.connectionId, {
       ...contents,
@@ -162,11 +167,23 @@ export const layer = (filePath: string) =>
       const spawner = yield* ChildProcessSpawner;
       const clientCredentials = yield* Linear.ClientCredentials.make();
       const githubCli = yield* GitHub.makeCliCredentialSource(spawner);
+      const refreshers: Record<string, CredentialStore.TokenRefresh> = {
+        linear: Linear.OAuth.makeTokenRefresh(client),
+        granola: makeGranolaTokenRefresh(client),
+      };
       return CredentialStore.make({
         stored,
         clientCredentials,
         githubCli,
-        refresh: Linear.OAuth.makeTokenRefresh(client),
+        refresh: (request) =>
+          refreshers[request.issueTracker]?.(request) ??
+          Effect.fail(
+            new CredentialStore.CredentialError({
+              account: request.account,
+              message: `cannot refresh the stored token for ${request.account}`,
+              retryable: false,
+            }),
+          ),
       });
     }),
   );

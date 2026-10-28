@@ -3,7 +3,9 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
@@ -210,6 +212,36 @@ describe("CredentialStore (Connections)", () => {
 
       assert.strictEqual(credential.source, "stored-key");
       assert.strictEqual(Redacted.value(credential.token), "stored-key");
+    }),
+  );
+
+  it.effect("prefers a Granola API key when the Connection also has a browser grant", () =>
+    Effect.gen(function* () {
+      const id = connectionId("granola/person@example.com");
+      const grant = {
+        ...stored("person@example.com", storedToken(far, "oauth-token")),
+        issueTracker: "granola",
+      };
+      const store = make({
+        stored: {
+          load: Effect.succeed([grant]),
+          save: () => Effect.void,
+          loadConnectionCredentials: Effect.succeed([
+            { _tag: "Stored", connectionId: id },
+            { _tag: "ApiKey", connectionId: id, key: Redacted.make("grn_key") },
+          ]),
+        },
+      });
+      const credential = yield* store.bearerToken({
+        ...account,
+        key: id,
+        issueTracker: "granola",
+        organization: "person@example.com",
+        connectionId: id,
+      });
+
+      assert.strictEqual(credential.source, "stored-key");
+      assert.strictEqual(Redacted.value(credential.token), "grn_key");
     }),
   );
 
@@ -426,6 +458,56 @@ const withStored = (
   );
 
 describe("CredentialStore (stored)", () => {
+  it.effect("restores the previous browser grant when re-connect fails", () =>
+    Effect.gen(function* () {
+      const previous = stored("acme", storedToken(far, "previous-token"));
+      const replacement = stored("acme", storedToken(far, "replacement-token"));
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([previous]);
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) => Ref.set(credentials, [credential]),
+          removeCredential: () => Ref.set(credentials, []),
+        },
+      });
+      const withStoredCredential = store.withStoredCredential;
+      if (!withStoredCredential) return assert.fail("Expected staged credential support");
+
+      yield* Effect.flip(withStoredCredential(replacement, Effect.fail("re-connect failed")));
+
+      const [restored] = yield* Ref.get(credentials);
+      assert.strictEqual(restored && Redacted.value(restored.token.accessToken), "previous-token");
+    }),
+  );
+
+  it.effect("restores the previous browser grant when re-connect is interrupted", () =>
+    Effect.gen(function* () {
+      const previous = stored("acme", storedToken(far, "previous-token"));
+      const replacement = stored("acme", storedToken(far, "replacement-token"));
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([previous]);
+      const started = yield* Deferred.make<void>();
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) => Ref.set(credentials, [credential]),
+          removeCredential: () => Ref.set(credentials, []),
+        },
+      });
+      const withStoredCredential = store.withStoredCredential;
+      if (!withStoredCredential) return assert.fail("Expected staged credential support");
+      const reconnecting = yield* withStoredCredential(
+        replacement,
+        Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+      ).pipe(Effect.forkChild({ startImmediately: true }));
+
+      yield* Deferred.await(started);
+      yield* Fiber.interrupt(reconnecting);
+
+      const [restored] = yield* Ref.get(credentials);
+      assert.strictEqual(restored && Redacted.value(restored.token.accessToken), "previous-token");
+    }),
+  );
+
   it.effect("prefers a live stored token over the account's env var", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;

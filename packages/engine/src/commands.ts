@@ -55,13 +55,15 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { ConnectionStore } from "./connection";
+import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import { fold } from "./coordination";
+import { CredentialStore } from "./credential-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { GitHubClient } from "./github/client";
 import { repoTargetFor as githubRepoTargetFor } from "./github/host";
+import { GranolaLogin } from "./granola-login";
 import { Harness, type HarnessService } from "./harness";
 import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
 import {
@@ -914,6 +916,7 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
   const requestedAccount = ConnectionEstablishment.match(payload.establishment, {
     github: () => null,
     linear: ({ account }) => account,
+    granola: ({ account }) => account,
   });
   if (requestedAccount !== null && existing.account !== requestedAccount) {
     return yield* connectionFailure(
@@ -932,6 +935,55 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
         system: connection.system,
         account: connection.account,
       }).pipe(Effect.andThen(publishConnectionMutation([]))),
+  );
+});
+
+const findGranolaConnection = Effect.fn("Daemon.findGranolaConnection")(function* (
+  connections: ConnectionStoreService,
+  account: string,
+) {
+  const connection = yield* connections.findSystem("granola");
+  const accountChanged = connection !== null && connection.account !== account;
+  if (!accountChanged) return connection;
+  return yield* connectionFailure(
+    "login Granola",
+    connection.id,
+    `Connection is established for "${connection.account}". Remove it before connecting to "${account}".`,
+  );
+});
+
+export const loginGranola = Effect.fn("Daemon.LoginGranola")(function* (payload: {
+  readonly account: string;
+}) {
+  const connections = yield* ConnectionStore;
+  const existing = yield* findGranolaConnection(connections, payload.account);
+  const credential = yield* (yield* GranolaLogin).login(payload.account);
+  const store = yield* CredentialStore;
+  const withStoredCredential = store.withStoredCredential;
+  if (!withStoredCredential) {
+    return yield* connectionFailure(
+      "login Granola",
+      existing?.id ?? null,
+      "Credential store cannot stage a browser login",
+    );
+  }
+  const current = yield* findGranolaConnection(connections, payload.account);
+  const establishment = {
+    system: "granola",
+    account: payload.account,
+    source: { _tag: "Stored" },
+  } as const;
+  const connect = current ? reconnectConnection({ establishment }) : establishConnection({ establishment });
+  return yield* withStoredCredential(credential, connect).pipe(
+    Effect.mapError((error) =>
+      error._tag === "CredentialError"
+        ? new ConnectionFailure({
+            operation: "login Granola",
+            connectionId: current?.id ?? null,
+            message: error.message,
+          })
+        : error,
+    ),
   );
 });
 

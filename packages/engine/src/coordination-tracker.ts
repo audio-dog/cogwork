@@ -302,9 +302,32 @@ export const makeCoordinationTracker = <Ref, CommentId>(
   const { codec } = host;
   const records = makeTrackerRecords(host);
 
-  const applyRoles = Effect.fn("coordinationTracker.applyRoles")(function* (ref: Ref, changes: RoleChanges) {
-    yield* Effect.forEach(changes.add, (role) => host.addRole(ref, role));
-    yield* Effect.forEach(changes.remove, (role) => host.removeRole(ref, role)).pipe(
+  const handOffWrite = <A, R>(
+    write: Effect.Effect<A, IssueTrackerError, R>,
+    item: WorkItemId,
+    step: "add role" | "remove role" | "marker" | "note",
+  ) =>
+    write.pipe(
+      Effect.tapError((error) =>
+        Effect.logWarning("hand-off write failed", { item, step, message: error.message }),
+      ),
+    );
+
+  const applyRoles = Effect.fn("coordinationTracker.applyRoles")(function* (
+    ref: Ref,
+    changes: RoleChanges,
+    handOffItem?: WorkItemId,
+  ) {
+    const addRole = (role: TriageRole) => {
+      const write = host.addRole(ref, role);
+      return handOffItem === undefined ? write : handOffWrite(write, handOffItem, "add role");
+    };
+    const removeRole = (role: TriageRole) => {
+      const write = host.removeRole(ref, role);
+      return handOffItem === undefined ? write : handOffWrite(write, handOffItem, "remove role");
+    };
+    yield* Effect.forEach(changes.add, addRole);
+    yield* Effect.forEach(changes.remove, removeRole).pipe(
       Effect.tapError(() =>
         Effect.forEach(changes.add, (role) => host.removeRole(ref, role)).pipe(
           Effect.catchTag("IssueTrackerError", (error) =>
@@ -326,12 +349,17 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ref: Ref,
     stage: LifecycleStage,
     atMillis: number,
+    item: WorkItemId,
   ) {
     const changes = { remove: [handoffRoleFor(stage)], add: ["ready-for-human"] } as const;
-    yield* applyRoles(ref, changes);
-    yield* Coordination.upsertCoordination(codec, host.comments(ref), {
-      marker: Coordination.serializeEngineHandoff(codec, atMillis),
-    }).pipe(
+    yield* applyRoles(ref, changes, item);
+    yield* handOffWrite(
+      Coordination.upsertCoordination(codec, host.comments(ref), {
+        marker: Coordination.serializeEngineHandoff(codec, atMillis),
+      }),
+      item,
+      "marker",
+    ).pipe(
       Effect.tapError(() =>
         applyRoles(ref, { remove: changes.add, add: changes.remove }).pipe(
           Effect.catchTag("IssueTrackerError", (error) =>
@@ -474,6 +502,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
         {
           operation: { workflow: outcome.workflow, operation: outcome.operation },
           outcome: "failed",
+          ...(outcome.terminal === true ? { terminal: true } : {}),
           atMillis: outcome.atMillis,
           lineage: lineageFor(workspace, id),
         },
@@ -486,8 +515,8 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: HandOffOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* applyEngineHandoff(ref, outcome.stage, yield* Clock.currentTimeMillis);
-      if (outcome.note !== undefined) yield* writeNote(ref, outcome.note);
+      yield* applyEngineHandoff(ref, outcome.stage, yield* Clock.currentTimeMillis, id);
+      if (outcome.note !== undefined) yield* handOffWrite(writeNote(ref, outcome.note), id, "note");
     }),
     handBack: Effect.fn("coordinationTracker.handBack")(function* (
       workspace: WorkspaceIssueTrackerBinding,
@@ -520,7 +549,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ) {
       const ref = yield* host.resolve(workspace, id);
       yield* writeFollowUp(ref, outcome.marker, outcome.detail);
-      yield* applyEngineHandoff(ref, "follow-up", outcome.atMillis);
+      yield* applyEngineHandoff(ref, "follow-up", outcome.atMillis, id);
       yield* records.appendAttempt(ref, {
         operation: codingOperation("follow-up"),
         outcome: "abandoned",

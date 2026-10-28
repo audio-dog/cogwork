@@ -41,9 +41,21 @@ export class BrowserOpener extends Context.Service<BrowserOpener, BrowserOpenerS
 
 const openCommand = (url: string) => {
   if (process.platform === "darwin") return ChildProcess.make("open", [url]);
-  if (process.platform === "win32") return ChildProcess.make("cmd", ["/c", "start", "", url]);
+  if (process.platform === "win32")
+    return ChildProcess.make("rundll32.exe", ["url.dll,FileProtocolHandler", url]);
   return ChildProcess.make("xdg-open", [url]);
 };
+
+const authorizationUrl = (value: string) =>
+  Effect.try({
+    try: () => new URL(value),
+    catch: () => new LinearOAuthError({ message: "The authorization server returned an invalid URL." }),
+  }).pipe(
+    Effect.filterOrFail(
+      (url) => url.protocol === "https:",
+      () => new LinearOAuthError({ message: "The authorization server returned a non-HTTPS URL." }),
+    ),
+  );
 
 export const browserOpenerLayer = Layer.effect(
   BrowserOpener,
@@ -51,7 +63,8 @@ export const browserOpenerLayer = Layer.effect(
     ChildProcessSpawner,
     (spawner): BrowserOpenerService => ({
       open: (url) =>
-        spawner.exitCode(openCommand(url)).pipe(
+        authorizationUrl(url).pipe(
+          Effect.flatMap((safeUrl) => spawner.exitCode(openCommand(safeUrl.href))),
           Effect.asVoid,
           Effect.mapError(
             (cause) =>
@@ -62,7 +75,7 @@ export const browserOpenerLayer = Layer.effect(
             "TimeoutError",
             () =>
               new LinearOAuthError({
-                message: `Opening the browser timed out after ${browserOpenDeadline}; retry cogwork login linear.`,
+                message: `Opening the browser timed out after ${browserOpenDeadline}; retry the login.`,
               }),
           ),
         ),
@@ -79,13 +92,7 @@ interface CallbackParams {
 const resultPage = (heading: string, detail: string) =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>cogwork</title></head><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem"><h1>${heading}</h1><p>${detail}</p></body></html>`;
 
-const successPage = resultPage(
-  "Linear login complete",
-  "You can close this window and return to the terminal.",
-);
-const failurePage = resultPage("Linear login failed", "Return to the terminal for details.");
-
-const callbackApp = (result: Deferred.Deferred<CallbackParams>) =>
+const callbackApp = (result: Deferred.Deferred<CallbackParams>, expectedState: string, loginName: string) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = new URL(request.url, "http://localhost");
@@ -95,49 +102,78 @@ const callbackApp = (result: Deferred.Deferred<CallbackParams>) =>
       state: url.searchParams.get("state"),
       error: url.searchParams.get("error"),
     } satisfies CallbackParams;
+    if (params.state !== expectedState) {
+      return HttpServerResponse.text(
+        resultPage(`${loginName} login failed`, "The authorization response had an invalid state."),
+        { status: 400, contentType: "text/html; charset=utf-8" },
+      );
+    }
     yield* Deferred.succeed(result, params);
     const settled = params.error !== null || params.code === null;
-    return HttpServerResponse.html(settled ? failurePage : successPage);
+    return HttpServerResponse.html(
+      settled
+        ? resultPage(`${loginName} login failed`, "Return to Cogwork for details.")
+        : resultPage(`${loginName} login complete`, "You can close this window and return to Cogwork."),
+    );
   });
+
+export class LoopbackAuthorizationError extends Data.TaggedError("LoopbackAuthorizationError")<{
+  readonly message: string;
+}> {}
+
+export interface LoopbackAuthorizationConfig {
+  readonly authorizationUrl: URL;
+  readonly expectedState: string;
+  readonly loginName: string;
+}
+
+export const awaitLoopbackAuthorization = Effect.fn("cli.login.awaitLoopbackAuthorization")(function* (
+  config: LoopbackAuthorizationConfig,
+) {
+  const result = yield* Deferred.make<CallbackParams>();
+  yield* HttpServer.serveEffect(callbackApp(result, config.expectedState, config.loginName));
+  const opener = yield* BrowserOpener;
+  const callback = yield* Deferred.await(result).pipe(
+    Effect.timeout(callbackDeadline),
+    Effect.mapError(
+      () =>
+        new LoopbackAuthorizationError({
+          message: `${config.loginName} login timed out waiting for the browser callback; retry.`,
+        }),
+    ),
+    Effect.raceFirst(
+      opener.open(config.authorizationUrl.href).pipe(
+        Effect.mapError((error) => new LoopbackAuthorizationError({ message: error.message })),
+        Effect.andThen(Deferred.await(result)),
+      ),
+    ),
+  );
+  if (callback.error !== null) {
+    return yield* new LoopbackAuthorizationError({
+      message: `${config.loginName} denied the authorization ("${callback.error}").`,
+    });
+  }
+  if (callback.code === null) {
+    return yield* new LoopbackAuthorizationError({
+      message: `${config.loginName} did not return an authorization code.`,
+    });
+  }
+  return callback.code;
+});
 
 const redirectUriFor = (redirectPort: number) => Linear.OAuth.redirectUri(redirectPort);
 
 const awaitAuthorization = Effect.fn("cli.login.awaitAuthorization")(
   function* (config: LinearLoginConfig, authorizeUrl: string, expectedState: string, verifier: string) {
-    const result = yield* Deferred.make<CallbackParams>();
-    yield* HttpServer.serveEffect(callbackApp(result));
-    const opener = yield* BrowserOpener;
-    const callback = yield* Deferred.await(result).pipe(
-      Effect.timeout(callbackDeadline),
-      Effect.catchTag(
-        "TimeoutError",
-        () =>
-          new LinearOAuthError({
-            message: `Linear login timed out waiting for the browser callback after ${callbackDeadline}; retry cogwork login linear.`,
-          }),
-      ),
-      Effect.raceFirst(opener.open(authorizeUrl).pipe(Effect.andThen(Deferred.await(result)))),
-    );
-    if (callback.error !== null) {
-      return yield* new LinearOAuthError({
-        message: `Linear denied the authorization ("${callback.error}"). Confirm ${redirectUriFor(config.redirectPort)} is a registered redirect URL for this OAuth app.`,
-      });
-    }
-    if (callback.state !== expectedState) {
-      return yield* new LinearOAuthError({
-        message:
-          "The authorization response carried the wrong state; discarding it and not exchanging a token.",
-      });
-    }
-    if (callback.code === null) {
-      return yield* new LinearOAuthError({
-        message: "Linear's redirect did not include an authorization code.",
-      });
-    }
+    const code = yield* awaitLoopbackAuthorization({
+      authorizationUrl: new URL(authorizeUrl),
+      expectedState,
+      loginName: "Linear",
+    }).pipe(Effect.mapError((error) => new LinearOAuthError({ message: error.message })));
     return yield* Linear.OAuth.exchangeToken({
       clientId: config.clientId,
       redirectUri: redirectUriFor(config.redirectPort),
-      code: callback.code,
+      code,
       verifier,
     });
   },

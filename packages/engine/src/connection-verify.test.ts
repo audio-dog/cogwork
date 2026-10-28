@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { ConnectionVerifier, layer } from "./connection-verify";
 import type { Credential } from "./credential-store";
@@ -24,7 +25,21 @@ class FetchedUrls extends Context.Service<FetchedUrls, Ref.Ref<ReadonlyArray<str
 const urlOf = (input: RequestInfo | URL) =>
   typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 
-const respondingWith = (status: number, body = "{}") =>
+const granolaInitializeResult = JSON.stringify({
+  jsonrpc: "2.0",
+  id: 1,
+  result: {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    serverInfo: { name: "Granola", version: "1.0.0" },
+  },
+});
+
+const respondingWith = (
+  status: number,
+  body: BodyInit = granolaInitializeResult,
+  contentType = "application/json",
+) =>
   layer.pipe(
     Layer.provide(githubClientLayer),
     Layer.provide(FetchHttpClient.layer),
@@ -35,7 +50,7 @@ const respondingWith = (status: number, body = "{}") =>
           const seen = yield* FetchedUrls;
           return (input: RequestInfo | URL) =>
             Ref.update(seen, (current) => [...current, urlOf(input)]).pipe(
-              Effect.map(() => new Response(body, { status })),
+              Effect.map(() => new Response(body, { status, headers: { "content-type": contentType } })),
               Effect.runPromise,
             );
         }),
@@ -76,5 +91,56 @@ describe("ConnectionVerifier", () => {
 
       assert.strictEqual(error.reason, "unavailable");
     }).pipe(Effect.provide(respondingWith(503, ""))),
+  );
+
+  it.effect("accepts Granola's streamed initialize result without waiting for stream closure", () =>
+    Effect.gen(function* () {
+      const cancellation = { completed: false };
+      const body = new ReadableStream<Uint8Array>({
+        start: (controller) => {
+          controller.enqueue(new TextEncoder().encode(`data: ${granolaInitializeResult}\n\n`));
+        },
+        cancel: () => {
+          cancellation.completed = true;
+        },
+      });
+
+      const [account, urls] = yield* ConnectionVerifier.pipe(
+        Effect.flatMap((verifier) => verifier.verify("granola", apiKey("grn_real"))),
+        Effect.zip(FetchedUrls.pipe(Effect.flatMap(Ref.get))),
+        Effect.provide(respondingWith(200, body, "text/event-stream")),
+      );
+
+      assert.strictEqual(account, null);
+      assert.deepStrictEqual(urls, ["https://mcp.granola.ai/mcp"]);
+      assert.isTrue(cancellation.completed);
+    }),
+  );
+
+  it.effect("rejects a Granola JSON-RPC error returned with HTTP 200", () =>
+    Effect.gen(function* () {
+      const verifier = yield* ConnectionVerifier;
+      const result = yield* Effect.result(verifier.verify("granola", apiKey("grn_real")));
+
+      assert.isTrue(Result.isFailure(result));
+      if (Result.isFailure(result)) assert.strictEqual(result.failure.reason, "unavailable");
+    }).pipe(
+      Effect.provide(
+        respondingWith(
+          200,
+          JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32_000, message: "bad" } }),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("reports a revoked Granola credential as an auth failure", () =>
+    Effect.gen(function* () {
+      const verifier = yield* ConnectionVerifier;
+      const error = yield* Effect.flip(verifier.verify("granola", apiKey("grn_revoked")));
+
+      assert.strictEqual(error.reason, "auth");
+      assert.include(error.message, "401");
+    }).pipe(Effect.provide(respondingWith(401))),
   );
 });

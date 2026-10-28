@@ -51,6 +51,8 @@ export const StoredCredential = Schema.Struct({
   organization: TrimmedNonEmptyString,
   actorUserId: TrimmedNonEmptyString,
   oauthClientId: Schema.optional(TrimmedNonEmptyString),
+  oauthTokenEndpoint: Schema.optional(TrimmedNonEmptyString),
+  oauthResource: Schema.optional(TrimmedNonEmptyString),
   token: StoredToken,
 });
 export type StoredCredential = typeof StoredCredential.Type;
@@ -156,7 +158,10 @@ export interface ProviderCredential {
 
 export interface TokenRefreshRequest {
   readonly account: string;
+  readonly issueTracker: string;
   readonly clientId: string;
+  readonly tokenEndpoint?: string;
+  readonly resource?: string;
   readonly refreshToken: Redacted.Redacted<string>;
 }
 
@@ -199,6 +204,10 @@ export interface CredentialStoreService {
     source: ConnectionSource,
   ) => Effect.Effect<Credential, CredentialError>;
   readonly persist: (credential: StoredCredential) => Effect.Effect<void, CredentialError>;
+  readonly withStoredCredential?: <A, E, R>(
+    credential: StoredCredential,
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | CredentialError, R>;
   readonly invalidate: (account: CredentialAccount) => Effect.Effect<void>;
   readonly providerKey: (account: ProviderAccount) => Effect.Effect<ProviderCredential, CredentialError>;
   readonly persistProviderKey: (key: StoredProviderKey) => Effect.Effect<void, CredentialError>;
@@ -240,6 +249,19 @@ const envCredential = Effect.fn("CredentialStore.env")(function* (account: Crede
 const matching = (account: CredentialAccount) => (credential: StoredCredential) =>
   credential.issueTracker === account.issueTracker &&
   (account.organization === null || credential.organization === account.organization);
+
+const connectionCredentialPriority: Record<StoredConnectionCredential["_tag"], number> = {
+  ApiKey: 0,
+  Stored: 1,
+  Env: 2,
+  GitHubCli: 3,
+};
+
+const tokenEnvs = {
+  github: "GITHUB_TOKEN",
+  linear: "LINEAR_API_KEY",
+  granola: "GRANOLA_API_KEY",
+} as const;
 
 export const expiryMargin = Duration.minutes(1);
 
@@ -301,7 +323,14 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     if (match?.live) return match.credential;
     const credential = match?.credential ?? stale;
     const presented = credential.token.refreshToken ?? fallbackRefreshToken;
-    const token = yield* refresh({ account: account.key, clientId, refreshToken: presented });
+    const token = yield* refresh({
+      account: account.key,
+      issueTracker: credential.issueTracker,
+      clientId,
+      tokenEndpoint: credential.oauthTokenEndpoint,
+      resource: credential.oauthResource,
+      refreshToken: presented,
+    });
     // Linear leaves refresh_token out of a response when it does not rotate one, so the presented
     // token has to carry forward or the next refresh has nothing to present.
     const rotated = {
@@ -390,8 +419,14 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
 
   const resolve = Effect.fn("CredentialStore.resolve")(function* (account: CredentialAccount) {
     const connectionCredentials = yield* sources.stored.loadConnectionCredentials ?? Effect.succeed([]);
-    const configured = connectionCredentials.find((entry) => entry.connectionId === account.connectionId);
-    if (configured) return yield* resolveSource(account, configured);
+    const configured = connectionCredentials
+      .filter((entry) => entry.connectionId === account.connectionId)
+      .toSorted(
+        (left, right) => connectionCredentialPriority[left._tag] - connectionCredentialPriority[right._tag],
+      );
+    if (configured.length > 0) {
+      return yield* Effect.firstSuccessOf(configured.map((entry) => resolveSource(account, entry)));
+    }
     const candidate = yield* resolveStored(account);
     if (candidate) return storedCredential(candidate);
     const granted = yield* grantedCredential(sources.clientCredentials, account);
@@ -415,7 +450,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       key: connectionId,
       issueTracker: system,
       organization: account === "default" ? null : account,
-      tokenEnv: system === "github" ? "GITHUB_TOKEN" : "LINEAR_API_KEY",
+      tokenEnv: tokenEnvs[system],
       clientCredentials: null,
       oauthClientId: null,
     });
@@ -495,10 +530,37 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     return credential;
   });
 
+  const withStoredCredential: NonNullable<CredentialStoreService["withStoredCredential"]> = (
+    credential,
+    effect,
+  ) =>
+    Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const account = accountOf(credential);
+        const previous = (yield* sources.stored.load).find((entry) => accountOf(entry) === account);
+        const remove = sources.stored.removeCredential;
+        if (!previous && !remove) {
+          return yield* new CredentialError({
+            account,
+            message: "this credential store cannot stage a browser login",
+            retryable: false,
+          });
+        }
+        yield* sources.stored.save(credential);
+        const rollback = previous
+          ? sources.stored.save(previous)
+          : remove?.(credential.issueTracker, credential.organization);
+        return yield* restore(effect).pipe(
+          Effect.onError(() => rollback?.pipe(Effect.ignore) ?? Effect.void),
+        );
+      }),
+    );
+
   return {
     bearerToken: (account) => bearerToken(account).pipe(annotateAccount(account.key)),
     resolveSource: (account, source) => resolveSource(account, source).pipe(annotateAccount(account.key)),
     persist: sources.stored.save,
+    withStoredCredential,
     invalidate: (account) => sources.clientCredentials?.forget(account) ?? Effect.void,
     providerKey,
     persistProviderKey: (key) =>

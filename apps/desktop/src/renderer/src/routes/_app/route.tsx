@@ -11,6 +11,7 @@ import { RightPanel } from "../../components/right-panel";
 import { RightPanelResizeHandle, useRightPanelWidthActions } from "../../components/right-panel-resize";
 import { PausedBanner, SchedulerControls } from "../../components/scheduler-gauges";
 import { SidebarResizeHandle, useSidebarWidth } from "../../components/sidebar-resize";
+import { DaemonWorkflowProvider } from "../../features/workflow-session";
 import { useRightPanelStore } from "../../store/right-panel";
 
 function SidebarControl() {
@@ -139,14 +140,16 @@ function AppShell() {
 
   return (
     <DaemonConfigurationProvider>
-      <AppSidebar />
-      <SidebarInset className="h-svh overflow-hidden">
-        <ActivityViewProvider>
-          <ContentArea onRightPanelCommit={rightPanel.setWidth} onRightPanelReset={rightPanel.reset} />
-        </ActivityViewProvider>
-      </SidebarInset>
-      <SidebarControl />
-      <SidebarResizeHandle onCommit={setWidth} onReset={reset} />
+      <DaemonWorkflowProvider>
+        <AppSidebar />
+        <SidebarInset className="h-svh overflow-hidden">
+          <ActivityViewProvider>
+            <ContentArea onRightPanelCommit={rightPanel.setWidth} onRightPanelReset={rightPanel.reset} />
+          </ActivityViewProvider>
+        </SidebarInset>
+        <SidebarControl />
+        <SidebarResizeHandle onCommit={setWidth} onReset={reset} />
+      </DaemonWorkflowProvider>
     </DaemonConfigurationProvider>
   );
 }

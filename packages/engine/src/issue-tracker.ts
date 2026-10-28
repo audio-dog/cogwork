@@ -80,6 +80,7 @@ export interface AttemptFailedOutcome extends OperationKey {
   readonly atMillis: number;
   readonly reason?: string;
   readonly marker?: FollowUpMarker;
+  readonly terminal?: boolean;
 }
 
 export interface HandOffOutcome {
