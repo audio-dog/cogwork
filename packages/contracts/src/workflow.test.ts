@@ -195,7 +195,10 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
           triggers: [
             {
               ...baseDocument.triggers[0],
-              parameters: [{ id: "unexpected", value: "value" }],
+              parameters: [
+                { id: "label", value: "missing" },
+                { id: "label", value: "ready" },
+              ],
             },
           ],
         }),
@@ -209,7 +212,12 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
   { code: "no-trigger", produce: () => codesOf(documentWith({ triggers: [] })) },
   {
     code: "uncovered-outcome",
-    produce: () => codesOf(replaceOperation({ transitions: [] })),
+    produce: () =>
+      codesOf(
+        replaceOperation({
+          questions: [{ ...operation.questions[0], choices: [] }],
+        }),
+      ),
   },
   {
     code: "conflicting-hand-offs",
@@ -323,12 +331,25 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
           entry.kind === "trigger"
             ? {
                 ...entry,
-                parameters: [{ id: "label", required: true, source: "live", values: [] }],
+                parameters: [{ id: "label", required: true, source: "live", values: ["ready"] }],
               }
             : entry,
         ),
       }).entries;
-      return readinessCodesOf(baseDocument, catalogWith({ entries }));
+      return readinessCodesOf(
+        documentWith({
+          triggers: [
+            {
+              ...baseDocument.triggers[0],
+              parameters: [
+                { id: "label", value: "missing" },
+                { id: "label", value: "ready" },
+              ],
+            },
+          ],
+        }),
+        catalogWith({ entries }),
+      );
     },
   },
   {

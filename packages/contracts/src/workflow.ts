@@ -709,8 +709,10 @@ const transitionMatches = (
     answers.some((answer) => answer.question === condition.question && answer.choice === condition.choice),
   );
 
-export const uncovered = (operation: WorkflowOperation) =>
-  answerCombinations(operation).filter(
+export const uncovered = (operation: WorkflowOperation) => {
+  const hasQuestionWithoutChoices = operation.questions.some(({ choices }) => choices.length === 0);
+  if (hasQuestionWithoutChoices) return [[]];
+  return answerCombinations(operation).filter(
     (answers) =>
       !operation.transitions.some(
         (transition) =>
@@ -718,6 +720,7 @@ export const uncovered = (operation: WorkflowOperation) =>
           (transition.actions.length > 0 || transition.handOff !== null),
       ),
   );
+};
 
 const duplicateIdDiagnostics = (document: WorkflowDocument) => {
   const nodes = [
@@ -881,27 +884,31 @@ const catalogDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog
     const unknownParameters = usage.parameters
       .filter(({ id }) => !entry.parameters.some((parameter) => parameter.id === id))
       .map(({ id }) => diagnostic("unknown-option", "malformed", `Unknown parameter ${id}`, usage.location));
-    const parameters = new Map(usage.parameters.map((parameter) => [parameter.id, parameter.value]));
     const parameterDiagnostics = entry.parameters.flatMap((parameter) => {
-      const value = parameters.get(parameter.id);
+      const values = usage.parameters.filter(({ id }) => id === parameter.id).map(({ value }) => value);
       const result = [
         {
-          matches: parameter.required && value === undefined,
-          make: () =>
+          matches: parameter.required && values.length === 0,
+          make: () => [
             diagnostic("missing-option", "incomplete", `Missing parameter ${parameter.id}`, usage.location),
+          ],
         },
         {
-          matches: parameter.source === "fixed" && value !== undefined && !parameter.values.includes(value),
+          matches: parameter.source === "fixed",
           make: () =>
-            diagnostic(
-              "unknown-option",
-              "malformed",
-              `Parameter ${parameter.id} does not list ${value}`,
-              usage.location,
-            ),
+            values
+              .filter((value) => !parameter.values.includes(value))
+              .map((value) =>
+                diagnostic(
+                  "unknown-option",
+                  "malformed",
+                  `Parameter ${parameter.id} does not list ${value}`,
+                  usage.location,
+                ),
+              ),
         },
       ].find(({ matches }) => matches);
-      return result ? [result.make()] : [];
+      return result?.make() ?? [];
     });
     return [...unknownParameters, ...parameterDiagnostics];
   });
@@ -1091,17 +1098,15 @@ const optionReadinessDiagnostics = (document: WorkflowDocument, catalog: Workflo
   return entryUsages(document).flatMap((usage) => {
     const entry = entries.get(usage.entry);
     if (!entry) return [];
-    const values = new Map(usage.parameters.map(({ id, value }) => [id, value]));
-    return entry.parameters.flatMap((parameter) => {
-      const value = values.get(parameter.id);
-      const missingLiveValue =
-        parameter.source === "live" && value !== undefined && !parameter.values.includes(value);
+    return usage.parameters.flatMap(({ id, value }) => {
+      const parameter = entry.parameters.find((candidate) => candidate.id === id);
+      const missingLiveValue = parameter?.source === "live" && !parameter.values.includes(value);
       return missingLiveValue
         ? [
             diagnostic(
               "option-not-listed",
               "advisory",
-              `Parameter ${parameter.id} does not list ${value}`,
+              `Parameter ${id} does not list ${value}`,
               usage.location,
             ),
           ]
