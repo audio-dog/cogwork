@@ -1,0 +1,23 @@
+packages/engine/src/interrupt-store.ts
+  s_970f6fa6f3464b::t_5683639901e724 51
+  s_970f6fa6f3464b::t_c511d6236bdaba 12-26,47-50,52-59,73-78,95,101
+  s_970f6fa6f3464b::t_014e75c45cdc2f 79
+packages/engine/src/interrupt-store.test.ts
+  s_970f6fa6f3464b::t_c511d6236bdaba 86-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e3131cb055c50464166e2958d5cb33ecb62e8fd0",
+  "prompts": {},
+  "sessions": {
+    "s_970f6fa6f3464b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180cc-1ad3-7e41-a588-0e33e33a552f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
