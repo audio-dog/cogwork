@@ -1,0 +1,27 @@
+docs/spec/customizable-workflows.md
+  s_29ddf2caebf207::t_f90eb65173d78b 240-241
+  s_29ddf2caebf207::t_81c2c39ff31ead 612
+  s_29ddf2caebf207::t_25d34b3aee22f3 131-132
+  s_29ddf2caebf207::t_62ce6806916617 248
+  s_29ddf2caebf207::t_96e4962030c48a 383
+  s_29ddf2caebf207::t_edac7639f2de5b 199
+  s_29ddf2caebf207::t_c4a99ff52d18db 236
+  s_29ddf2caebf207::t_1c10c66a291df8 572
+  s_29ddf2caebf207::t_d1e78e8a1cf91f 409-567
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f9e081e38d56945c072cb12c36f43582cf62c57d",
+  "prompts": {},
+  "sessions": {
+    "s_29ddf2caebf207": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "06a104f9-7ac7-4af1-8e9c-3b051c142b6d",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
