@@ -79,6 +79,13 @@ export function useWorkflowSession() {
 const successValue = <Value,>(result: { readonly _tag: string; readonly value?: Value }) =>
   result._tag === "Success" ? (result.value ?? null) : null;
 
+const mergeWorkflowRecords = (...groups: ReadonlyArray<ReadonlyArray<WorkflowRecord>>) =>
+  groups.flat().reduce<ReadonlyMap<WorkflowId, WorkflowRecord>>((records, workflow) => {
+    const current = records.get(workflow.id);
+    const isNewest = current === undefined || workflow.workingRevision >= current.workingRevision;
+    return isNewest ? new Map(records).set(workflow.id, workflow) : records;
+  }, new Map());
+
 export function DaemonWorkflowProvider({ children }: { readonly children: ReactNode }) {
   const session = useActivitySession();
   const listed = useAtomValue(workflowsAtom);
@@ -93,7 +100,8 @@ export function DaemonWorkflowProvider({ children }: { readonly children: ReactN
   const queried = successValue(listed);
   const catalog = successValue(catalogResult);
   const templates = successValue(templatesResult);
-  const workflows = !session.seed ? [...session.workflows.values()] : (queried?.workflows ?? []);
+  const queriedWorkflows = session.seed ? (queried?.workflows ?? []) : [];
+  const workflows = [...mergeWorkflowRecords(queriedWorkflows, [...session.workflows.values()]).values()];
   const client: WorkflowClient = {
     create: (document) => create({ payload: { document } }),
     edit: (id, edits) => edit({ payload: { id, edits } }),

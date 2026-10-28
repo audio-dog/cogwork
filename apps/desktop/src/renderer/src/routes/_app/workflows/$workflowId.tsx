@@ -13,7 +13,8 @@ function WorkflowRoute() {
   const { workflowId } = Route.useParams();
   const { state } = useWorkflowSession();
   const workflow = state.workflows.find(({ id }) => id === workflowId);
-  if (!workflow) {
+  if (workflow) return <WorkflowEditor key={workflowId} workflow={workflow} />;
+  if (state.loading)
     return (
       <div className="mx-auto flex w-full max-w-2xl px-8 py-16">
         <Empty className="w-full">
@@ -21,16 +22,26 @@ function WorkflowRoute() {
             <EmptyMedia variant="icon">
               <RiNodeTree />
             </EmptyMedia>
-            <EmptyTitle>Workflow not found</EmptyTitle>
+            <EmptyTitle>Loading Workflow</EmptyTitle>
           </EmptyHeader>
-          <EmptyContent>
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/workflows" />}>
-              Back to Workflows
-            </Button>
-          </EmptyContent>
         </Empty>
       </div>
     );
-  }
-  return <WorkflowEditor key={workflowId} workflow={workflow} />;
+  return (
+    <div className="mx-auto flex w-full max-w-2xl px-8 py-16">
+      <Empty className="w-full">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <RiNodeTree />
+          </EmptyMedia>
+          <EmptyTitle>Workflow not found</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/workflows" />}>
+            Back to Workflows
+          </Button>
+        </EmptyContent>
+      </Empty>
+    </div>
+  );
 }
