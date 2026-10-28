@@ -20,6 +20,7 @@ import {
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -47,6 +48,7 @@ import {
   type RunChatOptions,
 } from "./provider-runner";
 import { SessionStore, type SessionStoreService } from "./session-store";
+import { isPolicyDenied } from "./tools";
 
 const SECRET = "sk-super-secret-value";
 const harnessName = Schema.decodeSync(HarnessName)("provider");
@@ -69,6 +71,15 @@ const scriptedChunks: ReadonlyArray<StreamChunk> = [
   { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: "hello world" },
   { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" },
 ];
+
+const scriptedRunChat =
+  (exercise: (options: RunChatOptions) => Promise<void>): RunChat =>
+  (options) => {
+    const iterator = exercise(options).then(() => toAsyncIterable(scriptedChunks)[Symbol.asyncIterator]());
+    return {
+      [Symbol.asyncIterator]: () => ({ next: () => iterator.then((current) => current.next()) }),
+    };
+  };
 
 const structuredTriageJson = '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}';
 
@@ -154,7 +165,7 @@ const contextLayer = (layers: ReadonlyArray<InstructionLayer>) =>
   Layer.succeed(ContextAssembler, contextService(layers));
 
 interface RequestOverrides {
-  readonly checkoutPath?: string;
+  readonly checkoutPath?: string | null;
   readonly session?: HarnessRequest["session"];
   readonly stage?: "triage" | "implement";
   readonly model?: string;
@@ -203,7 +214,10 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
         facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
         observation: { generation: 1, observedAtMillis: 1 },
       },
-      sandbox: { workspace: overrides.checkoutPath ?? "/tmp/does-not-matter", policy: profile },
+      sandbox: {
+        workspace: overrides.checkoutPath === undefined ? "/tmp/does-not-matter" : overrides.checkoutPath,
+        policy: profile,
+      },
       persistence: { sessionKind: "owned-transcript" },
       provenance: {
         resolution: [],
@@ -330,6 +344,82 @@ describe("providerRunner", { timeout: 30_000 }, () => {
 
       assert.strictEqual(capturedOptions[0]?.threadId, sessionId);
     }),
+  );
+
+  it.live("runs without a Workspace in an empty scratch directory and removes it after the Run", () =>
+    Effect.gen(function* () {
+      const roots: Array<string> = [];
+      const runChat = scriptedRunChat((options) => {
+        const bash = options.tools.find((tool) => tool.name === "bash")?.execute;
+        if (!bash) return Promise.reject(new Error("bash tool was not provided"));
+        return Promise.resolve(bash({ command: "pwd\nfind . -mindepth 1 -maxdepth 1 -print" })).then(
+          (result) => {
+            if (isPolicyDenied(result)) throw new Error(result.reason);
+            const [root, ...entries] = result.stdout.trim().split("\n");
+            if (!root) throw new Error("scratch directory path was empty");
+            roots.push(root);
+            assert.deepStrictEqual(entries, []);
+          },
+        );
+      });
+      const runner = providerRunner({ name: harnessName, runChat });
+
+      yield* Stream.runDrain(runner.run(request({ checkoutPath: null })));
+
+      const root = roots[0];
+      if (!root) return assert.fail("scratch directory was not opened");
+      const fs = yield* FileSystem.FileSystem;
+      assert.isFalse(yield* fs.exists(root));
+    }).pipe(Effect.provide(providerRunnerLayer())),
+  );
+
+  it.live("uses the Workspace checkout for a read-only Run and denies writes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const checkoutPath = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-provider-read-only-" });
+      yield* fs.writeFileString(`${checkoutPath}/seed.txt`, "workspace checkout");
+      const runChat = scriptedRunChat((options) => {
+        const read = options.tools.find((tool) => tool.name === "read")?.execute;
+        const write = options.tools.find((tool) => tool.name === "write")?.execute;
+        if (!read || !write) return Promise.reject(new Error("owned file tools were not provided"));
+        return Promise.all([
+          read({ path: "seed.txt" }),
+          write({ path: "changed.txt", content: "blocked" }),
+        ]).then(([readResult, writeResult]) => {
+          assert.deepStrictEqual(readResult, {
+            path: "seed.txt",
+            content: "workspace checkout",
+          });
+          assert.isTrue(isPolicyDenied(writeResult));
+        });
+      });
+      const runner = providerRunner({ name: harnessName, runChat });
+
+      yield* Stream.runDrain(runner.run(request({ stage: "triage", checkoutPath })));
+
+      assert.isFalse(yield* fs.exists(`${checkoutPath}/changed.txt`));
+    }).pipe(Effect.provide(providerRunnerLayer())),
+  );
+
+  it.live("uses the prepared checkout for a full Run", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const checkoutPath = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-provider-worktree-" });
+      yield* fs.writeFileString(`${checkoutPath}/branch.txt`, "branch worktree");
+      const runChat = scriptedRunChat((options) => {
+        const read = options.tools.find((tool) => tool.name === "read")?.execute;
+        if (!read) return Promise.reject(new Error("read tool was not provided"));
+        return Promise.resolve(read({ path: "branch.txt" })).then((result) => {
+          assert.deepStrictEqual(result, {
+            path: "branch.txt",
+            content: "branch worktree",
+          });
+        });
+      });
+      const runner = providerRunner({ name: harnessName, runChat });
+
+      yield* Stream.runDrain(runner.run(request({ checkoutPath })));
+    }).pipe(Effect.provide(providerRunnerLayer())),
   );
 
   it.live("refuses to open a chat without a Session", () =>

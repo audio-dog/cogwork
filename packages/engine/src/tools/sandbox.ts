@@ -16,9 +16,11 @@ export interface WorktreeSandbox {
   readonly root: string;
 }
 
-// Fixed `dir` means teardown never deletes the checkout, only the sandbox handle.
-export const openWorktreeSandbox = (root: string) => {
-  const provider = localProcessSandbox({ dir: root, passEnv: Object.keys(process.env) });
+export const openWorktreeSandbox = (root: string | null) => {
+  const provider = localProcessSandbox({
+    ...(root === null ? {} : { dir: root }),
+    passEnv: Object.keys(process.env),
+  });
   return Effect.acquireRelease(
     Effect.tryPromise({
       try: (signal) => provider.create({ signal }),
@@ -29,7 +31,7 @@ export const openWorktreeSandbox = (root: string) => {
         orElse: () =>
           Effect.fail(toolError("timeout", `sandbox launch timed out after ${sandboxLaunchDeadline}`, root)),
       }),
-      Effect.map((handle): WorktreeSandbox => ({ handle, root })),
+      Effect.map((handle): WorktreeSandbox => ({ handle, root: root ?? handle.id })),
     ),
     ({ handle }) =>
       Effect.tryPromise({

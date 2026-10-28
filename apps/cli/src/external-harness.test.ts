@@ -39,14 +39,14 @@ const externalProfiles = [
   },
 ] as const;
 
-describe("external harness registration", () => {
+describe("harness registration", () => {
   layer(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))((it) => {
-    it.effect("registers only runnable Harnesses when no replay fixture is configured", () =>
+    it.effect("registers the owned and external Harnesses when no replay fixture is configured", () =>
       Effect.gen(function* () {
         const runners = yield* harnessRunners;
         assert.deepStrictEqual(
           runners.map((runner) => runner.name),
-          ["cursor", "claude", "codex"],
+          ["provider", "cursor", "claude", "codex"],
         );
       }),
     );
@@ -73,7 +73,7 @@ describe("external harness registration", () => {
         const runners = yield* harnessRunners;
         assert.deepStrictEqual(
           runners.map((runner) => runner.name),
-          ["cursor", "claude", "codex", "replay"],
+          ["provider", "cursor", "claude", "codex", "replay"],
         );
       }),
     );
