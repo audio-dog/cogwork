@@ -124,6 +124,15 @@ describe("activity session", () => {
     expect(reconnected.log.map((row) => row.summary)).toEqual(["42 · run running"]);
   });
 
+  it("refreshes Workflow inputs for live changes, not seed events", () => {
+    const changed = event({ _tag: "WorkspaceRemoved", workspace: "acme" });
+    const seeded = ingestDaemonEvent(initialActivitySession, changed, 1);
+    const live = ingestDaemonEvent(ingestDaemonEvent(seeded, event({ _tag: "SeedEnd" }), 2), changed, 3);
+
+    expect(seeded.workflowInputsRevision).toBe(0);
+    expect(live.workflowInputsRevision).toBe(1);
+  });
+
   it("releases a terminal run's preview scratch state", () => {
     const withPreview = ingestDaemonEvent(
       initialActivitySession,

@@ -10,7 +10,8 @@ import type {
   WorkflowTemplate,
   WorkspaceId,
 } from "@cogwork/contracts";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useUpdateEffect } from "@react-hookz/web";
 import { createContext, type ReactNode, use } from "react";
 import {
   applyWorkflowEditAtom,
@@ -89,7 +90,9 @@ const mergeWorkflowRecords = (...groups: ReadonlyArray<ReadonlyArray<WorkflowRec
 export function DaemonWorkflowProvider({ children }: { readonly children: ReactNode }) {
   const session = useActivitySession();
   const listed = useAtomValue(workflowsAtom);
-  const catalogResult = useAtomValue(workflowCatalogAtom(session.workflowInputsRevision));
+  const catalogResult = useAtomValue(workflowCatalogAtom);
+  const refreshCatalog = useAtomRefresh(workflowCatalogAtom);
+  useUpdateEffect(refreshCatalog, [refreshCatalog, session.workflowInputsRevision]);
   const templatesResult = useAtomValue(workflowTemplatesAtom);
   const create = useAtomSet(createWorkflowAtom, { mode: "promise" });
   const edit = useAtomSet(applyWorkflowEditAtom, { mode: "promise" });

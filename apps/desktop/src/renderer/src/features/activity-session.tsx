@@ -305,7 +305,7 @@ export const ingestDaemonEvent = (
       return next;
     },
   });
-  const workflowInputsChanged = workflowInputEventTags.some((tag) => tag === event._tag);
+  const workflowInputsChanged = !session.seed && workflowInputEventTags.some((tag) => tag === event._tag);
   return {
     ...session,
     board,

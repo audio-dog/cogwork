@@ -184,8 +184,10 @@ function BufferedTextarea({
   );
 }
 
-const workspaceIds = (workflow: WorkflowRecord) =>
-  workflow.workingCopy.workspaces._tag === "Listed" ? workflow.workingCopy.workspaces.workspaces : [];
+const workspaceIds = (workflow: WorkflowRecord, machine: MachineReadiness | null) =>
+  workflow.workingCopy.workspaces._tag === "Listed"
+    ? workflow.workingCopy.workspaces.workspaces
+    : (machine?.workspaces.map(({ id }) => id) ?? []);
 
 function WorkspaceSelect() {
   const {
@@ -320,6 +322,7 @@ function TriggerParameter({
   const {
     state: { workflow },
     actions,
+    meta: { machine },
   } = useWorkflowEditor();
   const trigger = workflow.workingCopy.triggers.find(({ id }) => id === triggerId);
   const [liveOptions, setLiveOptions] = useState<
@@ -344,7 +347,7 @@ function TriggerParameter({
       onOpenChange={async (open) => {
         if (!open) return;
         setLiveOptions(
-          (await actions.listOptions(entry.key, parameter.id, workspaceIds(workflow))).map(
+          (await actions.listOptions(entry.key, parameter.id, workspaceIds(workflow, machine))).map(
             ({ value, name }) => ({ value, label: name }),
           ),
         );
@@ -724,6 +727,7 @@ function ActionParameter({
   const {
     state: { workflow },
     actions,
+    meta: { machine },
   } = useWorkflowEditor();
   const [options, setOptions] = useState<ReadonlyArray<{ readonly value: string; readonly label: string }>>(
     value ? [{ value, label: value }] : [],
@@ -735,10 +739,12 @@ function ActionParameter({
       onOpenChange={async (open) => {
         if (!open) return;
         setOptions(
-          (await actions.listOptions(entry.key, parameter.id, workspaceIds(workflow))).map((option) => ({
-            value: option.value,
-            label: option.name,
-          })),
+          (await actions.listOptions(entry.key, parameter.id, workspaceIds(workflow, machine))).map(
+            (option) => ({
+              value: option.value,
+              label: option.name,
+            }),
+          ),
         );
       }}
       onValueChange={(selected) => {
@@ -1250,17 +1256,22 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
       ...rest.flatMap((entry) => entry.edits),
     ];
     const applied = applyWorkflowEdits(base.workingCopy, edits);
-    const canPreview = applied._tag === "Ok" && state.catalog !== null && state.machine !== null;
-    const next = canPreview
-      ? {
-          ...base,
-          workingCopy: applied.value,
-          workingRevision: base.workingRevision + pending.current.length,
-          diagnostics: validateWorkflow(applied.value, state.catalog),
-          readiness: adviseReadiness(applied.value, state.catalog, state.machine),
-        }
-      : base;
-    setPreview(next);
+    if (applied._tag !== "Ok") {
+      setPreview(base);
+      return;
+    }
+    const catalog = state.catalog;
+    const machine = state.machine;
+    const diagnostics = catalog ? validateWorkflow(applied.value, catalog) : base.diagnostics;
+    const canAdvise = catalog !== null && machine !== null;
+    const readiness = canAdvise ? adviseReadiness(applied.value, catalog, machine) : base.readiness;
+    setPreview({
+      ...base,
+      workingCopy: applied.value,
+      workingRevision: base.workingRevision + pending.current.length,
+      diagnostics,
+      readiness,
+    });
   };
   const editorActions: WorkflowClient = {
     ...actions,
@@ -1288,7 +1299,7 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
     publish: async (id) => {
       const queued = await editQueue.current;
       const latestRevision = Math.max(
-        workflow.workingRevision,
+        remote.workingRevision,
         queued.workingRevision,
         accepted.current.workingRevision,
       );
