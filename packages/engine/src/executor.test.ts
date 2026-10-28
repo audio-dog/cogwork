@@ -2694,7 +2694,14 @@ describe("Executor.execute", () => {
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
 
-      assert.strictEqual((yield* Ref.get(assemblyRequests))[0]?.workspace, implementWorkspace.config.name);
+      const [assemblyRequest] = yield* Ref.get(assemblyRequests);
+      assert.strictEqual(assemblyRequest?.workspace, implementWorkspace.config.name);
+      assert.deepStrictEqual(assemblyRequest?.operatingInstructions, {
+        instructionPackage: "implement-agent",
+        instruction: "",
+        questions: [],
+        hints: [],
+      });
       const [request] = yield* Ref.get(requests);
       assert.strictEqual(request?.plan.harness.model, "refreshed-model");
       const model = request?.plan.provenance.resolution.find(({ key }) => key === "model");
