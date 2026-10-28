@@ -1,0 +1,72 @@
+packages/engine/src/operation-resolution.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 111
+apps/cli/src/platform.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 447-454
+packages/contracts/src/workflow.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 934
+packages/engine/CONTEXT.md
+  s_e5d8f701c0c31e::t_c1680251147ccd 121
+apps/cli/src/external-harness.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 42,44,49,76
+apps/cli/CONTEXT.md
+  s_e5d8f701c0c31e::t_c1680251147ccd 27
+packages/engine/src/context-assembler.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 6,21-25,29,46,56,88-89,387-499
+  s_e5d8f701c0c31e::t_1694ab615723bf 500
+packages/engine/src/context-assembler.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 1,18,27-31,37,90-138,240-241,243-244,253,255,279-309,312-313,315-316,327,330,332-342,358,361,363
+packages/engine/src/context-fs.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 18
+packages/engine/src/harness.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 197,199-205,234
+packages/engine/src/run-plan.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 256,442-502
+apps/cli/src/rpc.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 9,88,95
+packages/engine/src/tools/sandbox.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 19-23,34
+packages/engine/src/executor.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 261,277,314,2681-2688
+apps/cli/src/platform.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 1324-1356
+packages/contracts/src/run-plan.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 182
+packages/engine/src/workflow.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 96-97,191-243
+  s_e5d8f701c0c31e::t_c9b23872c21041 244
+packages/contracts/CONTEXT.md
+  s_e5d8f701c0c31e::t_c1680251147ccd 475
+packages/engine/src/external-harness-runtime.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 477,482,492,505,508,696-697
+packages/engine/src/run-plan.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 941
+packages/contracts/src/workflow.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 407-430
+packages/engine/src/operation-resolution.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 683-688
+packages/engine/src/daemon-composition.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 125
+packages/engine/src/provider-runner.test.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 23,51,75-83,157,169,218-221,350-424
+  s_e5d8f701c0c31e::t_6df0f541ffe227 425
+packages/cursor-acp/src/harness.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 436
+packages/engine/src/testing/engine-test-layer.ts
+  s_e5d8f701c0c31e::t_c1680251147ccd 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "539bedc7a872ba5a6aa5591019b27f9ce17f4477",
+  "prompts": {},
+  "sessions": {
+    "s_e5d8f701c0c31e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18315-79b7-7810-9966-c6fe9bc24f12",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
