@@ -131,6 +131,40 @@ describe("observeWorkspace handback barrier", () => {
   );
 
   it.effect.each([
+    {
+      kind: "failing-check" as const,
+      signals: { latestFailingCheckAtMillis: 4 },
+    },
+    {
+      kind: "trusted-bot-finding" as const,
+      signals: { latestBotTriggerAtMillis: 4 },
+    },
+    {
+      kind: "merge-conflict" as const,
+      signals: { baseDivergence: "conflict" as const },
+    },
+  ])("resets stale no progress when a $kind clears the park", ({ kind, signals }) =>
+    Effect.gen(function* () {
+      const attempts = [1, 2, 3].map((atMillis) => attempt("follow-up", "failed", atMillis));
+      const observed = yield* observeWorkspace(
+        tracker({
+          ...item(attempts),
+          roles: ["ready-for-human"],
+          handback: null,
+          engineHandoffAtMillis: 5,
+          followUp: { ...followUp, attemptAtMillis: 3 },
+        }),
+        provider({ ...pr, observedAtMillis: 6, ...signals }),
+      )(workspace);
+      const eligible = classify(observed).eligible[0];
+
+      assert.strictEqual(eligible?.stage, "follow-up");
+      assert.strictEqual(eligible?.followUp?.noProgress, 1);
+      assert.strictEqual(eligible?.workContext.facts.followUpTrigger?.kind, kind);
+    }),
+  );
+
+  it.effect.each([
     { name: "draft pull request", signals: { draft: true } },
     { name: "unfollowable pull request", signals: { followable: false } },
   ])("keeps an engine follow-up park for a $name", ({ signals }) =>

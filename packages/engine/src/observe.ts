@@ -98,7 +98,8 @@ const reopenedItem = (
     },
     defaultClaimant,
   );
-  return { ...item, roles, handback, coordination, followUpTrigger: trigger };
+  const pr = item.pr?.followUp ? { ...item.pr, followUp: { ...item.pr.followUp, noProgress: 0 } } : item.pr;
+  return { ...item, roles, handback, coordination, followUpTrigger: trigger, pr };
 };
 
 const clearFailedFollowUpPark = (
