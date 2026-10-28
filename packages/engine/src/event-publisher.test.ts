@@ -373,7 +373,7 @@ const eligibleItem = (title: string): TrackerItem => ({
   url: "https://linear.app/acme/issue/AUD-1",
   roles: ["ready-for-agent"],
   assignees: [],
-  claimLabeled: false,
+  claimHeld: false,
   claim: null,
   claimedByUs: false,
   attempts: [],

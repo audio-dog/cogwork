@@ -1,5 +1,4 @@
 import {
-  type AttemptRecord,
   type Claim,
   type HandbackRecord,
   IssueTrackerError,
@@ -15,6 +14,7 @@ import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import type { CoordinationState } from "./coordination-adapter";
 import type { FollowUpMarker, ObservedPr } from "./follow-up";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
@@ -25,17 +25,12 @@ export const defaultTrackerCooldown = Duration.minutes(1);
 
 export type ClaimRequest = Omit<Claim, "by">;
 
-interface ObservedItemBase {
+interface ObservedItemBase extends CoordinationState {
   readonly id: WorkItemId;
   readonly title: string;
   readonly url: string;
   readonly roles: ReadonlyArray<TriageRole>;
   readonly assignees: ReadonlyArray<string>;
-  readonly claimLabeled: boolean;
-  readonly claim: Claim | null;
-  readonly claimedByUs: boolean;
-  readonly attempts: ReadonlyArray<AttemptRecord>;
-  readonly handback: HandbackRecord | null;
   readonly openBlockers: number;
   readonly proposal: string | null;
   readonly priority: Priority;

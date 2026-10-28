@@ -35,7 +35,7 @@ const item = (attempts: TrackerItem["attempts"]): TrackerItem => ({
   url: "https://github.com/owner/repo/issues/7",
   roles: ["ready-for-agent"],
   assignees: [],
-  claimLabeled: false,
+  claimHeld: false,
   claim: null,
   claimedByUs: false,
   attempts,

@@ -174,7 +174,7 @@ const classifyOne = (
   if (!ownedByActor(item, allowlist)) return Outcome.Drop({});
   if (item.roles.includes("wontfix")) return Outcome.Drop({});
   if (item.claim) return Outcome.Claimed({ claim: item.claim });
-  if (item.claimLabeled) return Outcome.Drop({});
+  if (item.claimHeld) return Outcome.Drop({});
   if (item.roles.includes("needs-info")) return Outcome.NeedsHuman({ reason: "needs-info" });
   if (item.roles.includes("ready-for-human")) return Outcome.NeedsHuman({ reason: "ready-for-human" });
   const readyToMergePr = readyToMergePrOf(item);

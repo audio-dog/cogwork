@@ -172,7 +172,7 @@ const parkedItem = (observed: ObservedItem | null) => {
     ...observed,
     roles,
     claim: null,
-    claimLabeled: false,
+    claimHeld: false,
     claimedByUs: false,
   });
 };

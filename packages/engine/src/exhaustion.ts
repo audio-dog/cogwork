@@ -1,9 +1,7 @@
 import type { AttemptRecord, HandbackRecord, OperationKey } from "@cogwork/contracts";
+import type { CoordinationState } from "./coordination-adapter";
 
-export interface ExhaustionHistory {
-  readonly attempts: ReadonlyArray<AttemptRecord>;
-  readonly handback: HandbackRecord | null;
-}
+export type ExhaustionHistory = Pick<CoordinationState, "attempts" | "handback">;
 
 export interface ExhaustionDecision {
   readonly failedAttempts: number;

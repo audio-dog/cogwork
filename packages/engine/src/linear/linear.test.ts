@@ -540,7 +540,7 @@ describe("linear work source adapter", () => {
       assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
       const observed = (yield* observeItems(workspace)).find((item) => item.id === "AUD-7");
       assert.deepStrictEqual(observed?.claim, { by: "cogwork", ...request });
-      assert.isTrue(observed?.claimLabeled);
+      assert.isTrue(observed?.claimHeld);
       assert.isTrue(observed?.claimedByUs);
     }).pipe(
       Effect.provide(
@@ -719,7 +719,7 @@ describe("linear work source adapter", () => {
       yield* source.claim(multiTeamWorkspace, id("BIL-7"), request);
       const observed = (yield* observeItems(multiTeamWorkspace)).find((item) => item.id === "BIL-7");
       assert.deepStrictEqual(observed?.claim, { by: "cogwork", ...request });
-      assert.isTrue(observed?.claimLabeled);
+      assert.isTrue(observed?.claimHeld);
     }).pipe(
       Effect.provide(
         withClient({

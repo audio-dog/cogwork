@@ -13,7 +13,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   url: over.url ?? `https://github.com/owner/repo/issues/${over.id}`,
   roles: over.roles ?? [],
   assignees: over.assignees ?? [],
-  claimLabeled: over.claimLabeled ?? false,
+  claimHeld: over.claimHeld ?? false,
   claim: over.claim ?? null,
   claimedByUs: over.claimedByUs ?? false,
   attempts: over.attempts ?? [],
@@ -212,7 +212,7 @@ describe("classify", () => {
 
   it("excludes claim-labeled items whose marker is missing to avoid double-claiming", () => {
     const { eligible, claimed, needsHuman } = classify([
-      item({ id: "1", roles: ["ready-for-agent"], claimLabeled: true }),
+      item({ id: "1", roles: ["ready-for-agent"], claimHeld: true }),
     ]);
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
   });

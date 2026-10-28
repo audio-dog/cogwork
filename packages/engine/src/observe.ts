@@ -51,7 +51,7 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
     url: item.url,
     roles: item.roles,
     assignees: item.assignees,
-    claimLabeled: item.claimLabeled,
+    claimHeld: item.claimHeld,
     claim: item.claim,
     claimedByUs: item.claimedByUs,
     attempts: item.attempts,

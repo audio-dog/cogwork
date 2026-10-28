@@ -207,7 +207,7 @@ describe("coordination tracker", () => {
       assert.strictEqual(error.message, "coordination marker write failed");
 
       const [item] = yield* tracker.observe(workspace);
-      assert.isFalse(item?.claimLabeled ?? true);
+      assert.isFalse(item?.claimHeld ?? true);
       const nextPoll = classify(item ? [{ ...item, pr: null }] : []);
       assert.deepStrictEqual(
         nextPoll.eligible.map((work) => work.id),
@@ -242,7 +242,7 @@ describe("coordination tracker", () => {
         .pipe(Effect.flip);
 
       const [item] = yield* failingTracker.observe(workspace);
-      assert.isTrue(item?.claimLabeled ?? false);
+      assert.isTrue(item?.claimHeld ?? false);
       assert.isTrue(item?.claimedByUs ?? false);
       assert.strictEqual(item?.claim?.claimedAtMillis, 1_722_000_000_000);
     }),
