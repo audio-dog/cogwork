@@ -295,9 +295,32 @@ export const makeCoordinationTracker = <Ref, CommentId>(
   const { codec } = host;
   const records = makeTrackerRecords(host);
 
-  const applyRoles = Effect.fn("coordinationTracker.applyRoles")(function* (ref: Ref, changes: RoleChanges) {
-    yield* Effect.forEach(changes.add, (role) => host.addRole(ref, role));
-    yield* Effect.forEach(changes.remove, (role) => host.removeRole(ref, role)).pipe(
+  const handOffWrite = <A, R>(
+    write: Effect.Effect<A, IssueTrackerError, R>,
+    item: WorkItemId,
+    step: "add role" | "remove role" | "note",
+  ) =>
+    write.pipe(
+      Effect.tapError((error) =>
+        Effect.logWarning("hand-off write failed", { item, step, message: error.message }),
+      ),
+    );
+
+  const applyRoles = Effect.fn("coordinationTracker.applyRoles")(function* (
+    ref: Ref,
+    changes: RoleChanges,
+    handOffItem?: WorkItemId,
+  ) {
+    const addRole = (role: TriageRole) => {
+      const write = host.addRole(ref, role);
+      return handOffItem === undefined ? write : handOffWrite(write, handOffItem, "add role");
+    };
+    const removeRole = (role: TriageRole) => {
+      const write = host.removeRole(ref, role);
+      return handOffItem === undefined ? write : handOffWrite(write, handOffItem, "remove role");
+    };
+    yield* Effect.forEach(changes.add, addRole);
+    yield* Effect.forEach(changes.remove, removeRole).pipe(
       Effect.tapError(() =>
         Effect.forEach(changes.add, (role) => host.removeRole(ref, role)).pipe(
           Effect.catchTag("IssueTrackerError", (error) =>
@@ -444,6 +467,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
         {
           operation: { workflow: outcome.workflow, operation: outcome.operation },
           outcome: "failed",
+          ...(outcome.terminal === true ? { terminal: true } : {}),
           atMillis: outcome.atMillis,
           lineage: lineageFor(workspace, id),
         },
@@ -456,8 +480,8 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: HandOffOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* applyRoles(ref, { remove: [handoffRoleFor(outcome.stage)], add: ["ready-for-human"] });
-      if (outcome.note !== undefined) yield* writeNote(ref, outcome.note);
+      yield* applyRoles(ref, { remove: [handoffRoleFor(outcome.stage)], add: ["ready-for-human"] }, id);
+      if (outcome.note !== undefined) yield* handOffWrite(writeNote(ref, outcome.note), id, "note");
     }),
     handBack: Effect.fn("coordinationTracker.handBack")(function* (
       workspace: WorkspaceIssueTrackerBinding,
