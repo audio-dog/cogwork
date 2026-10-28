@@ -101,9 +101,10 @@ and multi-user; the hosting itself has no owner and no date.
 product's future, and session contracts are shaped for them from the start. The surface and the
 machinery come after mission control and the owned runtime are real.
 
-**Pull request review stays on GitHub.** The one hard human gate is review and merge, and it
-lives where the maintainer already reviews. The PR read model is shaped richly enough to host an
-in-app panel the day that changes.
+**Pull request review stays on GitHub.** The shipped coding template ends with a person reviewing and
+merging there, as does the process used to build Cogwork. Workflow authors choose their human gates;
+Cogwork does not enforce one. Branch protection supplies a hard mechanism when wanted. The PR read
+model is shaped richly enough to host an in-app panel the day that changes.
 
 **Workspace config is heading for declarative, schema-validated data.** It is executable
 TypeScript today. That is a migration with a destination, not the destination.
@@ -123,8 +124,8 @@ tracker, so the roles separate eventually.
 **"Act" generalises to an actuator.** The coding harness is one actuator and the owned provider
 layer is another. Nothing may assume that acting means running a harness.
 
-**The coordination store becomes ours when a work item has no tracker.** The first small instance
-already exists as an ingestion watermark; the full store waits for the first non-coding workflow.
+**The coordination store becomes ours when a work item has no tracker.** The full store waits for the
+first non-coding workflow.
 
 **A knowledge layer — what cogwork knows about you — is deferred.** Meeting ingestion is its seed.
 

@@ -3,6 +3,11 @@
 - **Status:** accepted
 - **Date:** 2026-08-05
 
+> **Amendment (2026-10-27).** [Customizable Workflows §17](../spec/customizable-workflows.md#17-documents-and-adrs-the-build-changes)
+> makes human gates the Workflow author's choice. The statement that a person reviews and merges
+> describes the shipped coding template and how Cogwork is built, not an approval guard in Cogwork.
+> GitHub branch protection can enforce that gate when a hard mechanism is wanted.
+
 ## Context
 
 The mission-control v1 spec ([#160](https://github.com/colonylabs/cogwork/issues/160),
