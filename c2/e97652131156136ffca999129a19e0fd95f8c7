@@ -1,0 +1,24 @@
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_37bdafd0796541::t_3a910e87a8427d 4,6-17,19,21-40,42-47,50-57,59-81,85-87,89-107,113-115,117-120,122-132,137,139-140,142-143,146-183
+  s_37bdafd0796541::t_2a275210344789 1
+apps/desktop/src/renderer/src/routes/_app/workflows/new.tsx
+  s_37bdafd0796541::t_3a910e87a8427d 2,9
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId.tsx
+  s_37bdafd0796541::t_3a910e87a8427d 6,14-15,35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c2e97652131156136ffca999129a19e0fd95f8c7",
+  "prompts": {},
+  "sessions": {
+    "s_37bdafd0796541": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18358-8a25-7891-a2bf-38f296669467",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
