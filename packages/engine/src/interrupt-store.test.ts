@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { TestClock } from "effect/testing";
-import { InterruptStore, layer } from "./interrupt-store";
+import { InterruptStore, layer, make } from "./interrupt-store";
 
 const record = (
   interruptId: string,
@@ -81,6 +81,17 @@ describe("InterruptStore", () => {
       yield* store.create(record("i1", 10));
 
       assert.strictEqual((yield* store.get("i1"))?.status, "resolved");
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("drops pending interrupts when its process-scoped store is rebuilt", () =>
+    Effect.gen(function* () {
+      const previous = yield* InterruptStore;
+      yield* previous.create(record("pending", 10));
+      assert.lengthOf(yield* previous.listPending("thread-1"), 1);
+
+      const current = yield* make;
+      assert.lengthOf(yield* current.listPending("thread-1"), 0);
     }).pipe(Effect.provide(layer)),
   );
 });

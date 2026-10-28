@@ -1,4 +1,11 @@
-import type { AgUiEvent, HarnessName, RunId, RunPlan, RunPlanPolicyProfile } from "@cogwork/contracts";
+import type {
+  AgUiEvent,
+  HarnessName,
+  RunId,
+  RunPlan,
+  RunPlanPolicyProfile,
+  SessionId,
+} from "@cogwork/contracts";
 import {
   type AgentLoopStrategy,
   type AnyTool,
@@ -46,7 +53,7 @@ export interface RunChatOptions {
   readonly agentLoopStrategy: AgentLoopStrategy;
   readonly abortController: AbortController;
   readonly runId: RunId;
-  readonly threadId: string;
+  readonly threadId: SessionId;
   readonly outputSchema?: JSONSchema;
 }
 
@@ -94,6 +101,11 @@ export const defaultRunBudget = (profile: RunPlanPolicyProfile) => runBudgets[pr
 
 const launchError = (retryable: boolean, message: string) =>
   new HarnessError({ reason: "launch", retryable, message });
+
+const requireSession = (session: SessionId | null) =>
+  session
+    ? Effect.succeed(session)
+    : Effect.fail(launchError(false, "provider Harness launch requires a Cogwork Session"));
 
 const contextMiddleware = (instructions: ReadonlyArray<{ readonly content: string }>): ChatMiddleware => ({
   name: "cogwork-context",
@@ -196,10 +208,8 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           );
 
           const store = yield* SessionStore;
-          const session = request.session;
-          const history = session
-            ? yield* Effect.promise(() => store.persistence.stores.messages.loadThread(session))
-            : [];
+          const session = yield* requireSession(request.session);
+          const history = yield* Effect.promise(() => store.persistence.stores.messages.loadThread(session));
           const messages: ReadonlyArray<ModelMessage> = [
             ...history,
             workContextMessage(plan.workContext),
@@ -237,7 +247,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             agentLoopStrategy: maxIterations(defaultLoopBudget(plan.harness.profile)),
             abortController,
             runId: plan.id,
-            threadId: session ?? plan.id,
+            threadId: session,
             outputSchema: plan.structuredOutput ?? undefined,
           });
 
