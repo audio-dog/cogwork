@@ -3,10 +3,12 @@ packages/engine/src/coordination.ts
   s_638f6f3aaaa58b::t_486faa198983a8 211
   s_638f6f3aaaa58b::t_ca0ec402eaf554 123-124,126,135,144-145,148-152
   s_64831d19921b1b::t_bc727006ff22a7 122
+  s_638f6f3aaaa58b::t_08a00b02b3ae66 217
 packages/contracts/src/coordination.ts
   s_638f6f3aaaa58b::t_ca0ec402eaf554 2,5-9,14,36
 packages/engine/src/coordination.test.ts
   s_638f6f3aaaa58b::t_302cafdd0f374c 1,5,42,71-78,120,123-128,131-135
+  s_638f6f3aaaa58b::t_08a00b02b3ae66 121-122,129-130
 ---
 {
   "schema_version": "authorship/3.0.0",
