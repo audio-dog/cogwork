@@ -1,0 +1,29 @@
+packages/engine/CONTEXT.md
+  s_feb934fdd7b945::t_8ac6b61dfa68d7 121
+packages/engine/src/provider-runner.test.ts
+  s_feb934fdd7b945::t_4e082cd9e511a3 23,371,378,406
+  s_feb934fdd7b945::t_bd5e5a0911213e 75-83,352-356,362-363,381-389,393-394,409-413,417
+  s_feb934fdd7b945::t_f0d638f9516806 404
+  s_feb934fdd7b945::t_663108cb5182f3 51,168,217-220,349-351,357-361,364-366,368-370,372,374-377,379-380,390-392,395-397,399-400,402-403,405,407-408,414-416,418-420,423
+  s_feb934fdd7b945::t_3ba5a3ea0213c9 367,373,398,401,421-422
+  s_feb934fdd7b945::t_61c3c436ae5d01 424
+packages/engine/src/tools/sandbox.ts
+  s_feb934fdd7b945::t_8ac6b61dfa68d7 19-20,22-23,34
+  s_feb934fdd7b945::t_7fd13c0db689de 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4136fecd802f6a70ff7e3b3d706f93e58942384b",
+  "prompts": {},
+  "sessions": {
+    "s_feb934fdd7b945": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18339-7e6c-7c82-9f3f-ca0d50b381d2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
