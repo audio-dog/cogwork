@@ -76,9 +76,22 @@ const diagnosticsAt = (workflow: WorkflowRecord, location: Partial<WorkflowDiagn
     ].every(({ expected, actual }) => expected === undefined || expected === actual),
   );
 
+const diagnosticKey = (diagnostic: WorkflowDiagnostic, index: number) =>
+  [
+    diagnostic.code,
+    diagnostic.class,
+    diagnostic.location.trigger,
+    diagnostic.location.operation,
+    diagnostic.location.question,
+    diagnostic.location.choice,
+    diagnostic.location.field,
+    diagnostic.message,
+    index,
+  ].join(":");
+
 function Diagnostics({ diagnostics }: { readonly diagnostics: ReadonlyArray<WorkflowDiagnostic> }) {
-  return diagnostics.map((diagnostic) => (
-    <Alert key={`${diagnostic.code}:${diagnostic.location.field}`} data-diagnostic-class={diagnostic.class}>
+  return diagnostics.map((diagnostic, index) => (
+    <Alert key={diagnosticKey(diagnostic, index)} data-diagnostic-class={diagnostic.class}>
       <AlertDescription className="flex items-center gap-2">
         <Badge variant={diagnostic.class === "malformed" ? "destructive" : "secondary"}>
           {diagnostic.class}

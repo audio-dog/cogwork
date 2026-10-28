@@ -201,6 +201,7 @@ const mountEditor = async (workflow: WorkflowRecord, client: WorkflowClient) => 
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
   document.body.replaceChildren();
 });
 
@@ -460,6 +461,51 @@ describe("WorkflowProvider", () => {
       control.click();
     });
     expect(switchEnabled).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it("renders same-code diagnostics with distinct identities", async () => {
+    const duplicateLocation = {
+      trigger: null,
+      operation: null,
+      question: null,
+      choice: null,
+      field: "workflow",
+    };
+    const workflow: WorkflowRecord = {
+      ...record,
+      diagnostics: [
+        {
+          code: "no-trigger",
+          class: "incomplete",
+          location: duplicateLocation,
+          message: "Add a trigger",
+        },
+      ],
+      readiness: [
+        {
+          code: "no-trigger",
+          class: "advisory",
+          location: duplicateLocation,
+          message: "No trigger is ready",
+        },
+      ],
+    };
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { container, root } = await mountEditor(workflow, client);
+
+    expect(
+      [...container.querySelectorAll("[data-diagnostic-class]")].map(({ textContent }) => textContent),
+    ).toEqual(expect.arrayContaining(["incompleteAdd a trigger", "advisoryNo trigger is ready"]));
+    expect(consoleError.mock.calls.flat().join(" ")).not.toContain("same key");
     await act(async () => root.unmount());
   });
 
