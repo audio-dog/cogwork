@@ -1,0 +1,87 @@
+packages/engine/src/linear/oauth.test.ts
+  s_57ba1d69a7a159::t_582a45fd1a12a6 172
+apps/cli/src/granola-login.test.ts
+  s_57ba1d69a7a159::t_82f44b55b9849f 132-133
+  s_57ba1d69a7a159::t_24132093ecd95c 10-12,52,59,62-118,145,150-162,166-167
+  s_57ba1d69a7a159::t_c005149d1766ab 163
+apps/cli/src/granola-login.ts
+  s_57ba1d69a7a159::t_c5495306d56f44 139
+  s_57ba1d69a7a159::t_88eda88d61e467 19,37-42,48,62,107,126,152,222,228
+  s_57ba1d69a7a159::t_8c3f3653fe4515 175
+  s_57ba1d69a7a159::t_141ab3e069ac2e 116
+  s_57ba1d69a7a159::t_effd9591f2e604 4,18,21,23,25,44-47,49,51-58,60,75,102-105,111-115,130-131,138,149-151,153-174,176-195,197-200,202-211
+  s_57ba1d69a7a159::t_31386dab65b58f 6-8,10
+  s_57ba1d69a7a159::t_2e80029ddefd83 9
+  s_57ba1d69a7a159::t_175d1b4a34b1ac 20
+  s_57ba1d69a7a159::t_b9f8099b101619 196
+  s_57ba1d69a7a159::t_436c05ea1baf70 201
+  s_57ba1d69a7a159::t_da8261824ecba1 212
+apps/cli/src/credentials.ts
+  s_57ba1d69a7a159::t_df4ac92b3d3742 9,166-169,174-182
+packages/engine/src/commands.test.ts
+  s_57ba1d69a7a159::t_8f2e630ceea1fd 2380,2423,2425,2438,2443-2445
+  s_57ba1d69a7a159::t_85afae0d8cd2a3 434-457,2433-2435,2446,2450,2469-2472
+  s_57ba1d69a7a159::t_e6ab48f2f5c78c 2465
+  s_57ba1d69a7a159::t_1ab237a0d3e73d 71,2367-2379,2381-2396,2398-2422,2424,2426-2432,2436-2437,2439-2442,2447-2449,2451-2453,2456-2462,2467-2468,2473-2474
+  s_57ba1d69a7a159::t_7eeb8dfd862342 46
+  s_57ba1d69a7a159::t_9da17097a1d3ca 2397
+  s_57ba1d69a7a159::t_3ba18e3cd32dc5 62-67,615,619,2454-2455,2463-2464,2466
+  s_57ba1d69a7a159::t_cba9edb3366a73 2475
+packages/engine/src/connection-verify.ts
+  s_57ba1d69a7a159::t_79fcecbaeaa875 1,5-7,28-72,77
+  s_57ba1d69a7a159::t_5d18268aa19c5a 81
+packages/engine/src/connection.ts
+  s_57ba1d69a7a159::t_7be0ffdb64952e 213-216,218-224
+  s_57ba1d69a7a159::t_06c4836a06bda6 9,25,225
+  s_57ba1d69a7a159::t_ef2463fd754ad9 217
+packages/engine/src/credential-store.ts
+  s_57ba1d69a7a159::t_1f66b59c579d93 550-552
+  s_57ba1d69a7a159::t_829e4b72a90460 207
+  s_57ba1d69a7a159::t_32ca21bc25ec13 54-55,161,163-164,208-210,326-333,537-549,553,555-558,563
+  s_57ba1d69a7a159::t_6e3a6f591d4fb5 533-536
+  s_57ba1d69a7a159::t_9a6e8e5c94fc33 554
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_57ba1d69a7a159::t_5194716f5fb7e0 110,112-118,130,225-236
+apps/cli/src/connection-commands.test.ts
+  s_57ba1d69a7a159::t_fb22de88847e54 135-136
+packages/engine/src/connection-verify.test.ts
+  s_57ba1d69a7a159::t_816f1cab9e8827 80-99
+packages/engine/src/connection.test.ts
+  s_57ba1d69a7a159::t_c73dab143d40f2 179-218
+packages/engine/src/commands.ts
+  s_57ba1d69a7a159::t_6bca7a6245b06e 942-949,955-964
+apps/cli/CONTEXT.md
+  s_57ba1d69a7a159::t_925d6b51a56644 43
+packages/engine/src/credential-store.test.ts
+  s_57ba1d69a7a159::t_31ef4a4f1e48a8 429-446,448-450
+  s_57ba1d69a7a159::t_9d85b7ed9945bf 447
+apps/cli/src/login.ts
+  s_57ba1d69a7a159::t_c3d9a50445c273 55
+  s_57ba1d69a7a159::t_ec3e440259440e 105-110
+  s_57ba1d69a7a159::t_141ab3e069ac2e 120-124,130-131,140-142,146,152-159,172
+  s_57ba1d69a7a159::t_5cdb18d5db83fa 44-45,49-54,56-59,66-67,95,114-117,125-128,132-139,143-145,147-151,161-163,168-171,176
+  s_57ba1d69a7a159::t_bf90cd8597b6a8 113
+  s_57ba1d69a7a159::t_78a9a01a6ac901 129
+  s_57ba1d69a7a159::t_c1722c93d7a523 160
+packages/engine/src/testing/harness-probe-layer.ts
+  s_57ba1d69a7a159::t_3ba18e3cd32dc5 26-29,32
+apps/cli/src/login.test.ts
+  s_57ba1d69a7a159::t_3e738f4af66111 10,217,219,226-242
+  s_57ba1d69a7a159::t_8cbc7b176895c5 214-216,218,220-225,243-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f49a1b1ba7ed2903870eb8266bb016feb168fe89",
+  "prompts": {},
+  "sessions": {
+    "s_57ba1d69a7a159": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18342-7714-7b42-a1c1-a8dff923aa83",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
