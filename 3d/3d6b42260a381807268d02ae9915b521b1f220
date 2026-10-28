@@ -1,0 +1,21 @@
+packages/engine/src/run-preparation.ts
+  s_64831d19921b1b::t_ecc26a3bf9dfcb 85-87,179-180,210,220,228-230,234
+packages/engine/src/run-preparation.test.ts
+  s_64831d19921b1b::t_a101ab7d267d29 496,498,500,502,504
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3d3d6b42260a381807268d02ae9915b521b1f220",
+  "prompts": {},
+  "sessions": {
+    "s_64831d19921b1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180da-be7c-7b13-97e4-2d89cf85a6f8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
