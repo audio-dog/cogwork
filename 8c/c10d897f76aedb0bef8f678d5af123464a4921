@@ -1,0 +1,46 @@
+docs/adr/0007-autonomous-with-override-triage-self-halts.md
+  s_2437d60db6d39c::t_26edc160f0cdb9 6-10
+packages/contracts/src/triage.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 201,205-209
+packages/engine/src/executor.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 20,547-552,554,801-802,808
+docs/agents/product.md
+  s_2437d60db6d39c::t_26edc160f0cdb9 104-107,127-128
+packages/engine/src/playbook.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 7,11,51,85,139,150,161
+docs/adr/0030-work-context-carries-the-work-item-prose.md
+  s_2437d60db6d39c::t_26edc160f0cdb9 6-9
+packages/engine/src/run-plan.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 58,691-692,925,955
+docs/agents/technical-disposition.md
+  s_2437d60db6d39c::t_26edc160f0cdb9 203-206,290-297
+packages/engine/src/run-preparation.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 16
+packages/contracts/src/ag-ui.test.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 110-127
+packages/engine/src/interrupt-store.test.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 4,86-94
+  s_2437d60db6d39c::t_c5d785f6c2dc8f 95-96
+packages/engine/src/provider-runner.test.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 216,317,331-347
+packages/engine/src/provider-runner.ts
+  s_2437d60db6d39c::t_26edc160f0cdb9 1-8,56,105-109,211-212,250
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_2437d60db6d39c::t_26edc160f0cdb9 3-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8cc10d897f76aedb0bef8f678d5af123464a4921",
+  "prompts": {},
+  "sessions": {
+    "s_2437d60db6d39c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180eb-515b-7dd1-8b80-bc81de77682a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
