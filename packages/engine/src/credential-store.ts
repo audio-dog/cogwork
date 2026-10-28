@@ -251,8 +251,8 @@ const matching = (account: CredentialAccount) => (credential: StoredCredential) 
   (account.organization === null || credential.organization === account.organization);
 
 const connectionCredentialPriority: Record<StoredConnectionCredential["_tag"], number> = {
-  Stored: 0,
-  ApiKey: 1,
+  ApiKey: 0,
+  Stored: 1,
   Env: 2,
   GitHubCli: 3,
 };

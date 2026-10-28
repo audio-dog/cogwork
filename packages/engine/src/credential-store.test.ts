@@ -215,6 +215,36 @@ describe("CredentialStore (Connections)", () => {
     }),
   );
 
+  it.effect("prefers a Granola API key when the Connection also has a browser grant", () =>
+    Effect.gen(function* () {
+      const id = connectionId("granola/person@example.com");
+      const grant = {
+        ...stored("person@example.com", storedToken(far, "oauth-token")),
+        issueTracker: "granola",
+      };
+      const store = make({
+        stored: {
+          load: Effect.succeed([grant]),
+          save: () => Effect.void,
+          loadConnectionCredentials: Effect.succeed([
+            { _tag: "Stored", connectionId: id },
+            { _tag: "ApiKey", connectionId: id, key: Redacted.make("grn_key") },
+          ]),
+        },
+      });
+      const credential = yield* store.bearerToken({
+        ...account,
+        key: id,
+        issueTracker: "granola",
+        organization: "person@example.com",
+        connectionId: id,
+      });
+
+      assert.strictEqual(credential.source, "stored-key");
+      assert.strictEqual(Redacted.value(credential.token), "grn_key");
+    }),
+  );
+
   it.effect("resolves the env var selected for a Connection", () =>
     Effect.gen(function* () {
       const store = make({
