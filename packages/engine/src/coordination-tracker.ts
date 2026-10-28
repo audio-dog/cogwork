@@ -73,7 +73,7 @@ export interface CoordinationHost<Ref, CommentId> {
 }
 
 interface TrackerCoordinationAdapter<Ref, CommentId>
-  extends CoordinationAdapter<ListedItem<CommentId>, Ref, IssueTrackerError> {
+  extends CoordinationAdapter<ListedItem<CommentId>, Ref, undefined, IssueTrackerError> {
   readonly appendAttemptWithReason: (
     ref: Ref,
     attempt: AttemptRecord,
@@ -86,7 +86,7 @@ interface TrackerCoordinationAdapter<Ref, CommentId>
   ) => Effect.Effect<void, IssueTrackerError>;
 }
 
-export const makeTrackerCoordinationAdapter = <Ref, CommentId>(
+const makeTrackerCoordinationAdapter = <Ref, CommentId>(
   host: CoordinationHost<Ref, CommentId>,
 ): TrackerCoordinationAdapter<Ref, CommentId> => {
   const appendAttemptWithReason = (ref: Ref, attempt: AttemptRecord, reason?: string) =>
@@ -119,7 +119,7 @@ export const makeTrackerCoordinationAdapter = <Ref, CommentId>(
         status: Coordination.claimStatusFor(claim),
         marker: Coordination.serializeClaim(host.codec, claim),
       }).pipe(Effect.andThen(host.addClaim(ref))),
-    release: host.removeClaim,
+    release: (ref) => host.removeClaim(ref),
     appendAttempt: (ref, attempt) => appendAttemptWithReason(ref, attempt),
     appendHandback: (ref, handback) => appendHandbackWithNote(ref, handback),
     appendAttemptWithReason,
@@ -199,7 +199,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       id: WorkItemId,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* coordination.release(ref);
+      yield* coordination.release(ref, undefined);
     }),
     note: Effect.fn("coordinationTracker.note")(function* (
       workspace: WorkspaceIssueTrackerBinding,

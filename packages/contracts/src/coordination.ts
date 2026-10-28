@@ -2,17 +2,26 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
 import { LifecycleStage } from "./triage";
 
-const Lineage = {
-  lineageRoot: Schema.optionalKey(WorkItemId),
-  lineageParent: Schema.optionalKey(Schema.NullOr(WorkItemId)),
+const WithoutLineage = {
+  lineageRoot: Schema.optionalKey(Schema.Never),
+  lineageParent: Schema.optionalKey(Schema.Never),
 };
 
-export const Claim = Schema.Struct({
+const WithLineage = {
+  lineageRoot: WorkItemId,
+  lineageParent: Schema.NullOr(WorkItemId),
+};
+
+const ClaimFields = {
   by: TrimmedNonEmptyString,
   claimedAtMillis: Schema.Natural,
   stage: Schema.optional(LifecycleStage),
-  ...Lineage,
-});
+};
+
+export const Claim = Schema.Union([
+  Schema.Struct({ ...ClaimFields, ...WithoutLineage }),
+  Schema.Struct({ ...ClaimFields, ...WithLineage }),
+]);
 export type Claim = typeof Claim.Type;
 
 export const AttemptOutcome = Schema.Literals(["succeeded", "failed", "abandoned"]);
@@ -29,12 +38,16 @@ export const codingOperation = (stage: LifecycleStage) => ({
   operation: stage,
 });
 
-export const AttemptRecord = Schema.Struct({
+const AttemptFields = {
   ...OperationKey.fields,
   outcome: AttemptOutcome,
   atMillis: Schema.Natural,
-  ...Lineage,
-});
+};
+
+export const AttemptRecord = Schema.Union([
+  Schema.Struct({ ...AttemptFields, ...WithoutLineage }),
+  Schema.Struct({ ...AttemptFields, ...WithLineage }),
+]);
 export type AttemptRecord = typeof AttemptRecord.Type;
 
 export const HandbackRecord = Schema.Struct({

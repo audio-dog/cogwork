@@ -1,7 +1,8 @@
-import { type AttemptRecord, type Claim, type HandbackRecord, WorkItemId } from "@cogwork/contracts";
+import { AttemptRecord, Claim, type HandbackRecord, WorkItemId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { triageProposalBody } from "./comments";
 import {
@@ -40,6 +41,25 @@ const codecs = [
   ["linear", linearCodec],
 ] as const satisfies ReadonlyArray<readonly [string, WireCodec]>;
 const itemId = Schema.decodeSync(WorkItemId);
+
+it("rejects partial Claim and Attempt lineage", () => {
+  const root = itemId("#1");
+  assert.isTrue(
+    Result.isFailure(
+      Schema.decodeUnknownResult(Claim)({ by: "cogwork", claimedAtMillis: 1, lineageRoot: root }),
+    ),
+  );
+  assert.isTrue(
+    Result.isFailure(
+      Schema.decodeUnknownResult(AttemptRecord)({
+        stage: "implement",
+        outcome: "failed",
+        atMillis: 1,
+        lineageParent: null,
+      }),
+    ),
+  );
+});
 
 const makeStore = () =>
   Effect.gen(function* () {

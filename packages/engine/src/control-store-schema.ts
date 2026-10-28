@@ -1,6 +1,6 @@
 import { maxSchedulerLimit } from "@cogwork/contracts";
 import { desc, sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const daemonLimits = sqliteTable(
   "daemon_limits",
@@ -106,28 +106,59 @@ export const pluginInstalls = sqliteTable("plugin_installs", {
 
 export const coordinationItems = sqliteTable("coordination_items", {
   workItem: text("work_item").primaryKey(),
-  observedSourceRevision: text("observed_source_revision").notNull(),
-  processedSourceRevision: text("processed_source_revision"),
 });
+
+export const coordinationSourceRevisions = sqliteTable(
+  "coordination_source_revisions",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
+    revision: text("revision").notNull(),
+    processed: integer("processed", { mode: "boolean" }).notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex("coordination_source_revisions_item_revision").on(table.workItem, table.revision),
+    index("coordination_source_revisions_item_sequence").on(table.workItem, desc(table.sequence)),
+    check("coordination_source_revisions_revision", sql`length(trim(${table.revision})) > 0`),
+  ],
+);
 
 export const coordinationClaimEvents = sqliteTable(
   "coordination_claim_events",
   {
     sequence: integer("sequence").primaryKey({ autoIncrement: true }),
-    workItem: text("work_item").notNull(),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
     action: text("action").notNull(),
     by: text("by"),
     claimedAtMillis: integer("claimed_at_millis"),
     stage: text("stage"),
     lineageRoot: text("lineage_root"),
     lineageParent: text("lineage_parent"),
+    releasedClaimSequence: integer("released_claim_sequence"),
   },
   (table) => [
     index("coordination_claim_events_item_sequence").on(table.workItem, desc(table.sequence)),
     check("coordination_claim_events_action", sql`${table.action} IN ('claim', 'release')`),
     check(
       "coordination_claim_events_shape",
-      sql`(${table.action} = 'claim' AND ${table.by} IS NOT NULL AND ${table.claimedAtMillis} IS NOT NULL AND ${table.lineageRoot} IS NOT NULL) OR (${table.action} = 'release' AND ${table.by} IS NULL AND ${table.claimedAtMillis} IS NULL AND ${table.stage} IS NULL AND ${table.lineageRoot} IS NULL AND ${table.lineageParent} IS NULL)`,
+      sql`(${table.action} = 'claim' AND ${table.by} IS NOT NULL AND ${table.claimedAtMillis} IS NOT NULL AND ${table.lineageRoot} IS NOT NULL AND ${table.releasedClaimSequence} IS NULL) OR (${table.action} = 'release' AND ${table.by} IS NULL AND ${table.claimedAtMillis} IS NULL AND ${table.stage} IS NULL AND ${table.lineageRoot} IS NULL AND ${table.lineageParent} IS NULL AND ${table.releasedClaimSequence} IS NOT NULL)`,
+    ),
+    check("coordination_claim_events_by", sql`${table.by} IS NULL OR length(trim(${table.by})) > 0`),
+    check(
+      "coordination_claim_events_claimed_at",
+      sql`${table.claimedAtMillis} IS NULL OR ${table.claimedAtMillis} >= 0`,
+    ),
+    check(
+      "coordination_claim_events_stage",
+      sql`${table.stage} IS NULL OR ${table.stage} IN ('triage', 'implement', 'follow-up')`,
+    ),
+    check(
+      "coordination_claim_events_lineage_root",
+      sql`${table.lineageRoot} IS NULL OR length(trim(${table.lineageRoot})) > 0`,
     ),
   ],
 );
@@ -136,7 +167,9 @@ export const coordinationAttempts = sqliteTable(
   "coordination_attempts",
   {
     sequence: integer("sequence").primaryKey({ autoIncrement: true }),
-    workItem: text("work_item").notNull(),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
     stage: text("stage").notNull(),
     outcome: text("outcome").notNull(),
     atMillis: integer("at_millis").notNull(),
@@ -145,7 +178,10 @@ export const coordinationAttempts = sqliteTable(
   },
   (table) => [
     index("coordination_attempts_item_sequence").on(table.workItem, table.sequence),
+    check("coordination_attempts_stage", sql`${table.stage} IN ('triage', 'implement', 'follow-up')`),
     check("coordination_attempts_outcome", sql`${table.outcome} IN ('succeeded', 'failed', 'abandoned')`),
+    check("coordination_attempts_at", sql`${table.atMillis} >= 0`),
+    check("coordination_attempts_lineage_root", sql`length(trim(${table.lineageRoot})) > 0`),
   ],
 );
 
@@ -153,11 +189,17 @@ export const coordinationHandbacks = sqliteTable(
   "coordination_handbacks",
   {
     sequence: integer("sequence").primaryKey({ autoIncrement: true }),
-    workItem: text("work_item").notNull(),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
     by: text("by").notNull(),
     atMillis: integer("at_millis").notNull(),
   },
-  (table) => [index("coordination_handbacks_item_sequence").on(table.workItem, desc(table.sequence))],
+  (table) => [
+    index("coordination_handbacks_item_sequence").on(table.workItem, desc(table.sequence)),
+    check("coordination_handbacks_by", sql`length(trim(${table.by})) > 0`),
+    check("coordination_handbacks_at", sql`${table.atMillis} >= 0`),
+  ],
 );
 
 // Effect's `Migrator` creates and owns its own bookkeeping table, so it is deliberately absent

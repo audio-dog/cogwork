@@ -46,7 +46,7 @@ export interface CoordinationBody {
 
 const attribution = "> *This was posted by cogwork.*";
 
-export const defaultClaimant = "cogwork";
+export { defaultClaimant } from "./coordination-adapter";
 
 const stageGerund: Record<LifecycleStage, string> = {
   triage: "triaging",

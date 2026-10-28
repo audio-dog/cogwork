@@ -23,7 +23,8 @@ export { IssueTrackerError };
 
 export const defaultTrackerCooldown = Duration.minutes(1);
 
-export type ClaimRequest = Omit<Claim, "by">;
+type WithoutClaimant<T> = T extends Claim ? Omit<T, "by"> : never;
+export type ClaimRequest = WithoutClaimant<Claim>;
 
 interface ObservedItemBase extends CoordinationState {
   readonly id: WorkItemId;
