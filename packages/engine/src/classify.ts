@@ -17,7 +17,7 @@ import type {
   RunPlanWorkContextReference,
   SessionId,
 } from "@cogwork/contracts";
-import { BranchName as BranchNameSchema, byStageThenPriority } from "@cogwork/contracts";
+import { BranchName as BranchNameSchema, byStageThenPriority, codingOperation } from "@cogwork/contracts";
 import * as Chunk from "effect/Chunk";
 import * as Data from "effect/Data";
 import { exhaustionOf } from "./exhaustion";
@@ -161,7 +161,7 @@ export const observedStage = (item: ObservedItem) => {
   return null;
 };
 
-export { consecutiveFailures, maxAttemptsPerStage } from "./exhaustion";
+export { consecutiveFailures, maxAttemptsPerOperation } from "./exhaustion";
 
 const ownedByActor = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined) =>
   !allowlist || item.assignees.some((assignee) => allowlist.includes(assignee));
@@ -182,7 +182,9 @@ const classifyOne = (
   const stage = observedStage(item);
   if (!stage) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
-  if (exhaustionOf(item, stage).exhausted) return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  if (exhaustionOf(item, codingOperation(stage)).exhausted) {
+    return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  }
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   if (availability?.get(stage)?.available === false && !isStalledFollowUp(stage, followUp)) {
     return Outcome.Drop({});
@@ -225,7 +227,7 @@ export const classifiedItemOf = (item: ObservedItem) =>
   });
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
-  const priorFailures = exhaustionOf(item, stage).failedAttempts;
+  const priorFailures = exhaustionOf(item, codingOperation(stage)).failedAttempts;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   const followUpBranch = followUpBranchFor(item, stage);
   return {

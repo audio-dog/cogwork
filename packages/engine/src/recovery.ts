@@ -1,5 +1,6 @@
 import {
   type AvailabilityCause,
+  codingOperation,
   type LifecycleStage,
   PollState,
   type RunPlanObservation,
@@ -107,7 +108,7 @@ export const make = Effect.gen(function* () {
     endedAtMillis: number,
     session: SessionId | null,
   ) {
-    const attempts = consecutiveFailures(item, stage) + 1;
+    const attempts = consecutiveFailures(item, codingOperation(stage)) + 1;
     const exhausted = isExhausted(attempts);
     yield* Effect.logWarning("recovered stale claim", {
       reason: recoveryReason,
@@ -115,7 +116,7 @@ export const make = Effect.gen(function* () {
       exhausted,
     });
     yield* issueTracker.attemptFailed(workspace, item.id, {
-      stage,
+      ...codingOperation(stage),
       atMillis: endedAtMillis,
       reason: recoveryReason,
     });

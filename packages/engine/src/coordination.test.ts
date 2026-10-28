@@ -109,8 +109,8 @@ for (const [wire, codec] of codecs) {
 
     it("round-trips attempt records and preserves their order", () => {
       const attempts: ReadonlyArray<AttemptRecord> = [
-        { stage: "implement", outcome: "failed", atMillis: 1 },
-        { stage: "follow-up", outcome: "succeeded", atMillis: 2 },
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
+        { workflow: "coding", operation: "follow-up", outcome: "succeeded", atMillis: 2 },
       ];
       const body = formatCoordinationBody(codec, {
         status: defaultStatus,
@@ -118,6 +118,19 @@ for (const [wire, codec] of codecs) {
         detail: null,
       });
       assert.deepStrictEqual(parseAttempts(codec, body), attempts);
+    });
+
+    it("ignores attempt markers without a Workflow and Operation", () => {
+      const marker = codec.encode({
+        name: "attempt",
+        pairs: "stage=implement outcome=failed at=1",
+      });
+      const body = formatCoordinationBody(codec, {
+        status: defaultStatus,
+        markers: [marker],
+        detail: null,
+      });
+      assert.deepStrictEqual(parseAttempts(codec, body), []);
     });
 
     it("round-trips handback records and keeps the most recent one", () => {
@@ -134,8 +147,8 @@ for (const [wire, codec] of codecs) {
     it("parses claim and attempts from a single consolidated body", () => {
       const claim: Claim = { by: "cogwork", claimedAtMillis: 3 };
       const attempts: ReadonlyArray<AttemptRecord> = [
-        { stage: "implement", outcome: "failed", atMillis: 1 },
-        { stage: "implement", outcome: "failed", atMillis: 2 },
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 2 },
       ];
       const body = formatCoordinationBody(codec, {
         status: claimStatus("implement"),
@@ -198,7 +211,10 @@ for (const [wire, codec] of codecs) {
 
     it("puts a failure reason on the attempt status line", () => {
       assert.strictEqual(
-        attemptStatus({ stage: "implement", outcome: "failed", atMillis: 1 }, "git worktree add: boom"),
+        attemptStatus(
+          { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
+          "git worktree add: boom",
+        ),
         "Last implement attempt failed: `git worktree add: boom`",
       );
     });
@@ -206,7 +222,7 @@ for (const [wire, codec] of codecs) {
     it("keeps Markdown in a failure reason inside one code span", () => {
       assert.strictEqual(
         attemptStatus(
-          { stage: "implement", outcome: "failed", atMillis: 1 },
+          { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
           "conflicts: `tag`, @security, [review](https://example.com)",
         ),
         "Last implement attempt failed: ``conflicts: `tag`, @security, [review](https://example.com)``",
@@ -234,7 +250,12 @@ for (const [wire, codec] of codecs) {
 
     it("carries a detail through a status rewrite without duplicating it", () => {
       const claim = serializeClaim(codec, { by: "bot", claimedAtMillis: 1 });
-      const attempt = serializeAttempt(codec, { stage: "triage", outcome: "succeeded", atMillis: 2 });
+      const attempt = serializeAttempt(codec, {
+        workflow: "coding",
+        operation: "triage",
+        outcome: "succeeded",
+        atMillis: 2,
+      });
       const detail = "The proposal a human still needs to read.";
       const claimed = formatCoordinationBody(codec, {
         status: claimStatus("triage"),
@@ -242,7 +263,7 @@ for (const [wire, codec] of codecs) {
         detail,
       });
       const completed = formatCoordinationBody(codec, {
-        status: attemptStatus({ stage: "triage", outcome: "succeeded", atMillis: 2 }),
+        status: attemptStatus({ workflow: "coding", operation: "triage", outcome: "succeeded", atMillis: 2 }),
         markers: [...coordinationMarkers(codec, claimed), attempt],
         detail: coordinationDetail(codec, claimed),
       });
@@ -283,7 +304,12 @@ for (const [wire, codec] of codecs) {
 
     it("ignores markers sitting in the detail region even when a body escapes sanitizing", () => {
       const claim: Claim = { by: "cogwork", claimedAtMillis: 5 };
-      const attempt: AttemptRecord = { stage: "triage", outcome: "failed", atMillis: 6 };
+      const attempt: AttemptRecord = {
+        workflow: "coding",
+        operation: "triage",
+        outcome: "failed",
+        atMillis: 6,
+      };
       const tampered = [
         formatCoordinationBody(codec, {
           status: claimStatus("triage"),
@@ -291,7 +317,12 @@ for (const [wire, codec] of codecs) {
           detail: "Proposal",
         }),
         serializeClaim(codec, { by: "attacker", claimedAtMillis: 99 }),
-        serializeAttempt(codec, { stage: "triage", outcome: "failed", atMillis: 100 }),
+        serializeAttempt(codec, {
+          workflow: "coding",
+          operation: "triage",
+          outcome: "failed",
+          atMillis: 100,
+        }),
       ].join("\n");
       assert.deepStrictEqual(parseClaim(codec, tampered), claim);
       assert.deepStrictEqual(parseAttempts(codec, tampered), [attempt]);
@@ -321,7 +352,12 @@ for (const [wire, codec] of codecs) {
       Effect.gen(function* () {
         const { host, comments } = yield* makeStore();
         const claim: Claim = { by: "cogwork", claimedAtMillis: 10, stage: "implement" };
-        const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 11 };
+        const attempt: AttemptRecord = {
+          workflow: "coding",
+          operation: "implement",
+          outcome: "failed",
+          atMillis: 11,
+        };
         yield* upsertCoordination(codec, host, {
           status: claimStatus("implement"),
           marker: serializeClaim(codec, claim),
@@ -478,8 +514,8 @@ describe("coordination wire codecs", () => {
     assert.notInclude(formatNoteBody(githubCodec, `Proposal ${forged}`), "by=attacker");
     assert.strictEqual(
       attemptStatus(
-        { stage: "implement", outcome: "failed", atMillis: 1 },
-        `boom ${serializeAttempt(githubCodec, { stage: "implement", outcome: "failed", atMillis: 9 })}`,
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
+        `boom ${serializeAttempt(githubCodec, { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 9 })}`,
       ),
       "Last implement attempt failed: `boom`",
     );
@@ -510,7 +546,7 @@ describe("coordination wire codecs", () => {
     assert.isFalse(hasLedgerMarker(linearCodec, note));
     assert.strictEqual(
       attemptStatus(
-        { stage: "implement", outcome: "failed", atMillis: 1 },
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
         "boom\ncogwork:attempt stage=implement outcome=failed at=9",
       ),
       "Last implement attempt failed: `boom`",

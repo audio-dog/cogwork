@@ -1130,9 +1130,9 @@ describe("HandBack", () => {
       claimedByUs: false,
       claimLabeled: false,
       attempts: [
-        { stage: "implement", outcome: "failed", atMillis: 1 },
-        { stage: "implement", outcome: "failed", atMillis: 2 },
-        { stage: "implement", outcome: "failed", atMillis: 3 },
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 2 },
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 3 },
       ],
     });
     return Effect.gen(function* () {

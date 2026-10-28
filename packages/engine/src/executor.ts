@@ -11,6 +11,7 @@ import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
+  codingOperation,
   FollowUpStageResult,
   ImplementStageResult,
   issueTrackerErrorIsPermanent,
@@ -411,7 +412,7 @@ export const make = Effect.gen(function* () {
       exhausted,
     });
     yield* issueTracker.attemptFailed(workspace, item.id, {
-      stage: item.stage,
+      ...codingOperation(item.stage),
       atMillis: endedAtMillis,
       reason,
     });

@@ -596,7 +596,7 @@ function trackerRecorder(
           const recorded = record(calls, {
             method: "attemptFailed",
             item: itemId,
-            stage: outcome.stage,
+            stage: outcome.operation,
             reason: outcome.reason,
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;

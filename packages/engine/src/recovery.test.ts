@@ -1,6 +1,7 @@
 import {
   type AttemptRecord,
   BranchName,
+  codingOperation,
   DaemonEvent,
   HarnessName,
   type OperationAvailability,
@@ -195,8 +196,8 @@ const stalledFollowUp: ObservedItem = {
   claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "follow-up" },
 };
 
-const failedAttempt = (atMillis: number, stage: AttemptRecord["stage"] = "implement"): AttemptRecord => ({
-  stage,
+const failedAttempt = (atMillis: number, stage: RunRecord["stage"] = "implement"): AttemptRecord => ({
+  ...codingOperation(stage),
   outcome: "failed",
   atMillis,
 });
@@ -204,7 +205,7 @@ const failedAttempt = (atMillis: number, stage: AttemptRecord["stage"] = "implem
 const withAttempts = (
   item: ObservedItem,
   count: number,
-  stage: AttemptRecord["stage"] = "implement",
+  stage: RunRecord["stage"] = "implement",
 ): ObservedItem => ({
   ...item,
   attempts: Array.from({ length: count }, (_, index) => failedAttempt(index + 1, stage)),
@@ -465,7 +466,7 @@ describe("Recovery.recover", () => {
       yield* probe.ledger.insertRun({ ...interrupted, status: "failed" });
       yield* recovery.recover();
       assert.deepStrictEqual(
-        (yield* Ref.get(probe.attempts)).map(({ outcome }) => outcome.stage),
+        (yield* Ref.get(probe.attempts)).map(({ outcome }) => outcome.operation),
         ["implement"],
       );
       assert.deepStrictEqual(yield* Ref.get(probe.handoffs), []);
@@ -489,7 +490,7 @@ describe("Recovery.recover", () => {
       });
       yield* recovery.recover();
       assert.deepStrictEqual(
-        (yield* Ref.get(probe.attempts)).map(({ outcome }) => outcome.stage),
+        (yield* Ref.get(probe.attempts)).map(({ outcome }) => outcome.operation),
         ["implement"],
       );
       assert.deepStrictEqual(yield* Ref.get(probe.handoffs), []);

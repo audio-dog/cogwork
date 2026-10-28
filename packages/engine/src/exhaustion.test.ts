@@ -1,9 +1,17 @@
-import type { AttemptOutcome, AttemptRecord, LifecycleStage } from "@cogwork/contracts";
+import {
+  type AttemptOutcome,
+  type AttemptRecord,
+  codingOperation,
+  type OperationKey,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { consecutiveFailures, type ExhaustionHistory, exhaustionOf, isExhausted } from "./exhaustion";
 
-const attempt = (outcome: AttemptOutcome, atMillis: number, stage: LifecycleStage = "implement") =>
-  ({ stage, outcome, atMillis }) satisfies AttemptRecord;
+const attempt = (
+  outcome: AttemptOutcome,
+  atMillis: number,
+  key: OperationKey = codingOperation("implement"),
+) => ({ ...key, outcome, atMillis }) satisfies AttemptRecord;
 
 const history = (attempts: ReadonlyArray<AttemptRecord>, handbackAtMillis: number | null = null) =>
   ({
@@ -13,14 +21,14 @@ const history = (attempts: ReadonlyArray<AttemptRecord>, handbackAtMillis: numbe
 
 describe("consecutiveFailures", () => {
   it("returns zero when the item has no attempts", () => {
-    assert.strictEqual(consecutiveFailures(history([]), "implement"), 0);
+    assert.strictEqual(consecutiveFailures(history([]), codingOperation("implement")), 0);
   });
 
   it("counts consecutive failures for the selected stage", () => {
     assert.strictEqual(
       consecutiveFailures(
         history([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)]),
-        "implement",
+        codingOperation("implement"),
       ),
       3,
     );
@@ -30,12 +38,12 @@ describe("consecutiveFailures", () => {
     assert.strictEqual(
       consecutiveFailures(
         history([
-          attempt("failed", 1, "triage"),
-          attempt("failed", 2, "implement"),
-          attempt("failed", 3, "follow-up"),
-          attempt("failed", 4, "implement"),
+          attempt("failed", 1, codingOperation("triage")),
+          attempt("failed", 2, codingOperation("implement")),
+          attempt("failed", 3, codingOperation("follow-up")),
+          attempt("failed", 4, codingOperation("implement")),
         ]),
-        "implement",
+        codingOperation("implement"),
       ),
       2,
     );
@@ -45,12 +53,12 @@ describe("consecutiveFailures", () => {
     assert.strictEqual(
       consecutiveFailures(
         history([
-          attempt("failed", 1, "implement"),
-          attempt("succeeded", 2, "triage"),
-          attempt("abandoned", 3, "follow-up"),
-          attempt("failed", 4, "implement"),
+          attempt("failed", 1, codingOperation("implement")),
+          attempt("succeeded", 2, codingOperation("triage")),
+          attempt("abandoned", 3, codingOperation("follow-up")),
+          attempt("failed", 4, codingOperation("implement")),
         ]),
-        "implement",
+        codingOperation("implement"),
       ),
       2,
     );
@@ -60,7 +68,7 @@ describe("consecutiveFailures", () => {
     assert.strictEqual(
       consecutiveFailures(
         history([attempt("failed", 1), attempt("failed", 2), attempt("succeeded", 3), attempt("failed", 4)]),
-        "implement",
+        codingOperation("implement"),
       ),
       1,
     );
@@ -76,7 +84,7 @@ describe("consecutiveFailures", () => {
           attempt("failed", 4),
           attempt("failed", 5),
         ]),
-        "implement",
+        codingOperation("implement"),
       ),
       2,
     );
@@ -86,7 +94,7 @@ describe("consecutiveFailures", () => {
     assert.strictEqual(
       consecutiveFailures(
         history([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3), attempt("failed", 5)], 4),
-        "implement",
+        codingOperation("implement"),
       ),
       1,
     );
@@ -96,7 +104,7 @@ describe("consecutiveFailures", () => {
     assert.strictEqual(
       consecutiveFailures(
         history([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)], 2),
-        "implement",
+        codingOperation("implement"),
       ),
       1,
     );
@@ -106,7 +114,7 @@ describe("consecutiveFailures", () => {
     assert.strictEqual(
       consecutiveFailures(
         history([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)]),
-        "implement",
+        codingOperation("implement"),
       ),
       3,
     );
@@ -125,7 +133,7 @@ describe("consecutiveFailures", () => {
           ],
           3,
         ),
-        "implement",
+        codingOperation("implement"),
       ),
       1,
     );
@@ -148,22 +156,28 @@ describe("isExhausted", () => {
 
 describe("exhaustionOf", () => {
   it("keeps an item available before any attempt", () => {
-    assert.deepStrictEqual(exhaustionOf(history([]), "implement"), {
+    assert.deepStrictEqual(exhaustionOf(history([]), codingOperation("implement")), {
       failedAttempts: 0,
       exhausted: false,
     });
   });
 
   it("keeps an item available after two consecutive failures", () => {
-    assert.deepStrictEqual(exhaustionOf(history([attempt("failed", 1), attempt("failed", 2)]), "implement"), {
-      failedAttempts: 2,
-      exhausted: false,
-    });
+    assert.deepStrictEqual(
+      exhaustionOf(history([attempt("failed", 1), attempt("failed", 2)]), codingOperation("implement")),
+      {
+        failedAttempts: 2,
+        exhausted: false,
+      },
+    );
   });
 
   it("spends an item after three consecutive failures", () => {
     assert.deepStrictEqual(
-      exhaustionOf(history([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)]), "implement"),
+      exhaustionOf(
+        history([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)]),
+        codingOperation("implement"),
+      ),
       {
         failedAttempts: 3,
         exhausted: true,
@@ -175,13 +189,13 @@ describe("exhaustionOf", () => {
     assert.deepStrictEqual(
       exhaustionOf(
         history([
-          attempt("failed", 1, "triage"),
-          attempt("failed", 2, "implement"),
-          attempt("failed", 3, "triage"),
-          attempt("failed", 4, "implement"),
-          attempt("failed", 5, "triage"),
+          attempt("failed", 1, codingOperation("triage")),
+          attempt("failed", 2, codingOperation("implement")),
+          attempt("failed", 3, codingOperation("triage")),
+          attempt("failed", 4, codingOperation("implement")),
+          attempt("failed", 5, codingOperation("triage")),
         ]),
-        "triage",
+        codingOperation("triage"),
       ),
       {
         failedAttempts: 3,
@@ -200,7 +214,7 @@ describe("exhaustionOf", () => {
           attempt("succeeded", 4),
           attempt("failed", 5),
         ]),
-        "implement",
+        codingOperation("implement"),
       ),
       {
         failedAttempts: 1,
@@ -222,7 +236,7 @@ describe("exhaustionOf", () => {
           ],
           4,
         ),
-        "implement",
+        codingOperation("implement"),
       ),
       {
         failedAttempts: 2,
@@ -244,12 +258,31 @@ describe("exhaustionOf", () => {
           ],
           3,
         ),
-        "implement",
+        codingOperation("implement"),
       ),
       {
         failedAttempts: 3,
         exhausted: true,
       },
     );
+  });
+
+  it("counts failures separately for two Operations on one item", () => {
+    const prepare = { workflow: "release", operation: "prepare" };
+    const publish = { workflow: "release", operation: "publish" };
+    const attempts = history([
+      attempt("failed", 1, prepare),
+      attempt("failed", 2, publish),
+      attempt("failed", 3, prepare),
+    ]);
+
+    assert.deepStrictEqual(exhaustionOf(attempts, prepare), {
+      failedAttempts: 2,
+      exhausted: false,
+    });
+    assert.deepStrictEqual(exhaustionOf(attempts, publish), {
+      failedAttempts: 1,
+      exhausted: false,
+    });
   });
 });

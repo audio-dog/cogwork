@@ -86,21 +86,23 @@ const pr: PrSignals = {
 };
 
 describe("observeWorkspace handback barrier", () => {
-  it.effect("keeps only attempts after the latest handback and makes an exhausted item eligible", () =>
+  it.effect("keeps post-handback history when the current Operation changes", () =>
     Effect.gen(function* () {
       const observed = yield* observeWorkspace(
         tracker(
           item([
-            { stage: "implement", outcome: "failed", atMillis: 1 },
-            { stage: "implement", outcome: "failed", atMillis: 3 },
-            { stage: "implement", outcome: "failed", atMillis: 4 },
-            { stage: "implement", outcome: "failed", atMillis: 6 },
+            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
+            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 3 },
+            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 4 },
+            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 6 },
           ]),
         ),
         provider(pr),
       )(workspace);
 
-      assert.deepStrictEqual(observed[0]?.attempts, [{ stage: "implement", outcome: "failed", atMillis: 6 }]);
+      assert.deepStrictEqual(observed[0]?.attempts, [
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 6 },
+      ]);
       assert.deepStrictEqual(
         classify(observed).eligible.map((work) => work.id),
         [id("#7")],
@@ -113,28 +115,30 @@ describe("observeWorkspace handback barrier", () => {
       const observed = yield* observeWorkspace(
         tracker({
           ...item([
-            { stage: "implement", outcome: "failed", atMillis: 1 },
-            { stage: "implement", outcome: "failed", atMillis: 6 },
-            { stage: "implement", outcome: "failed", atMillis: 7 },
-            { stage: "implement", outcome: "failed", atMillis: 9 },
+            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 1 },
+            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 6 },
+            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 7 },
+            { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 9 },
           ]),
           handback: { by: "local-owner", atMillis: 8 },
         }),
         provider(pr),
       )(workspace);
 
-      assert.deepStrictEqual(observed[0]?.attempts, [{ stage: "implement", outcome: "failed", atMillis: 9 }]);
+      assert.deepStrictEqual(observed[0]?.attempts, [
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 9 },
+      ]);
     }),
   );
 
   it.effect("zeros no progress until a follow-up marker write happens after the handback", () =>
     Effect.gen(function* () {
       const beforeWrite = yield* observeWorkspace(
-        tracker(item([{ stage: "follow-up", outcome: "succeeded", atMillis: 4 }])),
+        tracker(item([{ workflow: "coding", operation: "follow-up", outcome: "succeeded", atMillis: 4 }])),
         provider(pr),
       )(workspace);
       const afterWrite = yield* observeWorkspace(
-        tracker(item([{ stage: "follow-up", outcome: "abandoned", atMillis: 6 }])),
+        tracker(item([{ workflow: "coding", operation: "follow-up", outcome: "abandoned", atMillis: 6 }])),
         provider(pr),
       )(workspace);
 

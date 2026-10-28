@@ -294,9 +294,9 @@ export const handBack = Effect.fn("Daemon.HandBack")(function* (payload: {
     note: payload.note,
   });
 
-  const item = classifiedItemWithPr(
-    applyHandbackBarrier({ ...observed, roles: [payload.role], handback: record }),
-  );
+  const handedBack = { ...observed, roles: [payload.role], handback: record };
+  const operation = observed.attempts.at(-1);
+  const item = classifiedItemWithPr(operation ? applyHandbackBarrier(handedBack, operation) : handedBack);
   yield* publishChangedItem(payload.workspace, item);
   return item;
 });

@@ -1,4 +1,4 @@
-import { WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
+import { codingOperation, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -76,12 +76,12 @@ describe("issueTrackerRouter", () => {
       const calls = yield* RouterCalls;
       const router = yield* IssueTracker;
       yield* router.attemptFailed(githubWorkspace, id("#7"), {
-        stage: "implement",
+        ...codingOperation("implement"),
         atMillis: 1,
         reason: "git worktree add: boom",
       });
       yield* router.attemptFailed(linearWorkspace, id("AUD-7"), {
-        stage: "implement",
+        ...codingOperation("implement"),
         atMillis: 1,
         reason: "pnpm install: exit 1",
       });
@@ -104,7 +104,10 @@ describe("issueTrackerRouter", () => {
     Effect.gen(function* () {
       const calls = yield* RouterCalls;
       const router = yield* IssueTracker;
-      yield* router.attemptFailed(githubWorkspace, id("#7"), { stage: "implement", atMillis: 1 });
+      yield* router.attemptFailed(githubWorkspace, id("#7"), {
+        ...codingOperation("implement"),
+        atMillis: 1,
+      });
       assert.deepStrictEqual(yield* Ref.get(calls), [
         { source: "github", action: "attemptFailed", reason: undefined },
       ]);

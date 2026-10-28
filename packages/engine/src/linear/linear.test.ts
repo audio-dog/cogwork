@@ -1,4 +1,11 @@
-import { type AttemptRecord, type Priority, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
+import {
+  type AttemptOutcome,
+  type AttemptRecord,
+  type LifecycleStage,
+  type Priority,
+  WorkItemId,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -36,6 +43,8 @@ const teamKeyOf = (identifier: string) => {
 };
 
 const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
+const serializeCodingAttempt = (operation: LifecycleStage, outcome: AttemptOutcome, atMillis: number) =>
+  serializeAttempt({ workflow: "coding", operation, outcome, atMillis });
 const formatCoordinationBody = (body: Coordination.CoordinationBody) =>
   Coordination.formatCoordinationBody(wireCodec, body);
 const hasLedgerMarker = (body: string) => Coordination.hasLedgerMarker(wireCodec, body);
@@ -591,7 +600,7 @@ describe("linear work source adapter", () => {
               authorId: bot.id,
               body: formatCoordinationBody({
                 status: "triage completed.",
-                markers: [serializeAttempt({ stage: "triage", outcome: "succeeded", atMillis: 1 })],
+                markers: [serializeCodingAttempt("triage", "succeeded", 1)],
                 detail: null,
               }),
               createdAtMillis: 1,
