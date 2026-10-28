@@ -5,6 +5,7 @@ import {
   IssueTrackerError,
   type LifecycleStage,
   linearTeams,
+  type OperationKey,
   type Priority,
   type RunPlanWorkContextProse,
   type TriageRole,
@@ -69,8 +70,7 @@ export interface FollowedUpOutcome {
   readonly atMillis: number;
 }
 
-export interface AttemptFailedOutcome {
-  readonly stage: LifecycleStage;
+export interface AttemptFailedOutcome extends OperationKey {
   readonly atMillis: number;
   readonly reason?: string;
 }

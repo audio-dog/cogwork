@@ -1,6 +1,7 @@
 import {
   type AttemptRecord,
   type Claim,
+  codingOperation,
   type TriageRole,
   WorkItemId,
   WorkspaceConfig,
@@ -252,10 +253,15 @@ describe("coordination tracker", () => {
       const { host, itemAt } = yield* makeFakeHost([{ number: 7, labels: ["ready-for-agent"] }]);
       const tracker = makeCoordinationTracker(host);
       const claim = { claimedAtMillis: 10, stage: "implement" } as const;
-      const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 11 };
+      const attempt: AttemptRecord = {
+        workflow: "coding",
+        operation: "implement",
+        outcome: "failed",
+        atMillis: 11,
+      };
       yield* tracker.claim(workspace, decodeId("#7"), claim);
       yield* tracker.attemptFailed(workspace, decodeId("#7"), {
-        stage: "implement",
+        ...codingOperation("implement"),
         atMillis: 11,
         reason: "git worktree add: boom",
       });
@@ -384,7 +390,9 @@ describe("coordination outcomes", () => {
       assert.include(ledgerBody(stored?.comments ?? []), "triage completed.");
       const item = yield* observed(tracker, "#10");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-agent"]);
-      assert.deepStrictEqual(item?.attempts, [{ stage: "triage", outcome: "succeeded", atMillis: 11 }]);
+      assert.deepStrictEqual(item?.attempts, [
+        { workflow: "coding", operation: "triage", outcome: "succeeded", atMillis: 11 },
+      ]);
       assert.strictEqual(item?.proposal, "Recommend ready-for-agent.");
     }),
   );
@@ -398,7 +406,9 @@ describe("coordination outcomes", () => {
       assert.include(ledgerBody(stored?.comments ?? []), "implement completed.");
       const item = yield* observed(tracker, "#11");
       assert.deepStrictEqual([...(item?.roles ?? [])], []);
-      assert.deepStrictEqual(item?.attempts, [{ stage: "implement", outcome: "succeeded", atMillis: 12 }]);
+      assert.deepStrictEqual(item?.attempts, [
+        { workflow: "coding", operation: "implement", outcome: "succeeded", atMillis: 12 },
+      ]);
     }),
   );
 
@@ -419,7 +429,9 @@ describe("coordination outcomes", () => {
       );
       const item = yield* observed(tracker, "#12");
       assert.deepStrictEqual(item?.followUp, marker);
-      assert.deepStrictEqual(item?.attempts, [{ stage: "follow-up", outcome: "succeeded", atMillis: 13 }]);
+      assert.deepStrictEqual(item?.attempts, [
+        { workflow: "coding", operation: "follow-up", outcome: "succeeded", atMillis: 13 },
+      ]);
     }),
   );
 
@@ -428,7 +440,7 @@ describe("coordination outcomes", () => {
       const { host, itemAt } = yield* makeFakeHost([{ number: 13, labels: ["ready-for-agent"] }]);
       const tracker = makeCoordinationTracker(host);
       yield* tracker.attemptFailed(workspace, decodeId("#13"), {
-        stage: "implement",
+        ...codingOperation("implement"),
         atMillis: 14,
         reason: "pnpm install: exit 1",
       });
@@ -438,7 +450,9 @@ describe("coordination outcomes", () => {
         "Last implement attempt failed: `pnpm install: exit 1`",
       );
       const item = yield* observed(tracker, "#13");
-      assert.deepStrictEqual(item?.attempts, [{ stage: "implement", outcome: "failed", atMillis: 14 }]);
+      assert.deepStrictEqual(item?.attempts, [
+        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 14 },
+      ]);
     }),
   );
 
@@ -460,7 +474,12 @@ describe("coordination outcomes", () => {
 
   it.effect("handBack appends its record, applies one role, and keeps its note in the ledger", () =>
     Effect.gen(function* () {
-      const failed: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 2 };
+      const failed: AttemptRecord = {
+        workflow: "coding",
+        operation: "implement",
+        outcome: "failed",
+        atMillis: 2,
+      };
       const { host, itemAt, roleLog } = yield* makeFakeHost([
         {
           number: 17,
@@ -532,7 +551,9 @@ describe("coordination outcomes", () => {
       );
       const item = yield* observed(tracker, "#15");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-human"]);
-      assert.deepStrictEqual(item?.attempts, [{ stage: "follow-up", outcome: "abandoned", atMillis: 16 }]);
+      assert.deepStrictEqual(item?.attempts, [
+        { workflow: "coding", operation: "follow-up", outcome: "abandoned", atMillis: 16 },
+      ]);
     }),
   );
 

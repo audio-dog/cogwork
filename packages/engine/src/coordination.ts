@@ -62,11 +62,11 @@ export const claimStatusFor = (claim: Claim) =>
   claim.stage ? claimStatus(claim.stage) : `In progress — claimed by ${claim.by}.`;
 
 export const attemptStatus = (attempt: AttemptRecord, reason?: string | null) => {
-  if (attempt.outcome === "succeeded") return `${attempt.stage} completed.`;
-  if (attempt.outcome === "abandoned") return `${attempt.stage} abandoned.`;
+  if (attempt.outcome === "succeeded") return `${attempt.operation} completed.`;
+  if (attempt.outcome === "abandoned") return `${attempt.operation} abandoned.`;
   const trimmed = reason ? statusReason(reason) : "";
-  if (trimmed) return `Last ${attempt.stage} attempt failed: ${markdownCode(trimmed)}`;
-  return `Last ${attempt.stage} attempt failed.`;
+  if (trimmed) return `Last ${attempt.operation} attempt failed: ${markdownCode(trimmed)}`;
+  return `Last ${attempt.operation} attempt failed.`;
 };
 
 export const handbackStatus = (handback: HandbackRecord, note?: string) => {
@@ -132,9 +132,20 @@ export const parseClaim = (codec: WireCodec, body: string) => {
   return candidates.at(-1) ?? null;
 };
 
+const attemptKeyFromPairs = (pairs: Record<string, string>) =>
+  pairs.stage === undefined
+    ? { workflow: pairs.workflow, operation: pairs.operation }
+    : { workflow: "coding", operation: pairs.stage };
+
 export const parseAttempts = (codec: WireCodec, body: string) =>
   pairsNamed(codec, body, "attempt").flatMap((pairs) =>
-    okToArray(decodeAttempt({ stage: pairs.stage, outcome: pairs.outcome, atMillis: Number(pairs.at) })),
+    okToArray(
+      decodeAttempt({
+        ...attemptKeyFromPairs(pairs),
+        outcome: pairs.outcome,
+        atMillis: Number(pairs.at),
+      }),
+    ),
   );
 
 export const parseHandback = (codec: WireCodec, body: string) => {
@@ -199,7 +210,7 @@ export const serializeClaim = (codec: WireCodec, claim: Claim) =>
 export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
   codec.encode({
     name: "attempt",
-    pairs: `stage=${attempt.stage} outcome=${attempt.outcome} at=${attempt.atMillis}`,
+    pairs: `workflow=${attempt.workflow} operation=${attempt.operation} outcome=${attempt.outcome} at=${attempt.atMillis}`,
   });
 
 export const serializeHandback = (codec: WireCodec, handback: HandbackRecord) =>

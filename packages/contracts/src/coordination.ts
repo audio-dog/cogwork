@@ -12,8 +12,19 @@ export type Claim = typeof Claim.Type;
 export const AttemptOutcome = Schema.Literals(["succeeded", "failed", "abandoned"]);
 export type AttemptOutcome = typeof AttemptOutcome.Type;
 
+export const OperationKey = Schema.Struct({
+  workflow: TrimmedNonEmptyString,
+  operation: TrimmedNonEmptyString,
+});
+export type OperationKey = typeof OperationKey.Type;
+
+export const codingOperation = (stage: LifecycleStage) => ({
+  workflow: "coding",
+  operation: stage,
+});
+
 export const AttemptRecord = Schema.Struct({
-  stage: LifecycleStage,
+  ...OperationKey.fields,
   outcome: AttemptOutcome,
   atMillis: Schema.Natural,
 });

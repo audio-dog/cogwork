@@ -117,7 +117,7 @@ describe("classify", () => {
   });
 
   it("hands exhausted work to a human even when its Operation is unavailable", () => {
-    const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
+    const attempt = { workflow: "coding", operation: "triage", outcome: "failed" as const, atMillis: 1 };
     const result = classify(
       [item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt, attempt] })],
       undefined,
@@ -245,7 +245,7 @@ describe("classify", () => {
   });
 
   it("reports an open blocker as blocked even once the stage has exhausted the failed-attempt cap", () => {
-    const attempt = { stage: "implement" as const, outcome: "failed" as const, atMillis: 1 };
+    const attempt = { workflow: "coding", operation: "implement", outcome: "failed" as const, atMillis: 1 };
     const { blocked, needsHuman } = classify([
       item({
         id: "1",
@@ -333,7 +333,7 @@ describe("classify", () => {
   });
 
   it("hands an item to a human as ready-for-human once its stage exhausts the failed-attempt cap", () => {
-    const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
+    const attempt = { workflow: "coding", operation: "triage", outcome: "failed" as const, atMillis: 1 };
     const { eligible, needsHuman } = classify([
       item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt, attempt] }),
     ]);
@@ -342,14 +342,19 @@ describe("classify", () => {
   });
 
   it("keeps an item eligible while it is still under the failed-attempt cap", () => {
-    const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
+    const attempt = { workflow: "coding", operation: "triage", outcome: "failed" as const, atMillis: 1 };
     const { eligible } = classify([item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt] })]);
     assert.strictEqual(eligible[0]?.stage, "triage");
   });
 
   it("resets the failed-attempt cap after a successful attempt for that stage", () => {
-    const failed = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
-    const succeeded = { stage: "triage" as const, outcome: "succeeded" as const, atMillis: 4 };
+    const failed = { workflow: "coding", operation: "triage", outcome: "failed" as const, atMillis: 1 };
+    const succeeded = {
+      workflow: "coding",
+      operation: "triage",
+      outcome: "succeeded" as const,
+      atMillis: 4,
+    };
     const { eligible, needsHuman } = classify([
       item({
         id: "1",
@@ -368,11 +373,11 @@ describe("classify", () => {
         id: "1",
         roles: ["needs-triage"],
         attempts: [
-          { stage: "triage", outcome: "failed", atMillis: 1 },
-          { stage: "triage", outcome: "failed", atMillis: 2 },
-          { stage: "triage", outcome: "succeeded", atMillis: 3 },
-          { stage: "triage", outcome: "failed", atMillis: 4 },
-          { stage: "triage", outcome: "failed", atMillis: 5 },
+          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 1 },
+          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 2 },
+          { workflow: "coding", operation: "triage", outcome: "succeeded", atMillis: 3 },
+          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 4 },
+          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 5 },
         ],
       }),
     ]);

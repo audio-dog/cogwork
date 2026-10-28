@@ -1,7 +1,9 @@
 import {
+  type AttemptOutcome,
   type AttemptRecord,
   type Claim,
   GitHubIssueFieldId,
+  type LifecycleStage,
   type Priority,
   WorkItemId,
   WorkspaceConfig,
@@ -48,6 +50,8 @@ const id = Schema.decodeSync(WorkItemId);
 const defaultStatus = Coordination.defaultStatus;
 const serializeClaim = (claim: Claim) => Coordination.serializeClaim(wireCodec, claim);
 const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
+const serializeCodingAttempt = (operation: LifecycleStage, outcome: AttemptOutcome, atMillis: number) =>
+  serializeAttempt({ workflow: "coding", operation, outcome, atMillis });
 const serializeFollowUp = (marker: FollowUpMarker) => Coordination.serializeFollowUp(wireCodec, marker);
 
 const coordinationBody = (markers: ReadonlyArray<string>) =>
@@ -634,9 +638,7 @@ describe("GitHub adapters", () => {
             {
               issue: 5,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           reviews: [
@@ -894,9 +896,7 @@ describe("GitHub adapters", () => {
             {
               issue: 6,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           mergeable: [{ pull: 103, state: "dirty" }],
@@ -922,9 +922,7 @@ describe("GitHub adapters", () => {
             {
               issue: 9,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           mergeable: [{ pull: 104, state: "behind" }],
@@ -1201,9 +1199,7 @@ describe("GitHub adapters", () => {
             {
               issue: 50,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           reviews: [{ pull: 500, state: "APPROVED" }],
@@ -1250,9 +1246,7 @@ describe("GitHub adapters", () => {
             {
               issue: 20,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           reviews: [{ pull: 200, state: "CHANGES_REQUESTED" }],
@@ -1344,9 +1338,7 @@ describe("GitHub adapters", () => {
           comments: [40, 41, 42].map((issue) => ({
             issue,
             authorLogin: bot.login,
-            body: coordinationBody([
-              serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-            ]),
+            body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
           })),
           reviews: [
             { pull: 300, state: "APPROVED" },
@@ -1385,9 +1377,7 @@ describe("GitHub adapters", () => {
             {
               issue: 43,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
         }),
@@ -1418,9 +1408,7 @@ describe("GitHub adapters", () => {
             {
               issue: 44,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           reviews: [{ pull: 340, state: "CHANGES_REQUESTED" }],
@@ -1452,9 +1440,7 @@ describe("GitHub adapters", () => {
             {
               issue: 45,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
         }),
@@ -1487,9 +1473,7 @@ describe("GitHub adapters", () => {
             {
               issue: 45,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
         }),
@@ -1519,9 +1503,7 @@ describe("GitHub adapters", () => {
             {
               issue: 25,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           reviews: [
@@ -1552,9 +1534,7 @@ describe("GitHub adapters", () => {
             {
               issue: 26,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           reviews: [
@@ -1583,9 +1563,7 @@ describe("GitHub adapters", () => {
             {
               issue: 22,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
             },
           ],
           reviewComments: [
@@ -1648,9 +1626,7 @@ describe("GitHub adapters", () => {
           comments: [23, 24, 25, 26, 27].map((issue) => ({
             issue,
             authorLogin: bot.login,
-            body: coordinationBody([
-              serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
-            ]),
+            body: coordinationBody([serializeCodingAttempt("implement", "succeeded", 1)]),
           })),
           reviews: [
             { pull: 203, state: "COMMENTED", body: "please adjust", submittedAtMillis: 400 },
@@ -1699,9 +1675,7 @@ describe("GitHub adapters", () => {
               issue: 9,
               authorLogin: bot.login,
               authorAssociation: "NONE",
-              body: coordinationBody(
-                [1, 2, 3].map((at) => serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at })),
-              ),
+              body: coordinationBody([1, 2, 3].map((at) => serializeCodingAttempt("triage", "failed", at))),
               createdAtMillis: 1,
             },
           ],
@@ -1726,9 +1700,7 @@ describe("GitHub adapters", () => {
             {
               issue: 28,
               authorLogin: bot.login,
-              body: coordinationBody([
-                serializeAttempt({ stage: "triage", outcome: "succeeded", atMillis: 1 }),
-              ]),
+              body: coordinationBody([serializeCodingAttempt("triage", "succeeded", 1)]),
               createdAtMillis: 1,
             },
             {

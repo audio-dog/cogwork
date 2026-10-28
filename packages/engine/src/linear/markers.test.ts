@@ -61,7 +61,8 @@ describe("linear wire codec", () => {
       stage: "implement",
     });
     const attempt = Coordination.serializeAttempt(wireCodec, {
-      stage: "implement",
+      workflow: "coding",
+      operation: "implement",
       outcome: "failed",
       atMillis: 2,
     });
@@ -77,7 +78,7 @@ describe("linear wire codec", () => {
       stage: "implement",
     });
     assert.deepStrictEqual(Coordination.parseAttempts(wireCodec, body), [
-      { stage: "implement", outcome: "failed", atMillis: 2 },
+      { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 2 },
     ]);
   });
 });

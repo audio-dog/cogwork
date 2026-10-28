@@ -1,11 +1,12 @@
-import type {
-  AttemptRecord,
-  Claim,
-  LifecycleStage,
-  Priority,
-  RunPlanWorkContextProse,
-  TriageRole,
-  WorkItemId,
+import {
+  type AttemptRecord,
+  type Claim,
+  codingOperation,
+  type LifecycleStage,
+  type Priority,
+  type RunPlanWorkContextProse,
+  type TriageRole,
+  type WorkItemId,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import type { CommentHost, CoordinationComment, WireCodec } from "./coordination";
@@ -173,7 +174,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       const ref = yield* host.resolve(workspace, id);
       yield* writeNote(ref, outcome.proposal);
       yield* applyRoles(ref, { remove: ["needs-triage"], add: [outcome.role] });
-      yield* writeAttempt(ref, { stage: "triage", outcome: "succeeded", atMillis: outcome.atMillis });
+      yield* writeAttempt(ref, {
+        ...codingOperation("triage"),
+        outcome: "succeeded",
+        atMillis: outcome.atMillis,
+      });
     }),
     implemented: Effect.fn("coordinationTracker.implemented")(function* (
       workspace: WorkspaceIssueTrackerBinding,
@@ -182,7 +187,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ) {
       const ref = yield* host.resolve(workspace, id);
       yield* applyRoles(ref, { remove: ["ready-for-agent"], add: [] });
-      yield* writeAttempt(ref, { stage: "implement", outcome: "succeeded", atMillis: outcome.atMillis });
+      yield* writeAttempt(ref, {
+        ...codingOperation("implement"),
+        outcome: "succeeded",
+        atMillis: outcome.atMillis,
+      });
     }),
     followedUp: Effect.fn("coordinationTracker.followedUp")(function* (
       workspace: WorkspaceIssueTrackerBinding,
@@ -191,7 +200,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ) {
       const ref = yield* host.resolve(workspace, id);
       yield* writeFollowUp(ref, outcome.marker, outcome.summary);
-      yield* writeAttempt(ref, { stage: "follow-up", outcome: "succeeded", atMillis: outcome.atMillis });
+      yield* writeAttempt(ref, {
+        ...codingOperation("follow-up"),
+        outcome: "succeeded",
+        atMillis: outcome.atMillis,
+      });
     }),
     attemptFailed: Effect.fn("coordinationTracker.attemptFailed")(function* (
       workspace: WorkspaceIssueTrackerBinding,
@@ -201,7 +214,12 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       const ref = yield* host.resolve(workspace, id);
       yield* writeAttempt(
         ref,
-        { stage: outcome.stage, outcome: "failed", atMillis: outcome.atMillis },
+        {
+          workflow: outcome.workflow,
+          operation: outcome.operation,
+          outcome: "failed",
+          atMillis: outcome.atMillis,
+        },
         outcome.reason,
       );
     }),
@@ -234,7 +252,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       const ref = yield* host.resolve(workspace, id);
       yield* writeFollowUp(ref, outcome.marker, outcome.detail);
       yield* applyRoles(ref, { remove: [handoffRoleFor("follow-up")], add: ["ready-for-human"] });
-      yield* writeAttempt(ref, { stage: "follow-up", outcome: "abandoned", atMillis: outcome.atMillis });
+      yield* writeAttempt(ref, {
+        ...codingOperation("follow-up"),
+        outcome: "abandoned",
+        atMillis: outcome.atMillis,
+      });
     }),
     reclassify: Effect.fn("coordinationTracker.reclassify")(function* (
       workspace: WorkspaceIssueTrackerBinding,
