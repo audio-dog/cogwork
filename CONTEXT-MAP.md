@@ -14,7 +14,7 @@ lives in a separate safekeep repo: [taylorfsteele/sync](https://github.com/taylo
 
 ### Orchestration (the control plane)
 
-- [contracts](./packages/contracts/CONTEXT.md) — shared kernel: the schemas and vocabulary every other orchestration context speaks (`WorkItem`, `Run`, `Claim`, harness terms, lifecycle stages).
+- [contracts](./packages/contracts/CONTEXT.md) — shared kernel: the schemas and vocabulary every other orchestration context speaks (`WorkItem`, `Run`, `Claim`, harness terms, Workflows).
 - [engine](./packages/engine/CONTEXT.md) — the runtime machinery: daemon, reconcile, scheduler, executor, harness dispatch, worktrees, and the issue-tracker and source-control-provider adapters.
 - [cli](./apps/cli/CONTEXT.md) — `cogwork`, the client and headless daemon host: subcommands, RPC transport, workspace loading, live watch. On a laptop the desktop app is the primary daemon host (see product ADR 0008).
 - [desktop](./apps/desktop/CONTEXT.md) — the Electron mission-control shell: primary daemon host on a laptop, supervising the engine as a bundled Node child and giving the renderer a typed IPC seam to the daemon (see product ADRs 0008/0009).
