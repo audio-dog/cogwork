@@ -29,6 +29,11 @@ export const consecutiveFailures = (history: ExhaustionHistory, key: OperationKe
   return attempts.length - (lastNonFailure + 1);
 };
 
+export const latestFailureReason = (history: ExhaustionHistory, key: OperationKey) => {
+  const latest = attemptsAfterHandback(history, key).at(-1);
+  return latest?.outcome === "failed" ? (latest.reason ?? null) : null;
+};
+
 export const isExhausted = (failedAttempts: number) => failedAttempts >= maxAttemptsPerOperation;
 
 export const exhaustionOf = (history: ExhaustionHistory, key: OperationKey) => {

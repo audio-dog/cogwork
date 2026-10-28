@@ -33,6 +33,7 @@ import {
   resolveEngineOperationSetting,
   resolveRunPlanStage,
   tryAssembleRunPlan,
+  workContextMessage,
 } from "./run-plan";
 
 describe("projectedContributionName", () => {
@@ -227,6 +228,7 @@ const item: AdmittedWork = {
       claim: null,
       priority: "high",
       pr: null,
+      failureReason: "head is not ahead of origin/main",
     },
     prose: {
       body: "Build the resolved Run Plan.",
@@ -891,6 +893,10 @@ describe("Run Plan assembly", () => {
       [{ role: "user", content: "Implement #228" }],
     );
     assert.deepStrictEqual({ ...plan.workContext.facts }, item.workContext?.facts);
+    assert.include(
+      workContextMessage(plan.workContext).content,
+      '"failureReason": "head is not ahead of origin/main"',
+    );
     assert.deepStrictEqual(
       {
         ...plan.workContext.prose,

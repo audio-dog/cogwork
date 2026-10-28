@@ -377,11 +377,18 @@ describe("classify", () => {
           { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 2 },
           { workflow: "coding", operation: "triage", outcome: "succeeded", atMillis: 3 },
           { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 4 },
-          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 5 },
+          {
+            workflow: "coding",
+            operation: "triage",
+            outcome: "failed",
+            atMillis: 5,
+            reason: "head is not ahead of origin/main",
+          },
         ],
       }),
     ]);
     assert.strictEqual(eligible[0]?.priorFailures, 2);
+    assert.strictEqual(eligible[0]?.workContext.facts.failureReason, "head is not ahead of origin/main");
   });
 
   it("routes a bot PR with failing checks to follow-up even without a changes-requested review", () => {

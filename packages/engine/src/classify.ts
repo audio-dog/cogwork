@@ -20,7 +20,7 @@ import type {
 import { BranchName as BranchNameSchema, byStageThenPriority, codingOperation } from "@cogwork/contracts";
 import * as Chunk from "effect/Chunk";
 import * as Data from "effect/Data";
-import { exhaustionOf } from "./exhaustion";
+import { exhaustionOf, latestFailureReason } from "./exhaustion";
 import {
   type FollowUpContext,
   followUpContext,
@@ -227,7 +227,8 @@ export const classifiedItemOf = (item: ObservedItem) =>
   });
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
-  const priorFailures = exhaustionOf(item, codingOperation(stage)).failedAttempts;
+  const operation = codingOperation(stage);
+  const priorFailures = exhaustionOf(item, operation).failedAttempts;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   const followUpBranch = followUpBranchFor(item, stage);
   return {
@@ -249,6 +250,7 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
         claim: item.claim,
         priority: item.priority,
         pr: item.pr ? prSummaryOf(item.pr) : null,
+        failureReason: latestFailureReason(item, operation),
       },
     },
   };
