@@ -23,10 +23,13 @@ const refusingContextAssembler = Layer.succeed(ContextAssembler, {
 // It stays its own builder: folded into `engineTestLayer`, an empty registry would shadow the
 // harness double `executor.test.ts` provides, and a second `engineTestLayer` in the daemon pipe
 // would hand those suites a different run ledger than the one they assert on.
-export const harnessProbeTestLayer = (runners: ReadonlyArray<Harness.HarnessRunner> = []) =>
+export const harnessProbeTestLayer = (
+  runners: ReadonlyArray<Harness.HarnessRunner> = [],
+  credentials: Layer.Layer<CredentialStore.CredentialStore> = CredentialStore.layerEnv,
+) =>
   Layer.mergeAll(
     Harness.layer(runners),
-    CredentialStore.layerEnv,
+    credentials,
     FileSystem.layerNoop({}),
     FetchHttpClient.layer,
     refusingContextAssembler,

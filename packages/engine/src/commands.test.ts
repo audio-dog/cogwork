@@ -45,6 +45,7 @@ import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -60,9 +61,16 @@ import {
 } from "./commands";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
+import {
+  CredentialStore,
+  layerEnv as credentialLayerEnv,
+  make as makeCredentialStore,
+  type StoredCredential,
+} from "./credential-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
+import { GranolaLogin } from "./granola-login";
 import { fullHarnessExecution, type HarnessRunner } from "./harness";
 import { layer as harnessReadinessLayer } from "./harness-readiness";
 import type { HandBackOutcome, HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
@@ -425,6 +433,42 @@ const connectionStoreStubLayer = (options: ConnectionStoreStubOptions) =>
 
 const connectionStoreLayer = connectionStoreStubLayer({ status: "established" });
 
+const verifyGranolaRpcLifecycle = Effect.fn("test.verifyGranolaRpcLifecycle")(function* (
+  account: string,
+  id: Connection["id"],
+  stored: Ref.Ref<StoredCredential | null>,
+  configured: Ref.Ref<boolean>,
+  connection: Ref.Ref<Connection | null>,
+  plugins: Ref.Ref<PluginOverview>,
+  loginStarted: Deferred.Deferred<void>,
+  releaseLogin: Deferred.Deferred<void>,
+) {
+  const client = yield* RpcTest.makeClient(DaemonRpcs);
+
+  const loggingIn = yield* Effect.forkChild(client.LoginGranola({ account }));
+  yield* Deferred.await(loginStarted);
+  yield* Ref.set(connection, Connection.make({ id, system: "granola", account, status: "established" }));
+  yield* Ref.set(plugins, {
+    plugins: [{ ...installedPlugin("granola"), requiredConnections: ["granola"] }],
+  });
+  yield* Deferred.succeed(releaseLogin, undefined);
+  assert.strictEqual((yield* Fiber.await(loggingIn))._tag, "Success");
+
+  const connected = yield* Fiber.join(loggingIn);
+  assert.strictEqual(connected.overview.connections[0]?.connection?.id, id);
+  assert.strictEqual(
+    Redacted.value((yield* Ref.get(stored))?.token.accessToken ?? Redacted.make("")),
+    "granola-access",
+  );
+  assert.isTrue(yield* Ref.get(configured));
+  assert.strictEqual((yield* Ref.get(plugins)).plugins[0]?.record?.pluginId, "granola");
+
+  yield* client.RemoveConnection({ connectionId: id });
+  assert.strictEqual(yield* Ref.get(stored), null);
+  assert.isFalse(yield* Ref.get(configured));
+  assert.deepStrictEqual((yield* Ref.get(plugins)).plugins, []);
+});
+
 interface ConnectionPluginInstallProbeService {
   readonly installStarted: Deferred.Deferred<void>;
   readonly removed: Ref.Ref<ReadonlyArray<Connection["id"]>>;
@@ -582,10 +626,11 @@ const daemonLayer = <SourceExtra = never>(
   runControl: Layer.Layer<RunControl.RunControl> = RunControl.layer,
   harnessRunners: ReadonlyArray<HarnessRunner> = [],
   reconcile = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source))),
+  credentials: Layer.Layer<CredentialStore> = credentialLayerEnv,
 ) =>
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(harnessReadinessLayer),
-    Layer.provideMerge(harnessProbeTestLayer(harnessRunners)),
+    Layer.provideMerge(harnessProbeTestLayer(harnessRunners, credentials)),
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
     Layer.provideMerge(Daemon.daemonInfoLayer),
     Layer.provideMerge(eventPublisherLayer),
@@ -2342,6 +2387,129 @@ describe("Connection mutations", () => {
     account: "other",
     source: { _tag: "Stored" },
   };
+
+  it.effect("keeps a browser grant after a concurrent Granola key connect, then cascades removal", () =>
+    Effect.gen(function* () {
+      const account = "person@example.com";
+      const id = connectionIdOf("granola", account);
+      const credential = {
+        issueTracker: "granola",
+        organization: account,
+        actorUserId: account,
+        oauthClientId: "granola-client",
+        oauthTokenEndpoint: "https://login.granola.ai/token",
+        token: {
+          accessToken: Redacted.make("granola-access"),
+          refreshToken: Redacted.make("granola-refresh"),
+          expiresAtMillis: Number.MAX_SAFE_INTEGER,
+          scopes: ["mcp"],
+        },
+      } satisfies StoredCredential;
+      const stored = yield* Ref.make<StoredCredential | null>(null);
+      const configured = yield* Ref.make(false);
+      const connection = yield* Ref.make<Connection | null>(null);
+      const loginStarted = yield* Deferred.make<void>();
+      const releaseLogin = yield* Deferred.make<void>();
+      const plugins = yield* Ref.make<PluginOverview>({
+        plugins: [
+          {
+            ...installedPlugin("granola"),
+            record: null,
+            resolvedIdentity: null,
+            requiredConnections: ["granola"],
+          },
+        ],
+      });
+      const credentialStore = makeCredentialStore({
+        stored: {
+          load: Ref.get(stored).pipe(Effect.map((value) => (value ? [value] : []))),
+          save: (value) => Ref.set(stored, value),
+          loadConnectionCredentials: Effect.succeed([]),
+          saveConnectionCredential: () => Ref.set(configured, true),
+          removeConnectionCredential: () => Ref.set(configured, false),
+          removeCredential: () => Ref.set(stored, null),
+        },
+      });
+      const granola = Connection.make({ id, system: "granola", account, status: "established" });
+      const connections = Layer.succeed(ConnectionStore, {
+        overview: Ref.get(connection).pipe(
+          Effect.map((current) => ({
+            connections: [
+              {
+                system: "granola" as const,
+                connection: current,
+                readiness: current
+                  ? ({ _tag: "Ready" } as const)
+                  : ({ _tag: "NotReady", reason: "Not connected" } as const),
+              },
+            ],
+          })),
+        ),
+        find: (connectionId) =>
+          Ref.get(connection).pipe(Effect.map((current) => (current?.id === connectionId ? current : null))),
+        findSystem: (system) =>
+          Ref.get(connection).pipe(Effect.map((current) => (current?.system === system ? current : null))),
+        bearer: () => Effect.die("unexpected Connection bearer"),
+        readiness: () => Effect.succeed({ _tag: "Ready" }),
+        requireReady: () => Effect.void,
+        requireSystemReady: () => Effect.void,
+        establish: (_input, expectedAccount) =>
+          Ref.set(connection, granola).pipe(
+            Effect.andThen(credentialStore.configureConnection(id, { _tag: "Stored" })),
+            Effect.map(() =>
+              expectedAccount ? Connection.make({ ...granola, account: expectedAccount }) : granola,
+            ),
+          ),
+        revoke: () => Effect.die("unexpected Connection revoke"),
+        remove: () => credentialStore.removeConnection(id).pipe(Effect.andThen(Ref.set(connection, null))),
+      });
+      const pluginManager = Layer.succeed(PluginManager, {
+        overview: Ref.get(plugins),
+        install: (pluginId) => {
+          const overview = {
+            plugins: [{ ...installedPlugin(pluginId), requiredConnections: ["granola" as const] }],
+          };
+          return Ref.set(plugins, overview).pipe(Effect.map(() => ({ overview, notices: [] })));
+        },
+        uninstall: () => {
+          const overview = { plugins: [] };
+          return Ref.set(plugins, overview).pipe(Effect.map(() => ({ overview, notices: [] })));
+        },
+        contributions: () => Effect.succeed([]),
+      });
+      const credentials = Layer.succeed(CredentialStore, credentialStore);
+      const services = Layer.succeed(GranolaLogin, {
+        login: () =>
+          Deferred.succeed(loginStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseLogin)),
+            Effect.map(() => credential),
+          ),
+      });
+      const rpcLayer = daemonLayer(
+        trackerLayer({}),
+        schedulerStub(),
+        controlStoreStub(),
+        registryServices,
+        pluginManager,
+        connections,
+        RunControl.layer,
+        [],
+        reconcileStubLayer,
+        credentials,
+      ).pipe(Layer.provideMerge(services));
+
+      yield* verifyGranolaRpcLifecycle(
+        account,
+        id,
+        stored,
+        configured,
+        connection,
+        plugins,
+        loginStarted,
+        releaseLogin,
+      ).pipe(Effect.provide(rpcLayer), Effect.scoped);
+    }),
+  );
 
   it.effect("signals a snapshot refresh after establishing a Connection", () => {
     const connection = Connection.make({

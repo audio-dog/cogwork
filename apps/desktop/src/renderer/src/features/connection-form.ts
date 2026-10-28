@@ -6,13 +6,18 @@ import * as Schema from "effect/Schema";
 export const CredentialSourceTag = Schema.Literals(["ApiKey", "Env", "GitHubCli", "Stored"]);
 export type CredentialSourceTag = typeof CredentialSourceTag.Type;
 
-export const environmentVariableFor = (system: ConnectionSystem) =>
-  system === "github" ? "GITHUB_TOKEN" : "LINEAR_API_KEY";
+const environmentVariables: Record<ConnectionSystem, string> = {
+  github: "GITHUB_TOKEN",
+  linear: "LINEAR_API_KEY",
+  granola: "GRANOLA_API_KEY",
+};
+
+export const environmentVariableFor = (system: ConnectionSystem) => environmentVariables[system];
 
 // One flat record, because that is what the form binds to: every field stays mounted so switching
 // source keeps what was already typed. Which credential field is *required* is the filter's job.
 export const EstablishmentFields = Schema.Struct({
-  system: Schema.Literals(["github", "linear"]),
+  system: Schema.Literals(["github", "linear", "granola"]),
   account: Schema.String,
   source: CredentialSourceTag,
   apiKey: Schema.String,
@@ -21,10 +26,12 @@ export const EstablishmentFields = Schema.Struct({
   // A struct-level filter is what lets the conditional requirement report at the field the person
   // is looking at: `path` puts the issue on `apiKey`/`environment`, not on the form as a whole.
   Schema.makeFilter((fields) => {
-    if (fields.system === "linear" && fields.account.trim() === "")
+    if (fields.system !== "github" && fields.account.trim() === "")
       return { path: ["account"], issue: "Name the account this Connection signs in as." };
     if (fields.source === "ApiKey" && fields.apiKey.trim() === "")
       return { path: ["apiKey"], issue: "Paste the API key." };
+    if (fields.system === "granola" && fields.source === "ApiKey" && !fields.apiKey.trim().startsWith("grn_"))
+      return { path: ["apiKey"], issue: "Granola API keys start with grn_." };
     if (fields.source === "Env" && fields.environment.trim() === "")
       return { path: ["environment"], issue: "Name the environment variable to read." };
     return undefined;

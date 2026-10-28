@@ -31,7 +31,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogwork/ui/components/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@cogwork/ui/components/dialog";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@cogwork/ui/components/field";
+import { Input } from "@cogwork/ui/components/input";
 import {
   Item,
   ItemActions,
@@ -40,15 +51,17 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@cogwork/ui/components/item";
+import { Spinner } from "@cogwork/ui/components/spinner";
 import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { RiAlertLine, RiCheckLine, RiDeleteBinLine, RiPlugLine } from "@remixicon/react";
+import { RiAlertLine, RiCheckLine, RiDeleteBinLine, RiFileTextLine, RiPlugLine } from "@remixicon/react";
 import { Link, linkOptions } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
-import { createContext, type ReactNode, use } from "react";
+import { createContext, type FormEvent, type ReactNode, use, useId, useState } from "react";
 import {
   connectionsAtom,
   establishConnectionAtom,
+  loginGranolaAtom,
   pluginsAtom,
   reconnectConnectionAtom,
   removeConnectionAtom,
@@ -63,7 +76,7 @@ import {
 import { type PluginLoadState, pluginSurfaceOf } from "../features/plugin-configuration";
 import { ConnectionEstablishmentDialog } from "./connection-establishment-form";
 
-interface ConnectionsValue {
+export interface ConnectionsValue {
   readonly state: {
     readonly overview: ConnectionOverview | null;
     readonly plugins: PluginOverview;
@@ -74,6 +87,7 @@ interface ConnectionsValue {
     // that inline and stays open, so a rejected credential can be corrected without re-typing.
     readonly establish: (establishment: ConnectionEstablishment) => Promise<string | null>;
     readonly reconnect: (establishment: ConnectionEstablishment) => Promise<string | null>;
+    readonly loginGranola: (account: string) => Promise<string | null>;
     readonly remove: (connectionId: ConnectionId) => void;
   };
   readonly meta: { readonly failure: string | null; readonly danglingWorkspaces: readonly string[] };
@@ -112,12 +126,23 @@ const rejectionOf = async (pending: Promise<Exit.Exit<unknown, unknown>>) => {
   return Exit.isSuccess(exit) ? null : messageOf(exit.cause);
 };
 
-function ConnectionsProvider({ children }: { readonly children: ReactNode }) {
+function ConnectionsProvider({
+  value,
+  children,
+}: {
+  readonly value: ConnectionsValue;
+  readonly children: ReactNode;
+}) {
+  return <ConnectionsContext value={value}>{children}</ConnectionsContext>;
+}
+
+function ConnectionsLiveProvider({ children }: { readonly children: ReactNode }) {
   const boardResult = useBoard();
   const queried = useAtomValue(connectionsAtom);
   const queriedPlugins = useAtomValue(pluginsAtom);
   const establish = useAtomSet(establishConnectionAtom, { mode: "promiseExit" });
   const reconnect = useAtomSet(reconnectConnectionAtom, { mode: "promiseExit" });
+  const loginGranola = useAtomSet(loginGranolaAtom, { mode: "promiseExit" });
   const [removeResult, remove] = useAtom(removeConnectionAtom);
   const board = BoardResult.$is("Success")(boardResult) ? boardResult.board : null;
   const overview = board?.connections ?? (queried._tag === "Success" ? queried.value : null);
@@ -130,6 +155,7 @@ function ConnectionsProvider({ children }: { readonly children: ReactNode }) {
     actions: {
       establish: (establishment) => rejectionOf(establish({ payload: { establishment } })),
       reconnect: (establishment) => rejectionOf(reconnect({ payload: { establishment } })),
+      loginGranola: (account) => rejectionOf(loginGranola({ payload: { account } })),
       remove: (connectionId) => remove({ payload: { connectionId } }),
     },
     meta: {
@@ -137,7 +163,7 @@ function ConnectionsProvider({ children }: { readonly children: ReactNode }) {
       danglingWorkspaces: board?.connectionNotices ?? [],
     },
   };
-  return <ConnectionsContext value={value}>{children}</ConnectionsContext>;
+  return <ConnectionsProvider value={value}>{children}</ConnectionsProvider>;
 }
 
 function EstablishConnectionDialog({ system }: { readonly system: ConnectionSystem }) {
@@ -174,6 +200,65 @@ function ReconnectConnectionDialog({ item }: { readonly item: ConnectionItem }) 
   );
 }
 
+function GranolaLoginDialog({ item }: { readonly item: ConnectionItem }) {
+  const {
+    actions: { loginGranola },
+  } = useConnections();
+  const [open, setOpen] = useState(false);
+  const [account, setAccount] = useState(item.connection?.account ?? "");
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const accountId = useId();
+  const openChange = (next: boolean) => {
+    setOpen(next);
+    setRefusal(null);
+  };
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    const result = await loginGranola(account.trim());
+    setSubmitting(false);
+    setRefusal(result);
+    if (result !== null) return;
+    setOpen(false);
+  };
+  return (
+    <Dialog open={open} onOpenChange={openChange}>
+      <DialogTrigger render={<Button size="sm" />}>{item.connection ? "Re-connect" : "Log in"}</DialogTrigger>
+      <DialogContent>
+        <form className="contents" onSubmit={submit}>
+          <DialogHeader>
+            <DialogTitle>Log in to Granola</DialogTitle>
+            <DialogDescription>
+              Cogwork opens Granola in your browser and stores the grant locally.
+            </DialogDescription>
+          </DialogHeader>
+          <Field data-invalid={refusal !== null}>
+            <FieldLabel htmlFor={accountId}>Account</FieldLabel>
+            <Input
+              id={accountId}
+              value={account}
+              onChange={(event) => setAccount(event.target.value)}
+              placeholder="person@example.com"
+              autoComplete="email"
+              required
+            />
+            <FieldDescription>The Granola account this Connection signs in as.</FieldDescription>
+            {refusal ? <FieldError>{refusal}</FieldError> : null}
+          </Field>
+          <DialogFooter>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? <Spinner data-icon="inline-start" /> : null}
+              Continue in browser
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RemoveConnectionDialog({ item }: { readonly item: ConnectionItem }) {
   const {
     actions: { remove },
@@ -206,7 +291,8 @@ function RemoveConnectionDialog({ item }: { readonly item: ConnectionItem }) {
 }
 
 function ConnectionSystemTile({ system }: { readonly system: ConnectionSystem }) {
-  const Icon = system === "github" ? GithubIcon : LinearIcon;
+  const icons = { github: GithubIcon, linear: LinearIcon, granola: RiFileTextLine };
+  const Icon = icons[system];
   return (
     <ItemMedia variant="icon" className="size-9 rounded-lg bg-muted text-foreground">
       <Icon className="size-4.5" />
@@ -290,7 +376,7 @@ function ConnectionCard({ item }: { readonly item: ConnectionItem }) {
       </CardContent>
       <CardFooter className="justify-between gap-2">
         <RemoveConnectionDialog item={item} />
-        <ConnectionMutationDialog item={item} />
+        <ConnectionActions item={item} />
       </CardFooter>
     </Card>
   );
@@ -301,6 +387,33 @@ function ConnectionMutationDialog({ item }: { readonly item: ConnectionItem }) {
   if (action === "none") return null;
   if (action === "establish") return <EstablishConnectionDialog system={item.system} />;
   return <ReconnectConnectionDialog item={item} />;
+}
+
+function GranolaConnectionActions({ item }: { readonly item: ConnectionItem }) {
+  const {
+    actions: { establish, reconnect },
+  } = useConnections();
+  const account = item.connection?.account;
+  return (
+    <div className="flex items-center gap-2">
+      <GranolaLoginDialog key={account} item={item} />
+      <ConnectionEstablishmentDialog
+        key={account}
+        system="granola"
+        account={account}
+        triggerLabel="Add key"
+        title="Add Granola API key"
+        description="Add an optional grn_ API key to this Connection."
+        submitLabel="Add key"
+        onEstablish={account ? reconnect : establish}
+      />
+    </div>
+  );
+}
+
+function ConnectionActions({ item }: { readonly item: ConnectionItem }) {
+  if (item.system === "granola") return <GranolaConnectionActions item={item} />;
+  return <ConnectionMutationDialog item={item} />;
 }
 
 function ConnectionsContent() {
@@ -354,9 +467,9 @@ function ConnectionsContent() {
 
 export function ConnectionsSurface() {
   return (
-    <ConnectionsProvider>
+    <ConnectionsLiveProvider>
       <ConnectionsContent />
-    </ConnectionsProvider>
+    </ConnectionsLiveProvider>
   );
 }
 

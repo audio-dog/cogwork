@@ -278,6 +278,12 @@ export const EstablishConnection = Rpc.make("EstablishConnection", {
   error: Schema.Union([ConnectionFailure, PluginFailure]),
 });
 
+export const LoginGranola = Rpc.make("LoginGranola", {
+  payload: { account: TrimmedNonEmptyString },
+  success: ConnectionMutationResult,
+  error: Schema.Union([ConnectionFailure, PluginFailure]),
+});
+
 export const ReconnectConnection = Rpc.make("ReconnectConnection", {
   payload: { establishment: ConnectionEstablishment },
   success: ConnectionMutationResult,
@@ -348,6 +354,7 @@ export const DaemonCommands = RpcGroup.make(
   InstallPlugin,
   UninstallPlugin,
   EstablishConnection,
+  LoginGranola,
   ReconnectConnection,
   RemoveConnection,
   DeregisterWorkspace,

@@ -12,6 +12,8 @@ import {
   resolveConnectionSource,
 } from "./connection-commands";
 
+const browserLoginSystems: ReadonlyArray<"linear" | "granola"> = ["linear", "granola"];
+
 describe("Connection commands", () => {
   it.effect("reads an API key when no source flag is selected", () =>
     Effect.gen(function* () {
@@ -37,19 +39,21 @@ describe("Connection commands", () => {
     }),
   );
 
-  it.effect("keeps Linear's saved login as an explicit alternate source", () =>
+  it.effect("keeps browser logins as explicit alternate sources", () =>
     Effect.gen(function* () {
-      const source = yield* resolveConnectionSource(
-        { env: Option.none(), githubCli: false, stored: true },
-        "linear",
-        Effect.die(new Error("API key input must not be read")),
+      const sources = yield* Effect.forEach(browserLoginSystems, (system) =>
+        resolveConnectionSource(
+          { env: Option.none(), githubCli: false, stored: true },
+          system,
+          Effect.die(new Error("API key input must not be read")),
+        ),
       );
 
-      assert.deepStrictEqual(source, { _tag: "Stored" });
+      assert.deepStrictEqual(sources, [{ _tag: "Stored" }, { _tag: "Stored" }]);
     }),
   );
 
-  it.effect("rejects saved login outside Linear", () =>
+  it.effect("rejects saved login outside browser-login systems", () =>
     Effect.gen(function* () {
       const failure = yield* Effect.flip(
         resolveConnectionSource(
@@ -59,7 +63,7 @@ describe("Connection commands", () => {
         ),
       );
 
-      assert.strictEqual(failure.message, "--stored is available only for Linear browser login");
+      assert.strictEqual(failure.message, "--stored is available only for browser-login Connections");
     }),
   );
 
@@ -116,6 +120,28 @@ describe("Connection commands", () => {
         failure.message,
         "GitHub Connections discover the account; omit the account argument",
       );
+    }),
+  );
+
+  it.effect("builds a Granola establishment from a pasted key", () =>
+    Effect.gen(function* () {
+      const invalid = yield* Effect.flip(
+        establishmentOf("granola", Option.some("person@example.com"), {
+          _tag: "ApiKey",
+          key: Redacted.make("wrong-prefix"),
+        }),
+      );
+      const source = yield* readApiKeyFrom(
+        Stream.toAsyncIterable(Stream.make(new TextEncoder().encode("grn_secret\n"))),
+      );
+      const establishment = yield* establishmentOf("granola", Option.some("person@example.com"), source);
+
+      assert.strictEqual(invalid._tag, "ConnectionFailure");
+      assert.strictEqual(invalid.operation, "parse Connection API key");
+      assert.strictEqual(invalid.message, "Granola API keys must start with grn_");
+      assert.strictEqual(establishment.system, "granola");
+      assert.strictEqual(establishment.account, "person@example.com");
+      assert.strictEqual(establishment.source._tag, "ApiKey");
     }),
   );
 
