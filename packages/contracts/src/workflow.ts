@@ -444,6 +444,18 @@ const refused = <A>(diagnostics: ReadonlyArray<WorkflowDiagnostic>): Decoded<A> 
   diagnostics,
 });
 
+const decodeWorkflowDocumentValue = (input: unknown) => {
+  const decoded = Schema.decodeUnknownExit(WorkflowDocument, {
+    errors: "all",
+    onExcessProperty: "error",
+  })(input);
+  return Exit.isFailure(decoded)
+    ? refused<WorkflowDocument>([
+        diagnostic("schema", "malformed", Cause.pretty(decoded.cause), location("document")),
+      ])
+    : ok(decoded.value);
+};
+
 const updateById = <A extends { readonly id: string }>(
   values: ReadonlyArray<A>,
   id: string,
@@ -678,13 +690,15 @@ export const applyWorkflowEdits = (
     ok(document),
   );
   if (result._tag === "Refused") return result;
+  const decoded = decodeWorkflowDocumentValue(result.value);
+  if (decoded._tag === "Refused") return decoded;
   const diagnostics = [
-    ...duplicateIdDiagnostics(result.value),
-    ...duplicateTransitionDiagnostics(result.value),
-    ...referenceDiagnostics(result.value),
-    ...selfHandOffDiagnostics(result.value),
+    ...duplicateIdDiagnostics(decoded.value),
+    ...duplicateTransitionDiagnostics(decoded.value),
+    ...referenceDiagnostics(decoded.value),
+    ...selfHandOffDiagnostics(decoded.value),
   ];
-  return diagnostics.length === 0 ? result : refused(diagnostics);
+  return diagnostics.length === 0 ? decoded : refused(diagnostics);
 };
 
 const duplicateValues = <A extends string>(values: ReadonlyArray<A>) =>
@@ -1344,15 +1358,7 @@ export const adviseReadiness = (
   ...optionReadinessDiagnostics(document, catalog),
 ];
 
-export const decodeWorkflowDocument = (input: unknown): Decoded<WorkflowDocument> => {
-  const decoded = Schema.decodeUnknownExit(WorkflowDocument, {
-    errors: "all",
-    onExcessProperty: "error",
-  })(input);
-  return Exit.isFailure(decoded)
-    ? refused([diagnostic("schema", "malformed", Cause.pretty(decoded.cause), location("document"))])
-    : ok(decoded.value);
-};
+export const decodeWorkflowDocument = decodeWorkflowDocumentValue;
 
 export const validateWorkflowInput = (input: unknown, catalog: WorkflowCatalog) => {
   const decoded = decodeWorkflowDocument(input);

@@ -461,6 +461,39 @@ describe("Workflow edits", () => {
     assert.strictEqual(result.value.name, "Second");
   });
 
+  it("refuses edits that exceed the answer-space bound", () => {
+    const questions = Array.from({ length: 12 }, (_, index) => ({
+      id: `question-${index}`,
+      text: `Question ${index}`,
+      choices: [
+        { id: "yes", name: "Yes" },
+        { id: "no", name: "No" },
+      ],
+    }));
+    const targetQuestion = questions[0];
+    if (!targetQuestion) throw new Error("missing target Question");
+    const document = decodeDocument({
+      ...baseDocument,
+      operations: [{ ...operation, questions }],
+    });
+    const result = applyWorkflowEdits(document, [
+      {
+        _tag: "AddChoice",
+        operation: operation.id,
+        question: decodeNodeId(targetQuestion.id),
+        choice: { id: decodeNodeId("maybe"), name: "Maybe" },
+      },
+    ]);
+
+    assert.strictEqual(result._tag, "Refused");
+    if (result._tag !== "Refused") return;
+    assert.deepStrictEqual(
+      result.diagnostics.map(({ code }) => code),
+      ["schema"],
+    );
+    assert.lengthOf(document.operations[0]?.questions[0]?.choices ?? [], 2);
+  });
+
   it("applies removal cascades before validating the final document", () => {
     const withNext = decodeDocument({
       ...baseDocument,
