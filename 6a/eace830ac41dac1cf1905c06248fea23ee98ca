@@ -1,0 +1,39 @@
+apps/desktop/src/renderer/src/components/connections-surface.tsx
+  s_57ba1d69a7a159::t_64abdb5990d9ee 391
+  s_57ba1d69a7a159::t_a267e02d50c84f 248,404-405
+  s_57ba1d69a7a159::t_b8f112a2f8f412 34-42,59,63,78,89,135-138,144,157,165
+  s_57ba1d69a7a159::t_aaf779889ab484 224-226,367,381-384,388-390,392-396,457,459
+  s_57ba1d69a7a159::t_26d4df9d2c5044 219
+  s_57ba1d69a7a159::t_61bbd985a9f2ed 45,128-134,202-218,220-223,227-247,380,385-387,397-403
+  s_57ba1d69a7a159::t_b9b876c7994e6a 55,282-283
+  s_57ba1d69a7a159::t_65d27919e18896 44,249
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_57ba1d69a7a159::t_b8f112a2f8f412 125-126
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_57ba1d69a7a159::t_b9b876c7994e6a 107-134,136-137,215
+apps/desktop/src/renderer/src/features/connections-view.ts
+  s_57ba1d69a7a159::t_80a9dffbb57d50 15-21
+apps/desktop/src/renderer/src/features/connections-view.test.ts
+  s_57ba1d69a7a159::t_71674495871ce0 6,19-22
+apps/desktop/src/renderer/src/components/connections-surface.test.tsx
+  s_57ba1d69a7a159::t_2248e336f4d27d 17
+  s_57ba1d69a7a159::t_5a284030a83679 1-16,18-40
+apps/desktop/src/renderer/src/features/connection-form.ts
+  s_57ba1d69a7a159::t_63a5db61c743cc 9-15,20,29,33-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6aeace830ac41dac1cf1905c06248fea23ee98ca",
+  "prompts": {},
+  "sessions": {
+    "s_57ba1d69a7a159": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18342-7714-7b42-a1c1-a8dff923aa83",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
