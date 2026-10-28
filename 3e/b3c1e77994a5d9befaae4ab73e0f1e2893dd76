@@ -1,0 +1,38 @@
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_37bdafd0796541::t_8af14b8ad38b70 187,350,730,742-747,1260-1265,1268-1274
+  s_37bdafd0796541::t_c97b77c7433bcf 188-190,1259,1302
+  s_37bdafd0796541::t_e9e0361e01c76a 325,1266-1267
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_37bdafd0796541::t_b22280dca4bb39 330,334
+  s_37bdafd0796541::t_f42fa9a725a33e 4,6,31-32,53-73,82-96,112-141,240-283,285-329,331-333,335-381
+  s_37bdafd0796541::t_3f9ce86b06a5d6 75-81,97-111
+  s_37bdafd0796541::t_8af14b8ad38b70 74
+  s_37bdafd0796541::t_77b7a013ff720f 284
+  s_37bdafd0796541::t_609cc56bfacab3 382
+apps/desktop/src/renderer/src/features/activity-session.test.ts
+  s_37bdafd0796541::t_f42fa9a725a33e 127-129,131-135
+  s_37bdafd0796541::t_4e1ce946127b7a 130
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_37bdafd0796541::t_8af14b8ad38b70 13-14,93-94
+  s_37bdafd0796541::t_09ebc9a9f02672 95
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_37bdafd0796541::t_c97b77c7433bcf 308
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_37bdafd0796541::t_8af14b8ad38b70 142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3eb3c1e77994a5d9befaae4ab73e0f1e2893dd76",
+  "prompts": {},
+  "sessions": {
+    "s_37bdafd0796541": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18358-8a25-7891-a2bf-38f296669467",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
