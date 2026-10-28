@@ -47,6 +47,7 @@ const eligibleWithPr: EligibleWork = {
   priority: "medium",
   priorFailures: 2,
   followUp: {
+    previousMarker: null,
     checks: "failing",
     humanCommentAtMillis: 0,
     botTriggerAtMillis: 0,

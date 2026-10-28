@@ -38,6 +38,7 @@ export interface ObservedPr {
 }
 
 export interface FollowUpContext {
+  readonly previousMarker: FollowUpMarker | null;
   readonly checks: CheckState;
   readonly humanCommentAtMillis: number;
   readonly botTriggerAtMillis: number;
@@ -130,6 +131,7 @@ export const noProgressAfterRound = (context: FollowUpContext, outcome: FollowUp
 export const followUpContext = (pr: ObservedPr): FollowUpContext => {
   const noProgress = noProgressCount(pr);
   return {
+    previousMarker: pr.followUp,
     checks: pr.checks,
     humanCommentAtMillis: humanCommentAt(pr),
     botTriggerAtMillis: botTriggerAt(pr),
