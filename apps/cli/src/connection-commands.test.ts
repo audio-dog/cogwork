@@ -12,6 +12,8 @@ import {
   resolveConnectionSource,
 } from "./connection-commands";
 
+const browserLoginSystems: ReadonlyArray<"linear" | "granola"> = ["linear", "granola"];
+
 describe("Connection commands", () => {
   it.effect("reads an API key when no source flag is selected", () =>
     Effect.gen(function* () {
@@ -37,19 +39,21 @@ describe("Connection commands", () => {
     }),
   );
 
-  it.effect("keeps Linear's saved login as an explicit alternate source", () =>
+  it.effect("keeps browser logins as explicit alternate sources", () =>
     Effect.gen(function* () {
-      const source = yield* resolveConnectionSource(
-        { env: Option.none(), githubCli: false, stored: true },
-        "linear",
-        Effect.die(new Error("API key input must not be read")),
+      const sources = yield* Effect.forEach(browserLoginSystems, (system) =>
+        resolveConnectionSource(
+          { env: Option.none(), githubCli: false, stored: true },
+          system,
+          Effect.die(new Error("API key input must not be read")),
+        ),
       );
 
-      assert.deepStrictEqual(source, { _tag: "Stored" });
+      assert.deepStrictEqual(sources, [{ _tag: "Stored" }, { _tag: "Stored" }]);
     }),
   );
 
-  it.effect("rejects saved login outside Linear", () =>
+  it.effect("rejects saved login outside browser-login systems", () =>
     Effect.gen(function* () {
       const failure = yield* Effect.flip(
         resolveConnectionSource(
@@ -59,7 +63,7 @@ describe("Connection commands", () => {
         ),
       );
 
-      assert.strictEqual(failure.message, "--stored is available only for Linear browser login");
+      assert.strictEqual(failure.message, "--stored is available only for browser-login Connections");
     }),
   );
 

@@ -37,6 +37,7 @@ const accountArgument = Argument.string("account").pipe(Argument.optional);
 const connectionIdArgument = Argument.string("connection-id");
 const decodeSystem = Schema.decodeUnknownEffect(ConnectionSystem);
 const decodeConnectionId = Schema.decodeUnknownEffect(ConnectionId);
+const storedLoginSystems = new Set<ConnectionSystemType>(["linear", "granola"]);
 
 type ApiKeySource = Extract<ConnectionEstablishment["source"], { readonly _tag: "ApiKey" }>;
 type ConnectionSourceOptions = {
@@ -88,11 +89,11 @@ export const resolveConnectionSource = Effect.fn("connection.source")(function* 
   }
   if (options.githubCli) return { _tag: "GitHubCli" } satisfies ConnectionEstablishment["source"];
   if (!options.stored) return yield* readApiKey;
-  if (system !== "linear") {
+  if (!storedLoginSystems.has(system)) {
     return yield* new ConnectionFailure({
       operation: "parse Connection source",
       connectionId: null,
-      message: "--stored is available only for Linear browser login",
+      message: "--stored is available only for browser-login Connections",
     });
   }
   return { _tag: "Stored" } satisfies ConnectionEstablishment["source"];
