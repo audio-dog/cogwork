@@ -19,6 +19,7 @@ import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import type * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -41,6 +42,7 @@ import {
   getGitHubPriorityFields,
   handBack,
   installPlugin,
+  loginGranola,
   rebindWorkspace,
   reclassify,
   reconnectConnection,
@@ -338,6 +340,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   InstallPlugin: installPlugin,
   UninstallPlugin: uninstallPlugin,
   EstablishConnection: establishConnection,
+  LoginGranola: loginGranola,
   ReconnectConnection: reconnectConnection,
   RemoveConnection: removeConnection,
   DeregisterWorkspace: deregisterWorkspace,
@@ -353,6 +356,7 @@ export const principalMiddlewareLayer = Layer.succeed(PrincipalMiddleware)(
 export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
+  readonly granolaLogin?: Layer.Layer<never, E, R | Crypto.Crypto>;
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
@@ -432,6 +436,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     plugins,
     connections,
     githubClient,
+    ...(adapters.granolaLogin ? [adapters.granolaLogin] : []),
     daemonInfoLayer,
     issueTracker,
     adapters.performanceHealth,

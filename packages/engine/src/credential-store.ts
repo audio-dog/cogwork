@@ -241,6 +241,19 @@ const matching = (account: CredentialAccount) => (credential: StoredCredential) 
   credential.issueTracker === account.issueTracker &&
   (account.organization === null || credential.organization === account.organization);
 
+const connectionCredentialPriority: Record<StoredConnectionCredential["_tag"], number> = {
+  Stored: 0,
+  ApiKey: 1,
+  Env: 2,
+  GitHubCli: 3,
+};
+
+const tokenEnvs = {
+  github: "GITHUB_TOKEN",
+  linear: "LINEAR_API_KEY",
+  granola: "GRANOLA_API_KEY",
+} as const;
+
 export const expiryMargin = Duration.minutes(1);
 
 interface StoredMatch {
@@ -300,6 +313,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     const match = yield* matchStored(sources.stored, account);
     if (match?.live) return match.credential;
     const credential = match?.credential ?? stale;
+    if (credential.issueTracker !== "linear") return null;
     const presented = credential.token.refreshToken ?? fallbackRefreshToken;
     const token = yield* refresh({ account: account.key, clientId, refreshToken: presented });
     // Linear leaves refresh_token out of a response when it does not rotate one, so the presented
@@ -390,8 +404,14 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
 
   const resolve = Effect.fn("CredentialStore.resolve")(function* (account: CredentialAccount) {
     const connectionCredentials = yield* sources.stored.loadConnectionCredentials ?? Effect.succeed([]);
-    const configured = connectionCredentials.find((entry) => entry.connectionId === account.connectionId);
-    if (configured) return yield* resolveSource(account, configured);
+    const configured = connectionCredentials
+      .filter((entry) => entry.connectionId === account.connectionId)
+      .toSorted(
+        (left, right) => connectionCredentialPriority[left._tag] - connectionCredentialPriority[right._tag],
+      );
+    if (configured.length > 0) {
+      return yield* Effect.firstSuccessOf(configured.map((entry) => resolveSource(account, entry)));
+    }
     const candidate = yield* resolveStored(account);
     if (candidate) return storedCredential(candidate);
     const granted = yield* grantedCredential(sources.clientCredentials, account);
@@ -415,7 +435,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       key: connectionId,
       issueTracker: system,
       organization: account === "default" ? null : account,
-      tokenEnv: system === "github" ? "GITHUB_TOKEN" : "LINEAR_API_KEY",
+      tokenEnv: tokenEnvs[system],
       clientCredentials: null,
       oauthClientId: null,
     });

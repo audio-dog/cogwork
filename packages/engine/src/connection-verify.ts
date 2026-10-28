@@ -26,11 +26,16 @@ export const layer = Layer.effect(
   ConnectionVerifier,
   Effect.gen(function* () {
     const github = yield* GitHubClient;
+    const verifiers = {
+      github: (credential: Credential) => github.verifyCredential(credential.token),
+      linear: (credential: Credential) => verifyLinear(credential).pipe(Effect.map(() => null)),
+      granola: () => Effect.succeed(null),
+    } satisfies Record<
+      ConnectionSystem,
+      (credential: Credential) => Effect.Effect<string | null, IssueTrackerError>
+    >;
     return {
-      verify: (system, credential) =>
-        system === "github"
-          ? github.verifyCredential(credential.token)
-          : verifyLinear(credential).pipe(Effect.map(() => null)),
+      verify: (system, credential) => verifiers[system](credential),
     } satisfies ConnectionVerifierService;
   }),
 );
