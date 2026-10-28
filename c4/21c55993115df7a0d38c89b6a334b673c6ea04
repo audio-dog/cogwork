@@ -1,0 +1,21 @@
+apps/cli/src/classified-item.test.ts
+  s_638f6f3aaaa58b::t_e654b0ee5615c4 16-21
+apps/cli/src/status.test.ts
+  s_638f6f3aaaa58b::t_e654b0ee5615c4 2,11,257-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c421c55993115df7a0d38c89b6a334b673c6ea04",
+  "prompts": {},
+  "sessions": {
+    "s_638f6f3aaaa58b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180d5-02dc-7393-ad93-78e3fc7162e7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
