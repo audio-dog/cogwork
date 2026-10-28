@@ -38,6 +38,8 @@ import {
   WorkflowDocument as WorkflowDocumentSchema,
   type WorkflowEdit,
   WorkflowEditRefused,
+  type WorkflowFailure,
+  WorkflowFailure as WorkflowFailureSchema,
   type WorkflowId,
   WorkflowId as WorkflowIdSchema,
   type WorkflowList,
@@ -98,13 +100,7 @@ type ControlStoreMutators<Picture> = {
   ) => Effect.Effect<Picture, ControlStoreFailure>;
 };
 
-type WorkflowStoreError =
-  | ControlStoreFailure
-  | WorkflowNotFound
-  | WorkflowUnreadable
-  | WorkflowEditRefused
-  | WorkflowPublishRefused
-  | WorkflowSwitchRefused;
+type WorkflowStoreError = ControlStoreFailure | WorkflowFailure;
 
 export interface WorkflowStoreService {
   readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
@@ -288,14 +284,7 @@ const decodeJson = Schema.decodeUnknownEffect(JsonValue);
 const encodeJson = Schema.encodeUnknownEffect(JsonValue);
 const WorkflowDocumentJson = Schema.fromJsonString(WorkflowDocumentSchema);
 const encodeWorkflowDocument = Schema.encodeEffect(WorkflowDocumentJson);
-const WorkflowDomainFailure = Schema.Union([
-  WorkflowNotFound,
-  WorkflowUnreadable,
-  WorkflowEditRefused,
-  WorkflowPublishRefused,
-  WorkflowSwitchRefused,
-]);
-const isWorkflowDomainFailure = Schema.is(WorkflowDomainFailure);
+const isWorkflowDomainFailure = Schema.is(WorkflowFailureSchema);
 const isStaleControlStoreWrite = Schema.is(StaleControlStoreWrite);
 
 const workflowFailure = (operation: string) => (error: unknown) =>
@@ -513,44 +502,32 @@ const readPicture = (sql: SqlClient.SqlClient) =>
     };
   });
 
-const decodeStoredWorkflowRows = Schema.decodeUnknownEffect(Schema.Array(StoredWorkflowRow));
+type StoredWorkflowInput = Record<string, unknown>;
 
-type DecodedWorkflowResult =
-  | { readonly _tag: "Success"; readonly workflow: WorkflowRecord }
-  | { readonly _tag: "Failure"; readonly failure: { readonly id: string; readonly message: string } };
+const decodeStoredWorkflow = Schema.decodeUnknownEffect(StoredWorkflowRow);
 
-const decodedWorkflow = (workflow: WorkflowRecord): DecodedWorkflowResult => ({
-  _tag: "Success",
-  workflow,
-});
-
-const failedWorkflow = (id: string, error: unknown): DecodedWorkflowResult => ({
-  _tag: "Failure",
-  failure: { id, message: messageOf(error) },
-});
+const storedWorkflowId = (row: StoredWorkflowInput) => (typeof row.id === "string" ? row.id : "<unreadable>");
 
 const readStoredWorkflows = Effect.fn("ControlStore.readStoredWorkflows")(function* (
   sql: SqlClient.SqlClient,
 ) {
-  const rows = yield* sql<StoredWorkflowRow>`
+  return yield* sql<StoredWorkflowInput>`
     SELECT id, principal, working_copy, working_revision, published_copy, published_revision, enabled
     FROM workflows
     ORDER BY id
   `;
-  return yield* decodeStoredWorkflowRows(rows);
 });
 
 const readStoredWorkflow = Effect.fn("ControlStore.readStoredWorkflow")(function* (
   sql: SqlClient.SqlClient,
   id: WorkflowId,
 ) {
-  const rows = yield* sql<StoredWorkflowRow>`
+  const rows = yield* sql<StoredWorkflowInput>`
     SELECT id, principal, working_copy, working_revision, published_copy, published_revision, enabled
     FROM workflows
     WHERE id = ${id}
   `;
-  const decoded = yield* decodeStoredWorkflowRows(rows);
-  const row = decoded[0];
+  const row = rows[0];
   if (row) return row;
   return yield* new WorkflowNotFound({ id });
 });
@@ -581,7 +558,9 @@ const unreadableWorkflow = (id: WorkflowId) => (error: unknown) =>
 
 const getDecodedWorkflow = (sql: SqlClient.SqlClient, id: WorkflowId, catalog: WorkflowCatalog) =>
   readStoredWorkflow(sql, id).pipe(
-    Effect.flatMap((row) => decodeWorkflowRecord(row, catalog).pipe(Effect.mapError(unreadableWorkflow(id)))),
+    Effect.flatMap((row) => decodeStoredWorkflow(row)),
+    Effect.flatMap((row) => decodeWorkflowRecord(row, catalog)),
+    Effect.mapError(unreadableWorkflow(id)),
   );
 
 const blockingDiagnostics = (record: WorkflowRecord) =>
@@ -899,18 +878,13 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
   });
   const listWorkflows = Effect.fn("ControlStore.listWorkflows")(function* (catalog: WorkflowCatalog) {
     const rows = yield* readStoredWorkflows(sql);
-    const results = yield* Effect.forEach(rows, (row) =>
-      decodeWorkflowRecord(row, catalog).pipe(
-        Effect.match({
-          onFailure: (error) => failedWorkflow(row.id, error),
-          onSuccess: decodedWorkflow,
-        }),
+    const [failures, workflows] = yield* Effect.partition(rows, (row) =>
+      decodeStoredWorkflow(row).pipe(
+        Effect.flatMap((stored) => decodeWorkflowRecord(stored, catalog)),
+        Effect.mapError((error) => ({ id: storedWorkflowId(row), message: messageOf(error) })),
       ),
     );
-    return {
-      workflows: results.flatMap((result) => (result._tag === "Success" ? [result.workflow] : [])),
-      failures: results.flatMap((result) => (result._tag === "Failure" ? [result.failure] : [])),
-    } satisfies WorkflowList;
+    return { workflows, failures } satisfies WorkflowList;
   });
   const createWorkflow = Effect.fn("ControlStore.createWorkflow")(function* (
     principal: PrincipalId,
@@ -950,7 +924,12 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
           SET working_copy = ${workingCopy}, working_revision = working_revision + 1
           WHERE id = ${id}
         `;
-        return yield* getDecodedWorkflow(sql, id, catalog);
+        return {
+          ...current,
+          workingCopy: applied.document,
+          workingRevision: current.workingRevision + 1,
+          diagnostics,
+        } satisfies WorkflowRecord;
       }),
     );
   });
@@ -962,21 +941,25 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
     return yield* sql.withTransaction(
       Effect.gen(function* () {
         const current = yield* getDecodedWorkflow(sql, id, catalog);
-        if (revision !== current.workingRevision) {
-          return yield* new WorkflowPublishRefused({
-            reason: "stale-revision",
-            expectedRevision: revision,
-            actualRevision: current.workingRevision,
-            diagnostics: current.diagnostics,
-          });
-        }
         const blocking = blockingDiagnostics(current);
-        if (blocking.length > 0) {
+        const refusal = [
+          {
+            matches: revision !== current.workingRevision,
+            reason: "stale-revision" as const,
+            diagnostics: current.diagnostics,
+          },
+          {
+            matches: blocking.length > 0,
+            reason: "incomplete" as const,
+            diagnostics: blocking,
+          },
+        ].find(({ matches }) => matches);
+        if (refusal) {
           return yield* new WorkflowPublishRefused({
-            reason: "incomplete",
+            reason: refusal.reason,
             expectedRevision: revision,
             actualRevision: current.workingRevision,
-            diagnostics: blocking,
+            diagnostics: refusal.diagnostics,
           });
         }
         const publishedCopy = yield* encodeWorkflowDocument(current.workingCopy);
@@ -1389,11 +1372,6 @@ export const WorkflowStore = Context.Reference<WorkflowStoreService>(
   { defaultValue: () => unavailable("Control store did not boot") },
 );
 
-class ControlStoreImplementation extends Context.Service<
-  ControlStoreImplementation,
-  ControlStoreService & WorkflowStoreService
->()("@cogwork/engine/control-store/ControlStoreImplementation") {}
-
 const recoverBootFailure = (cause: Cause.Cause<unknown>) => {
   if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
   return Effect.andThen(
@@ -1413,21 +1391,12 @@ export const bootControlStoreLayer = (storePath: string, options: ControlStoreCl
   Layer.unwrap(
     Effect.map(prepareSchemaFallback(storePath, options), (preflightError) => {
       const client = controlStoreClientLayer(storePath, options);
-      const implementation = Layer.effect(
-        ControlStoreImplementation,
-        bootControlStore(storePath, preflightError),
-      ).pipe(Layer.provide(client));
       return Layer.merge(
-        Layer.merge(
-          Layer.effect(
-            ControlStore,
-            Effect.map(ControlStoreImplementation, (store) => store),
+        Layer.effectContext(
+          Effect.map(bootControlStore(storePath, preflightError), (store) =>
+            Context.make(ControlStore, store).pipe(Context.add(WorkflowStore, store)),
           ),
-          Layer.effect(
-            WorkflowStore,
-            Effect.map(ControlStoreImplementation, (store) => store),
-          ),
-        ).pipe(Layer.provide(implementation)),
+        ).pipe(Layer.provide(client)),
         client,
       );
     }),

@@ -99,11 +99,11 @@ const withStore = <A, E, R>(
   use: (store: typeof WorkflowStore.Service) => Effect.Effect<A, E, R>,
 ) => Effect.flatMap(WorkflowStore, use).pipe(Effect.provide(bootControlStoreLayer(storePath)));
 
-const corruptWorkingCopy = (storePath: string, id: string) =>
+const corruptStoredRow = (storePath: string, id: string) =>
   Effect.acquireUseRelease(
     Effect.sync(() => new DatabaseSync(storePath)),
     (database) =>
-      Effect.sync(() => database.prepare("UPDATE workflows SET working_copy = '{}' WHERE id = ?").run(id)),
+      Effect.sync(() => database.prepare("UPDATE workflows SET enabled = 2 WHERE id = ?").run(id)),
     (database) => Effect.sync(() => database.close()),
   );
 
@@ -217,7 +217,7 @@ layer(NodeServices.layer)((it) => {
       const second = yield* withStore(storePath, (store) =>
         store.createWorkflow(localOwnerId, completeDocument, catalog),
       );
-      yield* corruptWorkingCopy(storePath, first.id);
+      yield* corruptStoredRow(storePath, first.id);
 
       const listed = yield* withStore(storePath, (store) => store.listWorkflows(catalog));
       assert.deepStrictEqual(
