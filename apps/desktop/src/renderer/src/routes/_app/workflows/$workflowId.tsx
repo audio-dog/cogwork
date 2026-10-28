@@ -3,7 +3,7 @@ import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwo
 import { RiNodeTree } from "@remixicon/react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { WorkflowEditor } from "../../../components/workflow-editor";
-import { mockWorkflow } from "../../../features/workflow-mock-data";
+import { useWorkflowSession } from "../../../features/workflow-session";
 
 export const Route = createFileRoute("/_app/workflows/$workflowId")({
   component: WorkflowRoute,
@@ -11,8 +11,10 @@ export const Route = createFileRoute("/_app/workflows/$workflowId")({
 
 function WorkflowRoute() {
   const { workflowId } = Route.useParams();
-  const workflow = mockWorkflow(workflowId);
-  if (!workflow) {
+  const { state } = useWorkflowSession();
+  const workflow = state.workflows.find(({ id }) => id === workflowId);
+  if (workflow) return <WorkflowEditor key={workflowId} workflow={workflow} />;
+  if (state.loading)
     return (
       <div className="mx-auto flex w-full max-w-2xl px-8 py-16">
         <Empty className="w-full">
@@ -20,17 +22,26 @@ function WorkflowRoute() {
             <EmptyMedia variant="icon">
               <RiNodeTree />
             </EmptyMedia>
-            <EmptyTitle>Workflow not found</EmptyTitle>
+            <EmptyTitle>Loading Workflow</EmptyTitle>
           </EmptyHeader>
-          <EmptyContent>
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/workflows" />}>
-              Back to Workflows
-            </Button>
-          </EmptyContent>
         </Empty>
       </div>
     );
-  }
-  // The route reuses one component across params, so the draft dies with the key.
-  return <WorkflowEditor key={workflowId} workflow={workflow} />;
+  return (
+    <div className="mx-auto flex w-full max-w-2xl px-8 py-16">
+      <Empty className="w-full">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <RiNodeTree />
+          </EmptyMedia>
+          <EmptyTitle>Workflow not found</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/workflows" />}>
+            Back to Workflows
+          </Button>
+        </EmptyContent>
+      </Empty>
+    </div>
+  );
 }
