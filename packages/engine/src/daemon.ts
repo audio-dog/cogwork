@@ -106,6 +106,17 @@ import {
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
+import {
+  createWorkflow,
+  deleteWorkflow,
+  editWorkflow,
+  getWorkflow,
+  getWorkflowCatalog,
+  listWorkflows,
+  publishWorkflow,
+  switchWorkflow,
+  validateWorkflowDocument,
+} from "./workflow";
 import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -319,6 +330,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)).pipe(Stream.orDie),
   WatchEvents: () => Stream.unwrap(watchEvents()),
+  ListWorkflows: listWorkflows,
+  GetWorkflow: getWorkflow,
+  ValidateWorkflow: validateWorkflowDocument,
+  GetWorkflowCatalog: getWorkflowCatalog,
   CancelRun: cancelRun,
   HandBack: handBack,
   Reclassify: reclassify,
@@ -342,6 +357,11 @@ export const handlersLayer = DaemonRpcs.toLayer({
   RemoveConnection: removeConnection,
   DeregisterWorkspace: deregisterWorkspace,
   RebindWorkspace: rebindWorkspace,
+  CreateWorkflow: createWorkflow,
+  EditWorkflow: editWorkflow,
+  PublishWorkflow: publishWorkflow,
+  SwitchWorkflow: switchWorkflow,
+  DeleteWorkflow: deleteWorkflow,
 });
 
 export const serializationLayer = RpcSerialization.layerNdjson;

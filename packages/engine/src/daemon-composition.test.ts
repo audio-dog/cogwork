@@ -142,8 +142,9 @@ const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(func
   const runs = yield* rpc.ListRuns();
   const status = yield* rpc.GetStatus();
   const catalogs = yield* rpc.GetHarnessCatalogs();
+  const workflowCatalog = yield* rpc.GetWorkflowCatalog();
   const readiness = yield* Effect.result(rpc.GetHarnessReadiness());
-  return { runs, status, reconciled, heartbeatsExit, catalogs, readiness };
+  return { runs, status, reconciled, heartbeatsExit, catalogs, workflowCatalog, readiness };
 });
 
 const connectedWorkspace: RegisteredWorkspace = {
@@ -322,6 +323,10 @@ describe("daemon server composition", () => {
       assert.deepStrictEqual(
         result.catalogs.map(({ harness }) => harness),
         ["cursor"],
+      );
+      assert.deepStrictEqual(
+        result.workflowCatalog.entries.map(({ name }) => name),
+        ["Notify me", "Wait for my approval", "Withdraw the pending approval", "Hand to me", "Stop"],
       );
       assert.isTrue(Result.isFailure(result.readiness));
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),

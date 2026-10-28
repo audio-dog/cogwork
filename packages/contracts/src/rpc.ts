@@ -34,6 +34,16 @@ import {
 } from "./settings";
 import { TriageRole } from "./triage";
 import {
+  WorkflowCatalog,
+  WorkflowDiagnostic,
+  WorkflowDocument,
+  WorkflowEditBatch,
+  WorkflowFailure,
+  WorkflowId,
+  WorkflowList,
+  WorkflowRecord,
+} from "./workflow";
+import {
   GitHubPriorityField,
   WorkspaceRegistration,
   WorkspaceRegistrationError,
@@ -98,6 +108,26 @@ export const WatchEvents = Rpc.make("WatchEvents", {
   stream: true,
 });
 
+export const ListWorkflows = Rpc.make("ListWorkflows", {
+  success: WorkflowList,
+  error: ControlStoreFailure,
+});
+
+export const GetWorkflow = Rpc.make("GetWorkflow", {
+  payload: { id: WorkflowId },
+  success: WorkflowRecord,
+  error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
+});
+
+export const ValidateWorkflow = Rpc.make("ValidateWorkflow", {
+  payload: { document: Schema.Unknown },
+  success: Schema.Array(WorkflowDiagnostic),
+});
+
+export const GetWorkflowCatalog = Rpc.make("GetWorkflowCatalog", {
+  success: WorkflowCatalog,
+});
+
 export const DaemonQueries = RpcGroup.make(
   GetStatus,
   GetMetrics,
@@ -112,6 +142,10 @@ export const DaemonQueries = RpcGroup.make(
   ResolveWatchTarget,
   WatchActivity,
   WatchEvents,
+  ListWorkflows,
+  GetWorkflow,
+  ValidateWorkflow,
+  GetWorkflowCatalog,
 ).middleware(PrincipalMiddleware);
 
 export class CancelRunError extends Schema.TaggedError<CancelRunError>()("CancelRunError", {
@@ -249,6 +283,36 @@ export const RebindWorkspace = Rpc.make("RebindWorkspace", {
   error: WorkspaceRegistryError,
 });
 
+export const CreateWorkflow = Rpc.make("CreateWorkflow", {
+  payload: { document: WorkflowDocument },
+  success: WorkflowRecord,
+  error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
+});
+
+export const EditWorkflow = Rpc.make("EditWorkflow", {
+  payload: { id: WorkflowId, edits: WorkflowEditBatch },
+  success: WorkflowRecord,
+  error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
+});
+
+export const PublishWorkflow = Rpc.make("PublishWorkflow", {
+  payload: { id: WorkflowId, revision: Schema.Int },
+  success: WorkflowRecord,
+  error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
+});
+
+export const SwitchWorkflow = Rpc.make("SwitchWorkflow", {
+  payload: { id: WorkflowId, enabled: Schema.Boolean },
+  success: WorkflowRecord,
+  error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
+});
+
+export const DeleteWorkflow = Rpc.make("DeleteWorkflow", {
+  payload: { id: WorkflowId },
+  success: WorkflowId,
+  error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
+});
+
 export const DaemonCommands = RpcGroup.make(
   CancelRun,
   HandBack,
@@ -269,6 +333,11 @@ export const DaemonCommands = RpcGroup.make(
   RemoveConnection,
   DeregisterWorkspace,
   RebindWorkspace,
+  CreateWorkflow,
+  EditWorkflow,
+  PublishWorkflow,
+  SwitchWorkflow,
+  DeleteWorkflow,
 ).middleware(PrincipalMiddleware);
 
 export const DaemonRpcs = DaemonQueries.merge(DaemonCommands);
