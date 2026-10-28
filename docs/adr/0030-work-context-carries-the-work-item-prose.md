@@ -3,6 +3,10 @@
 - **Status:** accepted
 - **Date:** 2026-09-30
 
+> **Amendment (2026-10-27).** [Customizable Workflows §17](../spec/customizable-workflows.md#17-documents-and-adrs-the-build-changes)
+> generalizes Work Context to every source. Each item kind has one frozen shape, read once at
+> admission: issue, pull request, transcript, Slack conversation, schedule tick, or a future source.
+
 > **Amendment (2026-09-30).** A follow-up Run also freezes its pull request's description and review
 > comments into Work Context at admission, for the same reasons. It is also a prerequisite of ADR
 > [0032](./0032-resource-references-make-their-reader-a-required-need.md): the engine can only derive a
