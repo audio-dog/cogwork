@@ -1,6 +1,6 @@
 import { maxSchedulerLimit, type WorkflowDocument } from "@cogwork/contracts";
 import { desc, sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const daemonLimits = sqliteTable(
   "daemon_limits",
@@ -104,6 +104,75 @@ export const pluginInstalls = sqliteTable("plugin_installs", {
   installedAtMillis: integer("installed_at_millis").notNull(),
 });
 
+export const coordinationItems = sqliteTable("coordination_items", {
+  workItem: text("work_item").primaryKey(),
+});
+
+export const coordinationSourceRevisions = sqliteTable(
+  "coordination_source_revisions",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
+    revision: text("revision").notNull(),
+    processed: integer("processed", { mode: "boolean" }).notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex("coordination_source_revisions_item_revision").on(table.workItem, table.revision),
+    index("coordination_source_revisions_item_sequence").on(table.workItem, desc(table.sequence)),
+    check("coordination_source_revisions_revision", sql`length(trim(${table.revision})) > 0`),
+  ],
+);
+
+export const coordinationClaimEvents = sqliteTable(
+  "coordination_claim_events",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
+    action: text("action").notNull(),
+    by: text("by"),
+    claimedAtMillis: integer("claimed_at_millis"),
+    workflow: text("workflow"),
+    operation: text("operation"),
+    lineageRoot: text("lineage_root"),
+    lineageParent: text("lineage_parent"),
+    lineageHop: integer("lineage_hop"),
+    releasedClaimSequence: integer("released_claim_sequence"),
+  },
+  (table) => [
+    index("coordination_claim_events_item_sequence").on(table.workItem, desc(table.sequence)),
+    check("coordination_claim_events_action", sql`${table.action} IN ('claim', 'release')`),
+    check(
+      "coordination_claim_events_shape",
+      sql`(${table.action} = 'claim' AND ${table.by} IS NOT NULL AND ${table.claimedAtMillis} IS NOT NULL AND ${table.workflow} IS NOT NULL AND ${table.operation} IS NOT NULL AND ${table.lineageRoot} IS NOT NULL AND ${table.lineageHop} IS NOT NULL AND ${table.releasedClaimSequence} IS NULL) OR (${table.action} = 'release' AND ${table.by} IS NULL AND ${table.claimedAtMillis} IS NULL AND ${table.workflow} IS NULL AND ${table.operation} IS NULL AND ${table.lineageRoot} IS NULL AND ${table.lineageParent} IS NULL AND ${table.lineageHop} IS NULL AND ${table.releasedClaimSequence} IS NOT NULL)`,
+    ),
+    check("coordination_claim_events_by", sql`${table.by} IS NULL OR length(trim(${table.by})) > 0`),
+    check(
+      "coordination_claim_events_claimed_at",
+      sql`${table.claimedAtMillis} IS NULL OR ${table.claimedAtMillis} >= 0`,
+    ),
+    check(
+      "coordination_claim_events_workflow",
+      sql`${table.workflow} IS NULL OR length(trim(${table.workflow})) > 0`,
+    ),
+    check(
+      "coordination_claim_events_operation",
+      sql`${table.operation} IS NULL OR length(trim(${table.operation})) > 0`,
+    ),
+    check(
+      "coordination_claim_events_lineage_root",
+      sql`${table.lineageRoot} IS NULL OR length(trim(${table.lineageRoot})) > 0`,
+    ),
+    check(
+      "coordination_claim_events_lineage_hop",
+      sql`${table.lineageHop} IS NULL OR ${table.lineageHop} >= 0`,
+    ),
+  ],
+);
+
 export const workflows = sqliteTable(
   "workflows",
   {
@@ -130,6 +199,67 @@ export const workflows = sqliteTable(
       "workflows_published_revision",
       sql`${table.publishedRevision} IS NULL OR ${table.publishedRevision} >= 1`,
     ),
+  ],
+);
+
+export const coordinationAttempts = sqliteTable(
+  "coordination_attempts",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
+    workflow: text("workflow").notNull(),
+    operation: text("operation").notNull(),
+    outcome: text("outcome").notNull(),
+    atMillis: integer("at_millis").notNull(),
+    lineageRoot: text("lineage_root").notNull(),
+    lineageParent: text("lineage_parent"),
+    lineageHop: integer("lineage_hop").notNull(),
+  },
+  (table) => [
+    index("coordination_attempts_item_sequence").on(table.workItem, table.sequence),
+    check("coordination_attempts_workflow", sql`length(trim(${table.workflow})) > 0`),
+    check("coordination_attempts_operation", sql`length(trim(${table.operation})) > 0`),
+    check("coordination_attempts_outcome", sql`${table.outcome} IN ('succeeded', 'failed', 'abandoned')`),
+    check("coordination_attempts_at", sql`${table.atMillis} >= 0`),
+    check("coordination_attempts_lineage_root", sql`length(trim(${table.lineageRoot})) > 0`),
+    check("coordination_attempts_lineage_hop", sql`${table.lineageHop} >= 0`),
+  ],
+);
+
+export const coordinationHandbacks = sqliteTable(
+  "coordination_handbacks",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
+    by: text("by").notNull(),
+    atMillis: integer("at_millis").notNull(),
+    note: text("note"),
+  },
+  (table) => [
+    index("coordination_handbacks_item_sequence").on(table.workItem, desc(table.sequence)),
+    check("coordination_handbacks_by", sql`length(trim(${table.by})) > 0`),
+    check("coordination_handbacks_at", sql`${table.atMillis} >= 0`),
+  ],
+);
+
+export const coordinationParks = sqliteTable(
+  "coordination_parks",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
+    reason: text("reason").notNull(),
+    atMillis: integer("at_millis").notNull(),
+  },
+  (table) => [
+    index("coordination_parks_item_sequence").on(table.workItem, table.sequence),
+    check("coordination_parks_reason", sql`length(trim(${table.reason})) > 0`),
+    check("coordination_parks_at", sql`${table.atMillis} >= 0`),
   ],
 );
 

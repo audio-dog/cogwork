@@ -1,4 +1,11 @@
-import { type Claim, type LifecycleStage, type OperationAvailability, WorkItemId } from "@cogwork/contracts";
+import {
+  type Claim,
+  codingOperation,
+  type LifecycleStage,
+  LineageId,
+  type OperationAvailability,
+  WorkItemId,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
@@ -6,6 +13,23 @@ import { followUpNoProgressLimit, type ObservedPr } from "./follow-up";
 import type { ObservedItem, PrReview } from "./issue-tracker";
 
 const id = Schema.decodeSync(WorkItemId);
+const lineage = { root: LineageId.make("issue:test"), parent: null, hop: 0 };
+const attemptRecord = (
+  stage: LifecycleStage,
+  outcome: "succeeded" | "failed" | "abandoned",
+  atMillis: number,
+) => ({
+  operation: codingOperation(stage),
+  outcome,
+  atMillis,
+  lineage,
+});
+const claimFor = (stage: LifecycleStage, claimedAtMillis: number): Claim => ({
+  by: "cogwork",
+  claimedAtMillis,
+  operation: codingOperation(stage),
+  lineage,
+});
 
 const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string }) => ({
   id: id(over.id),
@@ -13,7 +37,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   url: over.url ?? `https://github.com/owner/repo/issues/${over.id}`,
   roles: over.roles ?? [],
   assignees: over.assignees ?? [],
-  claimLabeled: over.claimLabeled ?? false,
+  claimHeld: over.claimHeld ?? false,
   claim: over.claim ?? null,
   claimedByUs: over.claimedByUs ?? false,
   attempts: over.attempts ?? [],
@@ -117,7 +141,7 @@ describe("classify", () => {
   });
 
   it("hands exhausted work to a human even when its Operation is unavailable", () => {
-    const attempt = { workflow: "coding", operation: "triage", outcome: "failed" as const, atMillis: 1 };
+    const attempt = attemptRecord("triage", "failed", 1);
     const result = classify(
       [item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt, attempt] })],
       undefined,
@@ -156,7 +180,7 @@ describe("classify", () => {
   });
 
   it("keeps claimed and parked approved pull requests out of ready-to-merge", () => {
-    const claim: Claim = { by: "cogwork", claimedAtMillis: 1000, stage: "implement" };
+    const claim: Claim = claimFor("implement", 1000);
     const result = classify([
       item({ id: "claimed", roles: ["ready-for-agent"], claim, pr: pr("ready") }),
       item({ id: "parked", roles: ["needs-info"], pr: pr("ready") }),
@@ -204,7 +228,7 @@ describe("classify", () => {
   });
 
   it("excludes claimed items from eligible and reports them as claimed", () => {
-    const claim: Claim = { by: "cogwork", claimedAtMillis: 1000 };
+    const claim: Claim = claimFor("implement", 1000);
     const { eligible, claimed } = classify([item({ id: "1", roles: ["ready-for-agent"], claim })]);
     assert.strictEqual(eligible.length, 0);
     assert.deepStrictEqual(claimed[0]?.claim, claim);
@@ -212,7 +236,7 @@ describe("classify", () => {
 
   it("excludes claim-labeled items whose marker is missing to avoid double-claiming", () => {
     const { eligible, claimed, needsHuman } = classify([
-      item({ id: "1", roles: ["ready-for-agent"], claimLabeled: true }),
+      item({ id: "1", roles: ["ready-for-agent"], claimHeld: true }),
     ]);
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
   });
@@ -245,7 +269,7 @@ describe("classify", () => {
   });
 
   it("reports an open blocker as blocked even once the stage has exhausted the failed-attempt cap", () => {
-    const attempt = { workflow: "coding", operation: "implement", outcome: "failed" as const, atMillis: 1 };
+    const attempt = attemptRecord("implement", "failed", 1);
     const { blocked, needsHuman } = classify([
       item({
         id: "1",
@@ -281,7 +305,7 @@ describe("classify", () => {
   });
 
   it("keeps a claimed item claimed even while a blocker is open", () => {
-    const claim: Claim = { by: "cogwork", claimedAtMillis: 1000, stage: "implement" };
+    const claim: Claim = claimFor("implement", 1000);
     const { blocked, claimed } = classify([
       item({ id: "1", roles: ["ready-for-agent"], claim, openBlockers: 1 }),
     ]);
@@ -301,7 +325,7 @@ describe("classify", () => {
 
   it("carries the tracker ticket URL onto every classified item", () => {
     const trackerUrl = "https://linear.app/acme/issue/AUD-1";
-    const claim: Claim = { by: "cogwork", claimedAtMillis: 1 };
+    const claim: Claim = claimFor("implement", 1);
     const result = classify([
       item({ id: "eligible", roles: ["ready-for-agent"], url: trackerUrl }),
       item({ id: "claimed", roles: ["ready-for-agent"], claim, url: trackerUrl }),
@@ -333,7 +357,7 @@ describe("classify", () => {
   });
 
   it("hands an item to a human as ready-for-human once its stage exhausts the failed-attempt cap", () => {
-    const attempt = { workflow: "coding", operation: "triage", outcome: "failed" as const, atMillis: 1 };
+    const attempt = attemptRecord("triage", "failed", 1);
     const { eligible, needsHuman } = classify([
       item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt, attempt] }),
     ]);
@@ -342,19 +366,14 @@ describe("classify", () => {
   });
 
   it("keeps an item eligible while it is still under the failed-attempt cap", () => {
-    const attempt = { workflow: "coding", operation: "triage", outcome: "failed" as const, atMillis: 1 };
+    const attempt = attemptRecord("triage", "failed", 1);
     const { eligible } = classify([item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt] })]);
     assert.strictEqual(eligible[0]?.stage, "triage");
   });
 
   it("resets the failed-attempt cap after a successful attempt for that stage", () => {
-    const failed = { workflow: "coding", operation: "triage", outcome: "failed" as const, atMillis: 1 };
-    const succeeded = {
-      workflow: "coding",
-      operation: "triage",
-      outcome: "succeeded" as const,
-      atMillis: 4,
-    };
+    const failed = attemptRecord("triage", "failed", 1);
+    const succeeded = attemptRecord("triage", "succeeded", 4);
     const { eligible, needsHuman } = classify([
       item({
         id: "1",
@@ -373,11 +392,11 @@ describe("classify", () => {
         id: "1",
         roles: ["needs-triage"],
         attempts: [
-          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 1 },
-          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 2 },
-          { workflow: "coding", operation: "triage", outcome: "succeeded", atMillis: 3 },
-          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 4 },
-          { workflow: "coding", operation: "triage", outcome: "failed", atMillis: 5 },
+          attemptRecord("triage", "failed", 1),
+          attemptRecord("triage", "failed", 2),
+          attemptRecord("triage", "succeeded", 3),
+          attemptRecord("triage", "failed", 4),
+          attemptRecord("triage", "failed", 5),
         ],
       }),
     ]);
@@ -495,7 +514,7 @@ describe("classify", () => {
   });
 
   it("attaches the PR summary to every bucket that observed one, and leaves the rest bare", () => {
-    const claim: Claim = { by: "cogwork", claimedAtMillis: 1 };
+    const claim: Claim = claimFor("implement", 1);
     const summary = {
       number: 1,
       url: "https://github.com/owner/repo/pull/1",
@@ -523,7 +542,7 @@ describe("classify", () => {
   });
 
   it("gates on the assignee allowlist across every stage when one is set", () => {
-    const claim: Claim = { by: "cogwork", claimedAtMillis: 1, stage: "implement" };
+    const claim: Claim = claimFor("implement", 1);
     const { eligible, claimed, blocked, needsHuman, readyToMerge } = classify(
       [
         item({ id: "implement", roles: ["ready-for-agent"], assignees: ["intruder"] }),

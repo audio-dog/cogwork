@@ -13,7 +13,12 @@ describe("classified item formatting", () => {
         _tag: "Claimed",
         id: "2",
         title: "Running",
-        claim: { by: "agent", claimedAtMillis: 1, stage: "implement" },
+        claim: {
+          by: "agent",
+          claimedAtMillis: 1,
+          operation: { workflow: "coding", operation: "implement" },
+          lineage: { root: "run-1", parent: null, hop: 0 },
+        },
       }),
       "claimed 2 Running (by agent)",
     ],

@@ -1,7 +1,10 @@
 import {
   type AttemptOutcome,
   type AttemptRecord,
+  codingOperation,
+  keyOf,
   type LifecycleStage,
+  LineageId,
   type Priority,
   WorkItemId,
   WorkspaceConfig,
@@ -34,6 +37,17 @@ import {
 import { claimLabel, ledgerMarker, wireCodec } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
+const lineage = { root: LineageId.make("issue:test"), parent: null, hop: 0 };
+const claimRecord = (workspace: RegisteredWorkspace, itemId: string, claimedAtMillis: number) => ({
+  by: "cogwork",
+  claimedAtMillis,
+  operation: codingOperation("implement"),
+  lineage: {
+    root: LineageId.make(keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id(itemId) })),
+    parent: null,
+    hop: 0,
+  },
+});
 
 // The fake mirrors Linear: a team read returns only that team's issues, and a write only lands when
 // the target team owns the issue — so a mis-routed write is visible as a failure, not a silent no-op.
@@ -44,7 +58,7 @@ const teamKeyOf = (identifier: string) => {
 
 const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
 const serializeCodingAttempt = (operation: LifecycleStage, outcome: AttemptOutcome, atMillis: number) =>
-  serializeAttempt({ workflow: "coding", operation, outcome, atMillis });
+  serializeAttempt({ operation: codingOperation(operation), outcome, atMillis, lineage });
 const formatCoordinationBody = (body: Coordination.CoordinationBody) =>
   Coordination.formatCoordinationBody(wireCodec, body);
 const hasLedgerMarker = (body: string) => Coordination.hasLedgerMarker(wireCodec, body);
@@ -539,8 +553,8 @@ describe("linear work source adapter", () => {
       assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
       assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
       const observed = (yield* observeItems(workspace)).find((item) => item.id === "AUD-7");
-      assert.deepStrictEqual(observed?.claim, { by: "cogwork", ...request });
-      assert.isTrue(observed?.claimLabeled);
+      assert.deepStrictEqual(observed?.claim, claimRecord(workspace, "AUD-7", request.claimedAtMillis));
+      assert.isTrue(observed?.claimHeld);
       assert.isTrue(observed?.claimedByUs);
     }).pipe(
       Effect.provide(
@@ -718,8 +732,11 @@ describe("linear work source adapter", () => {
       const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
       yield* source.claim(multiTeamWorkspace, id("BIL-7"), request);
       const observed = (yield* observeItems(multiTeamWorkspace)).find((item) => item.id === "BIL-7");
-      assert.deepStrictEqual(observed?.claim, { by: "cogwork", ...request });
-      assert.isTrue(observed?.claimLabeled);
+      assert.deepStrictEqual(
+        observed?.claim,
+        claimRecord(multiTeamWorkspace, "BIL-7", request.claimedAtMillis),
+      );
+      assert.isTrue(observed?.claimHeld);
     }).pipe(
       Effect.provide(
         withClient({

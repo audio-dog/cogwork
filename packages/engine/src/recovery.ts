@@ -17,9 +17,14 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import { availabilityCauseSummary } from "./availability";
-import { type EligibleWork, eligibleWork, observedStage } from "./classify";
+import {
+  consecutiveFailures,
+  type EligibleWork,
+  eligibleWork,
+  maxAttemptsPerOperation,
+  observedStage,
+} from "./classify";
 import { type HandoffCause, handoffNote, handoffSession, recoveryReason } from "./comments";
-import { consecutiveFailures, isExhausted } from "./exhaustion";
 import { isStalledFollowUp } from "./follow-up";
 import { Harness } from "./harness";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
@@ -43,6 +48,9 @@ const correlationOf = (item: ObservedItem) => {
 
 const accountedRunFor = (item: ObservedItem, run: RunRecord | null) =>
   run && run.startedAtMillis >= (item.claim?.claimedAtMillis ?? 0) ? run : null;
+
+const claimedStage = (item: ObservedItem) =>
+  item.claim?.operation.workflow === "coding" ? (item.claim.operation.operation as LifecycleStage) : null;
 
 export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
@@ -109,7 +117,7 @@ export const make = Effect.gen(function* () {
     session: SessionId | null,
   ) {
     const attempts = consecutiveFailures(item, codingOperation(stage)) + 1;
-    const exhausted = isExhausted(attempts);
+    const exhausted = attempts >= maxAttemptsPerOperation;
     yield* Effect.logWarning("recovered stale claim", {
       reason: recoveryReason,
       attempts,
@@ -238,7 +246,7 @@ export const make = Effect.gen(function* () {
     if (currentStage && last?.status === "running") {
       return yield* recoverCrashed(workspace, item, currentStage, last.stage, last.session, observation);
     }
-    const staleStage = currentStage ? (accountedRun?.stage ?? item.claim?.stage ?? currentStage) : null;
+    const staleStage = currentStage ? (accountedRun?.stage ?? claimedStage(item) ?? currentStage) : null;
     yield* recoverStale(workspace, item, staleStage, accountedRun?.session ?? null);
   });
 

@@ -57,13 +57,13 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { ConnectionStore } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
+import { fold } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { GitHubClient } from "./github/client";
 import { repoTargetFor as githubRepoTargetFor } from "./github/host";
 import { Harness, type HarnessService } from "./harness";
 import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
-import { applyHandbackBarrier } from "./observe";
 import {
   catalogMembershipRefusal,
   modelOptionsMembershipRefusal,
@@ -172,7 +172,7 @@ const parkedItem = (observed: ObservedItem | null) => {
     ...observed,
     roles,
     claim: null,
-    claimLabeled: false,
+    claimHeld: false,
     claimedByUs: false,
   });
 };
@@ -294,9 +294,22 @@ export const handBack = Effect.fn("Daemon.HandBack")(function* (payload: {
     note: payload.note,
   });
 
-  const handedBack = { ...observed, roles: [payload.role], handback: record };
-  const operation = observed.attempts.at(-1);
-  const item = classifiedItemWithPr(operation ? applyHandbackBarrier(handedBack, operation) : handedBack);
+  const handedBack = {
+    ...observed,
+    roles: [payload.role],
+    handback: record,
+    coordination: fold(
+      {
+        claim: observed.claim,
+        attempts: observed.attempts,
+        handbacks: [{ ...record, note: payload.note ?? null }],
+        parks: [],
+        revision: observed.coordination?.revision ?? null,
+      },
+      "cogwork",
+    ),
+  };
+  const item = classifiedItemWithPr(handedBack);
   yield* publishChangedItem(payload.workspace, item);
   return item;
 });

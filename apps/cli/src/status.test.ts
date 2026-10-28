@@ -1,5 +1,5 @@
 import type { ControlStore, DaemonStatus, WorkspaceInfo } from "@cogwork/contracts";
-import { HarnessName, IssueTrackerType, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { HarnessName, IssueTrackerType, LineageId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
@@ -8,6 +8,7 @@ const workItemId = Schema.decodeSync(WorkItemId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const _harnessName = Schema.decodeSync(HarnessName);
 const issueTrackerType = Schema.decodeSync(IssueTrackerType);
+const lineageId = Schema.decodeSync(LineageId);
 
 const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   name: workspaceId("cogwork"),
@@ -253,7 +254,12 @@ describe("formatStatus", () => {
               {
                 id: workItemId("#2"),
                 title: "in flight",
-                claim: { by: "cogwork", claimedAtMillis: 10 },
+                claim: {
+                  by: "cogwork",
+                  claimedAtMillis: 10,
+                  operation: { workflow: "coding", operation: "implement" },
+                  lineage: { root: lineageId("run-1"), parent: null, hop: 0 },
+                },
               },
             ],
           }),

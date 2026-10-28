@@ -4,6 +4,7 @@ import {
   codingOperation,
   DaemonEvent,
   HarnessName,
+  LineageId,
   type OperationAvailability,
   type PollState,
   RunId,
@@ -49,6 +50,13 @@ const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const branchName = Schema.decodeSync(BranchName);
 const session = Schema.decodeSync(SessionId)("sess-abc");
+const lineage = { root: LineageId.make("issue:test"), parent: null, hop: 0 };
+const claim = (by: string, stage: RunRecord["stage"] = "implement", claimedAtMillis = 1) => ({
+  by,
+  claimedAtMillis,
+  operation: codingOperation(stage),
+  lineage,
+});
 
 const crashLoopsCapped = Metric.counter("cogwork_recovery_crash_loops_capped_total", {
   description: "Recovery crash loops capped before another resume.",
@@ -95,8 +103,8 @@ const claimedByUs: ObservedItem = {
   url: "https://github.com/owner/repo/issues/1",
   roles: ["ready-for-agent"],
   assignees: [],
-  claimLabeled: true,
-  claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "implement" },
+  claimHeld: true,
+  claim: claim("cogwork-bot"),
   claimedByUs: true,
   attempts: [],
   handback: null,
@@ -112,8 +120,8 @@ const claimedByOther: ObservedItem = {
   url: "https://github.com/owner/repo/issues/2",
   roles: [],
   assignees: [],
-  claimLabeled: true,
-  claim: { by: "someone-else", claimedAtMillis: 1 },
+  claimHeld: true,
+  claim: claim("someone-else"),
   claimedByUs: false,
   attempts: [],
   handback: null,
@@ -129,7 +137,7 @@ const unclaimed: ObservedItem = {
   url: "https://github.com/owner/repo/issues/3",
   roles: ["needs-triage"],
   assignees: [],
-  claimLabeled: false,
+  claimHeld: false,
   claim: null,
   claimedByUs: false,
   attempts: [],
@@ -146,8 +154,8 @@ const staleNoStage: ObservedItem = {
   url: "https://github.com/owner/repo/issues/4",
   roles: [],
   assignees: [],
-  claimLabeled: true,
-  claim: { by: "cogwork-bot", claimedAtMillis: 1 },
+  claimHeld: true,
+  claim: claim("cogwork-bot"),
   claimedByUs: true,
   attempts: [],
   handback: null,
@@ -193,13 +201,14 @@ const stalledFollowUp: ObservedItem = {
       baseDivergence: "none",
     },
   }),
-  claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "follow-up" },
+  claim: claim("cogwork-bot", "follow-up"),
 };
 
 const failedAttempt = (atMillis: number, stage: RunRecord["stage"] = "implement"): AttemptRecord => ({
-  ...codingOperation(stage),
+  operation: codingOperation(stage),
   outcome: "failed",
   atMillis,
+  lineage,
 });
 
 const withAttempts = (
@@ -501,7 +510,7 @@ describe("Recovery.recover", () => {
             withAttempts(
               {
                 ...claimedByUs,
-                claim: { by: "cogwork-bot", claimedAtMillis: 2, stage: "implement" },
+                claim: claim("cogwork-bot", "implement", 2),
               },
               2,
               "follow-up",
@@ -530,7 +539,7 @@ describe("Recovery.recover", () => {
           observed: [
             {
               ...claimedWithPr("pending", { checks: "failing" }),
-              claim: { by: "cogwork-bot", claimedAtMillis: 2, stage: "implement" },
+              claim: claim("cogwork-bot", "implement", 2),
             },
           ],
         }),

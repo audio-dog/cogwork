@@ -2,6 +2,8 @@ import {
   type AttemptRecord,
   type Claim,
   codingOperation,
+  keyOf,
+  LineageId,
   type TriageRole,
   WorkItemId,
   WorkspaceConfig,
@@ -14,11 +16,13 @@ import { classify } from "./classify";
 import { triageProposalBody } from "./comments";
 import type { CommentHost, CoordinationComment } from "./coordination";
 import * as Coordination from "./coordination";
+import { verifyCoordinationContract } from "./coordination-contract";
 import {
   type CoordinationHost,
   handoffRoleFor,
   type ListedItem,
   makeCoordinationTracker,
+  makeTrackerCoordination,
 } from "./coordination-tracker";
 import type { FollowUpMarker } from "./follow-up";
 import { wireCodec } from "./github/markers";
@@ -170,10 +174,42 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 
+const lineageFor = (id: string) => ({
+  root: LineageId.make(keyOf({ _tag: "Issue", workspace: workspace.config.name, id: decodeId(id) })),
+  parent: null,
+  hop: 0,
+});
+const claimRecord = (by: string, id: string, claimedAtMillis: number, stage = "implement") => ({
+  by,
+  claimedAtMillis,
+  operation: codingOperation(stage),
+  lineage: lineageFor(id),
+});
+const attemptRecord = (
+  id: string,
+  stage: string,
+  outcome: "succeeded" | "failed" | "abandoned",
+  atMillis: number,
+) => ({ operation: codingOperation(stage), outcome, atMillis, lineage: lineageFor(id) });
+
 const observed = (tracker: ReturnType<typeof makeCoordinationTracker>, id: string) =>
   tracker.observe(workspace).pipe(Effect.map((items) => items.find((item) => item.id === id)));
 
 describe("coordination tracker", () => {
+  it.effect("satisfies the shared coordination contract", () =>
+    Effect.gen(function* () {
+      const { host } = yield* makeFakeHost([{ number: 7, labels: ["ready-for-agent"] }]);
+      const [listed] = yield* host.list(workspace);
+      if (listed === undefined) return assert.fail("missing tracker item");
+      const coordination = makeTrackerCoordination(host, workspace, listed, claimant);
+      yield* verifyCoordinationContract(coordination, {
+        _tag: "Issue",
+        workspace: workspace.config.name,
+        id: decodeId("#7"),
+      });
+    }),
+  );
+
   it.effect("claims an item, then observes the claim as ours with its stage carried", () =>
     Effect.gen(function* () {
       const { host } = yield* makeFakeHost([{ number: 7, labels: ["ready-for-agent"] }]);
@@ -181,7 +217,10 @@ describe("coordination tracker", () => {
       const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
       yield* tracker.claim(workspace, decodeId("#7"), request);
       const item = yield* observed(tracker, "#7");
-      assert.deepStrictEqual(item?.claim, { by: claimant, ...request });
+      assert.deepStrictEqual(
+        item?.claim,
+        claimRecord(claimant, "#7", request.claimedAtMillis, request.stage),
+      );
       assert.isTrue(item?.claimedByUs);
     }),
   );
@@ -207,7 +246,7 @@ describe("coordination tracker", () => {
       assert.strictEqual(error.message, "coordination marker write failed");
 
       const [item] = yield* tracker.observe(workspace);
-      assert.isFalse(item?.claimLabeled ?? true);
+      assert.isFalse(item?.claimHeld ?? true);
       const nextPoll = classify(item ? [{ ...item, pr: null }] : []);
       assert.deepStrictEqual(
         nextPoll.eligible.map((work) => work.id),
@@ -242,7 +281,7 @@ describe("coordination tracker", () => {
         .pipe(Effect.flip);
 
       const [item] = yield* failingTracker.observe(workspace);
-      assert.isTrue(item?.claimLabeled ?? false);
+      assert.isTrue(item?.claimHeld ?? false);
       assert.isTrue(item?.claimedByUs ?? false);
       assert.strictEqual(item?.claim?.claimedAtMillis, 1_722_000_000_000);
     }),
@@ -253,12 +292,7 @@ describe("coordination tracker", () => {
       const { host, itemAt } = yield* makeFakeHost([{ number: 7, labels: ["ready-for-agent"] }]);
       const tracker = makeCoordinationTracker(host);
       const claim = { claimedAtMillis: 10, stage: "implement" } as const;
-      const attempt: AttemptRecord = {
-        workflow: "coding",
-        operation: "implement",
-        outcome: "failed",
-        atMillis: 11,
-      };
+      const attempt: AttemptRecord = attemptRecord("#7", "implement", "failed", 11);
       yield* tracker.claim(workspace, decodeId("#7"), claim);
       yield* tracker.attemptFailed(workspace, decodeId("#7"), {
         ...codingOperation("implement"),
@@ -266,7 +300,7 @@ describe("coordination tracker", () => {
         reason: "git worktree add: boom",
       });
       const item = yield* observed(tracker, "#7");
-      assert.deepStrictEqual(item?.claim, { by: claimant, ...claim });
+      assert.deepStrictEqual(item?.claim, claimRecord(claimant, "#7", 10));
       assert.deepStrictEqual(item?.attempts, [attempt]);
       const stored = yield* itemAt(7);
       assert.strictEqual(stored?.comments.length, 1);
@@ -328,9 +362,7 @@ describe("coordination tracker", () => {
               id: 1,
               isBot: true,
               createdAtMillis: 1,
-              body: coordinationBody([
-                serializeClaim({ by: "other-agent", claimedAtMillis: 1, stage: "implement" }),
-              ]),
+              body: coordinationBody([serializeClaim(claimRecord("other-agent", "#33", 1))]),
             },
           ],
         },
@@ -353,7 +385,7 @@ describe("coordination tracker", () => {
               id: 1,
               isBot: false,
               createdAtMillis: 1,
-              body: coordinationBody([serializeClaim({ by: "attacker", claimedAtMillis: 1 })]),
+              body: coordinationBody([serializeClaim(claimRecord("attacker", "#8", 1))]),
             },
           ],
         },
@@ -390,9 +422,7 @@ describe("coordination outcomes", () => {
       assert.include(ledgerBody(stored?.comments ?? []), "triage completed.");
       const item = yield* observed(tracker, "#10");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-agent"]);
-      assert.deepStrictEqual(item?.attempts, [
-        { workflow: "coding", operation: "triage", outcome: "succeeded", atMillis: 11 },
-      ]);
+      assert.deepStrictEqual(item?.attempts, [attemptRecord("#10", "triage", "succeeded", 11)]);
       assert.strictEqual(item?.proposal, "Recommend ready-for-agent.");
     }),
   );
@@ -406,9 +436,7 @@ describe("coordination outcomes", () => {
       assert.include(ledgerBody(stored?.comments ?? []), "implement completed.");
       const item = yield* observed(tracker, "#11");
       assert.deepStrictEqual([...(item?.roles ?? [])], []);
-      assert.deepStrictEqual(item?.attempts, [
-        { workflow: "coding", operation: "implement", outcome: "succeeded", atMillis: 12 },
-      ]);
+      assert.deepStrictEqual(item?.attempts, [attemptRecord("#11", "implement", "succeeded", 12)]);
     }),
   );
 
@@ -429,9 +457,7 @@ describe("coordination outcomes", () => {
       );
       const item = yield* observed(tracker, "#12");
       assert.deepStrictEqual(item?.followUp, marker);
-      assert.deepStrictEqual(item?.attempts, [
-        { workflow: "coding", operation: "follow-up", outcome: "succeeded", atMillis: 13 },
-      ]);
+      assert.deepStrictEqual(item?.attempts, [attemptRecord("#12", "follow-up", "succeeded", 13)]);
     }),
   );
 
@@ -450,9 +476,7 @@ describe("coordination outcomes", () => {
         "Last implement attempt failed: `pnpm install: exit 1`",
       );
       const item = yield* observed(tracker, "#13");
-      assert.deepStrictEqual(item?.attempts, [
-        { workflow: "coding", operation: "implement", outcome: "failed", atMillis: 14 },
-      ]);
+      assert.deepStrictEqual(item?.attempts, [attemptRecord("#13", "implement", "failed", 14)]);
     }),
   );
 
@@ -474,12 +498,7 @@ describe("coordination outcomes", () => {
 
   it.effect("handBack appends its record, applies one role, and keeps its note in the ledger", () =>
     Effect.gen(function* () {
-      const failed: AttemptRecord = {
-        workflow: "coding",
-        operation: "implement",
-        outcome: "failed",
-        atMillis: 2,
-      };
+      const failed: AttemptRecord = attemptRecord("#17", "implement", "failed", 2);
       const { host, itemAt, roleLog } = yield* makeFakeHost([
         {
           number: 17,
@@ -505,7 +524,11 @@ describe("coordination outcomes", () => {
       const item = yield* observed(tracker, "#17");
       assert.deepStrictEqual(item?.roles, ["ready-for-agent"]);
       assert.deepStrictEqual(item?.attempts, [failed]);
-      assert.deepStrictEqual(item?.handback, { by: "local-owner", atMillis: 5 });
+      assert.deepStrictEqual(item?.handback, {
+        by: "local-owner",
+        atMillis: 5,
+        note: "Try the repaired worktree setup.",
+      });
       assert.deepStrictEqual(yield* roleLog, [{ number: 17, changes }]);
 
       const stored = yield* itemAt(17);
@@ -551,9 +574,7 @@ describe("coordination outcomes", () => {
       );
       const item = yield* observed(tracker, "#15");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-human"]);
-      assert.deepStrictEqual(item?.attempts, [
-        { workflow: "coding", operation: "follow-up", outcome: "abandoned", atMillis: 16 },
-      ]);
+      assert.deepStrictEqual(item?.attempts, [attemptRecord("#15", "follow-up", "abandoned", 16)]);
     }),
   );
 
