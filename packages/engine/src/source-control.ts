@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import type { ObservedPr } from "./follow-up";
 import { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
+import type { TriggerSource } from "./trigger-source";
 
 // Everything the provider can learn about a pull request by reading it. The follow-up marker is the
 // tracker's coordination state, not the PR's, so it is attached during composition rather than here.
@@ -23,6 +24,7 @@ export interface OpenedPullRequest {
 }
 
 export interface SourceControlProviderService {
+  readonly triggerSources?: ReadonlyArray<TriggerSource>;
   readonly observe: (
     workspace: RegisteredWorkspace,
     workItems: ReadonlyArray<WorkItem>,

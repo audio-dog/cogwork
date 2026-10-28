@@ -17,6 +17,7 @@ import * as Layer from "effect/Layer";
 import type { CoordinationView } from "./coordination";
 import type { FollowUpMarker, ObservedPr } from "./follow-up";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
+import type { TriggerSource } from "./trigger-source";
 
 export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
 export { IssueTrackerError };
@@ -167,7 +168,9 @@ export const makeEmpty = Effect.succeed({
     failWhenRemote(workspace),
 } as const);
 
-export type IssueTrackerService = Effect.Success<typeof makeEmpty>;
+export type IssueTrackerService = Effect.Success<typeof makeEmpty> & {
+  readonly triggerSources?: ReadonlyArray<TriggerSource>;
+};
 
 export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerService>()(
   "@cogwork/engine/issue-tracker/IssueTracker",
