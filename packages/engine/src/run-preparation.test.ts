@@ -4,6 +4,7 @@ import {
   type OperationSettingRow,
   RunId,
   type RunPlanObservation,
+  type RunPlanPolicyProfile,
   type RunRecord,
   type Session,
   SessionId,
@@ -114,8 +115,18 @@ const triageItem = (number: number) => {
   } satisfies AdmittedWork;
 };
 
-const operationSettingsFor = (harness: HarnessName) =>
-  [
+const operationSettingsFor = (harness: HarnessName, profile?: RunPlanPolicyProfile) => {
+  const profileSettings = profile
+    ? ([
+        {
+          setting: "permission-profile",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: profile,
+        },
+      ] satisfies ReadonlyArray<OperationSettingRow>)
+    : [];
+  return [
     {
       setting: "enabled",
       level: { _tag: "Default" },
@@ -128,10 +139,12 @@ const operationSettingsFor = (harness: HarnessName) =>
       scope: { _tag: "SettingsProfile" },
       value: harness,
     },
+    ...profileSettings,
   ] satisfies ReadonlyArray<OperationSettingRow>;
+};
 
-const operationFor = (item: AdmittedWork, harness: HarnessName = cursor) => {
-  const operation = resolveRunPlanStage(workspace.config, item.stage, operationSettingsFor(harness));
+const operationFor = (item: AdmittedWork, harness: HarnessName = cursor, profile?: RunPlanPolicyProfile) => {
+  const operation = resolveRunPlanStage(workspace.config, item.stage, operationSettingsFor(harness, profile));
   if (!operation) return assert.fail(`expected ${item.stage} operation`);
   return operation;
 };
@@ -187,12 +200,13 @@ const worktreeLayer = ({
 const testLayer = (
   harness: HarnessName = cursor,
   worktree: WorktreeDoubleConfig = {},
+  profile?: RunPlanPolicyProfile,
 ): Layer.Layer<
   OperationResolution.OperationResolution | RunLedger.RunLedger | WorktreeManager | WorktreeCalls
 > => {
   const engineServices = engineTestLayerWithOperationResolution({
     harness,
-    operationSettings: operationSettingsFor(harness),
+    operationSettings: operationSettingsFor(harness, profile),
   });
   return Layer.merge(engineServices, worktreeLayer(worktree));
 };
@@ -251,6 +265,7 @@ const resume = (item: AdmittedWork, stored: Session) =>
 const prepare = Effect.fn("RunPreparationTest.prepare")(function* (
   item: AdmittedWork,
   harness: HarnessName = cursor,
+  profile?: RunPlanPolicyProfile,
 ) {
   yield* TestClock.setTime(20_000);
   const preparation = yield* RunPreparation.make;
@@ -258,7 +273,7 @@ const prepare = Effect.fn("RunPreparationTest.prepare")(function* (
     runId: runId(`prepared-${item.id}`),
     workspace,
     item,
-    operation: operationFor(item, harness),
+    operation: operationFor(item, harness, profile),
     startedAtMillis: 20_000,
     observation,
   });
@@ -419,6 +434,18 @@ describe("RunPreparation.prepare", () => {
     });
   });
 
+  it.layer(testLayer(cursor, {}, "read-only"))((it) => {
+    it.effect("uses the workspace checkout for a read-only implement Operation", () => {
+      const item = implementItem(114);
+      return Effect.gen(function* () {
+        const prepared = yield* prepare(item, cursor, "read-only");
+        assert.strictEqual(prepared.checkoutPath, workspace.config.checkoutPath);
+        assert.isNull(prepared.branch);
+        assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), []);
+      });
+    });
+  });
+
   it.layer(testLayer())((it) => {
     it.effect("uses the workspace checkout without touching a worktree for triage", () => {
       const item = triageItem(108);
@@ -431,11 +458,11 @@ describe("RunPreparation.prepare", () => {
     });
   });
 
-  it.layer(testLayer(replay))((it) => {
+  it.layer(testLayer(replay, {}, "read-only"))((it) => {
     it.effect("uses the workspace checkout without touching a worktree for replay", () => {
       const item = implementItem(109);
       return Effect.gen(function* () {
-        const prepared = yield* prepare(item, replay);
+        const prepared = yield* prepare(item, replay, "read-only");
         assert.strictEqual(prepared.checkoutPath, workspace.config.checkoutPath);
         assert.isNull(prepared.branch);
         assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), []);

@@ -61,16 +61,15 @@ type PrepareCandidateInput = Omit<PrepareRunInput, "item"> & {
 const isReplayHarness = (harness: HarnessName) => harness === "replay";
 
 const resumeWorktreeOptions = (item: AdmittedWork) => {
-  if (item.stage === "follow-up" && item.followUpBranch) {
+  if (item.followUpBranch) {
     return { resume: true, branch: item.followUpBranch };
   }
   return { resume: true };
 };
 
 const branchFor = (item: AdmittedWork, operation: ResolvedOperation) => {
-  if (isReplayHarness(operation.stage.harness) || item.stage === "triage") return null;
-  if (item.stage === "follow-up") return item.followUpBranch ?? branchName(item);
-  return branchName(item);
+  if (operation.profile === "read-only") return null;
+  return item.followUpBranch ?? branchName(item);
 };
 
 const logSessionChoice = Effect.fn("RunPreparation.logSessionChoice")(function* (
@@ -119,13 +118,13 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: AdmittedWork,
     branch: BranchName | null,
-    replay: boolean,
+    profile: ResolvedOperation["profile"],
   ) {
-    if (replay || item.stage === "triage") {
+    if (profile === "read-only") {
       return { path: workspace.config.checkoutPath, created: false };
     }
     if (item.resume?.session) return yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    if (item.stage === "follow-up" && branch) return yield* worktrees.ensure(workspace, item, { branch });
+    if (item.followUpBranch && branch) return yield* worktrees.ensure(workspace, item, { branch });
     return yield* worktrees.ensure(workspace, item);
   });
 
@@ -148,14 +147,14 @@ export const make = Effect.gen(function* () {
     branch,
     replay,
   }: PrepareCandidateInput) {
-    const checkout = yield* ensureCheckout(workspace, item, branch, replay);
+    const checkout = yield* ensureCheckout(workspace, item, branch, operation.profile);
     const facts = yield* branchSessionFacts(workspace, branch);
     const storedSession = yield* candidateSession(item, facts);
-    const session = item.stage === "follow-up" && replay ? null : storedSession;
+    const session = item.followUp && replay ? null : storedSession;
     const fullPrompt = buildOperationPrompt(operation.stage, item, workspace.config.linearHistory);
     const continuationPrompt =
       item.resume?.session && !replay ? buildContinuationNudge(checkout.path) : fullPrompt;
-    const applyResumePolicy = item.stage === "follow-up" && !item.resume?.session && !replay;
+    const applyResumePolicy = Boolean(item.followUp) && !item.resume?.session && !replay;
     const worktreeRecreated = item.resume?.session || applyResumePolicy ? checkout.created : false;
     const accepted = yield* operationResolution.resolve({
       runId,
