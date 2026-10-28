@@ -175,6 +175,10 @@ const rejectingVerifier = Layer.succeed(ConnectionVerifier, {
     Effect.fail(new IssueTrackerError({ reason: "auth", message: "GitHub authentication failed (401)" })),
 });
 
+const unavailableVerifier = Layer.succeed(ConnectionVerifier, {
+  verify: () => Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "Granola unavailable" })),
+});
+
 describe("Connection verification", () => {
   it.effect("keeps GitHub ready when its remote verifier is unavailable", () =>
     Effect.gen(function* () {
@@ -207,6 +211,44 @@ describe("Connection verification", () => {
       ),
     ),
   );
+
+  it.effect("keeps Granola ready when its remote verifier is unavailable", () => {
+    const granola = Connection.make({
+      id: connectionIdOf("granola", "person@example.com"),
+      system: "granola",
+      account: "person@example.com",
+      status: "established",
+    });
+    return Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const readiness = yield* connections.readiness(granola.id);
+
+      assert.strictEqual(readiness._tag, "Ready");
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(unavailableVerifier),
+          Layer.provide(
+            Layer.succeed(CredentialStore, {
+              ...unusedCredentialStore,
+              bearerToken: () =>
+                Effect.succeed({
+                  source: "stored-oauth" as const,
+                  token: Redacted.make("valid"),
+                  identity: { organization: granola.account, actorUserId: granola.account },
+                }),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(ControlStore, {
+              ...controlStoreService,
+              picture: Effect.succeed({ ...defaultControlStore, connections: [granola] }),
+            }),
+          ),
+        ),
+      ),
+    );
+  });
 
   it.effect("keeps a revoked Granola grant as a not-ready Connection", () => {
     const granola = Connection.make({

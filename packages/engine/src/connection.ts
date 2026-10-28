@@ -216,7 +216,13 @@ export const layer = Layer.effect(
     > = {
       github: (_credential) => Effect.succeed(null),
       linear: (_credential) => Effect.succeed(null),
-      granola: (credential) => verifier.verify("granola", credential),
+      granola: (credential) =>
+        verifier.verify("granola", credential).pipe(
+          Effect.catchIf(
+            (error) => error.reason === "unavailable",
+            () => Effect.succeed(null),
+          ),
+        ),
     };
     const verifyReadiness = (connection: Connection, credential: Credential) =>
       readinessVerifiers[connection.system](credential);
