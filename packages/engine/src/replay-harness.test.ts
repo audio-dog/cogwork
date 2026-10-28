@@ -51,7 +51,7 @@ const replayRequest = (speed: ReplaySpeed) => ({
   plan: Schema.decodeSync(RunPlan)({
     id: "run-replay-test",
     operation: "implement",
-    harness: { name: replayHarnessName, model: "fixture", options: { speed }, profile: "full" },
+    harness: { name: replayHarnessName, model: "fixture", options: { speed }, profile: "read-only" },
     instructions: [],
     operatingInstructions: {
       name: "implement-agent",

@@ -84,6 +84,7 @@ export interface CandidateFacts {
   readonly runId: RunId;
   readonly workspace: RegisteredWorkspace;
   readonly item: AdmittedWork;
+  readonly operation: ResolvedOperation;
   readonly observation: RunPlanObservation;
   readonly checkoutPath: string;
   readonly continuationPrompt: string;
@@ -555,13 +556,13 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  const evaluateAvailabilityWith = Effect.fn("OperationResolution.evaluateAvailabilityWith")(function* (
+  const evaluateResolvedWith = Effect.fn("OperationResolution.evaluateResolvedWith")(function* (
     workspace: RegisteredWorkspace,
     operation: LifecycleStage,
+    resolved: ResolvedOperation | null,
     observeFailure: HarnessFailureObserver,
   ) {
     const overview = yield* loadPluginOverview();
-    const resolved = yield* controlStore.withWrite(resolveStage(workspace, operation));
     const facts = yield* loadAvailabilityFacts(
       workspace,
       resolved ? [resolved] : [],
@@ -573,6 +574,15 @@ export const make = Effect.gen(function* () {
       facts,
       overview,
     };
+  });
+
+  const evaluateAvailabilityWith = Effect.fn("OperationResolution.evaluateAvailabilityWith")(function* (
+    workspace: RegisteredWorkspace,
+    operation: LifecycleStage,
+    observeFailure: HarnessFailureObserver,
+  ) {
+    const resolved = yield* controlStore.withWrite(resolveStage(workspace, operation));
+    return yield* evaluateResolvedWith(workspace, operation, resolved, observeFailure);
   });
 
   const evaluateAvailability = (workspace: RegisteredWorkspace, operation: LifecycleStage) =>
@@ -628,8 +638,11 @@ export const make = Effect.gen(function* () {
   });
 
   const resolve = Effect.fn("OperationResolution.resolve")(function* (facts: CandidateFacts) {
-    const evaluated = yield* evaluateAvailabilityWith(facts.workspace, facts.item.stage, (name, error) =>
-      harnessReadiness.requestOne(name, error),
+    const evaluated = yield* evaluateResolvedWith(
+      facts.workspace,
+      facts.item.stage,
+      facts.operation,
+      (name, error) => harnessReadiness.requestOne(name, error),
     );
     if (!evaluated.availability.available || !evaluated.resolved) {
       return yield* new OperationUnavailable({ availability: evaluated.availability });

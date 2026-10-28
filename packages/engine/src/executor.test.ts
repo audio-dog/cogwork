@@ -287,6 +287,18 @@ const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
     ),
 });
 
+const failingAssemblyContext = Layer.succeed(ContextAssembler.ContextAssembler, {
+  assemble: () =>
+    Effect.fail(
+      new ContextFsError({
+        operation: "assemble run context",
+        message: "assembly failed",
+        retryable: false,
+      }),
+    ),
+  cleanup: () => Effect.void,
+});
+
 const contributionContext = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: (request) =>
     Effect.succeed({
@@ -746,10 +758,14 @@ const runner = (
 });
 
 const recordOnlyRunner = (events: ReadonlyArray<AgUiEvent>) =>
-  runner(events, fullHarnessExecution, {
-    sessionKind: "owned-transcript",
-    name: replay,
-  });
+  runner(
+    events,
+    { ...fullHarnessExecution, profiles: ["read-only"] },
+    {
+      sessionKind: "owned-transcript",
+      name: replay,
+    },
+  );
 
 const capturingRunner = (
   events: ReadonlyArray<AgUiEvent>,
@@ -4161,6 +4177,44 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], divergedWorktree)));
+  });
+
+  it.effect("uses the read-only checkout in a pre-preparation hand-off", () => {
+    const resumeItem: EligibleWork = {
+      ...implementItem,
+      resume: { session: previousSession, reason: "interrupted" },
+    };
+    const permissionProfile: OperationSettingRow = {
+      setting: "permission-profile",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace: implementWorkspace.config.name },
+      value: "read-only",
+    };
+    const readOnlyRunner = runner(implementEvents, {
+      ...fullHarnessExecution,
+      profiles: ["read-only"],
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* seedResumeSession();
+      yield* execute(executor, implementWorkspace, resumeItem);
+
+      const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
+      assert.include(handOff?.note ?? "", "cd '/repos/gh' && codex resume 'sess-prev'");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [readOnlyRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [...runnableStages, permissionProfile],
+          failingAssemblyContext,
+        ),
+      ),
+    );
   });
 
   it.effect("derives a pre-preparation follow-up hand-off from its linked external branch", () => {

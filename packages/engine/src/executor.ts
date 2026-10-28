@@ -470,7 +470,8 @@ export const make = Effect.gen(function* () {
     failure: RetryFailure,
     harnessName: HarnessName,
     handle: string | null,
-  ) => reportFailureAtCheckout(workspace, item, failure, harnessName, handle, undefined);
+    checkoutPath: string,
+  ) => reportFailureAtCheckout(workspace, item, failure, harnessName, handle, checkoutPath);
 
   const applyFailure = Effect.fn("Executor.applyFailure")(function* (
     workspace: RegisteredWorkspace,
@@ -1084,6 +1085,7 @@ export const make = Effect.gen(function* () {
     const reportPreparationFailure = Effect.fn("Executor.reportPreparationFailure")(function* ({
       error,
       session,
+      checkoutPath,
     }: PreparationFailure) {
       if (error._tag === "OperationUnavailable") {
         yield* noteUnavailableResume(workspace, item, error.availability.causes);
@@ -1095,6 +1097,7 @@ export const make = Effect.gen(function* () {
         error,
         session?.harness ?? operation.stage.harness,
         sessionHandle(session),
+        checkoutPath,
       );
       return null;
     });

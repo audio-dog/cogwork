@@ -4,15 +4,18 @@ import {
   type OperationSettingRow,
   RunId,
   type RunPlanObservation,
+  type RunPlanPolicyProfile,
   type RunRecord,
   type Session,
   SessionId,
   WorkItemId,
   WorkspaceConfig,
 } from "@cogwork/contracts";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -114,8 +117,18 @@ const triageItem = (number: number) => {
   } satisfies AdmittedWork;
 };
 
-const operationSettingsFor = (harness: HarnessName) =>
-  [
+const operationSettingsFor = (harness: HarnessName, profile?: RunPlanPolicyProfile) => {
+  const profileSettings = profile
+    ? ([
+        {
+          setting: "permission-profile",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: profile,
+        },
+      ] satisfies ReadonlyArray<OperationSettingRow>)
+    : [];
+  return [
     {
       setting: "enabled",
       level: { _tag: "Default" },
@@ -128,10 +141,12 @@ const operationSettingsFor = (harness: HarnessName) =>
       scope: { _tag: "SettingsProfile" },
       value: harness,
     },
+    ...profileSettings,
   ] satisfies ReadonlyArray<OperationSettingRow>;
+};
 
-const operationFor = (item: AdmittedWork, harness: HarnessName = cursor) => {
-  const operation = resolveRunPlanStage(workspace.config, item.stage, operationSettingsFor(harness));
+const operationFor = (item: AdmittedWork, harness: HarnessName = cursor, profile?: RunPlanPolicyProfile) => {
+  const operation = resolveRunPlanStage(workspace.config, item.stage, operationSettingsFor(harness, profile));
   if (!operation) return assert.fail(`expected ${item.stage} operation`);
   return operation;
 };
@@ -187,14 +202,19 @@ const worktreeLayer = ({
 const testLayer = (
   harness: HarnessName = cursor,
   worktree: WorktreeDoubleConfig = {},
+  profile?: RunPlanPolicyProfile,
 ): Layer.Layer<
-  OperationResolution.OperationResolution | RunLedger.RunLedger | WorktreeManager | WorktreeCalls
+  | FileSystem.FileSystem
+  | OperationResolution.OperationResolution
+  | RunLedger.RunLedger
+  | WorktreeManager
+  | WorktreeCalls
 > => {
   const engineServices = engineTestLayerWithOperationResolution({
     harness,
-    operationSettings: operationSettingsFor(harness),
+    operationSettings: operationSettingsFor(harness, profile),
   });
-  return Layer.merge(engineServices, worktreeLayer(worktree));
+  return Layer.mergeAll(engineServices, worktreeLayer(worktree), FileSystem.layerNoop({}));
 };
 
 const session = (id: string, harness: HarnessName = cursor) =>
@@ -251,6 +271,7 @@ const resume = (item: AdmittedWork, stored: Session) =>
 const prepare = Effect.fn("RunPreparationTest.prepare")(function* (
   item: AdmittedWork,
   harness: HarnessName = cursor,
+  profile?: RunPlanPolicyProfile,
 ) {
   yield* TestClock.setTime(20_000);
   const preparation = yield* RunPreparation.make;
@@ -258,7 +279,7 @@ const prepare = Effect.fn("RunPreparationTest.prepare")(function* (
     runId: runId(`prepared-${item.id}`),
     workspace,
     item,
-    operation: operationFor(item, harness),
+    operation: operationFor(item, harness, profile),
     startedAtMillis: 20_000,
     observation,
   });
@@ -273,6 +294,19 @@ const divergedWorktree = new WorktreeError({
 });
 
 describe("RunPreparation.prepare", () => {
+  it.effect("uses an empty scratch checkout without a Workspace", () =>
+    Effect.gen(function* () {
+      const item = implementItem(115);
+      const preparation = yield* RunPreparation.make;
+      const checkout = yield* preparation.prepareCheckout(null, item, operationFor(item));
+      const fs = yield* FileSystem.FileSystem;
+
+      assert.isNull(checkout.branch);
+      assert.deepStrictEqual(yield* fs.readDirectory(checkout.path), []);
+      assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), []);
+    }).pipe(Effect.provide(Layer.merge(testLayer(), NodeFileSystem.layer))),
+  );
+
   it.layer(testLayer())((it) => {
     it.effect("resumes the branch's persisted Session", () => {
       const item = implementItem(101);
@@ -393,6 +427,21 @@ describe("RunPreparation.prepare", () => {
   });
 
   it.layer(testLayer())((it) => {
+    it.effect("resumes a full pull request Operation on its head branch", () => {
+      const base = { ...implementItem(116), followUpBranch: externalBranch };
+      const stored = session("session-pull-request-recovery");
+      const item = resume(base, stored);
+      return Effect.gen(function* () {
+        yield* seedBranchSession(item, stored, 1_000, externalBranch);
+        const prepared = yield* prepare(item);
+        const calls = yield* Ref.get(yield* WorktreeCalls);
+        assert.strictEqual(prepared.branch, externalBranch);
+        assert.deepStrictEqual(calls, [{ item: item.id, options: { resume: true, branch: externalBranch } }]);
+      });
+    });
+  });
+
+  it.layer(testLayer())((it) => {
     it.effect("starts a fresh Session for an explicit fresh follow-up", () => {
       const item = followUpItem(107, true);
       const stored = session("session-follow-up");
@@ -420,6 +469,18 @@ describe("RunPreparation.prepare", () => {
   });
 
   it.layer(testLayer())((it) => {
+    it.effect("keeps the inspected read-only profile through preparation", () => {
+      const item = implementItem(114);
+      return Effect.gen(function* () {
+        const prepared = yield* prepare(item, cursor, "read-only");
+        assert.strictEqual(prepared.checkoutPath, workspace.config.checkoutPath);
+        assert.isNull(prepared.branch);
+        assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), []);
+      });
+    });
+  });
+
+  it.layer(testLayer())((it) => {
     it.effect("uses the workspace checkout without touching a worktree for triage", () => {
       const item = triageItem(108);
       return Effect.gen(function* () {
@@ -431,11 +492,26 @@ describe("RunPreparation.prepare", () => {
     });
   });
 
-  it.layer(testLayer(replay))((it) => {
+  it.layer(testLayer(cursor, {}, "full"))((it) => {
+    it.effect("keeps a full triage Operation outside branch Session lineage", () => {
+      const item = triageItem(117);
+      const stored = session("session-triage-branch");
+      return Effect.gen(function* () {
+        yield* seedBranchSession(item, stored);
+        const prepared = yield* prepare(item, cursor, "full");
+        assert.notStrictEqual(prepared.session, stored.id);
+        assert.strictEqual(prepared.checkoutPath, `/worktrees/${branchName(item)}`);
+        assert.isNull(prepared.branch);
+        assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), [{ item: item.id, options: undefined }]);
+      });
+    });
+  });
+
+  it.layer(testLayer(replay, {}, "read-only"))((it) => {
     it.effect("uses the workspace checkout without touching a worktree for replay", () => {
       const item = implementItem(109);
       return Effect.gen(function* () {
-        const prepared = yield* prepare(item, replay);
+        const prepared = yield* prepare(item, replay, "read-only");
         assert.strictEqual(prepared.checkoutPath, workspace.config.checkoutPath);
         assert.isNull(prepared.branch);
         assert.deepStrictEqual(yield* Ref.get(yield* WorktreeCalls), []);

@@ -16,6 +16,7 @@ import {
   type OperationSettingName,
   type OperationSettingRow,
   OperationSettingUpdate,
+  operationDefaultProfiles,
   type RunPlanPolicyProfile,
   resolveOperationSetting,
   type WorkspaceId,
@@ -299,7 +300,7 @@ const permissionProfileDefault = (
 ) => {
   const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
   const profiles = catalogFor(catalogs, harness)?.policyProfiles ?? [];
-  return defaultPermissionProfile(operation, profiles);
+  return defaultPermissionProfile(operationDefaultProfiles[operation], profiles);
 };
 
 interface SettingDefaultContext {
