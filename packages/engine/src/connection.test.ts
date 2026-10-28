@@ -176,6 +176,46 @@ const rejectingVerifier = Layer.succeed(ConnectionVerifier, {
 });
 
 describe("Connection verification", () => {
+  it.effect("keeps a revoked Granola grant as a not-ready Connection", () => {
+    const granola = Connection.make({
+      id: connectionIdOf("granola", "person@example.com"),
+      system: "granola",
+      account: "person@example.com",
+      status: "established",
+    });
+    return Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const readiness = yield* connections.readiness(granola.id);
+
+      assert.strictEqual(readiness._tag, "NotReady");
+      if (readiness._tag === "NotReady") assert.include(readiness.reason, "401");
+      assert.strictEqual((yield* connections.find(granola.id))?.id, granola.id);
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(rejectingVerifier),
+          Layer.provide(
+            Layer.succeed(CredentialStore, {
+              ...unusedCredentialStore,
+              bearerToken: () =>
+                Effect.succeed({
+                  source: "stored-oauth" as const,
+                  token: Redacted.make("revoked"),
+                  identity: { organization: granola.account, actorUserId: granola.account },
+                }),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(ControlStore, {
+              ...controlStoreService,
+              picture: Effect.succeed({ ...defaultControlStore, connections: [granola] }),
+            }),
+          ),
+        ),
+      ),
+    );
+  });
+
   it.effect("refuses a credential the system rejects, and writes nothing", () =>
     Effect.gen(function* () {
       const connections = yield* ConnectionStore;

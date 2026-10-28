@@ -132,6 +132,8 @@ describe("Connection commands", () => {
       );
       const establishment = yield* establishmentOf("granola", Option.some("person@example.com"), source);
 
+      assert.strictEqual(invalid._tag, "ConnectionFailure");
+      assert.strictEqual(invalid.operation, "parse Connection API key");
       assert.strictEqual(invalid.message, "Granola API keys must start with grn_");
       assert.strictEqual(establishment.system, "granola");
       assert.strictEqual(establishment.account, "person@example.com");

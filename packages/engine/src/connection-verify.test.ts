@@ -77,4 +77,24 @@ describe("ConnectionVerifier", () => {
       assert.strictEqual(error.reason, "unavailable");
     }).pipe(Effect.provide(respondingWith(503, ""))),
   );
+
+  it.effect("asks Granola to accept the credential", () =>
+    Effect.gen(function* () {
+      const verifier = yield* ConnectionVerifier;
+      const account = yield* verifier.verify("granola", apiKey("grn_real"));
+
+      assert.strictEqual(account, null);
+      assert.deepStrictEqual(yield* Ref.get(yield* FetchedUrls), ["https://mcp.granola.ai/mcp"]);
+    }).pipe(Effect.provide(respondingWith(200))),
+  );
+
+  it.effect("reports a revoked Granola credential as an auth failure", () =>
+    Effect.gen(function* () {
+      const verifier = yield* ConnectionVerifier;
+      const error = yield* Effect.flip(verifier.verify("granola", apiKey("grn_revoked")));
+
+      assert.strictEqual(error.reason, "auth");
+      assert.include(error.message, "401");
+    }).pipe(Effect.provide(respondingWith(401))),
+  );
 });

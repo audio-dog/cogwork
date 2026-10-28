@@ -15,7 +15,6 @@ import {
   ContributionSettingUpdate,
   type ControlStoreFailure,
   type ControlStore as ControlStorePicture,
-  connectionIdOf,
   type DaemonLimitUpdate,
   HarnessName,
   HarnessNotRegistered,
@@ -940,28 +939,29 @@ export const loginGranola = Effect.fn("Daemon.LoginGranola")(function* (payload:
   }
   const credential = yield* (yield* GranolaLogin).login(payload.account);
   const store = yield* CredentialStore;
-  yield* store.persist(credential).pipe(
-    Effect.mapError(
-      (error) =>
-        new ConnectionFailure({
-          operation: "login Granola",
-          connectionId: existing?.id ?? null,
-          message: error.message,
-        }),
-    ),
-  );
+  const withStoredCredential = store.withStoredCredential;
+  if (!withStoredCredential) {
+    return yield* connectionFailure(
+      "login Granola",
+      existing?.id ?? null,
+      "Credential store cannot stage a browser login",
+    );
+  }
   const establishment = {
     system: "granola",
     account: payload.account,
     source: { _tag: "Stored" },
   } as const;
-  return yield* (
-    existing ? reconnectConnection({ establishment }) : establishConnection({ establishment })
-  ).pipe(
-    Effect.onError(() =>
-      existing
-        ? Effect.void
-        : store.removeConnection(connectionIdOf("granola", payload.account)).pipe(Effect.ignore),
+  const connect = existing ? reconnectConnection({ establishment }) : establishConnection({ establishment });
+  return yield* withStoredCredential(credential, connect).pipe(
+    Effect.mapError((error) =>
+      error._tag === "CredentialError"
+        ? new ConnectionFailure({
+            operation: "login Granola",
+            connectionId: existing?.id ?? null,
+            message: error.message,
+          })
+        : error,
     ),
   );
 });

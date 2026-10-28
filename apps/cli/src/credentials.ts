@@ -6,6 +6,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import { makeTokenRefresh as makeGranolaTokenRefresh } from "./granola-login";
 
 const fileMode = 0o600;
 const directoryMode = 0o700;
@@ -162,11 +163,23 @@ export const layer = (filePath: string) =>
       const spawner = yield* ChildProcessSpawner;
       const clientCredentials = yield* Linear.ClientCredentials.make();
       const githubCli = yield* GitHub.makeCliCredentialSource(spawner);
+      const refreshers: Record<string, CredentialStore.TokenRefresh> = {
+        linear: Linear.OAuth.makeTokenRefresh(client),
+        granola: makeGranolaTokenRefresh(client),
+      };
       return CredentialStore.make({
         stored,
         clientCredentials,
         githubCli,
-        refresh: Linear.OAuth.makeTokenRefresh(client),
+        refresh: (request) =>
+          refreshers[request.issueTracker]?.(request) ??
+          Effect.fail(
+            new CredentialStore.CredentialError({
+              account: request.account,
+              message: `cannot refresh the stored token for ${request.account}`,
+              retryable: false,
+            }),
+          ),
       });
     }),
   );

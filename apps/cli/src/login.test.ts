@@ -7,6 +7,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
@@ -210,6 +211,42 @@ describe("login linear", () => {
 });
 
 describe("browser opener", () => {
+  it.effect("rejects a non-HTTPS authorization URL before spawning", () =>
+    Effect.gen(function* () {
+      const opener = yield* BrowserOpener;
+      const outcome = yield* Effect.exit(opener.open("http://example.com/authorize"));
+
+      assert.isTrue(Exit.isFailure(outcome));
+    }).pipe(
+      Effect.provide(
+        browserOpenerLayer.pipe(
+          Layer.provide(
+            Layer.succeed(
+              ChildProcessSpawner.ChildProcessSpawner,
+              ChildProcessSpawner.make(() =>
+                Effect.succeed(
+                  ChildProcessSpawner.makeHandle({
+                    pid: ChildProcessSpawner.ProcessId(1),
+                    stdin: Sink.drain,
+                    stdout: Stream.empty,
+                    stderr: Stream.empty,
+                    all: Stream.empty,
+                    exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+                    isRunning: Effect.succeed(false),
+                    kill: () => Effect.void,
+                    getInputFd: () => Sink.drain,
+                    getOutputFd: () => Stream.empty,
+                    unref: Effect.succeed(Effect.void),
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
   it.effect("times out a hanging browser subprocess with retry guidance", () =>
     Effect.gen(function* () {
       const opener = yield* BrowserOpener;

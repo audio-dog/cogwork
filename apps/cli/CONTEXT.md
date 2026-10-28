@@ -40,7 +40,7 @@ The `login key --provider <id>` subcommand: the bring-your-own-key path. It read
 _Avoid_: A `--key` flag (that leaks the secret), a separate provider secret file
 
 **connection**:
-The daemon-backed management group for `establish`, `re-connect`, and `remove`. Connect and re-connect read an API key from stdin by default. `--env` selects an environment-variable name, GitHub's `--github-cli` uses the account from `gh auth login`, and Linear's `--stored` selects an existing browser-login grant. The GitHub account is discovered from the accepted credential, so only Linear takes the optional account argument. Cogwork does not load `~/.cogwork/.env`; environment references resolve only from the daemon process environment. Removal reports the Workspace ids left dangling.
+The daemon-backed management group for `establish`, `re-connect`, and `remove`. Connect and re-connect read an API key from stdin by default. `--env` selects an environment-variable name, GitHub's `--github-cli` uses the account from `gh auth login`, and `--stored` selects an existing browser-login grant. The GitHub account is discovered from the accepted credential. Linear and Granola take the account argument. Cogwork does not load `~/.cogwork/.env`; environment references resolve only from the daemon process environment. Removal reports the Workspace ids left dangling.
 _Avoid_: Putting an API key in argv, editing the Control store directly
 
 **login linear**:

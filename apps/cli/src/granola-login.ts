@@ -1,24 +1,28 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
 import { ConnectionFailure } from "@cogwork/contracts";
-import { Granola } from "@cogwork/engine";
+import { CredentialStore, Granola } from "@cogwork/engine";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
-import { auth, type OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
+import {
+  auth,
+  type OAuthClientProvider,
+  type OAuthDiscoveryState,
+} from "@modelcontextprotocol/sdk/client/auth.js";
 import type { OAuthClientInformationMixed, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
-import * as HttpServer from "effect/unstable/http/HttpServer";
-import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
-import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
+import * as Schema from "effect/Schema";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import type * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import { BrowserOpener, browserOpenerLayer } from "./login";
+import { awaitLoopbackAuthorization, BrowserOpener, browserOpenerLayer } from "./login";
 
-const callbackDeadline = "5 minutes";
+const oauthRequestDeadline = "30 seconds";
 
 export interface GranolaLoginConfig {
   readonly endpoint: string;
@@ -28,60 +32,34 @@ export interface GranolaLoginConfig {
 const failure = (message: string) =>
   new ConnectionFailure({ operation: "login Granola", connectionId: null, message });
 
-interface CallbackParams {
-  readonly code: string | null;
-  readonly state: string | null;
-  readonly error: string | null;
-}
-
-const callbackApp = (result: Deferred.Deferred<CallbackParams>) =>
-  Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const url = new URL(request.url, "http://127.0.0.1");
-    if (url.pathname !== "/oauth/callback") return HttpServerResponse.empty({ status: 404 });
-    const params = {
-      code: url.searchParams.get("code"),
-      state: url.searchParams.get("state"),
-      error: url.searchParams.get("error"),
-    } satisfies CallbackParams;
-    yield* Deferred.succeed(result, params);
-    const successful = params.error === null && params.code !== null;
-    return HttpServerResponse.html(
-      `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>cogwork</title></head><body><h1>Granola login ${successful ? "complete" : "failed"}</h1><p>Return to Cogwork.</p></body></html>`,
-    );
-  });
-
 const redirectUri = (port: number) => `http://127.0.0.1:${port}/oauth/callback`;
 
-const runAuth = (provider: OAuthClientProvider, endpoint: string, authorizationCode?: string) =>
+const runAuth = (
+  fetchFn: typeof globalThis.fetch,
+  provider: OAuthClientProvider,
+  endpoint: string,
+  authorizationCode?: string,
+) =>
   Effect.tryPromise({
-    try: () => auth(provider, { serverUrl: endpoint, authorizationCode }),
+    try: (signal) =>
+      auth(provider, {
+        serverUrl: endpoint,
+        authorizationCode,
+        fetchFn: (input, init) => fetchFn(input, { ...init, signal }),
+      }),
     catch: (error) => failure(error instanceof Error ? error.message : String(error)),
-  });
+  }).pipe(
+    Effect.timeout(oauthRequestDeadline),
+    Effect.mapError((error) =>
+      error._tag === "ConnectionFailure"
+        ? error
+        : failure(`Granola OAuth request timed out after ${oauthRequestDeadline}.`),
+    ),
+  );
 
-const awaitCallback = (authorizationUrl: URL, expectedState: string) =>
-  Effect.gen(function* () {
-    const result = yield* Deferred.make<CallbackParams>();
-    yield* HttpServer.serveEffect(callbackApp(result));
-    const opener = yield* BrowserOpener;
-    const callback = yield* Deferred.await(result).pipe(
-      Effect.timeout(callbackDeadline),
-      Effect.mapError(() => failure("Granola login timed out waiting for the browser callback.")),
-      Effect.raceFirst(
-        opener.open(authorizationUrl.href).pipe(
-          Effect.mapError((error) => failure(error.message)),
-          Effect.andThen(Deferred.await(result)),
-        ),
-      ),
-    );
-    if (callback.error) return yield* failure(`Granola denied authorization: ${callback.error}`);
-    if (callback.state !== expectedState) return yield* failure("Granola returned the wrong OAuth state.");
-    if (!callback.code) return yield* failure("Granola did not return an authorization code.");
-    return callback.code;
-  });
-
-export const makeLogin = Effect.fn("granola.login")(function* (config: GranolaLoginConfig, account: string) {
+const makeLogin = Effect.fn("granola.login")(function* (config: GranolaLoginConfig, account: string) {
   const crypto = yield* Crypto.Crypto;
+  const fetchFn = yield* FetchHttpClient.Fetch;
   const state = Encoding.encodeBase64Url(
     yield* crypto
       .randomBytes(16)
@@ -94,6 +72,7 @@ export const makeLogin = Effect.fn("granola.login")(function* (config: GranolaLo
     tokens?: OAuthTokens;
     verifier?: string;
     authorizationUrl?: URL;
+    discovery?: OAuthDiscoveryState;
   } = {};
   const provider: OAuthClientProvider = {
     redirectUrl: callback,
@@ -120,12 +99,21 @@ export const makeLogin = Effect.fn("granola.login")(function* (config: GranolaLo
       session.verifier = verifier;
     },
     codeVerifier: () => session.verifier ?? "",
+    discoveryState: () => session.discovery,
+    saveDiscoveryState: (discovery) => {
+      session.discovery = discovery;
+    },
   };
-  const first = yield* runAuth(provider, config.endpoint);
+  const first = yield* runAuth(fetchFn, provider, config.endpoint);
   if (first !== "REDIRECT" || !session.authorizationUrl) {
     return yield* failure("Granola did not start browser authorization.");
   }
-  const code = yield* awaitCallback(session.authorizationUrl, state).pipe(
+  const code = yield* awaitLoopbackAuthorization({
+    authorizationUrl: session.authorizationUrl,
+    expectedState: state,
+    loginName: "Granola",
+  }).pipe(
+    Effect.mapError((error) => failure(error.message)),
     Effect.provideService(BrowserOpener, opener),
     Effect.provide(NodeHttpServer.layer(Http.createServer, { host: "127.0.0.1", port: config.redirectPort })),
     Effect.scoped,
@@ -135,16 +123,20 @@ export const makeLogin = Effect.fn("granola.login")(function* (config: GranolaLo
         : failure(`Could not start the Granola callback server on 127.0.0.1:${config.redirectPort}.`),
     ),
   );
-  const completed = yield* runAuth(provider, config.endpoint, code);
+  const completed = yield* runAuth(fetchFn, provider, config.endpoint, code);
   if (completed !== "AUTHORIZED" || !session.tokens || !session.client) {
     return yield* failure("Granola did not complete authorization.");
   }
+  const tokenEndpoint = session.discovery?.authorizationServerMetadata?.token_endpoint;
+  if (!tokenEndpoint) return yield* failure("Granola did not report an OAuth token endpoint.");
   const now = yield* Clock.currentTimeMillis;
   return {
     issueTracker: "granola",
     organization: account,
     actorUserId: account,
     oauthClientId: session.client.client_id,
+    oauthTokenEndpoint: tokenEndpoint,
+    oauthResource: session.discovery?.resourceMetadata?.resource ?? config.endpoint,
     token: {
       accessToken: Redacted.make(session.tokens.access_token),
       refreshToken: session.tokens.refresh_token ? Redacted.make(session.tokens.refresh_token) : null,
@@ -153,6 +145,70 @@ export const makeLogin = Effect.fn("granola.login")(function* (config: GranolaLo
     },
   };
 });
+
+const RefreshResponse = Schema.Struct({
+  access_token: Schema.NonEmptyString,
+  refresh_token: Schema.optional(Schema.NonEmptyString),
+  expires_in: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
+  scope: Schema.optional(Schema.String),
+});
+
+const decodeRefreshResponse = Schema.decodeUnknownEffect(RefreshResponse);
+
+const refreshFailure = (account: string, detail: string) =>
+  new CredentialStore.CredentialError({
+    account,
+    message: `Granola token refresh failed: ${detail}`,
+    retryable: false,
+  });
+
+export const makeTokenRefresh = (client: HttpClient.HttpClient): CredentialStore.TokenRefresh =>
+  Effect.fn("granola.oauth.tokenRefresh")(function* (request) {
+    if (!request.tokenEndpoint) {
+      return yield* refreshFailure(request.account, "the stored grant has no token endpoint");
+    }
+    const response = yield* client
+      .execute(
+        HttpClientRequest.post(request.tokenEndpoint).pipe(
+          HttpClientRequest.setHeader("accept", "application/json"),
+          HttpClientRequest.bodyUrlParams({
+            grant_type: "refresh_token",
+            client_id: request.clientId,
+            refresh_token: Redacted.value(request.refreshToken),
+            ...(request.resource ? { resource: request.resource } : {}),
+          }),
+        ),
+      )
+      .pipe(
+        Effect.mapError(() => refreshFailure(request.account, "the token endpoint could not be reached")),
+        Effect.timeout(oauthRequestDeadline),
+        Effect.mapError((error) =>
+          error._tag === "CredentialError"
+            ? error
+            : refreshFailure(request.account, `the token endpoint timed out after ${oauthRequestDeadline}`),
+        ),
+      );
+    if (response.status !== 200) {
+      return yield* refreshFailure(request.account, `the token endpoint returned ${response.status}`);
+    }
+    const body = yield* response.json.pipe(
+      Effect.mapError(() =>
+        refreshFailure(request.account, "the token endpoint returned an unreadable body"),
+      ),
+    );
+    const tokens = yield* decodeRefreshResponse(body).pipe(
+      Effect.mapError(() =>
+        refreshFailure(request.account, "the token endpoint returned an unexpected payload"),
+      ),
+    );
+    const now = yield* Clock.currentTimeMillis;
+    return {
+      accessToken: Redacted.make(tokens.access_token),
+      refreshToken: tokens.refresh_token ? Redacted.make(tokens.refresh_token) : null,
+      expiresAtMillis: now + (tokens.expires_in ?? 3600) * 1000,
+      scopes: tokens.scope?.split(" ").filter(Boolean) ?? [],
+    };
+  });
 
 export const granolaLoginLayer = (
   config: GranolaLoginConfig = { endpoint: "https://mcp.granola.ai/mcp", redirectPort: 63_339 },
@@ -163,11 +219,13 @@ export const granolaLoginLayer = (
     Effect.gen(function* () {
       const opener = yield* BrowserOpener;
       const crypto = yield* Crypto.Crypto;
+      const fetchFn = yield* FetchHttpClient.Fetch;
       return {
         login: (account: string) =>
           makeLogin(config, account).pipe(
             Effect.provideService(BrowserOpener, opener),
             Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(FetchHttpClient.Fetch, fetchFn),
           ),
       };
     }),

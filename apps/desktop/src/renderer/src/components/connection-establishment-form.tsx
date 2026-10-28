@@ -104,35 +104,18 @@ function LinearCredentialSources({ id }: { readonly id: string }) {
   );
 }
 
-function GranolaCredentialSources({ id }: { readonly id: string }) {
-  return (
-    <>
-      <CredentialSourceOption id={id} value="ApiKey">
-        <FieldTitle>API key</FieldTitle>
-        <FieldDescription>Kept in the Credential store, never the Control store.</FieldDescription>
-      </CredentialSourceOption>
-      <CredentialSourceOption id={id} value="Env">
-        <FieldTitle>Environment variable</FieldTitle>
-        <FieldDescription>
-          Cogwork stores the variable&apos;s name, never its value. The daemon reads it from its process
-          environment.
-        </FieldDescription>
-      </CredentialSourceOption>
-      <CredentialSourceOption id={id} value="Stored">
-        <FieldTitle>Saved browser login</FieldTitle>
-        <FieldDescription>Uses the Granola browser grant in the Credential store.</FieldDescription>
-      </CredentialSourceOption>
-    </>
-  );
-}
-
 const credentialSources = {
   github: GitHubCredentialSources,
   linear: LinearCredentialSources,
-  granola: GranolaCredentialSources,
-} satisfies Record<ConnectionSystem, typeof GitHubCredentialSources>;
+} satisfies Record<Exclude<ConnectionSystem, "granola">, typeof GitHubCredentialSources>;
 
-function CredentialSourceOptions({ id, system }: { readonly id: string; readonly system: ConnectionSystem }) {
+function CredentialSourceOptions({
+  id,
+  system,
+}: {
+  readonly id: string;
+  readonly system: Exclude<ConnectionSystem, "granola">;
+}) {
   const Sources = credentialSources[system];
   return <Sources id={id} />;
 }
@@ -144,7 +127,7 @@ function CredentialSourceField({
   onChange,
 }: {
   readonly id: string;
-  readonly system: ConnectionSystem;
+  readonly system: Exclude<ConnectionSystem, "granola">;
   readonly value: CredentialSourceTag;
   readonly onChange: (next: CredentialSourceTag) => void;
 }) {
@@ -239,16 +222,18 @@ export function ConnectionEstablishmentDialog({
               </form.Field>
             ) : null}
 
-            <form.Field name="source">
-              {(field) => (
-                <CredentialSourceField
-                  id={`${fieldId}-source`}
-                  system={system}
-                  value={field.state.value}
-                  onChange={field.handleChange}
-                />
-              )}
-            </form.Field>
+            {system === "granola" ? null : (
+              <form.Field name="source">
+                {(field) => (
+                  <CredentialSourceField
+                    id={`${fieldId}-source`}
+                    system={system}
+                    value={field.state.value}
+                    onChange={field.handleChange}
+                  />
+                )}
+              </form.Field>
+            )}
 
             <form.Subscribe selector={(state) => state.values.source}>
               {(source) => {

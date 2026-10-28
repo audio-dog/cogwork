@@ -6,7 +6,7 @@ import {
   ConnectionNotReady,
   type ConnectionOverview,
   type ConnectionReadiness,
-  type ConnectionSystem,
+  ConnectionSystem,
   connectionIdOf,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
@@ -22,7 +22,7 @@ import {
   CredentialStore,
 } from "./credential-store";
 
-const knownSystems: ReadonlyArray<ConnectionSystem> = ["github", "linear", "granola"];
+const knownSystems: ReadonlyArray<ConnectionSystem> = ConnectionSystem.literals;
 
 const tokenEnvs: Record<ConnectionSystem, string> = {
   github: "GITHUB_TOKEN",
@@ -210,7 +210,19 @@ export const layer = Layer.effect(
     });
 
     const readiness = Effect.fn("ConnectionStore.readiness")(function* (connectionId: ConnectionId) {
-      return yield* bearer(connectionId).pipe(
+      return yield* find(connectionId).pipe(
+        Effect.flatMap((connection) =>
+          connection
+            ? bearer(connectionId).pipe(
+                Effect.flatMap((credential) => verifier.verify(connection.system, credential)),
+                Effect.mapError((error) =>
+                  error._tag === "IssueTrackerError"
+                    ? refused(connectionId, connection.system, error)
+                    : error,
+                ),
+              )
+            : Effect.fail(new ConnectionNotReady({ connectionId, message: "Connection does not exist" })),
+        ),
         Effect.match({
           onFailure: (error) => ({ _tag: "NotReady", reason: error.message }) satisfies ConnectionReadiness,
           onSuccess: () => ({ _tag: "Ready" }) satisfies ConnectionReadiness,

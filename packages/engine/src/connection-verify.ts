@@ -1,7 +1,10 @@
-import type { ConnectionSystem, IssueTrackerError } from "@cogwork/contracts";
+import { type ConnectionSystem, IssueTrackerError } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { Credential } from "./credential-store";
 import { GitHubClient } from "./github/client";
 import { verifyCredential as verifyLinear } from "./linear/client";
@@ -22,14 +25,60 @@ export class ConnectionVerifier extends Context.Service<ConnectionVerifier, Conn
   "@cogwork/engine/connection-verify/ConnectionVerifier",
 ) {}
 
+const granolaEndpoint = "https://mcp.granola.ai/mcp";
+const granolaDeadline = "10 seconds";
+
+const granolaFailure = (reason: IssueTrackerError["reason"], message: string) =>
+  new IssueTrackerError({ reason, message });
+
+const verifyGranola = Effect.fn("granola.verifyCredential")(function* (
+  client: HttpClient.HttpClient,
+  credential: Credential,
+) {
+  const request = yield* HttpClientRequest.bodyJson(HttpClientRequest.post(granolaEndpoint), {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "cogwork", version: "0.0.1" },
+    },
+  }).pipe(Effect.mapError(() => granolaFailure("unavailable", "could not build the Granola probe")));
+  const response = yield* client
+    .execute(
+      request.pipe(
+        HttpClientRequest.setHeader("authorization", `Bearer ${Redacted.value(credential.token)}`),
+        HttpClientRequest.setHeader("accept", "application/json, text/event-stream"),
+      ),
+    )
+    .pipe(
+      Effect.mapError(() => granolaFailure("unavailable", "Granola could not be reached")),
+      Effect.timeout(granolaDeadline),
+      Effect.mapError((error) =>
+        error._tag === "IssueTrackerError"
+          ? error
+          : granolaFailure("unavailable", `Granola did not respond within ${granolaDeadline}`),
+      ),
+    );
+  if (response.status === 401 || response.status === 403) {
+    return yield* granolaFailure("auth", `Granola returned ${response.status}`);
+  }
+  if (response.status < 200 || response.status >= 300) {
+    return yield* granolaFailure("unavailable", `Granola returned ${response.status}`);
+  }
+  return null;
+});
+
 export const layer = Layer.effect(
   ConnectionVerifier,
   Effect.gen(function* () {
     const github = yield* GitHubClient;
+    const http = yield* HttpClient.HttpClient;
     const verifiers = {
       github: (credential: Credential) => github.verifyCredential(credential.token),
       linear: (credential: Credential) => verifyLinear(credential).pipe(Effect.map(() => null)),
-      granola: () => Effect.succeed(null),
+      granola: (credential) => verifyGranola(http, credential),
     } satisfies Record<
       ConnectionSystem,
       (credential: Credential) => Effect.Effect<string | null, IssueTrackerError>

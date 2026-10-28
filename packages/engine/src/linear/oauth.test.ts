@@ -169,6 +169,7 @@ describe("linear oauth helpers", () => {
     Effect.flatMap(HttpClient.HttpClient, (client) =>
       makeTokenRefresh(client)({
         account: "AUD",
+        issueTracker: "linear",
         clientId: "client-1",
         refreshToken: Redacted.make(refreshToken),
       }),

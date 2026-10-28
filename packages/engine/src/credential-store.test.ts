@@ -426,6 +426,28 @@ const withStored = (
   );
 
 describe("CredentialStore (stored)", () => {
+  it.effect("restores the previous browser grant when re-connect fails", () =>
+    Effect.gen(function* () {
+      const previous = stored("acme", storedToken(far, "previous-token"));
+      const replacement = stored("acme", storedToken(far, "replacement-token"));
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([previous]);
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) => Ref.set(credentials, [credential]),
+          removeCredential: () => Ref.set(credentials, []),
+        },
+      });
+      const withStoredCredential = store.withStoredCredential;
+      if (!withStoredCredential) return assert.fail("Expected staged credential support");
+
+      yield* Effect.flip(withStoredCredential(replacement, Effect.fail("re-connect failed")));
+
+      const [restored] = yield* Ref.get(credentials);
+      assert.strictEqual(restored && Redacted.value(restored.token.accessToken), "previous-token");
+    }),
+  );
+
   it.effect("prefers a live stored token over the account's env var", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;
