@@ -1,0 +1,19 @@
+docs/adr/0034-trigger-observation-is-level-triggered.md
+  s_6d851846e46a79::t_f5efa340ba5a8b 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "625a95767990a60a28d27953219cdcc1e3fbb005",
+  "prompts": {},
+  "sessions": {
+    "s_6d851846e46a79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1837f-c252-7533-8147-6d91dbd5b188",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
