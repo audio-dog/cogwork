@@ -1,0 +1,40 @@
+docs/spec/customizable-workflows.md
+  s_900d1c79999f29::t_cbf27a9e513b33 319
+packages/contracts/CONTEXT.md
+  s_900d1c79999f29::t_ef88300aa51a46 405,522,592
+packages/engine/src/ci.ts
+  s_900d1c79999f29::t_b2318f4451e34d 34
+  s_900d1c79999f29::t_2ba6537f4c9f1f 13-14,27,32
+packages/engine/src/github/provider.ts
+  s_900d1c79999f29::t_2ba6537f4c9f1f 202
+packages/engine/src/github/github.test.ts
+  s_900d1c79999f29::t_4b82e7f88fa90d 22,1094
+packages/engine/src/ci.test.ts
+  s_900d1c79999f29::t_2ba6537f4c9f1f 2,56-63
+  s_900d1c79999f29::t_6007c3216a21de 64-65
+packages/engine/src/observe.test.ts
+  s_900d1c79999f29::t_4b82e7f88fa90d 121
+  s_900d1c79999f29::t_8e0c651fe93447 133-174
+  s_900d1c79999f29::t_b48ca7428154c9 175
+packages/engine/src/classify.ts
+  s_900d1c79999f29::t_c3f5ea118f7568 195-197
+packages/engine/src/observe.ts
+  s_900d1c79999f29::t_e53bbaa91ed8e9 111,116
+  s_900d1c79999f29::t_94e717dc5e9f94 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7234aa83351c3ffe29251d3bc9beb92d949f5d74",
+  "prompts": {},
+  "sessions": {
+    "s_900d1c79999f29": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1839e-d6d8-7a83-bab6-6c60b8e6f01f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
