@@ -24,6 +24,7 @@ import { fold, maxAttemptsPerOperation } from "./coordination";
 import {
   type FollowUpContext,
   followUpContext,
+  followUpTriggerAfter,
   isStalledFollowUp,
   type ObservedPr,
   triggersFollowUp,
@@ -179,6 +180,31 @@ const coordinationViewOf = (item: ObservedItem) =>
 export const consecutiveFailures = (item: ObservedItem, key: ReturnType<typeof codingOperation>) =>
   coordinationViewOf(item).counters(key).consecutiveFailures;
 
+const newestFailedFollowUpAttempt = (item: ObservedItem) => {
+  const barrierAtMillis = coordinationViewOf(item).barrierAtMillis;
+  return item.attempts.findLast(
+    (attempt) =>
+      attempt.atMillis > barrierAtMillis &&
+      attempt.operation.workflow === "coding" &&
+      attempt.operation.operation === "follow-up" &&
+      (attempt.outcome === "failed" || attempt.outcome === "abandoned"),
+  );
+};
+
+export const failedFollowUpReopen = (item: ObservedItem) => {
+  const isFailedFollowUpPark =
+    item.pr && !item.roles.includes("needs-info") && item.roles.includes("ready-for-human");
+  if (!isFailedFollowUpPark) return null;
+  const attempt = newestFailedFollowUpAttempt(item);
+  if (!attempt) return null;
+  const engineHandoffAtMillis = item.engineHandoffAtMillis ?? 0;
+  const handoffOwnsPark =
+    engineHandoffAtMillis >= attempt.atMillis &&
+    engineHandoffAtMillis > coordinationViewOf(item).barrierAtMillis;
+  if (!handoffOwnsPark) return null;
+  return followUpTriggerAfter(item.pr, attempt.atMillis);
+};
+
 const latestFailureReason = (item: ObservedItem, key: ReturnType<typeof codingOperation>) => {
   const barrierAtMillis = coordinationViewOf(item).barrierAtMillis;
   const latest = item.attempts
@@ -205,13 +231,16 @@ const classifyOne = (
   if (item.claim) return Outcome.Claimed({ claim: item.claim });
   if (item.claimHeld) return Outcome.Drop({});
   if (item.roles.includes("needs-info")) return Outcome.NeedsHuman({ reason: "needs-info" });
-  if (item.roles.includes("ready-for-human")) return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  const reopen = failedFollowUpReopen(item);
+  if (item.roles.includes("ready-for-human") && !reopen) {
+    return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  }
   const readyToMergePr = readyToMergePrOf(item);
   if (readyToMergePr) return Outcome.ReadyToMerge({ pr: readyToMergePr });
   const stage = observedStage(item);
   if (!stage) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
-  if (coordinationViewOf(item).counters(codingOperation(stage)).exhausted) {
+  if (!reopen && coordinationViewOf(item).counters(codingOperation(stage)).exhausted) {
     return Outcome.NeedsHuman({ reason: "ready-for-human" });
   }
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
@@ -257,7 +286,9 @@ export const classifiedItemOf = (item: ObservedItem) =>
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   const operation = codingOperation(stage);
-  const priorFailures = coordinationViewOf(item).counters(operation).consecutiveFailures;
+  const reopen = failedFollowUpReopen(item);
+  const trigger = item.followUpTrigger ?? reopen;
+  const priorFailures = reopen ? 0 : coordinationViewOf(item).counters(operation).consecutiveFailures;
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   const followUpBranch = followUpBranchFor(item, stage);
   return {
@@ -279,7 +310,8 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
         claim: item.claim,
         priority: item.priority,
         pr: item.pr ? prSummaryOf(item.pr) : null,
-        failureReason: latestFailureReason(item, operation),
+        failureReason: reopen ? null : latestFailureReason(item, operation),
+        followUpTrigger: trigger,
       },
     },
   };

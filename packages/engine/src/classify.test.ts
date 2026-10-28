@@ -44,6 +44,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   claimedByUs: over.claimedByUs ?? false,
   attempts: over.attempts ?? [],
   handback: over.handback ?? null,
+  engineHandoffAtMillis: over.engineHandoffAtMillis ?? null,
   pr: over.pr ?? null,
   openBlockers: over.openBlockers ?? 0,
   proposal: over.proposal ?? null,
@@ -365,6 +366,134 @@ describe("classify", () => {
     ]);
     assert.strictEqual(eligible.length, 0);
     assert.strictEqual(needsHuman[0]?.reason, "ready-for-human");
+  });
+
+  it("reopens an exhausted follow-up for a newer human review with a fresh attempt window", () => {
+    const attempts = [1, 2, 3].map((atMillis) => attemptRecord("follow-up", "failed", atMillis));
+    const { eligible, needsHuman } = classify([
+      item({
+        id: "1",
+        roles: ["ready-for-human"],
+        attempts,
+        engineHandoffAtMillis: 3,
+        pr: pr("changes-requested", {
+          latestHumanCommentAtMillis: 4,
+          followUp: {
+            checks: "passing",
+            humanCommentAtMillis: 0,
+            noProgress: 0,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+            attemptAtMillis: 3,
+          },
+        }),
+      }),
+    ]);
+
+    assert.strictEqual(eligible[0]?.stage, "follow-up");
+    assert.strictEqual(eligible[0]?.priorFailures, 0);
+    assert.deepStrictEqual(eligible[0]?.workContext.facts.followUpTrigger, {
+      kind: "human-feedback",
+      atMillis: 4,
+    });
+    assert.strictEqual(needsHuman.length, 0);
+  });
+
+  it.each([
+    {
+      name: "a failing check that completed later",
+      pr: { checks: "failing" as const, latestFailingCheckAtMillis: 4 },
+      kind: "failing-check",
+    },
+    {
+      name: "a later trusted-bot finding",
+      pr: { latestBotTriggerAtMillis: 4 },
+      kind: "trusted-bot-finding",
+    },
+    {
+      name: "a conflict first observed after the attempt",
+      pr: { baseDivergence: "conflict" as const, observedAtMillis: 4 },
+      kind: "merge-conflict",
+    },
+  ])("reopens an exhausted follow-up for $name", ({ kind, pr: trigger }) => {
+    const attempts = [1, 2, 3].map((atMillis) => attemptRecord("follow-up", "failed", atMillis));
+    const { eligible } = classify([
+      item({
+        id: "1",
+        roles: ["ready-for-human"],
+        attempts,
+        engineHandoffAtMillis: 3,
+        pr: pr("changes-requested", {
+          followUp: {
+            checks: "passing",
+            humanCommentAtMillis: 0,
+            noProgress: 0,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+            attemptAtMillis: 3,
+          },
+          ...trigger,
+        }),
+      }),
+    ]);
+
+    assert.strictEqual(eligible[0]?.priorFailures, 0);
+    assert.strictEqual(eligible[0]?.workContext.facts.followUpTrigger?.kind, kind);
+  });
+
+  it.each([
+    {
+      name: "a check that failed before the last attempt",
+      pr: { checks: "failing" as const, latestFailingCheckAtMillis: 2 },
+    },
+    {
+      name: "a conflict already present at the last attempt",
+      pr: { baseDivergence: "conflict" as const, observedAtMillis: 4 },
+      markerBase: "conflict" as const,
+    },
+  ])("keeps an exhausted follow-up parked for $name", ({ markerBase = "none" as const, pr: trigger }) => {
+    const attempts = [1, 2, 3].map((atMillis) => attemptRecord("follow-up", "failed", atMillis));
+    const result = classify([
+      item({
+        id: "1",
+        roles: ["ready-for-human"],
+        attempts,
+        engineHandoffAtMillis: 3,
+        pr: pr("changes-requested", {
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 0,
+            noProgress: 0,
+            baseDivergence: markerBase,
+            botTriggerAtMillis: 0,
+            attemptAtMillis: 3,
+          },
+          ...trigger,
+        }),
+      }),
+    ]);
+
+    assert.strictEqual(result.eligible.length, 0);
+    assert.strictEqual(result.needsHuman[0]?.reason, "ready-for-human");
+  });
+
+  it.each([
+    { name: "needs-info", roles: ["needs-info"] as const, engineHandoffAtMillis: 3 },
+    { name: "a person-owned ready-for-human", roles: ["ready-for-human"] as const },
+  ])("preserves $name after newer pull-request activity", ({ roles, engineHandoffAtMillis }) => {
+    const attempts = [1, 2, 3].map((atMillis) => attemptRecord("follow-up", "failed", atMillis));
+    const result = classify([
+      item({
+        id: "1",
+        roles,
+        attempts,
+        engineHandoffAtMillis,
+        pr: pr("changes-requested", { latestHumanCommentAtMillis: 4 }),
+      }),
+    ]);
+
+    assert.strictEqual(result.eligible.length, 0);
+    assert.strictEqual(result.needsHuman.length, 1);
   });
 
   it("keeps an item eligible while it is still under the failed-attempt cap", () => {

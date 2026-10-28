@@ -1,7 +1,8 @@
 import { type AttemptRecord, codingOperation, IssueTrackerError, type WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
-import { fold } from "./coordination";
+import { failedFollowUpReopen } from "./classify";
+import { defaultClaimant, fold } from "./coordination";
 import type { IssueTrackerService, ObservedItem, TrackerItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import type { PrSignals, SourceControlProviderService } from "./source-control";
@@ -58,6 +59,8 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
     claimedByUs: item.claimedByUs,
     attempts: item.attempts,
     handback: item.handback,
+    engineHandoffAtMillis: item.engineHandoffAtMillis,
+    followUpTrigger: item.followUpTrigger,
     openBlockers: item.openBlockers,
     proposal: item.proposal,
     priority: item.priority,
@@ -69,6 +72,50 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
   const markerWritten = observed.attempts.some((attempt) => isFollowUpMarkerWrite(attempt, barrier));
   if (!followUp || barrier === 0 || markerWritten) return observed;
   return { ...observed, pr: { ...observed.pr, followUp: { ...followUp, noProgress: 0 } } };
+};
+
+const reopenedItem = (
+  item: ObservedItem,
+  trigger: NonNullable<ObservedItem["followUpTrigger"]>,
+  handbackAtMillis: number,
+): ObservedItem => {
+  const handback = { by: defaultClaimant, atMillis: handbackAtMillis };
+  const roles = [
+    ...item.roles.filter((role) => role !== "ready-for-human" && role !== "ready-for-agent"),
+    "ready-for-agent" as const,
+  ];
+  const current = item.coordination;
+  const coordination = fold(
+    {
+      claim: item.claim,
+      attempts: item.attempts,
+      handbacks: [
+        ...(item.handback ? [{ ...item.handback, note: item.handback.note ?? null }] : []),
+        { ...handback, note: null },
+      ],
+      parks: current?.park ? [current.park] : [],
+      revision: current?.revision ?? null,
+    },
+    defaultClaimant,
+  );
+  return { ...item, roles, handback, coordination, followUpTrigger: trigger };
+};
+
+const clearFailedFollowUpPark = (
+  tracker: IssueTrackerService,
+  workspace: RegisteredWorkspace,
+  item: ObservedItem,
+) => {
+  const trigger = failedFollowUpReopen(item);
+  if (!trigger) return Effect.succeed(item);
+  const handbackAtMillis = Math.max(item.pr?.observedAtMillis ?? 0, item.engineHandoffAtMillis ?? 0);
+  return tracker
+    .handBack(workspace, item.id, {
+      record: { by: defaultClaimant, atMillis: handbackAtMillis },
+      changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
+      trigger,
+    })
+    .pipe(Effect.map(() => reopenedItem(item, trigger, handbackAtMillis)));
 };
 
 export const observeWorkspace = (tracker: IssueTrackerService, provider: SourceControlProviderService) =>
@@ -106,5 +153,8 @@ export const observeWorkspace = (tracker: IssueTrackerService, provider: SourceC
           }),
       ),
     );
-    return items.map((item) => composed(item, signals));
+    return yield* Effect.forEach(
+      items.map((item) => composed(item, signals)),
+      (item) => clearFailedFollowUpPark(tracker, workspace, item),
+    );
   });
