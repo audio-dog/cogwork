@@ -558,9 +558,12 @@ const unreadableWorkflow = (id: WorkflowId) => (error: unknown) =>
 
 const getDecodedWorkflow = (sql: SqlClient.SqlClient, id: WorkflowId, catalog: WorkflowCatalog) =>
   readStoredWorkflow(sql, id).pipe(
-    Effect.flatMap((row) => decodeStoredWorkflow(row)),
-    Effect.flatMap((row) => decodeWorkflowRecord(row, catalog)),
-    Effect.mapError(unreadableWorkflow(id)),
+    Effect.flatMap((row) =>
+      decodeStoredWorkflow(row).pipe(
+        Effect.flatMap((stored) => decodeWorkflowRecord(stored, catalog)),
+        Effect.mapError(unreadableWorkflow(id)),
+      ),
+    ),
   );
 
 const blockingDiagnostics = (record: WorkflowRecord) =>

@@ -4,6 +4,7 @@ import {
   WorkflowCatalog,
   WorkflowDocument,
   WorkflowEditRefused,
+  WorkflowNotFound,
   WorkflowOperation,
   WorkflowPublishRefused,
   WorkflowSwitchRefused,
@@ -11,8 +12,11 @@ import {
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -201,6 +205,13 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(published.publishedRevision, created.workingRevision);
       assert.isTrue(enabled.enabled);
       assert.strictEqual(deleted, created.id);
+      const missing = yield* Effect.exit(
+        withStore(storePath, (store) => store.getWorkflow(created.id, catalog)),
+      );
+      assert.isTrue(Exit.isFailure(missing));
+      if (!Exit.isFailure(missing)) return;
+      const failure = Option.getOrNull(Cause.findErrorOption(missing.cause));
+      assert.isTrue(Schema.is(WorkflowNotFound)(failure));
       assert.deepStrictEqual(yield* withStore(storePath, (store) => store.listWorkflows(catalog)), {
         workflows: [],
         failures: [],
