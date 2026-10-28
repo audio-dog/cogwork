@@ -51,6 +51,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@cogwork/ui/components/item";
+import { Spinner } from "@cogwork/ui/components/spinner";
 import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiCheckLine, RiDeleteBinLine, RiFileTextLine, RiPlugLine } from "@remixicon/react";
 import { Link, linkOptions } from "@tanstack/react-router";
@@ -206,16 +207,24 @@ function GranolaLoginDialog({ item }: { readonly item: ConnectionItem }) {
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(item.connection?.account ?? "");
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const accountId = useId();
+  const openChange = (next: boolean) => {
+    setOpen(next);
+    setRefusal(null);
+  };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     const result = await loginGranola(account.trim());
+    setSubmitting(false);
     setRefusal(result);
     if (result !== null) return;
     setOpen(false);
   };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger render={<Button size="sm" />}>{item.connection ? "Re-connect" : "Log in"}</DialogTrigger>
       <DialogContent>
         <form className="contents" onSubmit={submit}>
@@ -239,7 +248,10 @@ function GranolaLoginDialog({ item }: { readonly item: ConnectionItem }) {
             {refusal ? <FieldError>{refusal}</FieldError> : null}
           </Field>
           <DialogFooter>
-            <Button type="submit">Continue in browser</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? <Spinner data-icon="inline-start" /> : null}
+              Continue in browser
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
