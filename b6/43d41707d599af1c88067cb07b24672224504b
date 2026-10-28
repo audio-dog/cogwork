@@ -1,0 +1,24 @@
+packages/engine/src/control-store.ts
+  s_5d25df11763a72::t_62e3263cac64e2 1395-1397,1399
+  s_5d25df11763a72::t_e154f47d0f7d88 881-884,887,927-932,945-957,959,962
+  s_5d25df11763a72::t_e4e83080f81c1f 505,507,509,514,525,530,561-563
+  s_5d25df11763a72::t_08f1fb4da56049 41-42,103,287
+packages/engine/src/workflow-store.test.ts
+  s_5d25df11763a72::t_e5bdbe77976e1e 102,106,220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b643d41707d599af1c88067cb07b24672224504b",
+  "prompts": {},
+  "sessions": {
+    "s_5d25df11763a72": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180c6-e4e6-7001-9655-8376eb62863e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
