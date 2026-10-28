@@ -1,0 +1,21 @@
+packages/engine/src/observe.test.ts
+  s_638f6f3aaaa58b::t_a27f305e3603b7 152-155,159
+packages/engine/src/observe.ts
+  s_638f6f3aaaa58b::t_2bf2c20bfecefb 1,14-20,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "da831bb0781693d707bf04eb333835a8fb0ac953",
+  "prompts": {},
+  "sessions": {
+    "s_638f6f3aaaa58b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a180d5-02dc-7393-ad93-78e3fc7162e7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
