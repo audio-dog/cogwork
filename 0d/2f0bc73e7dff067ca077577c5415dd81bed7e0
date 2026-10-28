@@ -1,0 +1,167 @@
+packages/engine/src/coordination-control-store.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-126
+packages/engine/src/coordination-fold.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-96
+packages/engine/src/control-store.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 124-129,134-139,148
+packages/engine/src/workflow-catalog.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-51
+apps/cli/src/workflow-commands.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-185
+packages/contracts/src/board.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 125-126
+packages/engine/src/index.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 6-7,46
+packages/engine/src/commands.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 60,177,299-314
+apps/cli/src/platform.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 420-427
+packages/engine/src/context-fs.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 18
+apps/cli/src/status.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 2,11,257-262
+packages/engine/src/coordination-control-store.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-399
+packages/engine/src/engine.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 574,636,1558,1595,1631
+packages/cursor-acp/src/harness.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 436
+packages/engine/src/executor.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 37,407
+packages/engine/src/executor.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 261,277,314,2697-2704
+packages/engine/src/run-plan.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 254,440-500
+packages/contracts/src/workflow.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-580
+packages/engine/src/run-plan.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 941
+packages/engine/src/workflow.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-450
+apps/cli/CONTEXT.md
+  s_57ba1d69a7a159::t_62d5feb61a87d6 27
+packages/engine/src/coordination.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-19,21,69-335,347-351,354-355,357-358,361-362,409,411-423,426-431,436-437,446,449,455,459-468,515,518,524,527,530-536
+packages/engine/src/observe.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1,13-18,44,100-103,109-112,125-128,135-138,145,149-153,159
+packages/contracts/CONTEXT.md
+  s_57ba1d69a7a159::t_62d5feb61a87d6 475
+packages/engine/src/classify.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 23,164-180,193,201,246
+packages/engine/src/operation-resolution.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 683-688
+apps/cli/src/cli.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 15-27
+packages/engine/src/external-harness-runtime.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 477,482,492,505,508,696-697
+packages/engine/src/control-store.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1115-1117
+packages/engine/src/tools/sandbox.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 19-23,34
+packages/engine/src/commands.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 10,18,321,773,785-798,904,950,1069,1180-1181
+packages/contracts/src/rpc.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 37-49,115-147,162-167,311-340,362-366
+  s_57ba1d69a7a159::t_38a0cac214583a 36
+apps/cli/src/classified-item.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 16-21
+packages/contracts/src/run-plan.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 181
+packages/engine/src/testing/engine-test-layer.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 95
+packages/engine/src/provider-runner.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 23,51,75-83,157,169,218-221,350-424
+  s_57ba1d69a7a159::t_d27edfbd8fb375 425
+packages/contracts/src/workflow.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-1366
+apps/cli/src/platform.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1267-1299
+packages/engine/src/classify.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-8,16-32,40,144,183,231,239,272,308,328,360,369,375-376,395-399,517,545
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 68-73
+packages/engine/src/observe.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1,4,14-20,38-49,56,65,67-71
+packages/engine/src/coordination-contract.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-46
+packages/engine/src/github/github.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 5,8,51-57,63,996,1017
+packages/engine/src/workflow-machine-readiness.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-108
+apps/cli/src/external-harness.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 42,44,49,76
+packages/engine/src/linear/markers.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1,59,63-64,67,70,81-82,85
+packages/engine/src/context-assembler.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1,18,27-31,37,90-138,240-241,243-244,253,255,279-309,312-313,315-316,327,330,332-342,358,361,363
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 19-20,40
+packages/engine/src/event-publisher.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 376
+apps/cli/src/cli.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 20,44
+packages/engine/src/coordination-tracker.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 3,6-7,9-10,15,35,79-117,119-140,144-287,292,320-351,366-372,379,397-398,401,411-412,415,425-426,429,438,441,444,464-468,479-480,483
+packages/engine/src/harness.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 197,199-205,234
+packages/engine/src/operation-resolution.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 111
+apps/desktop/src/renderer/src/features/item-tab.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 93-98
+packages/engine/src/recovery.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 7,53-59,106-107,123-124,140,157-158,204,208,211,513,542
+packages/engine/src/recovery.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 20-26,52-54,120,249
+apps/cli/src/rpc.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 9,89,96
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_57ba1d69a7a159::t_62d5feb61a87d6 148-149
+packages/engine/src/control-store-schema.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1,3,107-264
+  s_57ba1d69a7a159::t_ae6eec58973b32 265
+packages/engine/src/daemon.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 111-113,192,230-236,244,336-341,366-372,459-466,480
+packages/engine/src/workflow.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1-411
+packages/contracts/src/index.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 22
+packages/engine/src/context-assembler.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 6,21-25,29,46,56,88-89,387-499
+  s_57ba1d69a7a159::t_95e5982b2ef8b3 500
+packages/engine/src/coordination.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 1,5-6,33-47,51,53,55-56,59-62,64,67-79,82,87-88,93-95,98,101-107,111-112,115,117-119,122-123,125,128-135,139-147,150-152,155
+packages/engine/src/daemon-composition.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 7-16,121,155,157,206-208,213-216,219,246-248,326-373,395-398
+packages/engine/CONTEXT.md
+  s_57ba1d69a7a159::t_62d5feb61a87d6 121
+docs/spec/customizable-workflows.md
+  s_57ba1d69a7a159::t_62d5feb61a87d6 131-132,199,236,240-241,248,268,384,410-568,573,613
+packages/contracts/src/coordination.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 2-4,6-27,29,31-51,59-79,81-84,87,90,97,100-124
+packages/contracts/src/daemon-event.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 19,72-73
+packages/engine/src/coordination-tracker.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 5-6,19,25,177-194,199-212,220-223,249,284,295,303,365,388,425,439,460,479,501,527-531,577
+packages/engine/src/issue-tracker.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 17,26-29,32-37,99
+packages/engine/src/read-model.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 5,35-40
+packages/engine/src/linear/linear.test.ts
+  s_57ba1d69a7a159::t_62d5feb61a87d6 4-5,7,40-50,61,556-557,735-739
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d2f0bc73e7dff067ca077577c5415dd81bed7e0",
+  "prompts": {},
+  "sessions": {
+    "s_57ba1d69a7a159": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18342-7714-7b42-a1c1-a8dff923aa83",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
