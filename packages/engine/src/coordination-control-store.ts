@@ -270,6 +270,7 @@ const makeControlStoreAuthority = () =>
       return {
         claim: latest?.claim ?? null,
         latestClaimAtMillis: latestClaim?.claimedAtMillis,
+        latestClaimOperation: latestClaim?.operation,
         attempts,
         handbacks,
         parks,
