@@ -9,6 +9,7 @@ import {
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
+  providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
   sourceFailure,
@@ -146,7 +147,7 @@ const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(func
   );
   return {
     events: events.flat(),
-    cursor: Math.max(cursor ?? 0, ...issues.map((issue) => issue.updatedAtMillis ?? 0)),
+    cursor: providerCursorAfterRead(cursor, now),
     workspace: workspace.config.name,
   };
 });

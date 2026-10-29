@@ -7,6 +7,7 @@ import {
   WorkspaceId,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -18,7 +19,7 @@ import { vi } from "vitest";
 import type { RegisteredWorkspace } from "../projector";
 import { matchTriggerEvent } from "../trigger-observation";
 import type { TriggerSubscription } from "../trigger-source";
-import { GitHubClient, type RawPull } from "./client";
+import { GitHubClient, type GitHubClientService, type RawPull } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
   issueHasLabelKey,
@@ -257,6 +258,51 @@ describe("GitHub Trigger sources", () => {
       ),
     ),
   );
+
+  it.effect("starts the next tracker read before updates made during a long poll", () => {
+    const firstEvent = Deferred.makeUnsafe<void>();
+    const secondRead = Deferred.makeUnsafe<void>();
+    const listIssues = vi.fn<GitHubClientService["listIssues"]>((_target, _options) => {
+      if (listIssues.mock.calls.length === 1) {
+        return TestClock.adjust("100 seconds").pipe(
+          Effect.map(() => [
+            { ...issue(1), updatedAtMillis: 90_000 },
+            { ...issue(2), labels: [], updatedAtMillis: 190_000 },
+          ]),
+        );
+      }
+      return Deferred.succeed(secondRead, undefined).pipe(Effect.map(() => []));
+    });
+
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(100_000);
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const running = yield* source
+        .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
+        .pipe(
+          Stream.tap(() => Deferred.succeed(firstEvent, undefined)),
+          Stream.runDrain,
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Deferred.await(firstEvent);
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("60 seconds");
+      yield* Deferred.await(secondRead);
+
+      assert.strictEqual(listIssues.mock.calls[1]?.[1]?.since, 70_000);
+      yield* Fiber.interrupt(running);
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues,
+          listIssueEvents: () =>
+            Effect.succeed([{ id: 1, event: "labeled", labelName: "needs-triage", createdAtMillis: 90_000 }]),
+          listTriggerComments: () => Effect.succeed([]),
+        }),
+      ),
+    );
+  });
 
   it.effect("keeps distinct items that share one source revision", () =>
     Effect.gen(function* () {

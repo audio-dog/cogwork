@@ -65,6 +65,9 @@ export const providerModifiedSinceGraceMillis = 30_000;
 const providerPollInterval = Duration.seconds(60);
 const zeroCatchUpGraceMillis = Duration.toMillis(providerPollInterval) + providerModifiedSinceGraceMillis;
 
+export const providerCursorAfterRead = (cursor: number | undefined, startedAtMillis: number) =>
+  Math.max(cursor ?? 0, startedAtMillis);
+
 export const catchUpSince = (
   parameters: ReadonlyArray<WorkflowParameterValue>,
   switchedOnAt: number,
