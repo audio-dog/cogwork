@@ -157,6 +157,7 @@ export const layer = Layer.effect(
       github: (credential: Credential) => github.verifyCredential(credential.token),
       linear: (credential: Credential) => verifyLinear(credential).pipe(Effect.map(() => null)),
       granola: (credential) => verifyGranola(http, credential),
+      slack: (_credential) => Effect.succeed(null),
     } satisfies Record<
       ConnectionSystem,
       (credential: Credential) => Effect.Effect<string | null, IssueTrackerError>

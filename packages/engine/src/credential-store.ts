@@ -261,6 +261,7 @@ const tokenEnvs = {
   github: "GITHUB_TOKEN",
   linear: "LINEAR_API_KEY",
   granola: "GRANOLA_API_KEY",
+  slack: "SLACK_TOKEN",
 } as const;
 
 export const expiryMargin = Duration.minutes(1);

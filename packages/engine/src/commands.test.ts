@@ -81,6 +81,7 @@ import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
+import { SlackLogin } from "./slack-login";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
@@ -462,6 +463,26 @@ const verifyGranolaRpcLifecycle = Effect.fn("test.verifyGranolaRpcLifecycle")(fu
   );
   assert.isTrue(yield* Ref.get(configured));
   assert.strictEqual((yield* Ref.get(plugins)).plugins[0]?.record?.pluginId, "granola");
+
+  yield* client.RemoveConnection({ connectionId: id });
+  assert.strictEqual(yield* Ref.get(stored), null);
+  assert.isFalse(yield* Ref.get(configured));
+  assert.deepStrictEqual((yield* Ref.get(plugins)).plugins, []);
+});
+
+const verifySlackRpcLifecycle = Effect.fn("test.verifySlackRpcLifecycle")(function* (
+  id: Connection["id"],
+  stored: Ref.Ref<StoredCredential | null>,
+  configured: Ref.Ref<boolean>,
+  plugins: Ref.Ref<PluginOverview>,
+) {
+  const client = yield* RpcTest.makeClient(DaemonRpcs);
+  const result = yield* client.LoginSlack();
+
+  assert.strictEqual(result.overview.connections[0]?.connection?.id, id);
+  assert.strictEqual((yield* Ref.get(stored))?.actorUserId, "U-STUB");
+  assert.isTrue(yield* Ref.get(configured));
+  assert.strictEqual((yield* Ref.get(plugins)).plugins[0]?.record?.pluginId, "slack");
 
   yield* client.RemoveConnection({ connectionId: id });
   assert.strictEqual(yield* Ref.get(stored), null);
@@ -2508,6 +2529,112 @@ describe("Connection mutations", () => {
         loginStarted,
         releaseLogin,
       ).pipe(Effect.provide(rpcLayer), Effect.scoped);
+    }),
+  );
+
+  it.effect("establishes Slack from browser identity, installs its Plugin, and cascades removal", () =>
+    Effect.gen(function* () {
+      const account = "T-STUB";
+      const slackId = connectionIdOf("slack", account);
+      const credential = {
+        issueTracker: "slack",
+        organization: account,
+        actorUserId: "U-STUB",
+        oauthClientId: "slack-client",
+        oauthTokenEndpoint: "https://slack.example/token",
+        token: {
+          accessToken: Redacted.make("slack-access"),
+          refreshToken: Redacted.make("slack-refresh"),
+          expiresAtMillis: Number.MAX_SAFE_INTEGER,
+          scopes: ["channels:history"],
+        },
+      } satisfies StoredCredential;
+      const stored = yield* Ref.make<StoredCredential | null>(null);
+      const configured = yield* Ref.make(false);
+      const connection = yield* Ref.make<Connection | null>(null);
+      const plugins = yield* Ref.make<PluginOverview>({
+        plugins: [
+          {
+            ...installedPlugin("slack"),
+            record: null,
+            resolvedIdentity: null,
+            requiredConnections: ["slack"],
+          },
+        ],
+      });
+      const credentialStore = makeCredentialStore({
+        stored: {
+          load: Ref.get(stored).pipe(Effect.map((value) => (value ? [value] : []))),
+          save: (value) => Ref.set(stored, value),
+          loadConnectionCredentials: Effect.succeed([]),
+          saveConnectionCredential: () => Ref.set(configured, true),
+          removeConnectionCredential: () => Ref.set(configured, false),
+          removeCredential: () => Ref.set(stored, null),
+        },
+      });
+      const slack = Connection.make({ id: slackId, system: "slack", account, status: "established" });
+      const connections = Layer.succeed(ConnectionStore, {
+        overview: Ref.get(connection).pipe(
+          Effect.map((current) => ({
+            connections: [
+              {
+                system: "slack" as const,
+                connection: current,
+                readiness: current
+                  ? ({ _tag: "Ready" } as const)
+                  : ({ _tag: "NotReady", reason: "Not connected" } as const),
+              },
+            ],
+          })),
+        ),
+        find: (connectionId) =>
+          Ref.get(connection).pipe(Effect.map((current) => (current?.id === connectionId ? current : null))),
+        findSystem: (system) =>
+          Ref.get(connection).pipe(Effect.map((current) => (current?.system === system ? current : null))),
+        bearer: () => Effect.die("unexpected Connection bearer"),
+        readiness: () => Effect.succeed({ _tag: "Ready" }),
+        requireReady: () => Effect.void,
+        requireSystemReady: () => Effect.void,
+        establish: () =>
+          Ref.set(connection, slack).pipe(
+            Effect.andThen(credentialStore.configureConnection(slackId, { _tag: "Stored" })),
+            Effect.map(() => slack),
+          ),
+        revoke: () => Effect.die("unexpected Connection revoke"),
+        remove: () =>
+          credentialStore.removeConnection(slackId).pipe(Effect.andThen(Ref.set(connection, null))),
+      });
+      const pluginManager = Layer.succeed(PluginManager, {
+        overview: Ref.get(plugins),
+        install: (pluginId) => {
+          const overview = {
+            plugins: [{ ...installedPlugin(pluginId), requiredConnections: ["slack" as const] }],
+          };
+          return Ref.set(plugins, overview).pipe(Effect.map(() => ({ overview, notices: [] })));
+        },
+        uninstall: () => {
+          const overview = { plugins: [] };
+          return Ref.set(plugins, overview).pipe(Effect.map(() => ({ overview, notices: [] })));
+        },
+        contributions: () => Effect.succeed([]),
+      });
+      yield* verifySlackRpcLifecycle(slackId, stored, configured, plugins).pipe(
+        Effect.provide(
+          daemonLayer(
+            trackerLayer({}),
+            schedulerStub(),
+            controlStoreStub(),
+            registryServices,
+            pluginManager,
+            connections,
+            RunControl.layer,
+            [],
+            reconcileStubLayer,
+            Layer.succeed(CredentialStore, credentialStore),
+          ).pipe(Layer.provideMerge(Layer.succeed(SlackLogin, { login: Effect.succeed(credential) }))),
+        ),
+        Effect.scoped,
+      );
     }),
   );
 
