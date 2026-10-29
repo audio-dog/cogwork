@@ -392,6 +392,47 @@ it.effect("reads every REST page after the supplied watermark", () =>
   }),
 );
 
+it.effect("normalizes unusable REST transcripts to missing content", () =>
+  Effect.gen(function* () {
+    yield* TestClock.setTime(Date.parse("2026-10-30T00:00:00.000Z"));
+    const adapters = yield* httpAdapters(
+      [
+        {
+          data: [
+            {
+              id: "blank-string",
+              created_at: "2026-10-29T15:00:00.000Z",
+              updated_at: "2026-10-29T15:00:00.000Z",
+              title: "Blank string",
+              transcript: " \n ",
+            },
+            {
+              id: "blank-segment",
+              created_at: "2026-10-29T16:00:00.000Z",
+              updated_at: "2026-10-29T16:00:00.000Z",
+              title: "Blank segment",
+              transcript: [{ speaker: "Taylor", text: " " }],
+            },
+          ],
+          has_more: false,
+        },
+      ],
+      yield* Ref.make<ReadonlyArray<string>>([]),
+      yield* Ref.make<ReadonlyArray<string>>([]),
+    );
+    const notes = yield* adapters.rest.read(
+      credential("stored-key"),
+      connectionId,
+      subscription.catchUp?.since ?? 0,
+    );
+
+    assert.deepStrictEqual(
+      notes.map(({ transcript }) => transcript),
+      [null, null],
+    );
+  }),
+);
+
 it.effect("reads every MCP page and decodes its XML-like text", () =>
   Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-10-30T00:00:00.000Z"));

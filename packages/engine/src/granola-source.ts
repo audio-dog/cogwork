@@ -176,9 +176,15 @@ const attendeeText = (value: typeof RestAttendee.Type) => {
 
 const hasText = (value: string | null | undefined) => Boolean(value?.trim());
 
+const transcriptSegments = (value: (typeof RestNote.Type)["transcript"]) =>
+  Array.isArray(value) ? value : [{ speaker: undefined, text: value ?? "" }];
+
 const transcriptText = (value: (typeof RestNote.Type)["transcript"]) => {
-  if (value === null || value === undefined || typeof value === "string") return value ?? null;
-  return value.map(({ speaker, text }) => (speaker ? `${speaker}: ${text}` : text)).join("\n");
+  const lines = transcriptSegments(value).flatMap(({ speaker, text }) => {
+    if (!hasText(text)) return [];
+    return [hasText(speaker) ? `${speaker}: ${text}` : text];
+  });
+  return lines.length === 0 ? null : lines.join("\n");
 };
 
 const timestampOf = Effect.fn("GranolaSource.timestampOf")(function* (value: string, now: number) {
