@@ -545,6 +545,40 @@ describe("CredentialStore (stored)", () => {
     }),
   );
 
+  it.effect("keeps a removed Connection clear after an in-flight refresh", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([
+        stored("acme", expiredWithRefresh()),
+      ]);
+      const refreshStarted = yield* Deferred.make<void>();
+      const releaseRefresh = yield* Deferred.make<void>();
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) => Ref.set(credentials, [credential]),
+          removeConnection: () => Ref.set(credentials, []),
+        },
+        refresh: () =>
+          Deferred.succeed(refreshStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseRefresh)),
+            Effect.map(() => rotatedToken()),
+          ),
+      });
+      const refreshing = yield* store
+        .bearerToken(oauthAccount)
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.await(refreshStarted);
+      const removing = yield* store
+        .removeConnection(connectionId("linear/acme"))
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.succeed(releaseRefresh, undefined);
+      yield* Fiber.join(refreshing);
+      yield* Fiber.join(removing);
+
+      assert.deepStrictEqual(yield* Ref.get(credentials), []);
+    }),
+  );
+
   it.effect("prefers a live stored token over the account's env var", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;

@@ -593,15 +593,16 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     configureConnection: (connectionId, source) =>
       configureConnection(connectionId, source).pipe(annotateAccount(connectionId)),
     removeConnection: (connectionId) => {
-      const removeConnection = sources.stored.removeConnection;
-      if (removeConnection) return removeConnection(connectionId);
       const system = connectionSystemOf(connectionId);
       const account = connectionAccountOf(connectionId);
       const removeConnectionCredential =
         sources.stored.removeConnectionCredential?.(connectionId) ?? Effect.void;
       const removeCredential =
         system === null ? Effect.void : (sources.stored.removeCredential?.(system, account) ?? Effect.void);
-      return Effect.all([removeConnectionCredential, removeCredential], { discard: true });
+      const remove =
+        sources.stored.removeConnection?.(connectionId) ??
+        Effect.all([removeConnectionCredential, removeCredential], { discard: true });
+      return gateFor(connectionId).withPermit(remove);
     },
   };
 };
