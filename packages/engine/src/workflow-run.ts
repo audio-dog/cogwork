@@ -3,10 +3,11 @@ import {
   type AgUiEvent,
   agUiIsStructuredOutputComplete,
   keyOf,
-  matchWorkflowTransitions,
+  LineageId,
   RunId,
   RunPlan,
   type RunRecord,
+  WorkflowActionPlan,
   WorkItemId,
   WorkspaceId,
   workflowOperationResultJsonSchema,
@@ -16,36 +17,53 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as HttpClient from "effect/unstable/http/HttpClient";
 import { ContextAssembler } from "./context-assembler";
-import { Coordination } from "./coordination";
-import { CredentialStore } from "./credential-store";
+import { Coordination, maxLineageHops } from "./coordination";
 import { Harness, type HarnessRunnerEnv } from "./harness";
+import { IssueTracker } from "./issue-tracker";
 import { defaultRunBudget } from "./provider-runner";
+import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import type { TriggerAdmission } from "./trigger-observation";
 import { Workflows } from "./workflow";
+import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
+import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowNotifications } from "./workflow-notification";
 
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
+const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 
 const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
   workflow: admission.subscription.workflow,
   operation,
 });
+
+const handOffAdmission = (
+  admission: TriggerAdmission,
+  operation: TriggerAdmission["subscription"]["operation"],
+  attempt: RunId,
+): TriggerAdmission => ({
+  ...admission,
+  subscription: { ...admission.subscription, operation },
+  lineage: {
+    root: admission.lineage.root,
+    parent: LineageId.make(attempt),
+    hop: admission.lineage.hop + 1,
+  },
+});
+
+const initialAdmission = (admission: TriggerAdmission): TriggerAdmission | null => admission;
 
 const projection = [
   "Harness Adapter",
@@ -68,15 +86,18 @@ export const make = Effect.gen(function* () {
   const recorder = yield* RunRecorder;
   const contextAssembler = yield* ContextAssembler;
   const notifications = yield* WorkflowNotifications;
+  const actionPlans = yield* WorkflowActionPlanStore;
+  const issueTracker = yield* IssueTracker;
+  const registry = yield* WorkspaceRegistry;
   const executionContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
-    Effect.map(
-      Context.pick(
-        SessionStore,
-        ContextAssembler,
-        CredentialStore,
-        FileSystem.FileSystem,
-        Path.Path,
-        HttpClient.HttpClient,
+    Effect.map((context) =>
+      context.pipe(
+        Context.add(Coordination, coordination),
+        Context.add(IssueTracker, issueTracker),
+        Context.add(RunLedger, ledger),
+        Context.add(WorkflowActionPlanStore, actionPlans),
+        Context.add(WorkflowNotifications, notifications),
+        Context.add(WorkspaceRegistry, registry),
       ),
     ),
   );
@@ -87,17 +108,85 @@ export const make = Effect.gen(function* () {
       ledger.updateRun(record.id, { status, usage: null, endedAtMillis }),
     );
 
+  const settleAttempt = (attempt: RunId, status: RunRecord["status"]) =>
+    Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
+      ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
+    );
+
   const decline = (admission: TriggerAdmission) =>
     coordination
       .park(admission.event.key, { _tag: "MissingOperation" })
-      .pipe(Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)));
+      .pipe(
+        Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)),
+        Effect.asVoid,
+      );
+
+  const refuseResult = Effect.fn("WorkflowRun.refuseResult")(function* (
+    admission: TriggerAdmission,
+    key: ReturnType<typeof operationKeyOf>,
+    run: RunRecord,
+    issues: string,
+  ) {
+    yield* Ref.update(decodeIssues, (current) => new Map(current).set(keyOf(admission.event.key), issues));
+    const view = yield* coordination.recordAttempt(admission.event.key, {
+      operation: key,
+      outcome: "failed",
+      lineage: admission.lineage,
+      reason: issues,
+    });
+    const exhausted = view.counters(key).exhausted;
+    yield* settle(run, exhausted ? "exhausted" : "failed");
+    if (!exhausted) return;
+    yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues });
+    yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+  });
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
+    if (admission.lineage.hop >= maxLineageHops) {
+      yield* coordination.park(admission.event.key, { _tag: "HopCap" });
+      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+      return;
+    }
     const record = yield* workflows.get({ id: admission.subscription.workflow });
     const document = record.publishedCopy;
     const trigger = document?.triggers.find(({ id }) => id === admission.subscription.trigger);
     const operation = document?.operations.find(({ id }) => id === admission.subscription.operation);
     if (!record.enabled || document === null || trigger === undefined || operation === undefined) {
+      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+      return;
+    }
+
+    const key = operationKeyOf(admission, operation.id);
+    const pendingPlan = yield* actionPlans.pending(
+      keyOf(admission.event.key),
+      admission.subscription.workflow,
+    );
+    const stalePlan = pendingPlan !== null && pendingPlan.revision !== admission.event.revision;
+    if (stalePlan) {
+      yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
+    }
+    if (pendingPlan !== null && !stalePlan) {
+      yield* Effect.acquireRelease(
+        coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
+        (activeClaim) =>
+          coordination
+            .release(admission.event.key, activeClaim)
+            .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
+      );
+      const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
+      if (execution._tag !== "Complete") {
+        yield* settleAttempt(pendingPlan.attempt, "failed");
+        return;
+      }
+      yield* coordination.recordAttempt(admission.event.key, {
+        operation: key,
+        outcome: "succeeded",
+        lineage: admission.lineage,
+      });
+      yield* settleAttempt(pendingPlan.attempt, "succeeded");
+      if (execution.handOff !== null) {
+        return handOffAdmission(admission, execution.handOff, pendingPlan.attempt);
+      }
       yield* coordination.markProcessed(admission.event.key, admission.event.revision);
       return;
     }
@@ -114,7 +203,6 @@ export const make = Effect.gen(function* () {
     );
     if (Result.isFailure(preflight)) return yield* decline(admission);
 
-    const key = operationKeyOf(admission, operation.id);
     const claim = yield* Effect.acquireRelease(
       coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
       (activeClaim) =>
@@ -239,19 +327,7 @@ export const make = Effect.gen(function* () {
     );
     if (Exit.isFailure(decoded)) {
       const issues = String(decoded.cause);
-      yield* Ref.update(decodeIssues, (current) => new Map(current).set(keyOf(admission.event.key), issues));
-      const view = yield* coordination.recordAttempt(admission.event.key, {
-        operation: key,
-        outcome: "failed",
-        lineage: admission.lineage,
-        reason: issues,
-      });
-      const exhausted = view.counters(key).exhausted;
-      yield* settle(run, exhausted ? "exhausted" : "failed");
-      if (exhausted) {
-        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues });
-        yield* coordination.markProcessed(admission.event.key, admission.event.revision);
-      }
+      yield* refuseResult(admission, key, run, issues);
       return;
     }
 
@@ -273,31 +349,59 @@ export const make = Effect.gen(function* () {
       return;
     }
 
-    const actions = matchWorkflowTransitions(operation, decoded.value.answers).flatMap(
-      ({ actions }) => actions,
+    const actionPlanResult = yield* Effect.result(
+      buildWorkflowActionPlan({
+        admission,
+        document,
+        operation,
+        catalog: catalogResult.catalog,
+        machine: catalogResult.machine,
+        output: decoded.value,
+        attempt: run.id,
+        createdAtMillis: yield* Clock.currentTimeMillis,
+      }),
     );
-    if (actions.some(({ entry }) => entry === "cogwork.notify")) {
-      yield* notifications.write(run, {
-        id: `${record.id}:${operation.id}:${admission.event.revision}`,
-        workflow: record.id,
-        operation: operation.id,
-        summary: decoded.value.summary,
-        answers: decoded.value.answers,
-        atMillis: yield* Clock.currentTimeMillis,
-      });
+    if (Result.isFailure(actionPlanResult)) {
+      yield* refuseResult(admission, key, run, actionPlanResult.failure.message);
+      return;
+    }
+    const actionPlan = yield* actionPlans.create(actionPlanResult.success);
+    const actionPlanEvent: AgUiEvent = {
+      type: "CUSTOM",
+      name: "workflow.action-plan",
+      value: { object: actionPlan, raw: encodeActionPlan(actionPlan) },
+    };
+    yield* recorder.record(run, actionPlanEvent);
+    const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
+    if (execution._tag !== "Complete") {
+      yield* settle(run, "failed");
+      return;
     }
     yield* coordination.recordAttempt(admission.event.key, {
       operation: key,
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* coordination.markProcessed(admission.event.key, admission.event.revision);
     yield* settle(run, "succeeded");
+    if (execution.handOff !== null) {
+      return handOffAdmission(admission, execution.handOff, run.id);
+    }
+    yield* coordination.markProcessed(admission.event.key, admission.event.revision);
   });
 
   return {
     execute: (admission: TriggerAdmission) =>
-      executeRaw(admission).pipe(Effect.provide(executionContext), Effect.scoped, Effect.asVoid),
+      Effect.reduce(
+        Array.from({ length: maxLineageHops + 1 }),
+        () => initialAdmission(admission),
+        (current) =>
+          current
+            ? executeRaw(current).pipe(
+                Effect.scoped,
+                Effect.map((next) => next ?? null),
+              )
+            : Effect.succeed(null),
+      ).pipe(Effect.provide(executionContext), Effect.asVoid),
   } as const;
 });
 

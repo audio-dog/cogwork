@@ -5,6 +5,8 @@ import {
   type Priority,
   resolvePriority,
   type TriageRole,
+  WorkflowActionArtifact,
+  type WorkflowActionOrigin,
   WorkItemId,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
@@ -12,7 +14,7 @@ import * as Schema from "effect/Schema";
 import type { CommentHost, CoordinationComment } from "../coordination";
 import * as Coordination from "../coordination";
 import type { CoordinationHost, ListedItem } from "../coordination-tracker";
-import { IssueTrackerError } from "../issue-tracker";
+import { type CreateIssueInput, IssueTrackerError } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import {
   type GitHubClientService,
@@ -85,6 +87,153 @@ const notGitHub = (workspace: WorkspaceIssueTrackerBinding) =>
     reason: "unavailable",
     message: `workspace ${workspace.config.name} does not use GitHub Issues`,
   });
+
+const writeMarker = (writeKey: string) =>
+  wireCodec.encode({ name: "write", pairs: `key=${encodeURIComponent(writeKey)}` });
+
+const carriesWriteKey = (body: string, writeKey: string) =>
+  wireCodec
+    .scan(body)
+    .some(({ name, pairs }) => name === "write" && pairs === `key=${encodeURIComponent(writeKey)}`);
+
+const markedBody = (body: string, writeKey: string) => [body.trim(), writeMarker(writeKey)].join("\n\n");
+
+const writeNotConfirmed = (writeKey: string) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    message: `GitHub write ${writeKey} was not confirmed by read-back`,
+  });
+
+export const makeIssueActions = (client: GitHubClientService) => {
+  const target = Effect.fn("github.workflowActionTarget")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+  ) {
+    const resolved = targetFor(workspace);
+    if (!resolved) return yield* notGitHub(workspace);
+    return resolved;
+  });
+  const artifact = Effect.fn("github.workflowActionArtifact")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    issue: RawIssue,
+    origin: WorkflowActionOrigin,
+  ) {
+    return WorkflowActionArtifact.make({
+      workspace: workspace.config.name,
+      issue: yield* itemId(issue.number),
+      url: issue.url,
+      origin,
+    });
+  });
+  const commentsCarry = (repo: GitHubTarget, number: number, writeKey: string) =>
+    client
+      .listAllComments(repo, number)
+      .pipe(Effect.map((comments) => comments.some(({ body }) => carriesWriteKey(body, writeKey))));
+  const confirmComment = Effect.fn("github.confirmWorkflowComment")(function* (
+    repo: GitHubTarget,
+    number: number,
+    writeKey: string,
+  ) {
+    if (yield* commentsCarry(repo, number, writeKey)) return;
+    return yield* writeNotConfirmed(writeKey);
+  });
+  const writeOnce = Effect.fn("github.workflowWriteOnce")(function* (
+    repo: GitHubTarget,
+    number: number,
+    writeKey: string,
+    applied: Effect.Effect<boolean, IssueTrackerError>,
+    write: Effect.Effect<unknown, IssueTrackerError>,
+  ) {
+    if (yield* commentsCarry(repo, number, writeKey)) return;
+    if (!(yield* applied)) yield* write;
+    yield* client.createComment(repo, number, writeMarker(writeKey));
+    yield* confirmComment(repo, number, writeKey);
+  });
+  return {
+    createIssue: Effect.fn("github.workflowCreateIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      input: CreateIssueInput,
+    ) {
+      const repo = yield* target(workspace);
+      const existing = (yield* client.listIssues(repo, { state: "all" })).find(({ body }) =>
+        carriesWriteKey(body, input.origin.writeKey),
+      );
+      if (existing) return yield* artifact(workspace, existing, input.origin);
+      yield* client.createIssue(repo, {
+        title: input.title,
+        body: markedBody(input.body, input.origin.writeKey),
+        labels: input.labels,
+      });
+      const created = (yield* client.listIssues(repo, { state: "all" })).find(({ body }) =>
+        carriesWriteKey(body, input.origin.writeKey),
+      );
+      if (!created) return yield* writeNotConfirmed(input.origin.writeKey);
+      return yield* artifact(workspace, created, input.origin);
+    }),
+    commentIssue: Effect.fn("github.workflowCommentIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      body: string,
+      writeKey: string,
+    ) {
+      const repo = yield* target(workspace);
+      const number = yield* issueNumberOf(id);
+      if (yield* commentsCarry(repo, number, writeKey)) return;
+      yield* client.createComment(repo, number, markedBody(body, writeKey));
+      yield* confirmComment(repo, number, writeKey);
+    }),
+    addLabels: Effect.fn("github.workflowAddLabels")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      labels: ReadonlyArray<string>,
+      writeKey: string,
+    ) {
+      const repo = yield* target(workspace);
+      const number = yield* issueNumberOf(id);
+      yield* writeOnce(
+        repo,
+        number,
+        writeKey,
+        client
+          .readIssue(repo, number)
+          .pipe(Effect.map((issue) => labels.every((label) => issue.labels.includes(label)))),
+        Effect.forEach(labels, (label) => client.addLabel(repo, number, label), { discard: true }),
+      );
+    }),
+    removeLabel: Effect.fn("github.workflowRemoveLabel")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      label: string,
+      writeKey: string,
+    ) {
+      const repo = yield* target(workspace);
+      const number = yield* issueNumberOf(id);
+      yield* writeOnce(
+        repo,
+        number,
+        writeKey,
+        client.readIssue(repo, number).pipe(Effect.map((issue) => !issue.labels.includes(label))),
+        client.removeLabel(repo, number, label),
+      );
+    }),
+    closeIssue: Effect.fn("github.workflowCloseIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      writeKey: string,
+    ) {
+      const repo = yield* target(workspace);
+      const number = yield* issueNumberOf(id);
+      const closeIssue = client.closeIssue;
+      if (!closeIssue) return yield* writeNotConfirmed(writeKey);
+      yield* writeOnce(
+        repo,
+        number,
+        writeKey,
+        client.readIssue(repo, number).pipe(Effect.map(({ state }) => state === "closed")),
+        closeIssue(repo, number),
+      );
+    }),
+  };
+};
 
 export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRef, number> => {
   const authenticatedTarget = Effect.fn("github.authenticatedTarget")(function* (target: GitHubTarget) {

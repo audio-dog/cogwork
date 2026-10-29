@@ -1406,6 +1406,10 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           acceptResponse,
         ),
       ),
+    closeIssue: (repo: GitHubRepoRef, issueNumber: number) =>
+      sendAcceptedOnce(repo, HttpClientRequest.patch(repoPath(repo, `/issues/${issueNumber}`)), {
+        state: "closed",
+      }),
     createComment,
     createPerformanceComment,
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
@@ -1419,7 +1423,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   };
 });
 
-export type GitHubClientService = Effect.Success<ReturnType<typeof make>>;
+type GitHubClientImplementation = Effect.Success<ReturnType<typeof make>>;
+export type GitHubClientService = Omit<GitHubClientImplementation, "closeIssue"> &
+  Partial<Pick<GitHubClientImplementation, "closeIssue">>;
 
 export class GitHubClient extends Context.Service<GitHubClient, GitHubClientService>()(
   "@cogwork/engine/github/client/GitHubClient",

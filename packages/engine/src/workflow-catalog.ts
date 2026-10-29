@@ -10,6 +10,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { clockEntries, clockSource } from "./clock-source";
+import { workflowCatalogContribution as githubActions } from "./github/adapter";
+import { workflowCatalogContribution as linearActions } from "./linear/adapter";
 
 export interface WorkflowCatalogContribution {
   readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
@@ -61,6 +63,8 @@ export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
 
 export const workflowCatalogContributionsLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
+  githubActions,
+  linearActions,
   {
     entries: clockEntries,
     templates: [],

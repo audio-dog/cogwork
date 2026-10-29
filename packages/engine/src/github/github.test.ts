@@ -4,9 +4,13 @@ import {
   type Claim,
   codingOperation,
   GitHubIssueFieldId,
+  keyOf,
   type LifecycleStage,
   LineageId,
   type Priority,
+  RunId,
+  WorkflowActionOrigin,
+  WorkflowId,
   WorkItemId,
   WorkspaceConfig,
 } from "@cogwork/contracts";
@@ -25,7 +29,7 @@ import { classify } from "../classify";
 import { triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
 import type { FollowUpMarker } from "../follow-up";
-import { IssueTracker, IssueTrackerError } from "../issue-tracker";
+import { actionsOf, IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
 import { SourceControlProvider } from "../source-control";
@@ -281,7 +285,24 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
     listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
-    createIssue: () => Effect.void,
+    createIssue: (_repo, input) =>
+      Ref.update(issuesRef, (issues) => {
+        const number = Math.max(0, ...issues.map(({ number }) => number)) + 1;
+        const created: RawIssue = {
+          nodeId: `I_issue_${number}`,
+          number,
+          title: input.title,
+          url: `https://github.com/owner/repo/issues/${number}`,
+          labels: input.labels,
+          assignees: [],
+          isPullRequest: false,
+          openBlockers: 0,
+          body: input.body,
+          state: "open",
+          createdAtMillis: 0,
+        };
+        return [...issues, created];
+      }),
     createPull: () =>
       seed.pullRequestError
         ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull request rejected" }))
@@ -293,6 +314,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         ...issue,
         labels: issue.labels.filter((existing) => existing !== label),
       })),
+    closeIssue: (_repo, number) => patch(number, (issue) => ({ ...issue, state: "closed" })),
     createComment,
     createPerformanceComment: createComment,
     editComment: (_repo, commentId, body) =>
@@ -486,6 +508,47 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
 });
 
 describe("GitHub adapters", () => {
+  it.effect("executes issue actions once and confirms their write keys", () =>
+    Effect.gen(function* () {
+      const tracker = actionsOf(yield* IssueTracker);
+      const client = yield* GitHubClient;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker.createIssue(workspace, {
+        title: "Created",
+        body: "Body",
+        labels: ["needs-triage"],
+        origin,
+      });
+      yield* tracker.commentIssue(workspace, id("#5"), "Comment", "comment-key");
+      yield* tracker.commentIssue(workspace, id("#5"), "Comment", "comment-key");
+      yield* tracker.addLabels(workspace, id("#5"), ["added"], "add-key");
+      yield* tracker.removeLabel(workspace, id("#5"), "old", "remove-key");
+      yield* tracker.closeIssue(workspace, id("#5"), "close-key");
+
+      const issues = yield* client.listIssues(repo, { state: "all" });
+      const current = issues.find(({ number }) => number === 5);
+      const created = issues.find(({ title }) => title === "Created");
+      const comments = yield* client.listComments(repo, 5);
+      assert.deepStrictEqual(artifact.origin, origin);
+      assert.include(created?.body ?? "", "create-key");
+      assert.deepStrictEqual(current?.labels, ["added"]);
+      assert.strictEqual(current?.state, "closed");
+      assert.strictEqual(comments.filter(({ body }) => body.includes("Comment")).length, 1);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: ["old"] }],
+        }),
+      ),
+    ),
+  );
+
   it.effect("reads current issue prose and comment attribution for admission", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;

@@ -1,5 +1,5 @@
 export { credentialAccountFor } from "./account";
-export { layer as adapterLayer, makeAdapter } from "./adapter";
+export { layer as adapterLayer, makeAdapter, workflowCatalogContribution } from "./adapter";
 export {
   LinearClient,
   type LinearClientService,

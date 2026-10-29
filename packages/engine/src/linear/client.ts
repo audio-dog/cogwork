@@ -43,6 +43,7 @@ export interface RawIssue {
   readonly identifier: string;
   readonly title: string;
   readonly url: string;
+  readonly body?: string;
   readonly labels: ReadonlyArray<string>;
   readonly assignees: ReadonlyArray<string>;
   readonly stateName: string;
@@ -141,6 +142,7 @@ const IssueNode = Schema.Struct({
   identifier: Schema.String,
   title: Schema.String,
   url: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
   priority: Schema.optional(Schema.Finite),
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
@@ -174,6 +176,7 @@ const IssuesTeamNode = Schema.Struct({
 });
 
 const MetaTeamNode = Schema.Struct({
+  id: Schema.String,
   states: Schema.Struct({ nodes: Schema.Array(StateNode) }),
 });
 
@@ -350,6 +353,7 @@ const issueFields = `
       identifier
       title
       url
+      description
       priority
       labels(first: ${labelPageSize}) { nodes { name } }
       assignee { id }
@@ -392,6 +396,7 @@ const issuesFilter = (assigneeIds: ReadonlyArray<string> | null) => ({
 });
 
 const metaSelection = `
+  id
   states { nodes { id name type } }`;
 
 // Linear caps an unpaginated connection at 50, and a team can hold more labels than that.
@@ -523,6 +528,7 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   identifier: issue.identifier,
   title: issue.title,
   url: issue.url,
+  body: issue.description ?? "",
   labels: issue.labels.nodes.map((label) => label.name),
   assignees: issue.assignee ? [issue.assignee.id] : [],
   stateName: issue.state.name,
@@ -825,6 +831,39 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return payload.issueLabelId;
   });
 
+  const createIssue = Effect.fn("linear.createIssue")(function* (
+    ref: LinearTeamRef,
+    input: { readonly title: string; readonly body: string; readonly labels: ReadonlyArray<string> },
+  ) {
+    interface CreatedIssue {
+      readonly success: boolean;
+      readonly issue: { readonly id: string; readonly identifier: string; readonly url: string } | null;
+    }
+    const team = yield* loadTeam(ref, metaShape);
+    const labelIds = yield* Effect.forEach(input.labels, (label) => ensureLabel(ref, label));
+    const payload = yield* call(ref, (sdk) =>
+      sdk
+        .createIssue({
+          teamId: team.id,
+          title: input.title,
+          description: input.body,
+          labelIds,
+        })
+        .then((created): Promise<CreatedIssue> => {
+          const issue = created.issue;
+          return issue === undefined
+            ? Promise.resolve({ success: created.success, issue: null })
+            : issue.then((value) => ({
+                success: created.success,
+                issue: { id: value.id, identifier: value.identifier, url: value.url },
+              }));
+        }),
+    );
+    yield* requireSuccess("issueCreate", payload);
+    if (payload.issue === null) return yield* unavailable("Linear issueCreate returned no issue");
+    return payload.issue;
+  });
+
   const issueLabelId = Effect.fn("linear.issueLabelId")(function* (
     ref: LinearTeamRef,
     issueId: string,
@@ -924,6 +963,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       );
     }),
     readProse,
+    createIssue,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);
@@ -944,7 +984,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   };
 });
 
-export type LinearClientService = Effect.Success<ReturnType<typeof make>>;
+type LinearClientImplementation = Effect.Success<ReturnType<typeof make>>;
+export type LinearClientService = Omit<LinearClientImplementation, "createIssue"> &
+  Partial<Pick<LinearClientImplementation, "createIssue">>;
 
 export class LinearClient extends Context.Service<LinearClient, LinearClientService>()(
   "@cogwork/engine/linear/client/LinearClient",

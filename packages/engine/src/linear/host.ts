@@ -1,11 +1,11 @@
-import { linearTeams, type TriageRole, WorkItemId } from "@cogwork/contracts";
+import { linearTeams, type TriageRole, WorkflowActionArtifact, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { triageProposalAttribution } from "../comments";
 import type { CommentHost, CoordinationComment } from "../coordination";
 import * as Coordination from "../coordination";
 import type { CoordinationHost, ListedItem } from "../coordination-tracker";
-import { IssueTrackerError } from "../issue-tracker";
+import { type CreateIssueInput, IssueTrackerError } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
 import {
@@ -85,6 +85,185 @@ const notLinear = (workspace: WorkspaceIssueTrackerBinding) =>
     message: `workspace ${workspace.config.name} is not a linear work source`,
   });
 
+const canceledStateId = Effect.fn("linear.canceledStateId")(function* (
+  client: LinearClientService,
+  target: LinearTarget,
+) {
+  const states = yield* client.listWorkflowStates(target);
+  const canceled =
+    states.find((state) => state.name === canceledStateName) ??
+    states.find((state) => state.type === "canceled");
+  if (!canceled) {
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: `Linear team ${target.team} has no Canceled workflow state`,
+    });
+  }
+  return canceled.id;
+});
+
+const writeMarker = (writeKey: string) =>
+  wireCodec.encode({ name: "write", pairs: `key=${encodeURIComponent(writeKey)}` });
+
+const carriesWriteKey = (body: string, writeKey: string) =>
+  wireCodec
+    .scan(body)
+    .some(({ name, pairs }) => name === "write" && pairs === `key=${encodeURIComponent(writeKey)}`);
+
+const markedBody = (body: string, writeKey: string) => [body.trim(), writeMarker(writeKey)].join("\n\n");
+
+const writeNotConfirmed = (writeKey: string) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    message: `Linear write ${writeKey} was not confirmed by read-back`,
+  });
+
+export const makeIssueActions = (client: LinearClientService) => {
+  const targetForCreate = Effect.fn("linear.workflowCreateTarget")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+  ) {
+    const target = targetsFor(workspace).at(0);
+    if (!target) return yield* notLinear(workspace);
+    return target;
+  });
+  const targetForIssue = Effect.fn("linear.workflowIssueTarget")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    id: WorkItemId,
+  ) {
+    const targets = targetsFor(workspace);
+    const [first, ...rest] = targets;
+    if (!first) return yield* notLinear(workspace);
+    if (rest.length === 0) return first;
+    const target = targets.find(({ team }) => team === teamKeyOf(id));
+    if (!target) {
+      return yield* new IssueTrackerError({
+        reason: "unavailable",
+        message: `Linear item ${id} does not belong to a configured team`,
+      });
+    }
+    return target;
+  });
+  const commentsCarry = (target: LinearTarget, issue: string, writeKey: string) =>
+    client
+      .readProse(target, issue)
+      .pipe(Effect.map(({ comments }) => comments.some(({ body }) => carriesWriteKey(body, writeKey))));
+  const confirmComment = Effect.fn("linear.confirmWorkflowComment")(function* (
+    target: LinearTarget,
+    issue: string,
+    writeKey: string,
+  ) {
+    if (yield* commentsCarry(target, issue, writeKey)) return;
+    return yield* writeNotConfirmed(writeKey);
+  });
+  const writeOnce = Effect.fn("linear.workflowWriteOnce")(function* (
+    target: LinearTarget,
+    issue: string,
+    writeKey: string,
+    applied: (issue: ObservedRawIssue) => boolean,
+    write: Effect.Effect<unknown, IssueTrackerError>,
+  ) {
+    if (yield* commentsCarry(target, issue, writeKey)) return;
+    const current = (yield* client.observeIssues(target, null)).find(
+      ({ identifier }) => identifier === issue,
+    );
+    if (!current || !applied(current)) yield* write;
+    yield* client.createComment(target, issue, writeMarker(writeKey));
+    yield* confirmComment(target, issue, writeKey);
+  });
+  return {
+    createIssue: Effect.fn("linear.workflowCreateIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      input: CreateIssueInput,
+    ) {
+      const target = yield* targetForCreate(workspace);
+      const existing = (yield* client.observeIssues(target, null)).find(({ body }) =>
+        carriesWriteKey(body ?? "", input.origin.writeKey),
+      );
+      if (existing) {
+        return WorkflowActionArtifact.make({
+          workspace: workspace.config.name,
+          issue: yield* itemId(existing.identifier),
+          url: existing.url,
+          origin: input.origin,
+        });
+      }
+      const createIssue = client.createIssue;
+      if (!createIssue) return yield* writeNotConfirmed(input.origin.writeKey);
+      const created = yield* createIssue(target, {
+        title: input.title,
+        body: markedBody(input.body, input.origin.writeKey),
+        labels: input.labels,
+      });
+      const prose = yield* client.readProse(target, created.id);
+      if (!carriesWriteKey(prose.body, input.origin.writeKey)) {
+        return yield* writeNotConfirmed(input.origin.writeKey);
+      }
+      return WorkflowActionArtifact.make({
+        workspace: workspace.config.name,
+        issue: yield* itemId(created.identifier),
+        url: created.url,
+        origin: input.origin,
+      });
+    }),
+    commentIssue: Effect.fn("linear.workflowCommentIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      body: string,
+      writeKey: string,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      if (yield* commentsCarry(target, id, writeKey)) return;
+      yield* client.createComment(target, id, markedBody(body, writeKey));
+      yield* confirmComment(target, id, writeKey);
+    }),
+    addLabels: Effect.fn("linear.workflowAddLabels")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      labels: ReadonlyArray<string>,
+      writeKey: string,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      yield* writeOnce(
+        target,
+        id,
+        writeKey,
+        (issue) => labels.every((label) => issue.labels.includes(label)),
+        Effect.forEach(labels, (label) => client.addLabel(target, id, label), { discard: true }),
+      );
+    }),
+    removeLabel: Effect.fn("linear.workflowRemoveLabel")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      label: string,
+      writeKey: string,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      yield* writeOnce(
+        target,
+        id,
+        writeKey,
+        (issue) => !issue.labels.includes(label),
+        client.removeLabel(target, id, label),
+      );
+    }),
+    closeIssue: Effect.fn("linear.workflowCloseIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      writeKey: string,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      const stateId = yield* canceledStateId(client, target);
+      yield* writeOnce(
+        target,
+        id,
+        writeKey,
+        ({ stateType }) => stateType === "canceled",
+        client.setState(target, id, stateId),
+      );
+    }),
+  };
+};
+
 export const makeHost = (client: LinearClientService): CoordinationHost<LinearRef, string> => {
   const authenticatedTargetsFor = Effect.fn("linear.authenticatedTargetsFor")(function* (
     workspace: WorkspaceIssueTrackerBinding,
@@ -120,20 +299,6 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
         comments: issue.coordinationComments.map(toCoordinationComment(target.actorUserId)),
       } satisfies ListedItem<string>;
     });
-
-  const canceledStateId = Effect.fn("linear.canceledStateId")(function* (target: LinearTarget) {
-    const states = yield* client.listWorkflowStates(target);
-    const canceled =
-      states.find((state) => state.name === canceledStateName) ??
-      states.find((state) => state.type === "canceled");
-    if (!canceled) {
-      return yield* new IssueTrackerError({
-        reason: "unavailable",
-        message: `Linear team ${target.team} has no Canceled workflow state`,
-      });
-    }
-    return canceled.id;
-  });
 
   return {
     codec: wireCodec,
@@ -197,7 +362,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
     // Linear closes a wontfix ticket by moving it to the Canceled workflow state; GitHub has no such write.
     afterRoleChange: (ref, changes) =>
       changes.add.includes("wontfix")
-        ? Effect.flatMap(canceledStateId(ref.target), (stateId) =>
+        ? Effect.flatMap(canceledStateId(client, ref.target), (stateId) =>
             client.setState(ref.target, ref.issueId, stateId),
           )
         : Effect.void,

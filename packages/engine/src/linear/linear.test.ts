@@ -6,6 +6,9 @@ import {
   type LifecycleStage,
   LineageId,
   type Priority,
+  RunId,
+  WorkflowActionOrigin,
+  WorkflowId,
   WorkItemId,
   WorkspaceConfig,
 } from "@cogwork/contracts";
@@ -18,7 +21,7 @@ import * as Schema from "effect/Schema";
 import { classify } from "../classify";
 import { triageProposalAttribution, triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
-import { IssueTracker, IssueTrackerError } from "../issue-tracker";
+import { actionsOf, IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
 import * as SourceControl from "../source-control";
@@ -132,6 +135,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         identifier: issue.identifier,
         title: issue.title,
         url: `https://linear.app/acme/issue/${issue.identifier}`,
+        body: issue.description ?? "",
         labels: issue.labels,
         assignees: issue.assignees ?? [],
         stateName: issue.stateName ?? "Todo",
@@ -221,12 +225,14 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
       guard(
         Effect.gen(function* () {
           const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
-          const issue = issues.find((candidate) => candidate.identifier === issueId);
+          const issue = issues.find(
+            (candidate) => candidate.identifier === issueId || candidate.id === issueId,
+          );
           if (!issue) {
             return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
           }
           return {
-            body: seed.issues.find((candidate) => candidate.identifier === issueId)?.description ?? "",
+            body: issue.body ?? "",
             comments: [...(comments.get(issueId) ?? [])],
           };
         }),
@@ -265,6 +271,29 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             }));
           }).pipe(Effect.asVoid),
         ),
+      ),
+    createIssue: (ref, input) =>
+      guard(
+        Effect.gen(function* () {
+          const issues = yield* Ref.get(issuesRef);
+          const number = issues.length + 100;
+          const identifier = `${ref.team}-${number}`;
+          const created: RawIssue = {
+            id: `uuid-${identifier}`,
+            identifier,
+            title: input.title,
+            url: `https://linear.app/acme/issue/${identifier}`,
+            body: input.body,
+            labels: input.labels,
+            assignees: [],
+            stateName: "Todo",
+            stateType: "unstarted",
+            openBlockers: 0,
+            priority: "medium",
+          };
+          yield* Ref.update(issuesRef, (current) => [...current, created]);
+          return { id: created.id, identifier: created.identifier, url: created.url };
+        }),
       ),
     createComment: (ref, issueId, body) =>
       guard(
@@ -360,6 +389,47 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
   comments.filter((comment) => comment.authorId === bot.id);
 
 describe("linear work source adapter", () => {
+  it.effect("executes issue actions once and confirms their write keys", () =>
+    Effect.gen(function* () {
+      const tracker = actionsOf(yield* IssueTracker);
+      const client = yield* LinearClient;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker.createIssue(workspace, {
+        title: "Created",
+        body: "Body",
+        labels: ["needs-triage"],
+        origin,
+      });
+      yield* tracker.commentIssue(workspace, id("AUD-5"), "Comment", "comment-key");
+      yield* tracker.commentIssue(workspace, id("AUD-5"), "Comment", "comment-key");
+      yield* tracker.addLabels(workspace, id("AUD-5"), ["added"], "add-key");
+      yield* tracker.removeLabel(workspace, id("AUD-5"), "old", "remove-key");
+      yield* tracker.closeIssue(workspace, id("AUD-5"), "close-key");
+
+      const issues = yield* client.observeIssues(teamRef, null);
+      const current = issues.find(({ identifier }) => identifier === "AUD-5");
+      const created = issues.find(({ title }) => title === "Created");
+      const comments = yield* client.listComments(teamRef, "AUD-5", botCoordination);
+      assert.deepStrictEqual(artifact.origin, origin);
+      assert.include(created?.body ?? "", "create-key");
+      assert.deepStrictEqual(current?.labels, ["added"]);
+      assert.strictEqual(current?.stateType, "canceled");
+      assert.strictEqual(comments.filter(({ body }) => body.includes("Comment")).length, 1);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-5", title: "Existing", labels: ["old"] }],
+        }),
+      ),
+    ),
+  );
+
   it.effect("reads current issue prose and comment attribution for admission", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;

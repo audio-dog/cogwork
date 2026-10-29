@@ -1,8 +1,10 @@
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
-import { HarnessName, TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
+import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
+import { WorkItemKey } from "./coordination";
 import { PrincipalId } from "./principal";
+import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
 
 export const WorkflowId = TrimmedNonEmptyString.pipe(Schema.brand("WorkflowId"));
@@ -71,6 +73,53 @@ export const WorkflowAction = Schema.Struct({
   parameters: Schema.Array(WorkflowParameterValue),
 });
 export type WorkflowAction = typeof WorkflowAction.Type;
+
+export const WorkflowActionTarget = Schema.TaggedUnion({
+  Cogwork: {},
+  CurrentIssue: { workspace: WorkspaceId, issue: WorkItemId },
+  ExistingIssue: { workspace: WorkspaceId, issue: WorkItemId },
+  NewIssue: { workspace: WorkspaceId },
+});
+export type WorkflowActionTarget = typeof WorkflowActionTarget.Type;
+
+export class WorkflowActionOrigin extends Schema.Class<WorkflowActionOrigin>("WorkflowActionOrigin")({
+  item: WorkItemKey,
+  workflow: WorkflowId,
+  attempt: RunId,
+  writeKey: TrimmedNonEmptyString,
+}) {}
+
+export class WorkflowActionArtifact extends Schema.Class<WorkflowActionArtifact>("WorkflowActionArtifact")({
+  workspace: WorkspaceId,
+  issue: WorkItemId,
+  url: TrimmedNonEmptyString,
+  origin: WorkflowActionOrigin,
+}) {}
+
+export class WorkflowActionPlanStep extends Schema.Class<WorkflowActionPlanStep>("WorkflowActionPlanStep")({
+  position: Schema.Natural,
+  entry: WorkflowCatalogKey,
+  parameters: Schema.Array(WorkflowParameterValue),
+  inputs: Schema.Record(Schema.String, TrimmedNonEmptyString),
+  target: WorkflowActionTarget,
+  writeKey: TrimmedNonEmptyString,
+  status: Schema.Literals(["pending", "completed", "failed"]),
+  failures: Schema.Natural,
+  artifact: Schema.NullOr(WorkflowActionArtifact),
+}) {}
+
+export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("WorkflowActionPlan")({
+  item: WorkItemKey,
+  workflow: WorkflowId,
+  attempt: RunId,
+  operation: WorkflowNodeId,
+  revision: TrimmedNonEmptyString,
+  createdAtMillis: Schema.Natural,
+  summary: TrimmedNonEmptyString,
+  answers: Schema.Record(Schema.String, Schema.String),
+  handOff: Schema.NullOr(WorkflowNodeId),
+  steps: Schema.Array(WorkflowActionPlanStep),
+}) {}
 
 export const WorkflowTransition = Schema.Struct({
   when: Schema.Array(WorkflowTransitionAnswer),

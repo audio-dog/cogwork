@@ -6,6 +6,7 @@ import {
   type ParkReason,
   ParkRecord,
   RunId,
+  WorkflowActionPlan,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -34,12 +35,15 @@ import {
   type HarnessRunner,
   make as makeHarness,
 } from "./harness";
+import { emptyLayer as emptyIssueTrackerLayer } from "./issue-tracker";
 import { defaultRunBudget } from "./provider-runner";
+import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import type { TriggerAdmission } from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
+import { memoryLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
 
@@ -218,6 +222,9 @@ const resultEvent = (object: unknown) => ({
 
 const requirements = Layer.mergeAll(
   engineTestLayer(),
+  emptyIssueTrackerLayer,
+  Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+  workflowActionPlanStoreLayer,
   CredentialStore.layerEnv,
   NodeServices.layer,
   FetchHttpClient.layer,
@@ -248,7 +255,11 @@ interface HarnessBehavior {
   readonly run?: HarnessRunner["run"];
 }
 
-const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior = {}) =>
+const testProgram = (
+  objects: ReadonlyArray<unknown>,
+  behavior: HarnessBehavior = {},
+  service: WorkflowsService = workflowService,
+) =>
   Effect.gen(function* () {
     const output = yield* Ref.make(objects);
     const coordination = yield* makeCoordination();
@@ -288,7 +299,7 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
       },
     ]);
     const runner = yield* makeWorkflowRun.pipe(
-      Effect.provideService(Workflows, workflowService),
+      Effect.provideService(Workflows, service),
       Effect.provideService(Coordination, coordination.service),
       Effect.provideService(Harness, harness),
       Effect.provideService(WorkflowNotifications, notifications),
@@ -313,6 +324,13 @@ describe("WorkflowRun", () => {
       assert.isDefined(run);
       if (!run) return;
       const plan = yield* ledger.getRunPlan(run.id);
+      const activities = yield* (yield* RunRecorder).replay(run).pipe(Stream.runCollect);
+      const actionPlan = activities.find(
+        ({ event }) => event.type === "CUSTOM" && event.name === "workflow.action-plan",
+      );
+      const frozenPlan = yield* Schema.decodeUnknownEffect(Schema.Struct({ object: WorkflowActionPlan }))(
+        actionPlan?.event.value,
+      ).pipe(Effect.map(({ object }) => object));
       yield* Effect.forEach(
         Array.from({ length: 101 }, (_, index) => index),
         (index) =>
@@ -327,6 +345,9 @@ describe("WorkflowRun", () => {
 
       assert.strictEqual(run.status, "succeeded");
       assert.isNull(plan?.sandbox.workspace);
+      assert.isDefined(actionPlan);
+      assert.strictEqual(frozenPlan.steps[0]?.entry, notifyEntry);
+      assert.deepStrictEqual(frozenPlan.steps[0]?.inputs, { notification: "All clear" });
       assert.strictEqual(
         plan?.instructions.find(({ source }) => source === "workflow-operation")?.content,
         "implement-agent:Summarize the day.",
@@ -335,6 +356,85 @@ describe("WorkflowRun", () => {
         (yield* restartedNotifications.list).map(({ summary, answers }) => ({ summary, answers })),
         [{ summary: "All clear", answers: { done: "yes" } }],
       );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("refuses a matched action input that is empty after trim", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram([
+        {
+          summary: "No message",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "   " },
+        },
+      ]);
+      yield* runner.execute(admission);
+      const [run] = yield* (yield* RunLedger).listRuns(10);
+      const attempts = yield* Ref.get(coordination.attempts);
+
+      assert.strictEqual(run?.status, "failed");
+      assert.include(attempts[0]?.reason ?? "", "needs non-empty input notification");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("runs a hand-off after the first action plan completes", () =>
+    Effect.gen(function* () {
+      const publish = decodeNode("publish");
+      const [summarize] = document.operations;
+      assert.isDefined(summarize);
+      if (!summarize) return;
+      const handedOffDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        ...document,
+        operations: [
+          {
+            ...summarize,
+            transitions: [
+              {
+                when: [{ question: decodeNode("done"), choice: decodeNode("yes") }],
+                actions: [],
+                handOff: publish,
+              },
+            ],
+          },
+          {
+            ...summarize,
+            id: publish,
+            name: "Publish",
+          },
+        ],
+      });
+      const handedOffService: WorkflowsService = {
+        ...workflowService,
+        get: () =>
+          Effect.succeed({
+            ...workflowRecord,
+            workingCopy: handedOffDocument,
+            publishedCopy: handedOffDocument,
+          }),
+      };
+      const { runner, notifications } = yield* testProgram(
+        [
+          { summary: "Ready", stuck: false, answers: { done: "yes" }, inputs: {} },
+          {
+            summary: "Published",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { notification: "Published" },
+          },
+        ],
+        {},
+        handedOffService,
+      );
+
+      yield* runner.execute(admission);
+
+      const runs = yield* (yield* RunLedger).listRuns(10);
+      assert.lengthOf(runs, 2);
+      assert.deepInclude((yield* notifications.list)[0], {
+        operation: publish,
+        summary: "Published",
+      });
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

@@ -117,6 +117,7 @@ import {
 } from "./trigger-observation";
 import { TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
+import { controlStoreLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
 import { WorkflowNotifications, layer as workflowNotificationsLayer } from "./workflow-notification";
@@ -479,6 +480,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
     Layer.provide(controlStore),
   );
+  const workflowActionPlans = workflowActionPlanStoreLayer.pipe(Layer.provide(controlStore));
   const triggerSources = Layer.succeed(TriggerSources, [clockSource]);
   const triggerObservationStore = controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
   const workflowNotifications = workflowNotificationsLayer.pipe(
@@ -491,7 +493,17 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const workflowRun = workflowRunLayer.pipe(
     Layer.provide(
-      Layer.mergeAll(workflows, coordination, harnessRuntime, runLedger, runRecorder, workflowNotifications),
+      Layer.mergeAll(
+        workflows,
+        coordination,
+        harnessRuntime,
+        issueTracker,
+        registry,
+        runLedger,
+        runRecorder,
+        workflowActionPlans,
+        workflowNotifications,
+      ),
     ),
   );
   const base = Layer.mergeAll(
@@ -512,6 +524,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     triggerSources,
     triggerObservation,
     workflowNotifications,
+    workflowActionPlans,
     workflowRun,
     McpSkill.layer.pipe(Layer.provide(credentials)),
     runControlLayer,
