@@ -1,4 +1,10 @@
-import { Connection, type ConnectionReadiness, connectionIdOf, WorkflowCatalogKey } from "@cogwork/contracts";
+import {
+  Connection,
+  type ConnectionReadiness,
+  connectionIdOf,
+  type ParkRecord,
+  WorkflowCatalogKey,
+} from "@cogwork/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -54,17 +60,33 @@ const note: GranolaNoteSnapshot = {
 
 const coordinationService = (
   revisionOf: (noteId: string) => string | null = () => null,
+  planRejected: (noteId: string) => boolean = () => false,
 ): CoordinationService => ({
   fold,
   read: (ref) => {
-    const revision = ref._tag === "GranolaNote" ? revisionOf(ref.noteId) : null;
+    const noteId = ref._tag === "GranolaNote" ? ref.noteId : null;
+    const revision = noteId === null ? null : revisionOf(noteId);
+    const parks = (
+      noteId !== null && planRejected(noteId)
+        ? [
+            {
+              reason: {
+                _tag: "PlanRejected",
+                reason: "Granola note has no transcript",
+                entry: generated,
+              },
+              atMillis: 1,
+            },
+          ]
+        : []
+    ) satisfies ReadonlyArray<ParkRecord>;
     return Effect.succeed(
       fold(
         {
           claim: null,
           attempts: [],
           handbacks: [],
-          parks: [],
+          parks,
           revision: revision === null ? null : { observed: revision, processed: null },
         },
         "cogwork",
@@ -236,6 +258,34 @@ it.effect("classifies the first MCP note revision as generated", () =>
         mcp: adapter(calls, [note]),
       },
       coordinationService(),
+    );
+    const events = yield* source
+      .observe([subscription, { ...subscription, entry: edited }])
+      .pipe(Stream.take(1), Stream.runCollect);
+
+    assert.strictEqual(events[0]?.entry, generated);
+  }),
+);
+
+it.effect("classifies the first complete revision as generated after a plan rejection", () =>
+  Effect.gen(function* () {
+    const calls = yield* Ref.make(0);
+    const source = makeGranolaSource(
+      connectionStore(credential("stored-oauth")),
+      {
+        rest: adapter(calls, []),
+        mcp: adapter(calls, [
+          {
+            ...note,
+            updatedAt: "2026-10-29T16:00:00.000Z",
+            updatedAtMillis: Date.parse("2026-10-29T16:00:00.000Z"),
+          },
+        ]),
+      },
+      coordinationService(
+        () => "2026-10-29T15:00:00.000Z",
+        () => true,
+      ),
     );
     const events = yield* source
       .observe([subscription, { ...subscription, entry: edited }])

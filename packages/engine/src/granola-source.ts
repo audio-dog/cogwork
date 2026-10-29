@@ -1,5 +1,6 @@
 import {
   type ConnectionId,
+  ParkReason,
   type WorkflowAvailability,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
@@ -479,12 +480,17 @@ const eventOf = Effect.fn("GranolaSource.eventOf")(function* (
         adapterFailure("unavailable", `Could not read the prior Granola revision: ${error.message}`),
       ),
     );
+  const rejectedGeneratedRevision =
+    prior.park !== null &&
+    ParkReason.guards.PlanRejected(prior.park.reason) &&
+    prior.park.reason.entry === generatedKey;
+  const isGeneratedRevision = prior.revision === null || rejectedGeneratedRevision;
   return {
     key,
     revision: note.updatedAt,
     cause: { _tag: "Unknown" },
     atMillis: note.updatedAtMillis,
-    entry: prior.revision === null ? generatedKey : editedKey,
+    entry: isGeneratedRevision ? generatedKey : editedKey,
     workspace: null,
     payload: payloadOf(note),
   } satisfies TriggerEvent;
