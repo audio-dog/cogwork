@@ -1,0 +1,32 @@
+packages/engine/src/slack-source.test.ts
+  s_79a6dc92473e13::t_199c7bffaa6ec1 83,98,123-128,133,136,138,198,205-228,492-547
+  s_79a6dc92473e13::t_20624c8eb9ceec 86-90,137
+  s_c9fa8dfeb4b918::t_c0af1671664d84 548
+packages/engine/src/slack-source.ts
+  s_79a6dc92473e13::t_e129bf86f5a20a 285,477,479-486,545,571-574,599-602
+  s_79a6dc92473e13::t_7c8f82d2239b3b 210,223,250-257,408,411,538-544,546,554-556,558-559,565,575,579,639
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d05032b100971a60573984b4d6ec402f31c435ae",
+  "prompts": {},
+  "sessions": {
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c9fa8dfeb4b918": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18936-e8e8-7212-b62f-6752657051d0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
