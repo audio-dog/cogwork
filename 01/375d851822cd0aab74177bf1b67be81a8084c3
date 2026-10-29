@@ -1,0 +1,60 @@
+packages/engine/src/granola-http.ts
+  s_dee3b081d33640::t_508a7830d64899 105
+  s_dee3b081d33640::t_553cc91fbe51f3 1-5,7-82,104,108,120-121,126-132,135-147,149-168
+  s_dee3b081d33640::t_a670cf78acabb2 106-107
+  s_dee3b081d33640::t_74e081840751af 83-103,109-116,118-119,122-125,134,148
+  s_dee3b081d33640::t_83d5dfae343130 6
+  s_dee3b081d33640::t_5f3a3cb55ad75d 117
+  s_dee3b081d33640::t_a9aa4aa0c3ac99 133
+packages/engine/src/connection-verify.ts
+  s_dee3b081d33640::t_53d0cb688b3944 43-44,60-66
+  s_dee3b081d33640::t_69237bd2c3ead8 10
+packages/engine/src/granola-source.test.ts
+  s_dee3b081d33640::t_6bff08e40d1afb 352-355
+  s_dee3b081d33640::t_6211c64cae9d97 13,20,120,122
+  s_dee3b081d33640::t_4c978d62db506d 5,22,317-351,356-440
+  s_dee3b081d33640::t_dd1d5bca0ae6dd 11,215,228,272
+  s_dee3b081d33640::t_afe4121d9fe3ec 281-282,291,295
+packages/engine/src/granola-source.ts
+  s_dee3b081d33640::t_217197c26efb84 171
+  s_dee3b081d33640::t_c6a40c059b9d93 18,51-54,58-72,75-84,91,94-95,98,103,121-123,125-141
+  s_dee3b081d33640::t_76dd23dc9fb11f 14,347-355,359-364,369-398,400-404,407,409-410,413-430,464,466,474,501,503,516,521-522,527,545-548,550-552,563-565
+  s_dee3b081d33640::t_bdcf41f21ff181 85,90
+  s_dee3b081d33640::t_a670cf78acabb2 525,538
+  s_dee3b081d33640::t_a96a9b67c5e7e5 160,184-211,226-231,234-253,256-261,263-268,271-272,274-278,298-302,307-314,317
+  s_dee3b081d33640::t_1211c0f3f38994 270
+  s_dee3b081d33640::t_b92317bc4edb5a 100,105,111,113-115
+  s_dee3b081d33640::t_710ceaae8ea2ec 303
+  s_dee3b081d33640::t_f93faab90d8ed7 549
+  s_dee3b081d33640::t_fbc783618acbfd 86-89
+  s_dee3b081d33640::t_a31f9b72722f84 155-157,161-162,165,170,172,181-183,212-214,537
+  s_dee3b081d33640::t_a81156ad50aa8a 344
+  s_dee3b081d33640::t_05e2fc5f3ff8f4 536,541-544,554-562
+  s_dee3b081d33640::t_bc4c7944619edf 477-486
+  s_dee3b081d33640::t_52ab6f3d11b8ba 321-322,324-329,331,333-343,345-346,356,358,366-367,405,408,411-412
+  s_f4abcd25549e05::t_6c1a27dac7519c 262,368,523-524,528-535,539-540,553
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "01375d851822cd0aab74177bf1b67be81a8084c3",
+  "prompts": {},
+  "sessions": {
+    "s_dee3b081d33640": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c6-8bf6-76a2-ba8d-440eec1136d5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
