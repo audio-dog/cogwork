@@ -263,17 +263,17 @@ const sourceSubscriptions = (source: TriggerSource, subscriptions: ReadonlyArray
   return subscriptions.filter(({ entry }) => entries.has(entry));
 };
 
+const subscriptionIdentity = ({
+  workflow,
+  trigger,
+  operation,
+  entry,
+  parameters,
+  workspaces,
+}: TriggerSubscription) => JSON.stringify({ workflow, trigger, operation, entry, parameters, workspaces });
+
 const fingerprintOf = (subscriptions: ReadonlyArray<TriggerSubscription>) =>
-  JSON.stringify(
-    subscriptions.map(({ workflow, trigger, operation, entry, parameters, workspaces }) => ({
-      workflow,
-      trigger,
-      operation,
-      entry,
-      parameters,
-      workspaces,
-    })),
-  );
+  JSON.stringify(subscriptions.map(subscriptionIdentity));
 
 const lineageOf = (ref: WorkItemRef): Lineage => ({
   root: Schema.decodeSync(LineageId)(keyOf(ref)),
@@ -312,9 +312,16 @@ export const make = Effect.gen(function* () {
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
 
-  const admit = Effect.fn("TriggerObservation.admit")(function* (source: TriggerSource, event: TriggerEvent) {
+  const admit = Effect.fn("TriggerObservation.admit")(function* (
+    source: TriggerSource,
+    subscriptions: ReadonlyArray<TriggerSubscription>,
+    event: TriggerEvent,
+  ) {
     const listed = yield* workflows.list;
-    const active = sourceSubscriptions(source, subscriptionsOf(listed.workflows));
+    const current = new Set(
+      sourceSubscriptions(source, subscriptionsOf(listed.workflows)).map(subscriptionIdentity),
+    );
+    const active = subscriptions.filter((subscription) => current.has(subscriptionIdentity(subscription)));
     if (active.length === 0) return;
     const outcome = yield* coordination.observe(event.key, event.revision, event.cause);
     if (outcome === "redelivered") return;
@@ -336,7 +343,7 @@ export const make = Effect.gen(function* () {
     fingerprint: string,
   ) =>
     source.observe(subscriptions).pipe(
-      Stream.runForEach((event) => admit(source, event)),
+      Stream.runForEach((event) => admit(source, subscriptions, event)),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(
           Effect.andThen(waitForRetry(error.retryAfterMillis)),

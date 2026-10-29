@@ -333,6 +333,53 @@ describe("TriggerObservation", () => {
       assert.deepStrictEqual(yield* observation.eligible, []);
     }).pipe(Effect.scoped),
   );
+
+  it.effect("keeps the activated catch-up window while admitting events", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(1_000);
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const changes = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key: {
+          _tag: "GranolaNote",
+          connection: connectionIdOf("granola", "person@example.com"),
+          noteId: "note-before-switch-on",
+        },
+        revision: "2026-10-29T15:00:00.000Z",
+        cause: { _tag: "Unknown" },
+        atMillis: 999,
+        entry: granolaEntry,
+        workspace: null,
+      });
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(changes)));
+      assert.deepStrictEqual(yield* observation.eligible, []);
+    }).pipe(Effect.scoped),
+  );
 });
 
 layer(NodeServices.layer)((it) => {
