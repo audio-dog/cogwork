@@ -17,6 +17,12 @@
       "name": "Granola",
       "summary": "Granola meeting notes through its hosted MCP server.",
       "bundle": "bundles/granola"
+    },
+    {
+      "pluginId": "slack",
+      "name": "Slack",
+      "summary": "Slack tools through its hosted MCP server.",
+      "bundle": "bundles/slack"
     }
   ]
 }
