@@ -1343,6 +1343,21 @@ describe("linear client", () => {
             },
           };
         }
+        if (document.includes("IssueCoordinationComments")) {
+          return {
+            body: {
+              data: {
+                issue: {
+                  comments: { nodes: [] },
+                  proposalComments: { nodes: [] },
+                },
+              },
+            },
+          };
+        }
+        if (document.includes("commentCreate")) {
+          return { body: { data: { commentCreate: { success: true } } } };
+        }
         if (document.includes("IssueLabelByName")) {
           return { body: { data: { issue: { labels: { nodes: [] } } } } };
         }

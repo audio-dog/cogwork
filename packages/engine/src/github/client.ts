@@ -250,6 +250,7 @@ const CheckRunSchema = Schema.Struct({
   status: Schema.String,
   conclusion: Schema.NullOr(Schema.String),
   started_at: Schema.NullOr(Schema.String),
+  completed_at: Schema.NullOr(Schema.String),
 });
 
 const CheckRunsSchema = Schema.Struct({ check_runs: Schema.Array(CheckRunSchema) });
@@ -1487,6 +1488,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
             status: run.status,
             conclusion: run.conclusion,
             startedAtMillis: millisFromIso(run.started_at),
+            completedAtMillis: millisFromIso(run.completed_at),
           }),
         );
         if (current.length < 100) return current;

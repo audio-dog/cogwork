@@ -94,6 +94,7 @@ const followUpItem = (number: number, fresh = false) => {
     priorFailures: 0,
     workContext: workContext(id),
     followUp: {
+      previousMarker: null,
       checks: "failing",
       humanCommentAtMillis: 0,
       botTriggerAtMillis: 0,

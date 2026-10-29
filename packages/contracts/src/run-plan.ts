@@ -74,6 +74,12 @@ export class RunPlanWorkContextReference extends Schema.Class<RunPlanWorkContext
   url: Schema.NullOr(TrimmedNonEmptyString),
 }) {}
 
+export const RunPlanFollowUpTrigger = Schema.Struct({
+  kind: Schema.Literals(["human-feedback", "trusted-bot-finding", "failing-check", "merge-conflict"]),
+  atMillis: Schema.Natural,
+});
+export type RunPlanFollowUpTrigger = typeof RunPlanFollowUpTrigger.Type;
+
 export class RunPlanWorkContextFacts extends Schema.Class<RunPlanWorkContextFacts>("RunPlanWorkContextFacts")(
   {
     roles: Schema.Array(TriageRole),
@@ -83,6 +89,7 @@ export class RunPlanWorkContextFacts extends Schema.Class<RunPlanWorkContextFact
     priority: Priority,
     pr: Schema.NullOr(PrSummary),
     failureReason: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+    followUpTrigger: Schema.optional(Schema.NullOr(RunPlanFollowUpTrigger)),
   },
 ) {}
 

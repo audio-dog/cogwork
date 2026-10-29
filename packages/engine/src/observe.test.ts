@@ -1,6 +1,7 @@
 import { codingOperation, LineageId, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
 import type { FollowUpMarker } from "./follow-up";
@@ -33,6 +34,7 @@ const followUp: FollowUpMarker = {
   noProgress: 3,
   baseDivergence: "none",
   botTriggerAtMillis: 0,
+  latestFailingCheckAtMillis: 3,
 };
 
 const item = (attempts: TrackerItem["attempts"]): TrackerItem => ({
@@ -52,7 +54,10 @@ const item = (attempts: TrackerItem["attempts"]): TrackerItem => ({
   priority: "medium",
 });
 
-const tracker = (tracked: TrackerItem): IssueTrackerService => ({
+const tracker = (
+  tracked: TrackerItem,
+  handBack: IssueTrackerService["handBack"] = () => Effect.void,
+): IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([tracked]),
   readProse: () => Effect.succeed({ body: "", comments: [] }),
@@ -64,7 +69,7 @@ const tracker = (tracked: TrackerItem): IssueTrackerService => ({
   followedUp: () => Effect.void,
   attemptFailed: () => Effect.void,
   handOff: () => Effect.void,
-  handBack: () => Effect.void,
+  handBack,
   stalled: () => Effect.void,
   reclassify: () => Effect.void,
 });
@@ -92,6 +97,143 @@ const pr: PrSignals = {
 };
 
 describe("observeWorkspace handback barrier", () => {
+  it.effect("clears an engine follow-up park before classifying newer human feedback", () =>
+    Effect.gen(function* () {
+      const handbacks = yield* Ref.make<ReadonlyArray<Parameters<IssueTrackerService["handBack"]>[2]>>([]);
+      const attempts = [1, 2, 3].map((atMillis) => attempt("follow-up", "failed", atMillis));
+      const observed = yield* observeWorkspace(
+        tracker(
+          {
+            ...item(attempts),
+            roles: ["ready-for-human"],
+            handback: null,
+            engineHandoffAtMillis: 5,
+            followUp: { ...followUp, attemptAtMillis: 3 },
+          },
+          (_workspace, _id, outcome) => Ref.update(handbacks, (all) => [...all, outcome]),
+        ),
+        provider({ ...pr, latestHumanCommentAtMillis: 4, observedAtMillis: 6 }),
+      )(workspace);
+
+      assert.deepStrictEqual(yield* Ref.get(handbacks), [
+        {
+          record: { by: "cogwork", atMillis: 6 },
+          changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
+          trigger: { kind: "human-feedback", atMillis: 4 },
+        },
+      ]);
+      assert.deepStrictEqual(observed[0]?.roles, ["ready-for-agent"]);
+      assert.strictEqual(classify(observed).eligible[0]?.priorFailures, 0);
+      assert.deepStrictEqual(classify(observed).eligible[0]?.workContext.facts.followUpTrigger, {
+        kind: "human-feedback",
+        atMillis: 4,
+      });
+    }),
+  );
+
+  it.effect.each([
+    {
+      kind: "failing-check" as const,
+      signals: { latestFailingCheckAtMillis: 4 },
+    },
+    {
+      kind: "trusted-bot-finding" as const,
+      signals: { latestBotTriggerAtMillis: 4 },
+    },
+    {
+      kind: "merge-conflict" as const,
+      signals: { baseDivergence: "conflict" as const },
+    },
+  ])("resets stale no progress when a $kind clears the park", ({ kind, signals }) =>
+    Effect.gen(function* () {
+      const attempts = [1, 2, 3].map((atMillis) => attempt("follow-up", "failed", atMillis));
+      const observed = yield* observeWorkspace(
+        tracker({
+          ...item(attempts),
+          roles: ["ready-for-human"],
+          handback: null,
+          engineHandoffAtMillis: 5,
+          followUp: { ...followUp, attemptAtMillis: 3 },
+        }),
+        provider({ ...pr, observedAtMillis: 6, ...signals }),
+      )(workspace);
+      const eligible = classify(observed).eligible[0];
+
+      assert.strictEqual(eligible?.stage, "follow-up");
+      assert.strictEqual(eligible?.followUp?.noProgress, 1);
+      assert.strictEqual(eligible?.workContext.facts.followUpTrigger?.kind, kind);
+    }),
+  );
+
+  it.effect.each([
+    { name: "draft pull request", signals: { draft: true } },
+    { name: "unfollowable pull request", signals: { followable: false } },
+  ])("keeps an engine follow-up park for a $name", ({ signals }) =>
+    Effect.gen(function* () {
+      const handbacks = yield* Ref.make<ReadonlyArray<Parameters<IssueTrackerService["handBack"]>[2]>>([]);
+      const attempts = [1, 2, 3].map((atMillis) => attempt("follow-up", "failed", atMillis));
+      const observed = yield* observeWorkspace(
+        tracker(
+          {
+            ...item(attempts),
+            roles: ["ready-for-human"],
+            handback: null,
+            engineHandoffAtMillis: 5,
+            followUp: { ...followUp, attemptAtMillis: 3 },
+          },
+          (_workspace, _id, outcome) => Ref.update(handbacks, (all) => [...all, outcome]),
+        ),
+        provider({ ...pr, latestHumanCommentAtMillis: 4, observedAtMillis: 6, ...signals }),
+      )(workspace);
+
+      assert.isEmpty(yield* Ref.get(handbacks));
+      assert.deepStrictEqual(observed[0]?.roles, ["ready-for-human"]);
+    }),
+  );
+
+  it.effect("keeps a persisted wake trigger in work context on the next observation", () =>
+    Effect.gen(function* () {
+      const attempts = [1, 2, 3].map((atMillis) => attempt("follow-up", "failed", atMillis));
+      const observed = yield* observeWorkspace(
+        tracker({
+          ...item(attempts),
+          roles: ["ready-for-agent"],
+          handback: { by: "cogwork", atMillis: 6 },
+          followUpTrigger: { kind: "human-feedback", atMillis: 4 },
+          followUp: { ...followUp, attemptAtMillis: 3 },
+        }),
+        provider({ ...pr, latestHumanCommentAtMillis: 4, observedAtMillis: 7 }),
+      )(workspace);
+
+      assert.deepStrictEqual(classify(observed).eligible[0]?.workContext.facts.followUpTrigger, {
+        kind: "human-feedback",
+        atMillis: 4,
+      });
+    }),
+  );
+
+  it.effect("does not use an external trigger timestamp as the failure barrier", () =>
+    Effect.gen(function* () {
+      const handbacks = yield* Ref.make<ReadonlyArray<Parameters<IssueTrackerService["handBack"]>[2]>>([]);
+      const attempts = [1, 2, 3].map((atMillis) => attempt("follow-up", "failed", atMillis));
+      yield* observeWorkspace(
+        tracker(
+          {
+            ...item(attempts),
+            roles: ["ready-for-human"],
+            handback: null,
+            engineHandoffAtMillis: 5,
+            followUp: { ...followUp, attemptAtMillis: 3 },
+          },
+          (_workspace, _id, outcome) => Ref.update(handbacks, (all) => [...all, outcome]),
+        ),
+        provider({ ...pr, latestFailingCheckAtMillis: 4_102_444_800_000, observedAtMillis: 6 }),
+      )(workspace);
+
+      assert.strictEqual((yield* Ref.get(handbacks))[0]?.record.atMillis, 6);
+    }),
+  );
+
   it.effect("keeps post-handback history when the current Operation changes", () =>
     Effect.gen(function* () {
       const observed = yield* observeWorkspace(
