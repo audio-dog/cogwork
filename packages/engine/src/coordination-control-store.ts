@@ -70,9 +70,6 @@ const coordinationError = (
   retryable = reason === "unavailable",
 ) => new CoordinationError({ reason, message, retryable });
 
-const notThisAuthority = () =>
-  coordinationError("not-this-authority", "tracker items use tracker authority", false);
-
 const claimsMatch = (actual: Claim, expected: Claim) =>
   actual.by === expected.by &&
   actual.claimedAtMillis === expected.claimedAtMillis &&
@@ -82,8 +79,7 @@ const claimsMatch = (actual: Claim, expected: Claim) =>
   actual.lineage.parent === expected.lineage.parent &&
   actual.lineage.hop === expected.lineage.hop;
 
-const controlRef = (ref: WorkItemRef) =>
-  ref._tag === "Issue" ? Effect.fail(notThisAuthority()) : Effect.succeed(keyOf(ref));
+const controlRef = (ref: WorkItemRef) => Effect.succeed(keyOf(ref));
 
 const makeControlStoreAuthority = () =>
   Effect.gen(function* () {
@@ -382,18 +378,6 @@ const makeControlStoreAuthority = () =>
     };
   });
 
-const trackerAuthority = {
-  read: (_ref: WorkItemRef) => Effect.fail(notThisAuthority()),
-  claim: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(notThisAuthority()),
-  release: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(notThisAuthority()),
-  recordAttempt: (_ref: WorkItemRef, _attempt: AttemptRecord, _reason?: string) =>
-    Effect.fail(notThisAuthority()),
-  park: (_ref: WorkItemRef, _park: ParkRecord) => Effect.fail(notThisAuthority()),
-  handBack: (_ref: WorkItemRef, _record: HandbackRecord) => Effect.fail(notThisAuthority()),
-  observe: (_ref: WorkItemRef, _revision: string, _cause: Cause) => Effect.fail(notThisAuthority()),
-  markProcessed: (_ref: WorkItemRef, _revision: string) => Effect.fail(notThisAuthority()),
-};
-
 const unavailableAuthority = (error: CoordinationError) => ({
   read: (_ref: WorkItemRef) => Effect.fail(error),
   claim: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(error),
@@ -406,6 +390,9 @@ const unavailableAuthority = (error: CoordinationError) => ({
 });
 
 export const makeControlStoreCoordination = Effect.match(makeControlStoreAuthority(), {
-  onFailure: (error) => makeCoordination(trackerAuthority, unavailableAuthority(error), defaultClaimant),
-  onSuccess: (control) => makeCoordination(trackerAuthority, control, defaultClaimant),
+  onFailure: (error) => {
+    const unavailable = unavailableAuthority(error);
+    return makeCoordination(unavailable, unavailable, defaultClaimant);
+  },
+  onSuccess: (control) => makeCoordination(control, control, defaultClaimant),
 });
