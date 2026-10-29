@@ -1,0 +1,21 @@
+packages/engine/src/granola-source.ts
+  s_dee3b081d33640::t_a71d67b57f2633 159-160,196
+packages/engine/src/granola-source.test.ts
+  s_dee3b081d33640::t_ee1b26d0ac4616 351,374
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f028ce3a62c1ee3c1e6cd0ed51e729a47800178f",
+  "prompts": {},
+  "sessions": {
+    "s_dee3b081d33640": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c6-8bf6-76a2-ba8d-440eec1136d5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
