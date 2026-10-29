@@ -125,9 +125,17 @@ const isWorkflowCandidate = (candidate: Schedulable): candidate is WorkflowCandi
 
 const workflowKeyFor = (admission: TriggerAdmission) => `workflow:${keyOf(admission.event.key)}`;
 
+const workflowAdmissionKeyFor = (admission: TriggerAdmission) =>
+  `workflow-admission:${JSON.stringify([
+    keyOf(admission.event.key),
+    admission.event.revision,
+    admission.subscription.workflow,
+    admission.subscription.trigger,
+  ])}`;
+
 const workflowCandidateOf = (admission: TriggerAdmission): WorkflowCandidate => ({
   admission,
-  keys: [workflowKeyFor(admission)],
+  keys: [workflowKeyFor(admission), workflowAdmissionKeyFor(admission)],
 });
 
 const workspaceReservation = (candidate: Schedulable) =>
@@ -173,12 +181,16 @@ const reserve = (state: SchedulerState, candidate: Schedulable) => {
 
 const release = (state: SchedulerState, candidate: Schedulable) => {
   const reservation = workspaceReservation(candidate);
+  const acted = isWorkflowCandidate(candidate)
+    ? new Set([...state.acted].filter((key) => key !== workflowKeyFor(candidate.admission)))
+    : state.acted;
   return {
     ...state,
     global: Math.max(0, state.global - 1),
     perWorkspace:
       reservation === null ? state.perWorkspace : bumped(state.perWorkspace, reservation.workspace, -1),
     inflight: new Set([...state.inflight].filter((key) => !candidate.keys.includes(key))),
+    acted,
   };
 };
 

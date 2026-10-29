@@ -40,6 +40,7 @@ import { WorkflowRun } from "./workflow-run";
 const id = Schema.decodeSync(WorkItemId);
 const workflowId = Schema.decodeSync(WorkflowId)("scheduled-workflow");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
+const siblingTriggerId = Schema.decodeSync(WorkflowNodeId)("schedule-sibling");
 const operationId = Schema.decodeSync(WorkflowNodeId)("run");
 const scheduleEntry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
 
@@ -491,7 +492,7 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
   );
 };
 
-const workflowAdmission = (instantMillis: number): TriggerAdmission => {
+const workflowAdmission = (instantMillis: number, trigger = triggerId) => {
   const item = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis } as const;
   return {
     event: {
@@ -504,7 +505,7 @@ const workflowAdmission = (instantMillis: number): TriggerAdmission => {
     },
     subscription: {
       workflow: workflowId,
-      trigger: triggerId,
+      trigger,
       operation: operationId,
       entry: scheduleEntry,
       parameters: [],
@@ -516,7 +517,7 @@ const workflowAdmission = (instantMillis: number): TriggerAdmission => {
       parent: null,
       hop: 0,
     },
-  };
+  } satisfies TriggerAdmission;
 };
 
 describe("Scheduler.tick", () => {
@@ -564,6 +565,47 @@ describe("Scheduler.tick", () => {
                 ...executions,
                 admission.event.revision,
               ]).pipe(Effect.andThen(probe.gate.await)),
+          },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("schedules every sibling Workflow admission without a restart", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+
+      assert.deepStrictEqual(yield* Ref.get(probe.workflowExecutions), [triggerId, siblingTriggerId]);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 2, perWorkspaceLimit: 1, dailyBudget: 2 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [workflowAdmission(1_000), workflowAdmission(1_000, siblingTriggerId)],
+            workflowExecute: (probe, admission) =>
+              Effect.all(
+                [
+                  Ref.update(probe.workflowExecutions, (executions) => [
+                    ...executions,
+                    admission.subscription.trigger,
+                  ]),
+                  Ref.update(probe.workflowAdmissions, (admissions) =>
+                    admissions.filter(
+                      (candidate) => candidate.subscription.trigger !== admission.subscription.trigger,
+                    ),
+                  ),
+                ],
+                { discard: true },
+              ),
           },
         ),
       ),
