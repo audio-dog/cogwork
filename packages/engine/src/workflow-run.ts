@@ -42,6 +42,8 @@ const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 
+export type WorkflowRunOutcome = "completed" | "retry" | "skipped";
+
 const workContextBody = (admission: TriggerAdmission, workflow: string) => {
   const payload = admission.event.payload;
   if (payload?._tag !== "GranolaNote") {
@@ -120,14 +122,18 @@ export const make = Effect.gen(function* () {
       );
 
   const decline = (admission: TriggerAdmission) =>
-    coordination
-      .park(admission.event.key, { _tag: "MissingOperation" })
-      .pipe(Effect.andThen(complete(admission)));
+    coordination.park(admission.event.key, { _tag: "MissingOperation" }).pipe(
+      Effect.andThen(complete(admission)),
+      Effect.map(() => "skipped" as const),
+    );
 
   const rejectPlan = (admission: TriggerAdmission, reason: string) =>
     coordination
       .park(admission.event.key, { _tag: "PlanRejected", reason, entry: admission.event.entry })
-      .pipe(Effect.andThen(complete(admission)));
+      .pipe(
+        Effect.andThen(complete(admission)),
+        Effect.map(() => "skipped" as const),
+      );
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
     const record = yield* workflows.get({ id: admission.subscription.workflow });
@@ -136,7 +142,7 @@ export const make = Effect.gen(function* () {
     const operation = document?.operations.find(({ id }) => id === admission.subscription.operation);
     if (!record.enabled || document === null || trigger === undefined || operation === undefined) {
       yield* complete(admission);
-      return;
+      return "skipped" as const;
     }
     if (admission.event.payload?._tag === "GranolaNoteRejected") {
       return yield* rejectPlan(admission, admission.event.payload.reason);
@@ -270,7 +276,7 @@ export const make = Effect.gen(function* () {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason });
         yield* complete(admission);
       }
-      return;
+      return exhausted ? ("completed" as const) : ("retry" as const);
     }
 
     const output = Option.getOrUndefined(eventsExit.value);
@@ -292,7 +298,7 @@ export const make = Effect.gen(function* () {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues });
         yield* complete(admission);
       }
-      return;
+      return exhausted ? ("completed" as const) : ("retry" as const);
     }
 
     yield* Ref.update(decodeIssues, (current) => {
@@ -310,7 +316,7 @@ export const make = Effect.gen(function* () {
       yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary });
       yield* complete(admission);
       yield* settle(run, "failed");
-      return;
+      return "completed" as const;
     }
 
     const actions = matchWorkflowTransitions(operation, decoded.value.answers).flatMap(
@@ -333,18 +339,19 @@ export const make = Effect.gen(function* () {
     });
     yield* complete(admission);
     yield* settle(run, "succeeded");
+    return "completed" as const;
   });
 
   return {
     execute: (admission: TriggerAdmission) =>
-      executeRaw(admission).pipe(Effect.provide(executionContext), Effect.scoped, Effect.asVoid),
+      executeRaw(admission).pipe(Effect.provide(executionContext), Effect.scoped),
   } as const;
 });
 
 export const WorkflowRun = Context.Reference<Effect.Success<typeof make>>(
   "@cogwork/engine/workflow-run/WorkflowRun",
   {
-    defaultValue: () => ({ execute: () => Effect.void }),
+    defaultValue: () => ({ execute: () => Effect.succeed("completed" as const) }),
   },
 );
 

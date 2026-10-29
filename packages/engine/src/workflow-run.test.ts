@@ -405,6 +405,31 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
+  it.effect("reports a rejected Granola note as skipped", () =>
+    Effect.gen(function* () {
+      const rejected: TriggerAdmission = {
+        ...granolaAdmission,
+        event: {
+          ...granolaAdmission.event,
+          payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
+        },
+      };
+      const { runner } = yield* testProgram([]);
+
+      assert.strictEqual(yield* runner.execute(rejected), "skipped");
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("reports a non-exhausted failure as retryable", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram([{}]);
+
+      assert.strictEqual(yield* runner.execute(admission), "retry");
+      assert.isNull(yield* Ref.get(coordination.processed));
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("writes Notify me output and keeps the Run workspace-free", () =>
     Effect.gen(function* () {
       const { runner } = yield* testProgram([
