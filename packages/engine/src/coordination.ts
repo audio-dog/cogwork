@@ -133,7 +133,9 @@ interface GateInput {
   readonly counters: CoordinationCounters;
 }
 
-const blocksGate = (park: ParkRecord | null) => park !== null && park.reason._tag !== "PlanRejected";
+const revisionRetryParks = new Set<ParkReason["_tag"]>(["MissingOperation", "PlanRejected"]);
+
+const blocksGate = (park: ParkRecord | null) => park !== null && !revisionRetryParks.has(park.reason._tag);
 
 const gateRules = [
   {
