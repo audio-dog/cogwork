@@ -450,13 +450,28 @@ layer(NodeServices.layer)((it) => {
               },
             }),
           ),
+          Effect.andThen(
+            store.put({
+              ...admission,
+              subscription: siblingSubscription,
+              event: {
+                ...admission.event,
+                key: { ...admission.event.key, instantMillis: 1_500 },
+                revision: "1500",
+                atMillis: 1_500,
+              },
+            }),
+          ),
         ),
       );
       yield* useStore((store) =>
         Effect.all([store.admissions, store.activate([subscription], 4_000)]).pipe(
           Effect.tap(([admissions, active]) =>
             Effect.sync(() => {
-              assert.strictEqual(admissions[0]?.event.revision, "1500");
+              assert.deepStrictEqual(
+                admissions.map(({ subscription: current }) => current.trigger).toSorted(),
+                [triggerId, siblingTriggerId].toSorted(),
+              );
               assert.strictEqual(active[0]?.catchUp?.since, 1_500);
             }),
           ),
