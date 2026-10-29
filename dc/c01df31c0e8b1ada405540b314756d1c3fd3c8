@@ -1,0 +1,29 @@
+packages/engine/src/slack-source.ts
+  s_79a6dc92473e13::t_80fc3c5393f32c 197-199,448-454,460-462,731,896-897,899-903,905-906,908,911-913
+  s_79a6dc92473e13::t_065339a303efd4 898,904
+  s_79a6dc92473e13::t_834e98dfbdc923 907
+  s_79a6dc92473e13::t_054f375dc37af9 909-910
+packages/engine/src/slack-source.test.ts
+  s_79a6dc92473e13::t_f6065bdedb5952 375-407,699,701,703,747
+  s_79a6dc92473e13::t_2c9cf0ba4c0ed1 345-351,531-534
+  s_79a6dc92473e13::t_547200cdf8c21f 729
+  s_79a6dc92473e13::t_834e98dfbdc923 745
+  s_79a6dc92473e13::t_9f431ba219a692 728,730-736
+  s_79a6dc92473e13::t_963d8ead88a648 352-356,408-411
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dcc01df31c0e8b1ada405540b314756d1c3fd3c8",
+  "prompts": {},
+  "sessions": {
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
