@@ -292,8 +292,13 @@ const lineageOf = (ref: WorkItemRef): Lineage => ({
   hop: 0,
 });
 
-const waitForRetry = (retryAfterMillis: number | null) =>
-  retryAfterMillis === null ? Effect.void : Effect.sleep(retryAfterMillis);
+const waitForRetry = (failure: SourceFailure) => {
+  const retryRules = [
+    { matches: failure.reason === "connection-not-ready", wait: Effect.never },
+    { matches: failure.retryAfterMillis === null, wait: Effect.void },
+  ];
+  return retryRules.find(({ matches }) => matches)?.wait ?? Effect.sleep(failure.retryAfterMillis ?? 0);
+};
 
 export interface TriggerObservationService {
   readonly eligible: Effect.Effect<ReadonlyArray<TriggerAdmission>>;
@@ -328,7 +333,8 @@ export const make = Effect.gen(function* () {
     const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
     yield* Effect.forEach(matched, (subscription) =>
       coordination.observe(event.key, event.revision, event.cause).pipe(
-        Effect.flatMap(() => {
+        Effect.flatMap((outcome) => {
+          if (outcome === "redelivered") return Effect.void;
           const admission = { event, subscription, lineage: lineageOf(event.key) } satisfies TriggerAdmission;
           return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
         }),
@@ -344,9 +350,7 @@ export const make = Effect.gen(function* () {
     source.observe(subscriptions).pipe(
       Stream.runForEach(admit),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
-        setHealth(source.id, "failed", error.message).pipe(
-          Effect.andThen(waitForRetry(error.retryAfterMillis)),
-        ),
+        setHealth(source.id, "failed", error.message).pipe(Effect.andThen(waitForRetry(error))),
       ),
       Effect.catchCause((cause) =>
         EffectCause.hasInterruptsOnly(cause)
@@ -402,11 +406,38 @@ export const make = Effect.gen(function* () {
 
   const workflowChanged = (event: DaemonEvent) =>
     DaemonEvent.guards.WorkflowChanged(event) || DaemonEvent.guards.WorkflowDeleted(event);
+  const subscriptionsChanged = (event: DaemonEvent) =>
+    workflowChanged(event) || DaemonEvent.guards.ConnectionsChanged(event);
+  function resetFailedSources() {
+    return Ref.get(health).pipe(
+      Effect.map((current) => [...current.values()].filter(({ status }) => status === "failed")),
+      Effect.flatMap((failed) => {
+        const failedIds = new Set(failed.map(({ source }) => source));
+        return Effect.forEach(failed, ({ source }) => FiberMap.remove(fibers, source), {
+          discard: true,
+        }).pipe(
+          Effect.andThen(
+            Ref.update(
+              fingerprints,
+              (current) => new Map([...current].filter(([source]) => !failedIds.has(source))),
+            ),
+          ),
+        );
+      }),
+    );
+  }
   yield* Effect.forkScoped(
     Effect.all(
       [
         refresh().pipe(Effect.repeat(Schedule.spaced("5 seconds"))),
-        bus.events.pipe(Stream.filter(workflowChanged), Stream.runForEach(refresh)),
+        bus.events.pipe(
+          Stream.filter(subscriptionsChanged),
+          Stream.runForEach((event) =>
+            (DaemonEvent.guards.ConnectionsChanged(event) ? resetFailedSources() : Effect.void).pipe(
+              Effect.andThen(refresh),
+            ),
+          ),
+        ),
       ],
       { concurrency: "unbounded", discard: true },
     ),

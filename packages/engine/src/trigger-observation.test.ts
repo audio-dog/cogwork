@@ -112,6 +112,7 @@ const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => 
 const coordinationService = (
   processed: Ref.Ref<string | null>,
   observed: Ref.Ref<number>,
+  sourceRevision: Ref.Ref<string | null>,
 ): CoordinationService => ({
   fold,
   read: () =>
@@ -132,8 +133,31 @@ const coordinationService = (
   recordAttempt: () => Effect.die("unused"),
   park: () => Effect.die("unused"),
   handBack: () => Effect.die("unused"),
-  observe: () => Ref.update(observed, (count) => count + 1).pipe(Effect.map(() => "moved" as const)),
+  observe: (_ref, revision) =>
+    Ref.update(observed, (count) => count + 1).pipe(
+      Effect.andThen(
+        Ref.modify(
+          sourceRevision,
+          (current) => [current === revision ? "redelivered" : "moved", revision] as const,
+        ),
+      ),
+    ),
   markProcessed: (_ref, revision) => Ref.set(processed, revision),
+});
+
+const sourceFailingOnce = (starts: Ref.Ref<number>, failure: SourceFailure): TriggerSource => ({
+  id: "clock",
+  entries: clockEntries,
+  availability: () => Effect.succeed({ _tag: "Available" }),
+  listOptions: () => Effect.succeed([]),
+  observe: (subscriptions) =>
+    subscriptions.length === 0
+      ? Stream.empty
+      : Stream.unwrap(
+          Ref.updateAndGet(starts, (count) => count + 1).pipe(
+            Effect.map((count) => (count === 1 ? Stream.fail(failure) : Stream.never)),
+          ),
+        ),
 });
 
 describe("TriggerObservation", () => {
@@ -173,12 +197,13 @@ describe("TriggerObservation", () => {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>(null);
       const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
       const scripted = yield* makeScriptedSource("clock", clockEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
-        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
@@ -197,6 +222,16 @@ describe("TriggerObservation", () => {
       assert.strictEqual(yield* Ref.get(observed), 1);
       assert.lengthOf(yield* scripted.subscriptions, 1);
 
+      const redelivery = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(event);
+      yield* TestClock.adjust("1 second");
+      assert.isTrue(Option.isNone(yield* Fiber.join(redelivery)));
+
       yield* Ref.set(current, record(false));
       const declined = yield* observation.changes.pipe(
         Stream.take(1),
@@ -214,7 +249,7 @@ describe("TriggerObservation", () => {
       yield* TestClock.adjust("1 second");
 
       assert.isTrue(Option.isNone(yield* Fiber.join(declined)));
-      assert.strictEqual(yield* Ref.get(observed), 1);
+      assert.strictEqual(yield* Ref.get(observed), 2);
 
       yield* bus.publish({ _tag: "WorkflowChanged", workflow: record(false) });
       yield* Effect.yieldNow;
@@ -230,37 +265,22 @@ describe("TriggerObservation", () => {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>(null);
       const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
       const starts = yield* Ref.make(0);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
-      const rateLimited: TriggerSource = {
-        id: "clock",
-        entries: clockEntries,
-        availability: () => Effect.succeed({ _tag: "Available" }),
-        listOptions: () => Effect.succeed([]),
-        observe: (subscriptions) =>
-          subscriptions.length === 0
-            ? Stream.empty
-            : Stream.unwrap(
-                Ref.updateAndGet(starts, (count) => count + 1).pipe(
-                  Effect.map((count) =>
-                    count === 1
-                      ? Stream.fail(
-                          new SourceFailure({
-                            source: "clock",
-                            reason: "rate-limited",
-                            retryAfterMillis: 12_000,
-                            message: "wait",
-                          }),
-                        )
-                      : Stream.never,
-                  ),
-                ),
-              ),
-      };
+      const rateLimited = sourceFailingOnce(
+        starts,
+        new SourceFailure({
+          source: "clock",
+          reason: "rate-limited",
+          retryAfterMillis: 12_000,
+          message: "wait",
+        }),
+      );
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
-        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
         Effect.provideService(TriggerSources, [rateLimited]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
@@ -276,6 +296,46 @@ describe("TriggerObservation", () => {
       yield* TestClock.adjust(1);
       yield* Effect.yieldNow;
       yield* observation.refresh;
+      yield* Effect.yieldNow;
+      assert.strictEqual(yield* Ref.get(starts), 2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("restarts a connection-blocked source when Connections change", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const starts = yield* Ref.make(0);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const blocked = sourceFailingOnce(
+        starts,
+        new SourceFailure({
+          source: "clock",
+          reason: "connection-not-ready",
+          retryAfterMillis: null,
+          message: "connect",
+        }),
+      );
+      yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
+        Effect.provideService(TriggerSources, [blocked]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      assert.strictEqual(yield* Ref.get(starts), 1);
+      yield* TestClock.adjust("10 seconds");
+      assert.strictEqual(yield* Ref.get(starts), 1);
+
+      yield* bus.publish({
+        _tag: "ConnectionsChanged",
+        connections: { connections: [] },
+        danglingWorkspaces: [],
+      });
       yield* Effect.yieldNow;
       assert.strictEqual(yield* Ref.get(starts), 2);
     }).pipe(Effect.scoped),
