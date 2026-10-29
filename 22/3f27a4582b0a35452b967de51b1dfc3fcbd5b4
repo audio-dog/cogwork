@@ -1,0 +1,32 @@
+packages/engine/src/github/client.test.ts
+  s_32b58d670b4dfe::t_bd2d807c9b4864 564
+  s_32b58d670b4dfe::t_92f575b763ef79 43-54,552,557,563,674,708,785,799-800
+  s_32b58d670b4dfe::t_b3b9ef33ec3d22 243-262
+  s_32b58d670b4dfe::t_58f6d7f7c1dabb 263-265
+packages/engine/src/github/host.ts
+  s_32b58d670b4dfe::t_c59c38bb3fad02 157,159,164-166
+packages/engine/src/github/client.ts
+  s_32b58d670b4dfe::t_66fb852b1be3b4 146,465,1097,1099-1101,1324-1334,1336
+  s_32b58d670b4dfe::t_7f654dc1440ba8 1098,1107,1335
+packages/engine/src/github/github.test.ts
+  s_32b58d670b4dfe::t_bd2d807c9b4864 529-536,538
+  s_32b58d670b4dfe::t_7d38a3a37ae014 121,253-260,297,312,519-528,537,539-548
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_32b58d670b4dfe::t_3d916cc0caa03b 300-301,344,368
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "223f27a4582b0a35452b967de51b1dfc3fcbd5b4",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
