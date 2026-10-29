@@ -75,6 +75,8 @@ const encodeAdmission = Schema.encodeSync(admissionJson);
 const decodeAdmission = Schema.decodeUnknownEffect(admissionJson);
 const storeError = (error: unknown) => new TriggerObservationStoreError({ message: String(error) });
 const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workflow}:${trigger}`;
+const admissionKey = (admission: TriggerAdmission) =>
+  `${keyOf(admission.event.key)}:${admission.event.revision}:${subscriptionKey(admission.subscription)}`;
 const checkpointOf = (admission: TriggerAdmission) =>
   admission.event.key._tag === "ScheduleInstant"
     ? admission.event.key.instantMillis
@@ -99,9 +101,7 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
   return {
     admissions: Effect.map(Ref.get(admissions), (current) => [...current.values()]),
     put: (admission) =>
-      Ref.update(admissions, (current) =>
-        new Map(current).set(`${keyOf(admission.event.key)}:${admission.event.revision}`, admission),
-      ).pipe(
+      Ref.update(admissions, (current) => new Map(current).set(admissionKey(admission), admission)).pipe(
         Effect.andThen(
           Ref.update(checkpoints, (current) => {
             const key = subscriptionKey(admission.subscription);
@@ -155,9 +155,15 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
         .withWrite(
           sql.withTransaction(
             sql`
-              INSERT INTO trigger_admissions (work_item, revision, payload)
-              VALUES (${keyOf(admission.event.key)}, ${admission.event.revision}, ${encodeAdmission(admission)})
-              ON CONFLICT (work_item, revision) DO UPDATE SET payload = excluded.payload
+              INSERT INTO trigger_admissions (work_item, revision, workflow, trigger, payload)
+              VALUES (
+                ${keyOf(admission.event.key)},
+                ${admission.event.revision},
+                ${admission.subscription.workflow},
+                ${admission.subscription.trigger},
+                ${encodeAdmission(admission)}
+              )
+              ON CONFLICT (work_item, revision, workflow, trigger) DO UPDATE SET payload = excluded.payload
             `.pipe(
               Effect.andThen(sql`
                 UPDATE trigger_subscription_checkpoints
@@ -331,15 +337,13 @@ export const make = Effect.gen(function* () {
   const admit = Effect.fn("TriggerObservation.admit")(function* (event: TriggerEvent) {
     const listed = yield* workflows.list;
     const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
-    yield* Effect.forEach(matched, (subscription) =>
-      coordination.observe(event.key, event.revision, event.cause).pipe(
-        Effect.flatMap((outcome) => {
-          if (outcome === "redelivered") return Effect.void;
-          const admission = { event, subscription, lineage: lineageOf(event.key) } satisfies TriggerAdmission;
-          return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
-        }),
-      ),
-    );
+    if (matched.length === 0) return;
+    const outcome = yield* coordination.observe(event.key, event.revision, event.cause);
+    if (outcome === "redelivered") return;
+    yield* Effect.forEach(matched, (subscription) => {
+      const admission = { event, subscription, lineage: lineageOf(event.key) } satisfies TriggerAdmission;
+      return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
+    });
   });
 
   const observe = (

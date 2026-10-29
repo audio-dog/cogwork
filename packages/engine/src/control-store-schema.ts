@@ -130,10 +130,12 @@ export const triggerAdmissions = sqliteTable(
   {
     workItem: text("work_item").notNull(),
     revision: text("revision").notNull(),
+    workflow: text("workflow").notNull(),
+    trigger: text("trigger").notNull(),
     payload: text("payload").notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.workItem, table.revision] }),
+    primaryKey({ columns: [table.workItem, table.revision, table.workflow, table.trigger] }),
     check("trigger_admissions_payload_json", sql`json_valid(${table.payload})`),
   ],
 );

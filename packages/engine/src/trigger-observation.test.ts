@@ -40,6 +40,7 @@ import {
 import { Workflows, type WorkflowsService } from "./workflow";
 
 const workflowId = Schema.decodeSync(WorkflowId)("daily-summary");
+const otherWorkflowId = Schema.decodeSync(WorkflowId)("other-workflow");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
 const entry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
 const scheduleParameters = [
@@ -192,6 +193,57 @@ describe("TriggerObservation", () => {
     assert.deepStrictEqual(matchTriggerEvent([other, selected], slackEvent), [selected]);
   });
 
+  it.effect("admits every matching Workflow for one source revision", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const scripted = yield* makeScriptedSource("clock", clockEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const workflows = {
+        ...workflowService(current),
+        list: Effect.succeed({
+          workflows: [record(true), { ...record(true), id: otherWorkflowId }],
+          unreadable: [],
+        }),
+      } satisfies WorkflowsService;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflows),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* observation.refresh;
+      yield* Effect.yieldNow;
+      const changes = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        ...event,
+        key: { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000" },
+        revision: "900.000",
+        atMillis: 900_000,
+      });
+      yield* TestClock.adjust("1 second");
+      const admitted = yield* Fiber.join(changes);
+
+      assert.isTrue(Option.isSome(admitted));
+      if (Option.isNone(admitted)) return;
+      assert.deepStrictEqual(
+        admitted.value.map(({ subscription }) => subscription.workflow).toSorted(),
+        [workflowId, otherWorkflowId].toSorted(),
+      );
+      assert.lengthOf(yield* observation.eligible, 2);
+      assert.strictEqual(yield* Ref.get(observed), 1);
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("admits once and stops the source after switch-off", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
@@ -343,6 +395,47 @@ describe("TriggerObservation", () => {
 });
 
 layer(NodeServices.layer)((it) => {
+  it.effect("persists every matching Workflow admission for one revision", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-trigger-admissions-" });
+      const storePath = path.join(directory, "control.db");
+      const sourceEvent = {
+        ...event,
+        key: { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000" },
+        revision: "900.000",
+        atMillis: 900_000,
+      } as const;
+      const sourceLineageRoot = yield* Schema.decodeEffect(LineageId)(keyOf(sourceEvent.key));
+      const sourceLineage = {
+        root: sourceLineageRoot,
+        parent: null,
+        hop: 0,
+      } as const;
+      const stored = yield* makeControlStoreTriggerObservationStore.pipe(
+        Effect.flatMap((store) =>
+          store.put({ event: sourceEvent, subscription, lineage: sourceLineage }).pipe(
+            Effect.andThen(
+              store.put({
+                event: sourceEvent,
+                subscription: { ...subscription, workflow: otherWorkflowId },
+                lineage: sourceLineage,
+              }),
+            ),
+            Effect.andThen(store.admissions),
+          ),
+        ),
+        Effect.provide(bootControlStoreLayer(storePath)),
+      );
+
+      assert.deepStrictEqual(
+        stored.map(({ subscription }) => subscription.workflow).toSorted(),
+        [workflowId, otherWorkflowId].toSorted(),
+      );
+    }),
+  );
+
   it.effect("persists admissions and skips time spent switched off", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
