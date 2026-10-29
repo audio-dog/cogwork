@@ -457,6 +457,62 @@ describe("classify", () => {
     assert.strictEqual(eligible[0]?.workContext.facts.followUpTrigger?.kind, kind);
   });
 
+  it("reopens for a new failing check when source control and the daemon clocks differ", () => {
+    const attempts = [198, 199, 200].map((atMillis) => attemptRecord("follow-up", "failed", atMillis));
+    const { eligible } = classify([
+      item({
+        id: "1",
+        roles: ["ready-for-human"],
+        attempts,
+        engineHandoffAtMillis: 200,
+        pr: pr("changes-requested", {
+          checks: "failing",
+          latestFailingCheckAtMillis: 101,
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 0,
+            noProgress: 0,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+            latestFailingCheckAtMillis: 100,
+            attemptAtMillis: 200,
+          },
+        }),
+      }),
+    ]);
+
+    assert.strictEqual(eligible[0]?.priorFailures, 0);
+    assert.strictEqual(eligible[0]?.workContext.facts.followUpTrigger?.kind, "failing-check");
+  });
+
+  it("keeps a standing failing check parked when source control is ahead of the daemon clock", () => {
+    const attempts = [1, 2, 3].map((atMillis) => attemptRecord("follow-up", "failed", atMillis));
+    const result = classify([
+      item({
+        id: "1",
+        roles: ["ready-for-human"],
+        attempts,
+        engineHandoffAtMillis: 3,
+        pr: pr("changes-requested", {
+          checks: "failing",
+          latestFailingCheckAtMillis: 100,
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 0,
+            noProgress: 0,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+            latestFailingCheckAtMillis: 100,
+            attemptAtMillis: 3,
+          },
+        }),
+      }),
+    ]);
+
+    assert.strictEqual(result.eligible.length, 0);
+    assert.strictEqual(result.needsHuman[0]?.reason, "ready-for-human");
+  });
+
   it.each([
     {
       name: "a check that failed before the last attempt",

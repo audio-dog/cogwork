@@ -13,6 +13,7 @@ export const FollowUpMarker = Schema.Struct({
   noProgress: Schema.Finite,
   baseDivergence: Schema.Literals(["conflict", "clean", "none"]),
   attemptAtMillis: Schema.optional(Schema.Finite),
+  latestFailingCheckAtMillis: Schema.optional(Schema.Finite),
   // Optional-with-default so markers persisted without a bot-trigger time still decode (as 0).
   botTriggerAtMillis: Schema.Finite.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
 });
@@ -42,6 +43,7 @@ export interface FollowUpContext {
   readonly checks: CheckState;
   readonly humanCommentAtMillis: number;
   readonly botTriggerAtMillis: number;
+  readonly latestFailingCheckAtMillis?: number;
   readonly noProgress: number;
   readonly stalled: boolean;
   readonly fresh: boolean;
@@ -83,22 +85,42 @@ const conflictTriggerAtMillis = ({ pr, attemptAtMillis }: TriggerInput) => {
 };
 
 const triggerSources = [
-  { kind: "human-feedback", atMillis: ({ pr }: TriggerInput) => humanCommentAt(pr) },
-  { kind: "trusted-bot-finding", atMillis: ({ pr }: TriggerInput) => botTriggerAt(pr) },
+  {
+    kind: "human-feedback",
+    atMillis: ({ pr }: TriggerInput) => humanCommentAt(pr),
+    thresholdAtMillis: ({ attemptAtMillis }: TriggerInput) => attemptAtMillis,
+  },
+  {
+    kind: "trusted-bot-finding",
+    atMillis: ({ pr }: TriggerInput) => botTriggerAt(pr),
+    thresholdAtMillis: ({ attemptAtMillis }: TriggerInput) => attemptAtMillis,
+  },
   {
     kind: "failing-check",
     atMillis: ({ pr }: TriggerInput) => pr.latestFailingCheckAtMillis ?? 0,
+    thresholdAtMillis: ({ pr }: TriggerInput) =>
+      pr.followUp?.latestFailingCheckAtMillis ??
+      (pr.followUp?.checks === "failing" ? Number.POSITIVE_INFINITY : 0),
   },
-  { kind: "merge-conflict", atMillis: conflictTriggerAtMillis },
+  {
+    kind: "merge-conflict",
+    atMillis: conflictTriggerAtMillis,
+    thresholdAtMillis: () => 0,
+  },
 ] as const;
 
 export const followUpTriggerAfter = (pr: ObservedPr, atMillis: number): FollowUpTrigger | null => {
   const input = { pr, attemptAtMillis: atMillis };
   return (
     triggerSources
-      .map(({ kind, atMillis }) => ({ kind, atMillis: atMillis(input) }))
-      .filter((candidate) => candidate.atMillis > atMillis)
+      .map(({ kind, atMillis, thresholdAtMillis }) => ({
+        kind,
+        atMillis: atMillis(input),
+        thresholdAtMillis: thresholdAtMillis(input),
+      }))
+      .filter((candidate) => candidate.atMillis > candidate.thresholdAtMillis)
       .toSorted((left, right) => right.atMillis - left.atMillis)
+      .map(({ kind, atMillis }) => ({ kind, atMillis }))
       .at(0) ?? null
   );
 };
@@ -131,6 +153,7 @@ export const followUpContext = (pr: ObservedPr): FollowUpContext => {
     checks: pr.checks,
     humanCommentAtMillis: humanCommentAt(pr),
     botTriggerAtMillis: botTriggerAt(pr),
+    latestFailingCheckAtMillis: pr.latestFailingCheckAtMillis ?? 0,
     noProgress,
     stalled: noProgress >= followUpNoProgressLimit,
     fresh: pr.fresh,

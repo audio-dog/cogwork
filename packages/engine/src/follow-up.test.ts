@@ -302,7 +302,7 @@ describe("followUpContext", () => {
     assert.strictEqual(context.baseDivergence, "conflict");
   });
 
-  it("carries the latest bot trigger and its previous marker", () => {
+  it("carries the latest trigger timestamps and its previous marker", () => {
     const previousMarker = {
       checks: "passing" as const,
       humanCommentAtMillis: 0,
@@ -310,8 +310,15 @@ describe("followUpContext", () => {
       baseDivergence: "none" as const,
       botTriggerAtMillis: 20,
     };
-    const context = followUpContext(pr({ latestBotTriggerAtMillis: 42, followUp: previousMarker }));
+    const context = followUpContext(
+      pr({
+        latestBotTriggerAtMillis: 42,
+        latestFailingCheckAtMillis: 43,
+        followUp: previousMarker,
+      }),
+    );
     assert.strictEqual(context.botTriggerAtMillis, 42);
+    assert.strictEqual(context.latestFailingCheckAtMillis, 43);
     assert.deepStrictEqual(context.previousMarker, previousMarker);
   });
 

@@ -34,6 +34,7 @@ const followUp: FollowUpMarker = {
   noProgress: 3,
   baseDivergence: "none",
   botTriggerAtMillis: 0,
+  latestFailingCheckAtMillis: 3,
 };
 
 const item = (attempts: TrackerItem["attempts"]): TrackerItem => ({
