@@ -194,6 +194,9 @@ const isCogworkMessage = (message: SlackMessage) =>
 
 const rootTimestampOf = (message: SlackMessage) => message.threadTs ?? message.ts;
 
+const ambientEmissionKey = (subscription: TriggerSubscription, channel: string, threadTs: string) =>
+  `${subscription.workflow}:${subscription.trigger}:${channel}:${threadTs}`;
+
 export const sourceFailure = (
   reason: SourceFailure["reason"],
   message: string,
@@ -442,20 +445,21 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
       ),
     ),
     reactions: Effect.fn("SlackClient.reactions")((session, oldestMillis) =>
-      cursorPages(
-        session,
-        "reactions.list",
-        { user: session.user, full: "true", limit: "200" },
-        decodeSlack(ReactionsResponse),
-        (response) => [
+      callSlack(client, session, "reactions.list", {
+        user: session.user,
+        full: "true",
+        limit: "1000",
+      }).pipe(
+        Effect.flatMap(decodeSlack(ReactionsResponse)),
+        Effect.map((response) =>
           response.items.flatMap((item) => {
             const isMessageItem =
               item.type === "message" && item.channel !== undefined && item.message !== undefined;
             return isMessageItem ? [normalizeMessage(item.message, item.channel)] : [];
           }),
-          response.response_metadata?.next_cursor ?? "",
-        ],
-      ).pipe(Effect.map((messages) => messages.filter((item) => timestampMillis(item.ts) > oldestMillis))),
+        ),
+        Effect.map((messages) => messages.filter((item) => timestampMillis(item.ts) > oldestMillis)),
+      ),
     ),
     replies: Effect.fn("SlackClient.replies")((session, channel, threadTs) =>
       cursorPages(
@@ -724,15 +728,12 @@ const ambientEvents = Effect.fn("SlackSource.ambientEvents")(function* (
       if (!newest || timestampMillis(newest.ts) <= since) return null;
       const quietFor = durationOf(subscription, "quiet-for", defaultQuietMillis);
       if (now - timestampMillis(newest.ts) < quietFor) return null;
-      const key = `${subscription.workflow}:${subscription.trigger}:${channel}:${rootTimestampOf(root)}`;
+      const key = ambientEmissionKey(subscription, channel, rootTimestampOf(root));
       const prior = (yield* Ref.get(emissions)).get(key);
       const priorAt = prior?.atMillis ?? 0;
       const atMostEvery = durationOf(subscription, "at-most-every", defaultAtMostMillis);
       if (prior?.revision === newest.ts || now - priorAt < atMostEvery) return null;
       const workContext = yield* resolvedWorkContext(client, session, root, complete, "Slack conversation");
-      yield* Ref.update(emissions, (current) =>
-        new Map(current).set(key, { revision: newest.ts, atMillis: now }),
-      );
       return ambientEvent(session, subscription, root, newest.ts, workContext);
     }),
   ).pipe(Effect.map((events) => events.filter((event) => event !== null)));
@@ -892,5 +893,23 @@ export const make = Effect.gen(function* () {
               }),
             ),
           ),
+    acknowledge: (event, subscriptions) => {
+      if (event.entry !== ambientKey || event.key._tag !== "SlackConversation") return Effect.void;
+      const { channel, threadTs } = event.key;
+      return Clock.currentTimeMillis.pipe(
+        Effect.flatMap((atMillis) =>
+          Ref.update(emissions, (current) =>
+            subscriptions.reduce(
+              (next, subscription) =>
+                new Map(next).set(ambientEmissionKey(subscription, channel, threadTs), {
+                  revision: event.revision,
+                  atMillis,
+                }),
+              current,
+            ),
+          ),
+        ),
+      );
+    },
   } satisfies TriggerSource;
 });

@@ -342,20 +342,18 @@ describe("Slack Trigger source", () => {
       yield* TestClock.setTime(1_000_000);
       const source = yield* make;
       const firstEvent = yield* Deferred.make<void>();
-      const eventsFiber = yield* source
-        .observe([
-          subscription("slack.message-in-channel", [
-            { id: "channel", value: "C123" },
-            { id: "quiet-for", value: "0" },
-            { id: "at-most-every", value: "120000" },
-          ]),
-        ])
-        .pipe(
-          Stream.tap(() => Deferred.succeed(firstEvent, undefined)),
-          Stream.take(2),
-          Stream.runCollect,
-          Effect.forkChild({ startImmediately: true }),
-        );
+      const selected = subscription("slack.message-in-channel", [
+        { id: "channel", value: "C123" },
+        { id: "quiet-for", value: "0" },
+        { id: "at-most-every", value: "120000" },
+      ]);
+      const eventsFiber = yield* source.observe([selected]).pipe(
+        Stream.tap((event) => source.acknowledge?.(event, [selected]) ?? Effect.void),
+        Stream.tap(() => Deferred.succeed(firstEvent, undefined)),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
       yield* Deferred.await(firstEvent);
       yield* Ref.update(state, (current) => ({
         ...current,
@@ -370,6 +368,43 @@ describe("Slack Trigger source", () => {
       assert.deepStrictEqual(
         events.map((event) => event.revision),
         ["600.000", "1001.000"],
+      );
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("re-emits an ambient event until admission succeeds", () =>
+    Effect.gen(function* () {
+      const root = message({ ts: "600.000", text: "First message" });
+      yield* Ref.set(yield* SlackClientStateRef, {
+        search: [],
+        history: [root],
+        reactions: [],
+        replies: [root],
+        failure: null,
+      });
+      yield* TestClock.setTime(1_000_000);
+      const source = yield* make;
+      const events = yield* source
+        .observe([
+          subscription("slack.message-in-channel", [
+            { id: "channel", value: "C123" },
+            { id: "quiet-for", value: "0" },
+            { id: "at-most-every", value: "120000" },
+          ]),
+        ])
+        .pipe(
+          Stream.take(2),
+          Stream.runCollect,
+          Effect.timeoutOption("61 seconds"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* TestClock.adjust("61 seconds");
+      const result = yield* Fiber.join(events);
+
+      assert.isTrue(Option.isSome(result));
+      assert.deepStrictEqual(
+        Option.getOrElse(result, () => []).map(({ revision }) => revision),
+        ["600.000", "600.000"],
       );
     }).pipe(Effect.provide(testLayer)),
   );
@@ -493,7 +528,10 @@ describe("Slack Trigger source", () => {
         { id: "quiet-for", value: "0" },
         { id: "at-most-every", value: "120000" },
       ]);
-      yield* source.observe([selected]).pipe(Stream.take(1), Stream.runDrain);
+      const [first] = yield* source.observe([selected]).pipe(Stream.take(1), Stream.runCollect);
+      assert.isDefined(first);
+      if (!first) return;
+      yield* source.acknowledge?.(first, [selected]) ?? Effect.void;
       yield* Ref.update(state, (current) => ({
         ...current,
         replies: [root, message({ ts: "1001.000", threadTs: root.ts, text: "Second message" })],
@@ -658,9 +696,11 @@ describe("Slack Trigger source", () => {
     }),
   );
 
-  it.effect("reads every Slack cursor page", () =>
+  it.effect("bounds reaction polling to one Slack page", () =>
     Effect.gen(function* () {
+      const requests = yield* Ref.make(0);
       const http = HttpClient.make((request, url) => {
+        assert.strictEqual(url.searchParams.get("limit"), "1000");
         const cursor = url.searchParams.get("cursor");
         const response = cursor
           ? {
@@ -685,13 +725,15 @@ describe("Slack Trigger source", () => {
               ],
               response_metadata: { next_cursor: "next" },
             };
-        return Effect.succeed(
-          HttpClientResponse.fromWeb(
-            request,
-            new Response(JSON.stringify(response), {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            }),
+        return Ref.update(requests, (count) => count + 1).pipe(
+          Effect.map(() =>
+            HttpClientResponse.fromWeb(
+              request,
+              new Response(JSON.stringify(response), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              }),
+            ),
           ),
         );
       });
@@ -700,8 +742,9 @@ describe("Slack Trigger source", () => {
 
       assert.deepStrictEqual(
         messages.map(({ ts }) => ts),
-        ["900.000", "901.000"],
+        ["900.000"],
       );
+      assert.strictEqual(yield* Ref.get(requests), 1);
     }),
   );
 });
