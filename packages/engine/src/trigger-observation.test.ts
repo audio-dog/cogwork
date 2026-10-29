@@ -42,6 +42,7 @@ import { Workflows, type WorkflowsService } from "./workflow";
 
 const workflowId = Schema.decodeSync(WorkflowId)("daily-summary");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
+const siblingTriggerId = Schema.decodeSync(WorkflowNodeId)("schedule-sibling");
 const entry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
 const scheduleParameters = [
   { id: "hour", value: "0" },
@@ -95,6 +96,7 @@ const subscription: TriggerSubscription = {
   workspaces: [],
   catchUp: { since: 0 },
 };
+const siblingSubscription: TriggerSubscription = { ...subscription, trigger: siblingTriggerId };
 
 const selectedWorkspaceId = Schema.decodeSync(WorkspaceId)("selected");
 const selectedWorkspace: RegisteredWorkspace = {
@@ -134,11 +136,17 @@ const selectedTrackerItem: TrackerItem = {
   followUp: null,
 };
 
-const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* () {
+const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* (
+  options: {
+    readonly observedItems?: ReadonlyArray<TrackerItem>;
+    readonly exactAssignees?: ReadonlyArray<string>;
+  } = {},
+) {
   const current = yield* Ref.make(record(true, selectedDocument));
   const processed = yield* Ref.make<string | null>(null);
   const observed = yield* Ref.make<ReadonlySet<string>>(new Set());
   const trackerCalls = yield* Ref.make(0);
+  const exactAssigneeCalls = yield* Ref.make(0);
   const scripted = yield* makeScriptedSource("clock", clockEntries);
   const store = yield* makeMemoryTriggerObservationStore;
   const bus = yield* makeDaemonEventBus;
@@ -146,7 +154,17 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
   const tracker = {
     ...emptyTracker,
     observe: () =>
-      Ref.update(trackerCalls, (count) => count + 1).pipe(Effect.map(() => [selectedTrackerItem])),
+      Ref.update(trackerCalls, (count) => count + 1).pipe(
+        Effect.map(() => options.observedItems ?? [selectedTrackerItem]),
+      ),
+    ...(options.exactAssignees === undefined
+      ? {}
+      : {
+          assignees: () =>
+            Ref.update(exactAssigneeCalls, (count) => count + 1).pipe(
+              Effect.map(() => options.exactAssignees ?? []),
+            ),
+        }),
   };
   const observation = yield* make.pipe(
     Effect.provideService(Workflows, workflowService(current)),
@@ -162,7 +180,7 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
   );
   yield* Effect.yieldNow;
   yield* observation.refresh;
-  return { observation, scripted, trackerCalls };
+  return { observation, scripted, trackerCalls, exactAssigneeCalls };
 });
 
 const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => ({
@@ -344,6 +362,42 @@ describe("TriggerObservation", () => {
 
       assert.strictEqual(yield* Ref.get(trackerCalls), 1);
     }).pipe(Effect.scoped),
+  );
+
+  it.effect("loads and reuses assignees for an item outside the tracker snapshot", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, trackerCalls, exactAssigneeCalls } = yield* makeWorkspaceObservation({
+        observedItems: [],
+        exactAssignees: ["owner"],
+      });
+      const changed = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(selectedEvent);
+      yield* scripted.emit({ ...selectedEvent, revision: "issue-2" });
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isSome(yield* Fiber.join(changed)));
+      assert.strictEqual(yield* Ref.get(trackerCalls), 1);
+      assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps sibling admissions for one item revision in memory", () =>
+    Effect.gen(function* () {
+      const store = yield* makeMemoryTriggerObservationStore;
+      const admission = { event, subscription, lineage } as const;
+      yield* store.put(admission);
+      yield* store.put({ ...admission, subscription: siblingSubscription });
+
+      assert.deepStrictEqual(
+        (yield* store.admissions).map(({ subscription: current }) => current.trigger).toSorted(),
+        [triggerId, siblingTriggerId].toSorted(),
+      );
+    }),
   );
 });
 

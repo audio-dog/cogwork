@@ -111,7 +111,10 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
     admissions: Effect.map(Ref.get(admissions), (current) => [...current.values()]),
     put: (admission) =>
       Ref.update(admissions, (current) =>
-        new Map(current).set(`${keyOf(admission.event.key)}:${admission.event.revision}`, admission),
+        new Map(current).set(
+          `${keyOf(admission.event.key)}:${admission.event.revision}:${subscriptionKey(admission.subscription)}`,
+          admission,
+        ),
       ).pipe(
         Effect.andThen(
           Ref.update(checkpoints, (current) => {
@@ -355,13 +358,31 @@ export const make = Effect.gen(function* () {
     return assignees;
   });
 
-  const workspaceAssignees = Effect.fn("TriggerObservation.workspaceAssignees")(function* (
+  const refreshItemAssignees = Effect.fn("TriggerObservation.refreshItemAssignees")(function* (
     workspace: Effect.Success<typeof registry.state>["workspaces"][number],
+    itemId: WorkItemId,
+    now: number,
+  ) {
+    const refreshed = yield* refreshWorkspaceAssignees(workspace, now);
+    if (refreshed.has(itemId)) return refreshed.get(itemId) ?? [];
+    const assignees = yield* tracker.assignees?.(workspace, itemId) ?? Effect.succeed([]);
+    yield* Ref.update(assigneeSnapshots, (snapshots) =>
+      new Map(snapshots).set(workspace.config.name, {
+        atMillis: now,
+        assignees: new Map(refreshed).set(itemId, assignees),
+      }),
+    );
+    return assignees;
+  });
+
+  const itemAssignees = Effect.fn("TriggerObservation.itemAssignees")(function* (
+    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
+    itemId: WorkItemId,
   ) {
     const now = yield* Clock.currentTimeMillis;
     const cached = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.name), now);
-    if (cached) return cached;
-    return yield* assigneeGate.withPermit(refreshWorkspaceAssignees(workspace, now));
+    if (cached?.has(itemId)) return cached.get(itemId) ?? [];
+    return yield* assigneeGate.withPermit(refreshItemAssignees(workspace, itemId, now));
   });
 
   const passesAssigneeGate = Effect.fn("TriggerObservation.passesAssigneeGate")(function* (
@@ -374,7 +395,7 @@ export const make = Effect.gen(function* () {
     const allowlist = workspace.config.issueTracker.assigneeAllowlist;
     if (allowlist === undefined) return true;
     if (event.key._tag !== "Issue") return true;
-    const assignees = (yield* workspaceAssignees(workspace)).get(event.key.id) ?? [];
+    const assignees = yield* itemAssignees(workspace, event.key.id);
     return assignees.some((assignee) => allowlist.includes(assignee));
   });
 

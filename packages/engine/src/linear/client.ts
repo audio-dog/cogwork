@@ -219,11 +219,18 @@ const IssueLabelPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }) })),
 });
 
+const IssueAssigneesPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({ assignee: Schema.optional(Schema.NullOr(Schema.Struct({ id: Schema.String }))) }),
+  ),
+});
+
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
+const decodeIssueAssignees = Schema.decodeUnknownEffect(IssueAssigneesPayload);
 
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
@@ -421,6 +428,11 @@ query IssueLabelByName($id: String!, $label: String!) {
   issue(id: $id) {
     labels(filter: { name: { eq: $label } }, first: 1) { nodes { id name } }
   }
+}`;
+
+const issueAssigneesQuery = `
+query IssueAssignees($id: String!) {
+  issue(id: $id) { assignee { id } }
 }`;
 
 const commentsQuery = `
@@ -899,6 +911,13 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return payload.issue.labels.nodes.at(0)?.id ?? null;
   });
 
+  const issueAssignees = Effect.fn("linear.issueAssignees")(function* (ref: LinearTeamRef, issueId: string) {
+    const data = yield* rawData(ref, issueAssigneesQuery, { id: issueId });
+    const payload = yield* Effect.mapError(decodeIssueAssignees(data), toUnavailable);
+    if (payload.issue === null) return yield* unavailable(`Linear issue not found: ${issueId}`);
+    return payload.issue.assignee ? [payload.issue.assignee.id] : [];
+  });
+
   const readProse = (ref: LinearTeamRef, issueId: string) => {
     const loadPage = Effect.fn("linear.loadCommentPage")(function* (state: CommentPaginationState) {
       const data = yield* rawData(ref, commentsQuery, { id: issueId, after: state.after });
@@ -968,6 +987,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return yield* callWithCredential(ref, credential, (sdk) => sdk.viewer.then((viewer) => viewer.id));
     }),
     observeIssues,
+    issueAssignees,
     labelAppliedAt,
     listWorkflowStates: (ref: LinearTeamRef) =>
       Effect.map(loadTeam(ref, metaShape), (team): ReadonlyArray<RawWorkflowState> => team.states.nodes),

@@ -169,6 +169,10 @@ export const makeEmpty = Effect.succeed({
 } as const);
 
 export type IssueTrackerService = Effect.Success<typeof makeEmpty> & {
+  readonly assignees?: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+  ) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
   readonly triggerSources?: ReadonlyArray<TriggerSource>;
 };
 

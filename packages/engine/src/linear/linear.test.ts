@@ -215,6 +215,15 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             );
         }),
       ),
+    issueAssignees: (_ref, issueId) =>
+      guard(
+        Effect.flatMap(Ref.get(issuesRef), (issues) => {
+          const issue = issues.find((candidate) => candidate.identifier === issueId);
+          return issue
+            ? Effect.succeed([...issue.assignees])
+            : Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue missing" }));
+        }),
+      ),
     listWorkflowStates: () => guard(Effect.succeed(states)),
     listComments: (_ref, issueId, _coordination) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),

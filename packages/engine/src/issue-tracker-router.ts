@@ -18,6 +18,7 @@ export const route = (github: IssueTrackerService, linear: IssueTrackerService):
     triggerSources: [...(github.triggerSources ?? []), ...(linear.triggerSources ?? [])],
     rateLimitScope: (workspace) => forWorkspace(workspace).rateLimitScope(workspace),
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
+    assignees: (workspace, id) => forWorkspace(workspace).assignees?.(workspace, id) ?? Effect.succeed([]),
     readProse: (workspace, id) => forWorkspace(workspace).readProse(workspace, id),
     claim: (workspace, id, claim) => forWorkspace(workspace).claim(workspace, id, claim),
     release: (workspace, id) => forWorkspace(workspace).release(workspace, id),
