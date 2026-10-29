@@ -116,6 +116,7 @@ export interface Candidate {
 interface WorkflowCandidate {
   readonly admission: TriggerAdmission;
   readonly keys: ReadonlyArray<string>;
+  readonly reservationKeys: ReadonlyArray<string>;
 }
 
 type Schedulable = Candidate | WorkflowCandidate;
@@ -123,12 +124,24 @@ type Schedulable = Candidate | WorkflowCandidate;
 const isWorkflowCandidate = (candidate: Schedulable): candidate is WorkflowCandidate =>
   "admission" in candidate;
 
-const workflowKeyFor = (admission: TriggerAdmission) => `workflow:${keyOf(admission.event.key)}`;
+const workflowItemKeyFor = (admission: TriggerAdmission) => `workflow:${keyOf(admission.event.key)}`;
+
+const workflowKeyFor = (admission: TriggerAdmission) =>
+  JSON.stringify([
+    workflowItemKeyFor(admission),
+    admission.event.revision,
+    admission.subscription.workflow,
+    admission.subscription.trigger,
+  ]);
 
 const workflowCandidateOf = (admission: TriggerAdmission): WorkflowCandidate => ({
   admission,
   keys: [workflowKeyFor(admission)],
+  reservationKeys: [workflowItemKeyFor(admission)],
 });
+
+const reservationKeysOf = (candidate: Schedulable) =>
+  isWorkflowCandidate(candidate) ? candidate.reservationKeys : candidate.keys;
 
 const workspaceReservation = (candidate: Schedulable) =>
   isWorkflowCandidate(candidate)
@@ -146,8 +159,9 @@ const fits = (candidate: Schedulable, state: SchedulerState, config: SchedulerCo
     state.budgetUsed < config.dailyBudget;
   const workspaceAvailable =
     reservation === null || (state.perWorkspace.get(reservation.workspace) ?? 0) < reservation.limit;
-  const keysAvailable = candidate.keys.every((key) => !state.inflight.has(key) && !state.acted.has(key));
-  return schedulerAvailable && workspaceAvailable && keysAvailable;
+  const identityAvailable = candidate.keys.every((key) => !state.acted.has(key));
+  const reservationAvailable = reservationKeysOf(candidate).every((key) => !state.inflight.has(key));
+  return schedulerAvailable && workspaceAvailable && identityAvailable && reservationAvailable;
 };
 
 const bumped = (map: ReadonlyMap<WorkspaceId, number>, key: WorkspaceId, delta: number) => {
@@ -165,7 +179,7 @@ const reserve = (state: SchedulerState, candidate: Schedulable) => {
     global: state.global + 1,
     perWorkspace:
       reservation === null ? state.perWorkspace : bumped(state.perWorkspace, reservation.workspace, 1),
-    inflight: new Set([...state.inflight, ...candidate.keys]),
+    inflight: new Set([...state.inflight, ...reservationKeysOf(candidate)]),
     acted: new Set([...state.acted, ...candidate.keys]),
     budgetUsed: state.budgetUsed + 1,
   };
@@ -178,7 +192,7 @@ const release = (state: SchedulerState, candidate: Schedulable) => {
     global: Math.max(0, state.global - 1),
     perWorkspace:
       reservation === null ? state.perWorkspace : bumped(state.perWorkspace, reservation.workspace, -1),
-    inflight: new Set([...state.inflight].filter((key) => !candidate.keys.includes(key))),
+    inflight: new Set([...state.inflight].filter((key) => !reservationKeysOf(candidate).includes(key))),
   };
 };
 

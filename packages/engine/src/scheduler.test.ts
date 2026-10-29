@@ -39,6 +39,7 @@ import { WorkflowRun } from "./workflow-run";
 
 const id = Schema.decodeSync(WorkItemId);
 const workflowId = Schema.decodeSync(WorkflowId)("scheduled-workflow");
+const siblingWorkflowId = Schema.decodeSync(WorkflowId)("sibling-workflow");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
 const operationId = Schema.decodeSync(WorkflowNodeId)("run");
 const scheduleEntry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
@@ -564,6 +565,54 @@ describe("Scheduler.tick", () => {
                 ...executions,
                 admission.event.revision,
               ]).pipe(Effect.andThen(probe.gate.await)),
+          },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("runs sibling Workflow admissions for one source item serially", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+
+      assert.deepStrictEqual(yield* Ref.get(probe.workflowExecutions), [workflowId, siblingWorkflowId]);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 2, perWorkspaceLimit: 1, dailyBudget: 2 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [
+              workflowAdmission(1_000),
+              {
+                ...workflowAdmission(1_000),
+                subscription: {
+                  ...workflowAdmission(1_000).subscription,
+                  workflow: siblingWorkflowId,
+                },
+              },
+            ],
+            workflowExecute: (state, admission) =>
+              Ref.update(state.workflowExecutions, (executions) => [
+                ...executions,
+                admission.subscription.workflow,
+              ]).pipe(
+                Effect.andThen(
+                  Ref.update(state.workflowAdmissions, (admissions) =>
+                    admissions.filter(
+                      (candidate) => candidate.subscription.workflow !== admission.subscription.workflow,
+                    ),
+                  ),
+                ),
+              ),
           },
         ),
       ),
