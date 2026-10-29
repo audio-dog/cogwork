@@ -11,6 +11,7 @@ import {
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -92,6 +93,7 @@ const subscription: TriggerSubscription = {
   catchUp: { since: 0 },
 };
 const granolaEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-generated");
+const granolaEditedEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-edited");
 const granolaTriggers = ["first", "second"].map((id) => ({
   id: Schema.decodeSync(WorkflowNodeId)(id),
   entry: granolaEntry,
@@ -276,6 +278,59 @@ describe("TriggerObservation", () => {
       assert.lengthOf(yield* Fiber.join(changes), 2);
       assert.lengthOf(yield* observation.eligible, 2);
       assert.strictEqual(yield* Ref.get(observed), 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("records an unmatched source revision", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const observedSignal = yield* Deferred.make<void>();
+      const baseCoordination = coordinationService(processed, observed);
+      const coordination: CoordinationService = {
+        ...baseCoordination,
+        observe: (ref, revision, cause) =>
+          baseCoordination
+            .observe(ref, revision, cause)
+            .pipe(Effect.tap(() => Deferred.succeed(observedSignal, undefined))),
+      };
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const didObserve = yield* Deferred.await(observedSignal).pipe(
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key: {
+          _tag: "GranolaNote",
+          connection: connectionIdOf("granola", "person@example.com"),
+          noteId: "note-1",
+        },
+        revision: "2026-10-29T16:00:00.000Z",
+        cause: { _tag: "Unknown" },
+        atMillis: 1,
+        entry: granolaEditedEntry,
+        workspace: null,
+      });
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isSome(yield* Fiber.join(didObserve)));
+      assert.deepStrictEqual(yield* observation.eligible, []);
     }).pipe(Effect.scoped),
   );
 });

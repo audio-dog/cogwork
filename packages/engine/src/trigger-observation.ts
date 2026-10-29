@@ -312,12 +312,14 @@ export const make = Effect.gen(function* () {
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
 
-  const admit = Effect.fn("TriggerObservation.admit")(function* (event: TriggerEvent) {
+  const admit = Effect.fn("TriggerObservation.admit")(function* (source: TriggerSource, event: TriggerEvent) {
     const listed = yield* workflows.list;
-    const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
-    if (matched.length === 0) return;
+    const active = sourceSubscriptions(source, subscriptionsOf(listed.workflows));
+    if (active.length === 0) return;
     const outcome = yield* coordination.observe(event.key, event.revision, event.cause);
     if (outcome === "redelivered") return;
+    const matched = matchTriggerEvent(active, event);
+    if (matched.length === 0) return;
     yield* Effect.forEach(
       matched,
       (subscription) => {
@@ -334,7 +336,7 @@ export const make = Effect.gen(function* () {
     fingerprint: string,
   ) =>
     source.observe(subscriptions).pipe(
-      Stream.runForEach(admit),
+      Stream.runForEach((event) => admit(source, event)),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(
           Effect.andThen(waitForRetry(error.retryAfterMillis)),
