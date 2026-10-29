@@ -188,6 +188,7 @@ export const makeTrackerCoordination = <Ref, CommentId>(
   const state: { ledger: Coordination.CoordinationLedger } = {
     ledger: {
       claim: item.claimLabeled ? parsedClaim : null,
+      claims: parsedClaims,
       latestClaimAtMillis: parsedClaim?.claimedAtMillis,
       latestClaimOperation: parsedClaim?.operation,
       attempts: Coordination.parseAttempts(host.codec, body),
@@ -246,6 +247,7 @@ export const makeTrackerCoordination = <Ref, CommentId>(
         yield* update({
           ...state.ledger,
           claim: record,
+          claims: [...(state.ledger.claims ?? []), record],
           latestClaimAtMillis: record.claimedAtMillis,
           latestClaimOperation: record.operation,
         });

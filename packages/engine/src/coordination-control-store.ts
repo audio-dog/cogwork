@@ -266,9 +266,11 @@ const makeControlStoreAuthority = () =>
         readRevision(workItem),
       ]);
       const [latest] = claims;
-      const latestClaim = claims.find(({ claim }) => claim !== null)?.claim ?? null;
+      const claimHistory = claims.flatMap(({ claim }) => (claim === null ? [] : [claim]));
+      const [latestClaim] = claimHistory;
       return {
         claim: latest?.claim ?? null,
+        claims: claimHistory,
         latestClaimAtMillis: latestClaim?.claimedAtMillis,
         latestClaimOperation: latestClaim?.operation,
         attempts,

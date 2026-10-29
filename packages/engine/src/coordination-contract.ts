@@ -42,8 +42,13 @@ export const verifyCoordinationContract = (coordination: CoordinationService, re
     assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
 
     yield* TestClock.setTime(5);
-    yield* coordination.park(ref, { _tag: "Stuck", summary: "still needs a person" });
+    const laterSiblingClaim = yield* coordination.claim(ref, { operation: siblingOperation, lineage });
+    yield* coordination.release(ref, laterSiblingClaim);
+    assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
+
     yield* TestClock.setTime(6);
+    yield* coordination.park(ref, { _tag: "Stuck", summary: "still needs a person" });
+    yield* TestClock.setTime(7);
     const handedBack = yield* coordination.handBack(ref, { by: "person", note: "try again" });
     assert.strictEqual(handedBack.gate(operation)._tag, "Open");
     assert.strictEqual(handedBack.counters(operation).consecutiveFailures, 0);

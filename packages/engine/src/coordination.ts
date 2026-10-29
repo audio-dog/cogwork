@@ -72,6 +72,7 @@ export const maxLineageHops = 25;
 
 export interface CoordinationLedger {
   readonly claim: ClaimType | null;
+  readonly claims?: ReadonlyArray<ClaimType>;
   readonly latestClaimAtMillis?: number;
   readonly latestClaimOperation?: OperationKey;
   readonly attempts: ReadonlyArray<AttemptRecord>;
@@ -128,20 +129,38 @@ const newestByTime = <A extends { readonly atMillis: number }>(records: Readonly
     null,
   );
 
-const claimClearsPark = (
-  park: ParkRecord | null,
-  claim: { readonly atMillis: number; readonly operation: OperationKey } | null,
-) =>
+interface ClaimStamp {
+  readonly atMillis: number;
+  readonly operation: OperationKey;
+}
+
+const claimClearsPark = (park: ParkRecord | null, claims: ReadonlyArray<ClaimStamp>) =>
   park !== null &&
-  claim !== null &&
-  claim.atMillis >= park.atMillis &&
-  (park.operation === undefined || sameOperation(park.operation, claim.operation));
+  claims.some((claim) => {
+    const claimMatchesOperation =
+      park.operation === undefined || sameOperation(park.operation, claim.operation);
+    return claim.atMillis >= park.atMillis && claimMatchesOperation;
+  });
 
 const recordedClaimOf = (ledger: CoordinationLedger) => {
   const { latestClaimAtMillis, latestClaimOperation } = ledger;
   const hasRecordedClaim = latestClaimAtMillis !== undefined && latestClaimOperation !== undefined;
   if (!hasRecordedClaim) return null;
   return { atMillis: latestClaimAtMillis, operation: latestClaimOperation };
+};
+
+const claimStampsOf = (ledger: CoordinationLedger) => {
+  const claims = ledger.claims?.map(({ claimedAtMillis, operation }) => ({
+    atMillis: claimedAtMillis,
+    operation,
+  }));
+  const recordedClaim = recordedClaimOf(ledger);
+  const legacyClaims = recordedClaim === null ? [] : [recordedClaim];
+  const activeClaims =
+    ledger.claim === null
+      ? []
+      : [{ atMillis: ledger.claim.claimedAtMillis, operation: ledger.claim.operation }];
+  return [...(claims ?? legacyClaims), ...activeClaims];
 };
 
 interface GateInput {
@@ -188,21 +207,8 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
   const barrierAtMillis = handback?.atMillis ?? 0;
   const activeParks = ledger.parks.filter((park) => park.atMillis > barrierAtMillis);
   const latestPark = newestByTime(activeParks);
-  const claims = [
-    recordedClaimOf(ledger),
-    ledger.claim === null
-      ? null
-      : { atMillis: ledger.claim.claimedAtMillis, operation: ledger.claim.operation },
-  ].filter(
-    (
-      claim,
-    ): claim is {
-      readonly atMillis: number;
-      readonly operation: OperationKey;
-    } => claim !== null,
-  );
-  const latestClaim = newestByTime(claims);
-  const park = claimClearsPark(latestPark, latestClaim) ? null : latestPark;
+  const claims = claimStampsOf(ledger);
+  const park = claimClearsPark(latestPark, claims) ? null : latestPark;
   const claimAfterBarrier =
     ledger.claim && ledger.claim.claimedAtMillis > barrierAtMillis ? ledger.claim : null;
   const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > barrierAtMillis);
@@ -224,7 +230,7 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
     );
     const input = {
       ledger,
-      park: claimClearsPark(matchingPark, latestClaim) ? null : matchingPark,
+      park: claimClearsPark(matchingPark, claims) ? null : matchingPark,
       counters: counters(key),
     };
     return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
