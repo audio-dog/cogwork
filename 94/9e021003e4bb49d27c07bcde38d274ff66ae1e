@@ -1,0 +1,21 @@
+packages/engine/src/coordination.ts
+  s_dee3b081d33640::t_a68ea7743361fc 136-138
+packages/engine/src/coordination-fold.test.ts
+  s_dee3b081d33640::t_c850fd77dca843 97-116,118-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "949e021003e4bb49d27c07bcde38d274ff66ae1e",
+  "prompts": {},
+  "sessions": {
+    "s_dee3b081d33640": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c6-8bf6-76a2-ba8d-440eec1136d5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
