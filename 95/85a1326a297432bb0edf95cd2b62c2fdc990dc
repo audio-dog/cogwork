@@ -1,0 +1,29 @@
+packages/engine/src/daemon-composition.test.ts
+  s_79a6dc92473e13::t_6e0bf0a4751f33 370,372
+  s_79a6dc92473e13::t_127ca25b5b0abd 412-414
+packages/engine/src/workflow-catalog.ts
+  s_79a6dc92473e13::t_cc7a53bb220e7c 12,62-78
+packages/engine/src/daemon.ts
+  s_79a6dc92473e13::t_b1228153bb541f 481,484-488
+  s_79a6dc92473e13::t_91ae8e35824be1 483
+  s_79a6dc92473e13::t_b8910b79acd527 478-480,482,490
+  s_79a6dc92473e13::t_ae46719089779a 115
+packages/engine/src/index.ts
+  s_79a6dc92473e13::t_b8910b79acd527 47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9585a1326a297432bb0edf95cd2b62c2fdc990dc",
+  "prompts": {},
+  "sessions": {
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
