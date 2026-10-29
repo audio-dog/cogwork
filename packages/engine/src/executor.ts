@@ -112,6 +112,7 @@ const defaultFollowUp: FollowUpContext = {
   checks: "pending",
   humanCommentAtMillis: 0,
   botTriggerAtMillis: 0,
+  latestFailingCheckAtMillis: 0,
   noProgress: 0,
   stalled: false,
   fresh: false,
@@ -530,6 +531,7 @@ export const make = Effect.gen(function* () {
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
     botTriggerAtMillis: context.botTriggerAtMillis,
+    latestFailingCheckAtMillis: context.latestFailingCheckAtMillis,
     attemptAtMillis,
     noProgress,
     baseDivergence: context.baseDivergence,
@@ -550,15 +552,24 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    const baseDivergence = yield* sourceControl.observe(workspace, [{ id: item.id, title: item.title }]).pipe(
-      Effect.map((signals) => signals.get(item.id)?.baseDivergence ?? "conflict"),
+    const context = item.followUp ?? defaultFollowUp;
+    const refreshed = yield* sourceControl.observe(workspace, [{ id: item.id, title: item.title }]).pipe(
+      Effect.map((signals) => {
+        const observed = signals.get(item.id);
+        if (!observed) return context;
+        return {
+          checks: observed.checks,
+          latestFailingCheckAtMillis: observed.latestFailingCheckAtMillis ?? 0,
+          baseDivergence: observed.baseDivergence,
+        };
+      }),
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("failed to refresh pull request before recording follow-up failure", {
           message: error.message,
-        }).pipe(Effect.map(() => "conflict" as const)),
+        }).pipe(Effect.map(() => context)),
       ),
     );
-    return { ...(item.followUp ?? defaultFollowUp), baseDivergence };
+    return { ...context, ...refreshed };
   });
 
   const postFollowUpSummary = Effect.fn("Executor.postFollowUpSummary")(function* (

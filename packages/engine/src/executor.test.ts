@@ -542,6 +542,7 @@ interface Call {
   readonly baseDivergence?: string;
   readonly humanCommentAtMillis?: number;
   readonly botTriggerAtMillis?: number;
+  readonly latestFailingCheckAtMillis?: number;
 }
 
 class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<Call>>>()(
@@ -622,6 +623,7 @@ function trackerRecorder(
             noProgress: outcome.marker?.noProgress,
             humanCommentAtMillis: outcome.marker?.humanCommentAtMillis,
             botTriggerAtMillis: outcome.marker?.botTriggerAtMillis,
+            latestFailingCheckAtMillis: outcome.marker?.latestFailingCheckAtMillis,
             terminal: outcome.terminal,
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
@@ -1279,7 +1281,7 @@ const conflictingProviderLayer: Layer.Layer<SourceControlProvider | PostedCommen
               checks: "failing" as const,
               latestHumanCommentAtMillis: null,
               latestBotTriggerAtMillis: null,
-              latestFailingCheckAtMillis: null,
+              latestFailingCheckAtMillis: 90,
               observedAtMillis: 1,
               fresh: false,
               baseDivergence: "conflict" as const,
@@ -4547,7 +4549,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
   });
 
-  it.effect("snapshots a conflict that starts before a failed follow-up ends", () => {
+  it.effect("snapshots pull request state before recording a failed follow-up", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
@@ -4555,6 +4557,7 @@ describe("Executor.execute", () => {
 
       const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
       assert.strictEqual(attempt?.baseDivergence, "conflict");
+      assert.strictEqual(attempt?.latestFailingCheckAtMillis, 90);
     }).pipe(
       Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, conflictingProviderLayer)),
     );
