@@ -424,11 +424,16 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
         Stream.runCollect,
       ),
     ),
-    history: Effect.fn("SlackClient.history")((session, channel, _oldestMillis) =>
+    history: Effect.fn("SlackClient.history")((session, channel, oldestMillis) =>
       cursorPages(
         session,
         "conversations.history",
-        { channel, include_all_metadata: "true", limit: "200" },
+        {
+          channel,
+          oldest: (oldestMillis / 1_000).toFixed(3),
+          include_all_metadata: "true",
+          limit: "200",
+        },
         decodeSlack(HistoryResponse),
         (response) => [
           response.messages.map((message) => normalizeMessage(message, channel)),
@@ -651,9 +656,7 @@ const mentionEvents = Effect.fn("SlackSource.mentionEvents")(function* (
       if (channel && message.channel !== channel) return null;
       const hydrated = yield* hydratedThread(client, session, message);
       const cogworkOriginUnknown = message.appId === cogworkAppId && !hydrated.selectedFromThread;
-      if (cogworkOriginUnknown) {
-        return yield* sourceFailure("unavailable", "Slack message origin metadata is unavailable");
-      }
+      if (cogworkOriginUnknown) return null;
       if (isCogworkMessage(hydrated.selected)) return null;
       if (!mentionedUserIds(hydrated.selected.text).includes(session.user)) return null;
       const workContext = yield* resolvedWorkContext(

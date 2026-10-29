@@ -14,7 +14,6 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -227,17 +226,22 @@ describe("Slack Trigger source", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
-  it.effect("refuses a Cogwork mention when its origin metadata cannot be read", () =>
+  it.effect("skips an unverifiable Cogwork mention without stopping other Slack Triggers", () =>
     Effect.gen(function* () {
       const cogworkMention = message({
         ts: "90.000",
         text: "Cogwork says <@U123> should review this",
         appId: "A0CD4UYHKPX",
       });
+      const reacted = message({
+        ts: "91.000",
+        text: "Human review request",
+        reactions: [{ name: "eyes", users: [session.user] }],
+      });
       yield* Ref.set(yield* SlackClientStateRef, {
         search: [cogworkMention],
         history: [],
-        reactions: [],
+        reactions: [reacted],
         replies: [],
         failure: null,
         contextFailure: new SourceFailure({
@@ -249,13 +253,14 @@ describe("Slack Trigger source", () => {
       });
       yield* TestClock.setTime(100_000);
       const source = yield* make;
-      const result = yield* source
-        .observe([subscription("slack.i-am-mentioned", [])])
-        .pipe(Stream.take(1), Stream.runCollect, Effect.result);
+      const events = yield* source
+        .observe([
+          subscription("slack.i-am-mentioned", []),
+          subscription("slack.reaction-added", [{ id: "emoji", value: "eyes" }]),
+        ])
+        .pipe(Stream.take(1), Stream.runCollect);
 
-      assert.isTrue(Result.isFailure(result));
-      if (!Result.isFailure(result)) return;
-      assert.strictEqual(result.failure.reason, "unavailable");
+      assert.strictEqual(events[0]?.revision, "91.000");
     }).pipe(Effect.provide(testLayer)),
   );
 
@@ -606,6 +611,25 @@ describe("Slack Trigger source", () => {
       });
 
       yield* makeHttpClient(http).searchMessages(session, 1_793_275_200_000);
+    }),
+  );
+
+  it.effect("bounds channel history to the catch-up instant", () =>
+    Effect.gen(function* () {
+      const http = HttpClient.make((request, url) => {
+        assert.strictEqual(url.searchParams.get("oldest"), "1793275200.000");
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(JSON.stringify({ ok: true, messages: [], response_metadata: { next_cursor: "" } }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+          ),
+        );
+      });
+
+      yield* makeHttpClient(http).history(session, "C123", 1_793_275_200_000);
     }),
   );
 
