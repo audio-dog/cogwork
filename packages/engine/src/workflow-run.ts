@@ -42,6 +42,28 @@ const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 
+const workContextBody = (admission: TriggerAdmission, workflow: string) => {
+  const payload = admission.event.payload;
+  if (payload?._tag !== "GranolaNote") {
+    return `Scheduled instant ${admission.event.revision} for Workflow ${workflow}.`;
+  }
+  return [
+    `# ${payload.title}`,
+    "",
+    "## Attendees",
+    payload.attendees.join("\n"),
+    "",
+    "## Calendar event",
+    payload.calendarEvent,
+    "",
+    "## Summary",
+    payload.summary,
+    "",
+    "## Transcript",
+    payload.transcript,
+  ].join("\n");
+};
+
 const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
   workflow: admission.subscription.workflow,
   operation,
@@ -92,6 +114,11 @@ export const make = Effect.gen(function* () {
       .park(admission.event.key, { _tag: "MissingOperation" })
       .pipe(Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)));
 
+  const rejectPlan = (admission: TriggerAdmission, reason: string) =>
+    coordination
+      .park(admission.event.key, { _tag: "PlanRejected", reason })
+      .pipe(Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)));
+
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
     const record = yield* workflows.get({ id: admission.subscription.workflow });
     const document = record.publishedCopy;
@@ -100,6 +127,9 @@ export const make = Effect.gen(function* () {
     if (!record.enabled || document === null || trigger === undefined || operation === undefined) {
       yield* coordination.markProcessed(admission.event.key, admission.event.revision);
       return;
+    }
+    if (admission.event.payload?._tag === "GranolaNoteRejected") {
+      return yield* rejectPlan(admission, admission.event.payload.reason);
     }
 
     const catalogResult = yield* workflows.catalog;
@@ -178,7 +208,7 @@ export const make = Effect.gen(function* () {
         reference: { workItem: item, url: null },
         facts: { roles: [], assignees: [], openBlockers: 0, claim, priority: "medium", pr: null },
         prose: {
-          body: `Scheduled instant ${admission.event.revision} for Workflow ${record.id}.`,
+          body: workContextBody(admission, record.id),
           comments: [],
         },
         observation,

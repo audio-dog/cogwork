@@ -164,6 +164,30 @@ const admission: TriggerAdmission = {
   },
 };
 
+const granolaAdmission: TriggerAdmission = {
+  ...admission,
+  event: {
+    ...admission.event,
+    key: {
+      _tag: "GranolaNote",
+      connection: Schema.decodeSync(Schema.String.pipe(Schema.brand("ConnectionId")))(
+        "granola/person@example.com",
+      ),
+      noteId: "note-1",
+    },
+    revision: "2026-10-29T15:00:00.000Z",
+    atMillis: Date.UTC(2026, 9, 29, 15),
+    payload: {
+      _tag: "GranolaNote",
+      title: "Weekly product sync",
+      attendees: ["Taylor <taylor@example.com>", "Ari <ari@example.com>"],
+      calendarEvent: "Weekly product sync · 2026-10-29 09:00 MDT",
+      summary: "Decided to ship the smaller change.",
+      transcript: "Taylor: Ship the smaller change.\nAri: Agreed.",
+    },
+  },
+};
+
 const makeCoordination = () =>
   Effect.gen(function* () {
     const attempts = yield* Ref.make<ReadonlyArray<AttemptRecord>>([]);
@@ -297,6 +321,65 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
   });
 
 describe("WorkflowRun", () => {
+  it.effect("freezes the complete Granola note in Work context", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram([
+        {
+          summary: "Captured",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "Captured" },
+        },
+      ]);
+      yield* runner.execute(granolaAdmission);
+      const [run] = yield* (yield* RunLedger).listRuns(10);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.strictEqual(
+        plan?.workContext.prose.body,
+        [
+          "# Weekly product sync",
+          "",
+          "## Attendees",
+          "Taylor <taylor@example.com>",
+          "Ari <ari@example.com>",
+          "",
+          "## Calendar event",
+          "Weekly product sync · 2026-10-29 09:00 MDT",
+          "",
+          "## Summary",
+          "Decided to ship the smaller change.",
+          "",
+          "## Transcript",
+          "Taylor: Ship the smaller change.\nAri: Agreed.",
+        ].join("\n"),
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("records a missing transcript as a Plan rejection without starting a Run", () =>
+    Effect.gen(function* () {
+      const rejected: TriggerAdmission = {
+        ...granolaAdmission,
+        event: {
+          ...granolaAdmission.event,
+          payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
+        },
+      };
+      const { runner, coordination } = yield* testProgram([]);
+      yield* runner.execute(rejected);
+
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+      assert.deepStrictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason, {
+        _tag: "PlanRejected",
+        reason: "Granola note has no transcript",
+      });
+      assert.strictEqual(yield* Ref.get(coordination.processed), rejected.event.revision);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("writes Notify me output and keeps the Run workspace-free", () =>
     Effect.gen(function* () {
       const { runner } = yield* testProgram([

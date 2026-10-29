@@ -133,6 +133,8 @@ interface GateInput {
   readonly counters: CoordinationCounters;
 }
 
+const blocksGate = (park: ParkRecord | null) => park !== null && park.reason._tag !== "PlanRejected";
+
 const gateRules = [
   {
     when: ({ ledger }: GateInput) => ledger.claim !== null,
@@ -147,7 +149,7 @@ const gateRules = [
     resolve: (): CoordinationGate => ({ _tag: "Quiet" }),
   },
   {
-    when: ({ park }: GateInput) => park !== null,
+    when: ({ park }: GateInput) => blocksGate(park),
     resolve: ({ park }: GateInput): CoordinationGate => ({
       _tag: "Parked",
       reason: (park as ParkRecord).reason,

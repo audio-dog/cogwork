@@ -93,4 +93,24 @@ describe("coordination fold", () => {
     );
     assert.strictEqual(fold(ledger([]), "cogwork").gate(operation)._tag, "Open");
   });
+
+  it("does not block a later revision after a plan rejection", () => {
+    const view = fold(
+      {
+        claim: null,
+        attempts: [],
+        handbacks: [],
+        parks: [
+          {
+            reason: { _tag: "PlanRejected", reason: "Granola note has no transcript" },
+            atMillis: 1,
+          },
+        ],
+        revision: { observed: "2", processed: "1" },
+      },
+      "cogwork",
+    );
+
+    assert.strictEqual(view.gate(operation)._tag, "Open");
+  });
 });
