@@ -132,6 +132,13 @@ export const establishmentOf = Effect.fn("connection.establishment")(function* (
   account: Option.Option<string>,
   source: ConnectionEstablishment["source"],
 ) {
+  if (system === "slack") {
+    return yield* new ConnectionFailure({
+      operation: "parse Connection account",
+      connectionId: null,
+      message: "Slack Connections use browser sign-in; run cogwork login slack",
+    });
+  }
   if (system === "github" && Option.isSome(account)) {
     return yield* new ConnectionFailure({
       operation: "parse Connection account",

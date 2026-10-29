@@ -1,4 +1,4 @@
-import type { ConnectionEstablishment } from "@cogwork/contracts";
+import { type ConnectionEstablishment, ConnectionFailure } from "@cogwork/contracts";
 import { Linear } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -78,6 +78,28 @@ const linearCommand = Command.make("linear", {
   credentials: credentialsFlag,
 }).pipe(Command.withHandler(runLogin));
 
+const runSlackLogin = Effect.fn("login.slack")((options: { readonly socket: string }) =>
+  Effect.gen(function* () {
+    const client = yield* makeDaemonClient();
+    const result = yield* client.LoginSlack();
+    const connection = result.overview.connections.find((item) => item.system === "slack")?.connection;
+    if (!connection) {
+      return yield* new ConnectionFailure({
+        operation: "login Slack",
+        connectionId: null,
+        message: "Slack login completed without a Connection",
+      });
+    }
+    yield* Console.log(`Logged in to Slack team "${connection.account}"; Connection established.`);
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(clientLayer(options.socket)),
+    Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
+  ),
+);
+
+const slackCommand = Command.make("slack", { socket: socketFlag }).pipe(Command.withHandler(runSlackLogin));
+
 const providerFlag = Flag.string("provider").pipe(
   Flag.withDescription("Provider id to store a key for (anthropic, openai, google, openrouter)"),
 );
@@ -105,4 +127,6 @@ const keyCommand = Command.make("key", {
   credentials: credentialsFlag,
 }).pipe(Command.withHandler(runKeyLogin));
 
-export const loginCommand = Command.make("login").pipe(Command.withSubcommands([linearCommand, keyCommand]));
+export const loginCommand = Command.make("login").pipe(
+  Command.withSubcommands([linearCommand, slackCommand, keyCommand]),
+);

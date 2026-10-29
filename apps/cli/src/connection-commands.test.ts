@@ -123,6 +123,14 @@ describe("Connection commands", () => {
     }),
   );
 
+  it.effect("routes Slack to browser sign-in", () =>
+    Effect.gen(function* () {
+      const failure = yield* Effect.flip(establishmentOf("slack", Option.some("T-STUB"), { _tag: "Stored" }));
+
+      assert.strictEqual(failure.message, "Slack Connections use browser sign-in; run cogwork login slack");
+    }),
+  );
+
   it.effect("builds a Granola establishment from a pasted key", () =>
     Effect.gen(function* () {
       const invalid = yield* Effect.flip(

@@ -8,6 +8,7 @@ import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { makeTokenRefresh as makeGranolaTokenRefresh } from "./granola-login";
+import { makeTokenRefresh as makeSlackTokenRefresh } from "./slack-login";
 
 const fileMode = 0o600;
 const directoryMode = 0o700;
@@ -170,6 +171,7 @@ export const layer = (filePath: string) =>
       const refreshers: Record<string, CredentialStore.TokenRefresh> = {
         linear: Linear.OAuth.makeTokenRefresh(client),
         granola: makeGranolaTokenRefresh(client),
+        slack: makeSlackTokenRefresh(client),
       };
       return CredentialStore.make({
         stored,

@@ -407,4 +407,60 @@ describe("file-backed credential store", () => {
       ),
     ),
   );
+
+  it.effect("stores Slack's rotated refresh token", () =>
+    onDisk(({ filePath }) => {
+      const requests: Array<URLSearchParams> = [];
+      const endpoint: typeof globalThis.fetch = (input, init) => {
+        const request = new Request(input, init);
+        return request.text().then((body) => {
+          requests.push(new URLSearchParams(body));
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              access_token: "slack-rotated",
+              refresh_token: "slack-refresh-2",
+              expires_in: 43_200,
+              scope: "channels:history,chat:write",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        });
+      };
+      return Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        yield* file.save({
+          issueTracker: "slack",
+          organization: "T-STUB",
+          actorUserId: "U-STUB",
+          oauthClientId: "slack-client",
+          oauthTokenEndpoint: "https://slack.example/token",
+          token: {
+            accessToken: Redacted.make("slack-stale"),
+            refreshToken: Redacted.make("slack-refresh-1"),
+            expiresAtMillis: 0,
+            scopes: ["channels:history"],
+          },
+        });
+        const store = yield* CredentialStore.CredentialStore;
+        const credential = yield* store.bearerToken({
+          key: "slack/T-STUB",
+          issueTracker: "slack",
+          organization: "T-STUB",
+          tokenEnv: "SLACK_TOKEN",
+          clientCredentials: null,
+          oauthClientId: null,
+        });
+        const saved = (yield* file.load)[0]?.token;
+
+        assert.strictEqual(Redacted.value(credential.token), "slack-rotated");
+        assert.strictEqual(saved?.refreshToken && Redacted.value(saved.refreshToken), "slack-refresh-2");
+        assert.strictEqual(requests[0]?.get("client_secret"), null);
+        assert.strictEqual(requests[0]?.get("refresh_token"), "slack-refresh-1");
+      }).pipe(
+        Effect.provide(Layer.provide(layer(filePath), FetchHttpClient.layer)),
+        Effect.provideService(FetchHttpClient.Fetch, endpoint),
+      );
+    }),
+  );
 });
