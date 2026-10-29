@@ -1,0 +1,108 @@
+packages/engine/src/commands.test.ts
+  s_32b58d670b4dfe::t_117037a6f49ee3 287
+packages/engine/src/issue-tracker-router.test.ts
+  s_32b58d670b4dfe::t_a5a16c220c00d6 8,43
+packages/engine/src/observe.test.ts
+  s_32b58d670b4dfe::t_a5a16c220c00d6 7,56
+packages/engine/src/linear/host.ts
+  s_32b58d670b4dfe::t_9e487fd1ccca03 134
+  s_32b58d670b4dfe::t_abe1f4644dc738 188
+packages/engine/src/issue-tracker-router.ts
+  s_32b58d670b4dfe::t_320e30039ecb83 5,29,31,33,35-36
+packages/engine/src/linear/client.test.ts
+  s_32b58d670b4dfe::t_a7a86329d8fa05 10,914-917
+  s_32b58d670b4dfe::t_e6aef10272f0c8 903,918
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_32b58d670b4dfe::t_2ec182c1f59367 371
+packages/engine/src/issue-tracker.test.ts
+  s_32b58d670b4dfe::t_117037a6f49ee3 6-11,42
+packages/engine/src/issue-workflow-catalog.ts
+  s_32b58d670b4dfe::t_f2a8c05df82169 40-56
+  s_32b58d670b4dfe::t_360159d943c372 7-13,22-37
+  s_32b58d670b4dfe::t_2de1756eb01376 39
+packages/engine/src/workflow-catalog.ts
+  s_32b58d670b4dfe::t_360159d943c372 34-48
+  s_32b58d670b4dfe::t_b3eb9df0c3b753 33
+packages/engine/src/github/host.ts
+  s_32b58d670b4dfe::t_abe1f4644dc738 230
+packages/engine/src/coordination-tracker.ts
+  s_32b58d670b4dfe::t_6abc9f3c71598f 291
+packages/engine/src/engine.test.ts
+  s_32b58d670b4dfe::t_117037a6f49ee3 155
+packages/engine/src/executor.test.ts
+  s_32b58d670b4dfe::t_a5a16c220c00d6 69-74,600
+packages/engine/src/linear/adapter.ts
+  s_32b58d670b4dfe::t_f2a8c05df82169 9-13
+docs/adr/0035-freeze-output-actions-before-writing.md
+  s_32b58d670b4dfe::t_eaee8c063259a0 13,21
+  s_32b58d670b4dfe::t_312cfdba99b73e 22
+packages/engine/src/linear/client.ts
+  s_32b58d670b4dfe::t_fcec84142d0a90 668-673,675-695,852,872
+  s_32b58d670b4dfe::t_1456e67dc07ea7 835
+  s_32b58d670b4dfe::t_abe1f4644dc738 1015
+  s_32b58d670b4dfe::t_55498851f62620 674
+packages/engine/src/github/client.ts
+  s_32b58d670b4dfe::t_abe1f4644dc738 1426
+packages/engine/src/workflow-action-plan.test.ts
+  s_32b58d670b4dfe::t_2cab1aae19cb09 87,100-102,104-107,153-157,248
+  s_32b58d670b4dfe::t_55498851f62620 103
+  s_32b58d670b4dfe::t_6e13c5f2a2c447 246-247,252-253
+  s_32b58d670b4dfe::t_64549f974f2afd 48-52,259-304
+  s_32b58d670b4dfe::t_27fe736e597770 199
+packages/contracts/src/workflow.ts
+  s_32b58d670b4dfe::t_e003f89279be51 4-10,15,84-90,93-96,133,386,390-394,398-401,420-427
+  s_32b58d670b4dfe::t_50b7bf7de1b2df 402-403,408-413,415-418
+  s_32b58d670b4dfe::t_4b91c66ecd461a 414
+packages/engine/src/workflow-action-plan.ts
+  s_32b58d670b4dfe::t_477e7f5af6af17 5,97,383,409,425,428-429,435-445,449-453,457,462,465,471-472,474-479,481
+  s_32b58d670b4dfe::t_546f0f66f4eba0 1,23-24,39,47,54,57,59,64,66,69-83,85-95,98,100,103-107,112,114-118,120,126,131,139-140,143-144,152,154,166,168,171-174,202,218-219,234,245,252,259-261,263-268,285
+  s_32b58d670b4dfe::t_56987153f95524 431
+  s_32b58d670b4dfe::t_0f77f62768dea4 432-434
+  s_32b58d670b4dfe::t_5dd07cd48c3166 258
+  s_32b58d670b4dfe::t_65d8c102685438 262
+  s_32b58d670b4dfe::t_6f0580cfd26977 303-314,331-332
+  s_32b58d670b4dfe::t_44a9effd9f9e1a 430
+  s_32b58d670b4dfe::t_f70f0af14ff01c 246,248,250
+  s_32b58d670b4dfe::t_55498851f62620 65,84,247,251
+  s_32b58d670b4dfe::t_8b8210858e259d 96
+  s_32b58d670b4dfe::t_0b8609159ad10e 249
+packages/contracts/src/workflow.test.ts
+  s_32b58d670b4dfe::t_76a4927f22874b 32,587,595,605,611
+  s_32b58d670b4dfe::t_8cd27328f0e250 612-613,616
+packages/engine/src/linear/linear.test.ts
+  s_32b58d670b4dfe::t_d3a4123498784d 24,394
+packages/engine/src/workflow-run.ts
+  s_32b58d670b4dfe::t_d0b328ef73c2fe 69-70,72-77,169,178,182-193,195-201,206,208-209,276,340-342,373
+  s_32b58d670b4dfe::t_a01a45749f6667 30,57,67,71
+  s_32b58d670b4dfe::t_c04fdf04d566bb 68
+packages/engine/src/event-publisher.test.ts
+  s_32b58d670b4dfe::t_a5a16c220c00d6 50-55,316
+packages/engine/src/recovery.test.ts
+  s_32b58d670b4dfe::t_a5a16c220c00d6 39,348
+packages/engine/src/github/adapter.ts
+  s_32b58d670b4dfe::t_f2a8c05df82169 9-13
+packages/engine/src/github/github.test.ts
+  s_32b58d670b4dfe::t_d3a4123498784d 32,513
+packages/engine/src/issue-tracker.ts
+  s_32b58d670b4dfe::t_6abc9f3c71598f 152,223
+  s_32b58d670b4dfe::t_94b2b8e7d47863 114-151,153-159,226
+packages/engine/src/control-store-schema.ts
+  s_32b58d670b4dfe::t_7a4f15581e8ce4 235
+  s_32b58d670b4dfe::t_56536fc25ad5c0 115-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9714b3b1ca7d57c8b9cf62ba481c371f99f097f5",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
