@@ -218,6 +218,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
               atMillis: comment.atMillis,
               entry: reviewCommentKey,
               workspace: workspace.config.name,
+              target: { workflow: subscription.workflow, trigger: subscription.trigger },
               prose,
             }) satisfies TriggerEvent,
         );
@@ -236,6 +237,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             atMillis: comment.atMillis,
             entry: botFindingKey,
             workspace: workspace.config.name,
+            target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "bot", value: bot ?? "" }],
             prose,
           }) satisfies TriggerEvent,

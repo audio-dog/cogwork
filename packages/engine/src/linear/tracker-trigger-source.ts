@@ -116,6 +116,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
             atMillis: comment.createdAtMillis,
             entry: newIssueCommentKey,
             workspace: workspace.config.name,
+            target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
             prose: proseOf(prose.body, prose.comments),
           }) satisfies TriggerEvent,

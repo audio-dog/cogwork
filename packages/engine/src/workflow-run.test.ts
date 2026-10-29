@@ -168,6 +168,7 @@ const makeCoordination = () =>
   Effect.gen(function* () {
     const attempts = yield* Ref.make<ReadonlyArray<AttemptRecord>>([]);
     const parks = yield* Ref.make<ReadonlyArray<ParkRecord>>([]);
+    const parkedRefs = yield* Ref.make<ReadonlyArray<Parameters<CoordinationService["park"]>[0]>>([]);
     const processed = yield* Ref.make<string | null>(null);
     const read = () =>
       Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed)]).pipe(
@@ -195,17 +196,21 @@ const makeCoordination = () =>
             ...current,
             AttemptRecord.make({ ...input, atMillis: current.length + 1 }),
           ]).pipe(Effect.andThen(read())),
-        park: (_ref, reason: ParkReason) =>
+        park: (ref, reason: ParkReason) =>
           Ref.update(parks, (current) => [
             ...current,
             ParkRecord.make({ reason, atMillis: current.length + 1 }),
-          ]).pipe(Effect.andThen(read())),
+          ]).pipe(
+            Effect.andThen(Ref.update(parkedRefs, (current) => [...current, ref])),
+            Effect.andThen(read()),
+          ),
         handBack: () => Effect.die("unused"),
         observe: () => Effect.succeed("moved"),
         markProcessed: (_ref, revision) => Ref.set(processed, revision),
       } satisfies CoordinationService,
       attempts,
       parks,
+      parkedRefs,
       processed,
     };
   });
@@ -393,6 +398,7 @@ describe("WorkflowRun", () => {
 
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
       assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "MissingOperation");
+      assert.strictEqual(String((yield* Ref.get(coordination.parkedRefs)).at(-1)?._tag), "WorkflowAdmission");
       assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );

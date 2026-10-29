@@ -16,6 +16,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import type { RegisteredWorkspace } from "../projector";
+import { matchTriggerEvent } from "../trigger-observation";
 import type { TriggerSubscription } from "../trigger-source";
 import { GitHubClient, type RawPull } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
@@ -49,6 +50,7 @@ const botWorkspace: RegisteredWorkspace = {
 const botRegistryState = { workspaces: [botWorkspace], failures: [] };
 const workflow = Schema.decodeSync(WorkflowId)("coding");
 const operation = Schema.decodeSync(WorkflowNodeId)("follow-up");
+const reviewTrigger = Schema.decodeSync(WorkflowNodeId)("review");
 const linkedIssueId = Schema.decodeSync(WorkItemId)("#7");
 const firstIssueId = Schema.decodeSync(WorkItemId)("#1");
 const secondIssueId = Schema.decodeSync(WorkItemId)("#2");
@@ -135,6 +137,8 @@ const pullClientLayer = (listedPulls = pulls) =>
         },
       ]),
   });
+
+const targetOf = (event: object) => ("target" in event ? event.target : undefined);
 
 describe("GitHub Trigger sources", () => {
   it.effect("emits current labels and keeps person-comment revisions distinct by label", () =>
@@ -341,6 +345,57 @@ describe("GitHub Trigger sources", () => {
     ),
   );
 
+  it.effect("keeps catch-up scoped to the Trigger that accepted the comment", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(1_000_000);
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const wide = subscription(
+        "github.new-comment-from-person",
+        "wide-comment",
+        [
+          { id: "label", value: "needs-triage" },
+          { id: "catch-up-at-most", value: "7" },
+        ],
+        0,
+      );
+      const live = subscription(
+        "github.new-comment-from-person",
+        "live-comment",
+        [
+          { id: "label", value: "needs-triage" },
+          { id: "catch-up-at-most", value: "0" },
+        ],
+        0,
+      );
+      const events = yield* source.observe([wide, live]).pipe(Stream.take(1), Stream.runCollect);
+
+      assert.deepStrictEqual(
+        matchTriggerEvent([wide, live], events[0] ?? assert.fail("missing comment event")).map(
+          ({ trigger }) => trigger,
+        ),
+        [wide.trigger],
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () => Effect.succeed([issue(1)]),
+          listIssueEvents: () => Effect.succeed([]),
+          listTriggerComments: () =>
+            Effect.succeed([
+              {
+                id: 1,
+                authorLogin: "maintainer",
+                authorAssociation: "MEMBER",
+                body: "caught up",
+                createdAtMillis: 100_000,
+              },
+            ]),
+        }),
+      ),
+    ),
+  );
+
   it.effect("keys pull conditions by head and base revisions", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;
@@ -490,6 +545,10 @@ describe("GitHub Trigger sources", () => {
 
       assert.strictEqual(events[0]?.revision, "review-88");
       assert.strictEqual(events[0]?.prose?.comments[0]?.body, "Review body");
+      assert.deepStrictEqual(events[0] ? targetOf(events[0]) : undefined, {
+        workflow,
+        trigger: reviewTrigger,
+      });
     }).pipe(Effect.provide(pullClientLayer())),
   );
 

@@ -20,13 +20,14 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import type { EligibleWork } from "./classify";
+import { coordinationKeyOf } from "./coordination";
 import { Executor } from "./executor";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { day } from "./time";
-import { type TriggerAdmission, TriggerObservation } from "./trigger-observation";
+import { type TriggerAdmission, TriggerObservation, workflowAdmissionRefOf } from "./trigger-observation";
 import { WorkflowRun } from "./workflow-run";
 import { branchName, ticketSlug } from "./worktree";
 
@@ -123,7 +124,8 @@ type Schedulable = Candidate | WorkflowCandidate;
 const isWorkflowCandidate = (candidate: Schedulable): candidate is WorkflowCandidate =>
   "admission" in candidate;
 
-const workflowKeyFor = (admission: TriggerAdmission) => `workflow:${keyOf(admission.event.key)}`;
+const workflowKeyFor = (admission: TriggerAdmission) =>
+  `workflow:${coordinationKeyOf(workflowAdmissionRefOf(admission))}`;
 
 const workflowCandidateOf = (admission: TriggerAdmission): WorkflowCandidate => ({
   admission,

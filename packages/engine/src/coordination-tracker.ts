@@ -12,7 +12,6 @@ import {
   type RunPlanWorkContextProse,
   type TriageRole,
   type WorkItemId,
-  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -197,9 +196,9 @@ export const makeTrackerCoordination = <Ref, CommentId>(
   };
   const issueRef = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
   const invalidRecordKey = keyOf(issueRef);
-  const matches = (ref: WorkItemRef) =>
+  const matches = (ref: Coordination.CoordinationRef) =>
     ref._tag === "Issue" && ref.workspace === issueRef.workspace && ref.id === issueRef.id;
-  const target = Effect.fn("TrackerCoordination.target")(function* (ref: WorkItemRef) {
+  const target = Effect.fn("TrackerCoordination.target")(function* (ref: Coordination.CoordinationRef) {
     if (!matches(ref)) {
       return yield* trackerAuthorityError("item is not held by this tracker authority", "not-this-authority");
     }
@@ -212,7 +211,7 @@ export const makeTrackerCoordination = <Ref, CommentId>(
       state.ledger = next;
     });
   const authority = {
-    read: (ref: WorkItemRef) => {
+    read: (ref: Coordination.CoordinationRef) => {
       if (!matches(ref)) {
         return Effect.fail(
           trackerAuthorityError("item is not held by this tracker authority", "not-this-authority"),
@@ -233,7 +232,7 @@ export const makeTrackerCoordination = <Ref, CommentId>(
         Effect.map(() => state.ledger),
       );
     },
-    claim: (ref: WorkItemRef, record: Claim) =>
+    claim: (ref: Coordination.CoordinationRef, record: Claim) =>
       Effect.gen(function* () {
         if (state.ledger.claim !== null) {
           return yield* trackerAuthorityError("item already has an active Claim", "claim-held");
@@ -244,7 +243,7 @@ export const makeTrackerCoordination = <Ref, CommentId>(
           .pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
         yield* update({ ...state.ledger, claim: record, latestClaimAtMillis: record.claimedAtMillis });
       }),
-    release: (ref: WorkItemRef, record: Claim) =>
+    release: (ref: Coordination.CoordinationRef, record: Claim) =>
       Effect.gen(function* () {
         if (state.ledger.claim === null || !claimsMatch(state.ledger.claim, record)) {
           return yield* trackerAuthorityError("active Claim does not match expected Claim", "stale-claim");
@@ -253,7 +252,7 @@ export const makeTrackerCoordination = <Ref, CommentId>(
         yield* records.release(native).pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
         yield* update({ ...state.ledger, claim: null });
       }),
-    recordAttempt: (ref: WorkItemRef, record: AttemptRecord, reason?: string) =>
+    recordAttempt: (ref: Coordination.CoordinationRef, record: AttemptRecord, reason?: string) =>
       Effect.gen(function* () {
         const native = yield* target(ref);
         yield* records
@@ -261,7 +260,7 @@ export const makeTrackerCoordination = <Ref, CommentId>(
           .pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
         yield* update({ ...state.ledger, attempts: [...state.ledger.attempts, record] });
       }),
-    park: (ref: WorkItemRef, record: ParkRecord) =>
+    park: (ref: Coordination.CoordinationRef, record: ParkRecord) =>
       Effect.gen(function* () {
         const native = yield* target(ref);
         yield* Coordination.upsertCoordination(host.codec, host.comments(native), {
@@ -269,7 +268,7 @@ export const makeTrackerCoordination = <Ref, CommentId>(
         }).pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
         yield* update({ ...state.ledger, parks: [...state.ledger.parks, record] });
       }),
-    handBack: (ref: WorkItemRef, record: HandbackRecord) =>
+    handBack: (ref: Coordination.CoordinationRef, record: HandbackRecord) =>
       Effect.gen(function* () {
         const native = yield* target(ref);
         yield* records
@@ -277,14 +276,14 @@ export const makeTrackerCoordination = <Ref, CommentId>(
           .pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
         yield* update({ ...state.ledger, handbacks: [...state.ledger.handbacks, record] });
       }),
-    observe: (_ref: WorkItemRef, _revision: string, _cause: Cause) =>
+    observe: (_ref: Coordination.CoordinationRef, _revision: string, _cause: Cause) =>
       Effect.fail(trackerAuthorityError("tracker authority owns source revisions", "not-this-authority")),
-    markProcessed: (_ref: WorkItemRef, _revision: string) =>
+    markProcessed: (_ref: Coordination.CoordinationRef, _revision: string) =>
       Effect.fail(trackerAuthorityError("tracker authority owns source revisions", "not-this-authority")),
   };
   const control = {
     ...authority,
-    read: (_ref: WorkItemRef) =>
+    read: (_ref: Coordination.CoordinationRef) =>
       Effect.fail(trackerAuthorityError("engine-minted item requires Control store", "not-this-authority")),
   };
   return Coordination.makeCoordination(authority, control, claimant);

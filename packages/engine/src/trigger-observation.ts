@@ -23,7 +23,7 @@ import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { matchesScheduledInstant } from "./clock-source";
 import { ControlStore } from "./control-store";
-import { Coordination } from "./coordination";
+import { Coordination, type WorkflowAdmissionRef } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker } from "./issue-tracker";
 import { WorkspaceRegistry } from "./registry";
@@ -42,6 +42,14 @@ export const TriggerAdmission = Schema.Struct({
   lineage: Lineage,
 });
 export type TriggerAdmission = typeof TriggerAdmission.Type;
+
+export const workflowAdmissionRefOf = (admission: TriggerAdmission): WorkflowAdmissionRef => ({
+  _tag: "WorkflowAdmission",
+  item: keyOf(admission.event.key),
+  sourceRevision: admission.event.revision,
+  workflow: admission.subscription.workflow,
+  trigger: admission.subscription.trigger,
+});
 
 export class TriggerObservationStoreError extends Schema.TaggedError<TriggerObservationStoreError>()(
   "TriggerObservationStoreError",
@@ -252,6 +260,9 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
     const sameWorkspace = event.workspace === null || subscription.workspaces.includes(event.workspace);
     const sameSchedule =
       event.key._tag !== "ScheduleInstant" || matchesScheduledInstant(subscription, event.key.instantMillis);
+    const sameTarget =
+      event.target === undefined ||
+      (event.target.workflow === subscription.workflow && event.target.trigger === subscription.trigger);
     const sameParameters = [...observed].every(([id, value]) =>
       subscription.parameters.some((parameter) => parameter.id === id && parameter.value === value),
     );
@@ -260,6 +271,7 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
       sameScheduleWorkflow &&
       sameWorkspace &&
       sameSchedule &&
+      sameTarget &&
       sameParameters
     );
   });
@@ -424,9 +436,15 @@ export const make = Effect.gen(function* () {
       (subscription) => ({ event, subscription, lineage: lineageOf(event) }) satisfies TriggerAdmission,
     );
     yield* Effect.forEach(admissions, store.put, { discard: true });
-    const delivery = yield* coordination.observe(event.key, event.revision, event.cause);
-    if (delivery === "redelivered") return;
-    yield* Effect.forEach(admissions, (admission) => PubSub.publish(changes, admission), { discard: true });
+    const deliveries = yield* Effect.forEach(admissions, (admission) =>
+      coordination
+        .observe(workflowAdmissionRefOf(admission), event.revision, event.cause)
+        .pipe(Effect.map((delivery) => ({ admission, delivery }))),
+    );
+    const moved = deliveries.filter(({ delivery }) => delivery === "moved");
+    yield* Effect.forEach(moved, ({ admission }) => PubSub.publish(changes, admission), {
+      discard: true,
+    });
   });
 
   const observe = (
@@ -519,7 +537,7 @@ export const make = Effect.gen(function* () {
       Effect.flatMap(([listed, current]) => {
         const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
         return Effect.forEach(current, (admission) =>
-          coordination.read(admission.event.key).pipe(
+          coordination.read(workflowAdmissionRefOf(admission)).pipe(
             Effect.map((view) => ({
               admission,
               enabled: enabled.has(admission.subscription.workflow),

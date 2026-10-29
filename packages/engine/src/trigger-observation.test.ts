@@ -119,6 +119,18 @@ const selectedDocument = Schema.decodeSync(WorkflowDocument)({
   ...document,
   workspaces: { _tag: "Listed", workspaces: [selectedWorkspaceId] },
 });
+const siblingSelectedDocument = Schema.decodeSync(WorkflowDocument)({
+  ...selectedDocument,
+  triggers: [
+    ...selectedDocument.triggers,
+    {
+      id: siblingTriggerId,
+      entry,
+      parameters: scheduleParameters,
+      start: Schema.decodeSync(WorkflowNodeId)("summarize"),
+    },
+  ],
+});
 const selectedIssueId = Schema.decodeSync(WorkItemId)("#1");
 const nextSelectedIssueId = Schema.decodeSync(WorkItemId)("#2");
 const selectedEvent = {
@@ -149,11 +161,14 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
     readonly observedItems?: ReadonlyArray<TrackerItem>;
     readonly exactAssignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
     readonly store?: TriggerObservationStoreService;
+    readonly publishedCopy?: WorkflowDocument;
   } = {},
 ) {
-  const current = yield* Ref.make(record(true, selectedDocument));
-  const processed = yield* Ref.make<string | null>(null);
-  const observed = yield* Ref.make<ReadonlySet<string>>(new Set());
+  const current = yield* Ref.make(record(true, options.publishedCopy ?? selectedDocument));
+  const processed = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+  const observed = yield* Ref.make<ReadonlyMap<string, Parameters<CoordinationService["read"]>[0]>>(
+    new Map(),
+  );
   const trackerCalls = yield* Ref.make(0);
   const exactAssigneeCalls = yield* Ref.make(0);
   const scripted = yield* makeScriptedSource("clock", clockEntries);
@@ -174,9 +189,10 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
             Ref.update(exactAssigneeCalls, (count) => count + 1).pipe(Effect.andThen(exactAssignees(itemId))),
         }),
   };
+  const coordination = coordinationService(processed, observed);
   const observation = yield* make.pipe(
     Effect.provideService(Workflows, workflowService(current)),
-    Effect.provideService(Coordination, coordinationService(processed, observed)),
+    Effect.provideService(Coordination, coordination),
     Effect.provideService(TriggerSources, [scripted.source]),
     Effect.provideService(TriggerObservationStore, store),
     Effect.provideService(DaemonEventBus, bus),
@@ -188,7 +204,7 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
   );
   yield* Effect.yieldNow;
   yield* observation.refresh;
-  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed };
+  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed, coordination };
 });
 
 const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => ({
@@ -206,33 +222,37 @@ const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => 
 });
 
 const coordinationService = (
-  processed: Ref.Ref<string | null>,
-  observed: Ref.Ref<ReadonlySet<string>>,
+  processed: Ref.Ref<ReadonlyMap<string, string>>,
+  observed: Ref.Ref<ReadonlyMap<string, Parameters<CoordinationService["read"]>[0]>>,
 ): CoordinationService => ({
   fold,
-  read: () =>
-    Effect.map(Ref.get(processed), (revision) =>
-      fold(
+  read: (ref) =>
+    Effect.map(Ref.get(processed), (revisions) => {
+      const processedRevision = revisions.get(JSON.stringify(ref)) ?? null;
+      return fold(
         {
           claim: null,
           attempts: [],
           handbacks: [],
           parks: [],
-          revision: { observed: event.revision, processed: revision },
+          revision: { observed: processedRevision ?? event.revision, processed: processedRevision },
         },
         "cogwork",
-      ),
-    ),
+      );
+    }),
   claim: () => Effect.die("unused"),
   release: () => Effect.die("unused"),
   recordAttempt: () => Effect.die("unused"),
   park: () => Effect.die("unused"),
   handBack: () => Effect.die("unused"),
-  observe: (_ref, revision) =>
+  observe: (ref, revision) =>
     Ref.modify(observed, (current) =>
-      current.has(revision) ? ["redelivered", current] : ["moved", new Set([...current, revision])],
+      current.has(`${JSON.stringify(ref)}:${revision}`)
+        ? ["redelivered", current]
+        : ["moved", new Map(current).set(`${JSON.stringify(ref)}:${revision}`, ref)],
     ),
-  markProcessed: (_ref, revision) => Ref.set(processed, revision),
+  markProcessed: (ref, revision) =>
+    Ref.update(processed, (current) => new Map(current).set(JSON.stringify(ref), revision)),
 });
 
 describe("TriggerObservation", () => {
@@ -267,8 +287,10 @@ describe("TriggerObservation", () => {
   it.effect("admits once and stops the source after switch-off", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
-      const processed = yield* Ref.make<string | null>(null);
-      const observed = yield* Ref.make<ReadonlySet<string>>(new Set());
+      const processed = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+      const observed = yield* Ref.make<ReadonlyMap<string, Parameters<CoordinationService["read"]>[0]>>(
+        new Map(),
+      );
       const scripted = yield* makeScriptedSource("clock", clockEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
@@ -482,6 +504,30 @@ describe("TriggerObservation", () => {
         [triggerId, siblingTriggerId].toSorted(),
       );
     }),
+  );
+
+  it.effect("keeps sibling Triggers eligible after one processes the source revision", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, observed, coordination } = yield* makeWorkspaceObservation({
+        publishedCopy: siblingSelectedDocument,
+      });
+      const changed = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(selectedEvent);
+      yield* Fiber.join(changed);
+      const [firstRef] = [...(yield* Ref.get(observed)).values()];
+      assert.isDefined(firstRef);
+      if (!firstRef) return;
+      yield* coordination.markProcessed(firstRef, selectedEvent.revision);
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ subscription: current }) => current.trigger),
+        [siblingTriggerId],
+      );
+    }).pipe(Effect.scoped),
   );
 });
 

@@ -570,6 +570,35 @@ describe("Scheduler.tick", () => {
     ),
   );
 
+  it.effect("reserves sibling Trigger admissions independently", () => {
+    const first = workflowAdmission(1_000);
+    const sibling = {
+      ...first,
+      subscription: {
+        ...first.subscription,
+        trigger: Schema.decodeSync(WorkflowNodeId)("sibling-trigger"),
+      },
+    };
+    return Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+
+      assert.strictEqual(yield* scheduler.tick(), 2);
+      yield* scheduler.awaitIdle;
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 2, perWorkspaceLimit: 1, dailyBudget: 2 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [first, sibling],
+          },
+        ),
+      ),
+    );
+  });
+
   it.effect("isolates a crashing Workflow Run from other scheduled work", () =>
     Effect.gen(function* () {
       const scheduler = yield* Scheduler.Scheduler;

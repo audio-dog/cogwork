@@ -85,6 +85,10 @@ const readTriggerProse = vi.fn(() =>
   }),
 );
 const readProse = vi.fn(() => readTriggerProse());
+const targetTriggerOf = (event: object) => {
+  if (!("target" in event) || typeof event.target !== "object" || event.target === null) return undefined;
+  return "trigger" in event.target ? event.target.trigger : undefined;
+};
 
 it.effect("reads Linear updates and keeps comment revisions distinct by label", () =>
   Effect.gen(function* () {
@@ -98,11 +102,11 @@ it.effect("reads Linear updates and keeps comment revisions distinct by label", 
       .pipe(Stream.take(3), Stream.runCollect);
 
     assert.deepStrictEqual(
-      [...events].map(({ revision, cause }) => [revision, cause._tag]),
+      [...events].map((event) => [event.revision, event.cause._tag, targetTriggerOf(event)]),
       [
-        ["comment:new:label:needs-triage", "Person"],
-        ["comment:new:label:ready-for-human", "Person"],
-        ["label:needs-triage:3000", "Unknown"],
+        ["comment:new:label:needs-triage", "Person", "comment"],
+        ["comment:new:label:ready-for-human", "Person", "ready-comment"],
+        ["label:needs-triage:3000", "Unknown", undefined],
       ],
     );
     assert.isTrue(observeIssues.mock.calls[0]?.[4]);

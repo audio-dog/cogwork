@@ -96,7 +96,7 @@ interface ProviderPollState extends ProviderPollCheckpoint {
 const batchSize = 50;
 
 const eventIdentity = (event: TriggerEvent) =>
-  `${keyOf(event.key)}:${event.entry}:${event.workspace}:${event.revision}:${JSON.stringify(event.parameters ?? [])}`;
+  `${keyOf(event.key)}:${event.entry}:${event.workspace}:${event.revision}:${JSON.stringify(event.target ?? null)}:${JSON.stringify(event.parameters ?? [])}`;
 
 const uniqueEvents = (events: ReadonlyArray<TriggerEvent>) =>
   [...new Map(events.map((event) => [eventIdentity(event), event])).values()].sort(

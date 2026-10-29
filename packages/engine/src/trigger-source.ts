@@ -36,6 +36,12 @@ export const TriggerEvent = Schema.Struct({
   atMillis: Schema.Natural,
   entry: WorkflowCatalogKey,
   workspace: Schema.NullOr(WorkspaceId),
+  target: Schema.optional(
+    Schema.Struct({
+      workflow: WorkflowId,
+      trigger: WorkflowNodeId,
+    }),
+  ),
   parameters: Schema.optional(Schema.Array(WorkflowParameterValue)),
   prose: Schema.optional(
     Schema.Struct({

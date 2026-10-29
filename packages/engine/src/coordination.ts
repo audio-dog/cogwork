@@ -6,6 +6,7 @@ import {
   type Claim as ClaimType,
   HandbackRecord,
   type HandbackRecord as HandbackRecordType,
+  keyOf,
   type LifecycleStage,
   type Lineage,
   type OperationKey,
@@ -13,6 +14,7 @@ import {
   type ParkRecord,
   ParkRecord as ParkRecordSchema,
   type SourceRevision,
+  WorkItemKey,
   type WorkItemRef,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
@@ -101,6 +103,25 @@ export interface CoordinationView {
   readonly counters: (key: OperationKey) => CoordinationCounters;
   readonly gate: (key: OperationKey) => CoordinationGate;
 }
+
+export interface WorkflowAdmissionRef {
+  readonly _tag: "WorkflowAdmission";
+  readonly item: WorkItemKey;
+  readonly sourceRevision: string;
+  readonly workflow: string;
+  readonly trigger: string;
+}
+
+export type CoordinationRef = WorkItemRef | WorkflowAdmissionRef;
+
+const segment = (value: string) => encodeURIComponent(value);
+
+export const coordinationKeyOf = (ref: CoordinationRef) =>
+  ref._tag === "WorkflowAdmission"
+    ? WorkItemKey.make(
+        `workflow-admission:${segment(ref.item)}:${segment(ref.sourceRevision)}:${segment(ref.workflow)}:${segment(ref.trigger)}`,
+      )
+    : keyOf(ref);
 
 const sameOperation = (left: OperationKey, right: OperationKey) =>
   left.workflow === right.workflow && left.operation === right.operation;
@@ -212,34 +233,37 @@ export class CoordinationError extends Schema.TaggedError<CoordinationError>()("
 }) {}
 
 interface CoordinationAuthority {
-  readonly read: (ref: WorkItemRef) => Effect.Effect<CoordinationLedger, CoordinationError>;
-  readonly claim: (ref: WorkItemRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
-  readonly release: (ref: WorkItemRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
+  readonly read: (ref: CoordinationRef) => Effect.Effect<CoordinationLedger, CoordinationError>;
+  readonly claim: (ref: CoordinationRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
+  readonly release: (ref: CoordinationRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
   readonly recordAttempt: (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     attempt: AttemptRecord,
     reason?: string,
   ) => Effect.Effect<void, CoordinationError>;
-  readonly park: (ref: WorkItemRef, park: ParkRecord) => Effect.Effect<void, CoordinationError>;
-  readonly handBack: (ref: WorkItemRef, record: HandbackRecordType) => Effect.Effect<void, CoordinationError>;
+  readonly park: (ref: CoordinationRef, park: ParkRecord) => Effect.Effect<void, CoordinationError>;
+  readonly handBack: (
+    ref: CoordinationRef,
+    record: HandbackRecordType,
+  ) => Effect.Effect<void, CoordinationError>;
   readonly observe: (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     revision: string,
     cause: Cause,
   ) => Effect.Effect<"moved" | "redelivered", CoordinationError>;
-  readonly markProcessed: (ref: WorkItemRef, revision: string) => Effect.Effect<void, CoordinationError>;
+  readonly markProcessed: (ref: CoordinationRef, revision: string) => Effect.Effect<void, CoordinationError>;
 }
 
 export interface CoordinationService {
   readonly fold: typeof fold;
-  readonly read: (ref: WorkItemRef) => Effect.Effect<CoordinationView, CoordinationError>;
+  readonly read: (ref: CoordinationRef) => Effect.Effect<CoordinationView, CoordinationError>;
   readonly claim: (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     input: { readonly operation: OperationKey; readonly lineage: Lineage },
   ) => Effect.Effect<ClaimType, CoordinationError>;
-  readonly release: (ref: WorkItemRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
+  readonly release: (ref: CoordinationRef, claim: ClaimType) => Effect.Effect<void, CoordinationError>;
   readonly recordAttempt: (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     input: {
       readonly operation: OperationKey;
       readonly outcome: AttemptOutcome;
@@ -247,20 +271,23 @@ export interface CoordinationService {
       readonly reason?: string;
     },
   ) => Effect.Effect<CoordinationView, CoordinationError>;
-  readonly park: (ref: WorkItemRef, reason: ParkReason) => Effect.Effect<CoordinationView, CoordinationError>;
+  readonly park: (
+    ref: CoordinationRef,
+    reason: ParkReason,
+  ) => Effect.Effect<CoordinationView, CoordinationError>;
   readonly handBack: (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     input: { readonly by: string; readonly note?: string },
   ) => Effect.Effect<CoordinationView, CoordinationError>;
   readonly observe: (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     revision: string,
     cause: Cause,
   ) => Effect.Effect<"moved" | "redelivered", CoordinationError>;
-  readonly markProcessed: (ref: WorkItemRef, revision: string) => Effect.Effect<void, CoordinationError>;
+  readonly markProcessed: (ref: CoordinationRef, revision: string) => Effect.Effect<void, CoordinationError>;
 }
 
-type AuthorityByTag = { [Tag in WorkItemRef["_tag"]]: CoordinationAuthority };
+type AuthorityByTag = { [Tag in CoordinationRef["_tag"]]: CoordinationAuthority };
 
 export const makeCoordination = (
   tracker: CoordinationAuthority,
@@ -275,14 +302,15 @@ export const makeCoordination = (
     SlackConversation: control,
     ScheduleInstant: control,
     FanOutChild: control,
+    WorkflowAdmission: control,
   } satisfies AuthorityByTag;
-  const authority = (ref: WorkItemRef) => authorities[ref._tag];
-  const read = (ref: WorkItemRef) =>
+  const authority = (ref: CoordinationRef) => authorities[ref._tag];
+  const read = (ref: CoordinationRef) =>
     authority(ref)
       .read(ref)
       .pipe(Effect.map((ledger) => fold(ledger, claimant)));
   const claim = Effect.fn("Coordination.claim")(function* (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     input: { readonly operation: OperationKey; readonly lineage: Lineage },
   ) {
     const claimedAtMillis = yield* Clock.currentTimeMillis;
@@ -291,7 +319,7 @@ export const makeCoordination = (
     return record;
   });
   const recordAttempt = Effect.fn("Coordination.recordAttempt")(function* (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     input: {
       readonly operation: OperationKey;
       readonly outcome: AttemptOutcome;
@@ -309,12 +337,12 @@ export const makeCoordination = (
     yield* authority(ref).recordAttempt(ref, attempt, input.reason);
     return yield* read(ref);
   });
-  const park = Effect.fn("Coordination.park")(function* (ref: WorkItemRef, reason: ParkReason) {
+  const park = Effect.fn("Coordination.park")(function* (ref: CoordinationRef, reason: ParkReason) {
     yield* authority(ref).park(ref, { reason, atMillis: yield* Clock.currentTimeMillis });
     return yield* read(ref);
   });
   const handBack = Effect.fn("Coordination.handBack")(function* (
-    ref: WorkItemRef,
+    ref: CoordinationRef,
     input: { readonly by: string; readonly note?: string },
   ) {
     yield* authority(ref).handBack(ref, {

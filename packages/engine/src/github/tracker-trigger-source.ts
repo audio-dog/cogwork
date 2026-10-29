@@ -115,6 +115,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
             atMillis: comment.createdAtMillis,
             entry: newIssueCommentKey,
             workspace: workspace.config.name,
+            target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
             prose: proseOf(issue, comments),
           }) satisfies TriggerEvent,
