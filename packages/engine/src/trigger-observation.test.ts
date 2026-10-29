@@ -36,6 +36,7 @@ import {
   matchTriggerEvent,
   type TriggerAdmission,
   TriggerObservationStore,
+  TriggerObservationStoreError,
 } from "./trigger-observation";
 import { TriggerSources, type TriggerSubscription } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
@@ -247,6 +248,62 @@ describe("TriggerObservation", () => {
 
       assert.deepStrictEqual(yield* observation.eligible, []);
       assert.deepStrictEqual(yield* scripted.subscriptions, []);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("retries a redelivered revision after its admission write fails", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
+      const scripted = yield* makeScriptedSource("clock", clockEntries);
+      const baseStore = yield* makeMemoryTriggerObservationStore;
+      const putAttempts = yield* Ref.make(0);
+      const failedPut = yield* Deferred.make<void>();
+      const store = {
+        ...baseStore,
+        putAll: (admissions: ReadonlyArray<TriggerAdmission>) =>
+          Ref.getAndUpdate(putAttempts, (count) => count + 1).pipe(
+            Effect.flatMap((attempt) =>
+              attempt === 0
+                ? Deferred.succeed(failedPut, undefined).pipe(
+                    Effect.andThen(
+                      Effect.fail(new TriggerObservationStoreError({ message: "first write failed" })),
+                    ),
+                  )
+                : baseStore.putAll(admissions),
+            ),
+          ),
+      };
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, currentRevision)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      yield* scripted.emit(event);
+      yield* Deferred.await(failedPut);
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(event);
+      yield* Effect.yieldNow;
+      const eligible = yield* observation.eligible;
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isSome(yield* Fiber.join(changed)));
+      assert.lengthOf(eligible, 1);
+      assert.strictEqual(yield* Ref.get(putAttempts), 2);
     }).pipe(Effect.scoped),
   );
 

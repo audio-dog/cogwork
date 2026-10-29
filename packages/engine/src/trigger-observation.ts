@@ -3,6 +3,7 @@ import {
   keyOf,
   Lineage,
   LineageId,
+  type ParkReason,
   type TriggerSourceHealth,
   type WorkflowCatalog,
   type WorkflowRecord,
@@ -60,6 +61,9 @@ interface StoredAdmission {
 export interface TriggerObservationStoreService {
   readonly admissions: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
   readonly put: (admission: TriggerAdmission) => Effect.Effect<void, TriggerObservationStoreError>;
+  readonly putAll: (
+    admissions: ReadonlyArray<TriggerAdmission>,
+  ) => Effect.Effect<void, TriggerObservationStoreError>;
   readonly complete: (admission: TriggerAdmission) => Effect.Effect<boolean, TriggerObservationStoreError>;
   readonly activate: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -116,22 +120,33 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
   const checkpoints = yield* Ref.make<
     ReadonlyMap<string, { readonly active: boolean; readonly checkpointMillis: number }>
   >(new Map());
-  return {
-    admissions: Effect.map(Ref.get(admissions), (current) => [...current.values()]),
-    put: (admission) =>
-      Ref.update(admissions, (current) => new Map(current).set(admissionKey(admission), admission)).pipe(
-        Effect.andThen(
-          Ref.update(checkpoints, (current) => {
+  const putAll = (nextAdmissions: ReadonlyArray<TriggerAdmission>) =>
+    Ref.update(
+      admissions,
+      (current) =>
+        new Map([
+          ...current,
+          ...nextAdmissions.map((admission) => [admissionKey(admission), admission] as const),
+        ]),
+    ).pipe(
+      Effect.andThen(
+        Ref.update(checkpoints, (current) =>
+          nextAdmissions.reduce((next, admission) => {
             const key = subscriptionKey(admission.subscription);
-            const checkpoint = current.get(key);
-            if (!checkpoint) return current;
-            return new Map(current).set(key, {
+            const checkpoint = next.get(key);
+            if (!checkpoint) return next;
+            return new Map(next).set(key, {
               ...checkpoint,
               checkpointMillis: Math.max(checkpoint.checkpointMillis, checkpointOf(admission)),
             });
-          }),
+          }, current),
         ),
       ),
+    );
+  return {
+    admissions: Effect.map(Ref.get(admissions), (current) => [...current.values()]),
+    put: (admission) => putAll([admission]),
+    putAll,
     complete: (admission) =>
       Ref.modify(admissions, (current) => {
         const next = withoutCompletedAdmission(current, admission);
@@ -168,30 +183,37 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
   const controlStore = yield* ControlStore;
   const decodeAdmissions = (rows: ReadonlyArray<StoredAdmission>) =>
     Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError)));
+  const putAll = (admissions: ReadonlyArray<TriggerAdmission>) =>
+    controlStore
+      .withWrite(
+        sql.withTransaction(
+          Effect.forEach(
+            admissions,
+            (admission) =>
+              sql`
+                INSERT INTO trigger_admissions (work_item, revision, payload)
+                VALUES (${keyOf(admission.event.key)}, ${admissionRevision(admission)}, ${encodeAdmission(admission)})
+                ON CONFLICT (work_item, revision) DO UPDATE SET payload = excluded.payload
+              `.pipe(
+                Effect.andThen(sql`
+                  UPDATE trigger_subscription_checkpoints
+                  SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
+                  WHERE workflow = ${admission.subscription.workflow}
+                    AND trigger = ${admission.subscription.trigger}
+                `),
+              ),
+            { discard: true },
+          ),
+        ),
+      )
+      .pipe(Effect.asVoid, Effect.mapError(storeError));
   return {
     admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions`.pipe(
       Effect.mapError(storeError),
       Effect.flatMap(decodeAdmissions),
     ),
-    put: (admission) =>
-      controlStore
-        .withWrite(
-          sql.withTransaction(
-            sql`
-              INSERT INTO trigger_admissions (work_item, revision, payload)
-              VALUES (${keyOf(admission.event.key)}, ${admissionRevision(admission)}, ${encodeAdmission(admission)})
-              ON CONFLICT (work_item, revision) DO UPDATE SET payload = excluded.payload
-            `.pipe(
-              Effect.andThen(sql`
-                UPDATE trigger_subscription_checkpoints
-                SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
-                WHERE workflow = ${admission.subscription.workflow}
-                  AND trigger = ${admission.subscription.trigger}
-              `),
-            ),
-          ),
-        )
-        .pipe(Effect.asVoid, Effect.mapError(storeError)),
+    put: (admission) => putAll([admission]),
+    putAll,
     complete: (admission) =>
       controlStore
         .withWrite(
@@ -321,6 +343,17 @@ const lineageOf = (ref: WorkItemRef): Lineage => ({
   hop: 0,
 });
 
+const planRejectionOf = (event: TriggerEvent) =>
+  event.payload?._tag === "GranolaNoteRejected"
+    ? ({ _tag: "PlanRejected", reason: event.payload.reason, entry: event.entry } satisfies ParkReason)
+    : null;
+
+const samePlanRejection = (left: ParkReason | undefined, right: ParkReason | null) =>
+  left?._tag === "PlanRejected" &&
+  right?._tag === "PlanRejected" &&
+  left.reason === right.reason &&
+  left.entry === right.entry;
+
 const waitForRetry = (retryAfterMillis: number | null) =>
   retryAfterMillis === null ? Effect.void : Effect.sleep(retryAfterMillis);
 
@@ -364,24 +397,26 @@ export const make = Effect.gen(function* () {
     const active = subscriptions.filter((subscription) => current.has(subscriptionIdentity(subscription)));
     if (active.length === 0) return;
     const outcome = yield* coordination.observe(event.key, event.revision, event.cause);
-    if (outcome === "redelivered") return;
     const matched = matchTriggerEvent(active, event);
     if (matched.length === 0) return;
-    if (event.payload?._tag === "GranolaNoteRejected") {
-      yield* coordination.park(event.key, {
-        _tag: "PlanRejected",
-        reason: event.payload.reason,
-        entry: event.entry,
-      });
-    }
-    yield* Effect.forEach(
-      matched,
-      (subscription) => {
-        const admission = { event, subscription, lineage: lineageOf(event.key) } satisfies TriggerAdmission;
-        return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
-      },
-      { discard: true },
+    const admissions = matched.map(
+      (subscription) => ({ event, subscription, lineage: lineageOf(event.key) }) satisfies TriggerAdmission,
     );
+    const redeliveryView = outcome === "redelivered" ? yield* coordination.read(event.key) : null;
+    if (outcome === "redelivered") {
+      const stored = yield* store.admissions;
+      const wasProcessed = redeliveryView?.revision?.processed === event.revision;
+      const isPending = stored.some((admission) =>
+        admissions.some((candidate) => sameSourceRevision(admission, candidate)),
+      );
+      const isHandled = wasProcessed || isPending;
+      if (isHandled) return;
+    }
+    const rejection = planRejectionOf(event);
+    const isAlreadyParked = samePlanRejection(redeliveryView?.park?.reason, rejection);
+    if (rejection !== null && !isAlreadyParked) yield* coordination.park(event.key, rejection);
+    yield* store.putAll(admissions);
+    yield* Effect.forEach(admissions, (admission) => PubSub.publish(changes, admission), { discard: true });
   });
 
   const observe = (
