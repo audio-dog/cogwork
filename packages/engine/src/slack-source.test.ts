@@ -372,6 +372,51 @@ describe("Slack Trigger source", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("emits a later reply after the conversation root leaves channel history", () =>
+    Effect.gen(function* () {
+      const state = yield* SlackClientStateRef;
+      const root = message({ ts: "600.000", text: "First message" });
+      yield* Ref.set(state, {
+        search: [],
+        history: [root],
+        reactions: [],
+        replies: [root],
+        failure: null,
+      });
+      yield* TestClock.setTime(1_000_000);
+      const source = yield* make;
+      const selected = subscription("slack.message-in-channel", [
+        { id: "channel", value: "C123" },
+        { id: "quiet-for", value: "0" },
+        { id: "at-most-every", value: "0" },
+      ]);
+      const [first] = yield* source.observe([selected]).pipe(Stream.take(1), Stream.runCollect);
+      assert.isDefined(first);
+      if (!first) return;
+      yield* source.acknowledge?.(first, [selected]) ?? Effect.void;
+      yield* Ref.set(state, {
+        search: [],
+        history: [],
+        reactions: [],
+        replies: [root, message({ ts: "1001.000", threadTs: root.ts, text: "Later reply" })],
+        failure: null,
+      });
+      const nextEvent = yield* source
+        .observe([{ ...selected, catchUp: { since: first.atMillis } }])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.timeoutOption("1 minute"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* TestClock.adjust("1 minute");
+      const result = yield* Fiber.join(nextEvent);
+
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(Option.getOrUndefined(result)?.[0]?.revision, "1001.000");
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("re-emits an ambient event until admission succeeds", () =>
     Effect.gen(function* () {
       const root = message({ ts: "600.000", text: "First message" });

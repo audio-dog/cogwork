@@ -197,6 +197,9 @@ const rootTimestampOf = (message: SlackMessage) => message.threadTs ?? message.t
 const ambientEmissionKey = (subscription: TriggerSubscription, channel: string, threadTs: string) =>
   `${subscription.workflow}:${subscription.trigger}:${channel}:${threadTs}`;
 
+const ambientSubscriptionKey = (subscription: TriggerSubscription) =>
+  `${subscription.workflow}:${subscription.trigger}`;
+
 export const sourceFailure = (
   reason: SourceFailure["reason"],
   message: string,
@@ -680,6 +683,46 @@ interface AmbientEmission {
   readonly atMillis: number;
 }
 
+interface AmbientRoot {
+  readonly subscription: string;
+  readonly channel: string;
+  readonly message: SlackMessage;
+  readonly latestMillis: number;
+}
+
+const trackedAmbientRoots = Effect.fn("SlackSource.trackedAmbientRoots")(function* (
+  subscription: TriggerSubscription,
+  channel: string,
+  now: number,
+  discovered: ReadonlyArray<SlackMessage>,
+  tracked: Ref.Ref<ReadonlyMap<string, AmbientRoot>>,
+) {
+  const subscriptionId = ambientSubscriptionKey(subscription);
+  const oldestMillis = now - durationOf(subscription, "catch-up-at-most", defaultCatchUpMillis);
+  return yield* Ref.modify(tracked, (current) => {
+    const retained = new Map(
+      [...current].filter(([, root]) => {
+        const belongsToSubscription = root.subscription === subscriptionId && root.channel === channel;
+        return !belongsToSubscription || root.latestMillis > oldestMillis;
+      }),
+    );
+    const next = discovered.reduce((roots, message) => {
+      const key = ambientEmissionKey(subscription, channel, rootTimestampOf(message));
+      const previous = roots.get(key);
+      return new Map(roots).set(key, {
+        subscription: subscriptionId,
+        channel,
+        message,
+        latestMillis: Math.max(previous?.latestMillis ?? 0, timestampMillis(message.ts)),
+      });
+    }, retained);
+    const messages = [...next.values()]
+      .filter((root) => root.subscription === subscriptionId && root.channel === channel)
+      .map((root) => root.message);
+    return [messages, next];
+  });
+});
+
 const ambientEvent = (
   session: SlackSession,
   subscription: TriggerSubscription,
@@ -708,14 +751,25 @@ const ambientEvents = Effect.fn("SlackSource.ambientEvents")(function* (
   subscription: TriggerSubscription,
   now: number,
   emissions: Ref.Ref<ReadonlyMap<string, AmbientEmission>>,
+  trackedRoots: Ref.Ref<ReadonlyMap<string, AmbientRoot>>,
 ) {
   const channel = parameterValue(subscription, "channel");
   if (!channel) return [];
   const since = catchUpSince(subscription, now);
-  const roots = yield* client.history(session, channel, since);
+  const discovered = yield* client.history(session, channel, since);
+  const roots = yield* trackedAmbientRoots(subscription, channel, now, discovered, trackedRoots);
   return yield* Effect.forEach(roots, (root) =>
     Effect.gen(function* () {
       const { thread: complete } = yield* hydratedThread(client, session, root);
+      const latestMillis = complete.reduce(
+        (latest, message) => Math.max(latest, timestampMillis(message.ts)),
+        timestampMillis(root.ts),
+      );
+      const rootKey = ambientEmissionKey(subscription, channel, rootTimestampOf(root));
+      yield* Ref.update(trackedRoots, (current) => {
+        const tracked = current.get(rootKey);
+        return tracked ? new Map(current).set(rootKey, { ...tracked, latestMillis }) : current;
+      });
       const author = parameterValue(subscription, "author") ?? "anyone";
       const relevant = complete.filter((message) => {
         const matchesAuthor = author !== "me" || message.user === session.user;
@@ -778,6 +832,7 @@ type EventReader = (
   subscription: TriggerSubscription,
   now: number,
   emissions: Ref.Ref<ReadonlyMap<string, AmbientEmission>>,
+  trackedRoots: Ref.Ref<ReadonlyMap<string, AmbientRoot>>,
 ) => Effect.Effect<ReadonlyArray<TriggerEvent>, SourceFailure>;
 
 const eventReaders = {
@@ -813,6 +868,7 @@ export const make = Effect.gen(function* () {
   const connections = yield* ConnectionStore;
   const session = slackSession(connections);
   const emissions = yield* Ref.make<ReadonlyMap<string, AmbientEmission>>(new Map());
+  const trackedRoots = yield* Ref.make<ReadonlyMap<string, AmbientRoot>>(new Map());
 
   const readEvents = Effect.fn("SlackSource.readEvents")(function* (
     subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -822,7 +878,9 @@ export const make = Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const nested = yield* Effect.forEach(subscriptions, (subscription) => {
       const reader = eventReaders[subscription.entry];
-      return reader ? reader(client, connected, subscription, now, emissions) : Effect.succeed([]);
+      return reader
+        ? reader(client, connected, subscription, now, emissions, trackedRoots)
+        : Effect.succeed([]);
     });
     return nested.flat();
   });
