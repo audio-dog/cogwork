@@ -1,0 +1,27 @@
+docs/spec/customizable-workflows.md
+  s_eb98ca8abb8650::t_1c0f4835496a76 564
+  s_eb98ca8abb8650::t_6f92c3df01f1a9 301
+  s_eb98ca8abb8650::t_fd8665e515c658 61
+  s_eb98ca8abb8650::t_52d763fc4fa272 252
+  s_eb98ca8abb8650::t_54920381220d75 365
+  s_eb98ca8abb8650::t_c1e6f597252103 399-400
+  s_eb98ca8abb8650::t_6d463d03a0cc89 256
+  s_eb98ca8abb8650::t_f19a3240ae758e 308
+  s_eb98ca8abb8650::t_eb6447fd501c39 575
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "66f9ad2481dd1c27d84fe507074adf31f1a82290",
+  "prompts": {},
+  "sessions": {
+    "s_eb98ca8abb8650": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "82543de1-f0ac-41bd-9d14-86bf63976d92",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
