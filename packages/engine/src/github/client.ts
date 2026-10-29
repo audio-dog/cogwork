@@ -1329,7 +1329,10 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         q: `repo:${repo.owner}/${repo.name} is:issue in:body "${marker}"`,
         per_page: "1",
       });
-      const json = yield* fetchJson(repo, `https://api.github.com/search/issues?${query}`);
+      const { body: json } = yield* fetchUncachedJsonResponse(
+        repo,
+        `https://api.github.com/search/issues?${query}`,
+      );
       const payload = yield* Effect.mapError(decodeSearchIssues(json), toUnavailable);
       const issue = payload.items.at(0);
       return issue ? toRawIssue(repo, issue) : null;

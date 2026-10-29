@@ -263,6 +263,28 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("refreshes a body marker search after an earlier miss", () => {
+    const marker = "<!-- cogwork:write key=create-key -->";
+    const fetch = vi.fn<typeof globalThis.fetch>((input, init) => {
+      const request = new Request(input, init);
+      if (fetch.mock.calls.length === 1) {
+        return Promise.resolve(jsonResponse({ items: [] }, 200, { etag: '"empty"' }));
+      }
+      return Promise.resolve(
+        request.headers.has("if-none-match")
+          ? new Response(null, { status: 304 })
+          : jsonResponse({ items: [{ ...issueResponse(416), body: marker }] }),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+
+      assert.isNull(yield* client.findIssueWithMarker(repo, marker));
+      assert.strictEqual((yield* client.findIssueWithMarker(repo, marker))?.number, 416);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("reads pull request references with an empty body", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(
