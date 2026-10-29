@@ -512,9 +512,13 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
   const handedToPerson = state.plan.steps.some(
     ({ entry, status }) => entry === "cogwork.hand-to-me" && status === "completed",
   );
+  const stopped = state.plan.steps.some(
+    ({ entry, status }) => entry === "cogwork.stop" && status === "completed",
+  );
   if (handedToPerson) {
     yield* coordination.park(admission.event.key, { _tag: "HandedToYou" });
   }
   yield* store.remove(state.plan.item, state.plan.workflow, state.plan.attempt);
-  return { _tag: "Complete", handOff: handedToPerson ? null : state.plan.handOff } as const;
+  const clearsHandOff = handedToPerson || stopped;
+  return { _tag: "Complete", handOff: clearsHandOff ? null : state.plan.handOff } as const;
 });

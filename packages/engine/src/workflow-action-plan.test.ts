@@ -199,6 +199,21 @@ const adapterLayers = Layer.merge(coordinationLayer, trackerLayer).pipe(
 const requirements = Layer.mergeAll(engineTestLayer(), workflowActionPlanStoreLayer, adapterLayers);
 
 describe("Workflow action plan", () => {
+  it.effect("a completed stop clears the hand-off", () =>
+    Effect.gen(function* () {
+      const store = yield* WorkflowActionPlanStore;
+      const initial = WorkflowActionPlan.make({
+        ...plan([step(0, "cogwork.stop")]),
+        handOff: decodeNode("next"),
+      });
+      yield* store.create(initial);
+
+      const result = yield* executeWorkflowActionPlan(initial, admission);
+
+      assert.deepStrictEqual(result, { _tag: "Complete", handOff: null });
+    }).pipe(Effect.provide(requirements)),
+  );
+
   it.effect("parks the third retryable write failure with one stable write key", () =>
     Effect.gen(function* () {
       const probe = yield* ActionPlanProbe;
