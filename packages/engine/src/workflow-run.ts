@@ -248,8 +248,8 @@ export const make = Effect.gen(function* () {
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, key);
-        yield* complete(admission);
       }
+      yield* complete(admission);
       return;
     }
 
@@ -270,8 +270,8 @@ export const make = Effect.gen(function* () {
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues }, key);
-        yield* complete(admission);
       }
+      yield* complete(admission);
       return;
     }
 

@@ -344,8 +344,7 @@ describe("WorkflowRun", () => {
           inputs: { notification: "Second complete" },
         },
       ]);
-      yield* observationStore.put(admission);
-      yield* observationStore.put(siblingAdmission);
+      yield* observationStore.putAll([admission, siblingAdmission]);
 
       yield* runner.execute(admission);
       assert.isNull(yield* Ref.get(coordination.processed));
@@ -380,12 +379,33 @@ describe("WorkflowRun", () => {
           }),
         },
       );
-      yield* observationStore.put(admission);
+      yield* observationStore.putAll([admission]);
 
       const result = yield* Effect.result(runner.execute(admission));
 
       assert.isTrue(Result.isFailure(result));
       assert.deepStrictEqual(yield* observationStore.admissions, [admission]);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("closes a source revision after a non-exhausted Workflow failure", () =>
+    Effect.gen(function* () {
+      const { runner, coordination, observationStore } = yield* testProgram([], {
+        run: () =>
+          Stream.fail(
+            new HarnessError({
+              reason: "turn",
+              retryable: true,
+              message: "Harness failed",
+            }),
+          ),
+      });
+      yield* observationStore.putAll([admission]);
+
+      yield* runner.execute(admission);
+
+      assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+      assert.deepStrictEqual(yield* observationStore.admissions, []);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -469,8 +489,7 @@ describe("WorkflowRun", () => {
           inputs: { notification: "Needs a decision" },
         },
       ]);
-      yield* observationStore.put(admission);
-      yield* observationStore.put(siblingAdmission);
+      yield* observationStore.putAll([admission, siblingAdmission]);
       yield* runner.execute(admission);
 
       assert.lengthOf(yield* Ref.get(coordination.attempts), 1);
