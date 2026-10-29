@@ -1,0 +1,89 @@
+packages/engine/src/github/client.ts
+  s_f4abcd25549e05::t_b23670d6a8af4a 1491-1492
+  s_f4abcd25549e05::t_cebb252408fc0b 990,998,1012,1026,1044-1048,1050-1065,1072-1077,1079-1085,1455-1468,1474-1479,1481,1483,1493-1495
+  s_f4abcd25549e05::t_8ee583e30f8ed0 1049
+  s_f4abcd25549e05::t_cf0328407217d5 1078
+  s_f4abcd25549e05::t_e6f98c1125a808 1480
+packages/engine/src/github/provider.ts
+  s_f4abcd25549e05::t_2251176adc8f38 119,289-290
+  s_f4abcd25549e05::t_f74e5cc8ad676f 7
+  s_f4abcd25549e05::t_cdcd919e8cbe89 22,113
+packages/engine/src/provider-trigger-source.ts
+  s_f4abcd25549e05::t_8bae56c111ba2e 7-8,75,77-108,110-115,119-138
+  s_f4abcd25549e05::t_776f632cab4f8a 109,116-118
+packages/engine/src/linear/client.test.ts
+  s_f4abcd25549e05::t_cecf95d277656e 333-367
+packages/engine/src/github/client.test.ts
+  s_f4abcd25549e05::t_c5ba029d68d64c 189-199,201-217
+  s_92a77419fcc9be::t_731795c16eea4d 200
+packages/engine/src/linear/linear.test.ts
+  s_f4abcd25549e05::t_8f773e8e28c0ff 235
+packages/engine/src/github/feedback.ts
+  s_f4abcd25549e05::t_cdcd919e8cbe89 1-19
+packages/engine/src/linear/client.ts
+  s_f4abcd25549e05::t_d38a115a1719af 147
+  s_f4abcd25549e05::t_9f31badd44b676 358,442-467,835-848,854-858,971
+  s_f4abcd25549e05::t_223b3e312d3fce 52
+  s_f4abcd25549e05::t_ffa246514e3794 849-853
+  s_f4abcd25549e05::t_5865e7d505b334 568
+  s_f4abcd25549e05::t_0a902cae7b031d 468
+packages/engine/src/trigger-observation.test.ts
+  s_f4abcd25549e05::t_9264c35d371a94 153-166
+  s_f4abcd25549e05::t_5797fefa1fe5e8 28-29,175,182-183
+  s_f4abcd25549e05::t_eb5bdebb240812 10-11
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_f212a5207389e7 10,12,129,135-136,138,145-146,150,154,160,162-168,192
+  s_f4abcd25549e05::t_fc6492015f7e5a 68-72,77-87,89-94,124
+  s_f4abcd25549e05::t_223b3e312d3fce 73-76
+packages/engine/src/github/source-control-target.ts
+  s_f4abcd25549e05::t_cdcd919e8cbe89 22-23,35
+packages/engine/src/github/github.test.ts
+  s_f4abcd25549e05::t_1e579ce6c45316 390-394,396,398,406-415,423-432,434-443
+  s_f4abcd25549e05::t_2251176adc8f38 31,376-381
+  s_f4abcd25549e05::t_750c45d41a36c6 284-285
+  s_92a77419fcc9be::t_7b6a30879cabe9 433
+packages/engine/src/linear/trigger-source.test.ts
+  s_f4abcd25549e05::t_5865e7d505b334 103
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_f4abcd25549e05::t_750c45d41a36c6 354
+packages/engine/src/trigger-observation.ts
+  s_f4abcd25549e05::t_6d3e28a707ba8c 233
+  s_f4abcd25549e05::t_2cc73afe1427bc 250-253,257-258,290-295,316-317,335,356-358,362,418-427
+packages/engine/src/github/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_9d059b0a3a07d3 99
+  s_f4abcd25549e05::t_1ec0cfa57ed676 10,12,35,64,125,131,133-134,139,144-145,149,153,159,161-167,193
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_f4abcd25549e05::t_f212a5207389e7 10,12,157,244,251,253,264-265,269,273,278,280-286,311
+  s_f4abcd25549e05::t_cdcd919e8cbe89 25,27,74-75,104-105,222-224,252
+  s_f4abcd25549e05::t_bb15abc50dabf4 255-257
+packages/engine/src/github/trigger-source.test.ts
+  s_f4abcd25549e05::t_5865e7d505b334 73,106,149,204,216
+  s_f4abcd25549e05::t_087f59b152259d 77-86,88,165-170
+  s_f4abcd25549e05::t_da2a24426139ce 87
+  s_f4abcd25549e05::t_1f394557fd292e 76
+  s_f4abcd25549e05::t_f2c4dcece4932a 171
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bb007378f0209c2c3ca944dbc85fed0ba6f5d1b3",
+  "prompts": {},
+  "sessions": {
+    "s_92a77419fcc9be": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a183bc-3062-76c3-817f-9332f5005d01",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
