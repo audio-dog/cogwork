@@ -89,14 +89,27 @@ export const make = Effect.gen(function* () {
     );
 
   const complete = Effect.fn("WorkflowRun.complete")(function* (admission: TriggerAdmission) {
-    const isLast = yield* observationStore.complete(admission);
-    if (!isLast) return;
-    yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+    const pending = yield* observationStore.admissions;
+    const hasSibling = pending.some(
+      (candidate) =>
+        keyOf(candidate.event.key) === keyOf(admission.event.key) &&
+        candidate.event.revision === admission.event.revision &&
+        (candidate.subscription.workflow !== admission.subscription.workflow ||
+          candidate.subscription.trigger !== admission.subscription.trigger),
+    );
+    if (!hasSibling) {
+      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+    }
+    yield* observationStore.complete(admission);
   });
 
   const decline = (admission: TriggerAdmission) =>
     coordination
-      .park(admission.event.key, { _tag: "MissingOperation" })
+      .park(
+        admission.event.key,
+        { _tag: "MissingOperation" },
+        operationKeyOf(admission, admission.subscription.operation),
+      )
       .pipe(Effect.andThen(complete(admission)));
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
@@ -234,7 +247,7 @@ export const make = Effect.gen(function* () {
       const exhausted = view.counters(key).exhausted;
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
-        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason });
+        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, key);
         yield* complete(admission);
       }
       return;
@@ -256,7 +269,7 @@ export const make = Effect.gen(function* () {
       const exhausted = view.counters(key).exhausted;
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
-        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues });
+        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues }, key);
         yield* complete(admission);
       }
       return;
@@ -274,7 +287,7 @@ export const make = Effect.gen(function* () {
         lineage: admission.lineage,
         reason: decoded.value.summary,
       });
-      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary });
+      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary }, key);
       yield* complete(admission);
       yield* settle(run, "failed");
       return;

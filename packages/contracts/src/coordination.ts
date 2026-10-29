@@ -119,7 +119,11 @@ export const ParkReason = Schema.TaggedUnion({
 });
 export type ParkReason = typeof ParkReason.Type;
 
-export const ParkRecord = Schema.Struct({ reason: ParkReason, atMillis: Schema.Natural });
+export const ParkRecord = Schema.Struct({
+  reason: ParkReason,
+  operation: Schema.optional(OperationKey),
+  atMillis: Schema.Natural,
+});
 export type ParkRecord = typeof ParkRecord.Type;
 
 export const SourceRevision = Schema.Struct({

@@ -19,13 +19,14 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { clockEntries } from "./clock-source";
 import { ContextAssembler } from "./context-assembler";
-import { Coordination, type CoordinationService, fold } from "./coordination";
+import { Coordination, CoordinationError, type CoordinationService, fold } from "./coordination";
 import * as CredentialStore from "./credential-store";
 import {
   fullHarnessExecution,
@@ -185,7 +186,7 @@ const makeCoordination = () =>
     const attempts = yield* Ref.make<ReadonlyArray<AttemptRecord>>([]);
     const parks = yield* Ref.make<ReadonlyArray<ParkRecord>>([]);
     const processed = yield* Ref.make<string | null>(null);
-    const read = () =>
+    const read = (_ref?: unknown) =>
       Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed)]).pipe(
         Effect.map(([currentAttempts, currentParks, currentProcessed]) =>
           fold(
@@ -211,10 +212,14 @@ const makeCoordination = () =>
             ...current,
             AttemptRecord.make({ ...input, atMillis: current.length + 1 }),
           ]).pipe(Effect.andThen(read())),
-        park: (_ref, reason: ParkReason) =>
+        park: (_ref, reason: ParkReason, operation) =>
           Ref.update(parks, (current) => [
             ...current,
-            ParkRecord.make({ reason, atMillis: current.length + 1 }),
+            ParkRecord.make({
+              reason,
+              ...(operation ? { operation } : {}),
+              atMillis: current.length + 1,
+            }),
           ]).pipe(Effect.andThen(read())),
         handBack: () => Effect.die("unused"),
         observe: () => Effect.succeed("moved"),
@@ -262,6 +267,7 @@ const requirements = Layer.mergeAll(
 interface HarnessBehavior {
   readonly preflight?: HarnessRunner["preflight"];
   readonly run?: HarnessRunner["run"];
+  readonly coordination?: (service: CoordinationService) => CoordinationService;
 }
 
 const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior = {}) =>
@@ -306,7 +312,10 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
     ]);
     const runner = yield* makeWorkflowRun.pipe(
       Effect.provideService(Workflows, workflowService),
-      Effect.provideService(Coordination, coordination.service),
+      Effect.provideService(
+        Coordination,
+        behavior.coordination?.(coordination.service) ?? coordination.service,
+      ),
       Effect.provideService(TriggerObservationStore, observationStore),
       Effect.provideService(Harness, harness),
       Effect.provideService(WorkflowNotifications, notifications),
@@ -343,6 +352,40 @@ describe("WorkflowRun", () => {
 
       yield* runner.execute(siblingAdmission);
       assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("keeps the last admission pending when source completion fails", () =>
+    Effect.gen(function* () {
+      const { runner, observationStore } = yield* testProgram(
+        [
+          {
+            summary: "Complete",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { notification: "Complete" },
+          },
+        ],
+        {
+          coordination: (service) => ({
+            ...service,
+            markProcessed: () =>
+              Effect.fail(
+                new CoordinationError({
+                  reason: "unavailable",
+                  retryable: true,
+                  message: "Control store unavailable",
+                }),
+              ),
+          }),
+        },
+      );
+      yield* observationStore.put(admission);
+
+      const result = yield* Effect.result(runner.execute(admission));
+
+      assert.isTrue(Result.isFailure(result));
+      assert.deepStrictEqual(yield* observationStore.admissions, [admission]);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -412,9 +455,13 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("parks a stuck result immediately", () =>
+  it.effect("parks a stuck result without blocking a sibling Workflow", () =>
     Effect.gen(function* () {
-      const { runner, coordination } = yield* testProgram([
+      const siblingAdmission = {
+        ...admission,
+        subscription: { ...admission.subscription, workflow: siblingWorkflow },
+      } satisfies TriggerAdmission;
+      const { runner, coordination, observationStore } = yield* testProgram([
         {
           summary: "Needs a decision",
           stuck: true,
@@ -422,11 +469,18 @@ describe("WorkflowRun", () => {
           inputs: { notification: "Needs a decision" },
         },
       ]);
+      yield* observationStore.put(admission);
+      yield* observationStore.put(siblingAdmission);
       yield* runner.execute(admission);
 
       assert.lengthOf(yield* Ref.get(coordination.attempts), 1);
       assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "Stuck");
-      assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+      assert.isNull(yield* Ref.get(coordination.processed));
+      assert.strictEqual(
+        (yield* coordination.service.read(admission.event.key)).gate({ workflow: siblingWorkflow, operation })
+          ._tag,
+        "Open",
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

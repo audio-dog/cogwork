@@ -169,7 +169,8 @@ const gateRules = [
 export const fold = (ledger: CoordinationLedger, claimant: string): CoordinationView => {
   const handback = newestByTime(ledger.handbacks);
   const barrierAtMillis = handback?.atMillis ?? 0;
-  const latestPark = newestByTime(ledger.parks.filter((park) => park.atMillis > barrierAtMillis));
+  const activeParks = ledger.parks.filter((park) => park.atMillis > barrierAtMillis);
+  const latestPark = newestByTime(activeParks);
   const claimTimes = [ledger.latestClaimAtMillis, ledger.claim?.claimedAtMillis].filter(
     (atMillis): atMillis is number => atMillis !== undefined,
   );
@@ -191,7 +192,18 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
     };
   };
   const gate = (key: OperationKey): CoordinationGate => {
-    const input = { ledger, park, counters: counters(key) };
+    const matchingPark = newestByTime(
+      activeParks.filter(
+        (candidate) => candidate.operation === undefined || sameOperation(candidate.operation, key),
+      ),
+    );
+    const claimClearsMatchingPark =
+      matchingPark !== null && latestClaimAtMillis !== null && latestClaimAtMillis >= matchingPark.atMillis;
+    const input = {
+      ledger,
+      park: claimClearsMatchingPark ? null : matchingPark,
+      counters: counters(key),
+    };
     return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
   };
   return {
@@ -247,7 +259,11 @@ export interface CoordinationService {
       readonly reason?: string;
     },
   ) => Effect.Effect<CoordinationView, CoordinationError>;
-  readonly park: (ref: WorkItemRef, reason: ParkReason) => Effect.Effect<CoordinationView, CoordinationError>;
+  readonly park: (
+    ref: WorkItemRef,
+    reason: ParkReason,
+    operation?: OperationKey,
+  ) => Effect.Effect<CoordinationView, CoordinationError>;
   readonly handBack: (
     ref: WorkItemRef,
     input: { readonly by: string; readonly note?: string },
@@ -309,8 +325,16 @@ export const makeCoordination = (
     yield* authority(ref).recordAttempt(ref, attempt, input.reason);
     return yield* read(ref);
   });
-  const park = Effect.fn("Coordination.park")(function* (ref: WorkItemRef, reason: ParkReason) {
-    yield* authority(ref).park(ref, { reason, atMillis: yield* Clock.currentTimeMillis });
+  const park = Effect.fn("Coordination.park")(function* (
+    ref: WorkItemRef,
+    reason: ParkReason,
+    operation?: OperationKey,
+  ) {
+    yield* authority(ref).park(ref, {
+      reason,
+      ...(operation ? { operation } : {}),
+      atMillis: yield* Clock.currentTimeMillis,
+    });
     return yield* read(ref);
   });
   const handBack = Effect.fn("Coordination.handBack")(function* (
