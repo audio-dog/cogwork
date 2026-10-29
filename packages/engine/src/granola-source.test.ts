@@ -402,11 +402,16 @@ it.effect("reads every MCP page and decodes its XML-like text", () =>
       id,
       result: { content: [{ type: "text", text }], isError: false },
     });
-    const meeting = (id: string, title: string, updatedAt: string) => `
+    const meeting = (
+      id: string,
+      title: string,
+      updatedAt: string,
+      summary = `<summary>${title} summary</summary>`,
+    ) => `
       <meeting id="${id}" title="${title}" meeting_at="${updatedAt}" updated_at="${updatedAt}">
         <known_participants><participant name="Taylor" /></known_participants>
         <calendar_event>${title}</calendar_event>
-        <summary>${title} summary</summary>
+        ${summary}
         <transcript>${title} transcript</transcript>
       </meeting>`;
     const adapters = yield* httpAdapters(
@@ -417,7 +422,12 @@ it.effect("reads every MCP page and decodes its XML-like text", () =>
         ),
         response(
           "page-2",
-          `<meetings_data>${meeting("meeting-2", "Second", "2026-10-29T16:00:00.000Z")}</meetings_data><pagination has_more="false" />`,
+          `<meetings_data>${meeting(
+            "meeting-2",
+            "Second",
+            "2026-10-29T16:00:00.000Z",
+            "<summary> </summary><summary_text>Second summary</summary_text>",
+          )}</meetings_data><pagination has_more="false" />`,
         ),
       ],
       urls,
@@ -437,6 +447,7 @@ it.effect("reads every MCP page and decodes its XML-like text", () =>
         ["meeting-2", "Second"],
       ],
     );
+    assert.strictEqual(notes[1]?.summary, "Second summary");
     assert.include(requests[0] ?? "", '"updated_after":"2026-10-28T00:00:00.000Z"');
     assert.notInclude(requests[0] ?? "", "time_range");
     assert.include(requests[1] ?? "", '"cursor":"page-2"');

@@ -247,7 +247,8 @@ const attributesOf = (text: string) =>
 const childText = (text: string, tags: ReadonlyArray<string>) =>
   tags
     .flatMap((tag) => [text.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "i"))])
-    .flatMap((match) => (match?.[1] === undefined ? [] : [xmlText(match[1])]))[0] ?? null;
+    .flatMap((match) => (match?.[1] === undefined ? [] : [xmlText(match[1])]))
+    .find(hasText) ?? null;
 
 const attendeeTextFrom = (body: string) => {
   const container = body.match(/<known_participants(?:\s[^>]*)?>([\s\S]*?)<\/known_participants>/i)?.[1];
