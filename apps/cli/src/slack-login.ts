@@ -68,7 +68,7 @@ const TokenResponse = Schema.Struct({
   expires_in: Schema.Finite.check(Schema.isGreaterThan(0)),
   scope: Schema.String,
   team: Schema.Struct({ id: Schema.NonEmptyString }),
-  user_id: Schema.NonEmptyString,
+  authed_user: Schema.Struct({ id: Schema.NonEmptyString }),
   app_id: Schema.NonEmptyString,
 });
 
@@ -183,7 +183,7 @@ const makeLogin = Effect.fn("slack.login")(function* (config: SlackLoginConfig) 
   return {
     issueTracker: "slack",
     organization: tokens.team.id,
-    actorUserId: tokens.user_id,
+    actorUserId: tokens.authed_user.id,
     oauthClientId: config.clientId,
     oauthTokenEndpoint: config.tokenEndpoint,
     token: {

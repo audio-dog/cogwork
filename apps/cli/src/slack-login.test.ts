@@ -85,7 +85,7 @@ describe("Slack browser login", () => {
               expires_in: 43_200,
               scope: expectedScopes,
               team: { id: "T-STUB" },
-              user_id: "U-STUB",
+              authed_user: { id: "U-STUB" },
               app_id: "A-STUB",
             }),
           );
