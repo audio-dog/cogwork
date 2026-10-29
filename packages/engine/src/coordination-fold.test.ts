@@ -81,7 +81,7 @@ describe("coordination fold", () => {
       "Quiet",
     );
     assert.strictEqual(fold(parked, "cogwork").gate(operation)._tag, "Parked");
-    assert.strictEqual(fold(parked, "cogwork").gate(operation, 4)._tag, "Parked");
+    assert.strictEqual(fold(parked, "cogwork").gate(operation, "2")._tag, "Parked");
     assert.deepStrictEqual(fold(ledger([attempt("failed", 1, maxLineageHops)]), "cogwork").gate(operation), {
       _tag: "Parked",
       reason: { _tag: "HopCap" },

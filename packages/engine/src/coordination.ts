@@ -101,7 +101,7 @@ export interface CoordinationView {
   readonly park: ParkRecord | null;
   readonly revision: SourceRevision | null;
   readonly counters: (key: OperationKey) => CoordinationCounters;
-  readonly gate: (key: OperationKey, activityAtMillis?: number) => CoordinationGate;
+  readonly gate: (key: OperationKey, sourceRevision?: string) => CoordinationGate;
 }
 
 const sameOperation = (left: OperationKey, right: OperationKey) =>
@@ -223,22 +223,24 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
     };
   };
   const counters = (key: OperationKey) => countersAfter(key, barrierAtMillis);
-  const gate = (key: OperationKey, activityAtMillis?: number): CoordinationGate => {
-    const gateBarrierAtMillis = Math.max(barrierAtMillis, activityAtMillis ?? 0);
+  const gate = (key: OperationKey, sourceRevision?: string): CoordinationGate => {
+    const processedRevision = ledger.revision?.processed;
+    const hasProcessedRevision = processedRevision !== null && processedRevision !== undefined;
+    const isNewSourceRevision =
+      sourceRevision !== undefined && hasProcessedRevision && sourceRevision !== processedRevision;
     const matchingPark = newestByTime(
       activeParks.filter((candidate) => {
         const matchesOperation = candidate.operation === undefined || sameOperation(candidate.operation, key);
-        const clearedByActivity =
-          candidate.operation !== undefined &&
-          activityAtMillis !== undefined &&
-          candidate.atMillis <= activityAtMillis;
-        return matchesOperation && !clearedByActivity;
+        const clearedByRevision = candidate.operation !== undefined && isNewSourceRevision;
+        return matchesOperation && !clearedByRevision;
       }),
     );
     const input = {
       ledger,
       park: claimClearsPark(matchingPark, claims) ? null : matchingPark,
-      counters: countersAfter(key, gateBarrierAtMillis),
+      counters: isNewSourceRevision
+        ? { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false }
+        : countersAfter(key, barrierAtMillis),
     };
     return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
   };

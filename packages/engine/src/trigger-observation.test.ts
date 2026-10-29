@@ -466,7 +466,7 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("offers later conversation activity after an exhausted operation park", () =>
+  it.effect("offers a later conversation revision posted before an exhausted operation park", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>("100.000");
@@ -510,7 +510,7 @@ describe("TriggerObservation", () => {
                   ParkRecord.make({
                     reason: { _tag: "Exhausted", reason: "failure limit" },
                     operation,
-                    atMillis: 150_000,
+                    atMillis: 300_000,
                   }),
                 ],
                 revision: { observed: "200.000", processed: "100.000" },

@@ -563,7 +563,7 @@ export const make = Effect.gen(function* () {
                       workflow: admission.subscription.workflow,
                       operation: admission.subscription.operation,
                     },
-                    admission.event.atMillis,
+                    admission.event.revision,
                   ),
                 })),
               ),
