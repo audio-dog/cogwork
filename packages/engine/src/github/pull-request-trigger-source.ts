@@ -9,6 +9,7 @@ import {
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
+  providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
   triggerEntry,
@@ -271,7 +272,7 @@ const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(
   );
   return {
     events: events.flat(),
-    cursor: Math.max(cursor ?? 0, ...trustedPulls.map(({ updatedAtMillis }) => updatedAtMillis)),
+    cursor: providerCursorAfterRead(cursor, now),
     workspace: workspace.config.name,
   };
 });

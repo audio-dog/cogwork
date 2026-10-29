@@ -9,6 +9,7 @@ import {
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
+  providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
   sourceFailure,
@@ -144,7 +145,7 @@ const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(func
   );
   return {
     events: events.flat(),
-    cursor: Math.max(cursor ?? 0, ...issues.flat().map(({ updatedAtMillis }) => updatedAtMillis)),
+    cursor: providerCursorAfterRead(cursor, now),
     workspace: workspace.config.name,
   };
 });
