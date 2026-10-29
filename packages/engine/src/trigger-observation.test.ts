@@ -430,6 +430,78 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.effect("offers one conversation revision at a time", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>("200.000");
+      const store = yield* makeMemoryTriggerObservationStore;
+      const conversation = {
+        _tag: "SlackConversation",
+        team: "T123",
+        channel: "C123",
+        threadTs: "100.000",
+      } as const;
+      const admission = (revision: string, atMillis: number) => ({
+        event: { ...event, key: conversation, revision, atMillis },
+        subscription,
+        lineage: { ...lineage, root: Schema.decodeSync(LineageId)(keyOf(conversation)) },
+      });
+      yield* store.putAll([admission("200.000", 200_000), admission("100.000", 100_000)]);
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
+        Effect.provideService(TriggerSources, []),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+      );
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        ["100.000"],
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("removes disabled siblings before offering an admission", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(event.revision);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const enabledAdmission = { event, subscription, lineage };
+      const disabledAdmission = {
+        ...enabledAdmission,
+        subscription: { ...subscription, workflow: otherWorkflowId },
+      };
+      yield* store.putAll([enabledAdmission, disabledAdmission]);
+      const workflows = {
+        ...workflowService(current),
+        list: Effect.succeed({
+          workflows: [record(true), { ...record(false), id: otherWorkflowId }],
+          unreadable: [],
+        }),
+      } satisfies WorkflowsService;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflows),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
+        Effect.provideService(TriggerSources, []),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+      );
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ subscription: candidate }) => candidate.workflow),
+        [workflowId],
+      );
+      assert.isTrue(yield* store.complete(enabledAdmission));
+      assert.deepStrictEqual(yield* store.admissions, []);
+      assert.isNull(yield* Ref.get(processed));
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("restarts a rate-limited source only after Retry-After", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(1_000_000);

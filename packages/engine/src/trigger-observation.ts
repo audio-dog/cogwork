@@ -86,6 +86,24 @@ const admissionKey = (admission: TriggerAdmission) =>
   `${keyOf(admission.event.key)}:${admission.event.revision}:${subscriptionKey(admission.subscription)}`;
 const sameRevision = (left: TriggerAdmission, right: TriggerAdmission) =>
   keyOf(left.event.key) === keyOf(right.event.key) && left.event.revision === right.event.revision;
+const sourceRevisionKey = (admission: TriggerAdmission) =>
+  JSON.stringify([keyOf(admission.event.key), admission.event.revision]);
+const admissionIsOlder = (candidate: TriggerAdmission, current: TriggerAdmission) =>
+  candidate.event.atMillis < current.event.atMillis ||
+  (candidate.event.atMillis === current.event.atMillis && candidate.event.revision < current.event.revision);
+const oldestRevisionAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) => {
+  const oldestByItem = admissions.reduce((oldest, admission) => {
+    const item = keyOf(admission.event.key);
+    const current = oldest.get(item);
+    return current === undefined || admissionIsOlder(admission, current)
+      ? new Map(oldest).set(item, admission)
+      : oldest;
+  }, new Map<string, TriggerAdmission>());
+  return admissions.filter((admission) => {
+    const oldest = oldestByItem.get(keyOf(admission.event.key));
+    return oldest !== undefined && sameRevision(admission, oldest);
+  });
+};
 const checkpointOf = (admission: TriggerAdmission) =>
   admission.event.key._tag === "ScheduleInstant"
     ? admission.event.key.instantMillis
@@ -516,23 +534,42 @@ export const make = Effect.gen(function* () {
     eligible: Effect.all([workflows.list, store.admissions]).pipe(
       Effect.flatMap(([listed, current]) => {
         const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
-        return Effect.forEach(current, (admission) =>
-          coordination.read(admission.event.key).pipe(
-            Effect.map((view) => ({
-              admission,
-              enabled: enabled.has(admission.subscription.workflow),
-              gate: view.gate({
-                workflow: admission.subscription.workflow,
-                operation: admission.subscription.operation,
-              }),
-            })),
+        const oldest = oldestRevisionAdmissions(current);
+        const active = oldest.filter(({ subscription }) => enabled.has(subscription.workflow));
+        const inactive = oldest.filter(({ subscription }) => !enabled.has(subscription.workflow));
+        const activeRevisions = new Set(active.map(sourceRevisionKey));
+        const inactiveRevisions = [
+          ...inactive
+            .filter((admission) => !activeRevisions.has(sourceRevisionKey(admission)))
+            .reduce(
+              (revisions, admission) => new Map(revisions).set(sourceRevisionKey(admission), admission),
+              new Map<string, TriggerAdmission>(),
+            )
+            .values(),
+        ];
+        return Effect.forEach(
+          inactiveRevisions,
+          (admission) => coordination.markProcessed(admission.event.key, admission.event.revision),
+          { discard: true },
+        ).pipe(
+          Effect.andThen(Effect.forEach(inactive, store.complete, { discard: true })),
+          Effect.andThen(
+            Effect.forEach(active, (admission) =>
+              coordination.read(admission.event.key).pipe(
+                Effect.map((view) => ({
+                  admission,
+                  gate: view.gate({
+                    workflow: admission.subscription.workflow,
+                    operation: admission.subscription.operation,
+                  }),
+                })),
+              ),
+            ),
           ),
         );
       }),
       Effect.map((states) =>
-        states
-          .filter(({ enabled, gate }) => enabled && gate._tag === "Open")
-          .map(({ admission }) => admission),
+        states.filter(({ gate }) => gate._tag === "Open").map(({ admission }) => admission),
       ),
       Effect.catchCause(() => Effect.succeed([])),
     ),
