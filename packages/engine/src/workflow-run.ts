@@ -162,6 +162,10 @@ export const make = Effect.gen(function* () {
       admission.subscription.workflow,
     );
     const stalePlan = pendingPlan !== null && pendingPlan.revision !== admission.event.revision;
+    const operationId =
+      pendingPlan?.revision === admission.event.revision
+        ? pendingPlan.operation
+        : admission.subscription.operation;
     if (stalePlan) {
       yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
     }
@@ -197,7 +201,7 @@ export const make = Effect.gen(function* () {
     const record = yield* workflows.get({ id: admission.subscription.workflow });
     const document = record.publishedCopy;
     const trigger = document?.triggers.find(({ id }) => id === admission.subscription.trigger);
-    const operation = document?.operations.find(({ id }) => id === admission.subscription.operation);
+    const operation = document?.operations.find(({ id }) => id === operationId);
     if (!record.enabled || document === null || trigger === undefined || operation === undefined) {
       yield* coordination.markProcessed(admission.event.key, admission.event.revision);
       return;

@@ -2,11 +2,13 @@ import {
   AttemptRecord,
   Claim,
   HarnessName,
+  keyOf,
   localOwnerId,
   type ParkReason,
   ParkRecord,
   RunId,
   WorkflowActionPlan,
+  WorkflowActionPlanStep,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -43,7 +45,10 @@ import { RunRecorder } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import type { TriggerAdmission } from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
-import { memoryLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
+import {
+  WorkflowActionPlanStore,
+  memoryLayer as workflowActionPlanStoreLayer,
+} from "./workflow-action-plan-store";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
 
@@ -173,10 +178,11 @@ const makeCoordination = () =>
     const attempts = yield* Ref.make<ReadonlyArray<AttemptRecord>>([]);
     const parks = yield* Ref.make<ReadonlyArray<ParkRecord>>([]);
     const processed = yield* Ref.make<string | null>(null);
+    const barrier = yield* Ref.make(0);
     const read = () =>
-      Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed)]).pipe(
-        Effect.map(([currentAttempts, currentParks, currentProcessed]) =>
-          fold(
+      Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed), Ref.get(barrier)]).pipe(
+        Effect.map(([currentAttempts, currentParks, currentProcessed, barrierAtMillis]) => ({
+          ...fold(
             {
               claim: null,
               attempts: currentAttempts,
@@ -186,7 +192,8 @@ const makeCoordination = () =>
             },
             "cogwork",
           ),
-        ),
+          barrierAtMillis,
+        })),
       );
     return {
       service: {
@@ -204,7 +211,7 @@ const makeCoordination = () =>
             ...current,
             ParkRecord.make({ reason, atMillis: current.length + 1 }),
           ]).pipe(Effect.andThen(read())),
-        handBack: () => Effect.die("unused"),
+        handBack: () => Ref.set(barrier, 2_000).pipe(Effect.andThen(read())),
         observe: () => Effect.succeed("moved"),
         markProcessed: (_ref, revision) => Ref.set(processed, revision),
       } satisfies CoordinationService,
@@ -431,6 +438,74 @@ describe("WorkflowRun", () => {
 
       const runs = yield* (yield* RunLedger).listRuns(10);
       assert.lengthOf(runs, 2);
+      assert.deepInclude((yield* notifications.list)[0], {
+        operation: publish,
+        summary: "Published",
+      });
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("replans the frozen operation after handback", () =>
+    Effect.gen(function* () {
+      const publish = decodeNode("publish");
+      const [summarize] = document.operations;
+      assert.isDefined(summarize);
+      if (!summarize) return;
+      const replannedDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        ...document,
+        operations: [...document.operations, { ...summarize, id: publish, name: "Publish" }],
+      });
+      const replannedService: WorkflowsService = {
+        ...workflowService,
+        get: () =>
+          Effect.succeed({
+            ...workflowRecord,
+            workingCopy: replannedDocument,
+            publishedCopy: replannedDocument,
+          }),
+      };
+      const { runner, coordination, notifications } = yield* testProgram(
+        [
+          {
+            summary: "Published",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { notification: "Published" },
+          },
+        ],
+        {},
+        replannedService,
+      );
+      const pending = WorkflowActionPlan.make({
+        item: keyOf(admission.event.key),
+        workflow,
+        attempt: decodeRun("publish-plan"),
+        operation: publish,
+        revision: admission.event.revision,
+        createdAtMillis: 1,
+        digest: "publish-plan",
+        summary: "Waiting for a Workspace",
+        answers: {},
+        handOff: null,
+        steps: [
+          WorkflowActionPlanStep.make({
+            position: 0,
+            entry: notifyEntry,
+            parameters: [],
+            inputs: { notification: "stale" },
+            target: { _tag: "NoWorkspace" },
+            writeKey: "publish-plan:0",
+            status: "pending",
+            failures: 0,
+            artifact: null,
+          }),
+        ],
+      });
+      yield* (yield* WorkflowActionPlanStore).create(pending);
+      yield* coordination.service.handBack();
+
+      yield* runner.execute(admission);
+
       assert.deepInclude((yield* notifications.list)[0], {
         operation: publish,
         summary: "Published",
