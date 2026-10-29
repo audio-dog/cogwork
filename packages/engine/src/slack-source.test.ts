@@ -80,9 +80,14 @@ const mentioned = message({ ts: "90.000", text: "Could <@U123> review this?" });
 const reply = message({
   ts: "91.000",
   threadTs: mentioned.ts,
-  text: "I added the reproduction steps.",
+  text: "<@U789|Morgan> added the reproduction steps.",
   user: "U789",
 });
+const userNames = new Map([
+  ["U123", "Morgan"],
+  ["U456", "Taylor"],
+  ["U789", "Morgan"],
+]);
 
 interface SlackClientState {
   readonly search: ReadonlyArray<SlackMessage>;
@@ -90,6 +95,7 @@ interface SlackClientState {
   readonly reactions: ReadonlyArray<SlackMessage>;
   readonly replies: ReadonlyArray<SlackMessage>;
   readonly failure: SourceFailure | null;
+  readonly contextFailure?: SourceFailure;
 }
 
 class SlackClientStateRef extends Context.Service<SlackClientStateRef, Ref.Ref<SlackClientState>>()(
@@ -114,16 +120,22 @@ const clientLayer: Layer.Layer<SlackClient | SlackClientStateRef> = Layer.effect
       Ref.get(stateRef).pipe(
         Effect.flatMap((state) => (state.failure ? state.failure : Effect.succeed(select(state)))),
       );
+    const readContext = <A>(select: (state: SlackClientState) => A) =>
+      Ref.get(stateRef).pipe(
+        Effect.flatMap((state) =>
+          state.contextFailure ? state.contextFailure : Effect.succeed(select(state)),
+        ),
+      );
     return {
       searchMessages: () => read((state) => state.search),
       history: () => read((state) => state.history),
       reactions: () => read((state) => state.reactions),
-      replies: () => read((state) => state.replies),
+      replies: () => readContext((state) => state.replies),
       channels: () => Effect.succeed([{ id: "C123", name: "reviews" }]),
       emojis: () => Effect.succeed(["eyes"]),
-      channelName: () => Effect.succeed("reviews"),
-      userName: (_session, user) => Effect.succeed(user === "U456" ? "Taylor" : "Morgan"),
-      permalink: () => Effect.succeed("https://example.slack.com/archives/C123/p90000"),
+      channelName: () => readContext(() => "reviews"),
+      userName: (_session, user) => readContext(() => userNames.get(user) ?? user),
+      permalink: () => readContext(() => "https://example.slack.com/archives/C123/p90000"),
     } satisfies SlackClientService;
   }),
 ).pipe(Layer.provideMerge(SlackClientStateRef.layer));
@@ -183,10 +195,34 @@ describe("Slack Trigger source", () => {
         {
           author: "Morgan",
           authorAssociation: null,
-          body: "I added the reproduction steps.",
+          body: "@Morgan added the reproduction steps.",
           createdAtMillis: 91_000,
         },
       ]);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("keeps observing when Slack context lookups are unavailable", () =>
+    Effect.gen(function* () {
+      yield* Ref.update(yield* SlackClientStateRef, (state) => ({
+        ...state,
+        contextFailure: new SourceFailure({
+          source: "slack",
+          reason: "unavailable",
+          retryAfterMillis: null,
+          message: "Slack API error: message_not_found",
+        }),
+      }));
+      yield* TestClock.setTime(100_000);
+      const source = yield* make;
+      const events = yield* source
+        .observe([subscription("slack.i-am-mentioned", [])])
+        .pipe(Stream.take(1), Stream.runCollect);
+
+      assert.strictEqual(events.length, 1);
+      assert.include(events[0]?.workContext?.body ?? "", "#C123");
+      assert.include(events[0]?.workContext?.body ?? "", "U456: Could @U123 review this?");
+      assert.notInclude(events[0]?.workContext?.body ?? "", "Permalink:");
     }).pipe(Effect.provide(testLayer)),
   );
 
@@ -450,6 +486,63 @@ describe("Slack Trigger source", () => {
 
       assert.strictEqual(failure.reason, "rate-limited");
       assert.strictEqual(failure.retryAfterMillis, 12_000);
+    }),
+  );
+
+  it.effect("reads search result channel IDs", () =>
+    Effect.gen(function* () {
+      const http = HttpClient.make((request) =>
+        Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              JSON.stringify({
+                ok: true,
+                messages: {
+                  matches: [
+                    {
+                      channel: { id: "C123", name: "reviews" },
+                      ts: "90.000",
+                      text: "Could <@U123> review this?",
+                    },
+                  ],
+                  paging: { page: 1, pages: 1 },
+                },
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            ),
+          ),
+        ),
+      );
+
+      const messages = yield* makeHttpClient(http).searchMessages(session, 0);
+
+      assert.strictEqual(messages[0]?.channel, "C123");
+    }),
+  );
+
+  it.effect("lists standard and custom Slack emoji", () =>
+    Effect.gen(function* () {
+      const http = HttpClient.make((request, url) => {
+        assert.strictEqual(url.searchParams.get("include_categories"), "true");
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              JSON.stringify({
+                ok: true,
+                emoji: { party_parrot: "https://example.slack.com/party-parrot.png" },
+                categories: [{ name: "Smileys", emoji_names: ["eyes", "wave"] }],
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            ),
+          ),
+        );
+      });
+
+      const emojis = yield* makeHttpClient(http).emojis(session);
+
+      assert.deepStrictEqual(emojis, ["eyes", "party_parrot", "wave"]);
     }),
   );
 

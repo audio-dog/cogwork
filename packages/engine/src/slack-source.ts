@@ -207,6 +207,7 @@ const RawMessage = Schema.Struct({
   ts: Schema.String,
   text: Schema.optional(Schema.String),
   user: Schema.optional(Schema.String),
+  channel: Schema.optional(Schema.Struct({ id: Schema.String })),
   channel_id: Schema.optional(Schema.String),
   thread_ts: Schema.optional(Schema.String),
   app_id: Schema.optional(Schema.String),
@@ -219,7 +220,7 @@ const SearchResponse = Schema.Struct({
   ok: Schema.Literal(true),
   messages: Schema.Struct({
     matches: Schema.Array(RawMessage),
-    pagination: Schema.optional(Schema.Struct({ page: Schema.Finite, page_count: Schema.Finite })),
+    paging: Schema.optional(Schema.Struct({ page: Schema.Finite, pages: Schema.Finite })),
   }),
 });
 const HistoryResponse = Schema.Struct({
@@ -246,6 +247,14 @@ const ChannelsResponse = Schema.Struct({
 const EmojiResponse = Schema.Struct({
   ok: Schema.Literal(true),
   emoji: Schema.Record(Schema.String, Schema.String),
+  categories: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        name: Schema.optional(Schema.String),
+        emoji_names: Schema.optional(Schema.Array(Schema.String)),
+      }),
+    ),
+  ),
 });
 const ChannelResponse = Schema.Struct({
   ok: Schema.Literal(true),
@@ -273,7 +282,7 @@ const SlackEnvelope = Schema.Struct({
 type RawMessageValue = typeof RawMessage.Type;
 
 const normalizeMessage = (message: RawMessageValue, channel: string): SlackMessage => ({
-  channel: message.channel_id ?? channel,
+  channel: message.channel_id ?? message.channel?.id ?? channel,
   ts: message.ts,
   threadTs: message.thread_ts ?? null,
   text: message.text ?? "",
@@ -396,10 +405,10 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
         }).pipe(
           Effect.flatMap(decodeSlack(SearchResponse)),
           Effect.map((response) => {
-            const next = response.messages.pagination;
+            const paging = response.messages.paging;
             return [
               response.messages.matches.map((message) => normalizeMessage(message, message.channel_id ?? "")),
-              next && next.page < next.page_count ? Option.some(page + 1) : Option.none(),
+              paging && paging.page < paging.pages ? Option.some(page + 1) : Option.none(),
             ] as const;
           }),
         ),
@@ -465,9 +474,16 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
       ).pipe(Stream.runCollect),
     ),
     emojis: Effect.fn("SlackClient.emojis")((session) =>
-      callSlack(client, session, "emoji.list", {}).pipe(
+      callSlack(client, session, "emoji.list", { include_categories: "true" }).pipe(
         Effect.flatMap(decodeSlack(EmojiResponse)),
-        Effect.map((response) => Object.keys(response.emoji).toSorted()),
+        Effect.map((response) =>
+          [
+            ...new Set([
+              ...Object.keys(response.emoji),
+              ...(response.categories ?? []).flatMap((category) => category.emoji_names ?? []),
+            ]),
+          ].toSorted(),
+        ),
       ),
     ),
     channelName: Effect.fn("SlackClient.channelName")((session, channel) =>
@@ -519,6 +535,15 @@ const slackSession = Effect.fn("SlackSource.session")(function* (connections: Co
   } satisfies SlackSession;
 });
 
+const isContextLookupFailure = (failure: SourceFailure) =>
+  failure.reason === "unavailable" || failure.reason === "decode";
+
+const withContextFallback = <A>(lookup: Effect.Effect<A, SourceFailure>, fallback: A) =>
+  lookup.pipe(Effect.catchIf(isContextLookupFailure, () => Effect.succeed(fallback)));
+
+const mentionedUserIds = (text: string) =>
+  [...text.matchAll(/<@([^>|]+)(?:\|[^>]+)?>/g)].flatMap((match) => (match[1] ? [match[1]] : []));
+
 const resolvedWorkContext = Effect.fn("SlackSource.workContext")(function* (
   client: SlackClientService,
   session: SlackSession,
@@ -526,27 +551,32 @@ const resolvedWorkContext = Effect.fn("SlackSource.workContext")(function* (
   thread: ReadonlyArray<SlackMessage>,
   heading: string,
 ) {
-  const channelName = yield* client.channelName(session, selected.channel);
-  const permalink = yield* client.permalink(session, selected.channel, selected.ts);
-  const mentionedUsers = thread.flatMap((message) =>
-    [...message.text.matchAll(/<@([^>]+)>/g)].flatMap((match) => (match[1] ? [match[1]] : [])),
+  const channelName = yield* withContextFallback(
+    client.channelName(session, selected.channel),
+    selected.channel,
   );
+  const permalink = yield* withContextFallback(client.permalink(session, selected.channel, selected.ts), "");
+  const mentionedUsers = thread.flatMap((message) => mentionedUserIds(message.text));
   const users = [
     ...new Set([...thread.flatMap((message) => (message.user ? [message.user] : [])), ...mentionedUsers]),
   ];
   const names = new Map(
     yield* Effect.forEach(users, (user) =>
-      Effect.map(client.userName(session, user), (name) => [user, name] as const),
+      Effect.map(withContextFallback(client.userName(session, user), user), (name) => [user, name] as const),
     ),
   );
   const authorOf = (message: SlackMessage) =>
     message.user ? (names.get(message.user) ?? message.user) : "Slack";
   const resolvedText = (message: SlackMessage) =>
-    message.text.replaceAll(/<@([^>]+)>/g, (_mention, user: string) => `@${names.get(user) ?? user}`);
+    message.text.replaceAll(
+      /<@([^>|]+)(?:\|[^>]+)?>/g,
+      (_mention, user: string) => `@${names.get(user) ?? user}`,
+    );
+  const permalinkLine = permalink ? [`Permalink: ${permalink}`] : [];
   return {
     body: [
       `${heading} in #${channelName}`,
-      `Permalink: ${permalink}`,
+      ...permalinkLine,
       "",
       `${authorOf(selected)}: ${resolvedText(selected)}`,
     ].join("\n"),
@@ -566,7 +596,10 @@ const hydratedThread = Effect.fn("SlackSource.hydratedThread")(function* (
   session: SlackSession,
   message: SlackMessage,
 ) {
-  const thread = yield* client.replies(session, message.channel, rootTimestampOf(message));
+  const thread = yield* withContextFallback(
+    client.replies(session, message.channel, rootTimestampOf(message)),
+    [message],
+  );
   const selected = thread.find((candidate) => candidate.ts === message.ts) ?? message;
   const complete = thread.some((candidate) => candidate.ts === selected.ts) ? thread : [selected, ...thread];
   return { selected, thread: complete } as const;
@@ -603,7 +636,7 @@ const mentionEvents = Effect.fn("SlackSource.mentionEvents")(function* (
       if (channel && message.channel !== channel) return null;
       const hydrated = yield* hydratedThread(client, session, message);
       if (isCogworkMessage(hydrated.selected)) return null;
-      if (!hydrated.selected.text.includes(`<@${session.user}>`)) return null;
+      if (!mentionedUserIds(hydrated.selected.text).includes(session.user)) return null;
       const workContext = yield* resolvedWorkContext(
         client,
         session,
