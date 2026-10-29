@@ -23,7 +23,7 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { markdownCode, parseTriageProposal, statusReason } from "./comments";
-import { FollowUpMarker } from "./follow-up";
+import { FollowUpMarker, type FollowUpTrigger } from "./follow-up";
 import { IssueTrackerError } from "./issue-tracker";
 
 export interface MarkerSpan {
@@ -473,10 +473,31 @@ export const parseHandbacks = (codec: WireCodec, body: string) =>
     okToArray(decodeHandback({ by: pairs.by, atMillis: Number(pairs.at), note: decodeNote(pairs.note) })),
   );
 
+const followUpTriggerKinds = [
+  "human-feedback",
+  "trusted-bot-finding",
+  "failing-check",
+  "merge-conflict",
+] as const satisfies ReadonlyArray<FollowUpTrigger["kind"]>;
+
+export const parseFollowUpTrigger = (codec: WireCodec, body: string): FollowUpTrigger | null => {
+  const pairs = pairsNamed(codec, body, "handback").at(-1);
+  const kind = followUpTriggerKinds.find((candidate) => candidate === pairs?.trigger);
+  if (!kind) return null;
+  const atMillis = Number(pairs?.triggerAt);
+  if (!Number.isFinite(atMillis)) return null;
+  return { kind, atMillis };
+};
+
 export const parseParks = (codec: WireCodec, body: string) =>
   pairsNamed(codec, body, "park").flatMap((pairs) =>
     pairs.record === undefined ? [] : okToArray(decodePark(decodeNote(pairs.record))),
   );
+
+export const parseEngineHandoffAtMillis = (codec: WireCodec, body: string) => {
+  const atMillis = Number(pairsNamed(codec, body, "engine-handoff").at(-1)?.at);
+  return Number.isFinite(atMillis) ? atMillis : null;
+};
 
 export const parseFollowUp = (codec: WireCodec, body: string) => {
   const candidates = pairsNamed(codec, body, "follow-up").flatMap((pairs) =>
@@ -489,6 +510,8 @@ export const parseFollowUp = (codec: WireCodec, body: string) => {
         baseDivergence: pairs.base ?? "none",
         // Omit when absent so the schema default (0) applies rather than a NaN from `Number(undefined)`.
         ...(pairs.bot === undefined ? {} : { botTriggerAtMillis: Number(pairs.bot) }),
+        ...(pairs.failing === undefined ? {} : { latestFailingCheckAtMillis: Number(pairs.failing) }),
+        ...(pairs.attempt === undefined ? {} : { attemptAtMillis: Number(pairs.attempt) }),
       }),
     ),
   );
@@ -536,10 +559,14 @@ export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
     pairs: `workflow=${attempt.operation.workflow} operation=${attempt.operation.operation} outcome=${attempt.outcome}${attempt.terminal === true ? " terminal=true" : ""} at=${attempt.atMillis} root=${attempt.lineage.root} parent=${attempt.lineage.parent ?? "none"} hop=${attempt.lineage.hop}${attempt.reason ? ` reason=${encodeURIComponent(attempt.reason)}` : ""}`,
   });
 
-export const serializeHandback = (codec: WireCodec, handback: HandbackRecordType) =>
+export const serializeHandback = (
+  codec: WireCodec,
+  handback: HandbackRecordType,
+  trigger?: FollowUpTrigger,
+) =>
   codec.encode({
     name: "handback",
-    pairs: `by=${handback.by} at=${handback.atMillis}${handback.note === null ? "" : ` note=${encodeURIComponent(handback.note)}`}`,
+    pairs: `by=${handback.by} at=${handback.atMillis}${handback.note === null ? "" : ` note=${encodeURIComponent(handback.note)}`}${trigger ? ` trigger=${trigger.kind} triggerAt=${trigger.atMillis}` : ""}`,
   });
 
 export const serializePark = (codec: WireCodec, park: ParkRecord) =>
@@ -548,10 +575,16 @@ export const serializePark = (codec: WireCodec, park: ParkRecord) =>
     pairs: `record=${encodeURIComponent(Schema.encodeSync(Schema.fromJsonString(ParkRecordSchema))(park))}`,
   });
 
+export const serializeEngineHandoff = (codec: WireCodec, atMillis: number) =>
+  codec.encode({ name: "engine-handoff", pairs: `at=${atMillis}` });
+
+export const serializeEngineHandoffCleared = (codec: WireCodec) =>
+  codec.encode({ name: "engine-handoff", pairs: "at=none" });
+
 export const serializeFollowUp = (codec: WireCodec, marker: FollowUpMarker) =>
   codec.encode({
     name: "follow-up",
-    pairs: `checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence} bot=${marker.botTriggerAtMillis}`,
+    pairs: `checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence} bot=${marker.botTriggerAtMillis}${marker.latestFailingCheckAtMillis === undefined ? "" : ` failing=${marker.latestFailingCheckAtMillis}`}${marker.attemptAtMillis === undefined ? "" : ` attempt=${marker.attemptAtMillis}`}`,
   });
 
 const detailSection = (codec: WireCodec, detail: string | null) => {

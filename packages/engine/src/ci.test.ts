@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { type CheckRun, checkState } from "./ci";
+import { type CheckRun, checkState, latestFailingCheckAtMillis } from "./ci";
 
 const run = (over: Partial<CheckRun> & { readonly name: string }): CheckRun => ({
   status: "completed",
@@ -51,6 +51,13 @@ describe("checkState", () => {
         run({ name: "ci", conclusion: "failure", startedAtMillis: 2 }),
       ]),
       "failing",
+    );
+  });
+
+  it("keeps a failing check completion when the daemon clock is behind", () => {
+    assert.strictEqual(
+      latestFailingCheckAtMillis([run({ name: "ci", conclusion: "failure", completedAtMillis: 2_000 })]),
+      2_000,
     );
   });
 });

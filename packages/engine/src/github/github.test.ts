@@ -24,6 +24,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
@@ -870,6 +871,7 @@ describe("GitHub adapters", () => {
                 status: "completed",
                 conclusion: "failure",
                 started_at: "2026-09-11T12:00:00Z",
+                completed_at: "2026-09-11T12:01:00Z",
               },
             ],
           }),
@@ -1229,9 +1231,11 @@ describe("GitHub adapters", () => {
 
   it.effect("reads failing checks, PR human comments, /fresh, and the follow-up marker from a bot PR", () =>
     Effect.gen(function* () {
+      yield* TestClock.adjust("1 second");
       const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#5");
       assert.strictEqual(observed?.pr?.checks, "failing");
+      assert.strictEqual(observed?.pr?.latestFailingCheckAtMillis, 250);
       assert.strictEqual(observed?.pr?.latestHumanCommentAtMillis, 200);
       assert.isTrue(observed?.pr?.fresh);
       assert.deepStrictEqual(observed?.pr?.followUp, {
@@ -1278,7 +1282,14 @@ describe("GitHub adapters", () => {
             },
           ],
           checks: [
-            { sha: "sha-100", name: "ci", status: "completed", conclusion: "failure", startedAtMillis: 1 },
+            {
+              sha: "sha-100",
+              name: "ci",
+              status: "completed",
+              conclusion: "failure",
+              startedAtMillis: 1,
+              completedAtMillis: 250,
+            },
           ],
         }),
       ),

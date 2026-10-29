@@ -223,6 +223,7 @@ describe("noProgressCount", () => {
 
 describe("noProgressAfterRound", () => {
   const context = (noProgress: number): FollowUpContext => ({
+    previousMarker: null,
     checks: "passing",
     humanCommentAtMillis: 0,
     botTriggerAtMillis: 0,
@@ -301,9 +302,27 @@ describe("followUpContext", () => {
     assert.strictEqual(context.baseDivergence, "conflict");
   });
 
-  it("carries the latest bot-trigger time so the next marker records it", () => {
-    const context = followUpContext(pr({ latestBotTriggerAtMillis: 42 }));
+  it("carries available trigger timestamps and leaves missing timestamps absent", () => {
+    const previousMarker = {
+      checks: "passing" as const,
+      humanCommentAtMillis: 0,
+      noProgress: 0,
+      baseDivergence: "none" as const,
+      botTriggerAtMillis: 20,
+    };
+    const context = followUpContext(
+      pr({
+        latestBotTriggerAtMillis: 42,
+        latestFailingCheckAtMillis: 43,
+        followUp: previousMarker,
+      }),
+    );
     assert.strictEqual(context.botTriggerAtMillis, 42);
+    assert.strictEqual(context.latestFailingCheckAtMillis, 43);
+    assert.deepStrictEqual(context.previousMarker, previousMarker);
+
+    const clockCapped = followUpContext(pr({ checks: "failing", latestFailingCheckAtMillis: null }));
+    assert.strictEqual(clockCapped.latestFailingCheckAtMillis, undefined);
   });
 
   it("stalls a bot round that follows rounds which changed nothing", () => {

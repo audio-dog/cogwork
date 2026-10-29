@@ -5,9 +5,12 @@ export interface CheckRun {
   readonly status: string;
   readonly conclusion: string | null;
   readonly startedAtMillis: number;
+  readonly completedAtMillis?: number;
 }
 
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
+
+const isFailing = (run: CheckRun) => run.conclusion !== null && failingConclusions.has(run.conclusion);
 
 const latestPerName = (runs: ReadonlyArray<CheckRun>) => [
   ...runs
@@ -21,8 +24,12 @@ const latestPerName = (runs: ReadonlyArray<CheckRun>) => [
 
 export const checkState = (runs: ReadonlyArray<CheckRun>): CheckState => {
   const latest = latestPerName(runs);
-  if (latest.some((run) => run.conclusion !== null && failingConclusions.has(run.conclusion)))
-    return "failing";
+  if (latest.some(isFailing)) return "failing";
   if (latest.some((run) => run.status !== "completed")) return "pending";
   return "passing";
 };
+
+export const latestFailingCheckAtMillis = (runs: ReadonlyArray<CheckRun>) =>
+  latestPerName(runs)
+    .filter(isFailing)
+    .reduce((latest, run) => Math.max(latest, run.completedAtMillis ?? 0), 0) || null;
