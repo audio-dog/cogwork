@@ -367,6 +367,13 @@ export const make = Effect.gen(function* () {
     if (outcome === "redelivered") return;
     const matched = matchTriggerEvent(active, event);
     if (matched.length === 0) return;
+    if (event.payload?._tag === "GranolaNoteRejected") {
+      yield* coordination.park(event.key, {
+        _tag: "PlanRejected",
+        reason: event.payload.reason,
+        entry: event.entry,
+      });
+    }
     yield* Effect.forEach(
       matched,
       (subscription) => {

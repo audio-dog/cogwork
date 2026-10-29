@@ -250,7 +250,7 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("admits every matching Trigger after one revision move", () =>
+  it.effect("observes and parks one rejection before admitting every matching Trigger", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make<WorkflowRecord>({
         ...record(true),
@@ -260,12 +260,23 @@ describe("TriggerObservation", () => {
       const processed = yield* Ref.make<string | null>(null);
       const observed = yield* Ref.make(0);
       const currentRevision = yield* Ref.make<string | null>(null);
+      const parks = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const baseCoordination = coordinationService(processed, observed, currentRevision);
+      const coordination: CoordinationService = {
+        ...baseCoordination,
+        park: (ref, reason) =>
+          baseCoordination.read(ref).pipe(
+            Effect.tap((view) => Effect.sync(() => assert.isNotNull(view.revision))),
+            Effect.andThen(Ref.update(parks, (current) => [...current, reason])),
+            Effect.andThen(baseCoordination.read(ref)),
+          ),
+      };
       const scripted = yield* makeScriptedSource("granola", granolaEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
-        Effect.provideService(Coordination, coordinationService(processed, observed, currentRevision)),
+        Effect.provideService(Coordination, coordination),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
@@ -288,11 +299,19 @@ describe("TriggerObservation", () => {
         atMillis: 1,
         entry: granolaEntry,
         workspace: null,
+        payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
       });
 
       assert.lengthOf(yield* Fiber.join(changes), 2);
       assert.lengthOf(yield* observation.eligible, 2);
       assert.strictEqual(yield* Ref.get(observed), 1);
+      assert.deepStrictEqual(yield* Ref.get(parks), [
+        {
+          _tag: "PlanRejected",
+          reason: "Granola note has no transcript",
+          entry: granolaEntry,
+        },
+      ]);
     }).pipe(Effect.scoped),
   );
 
