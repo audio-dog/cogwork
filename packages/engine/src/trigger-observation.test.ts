@@ -137,7 +137,7 @@ const selectedTrackerItem: TrackerItem = {
 const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* () {
   const current = yield* Ref.make(record(true, selectedDocument));
   const processed = yield* Ref.make<string | null>(null);
-  const observed = yield* Ref.make(0);
+  const observed = yield* Ref.make<ReadonlySet<string>>(new Set());
   const trackerCalls = yield* Ref.make(0);
   const scripted = yield* makeScriptedSource("clock", clockEntries);
   const store = yield* makeMemoryTriggerObservationStore;
@@ -181,7 +181,7 @@ const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => 
 
 const coordinationService = (
   processed: Ref.Ref<string | null>,
-  observed: Ref.Ref<number>,
+  observed: Ref.Ref<ReadonlySet<string>>,
 ): CoordinationService => ({
   fold,
   read: () =>
@@ -202,7 +202,10 @@ const coordinationService = (
   recordAttempt: () => Effect.die("unused"),
   park: () => Effect.die("unused"),
   handBack: () => Effect.die("unused"),
-  observe: () => Ref.update(observed, (count) => count + 1).pipe(Effect.map(() => "moved" as const)),
+  observe: (_ref, revision) =>
+    Ref.modify(observed, (current) =>
+      current.has(revision) ? ["redelivered", current] : ["moved", new Set([...current, revision])],
+    ),
   markProcessed: (_ref, revision) => Ref.set(processed, revision),
 });
 
@@ -239,7 +242,7 @@ describe("TriggerObservation", () => {
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>(null);
-      const observed = yield* Ref.make(0);
+      const observed = yield* Ref.make<ReadonlySet<string>>(new Set());
       const scripted = yield* makeScriptedSource("clock", clockEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
@@ -264,8 +267,19 @@ describe("TriggerObservation", () => {
       yield* Fiber.join(changed);
 
       assert.lengthOf(yield* observation.eligible, 1);
-      assert.strictEqual(yield* Ref.get(observed), 1);
+      assert.strictEqual((yield* Ref.get(observed)).size, 1);
       assert.lengthOf(yield* scripted.subscriptions, 1);
+
+      const redelivered = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(event);
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(redelivered)));
 
       yield* Ref.set(current, record(false));
       const declined = yield* observation.changes.pipe(
@@ -284,7 +298,7 @@ describe("TriggerObservation", () => {
       yield* TestClock.adjust("1 second");
 
       assert.isTrue(Option.isNone(yield* Fiber.join(declined)));
-      assert.strictEqual(yield* Ref.get(observed), 1);
+      assert.strictEqual((yield* Ref.get(observed)).size, 1);
 
       yield* bus.publish({ _tag: "WorkflowChanged", workflow: record(false) });
       yield* Effect.yieldNow;

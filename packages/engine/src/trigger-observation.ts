@@ -383,14 +383,13 @@ export const make = Effect.gen(function* () {
     const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
     const workspaceIds = registryState.workspaces.map(({ config }) => config.name);
     const matched = matchTriggerEvent(subscriptionsOf(listed.workflows, workspaceIds), event);
-    yield* Effect.forEach(matched, (subscription) =>
-      coordination.observe(event.key, event.revision, event.cause).pipe(
-        Effect.flatMap(() => {
-          const admission = { event, subscription, lineage: lineageOf(event) } satisfies TriggerAdmission;
-          return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
-        }),
-      ),
-    );
+    if (matched.length === 0) return;
+    const delivery = yield* coordination.observe(event.key, event.revision, event.cause);
+    if (delivery === "redelivered") return;
+    yield* Effect.forEach(matched, (subscription) => {
+      const admission = { event, subscription, lineage: lineageOf(event) } satisfies TriggerAdmission;
+      return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
+    });
   });
 
   const observe = (
