@@ -147,6 +147,17 @@ const admission: TriggerAdmission = {
     atMillis: 1_000,
     entry: scheduleEntry,
     workspace: null,
+    workContext: {
+      body: "Slack conversation in #reviews\nPermalink: https://example.slack.com/message",
+      comments: [
+        {
+          author: "Taylor",
+          authorAssociation: null,
+          body: "Please review this.",
+          createdAtMillis: 900,
+        },
+      ],
+    },
   },
   subscription: {
     workflow,
@@ -327,6 +338,11 @@ describe("WorkflowRun", () => {
 
       assert.strictEqual(run.status, "succeeded");
       assert.isNull(plan?.sandbox.workspace);
+      assert.strictEqual(plan?.workContext.prose.body, admission.event.workContext?.body);
+      assert.deepStrictEqual(
+        plan?.workContext.prose.comments.map((comment) => ({ ...comment })),
+        admission.event.workContext?.comments,
+      );
       assert.strictEqual(
         plan?.instructions.find(({ source }) => source === "workflow-operation")?.content,
         "implement-agent:Summarize the day.",

@@ -177,7 +177,7 @@ export const make = Effect.gen(function* () {
       workContext: {
         reference: { workItem: item, url: null },
         facts: { roles: [], assignees: [], openBlockers: 0, claim, priority: "medium", pr: null },
-        prose: {
+        prose: admission.event.workContext ?? {
           body: `Scheduled instant ${admission.event.revision} for Workflow ${record.id}.`,
           comments: [],
         },
