@@ -247,7 +247,57 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("repairs a partial Workflow admission on source redelivery", () =>
+  it.effect("keeps matching Workflow admissions invisible until the batch is durable", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const secondWrite = yield* Deferred.make<void>();
+      const releaseWrite = yield* Deferred.make<void>();
+      const scripted = yield* makeScriptedSource("clock", clockEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const blockedStore: TriggerObservationStoreService = {
+        ...store,
+        putAll: (admissions) =>
+          Deferred.succeed(secondWrite, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseWrite)),
+            Effect.andThen(store.putAll(admissions)),
+          ),
+      };
+      const workflows = {
+        ...workflowService(current),
+        list: Effect.succeed({
+          workflows: [record(true), { ...record(true), id: otherWorkflowId }],
+          unreadable: [],
+        }),
+      } satisfies WorkflowsService;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflows),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, blockedStore),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+      );
+      yield* observation.refresh;
+      yield* Effect.yieldNow;
+      yield* scripted.emit({
+        ...event,
+        key: { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000" },
+        revision: "900.000",
+        atMillis: 900_000,
+      });
+      yield* Deferred.await(secondWrite);
+
+      assert.deepStrictEqual(yield* observation.eligible, []);
+
+      yield* Deferred.succeed(releaseWrite, undefined);
+      yield* Effect.yieldNow;
+      assert.lengthOf(yield* observation.eligible, 2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("retries an atomic Workflow admission batch on source redelivery", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>(null);
@@ -260,22 +310,16 @@ describe("TriggerObservation", () => {
       const store = yield* makeMemoryTriggerObservationStore;
       const flakyStore: TriggerObservationStoreService = {
         ...store,
-        put: (admission: Parameters<typeof store.put>[0]) =>
+        putAll: (admissions) =>
           Ref.updateAndGet(putCount, (count) => count + 1).pipe(
             Effect.flatMap((count) =>
-              count === 2
+              count === 1
                 ? Deferred.succeed(failedPut, undefined).pipe(
                     Effect.andThen(
                       Effect.fail(new TriggerObservationStoreError({ message: "write failed" })),
                     ),
                   )
-                : store
-                    .put(admission)
-                    .pipe(
-                      Effect.tap(() =>
-                        count === 4 ? Deferred.succeed(repairedPut, undefined) : Effect.void,
-                      ),
-                    ),
+                : store.putAll(admissions).pipe(Effect.tap(() => Deferred.succeed(repairedPut, undefined))),
             ),
           ),
       };
@@ -303,13 +347,18 @@ describe("TriggerObservation", () => {
       yield* Effect.yieldNow;
       yield* scripted.emit(sourceEvent);
       yield* Deferred.await(failedPut);
-      assert.lengthOf(yield* store.admissions, 1);
+      assert.deepStrictEqual(yield* store.admissions, []);
 
       yield* observation.refresh;
       yield* Effect.yieldNow;
+      const repaired = yield* Deferred.await(repairedPut).pipe(
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
       yield* scripted.emit(sourceEvent);
-      yield* Deferred.await(repairedPut);
+      yield* TestClock.adjust("1 second");
 
+      assert.isTrue(Option.isSome(yield* Fiber.join(repaired)));
       assert.lengthOf(yield* observation.eligible, 2);
     }).pipe(Effect.scoped),
   );
@@ -492,15 +541,14 @@ layer(NodeServices.layer)((it) => {
       const result = yield* makeControlStoreTriggerObservationStore.pipe(
         Effect.flatMap((store) =>
           Effect.all([
-            store.put(first),
-            store.put(second),
+            store.putAll([first, second]),
             store.admissions,
             store.complete(first),
             store.admissions,
             store.complete(second),
             store.admissions,
           ]).pipe(
-            Effect.map(([, , stored, firstWasLast, afterFirst, secondWasLast, remaining]) => ({
+            Effect.map(([, stored, firstWasLast, afterFirst, secondWasLast, remaining]) => ({
               stored,
               firstWasLast,
               afterFirst,
@@ -564,15 +612,17 @@ layer(NodeServices.layer)((it) => {
         store.activate([subscription], 3_000).pipe(
           Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 1_000))),
           Effect.andThen(
-            store.put({
-              ...admission,
-              event: {
-                ...admission.event,
-                key: { ...admission.event.key, instantMillis: 1_500 },
-                revision: "1500",
-                atMillis: 1_500,
+            store.putAll([
+              {
+                ...admission,
+                event: {
+                  ...admission.event,
+                  key: { ...admission.event.key, instantMillis: 1_500 },
+                  revision: "1500",
+                  atMillis: 1_500,
+                },
               },
-            }),
+            ]),
           ),
         ),
       );

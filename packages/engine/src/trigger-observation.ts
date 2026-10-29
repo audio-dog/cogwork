@@ -62,7 +62,9 @@ interface StoredAdmissionCount {
 
 export interface TriggerObservationStoreService {
   readonly admissions: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
-  readonly put: (admission: TriggerAdmission) => Effect.Effect<void, TriggerObservationStoreError>;
+  readonly putAll: (
+    admissions: ReadonlyArray<TriggerAdmission>,
+  ) => Effect.Effect<void, TriggerObservationStoreError>;
   readonly complete: (admission: TriggerAdmission) => Effect.Effect<boolean, TriggerObservationStoreError>;
   readonly activate: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -110,21 +112,25 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
   >(new Map());
   return {
     admissions: Effect.map(Ref.get(admissions), (current) => [...current.pending.values()]),
-    put: (admission) =>
+    putAll: (batch) =>
       Ref.update(admissions, (current) => {
-        const key = admissionKey(admission);
-        if (current.processed.has(key)) return current;
-        return { ...current, pending: new Map(current.pending).set(key, admission) };
+        const pending = batch.reduce((next, admission) => {
+          const key = admissionKey(admission);
+          return current.processed.has(key) ? next : new Map(next).set(key, admission);
+        }, current.pending);
+        return { ...current, pending };
       }).pipe(
         Effect.andThen(
           Ref.update(checkpoints, (current) => {
-            const key = subscriptionKey(admission.subscription);
-            const checkpoint = current.get(key);
-            if (!checkpoint) return current;
-            return new Map(current).set(key, {
-              ...checkpoint,
-              checkpointMillis: Math.max(checkpoint.checkpointMillis, checkpointOf(admission)),
-            });
+            return batch.reduce((next, admission) => {
+              const key = subscriptionKey(admission.subscription);
+              const checkpoint = next.get(key);
+              if (!checkpoint) return next;
+              return new Map(next).set(key, {
+                ...checkpoint,
+                checkpointMillis: Math.max(checkpoint.checkpointMillis, checkpointOf(admission)),
+              });
+            }, current);
           }),
         ),
       ),
@@ -173,25 +179,31 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
         Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),
       ),
     ),
-    put: (admission) =>
+    putAll: (admissions) =>
       controlStore
         .withWrite(
           sql.withTransaction(
-            sql`
-              INSERT INTO trigger_admissions (work_item, revision, payload)
-              VALUES (
-                ${keyOf(admission.event.key)},
-                ${admission.event.revision},
-                ${encodeAdmission(admission)}
-              )
-              ON CONFLICT (work_item, revision, workflow, trigger) DO UPDATE SET payload = excluded.payload
-            `.pipe(
-              Effect.andThen(sql`
-                UPDATE trigger_subscription_checkpoints
-                SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
-                WHERE workflow = ${admission.subscription.workflow}
-                  AND trigger = ${admission.subscription.trigger}
-              `),
+            Effect.forEach(
+              admissions,
+              (admission) =>
+                sql`
+                  INSERT INTO trigger_admissions (work_item, revision, payload)
+                  VALUES (
+                    ${keyOf(admission.event.key)},
+                    ${admission.event.revision},
+                    ${encodeAdmission(admission)}
+                  )
+                  ON CONFLICT (work_item, revision, workflow, trigger)
+                  DO UPDATE SET payload = excluded.payload
+                `.pipe(
+                  Effect.andThen(sql`
+                    UPDATE trigger_subscription_checkpoints
+                    SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
+                    WHERE workflow = ${admission.subscription.workflow}
+                      AND trigger = ${admission.subscription.trigger}
+                  `),
+                ),
+              { discard: true },
             ),
           ),
         )
@@ -378,7 +390,7 @@ export const make = Effect.gen(function* () {
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
 
-  const admit = Effect.fn("TriggerObservation.admit")(function* (event: TriggerEvent) {
+  const admit = Effect.fn("TriggerObservation.admit")(function* (source: TriggerSource, event: TriggerEvent) {
     const listed = yield* workflows.list;
     const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
     if (matched.length === 0) return;
@@ -388,12 +400,14 @@ export const make = Effect.gen(function* () {
       current !== null &&
       (current.revision?.observed !== event.revision || current.revision.processed === event.revision);
     if (redeliveryIsClosed) return;
-    yield* Effect.forEach(matched, (subscription) => {
-      const admission = { event, subscription, lineage: lineageOf(event.key) } satisfies TriggerAdmission;
-      const stored = store.put(admission);
-      return outcome === "moved"
-        ? stored.pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid)
-        : stored;
+    const admissions = matched.map(
+      (subscription) => ({ event, subscription, lineage: lineageOf(event.key) }) satisfies TriggerAdmission,
+    );
+    yield* store.putAll(admissions);
+    yield* source.acknowledge?.(event, matched) ?? Effect.void;
+    if (outcome === "redelivered") return;
+    yield* Effect.forEach(admissions, (admission) => PubSub.publish(changes, admission), {
+      discard: true,
     });
   });
 
@@ -403,7 +417,7 @@ export const make = Effect.gen(function* () {
     fingerprint: string,
   ) =>
     source.observe(subscriptions).pipe(
-      Stream.runForEach(admit),
+      Stream.runForEach((event) => admit(source, event)),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(Effect.andThen(waitForRetry(error))),
       ),
