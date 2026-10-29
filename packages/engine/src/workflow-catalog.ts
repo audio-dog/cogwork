@@ -10,6 +10,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { clockEntries, clockSource } from "./clock-source";
+import { granolaWorkflowCatalogContribution } from "./granola-source";
 
 export interface WorkflowCatalogContribution {
   readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
@@ -61,6 +62,7 @@ export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
 
 export const workflowCatalogContributionsLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
+  granolaWorkflowCatalogContribution,
   {
     entries: clockEntries,
     templates: [],
