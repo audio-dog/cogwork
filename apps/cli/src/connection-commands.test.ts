@@ -3,6 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
@@ -125,9 +126,21 @@ describe("Connection commands", () => {
 
   it.effect("routes Slack to browser sign-in", () =>
     Effect.gen(function* () {
-      const failure = yield* Effect.flip(establishmentOf("slack", Option.some("T-STUB"), { _tag: "Stored" }));
+      const result = yield* Effect.result(
+        resolveConnectionSource(
+          { env: Option.none(), githubCli: false, stored: false },
+          "slack",
+          Effect.succeed({ _tag: "ApiKey", key: Redacted.make("must-not-be-read") }),
+        ),
+      );
 
-      assert.strictEqual(failure.message, "Slack Connections use browser sign-in; run cogwork login slack");
+      assert.isTrue(Result.isFailure(result));
+      if (Result.isFailure(result)) {
+        assert.strictEqual(
+          result.failure.message,
+          "Slack Connections use browser sign-in; run cogwork login slack",
+        );
+      }
     }),
   );
 
