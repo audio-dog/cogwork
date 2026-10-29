@@ -545,21 +545,31 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         const account = accountOf(credential);
-        const previous = (yield* sources.stored.load).find((entry) => accountOf(entry) === account);
         const remove = sources.stored.removeCredential;
-        if (!previous && !remove) {
-          return yield* new CredentialError({
-            account,
-            message: "this credential store cannot stage a browser login",
-            retryable: false,
-          });
-        }
-        yield* sources.stored.save(credential);
+        const previous = yield* gateFor(account).withPermit(
+          sources.stored.load.pipe(
+            Effect.map((entries) => entries.find((entry) => accountOf(entry) === account)),
+            Effect.flatMap((previous) => {
+              if (!previous && !remove) {
+                return Effect.fail(
+                  new CredentialError({
+                    account,
+                    message: "this credential store cannot stage a browser login",
+                    retryable: false,
+                  }),
+                );
+              }
+              return sources.stored.save(credential).pipe(Effect.map(() => previous));
+            }),
+          ),
+        );
         const rollback = previous
           ? sources.stored.save(previous)
           : remove?.(credential.issueTracker, credential.organization);
         return yield* restore(effect).pipe(
-          Effect.onError(() => rollback?.pipe(Effect.ignore) ?? Effect.void),
+          Effect.onError(() =>
+            rollback ? gateFor(account).withPermit(rollback).pipe(Effect.ignore) : Effect.void,
+          ),
         );
       }),
     );

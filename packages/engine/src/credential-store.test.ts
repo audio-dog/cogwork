@@ -508,6 +508,43 @@ describe("CredentialStore (stored)", () => {
     }),
   );
 
+  it.effect("keeps a replacement browser grant ahead of an in-flight refresh", () =>
+    Effect.gen(function* () {
+      const previous = stored("acme", expiredWithRefresh());
+      const replacement = stored("acme", storedToken(far, "replacement-token"));
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([previous]);
+      const refreshStarted = yield* Deferred.make<void>();
+      const releaseRefresh = yield* Deferred.make<void>();
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) => Ref.set(credentials, [credential]),
+          removeCredential: () => Ref.set(credentials, []),
+        },
+        refresh: () =>
+          Deferred.succeed(refreshStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseRefresh)),
+            Effect.map(() => rotatedToken()),
+          ),
+      });
+      const refreshing = yield* store
+        .bearerToken(oauthAccount)
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.await(refreshStarted);
+      const withStoredCredential = store.withStoredCredential;
+      if (!withStoredCredential) return assert.fail("Expected staged credential support");
+      const replacing = yield* withStoredCredential(replacement, Effect.void).pipe(
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Deferred.succeed(releaseRefresh, undefined);
+      yield* Fiber.join(refreshing);
+      yield* Fiber.join(replacing);
+
+      const [saved] = yield* Ref.get(credentials);
+      assert.strictEqual(saved && Redacted.value(saved.token.accessToken), "replacement-token");
+    }),
+  );
+
   it.effect("prefers a live stored token over the account's env var", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;
