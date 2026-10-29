@@ -156,6 +156,8 @@ const attendeeText = (value: typeof RestAttendee.Type) => {
   return [value.name, value.email].filter((member): member is string => member !== undefined).join(" · ");
 };
 
+const hasText = (value: string | null | undefined) => Boolean(value?.trim());
+
 const transcriptText = (value: (typeof RestNote.Type)["transcript"]) => {
   if (value === null || value === undefined || typeof value === "string") return value ?? null;
   return value.map(({ speaker, text }) => (speaker ? `${speaker}: ${text}` : text)).join("\n");
@@ -191,10 +193,7 @@ const restPage = (connection: ConnectionId, input: unknown) =>
                 title: note.title,
                 attendees: (note.attendees ?? []).map(attendeeText),
                 calendarEvent: note.calendar_event ?? "",
-                summary:
-                  [note.summary_markdown, note.summary_text, note.summary].find(
-                    (value) => value !== null && value !== undefined,
-                  ) ?? null,
+                summary: [note.summary_markdown, note.summary_text, note.summary].find(hasText) ?? null,
                 transcript: transcriptText(note.transcript),
               })),
             ),

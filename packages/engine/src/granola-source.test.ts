@@ -348,6 +348,7 @@ it.effect("reads every REST page after the supplied watermark", () =>
               created_at: "2026-10-29T16:00:00.000Z",
               updated_at: "2026-10-29T16:00:00.000Z",
               title: "Second",
+              summary_markdown: "",
               summary_text: "Second summary",
               transcript: "Second transcript",
             },
@@ -370,6 +371,7 @@ it.effect("reads every REST page after the supplied watermark", () =>
       notes.map(({ noteId }) => noteId),
       ["note-1", "note-2"],
     );
+    assert.strictEqual(notes[1]?.summary, "Second summary");
     assert.strictEqual(requested[0]?.searchParams.get("updated_after"), "2026-10-28T00:00:00.000Z");
     assert.strictEqual(requested[1]?.searchParams.get("cursor"), "page-2");
   }),
