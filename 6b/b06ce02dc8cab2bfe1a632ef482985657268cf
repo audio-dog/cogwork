@@ -1,0 +1,32 @@
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_f4abcd25549e05::t_ea55d7b10e2366 123-133,135-137
+  s_f4abcd25549e05::t_3c6fd2125e876e 12,258
+packages/engine/src/github/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_3c6fd2125e876e 12,134
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_3c6fd2125e876e 12,136-137
+packages/engine/src/provider-trigger-source.ts
+  s_f4abcd25549e05::t_6bcd6e64eae00e 67,75
+  s_f4abcd25549e05::t_3c6fd2125e876e 8,64-66,140
+  s_f4abcd25549e05::t_ea55d7b10e2366 2,76,99
+packages/engine/src/github/trigger-source.test.ts
+  s_f4abcd25549e05::t_fe3c9186315a1b 13,75-100,102-103,106,237-256,259-304,312-323,359-392
+  s_f4abcd25549e05::t_fc8f759ef7ba2f 19,42-43,74,101,257-258
+  s_f4abcd25549e05::t_aebdad48993f68 305-311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6bb06ce02dc8cab2bfe1a632ef482985657268cf",
+  "prompts": {},
+  "sessions": {
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
