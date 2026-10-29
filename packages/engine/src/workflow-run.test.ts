@@ -38,7 +38,11 @@ import { defaultRunBudget } from "./provider-runner";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import type { TriggerAdmission } from "./trigger-observation";
+import {
+  makeMemoryTriggerObservationStore,
+  type TriggerAdmission,
+  TriggerObservationStore,
+} from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
@@ -48,6 +52,7 @@ const decodeNode = Schema.decodeSync(WorkflowNodeId);
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const decodeRun = Schema.decodeSync(RunId);
 const workflow = decodeWorkflow("daily-summary");
+const siblingWorkflow = decodeWorkflow("sibling-summary");
 const trigger = decodeNode("schedule");
 const operation = decodeNode("summarize");
 const harnessName = Schema.decodeSync(HarnessName)("scripted");
@@ -263,6 +268,7 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
   Effect.gen(function* () {
     const output = yield* Ref.make(objects);
     const coordination = yield* makeCoordination();
+    const observationStore = yield* makeMemoryTriggerObservationStore;
     const notifications = yield* makeNotifications;
     const harness = makeHarness([
       {
@@ -301,13 +307,45 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
     const runner = yield* makeWorkflowRun.pipe(
       Effect.provideService(Workflows, workflowService),
       Effect.provideService(Coordination, coordination.service),
+      Effect.provideService(TriggerObservationStore, observationStore),
       Effect.provideService(Harness, harness),
       Effect.provideService(WorkflowNotifications, notifications),
     );
-    return { runner, coordination, notifications };
+    return { runner, coordination, notifications, observationStore };
   });
 
 describe("WorkflowRun", () => {
+  it.effect("marks a source revision processed after its last sibling Workflow admission", () =>
+    Effect.gen(function* () {
+      const siblingAdmission = {
+        ...admission,
+        subscription: { ...admission.subscription, workflow: siblingWorkflow },
+      } satisfies TriggerAdmission;
+      const { runner, coordination, observationStore } = yield* testProgram([
+        {
+          summary: "First complete",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "First complete" },
+        },
+        {
+          summary: "Second complete",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "Second complete" },
+        },
+      ]);
+      yield* observationStore.put(admission);
+      yield* observationStore.put(siblingAdmission);
+
+      yield* runner.execute(admission);
+      assert.isNull(yield* Ref.get(coordination.processed));
+
+      yield* runner.execute(siblingAdmission);
+      assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("writes Notify me output and keeps the Run workspace-free", () =>
     Effect.gen(function* () {
       const { runner } = yield* testProgram([
