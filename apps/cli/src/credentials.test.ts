@@ -8,6 +8,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
@@ -478,7 +479,6 @@ describe("file-backed credential store", () => {
               access_token: "slack-rotated",
               refresh_token: "slack-refresh-2",
               expires_in: 43_200,
-              scope: "channels:history,chat:write",
             }),
             { status: 200, headers: { "content-type": "application/json" } },
           );
@@ -500,18 +500,24 @@ describe("file-backed credential store", () => {
           },
         });
         const store = yield* CredentialStore.CredentialStore;
-        const credential = yield* store.bearerToken({
-          key: "slack/T-STUB",
-          issueTracker: "slack",
-          organization: "T-STUB",
-          tokenEnv: "SLACK_TOKEN",
-          clientCredentials: null,
-          oauthClientId: null,
-        });
+        const result = yield* Effect.result(
+          store.bearerToken({
+            key: "slack/T-STUB",
+            issueTracker: "slack",
+            organization: "T-STUB",
+            tokenEnv: "SLACK_TOKEN",
+            clientCredentials: null,
+            oauthClientId: null,
+          }),
+        );
+        assert.isTrue(Result.isSuccess(result));
+        if (Result.isFailure(result)) return;
+        const credential = result.success;
         const saved = (yield* file.load)[0]?.token;
 
         assert.strictEqual(Redacted.value(credential.token), "slack-rotated");
         assert.strictEqual(saved?.refreshToken && Redacted.value(saved.refreshToken), "slack-refresh-2");
+        assert.deepStrictEqual(saved?.scopes, []);
         assert.strictEqual(requests[0]?.get("client_secret"), null);
         assert.strictEqual(requests[0]?.get("refresh_token"), "slack-refresh-1");
       }).pipe(

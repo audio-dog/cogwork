@@ -77,7 +77,7 @@ const RefreshResponse = Schema.Struct({
   access_token: Schema.NonEmptyString,
   refresh_token: Schema.NonEmptyString,
   expires_in: Schema.Finite.check(Schema.isGreaterThan(0)),
-  scope: Schema.String,
+  scope: Schema.optional(Schema.String),
 });
 
 const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse);
@@ -248,7 +248,7 @@ export const makeTokenRefresh = (client: HttpClient.HttpClient): CredentialStore
       accessToken: Redacted.make(tokens.access_token),
       refreshToken: Redacted.make(tokens.refresh_token),
       expiresAtMillis: now + tokens.expires_in * 1000,
-      scopes: scopesOf(tokens.scope),
+      scopes: scopesOf(tokens.scope ?? ""),
     };
   });
 
