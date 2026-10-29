@@ -399,8 +399,12 @@ const issuesArgs = ", $filter: IssueFilter, $after: String";
 
 // Mirrors the classify-side assignee ownership gate: when the workspace names an allowlist, an
 // issue owned by anyone else can never classify, so fetching it only costs pages.
-const issuesFilter = (assigneeIds: ReadonlyArray<string> | null, updatedSince?: number) => ({
-  state: { type: { nin: ["completed"] } },
+const issuesFilter = (
+  assigneeIds: ReadonlyArray<string> | null,
+  updatedSince?: number,
+  includeCompleted = false,
+) => ({
+  ...(includeCompleted ? {} : { state: { type: { nin: ["completed"] } } }),
   ...(assigneeIds !== null && assigneeIds.length > 0 ? { assignee: { id: { in: assigneeIds } } } : {}),
   ...(updatedSince === undefined
     ? {}
@@ -813,6 +817,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     coordination: CoordinationScope | null,
     assigneeIds: ReadonlyArray<string> | null = null,
     updatedSince?: number,
+    includeCompleted: boolean = false,
   ) {
     const shape = coordination ? coordinatedIssuesShape : issuesShape;
     const scopeVariables = coordination
@@ -822,7 +827,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
           proposal: coordination.proposalMarker,
         }
       : {};
-    const filter = issuesFilter(assigneeIds, updatedSince);
+    const filter = issuesFilter(assigneeIds, updatedSince, includeCompleted);
     const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
     const issues = yield* Stream.paginate<string | null, typeof IssueNode.Type, IssueTrackerError>(
       null,
@@ -918,7 +923,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return payload.issue.assignee ? [payload.issue.assignee.id] : [];
   });
 
-  const readProse = (ref: LinearTeamRef, issueId: string) => {
+  const readIssueProse = (ref: LinearTeamRef, issueId: string, enforceAdmissionLimit: boolean) => {
     const loadPage = Effect.fn("linear.loadCommentPage")(function* (state: CommentPaginationState) {
       const data = yield* rawData(ref, commentsQuery, { id: issueId, after: state.after });
       const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
@@ -936,7 +941,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
         (state.after === null ? Buffer.byteLength(payload.issue.description ?? "") : 0);
       const withinAdmissionLimit =
         commentCount <= workContextCommentLimit && proseBytes <= workContextProseByteLimit;
-      if (!withinAdmissionLimit) {
+      if (enforceAdmissionLimit && !withinAdmissionLimit) {
         return yield* new IssueTrackerError({
           reason: "unavailable",
           retryable: false,
@@ -980,6 +985,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     );
   };
 
+  const readProse = (ref: LinearTeamRef, issueId: string) => readIssueProse(ref, issueId, true);
+  const readTriggerProse = (ref: LinearTeamRef, issueId: string) => readIssueProse(ref, issueId, false);
+
   return {
     authenticatedUserId: Effect.fn("linear.authenticatedUserId")(function* (ref: LinearTeamRef) {
       const credential = yield* credentialFor(ref);
@@ -1008,6 +1016,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       );
     }),
     readProse,
+    readTriggerProse,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);

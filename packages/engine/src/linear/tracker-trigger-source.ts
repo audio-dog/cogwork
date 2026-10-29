@@ -64,7 +64,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
   if (issueSubscriptions.length === 0) return [];
   const target = targetsFor(workspace).find(({ team }) => issue.identifier.startsWith(`${team}-`));
   if (!target) return [];
-  const prose = yield* client.readProse(target, issue.id);
+  const prose = yield* client.readTriggerProse(target, issue.id);
   const labelEvents = yield* Effect.forEach(issueSubscriptions, (subscription) =>
     Effect.gen(function* () {
       if (subscription.entry !== issueHasLabelKey) return [];
@@ -94,7 +94,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
   );
   const commentEvents = issueSubscriptions.flatMap((subscription) => {
     if (subscription.entry !== newIssueCommentKey) return [];
-    const label = parameterValue(subscription.parameters, "label");
+    const label = parameterValue(subscription.parameters, "label") ?? "";
     const cutoff = catchUpSince(subscription.parameters, subscription.catchUp?.since ?? now, now);
     return prose.comments
       .filter(
@@ -111,12 +111,12 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
               workspace: workspace.config.name,
               id: itemId(issue.identifier),
             },
-            revision: `comment:${comment.id}`,
+            revision: `comment:${comment.id}:label:${label}`,
             cause: { _tag: "Person" },
             atMillis: comment.createdAtMillis,
             entry: newIssueCommentKey,
             workspace: workspace.config.name,
-            parameters: [{ id: "label", value: label ?? "" }],
+            parameters: [{ id: "label", value: label }],
             prose: proseOf(prose.body, prose.comments),
           }) satisfies TriggerEvent,
       );
@@ -136,7 +136,7 @@ const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(func
   const updatedSince =
     cursor === undefined ? undefined : Math.max(0, cursor - providerModifiedSinceGraceMillis);
   const issues = yield* Effect.forEach(targetsFor(workspace), (target) =>
-    client.observeIssues(target, null, null, updatedSince),
+    client.observeIssues(target, null, null, updatedSince, true),
   );
   const events = yield* Effect.forEach(issues.flat(), (issue) =>
     eventsForIssue(client, workspace, selected, issue, now),

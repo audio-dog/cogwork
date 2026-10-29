@@ -196,6 +196,21 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             comment.body.includes(coordination.proposalMarker),
         );
 
+  const readProse: LinearClientService["readProse"] = (_ref, issueId) =>
+    guard(
+      Effect.gen(function* () {
+        const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
+        const issue = issues.find((candidate) => candidate.identifier === issueId);
+        if (!issue) {
+          return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
+        }
+        return {
+          body: seed.issues.find((candidate) => candidate.identifier === issueId)?.description ?? "",
+          comments: [...(comments.get(issueId) ?? [])],
+        };
+      }),
+    );
+
   return {
     authenticatedUserId: () => guard(Effect.succeed(bot.id)),
     observeIssues: (ref, coordination, assigneeIds = null) =>
@@ -227,20 +242,8 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     listWorkflowStates: () => guard(Effect.succeed(states)),
     listComments: (_ref, issueId, _coordination) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
-    readProse: (_ref, issueId) =>
-      guard(
-        Effect.gen(function* () {
-          const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
-          const issue = issues.find((candidate) => candidate.identifier === issueId);
-          if (!issue) {
-            return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
-          }
-          return {
-            body: seed.issues.find((candidate) => candidate.identifier === issueId)?.description ?? "",
-            comments: [...(comments.get(issueId) ?? [])],
-          };
-        }),
-      ),
+    readProse,
+    readTriggerProse: readProse,
     labelAppliedAt: () => Effect.succeed(null),
     addLabel: (ref, issueId, label) =>
       guard(

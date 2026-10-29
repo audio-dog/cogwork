@@ -14,6 +14,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import { vi } from "vitest";
 import type { RegisteredWorkspace } from "../projector";
 import type { TriggerSubscription } from "../trigger-source";
 import { GitHubClient, type RawPull } from "./client";
@@ -36,6 +37,16 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 const registryState = { workspaces: [workspace], failures: [] };
+const botWorkspace: RegisteredWorkspace = {
+  ...workspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: workspaceId,
+    checkoutPath: "/repos/example",
+    issueTracker: { type: "github" },
+    sourceControl: { type: "github", botAllowlist: ["maintainer"] },
+  }),
+};
+const botRegistryState = { workspaces: [botWorkspace], failures: [] };
 const workflow = Schema.decodeSync(WorkflowId)("coding");
 const operation = Schema.decodeSync(WorkflowNodeId)("follow-up");
 const linkedIssueId = Schema.decodeSync(WorkItemId)("#7");
@@ -71,6 +82,20 @@ const issue = (number: number, isPullRequest = false) => ({
   updatedAtMillis: number + 3_000,
 });
 
+const trustedPull: RawPull = {
+  number: 10,
+  url: "https://github.com/acme/example/pull/10",
+  authorLogin: "maintainer",
+  authorAssociation: "MEMBER",
+  draft: false,
+  headSha: "head-sha",
+  baseSha: "base-sha",
+  headRef: "7-work",
+  headRepository: "acme/example",
+  closingIssueNumbers: [7],
+  updatedAtMillis: 3_000,
+};
+
 const pulls: Array<RawPull> = [
   {
     number: 11,
@@ -85,19 +110,7 @@ const pulls: Array<RawPull> = [
     closingIssueNumbers: [99],
     updatedAtMillis: 2_900,
   },
-  {
-    number: 10,
-    url: "https://github.com/acme/example/pull/10",
-    authorLogin: "maintainer",
-    authorAssociation: "MEMBER",
-    draft: false,
-    headSha: "head-sha",
-    baseSha: "base-sha",
-    headRef: "7-work",
-    headRepository: "acme/example",
-    closingIssueNumbers: [7],
-    updatedAtMillis: 3_000,
-  },
+  trustedPull,
 ];
 
 const pullClientLayer = (listedPulls = pulls) =>
@@ -123,7 +136,7 @@ const pullClientLayer = (listedPulls = pulls) =>
   });
 
 describe("GitHub Trigger sources", () => {
-  it.effect("emits current labels and only new markerless person comments", () =>
+  it.effect("emits current labels and keeps person-comment revisions distinct by label", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;
       const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
@@ -134,20 +147,26 @@ describe("GitHub Trigger sources", () => {
             { id: "label", value: "needs-triage" },
             { id: "catch-up-at-most", value: "7" },
           ]),
+          subscription("github.new-comment-from-person", "ready-comment", [
+            { id: "label", value: "ready-for-human" },
+            { id: "catch-up-at-most", value: "7" },
+          ]),
         ])
-        .pipe(Stream.take(2), Stream.runCollect);
+        .pipe(Stream.take(3), Stream.runCollect);
 
       assert.deepStrictEqual(
         [...events].map(({ entry, revision, cause }) => [entry, revision, cause._tag]),
         [
           [issueHasLabelKey, "label:needs-triage:1500", "Unknown"],
-          [newIssueCommentKey, "comment:2", "Person"],
+          [newIssueCommentKey, "comment:2:label:needs-triage", "Person"],
+          [newIssueCommentKey, "comment:2:label:ready-for-human", "Person"],
         ],
       );
     }).pipe(
       Effect.provide(
         Layer.mock(GitHubClient, {
-          listIssues: () => Effect.succeed([issue(2, true), issue(1)]),
+          listIssues: () =>
+            Effect.succeed([issue(2, true), { ...issue(1), labels: ["needs-triage", "ready-for-human"] }]),
           listIssueEvents: (_target, number) =>
             Effect.succeed([
               {
@@ -293,7 +312,7 @@ describe("GitHub Trigger sources", () => {
 
       const result = yield* Fiber.join(collected);
       assert.isTrue(Option.isSome(result));
-      assert.strictEqual(Option.getOrThrow(result)[0]?.revision, "comment:1");
+      assert.strictEqual(Option.getOrThrow(result)[0]?.revision, "comment:1:label:needs-triage");
     }).pipe(
       Effect.provide(
         Layer.mock(GitHubClient, {
@@ -342,6 +361,121 @@ describe("GitHub Trigger sources", () => {
         id: linkedIssueId,
       });
     }).pipe(Effect.provide(pullClientLayer())),
+  );
+
+  it.effect("polls pull conditions when the pull watermark does not move", () => {
+    const listCheckRuns = vi.fn((_target: unknown, sha: string) =>
+      Effect.succeed([
+        {
+          name: "test",
+          status: "completed",
+          conclusion:
+            sha === "head-sha" &&
+            listCheckRuns.mock.calls.filter(([, current]) => current === "head-sha").length > 1
+              ? "failure"
+              : "success",
+          startedAtMillis: 2_500,
+        },
+      ]),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState));
+      const observed = yield* source
+        .observe([subscription("github.pull-request-checks-failed", "checks")])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.timeoutOption("61 seconds"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("61 seconds");
+      const result = yield* Fiber.join(observed);
+
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(Option.getOrThrow(result)[0]?.revision, "checks:head-sha:test:failure");
+      assert.strictEqual(listCheckRuns.mock.calls.filter(([, sha]) => sha === "head-sha").length, 2);
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+          listPulls: () =>
+            Effect.succeed([
+              trustedPull,
+              {
+                ...trustedPull,
+                number: 12,
+                headSha: "new-head-sha",
+                updatedAtMillis: 100_000,
+              },
+            ]),
+          listCheckRuns,
+          pullMergeableState: () => Effect.succeed("clean"),
+          listTriggerComments: () => Effect.succeed([]),
+          listReviewComments: () => Effect.succeed([]),
+          listReviews: () => Effect.succeed([]),
+        }),
+      ),
+    );
+  });
+
+  it.effect("excludes allowlisted bots from person-comment Triggers", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const sources = [
+        makeGitHubTrackerTriggerSource(client, Effect.succeed(botRegistryState)).observe([
+          subscription("github.new-comment-from-person", "comment", [{ id: "label", value: "needs-triage" }]),
+        ]),
+        makeGitHubPullRequestTriggerSource(client, Effect.succeed(botRegistryState)).observe([
+          subscription("github.new-review-comment-from-person", "review"),
+        ]),
+      ];
+      const observed = yield* Effect.forEach(
+        sources,
+        (source) => source.pipe(Stream.take(1), Stream.runCollect, Effect.timeoutOption("1 second")),
+        { concurrency: "unbounded" },
+      ).pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue((yield* Fiber.join(observed)).every(Option.isNone));
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () => Effect.succeed([issue(1)]),
+          listIssueEvents: () => Effect.succeed([]),
+          listTriggerComments: (_target, number) =>
+            Effect.succeed([
+              {
+                id: number,
+                authorLogin: "maintainer",
+                authorAssociation: "MEMBER",
+                authorType: "User",
+                body: "automated",
+                createdAtMillis: 2_000,
+              },
+            ]),
+          authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+          listPulls: () => Effect.succeed([trustedPull]),
+          listCheckRuns: () => Effect.succeed([]),
+          pullMergeableState: () => Effect.succeed("clean"),
+          listReviewComments: () => Effect.succeed([]),
+          listReviews: () =>
+            Effect.succeed([
+              {
+                authorLogin: "maintainer",
+                authorAssociation: "MEMBER",
+                authorType: "User",
+                state: "COMMENTED",
+                body: "automated",
+                submittedAtMillis: 2_000,
+              },
+            ]),
+        }),
+      ),
+    ),
   );
 
   it.effect("carries review bodies in occurrence prose", () =>

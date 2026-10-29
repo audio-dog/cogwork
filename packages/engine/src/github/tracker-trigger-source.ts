@@ -19,6 +19,7 @@ import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigge
 import type { GitHubClientService, GitHubRepoRef, RawIssue, RawIssueComment } from "./client";
 import { targetFor } from "./host";
 import { hasCogworkMarker } from "./markers";
+import { sourceControlTargetFor } from "./source-control-target";
 
 export const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("github.issue-has-label");
 export const newIssueCommentKey = Schema.decodeSync(WorkflowCatalogKey)("github.new-comment-from-person");
@@ -59,13 +60,14 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
   if (issueSubscriptions.length === 0) return [];
   const needsLabels = issueSubscriptions.some(({ entry }) => entry === issueHasLabelKey);
   const needsComments = issueSubscriptions.some(({ entry }) => entry === newIssueCommentKey);
+  const botAllowlist = sourceControlTargetFor(workspace)?.botAllowlist ?? new Map();
   const [history, comments] = yield* Effect.all([
     needsLabels ? client.listIssueEvents(target, issue.number) : Effect.succeed([]),
     needsComments ? client.listTriggerComments(target, issue.number) : Effect.succeed([]),
   ]);
   const labelEvents = issueSubscriptions.flatMap((subscription) => {
     if (subscription.entry !== issueHasLabelKey) return [];
-    const label = parameterValue(subscription.parameters, "label");
+    const label = parameterValue(subscription.parameters, "label") ?? "";
     const applied = history.findLast((event) => event.event === "labeled" && event.labelName === label);
     const atMillis = applied?.createdAtMillis ?? issue.createdAtMillis;
     return [
@@ -80,14 +82,14 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
         atMillis,
         entry: issueHasLabelKey,
         workspace: workspace.config.name,
-        parameters: [{ id: "label", value: label ?? "" }],
+        parameters: [{ id: "label", value: label }],
         prose: proseOf(issue, comments),
       } satisfies TriggerEvent,
     ];
   });
   const commentEvents = issueSubscriptions.flatMap((subscription) => {
     if (subscription.entry !== newIssueCommentKey) return [];
-    const label = parameterValue(subscription.parameters, "label");
+    const label = parameterValue(subscription.parameters, "label") ?? "";
     const switchedOnAt = subscription.catchUp?.since ?? now;
     const cutoff = catchUpSince(subscription.parameters, switchedOnAt, now);
     return comments
@@ -96,6 +98,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
           comment.createdAtMillis > cutoff &&
           comment.authorLogin !== null &&
           comment.authorType !== "Bot" &&
+          !botAllowlist.has(comment.authorLogin) &&
           personAssociations.has(comment.authorAssociation) &&
           !hasCogworkMarker(comment.body),
       )
@@ -107,12 +110,12 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
               workspace: workspace.config.name,
               id: itemId(`#${issue.number}`),
             },
-            revision: `comment:${comment.id}`,
+            revision: `comment:${comment.id}:label:${label}`,
             cause: { _tag: "Person" },
             atMillis: comment.createdAtMillis,
             entry: newIssueCommentKey,
             workspace: workspace.config.name,
-            parameters: [{ id: "label", value: label ?? "" }],
+            parameters: [{ id: "label", value: label }],
             prose: proseOf(issue, comments),
           }) satisfies TriggerEvent,
       );

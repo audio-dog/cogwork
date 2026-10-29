@@ -15,17 +15,15 @@ import {
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
-import type {
-  GitHubClientService,
-  GitHubRepoRef,
-  RawIssueComment,
-  RawPull,
-  RawReview,
-  RawReviewComment,
-} from "./client";
+import type { GitHubClientService, RawIssueComment, RawPull, RawReview, RawReviewComment } from "./client";
 import { trustedBotFeedback } from "./feedback";
 import { hasCogworkMarker } from "./markers";
-import { baseDivergenceOf, botAllowlistFrom, sourceControlTargetFor } from "./source-control-target";
+import {
+  baseDivergenceOf,
+  botAllowlistFrom,
+  type GitHubTargetConfig,
+  sourceControlTargetFor,
+} from "./source-control-target";
 
 const checksFailedKey = Schema.decodeSync(WorkflowCatalogKey)("github.pull-request-checks-failed");
 const conflictsKey = Schema.decodeSync(WorkflowCatalogKey)("github.pull-request-conflicts-with-base");
@@ -62,6 +60,7 @@ export const githubPullRequestEntries = [
 
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
 const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+const conditionEntries = new Set([checksFailedKey, conflictsKey]);
 const workItemId = Schema.decodeSync(WorkItemId);
 
 interface Feedback {
@@ -150,7 +149,7 @@ const proseOf = (pull: RawPull, feedback: ReadonlyArray<Feedback>) => ({
 
 const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(function* (
   client: GitHubClientService,
-  target: GitHubRepoRef,
+  target: GitHubTargetConfig,
   workspace: RegistryState["workspaces"][number],
   selected: ReadonlyArray<TriggerSubscription>,
   pull: RawPull,
@@ -206,6 +205,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
           (comment) =>
             comment.atMillis > cutoff &&
             comment.authorType !== "Bot" &&
+            !target.botAllowlist.has(comment.authorLogin) &&
             personAssociations.has(comment.authorAssociation) &&
             !hasCogworkMarker(comment.body),
         )
@@ -256,17 +256,20 @@ const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(
   if (!target) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
   const actorLogin = yield* client.authenticatedLogin(target);
   const since = cursor === undefined ? 0 : Math.max(0, cursor - providerModifiedSinceGraceMillis);
-  const pulls = (yield* client.listPulls(target)).filter(
-    ({ authorAssociation, authorLogin, updatedAtMillis }) =>
-      (authorLogin === actorLogin || personAssociations.has(authorAssociation)) &&
-      (cursor === undefined || updatedAtMillis >= since),
-  );
+  const isTrustedPull = ({ authorAssociation, authorLogin }: RawPull) =>
+    authorLogin === actorLogin || personAssociations.has(authorAssociation);
+  const trustedPulls = (yield* client.listPulls(target)).filter(isTrustedPull);
+  const observesCondition = selected.some(({ entry }) => conditionEntries.has(entry));
+  const pulls =
+    cursor === undefined || observesCondition
+      ? trustedPulls
+      : trustedPulls.filter(({ updatedAtMillis }) => updatedAtMillis >= since);
   const events = yield* Effect.forEach(pulls, (pull) =>
     eventsForPull(client, target, workspace, selected, pull, now),
   );
   return {
     events: events.flat(),
-    cursor: Math.max(cursor ?? 0, ...pulls.map(({ updatedAtMillis }) => updatedAtMillis)),
+    cursor: Math.max(cursor ?? 0, ...trustedPulls.map(({ updatedAtMillis }) => updatedAtMillis)),
     workspace: workspace.config.name,
   };
 });
