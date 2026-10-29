@@ -1296,6 +1296,15 @@ const conflictingProviderLayer: Layer.Layer<SourceControlProvider | PostedCommen
   },
 ).pipe(Layer.provideMerge(PostedComments.layer));
 
+const failedObservationProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
+  SourceControlProvider,
+  {
+    ...noopProvider,
+    observe: () =>
+      Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull request refresh failed" })),
+  },
+).pipe(Layer.provideMerge(PostedComments.layer));
+
 const recordingProvider: Layer.Layer<SourceControlProvider | PostedComments> = Layer.effect(
   SourceControlProvider,
   Effect.map(
@@ -4561,6 +4570,20 @@ describe("Executor.execute", () => {
     }).pipe(
       Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, conflictingProviderLayer)),
     );
+  });
+
+  it.effect.each([
+    { name: "no pull request signal", provider: noopProviderLayer },
+    { name: "refresh error", provider: failedObservationProviderLayer },
+  ])("records a conflict when failure refresh has $name", ({ provider }) => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, followUpItem);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.baseDivergence, "conflict");
+    }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, provider)));
   });
 
   it.effect("names the prepared linked-branch checkout in a follow-up hand-off", () => {

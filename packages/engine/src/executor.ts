@@ -553,10 +553,11 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
   ) {
     const context = item.followUp ?? defaultFollowUp;
+    const unavailable: FollowUpContext = { ...context, baseDivergence: "conflict" };
     const refreshed = yield* sourceControl.observe(workspace, [{ id: item.id, title: item.title }]).pipe(
       Effect.map((signals) => {
         const observed = signals.get(item.id);
-        if (!observed) return context;
+        if (!observed) return unavailable;
         return {
           checks: observed.checks,
           latestFailingCheckAtMillis: observed.latestFailingCheckAtMillis ?? 0,
@@ -566,7 +567,7 @@ export const make = Effect.gen(function* () {
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("failed to refresh pull request before recording follow-up failure", {
           message: error.message,
-        }).pipe(Effect.map(() => context)),
+        }).pipe(Effect.map(() => unavailable)),
       ),
     );
     return { ...context, ...refreshed };
