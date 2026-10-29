@@ -1047,6 +1047,57 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("keeps a rate-limited issue create retryable", () =>
+    Effect.gen(function* () {
+      stubLinear((document) =>
+        document.includes("issueCreate")
+          ? { status: 429, body: {} }
+          : { body: { data: { teams: { nodes: [teamBundle] } } } },
+      );
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [] }),
+      );
+
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.isUndefined(error.writeMayHaveCommitted);
+    }).pipe(withToken()),
+  );
+
+  it.effect("keeps a rejected issue create uncommitted", () =>
+    Effect.gen(function* () {
+      stubLinear((document) =>
+        document.includes("issueCreate")
+          ? { status: 401, body: {} }
+          : { body: { data: { teams: { nodes: [teamBundle] } } } },
+      );
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [] }),
+      );
+
+      assert.strictEqual(error.reason, "auth");
+      assert.isUndefined(error.writeMayHaveCommitted);
+    }).pipe(withToken()),
+  );
+
+  it.effect("marks a successful create without an issue as possibly committed", () =>
+    Effect.gen(function* () {
+      stubLinear((document) =>
+        document.includes("issueCreate")
+          ? { body: { data: { issueCreate: { success: true } } } }
+          : { body: { data: { teams: { nodes: [teamBundle] } } } },
+      );
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [] }),
+      );
+
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(error.writeMayHaveCommitted, true);
+    }).pipe(withToken()),
+  );
+
   it.effect("does not retry an auth failure", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ status: 401, body: {} }));

@@ -263,6 +263,11 @@ const markWriteMayHaveCommitted = (error: IssueTrackerError) =>
     writeMayHaveCommitted: true,
   });
 
+const classifyCreateFailure = (error: IssueTrackerError) => {
+  const mayHaveCommitted = error.reason === "unavailable" && error.retryable !== false;
+  return mayHaveCommitted ? markWriteMayHaveCommitted(error) : error;
+};
+
 const labelCreateRefused = (ref: LinearTeamRef, name: string) => (error: IssueTrackerError) =>
   new IssueTrackerError({
     reason: error.reason,
@@ -962,9 +967,11 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
                 issue: { id: value.id, identifier: value.identifier, url: value.url },
               }));
         }),
-    ).pipe(Effect.mapError(markWriteMayHaveCommitted));
+    ).pipe(Effect.mapError(classifyCreateFailure));
     yield* requireSuccess("issueCreate", payload);
-    if (payload.issue === null) return yield* unavailable("Linear issueCreate returned no issue");
+    if (payload.issue === null) {
+      return yield* markWriteMayHaveCommitted(unavailable("Linear issueCreate returned no issue"));
+    }
     return payload.issue;
   });
 
