@@ -33,6 +33,7 @@ import {
   makeControlStoreTriggerObservationStore,
   makeMemoryTriggerObservationStore,
   matchTriggerEvent,
+  type TriggerAdmission,
   TriggerObservationStore,
 } from "./trigger-observation";
 import { TriggerSources, type TriggerSubscription } from "./trigger-source";
@@ -40,6 +41,7 @@ import { Workflows, type WorkflowsService } from "./workflow";
 
 const workflowId = Schema.decodeSync(WorkflowId)("daily-summary");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
+const siblingTriggerId = Schema.decodeSync(WorkflowNodeId)("schedule-sibling");
 const entry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
 const scheduleParameters = [
   { id: "hour", value: "0" },
@@ -424,7 +426,7 @@ describe("TriggerObservation", () => {
 });
 
 layer(NodeServices.layer)((it) => {
-  it.effect("persists admissions and skips time spent switched off", () =>
+  it.effect("persists sibling completion and skips time spent switched off", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -434,7 +436,23 @@ layer(NodeServices.layer)((it) => {
         event,
         subscription,
         lineage,
-      } as const;
+      } satisfies TriggerAdmission;
+      const storedAdmission = {
+        ...admission,
+        event: {
+          ...admission.event,
+          key: { ...admission.event.key, instantMillis: 1_500 },
+          revision: "1500",
+          atMillis: 1_500,
+        },
+      } satisfies TriggerAdmission;
+      const siblingAdmission = {
+        ...storedAdmission,
+        subscription: {
+          ...storedAdmission.subscription,
+          trigger: siblingTriggerId,
+        },
+      } satisfies TriggerAdmission;
       const useStore = <A, E, R>(
         use: (
           store: Effect.Success<typeof makeControlStoreTriggerObservationStore>,
@@ -461,17 +479,7 @@ layer(NodeServices.layer)((it) => {
       yield* useStore((store) =>
         store.activate([subscription], 3_000).pipe(
           Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 1_000))),
-          Effect.andThen(
-            store.put({
-              ...admission,
-              event: {
-                ...admission.event,
-                key: { ...admission.event.key, instantMillis: 1_500 },
-                revision: "1500",
-                atMillis: 1_500,
-              },
-            }),
-          ),
+          Effect.andThen(store.put(storedAdmission).pipe(Effect.andThen(store.put(siblingAdmission)))),
         ),
       );
       yield* useStore((store) =>
@@ -479,6 +487,7 @@ layer(NodeServices.layer)((it) => {
           Effect.tap(([admissions, active]) =>
             Effect.sync(() => {
               assert.strictEqual(admissions[0]?.event.revision, "1500");
+              assert.lengthOf(admissions, 2);
               assert.strictEqual(active[0]?.catchUp?.since, 1_500);
             }),
           ),
@@ -491,6 +500,20 @@ layer(NodeServices.layer)((it) => {
           .pipe(
             Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 6_000))),
           ),
+      );
+      yield* useStore((store) =>
+        store.complete(storedAdmission).pipe(
+          Effect.tap((isLast) => Effect.sync(() => assert.isFalse(isLast))),
+          Effect.andThen(store.admissions),
+          Effect.tap((admissions) => Effect.sync(() => assert.lengthOf(admissions, 1))),
+        ),
+      );
+      yield* useStore((store) =>
+        store.complete(siblingAdmission).pipe(
+          Effect.tap((isLast) => Effect.sync(() => assert.isTrue(isLast))),
+          Effect.andThen(store.admissions),
+          Effect.tap((admissions) => Effect.sync(() => assert.deepStrictEqual(admissions, []))),
+        ),
       );
     }),
   );

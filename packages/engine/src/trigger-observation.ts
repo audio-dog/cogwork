@@ -60,6 +60,7 @@ interface StoredAdmission {
 export interface TriggerObservationStoreService {
   readonly admissions: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
   readonly put: (admission: TriggerAdmission) => Effect.Effect<void, TriggerObservationStoreError>;
+  readonly complete: (admission: TriggerAdmission) => Effect.Effect<boolean, TriggerObservationStoreError>;
   readonly activate: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
     atMillis: number,
@@ -79,6 +80,21 @@ const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workf
 const admissionRevision = (admission: TriggerAdmission) => subscriptionKey(admission.subscription);
 const admissionKey = (admission: TriggerAdmission) =>
   `${keyOf(admission.event.key)}:${admissionRevision(admission)}`;
+const sameSourceRevision = (candidate: TriggerAdmission, admission: TriggerAdmission) =>
+  keyOf(candidate.event.key) === keyOf(admission.event.key) &&
+  candidate.event.revision === admission.event.revision;
+const hasSourceRevision = (admissions: Iterable<TriggerAdmission>, completed: TriggerAdmission) =>
+  [...admissions].some((candidate) => sameSourceRevision(candidate, completed));
+const withoutCompletedAdmission = (
+  admissions: ReadonlyMap<string, TriggerAdmission>,
+  completed: TriggerAdmission,
+) => {
+  const key = admissionKey(completed);
+  if (admissions.get(key)?.event.revision !== completed.event.revision) return admissions;
+  const next = new Map(admissions);
+  next.delete(key);
+  return next;
+};
 const checkpointOf = (admission: TriggerAdmission) =>
   admission.event.key._tag === "ScheduleInstant"
     ? admission.event.key.instantMillis
@@ -116,6 +132,11 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
           }),
         ),
       ),
+    complete: (admission) =>
+      Ref.modify(admissions, (current) => {
+        const next = withoutCompletedAdmission(current, admission);
+        return [!hasSourceRevision(next.values(), admission), next];
+      }),
     activate: (subscriptions, atMillis) =>
       Ref.modify(checkpoints, (current) => {
         const activated = activateSubscriptions(subscriptions, current, atMillis);
@@ -145,12 +166,12 @@ export const memoryTriggerObservationStoreLayer = Layer.effect(
 export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const controlStore = yield* ControlStore;
+  const decodeAdmissions = (rows: ReadonlyArray<StoredAdmission>) =>
+    Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError)));
   return {
     admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions`.pipe(
       Effect.mapError(storeError),
-      Effect.flatMap((rows) =>
-        Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),
-      ),
+      Effect.flatMap(decodeAdmissions),
     ),
     put: (admission) =>
       controlStore
@@ -171,6 +192,26 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
           ),
         )
         .pipe(Effect.asVoid, Effect.mapError(storeError)),
+    complete: (admission) =>
+      controlStore
+        .withWrite(
+          sql.withTransaction(
+            sql`
+              DELETE FROM trigger_admissions
+              WHERE work_item = ${keyOf(admission.event.key)}
+                AND revision = ${admissionRevision(admission)}
+                AND payload = ${encodeAdmission(admission)}
+            `.pipe(
+              Effect.andThen(sql<StoredAdmission>`
+                SELECT payload FROM trigger_admissions
+                WHERE work_item = ${keyOf(admission.event.key)}
+              `),
+              Effect.flatMap(decodeAdmissions),
+              Effect.map((current) => !hasSourceRevision(current, admission)),
+            ),
+          ),
+        )
+        .pipe(Effect.mapError(storeError)),
     activate: (subscriptions, atMillis) =>
       controlStore
         .withWrite(
