@@ -1,0 +1,38 @@
+packages/engine/src/github/adapter.ts
+  s_f4abcd25549e05::t_c921a485aa3bcb 8-18
+packages/engine/src/linear/adapter.ts
+  s_f4abcd25549e05::t_c921a485aa3bcb 8-17
+packages/engine/src/trigger-observation.test.ts
+  s_f4abcd25549e05::t_8916fc9fbbc449 45,99,139-144,149,157-167,183,366-400
+  s_f4abcd25549e05::t_0b6959f78a9db0 401
+packages/engine/src/issue-tracker-router.ts
+  s_f4abcd25549e05::t_c921a485aa3bcb 21
+packages/engine/src/linear/client.ts
+  s_f4abcd25549e05::t_440cc64d8358f6 222-227,233,433-437,914-920,990
+packages/engine/src/issue-tracker.ts
+  s_f4abcd25549e05::t_c921a485aa3bcb 172-175
+packages/engine/src/linear/linear.test.ts
+  s_f4abcd25549e05::t_fc8f759ef7ba2f 223
+  s_f4abcd25549e05::t_8f1b2244c5807b 218-222,224-226
+packages/engine/src/trigger-observation.ts
+  s_f4abcd25549e05::t_2fbad43543460f 361-370,380,385
+  s_f4abcd25549e05::t_f46cfc87a62f6b 114-117
+  s_f4abcd25549e05::t_117bf7a8ac5d41 375-377
+  s_f4abcd25549e05::t_e0abb1d7376f68 371-374,378,384,398
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6545bcc4f5f9c128b6000e4df2798b6e948a95b5",
+  "prompts": {},
+  "sessions": {
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
