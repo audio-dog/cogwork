@@ -55,6 +55,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import { fold } from "./coordination";
@@ -1003,7 +1004,9 @@ const findSlackConnection = Effect.fn("Daemon.findSlackConnection")(function* (
   );
 });
 
-export const loginSlack = Effect.fn("Daemon.LoginSlack")(function* () {
+const slackLoginGate = Semaphore.makeUnsafe(1);
+
+const loginSlackUnlocked = Effect.fn("Daemon.LoginSlack.unlocked")(function* () {
   const connections = yield* ConnectionStore;
   const credential = yield* (yield* SlackLogin).login;
   const existing = yield* findSlackConnection(connections, credential.organization);
@@ -1016,25 +1019,28 @@ export const loginSlack = Effect.fn("Daemon.LoginSlack")(function* () {
       "Credential store cannot stage a browser login",
     );
   }
-  const current = yield* findSlackConnection(connections, credential.organization);
   const establishment = {
     system: "slack",
     account: credential.organization,
     source: { _tag: "Stored" },
   } as const;
-  const connect = current ? reconnectConnection({ establishment }) : establishConnection({ establishment });
+  const connect = existing ? reconnectConnection({ establishment }) : establishConnection({ establishment });
   return yield* withStoredCredential(credential, connect).pipe(
     Effect.mapError((error) =>
       error._tag === "CredentialError"
         ? new ConnectionFailure({
             operation: "login Slack",
-            connectionId: current?.id ?? null,
+            connectionId: existing?.id ?? null,
             message: error.message,
           })
         : error,
     ),
   );
 });
+
+export const loginSlack = Effect.fn("Daemon.LoginSlack")(() =>
+  slackLoginGate.withPermit(loginSlackUnlocked()),
+);
 
 const boundWorkspaceName = (workspace: RegistryState["workspaces"][number], connectionId: ConnectionId) => {
   if (workspace.config.issueTracker.connectionId === connectionId) return workspace.config.name;
