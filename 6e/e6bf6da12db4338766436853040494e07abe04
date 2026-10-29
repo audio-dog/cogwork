@@ -1,0 +1,70 @@
+packages/engine/src/executor.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 437,547-550,628-632,1274-1344,4558-4639
+  s_32b58d670b4dfe::t_34e65135e3158d 4640
+docs/spec/customizable-workflows.md
+  s_32b58d670b4dfe::t_8709d68b1a38b3 61,252,255-256,301,308,319,365,398-400,564,575
+packages/engine/src/ci.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 8,13-14,27,31-35
+packages/engine/src/classify.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 47-48,387-597
+  s_32b58d670b4dfe::t_692c0e24b8c84f 598
+packages/engine/src/coordination-tracker.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 491-507,535,547,551-566,587-593,608,621-622,651,662,686-723,745,770-783,790,792
+packages/engine/src/follow-up.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 15-16,30-31,42,46,69-127,152,156
+packages/engine/src/github/client.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 228,1410
+packages/engine/src/github/provider.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 2,5,194,202-203
+packages/engine/src/observe.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 4-5,62-63,77-121,157-159
+  s_32b58d670b4dfe::t_fa7a7faeee653b 160
+packages/engine/src/read-model.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 50
+packages/engine/src/coordination.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 19,24,101-117
+  s_32b58d670b4dfe::t_76bfe016948787 118-119
+packages/engine/src/classify.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 27,183-223,250-253,259,305-307,329-330
+packages/engine/src/linear/client.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 1352-1366
+packages/engine/src/ci.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 2,56-60
+  s_32b58d670b4dfe::t_14691c831945b3 61-62
+packages/engine/src/run-preparation.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 97
+packages/engine/src/executor.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 111,405-406,421-425,529,533-534,539-574,657,886,894
+packages/contracts/CONTEXT.md
+  s_32b58d670b4dfe::t_8709d68b1a38b3 405,522,592
+packages/engine/src/follow-up.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 226,305-319,321-325
+packages/engine/src/github/github.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 27,874,1234,1238,1285-1292
+packages/engine/src/coordination-tracker.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 17,22,101,117-122,125,305,345-369,398-399,496,515,525-540,549,564-574
+packages/engine/src/observe.test.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 4,37,57-60,73,101-237
+packages/contracts/src/run-plan.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 77-82,92
+packages/engine/src/issue-tracker.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 20,39-40,84,108
+packages/engine/src/coordination.ts
+  s_32b58d670b4dfe::t_8709d68b1a38b3 26,476-491,497-501,513-514,562-566,569,578-583,587
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6ee6bf6da12db4338766436853040494e07abe04",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
