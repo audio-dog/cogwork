@@ -1,10 +1,11 @@
-import { connectionSystemOf } from "@cogwork/contracts";
+import { type ConnectionId, connectionAccountOf, connectionSystemOf } from "@cogwork/contracts";
 import { CredentialStore, GitHub, Linear } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { makeTokenRefresh as makeGranolaTokenRefresh } from "./granola-login";
@@ -29,6 +30,7 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
   const path = yield* Path.Path;
   const directory = path.dirname(filePath);
   const pendingPath = `${filePath}.pending`;
+  const writeGate = yield* Semaphore.make(1);
 
   const read = Effect.fn("credentials.read")(function* () {
     const present = yield* Effect.orElseSucceed(fs.exists(filePath), () => false);
@@ -90,47 +92,62 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
     return contents;
   });
 
+  const update = Effect.fn("credentials.update")(function* (
+    account: string,
+    change: (contents: CredentialStore.CredentialFileContents) => CredentialStore.CredentialFileContents,
+  ) {
+    return yield* writeGate.withPermit(
+      Effect.gen(function* () {
+        const contents = yield* readForWrite(account);
+        yield* write(account, change(contents));
+      }),
+    );
+  });
+
   const save = Effect.fn("credentials.save")(function* (credential: CredentialStore.StoredCredential) {
     const account = CredentialStore.accountOf(credential);
-    const contents = yield* readForWrite(account);
-    const others = contents.credentials.filter((entry) => CredentialStore.accountOf(entry) !== account);
-    yield* write(account, { ...contents, credentials: [...others, credential] });
+    yield* update(account, (contents) => ({
+      ...contents,
+      credentials: [
+        ...contents.credentials.filter((entry) => CredentialStore.accountOf(entry) !== account),
+        credential,
+      ],
+    }));
   });
 
   const saveProviderKey = Effect.fn("credentials.saveProviderKey")(function* (
     key: CredentialStore.StoredProviderKey,
   ) {
-    const contents = yield* readForWrite(key.provider);
-    const others = contents.providerKeys.filter((entry) => entry.provider !== key.provider);
-    yield* write(key.provider, { ...contents, providerKeys: [...others, key] });
+    yield* update(key.provider, (contents) => ({
+      ...contents,
+      providerKeys: [...contents.providerKeys.filter((entry) => entry.provider !== key.provider), key],
+    }));
   });
 
   const saveConnectionCredential = Effect.fn("credentials.saveConnectionCredential")(function* (
     credential: CredentialStore.StoredConnectionCredential,
   ) {
-    const contents = yield* readForWrite(credential.connectionId);
-    const preservesGranolaLogin =
-      credential._tag === "ApiKey" && connectionSystemOf(credential.connectionId) === "granola";
-    const others = contents.connectionCredentials.filter(
-      (entry) =>
-        entry.connectionId !== credential.connectionId || (preservesGranolaLogin && entry._tag === "Stored"),
-    );
-    yield* write(credential.connectionId, {
-      ...contents,
-      connectionCredentials: [...others, credential],
+    yield* update(credential.connectionId, (contents) => {
+      const preservesGranolaLogin =
+        credential._tag === "ApiKey" && connectionSystemOf(credential.connectionId) === "granola";
+      const others = contents.connectionCredentials.filter(
+        (entry) =>
+          entry.connectionId !== credential.connectionId ||
+          (preservesGranolaLogin && entry._tag === "Stored"),
+      );
+      return { ...contents, connectionCredentials: [...others, credential] };
     });
   });
 
   const removeConnectionCredential = Effect.fn("credentials.removeConnectionCredential")(function* (
     connectionId: string,
   ) {
-    const contents = yield* readForWrite(connectionId);
-    yield* write(connectionId, {
+    yield* update(connectionId, (contents) => ({
       ...contents,
       connectionCredentials: contents.connectionCredentials.filter(
         (entry) => entry.connectionId !== connectionId,
       ),
-    });
+    }));
   });
 
   const removeCredential = Effect.fn("credentials.removeCredential")(function* (
@@ -138,13 +155,26 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
     organization: string,
   ) {
     const account = `${issueTracker}/${organization}`;
-    const contents = yield* readForWrite(account);
-    yield* write(account, {
+    yield* update(account, (contents) => ({
       ...contents,
       credentials: contents.credentials.filter(
         (entry) => entry.issueTracker !== issueTracker || entry.organization !== organization,
       ),
-    });
+    }));
+  });
+
+  const removeConnection = Effect.fn("credentials.removeConnection")(function* (connectionId: ConnectionId) {
+    const system = connectionSystemOf(connectionId);
+    const account = connectionAccountOf(connectionId);
+    yield* update(connectionId, (contents) => ({
+      ...contents,
+      credentials: contents.credentials.filter(
+        (entry) => entry.issueTracker !== system || entry.organization !== account,
+      ),
+      connectionCredentials: contents.connectionCredentials.filter(
+        (entry) => entry.connectionId !== connectionId,
+      ),
+    }));
   });
 
   return {
@@ -156,6 +186,7 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
     saveConnectionCredential,
     removeConnectionCredential,
     removeCredential,
+    removeConnection,
   } satisfies CredentialStore.StoredCredentials;
 });
 

@@ -186,6 +186,63 @@ describe("file-backed credential store", () => {
     ),
   );
 
+  it.effect("serializes writes across credential kinds", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        const connectionId = connectionIdOf("slack", "T-STUB");
+        yield* Effect.all(
+          [
+            file.save({
+              issueTracker: "slack",
+              organization: "T-STUB",
+              actorUserId: "U-STUB",
+              token: {
+                accessToken: Redacted.make("slack-access"),
+                refreshToken: Redacted.make("slack-refresh"),
+                expiresAtMillis: Number.MAX_SAFE_INTEGER,
+                scopes: ["channels:history"],
+              },
+            }),
+            file.saveProviderKey?.(providerKey("anthropic", "provider-key")) ?? Effect.void,
+            file.saveConnectionCredential?.({ _tag: "Stored", connectionId }) ?? Effect.void,
+          ],
+          { concurrency: "unbounded" },
+        );
+
+        assert.strictEqual((yield* file.load).length, 1);
+        assert.strictEqual((yield* file.loadProviderKeys ?? Effect.succeed([])).length, 1);
+        assert.strictEqual((yield* file.loadConnectionCredentials ?? Effect.succeed([])).length, 1);
+      }),
+    ),
+  );
+
+  it.effect("removes a Connection source and browser grant in one write", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        const connectionId = connectionIdOf("slack", "T-STUB");
+        yield* file.save({
+          issueTracker: "slack",
+          organization: "T-STUB",
+          actorUserId: "U-STUB",
+          token: {
+            accessToken: Redacted.make("slack-access"),
+            refreshToken: Redacted.make("slack-refresh"),
+            expiresAtMillis: Number.MAX_SAFE_INTEGER,
+            scopes: ["channels:history"],
+          },
+        });
+        yield* file.saveConnectionCredential?.({ _tag: "Stored", connectionId });
+
+        yield* CredentialStore.make({ stored: file }).removeConnection(connectionId);
+
+        assert.deepStrictEqual(yield* file.load, []);
+        assert.deepStrictEqual(yield* file.loadConnectionCredentials, []);
+      }),
+    ),
+  );
+
   it.effect("browser login replaces a Connection's previous source", () =>
     onDisk(({ filePath }) =>
       Effect.gen(function* () {

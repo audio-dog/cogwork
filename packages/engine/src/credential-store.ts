@@ -142,6 +142,7 @@ export interface StoredCredentials {
     issueTracker: string,
     organization: string,
   ) => Effect.Effect<void, CredentialError>;
+  readonly removeConnection?: (connectionId: ConnectionId) => Effect.Effect<void, CredentialError>;
 }
 
 export interface ProviderAccount {
@@ -324,21 +325,27 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     if (match?.live) return match.credential;
     const credential = match?.credential ?? stale;
     const presented = credential.token.refreshToken ?? fallbackRefreshToken;
-    const token = yield* refresh({
-      account: account.key,
-      issueTracker: credential.issueTracker,
-      clientId,
-      tokenEndpoint: credential.oauthTokenEndpoint,
-      resource: credential.oauthResource,
-      refreshToken: presented,
-    });
-    // Linear leaves refresh_token out of a response when it does not rotate one, so the presented
-    // token has to carry forward or the next refresh has nothing to present.
-    const rotated = {
-      ...credential,
-      token: { ...token, refreshToken: token.refreshToken ?? presented },
-    } satisfies StoredCredential;
-    yield* sources.stored.save(rotated);
+    const rotated = yield* Effect.uninterruptibleMask((restore) =>
+      restore(
+        refresh({
+          account: account.key,
+          issueTracker: credential.issueTracker,
+          clientId,
+          tokenEndpoint: credential.oauthTokenEndpoint,
+          resource: credential.oauthResource,
+          refreshToken: presented,
+        }),
+      ).pipe(
+        Effect.map(
+          (token) =>
+            ({
+              ...credential,
+              token: { ...token, refreshToken: token.refreshToken ?? presented },
+            }) satisfies StoredCredential,
+        ),
+        Effect.tap(sources.stored.save),
+      ),
+    );
     yield* Effect.logInfo("refreshed the stored credential", {
       organization: rotated.organization,
     });
@@ -576,6 +583,8 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     configureConnection: (connectionId, source) =>
       configureConnection(connectionId, source).pipe(annotateAccount(connectionId)),
     removeConnection: (connectionId) => {
+      const removeConnection = sources.stored.removeConnection;
+      if (removeConnection) return removeConnection(connectionId);
       const system = connectionSystemOf(connectionId);
       const account = connectionAccountOf(connectionId);
       const removeConnectionCredential =

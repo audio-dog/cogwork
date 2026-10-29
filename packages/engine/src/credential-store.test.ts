@@ -701,6 +701,39 @@ describe("CredentialStore (refresh)", () => {
     }).pipe(withRefreshEnv),
   );
 
+  it.effect("finishes saving a rotated token after interruption", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([
+        stored("acme", expiredWithRefresh()),
+      ]);
+      const saveStarted = yield* Deferred.make<void>();
+      const releaseSave = yield* Deferred.make<void>();
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) =>
+            Deferred.succeed(saveStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(releaseSave)),
+              Effect.andThen(Ref.set(credentials, [credential])),
+            ),
+        },
+        refresh: () => Effect.succeed(rotatedToken()),
+      });
+      const resolving = yield* store
+        .bearerToken(oauthAccount)
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.await(saveStarted);
+      const interrupting = yield* Fiber.interrupt(resolving).pipe(
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Deferred.succeed(releaseSave, undefined);
+      yield* Fiber.join(interrupting);
+
+      const token = (yield* Ref.get(credentials))[0]?.token;
+      assert.strictEqual(token?.refreshToken && Redacted.value(token.refreshToken), "refresh-2");
+    }).pipe(withRefreshEnv),
+  );
+
   it.effect("keeps the previous refresh token when the response rotates only the access token", () =>
     Effect.gen(function* () {
       const { store, savedToken } = yield* harness({
