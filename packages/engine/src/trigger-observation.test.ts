@@ -22,6 +22,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { clockEntries } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
@@ -510,6 +511,25 @@ layer(NodeServices.layer)((it) => {
       );
       yield* useStore((store) =>
         store.complete(siblingAdmission).pipe(
+          Effect.tap((isLast) => Effect.sync(() => assert.isTrue(isLast))),
+          Effect.andThen(store.admissions),
+          Effect.tap((admissions) => Effect.sync(() => assert.deepStrictEqual(admissions, []))),
+        ),
+      );
+      yield* useStore((store) =>
+        store.put(storedAdmission).pipe(
+          Effect.andThen(SqlClient.SqlClient),
+          Effect.flatMap(
+            (sql) => sql`
+              UPDATE trigger_admissions
+              SET revision = ${storedAdmission.event.revision}
+              WHERE work_item = ${keyOf(storedAdmission.event.key)}
+            `,
+          ),
+        ),
+      );
+      yield* useStore((store) =>
+        store.complete(storedAdmission).pipe(
           Effect.tap((isLast) => Effect.sync(() => assert.isTrue(isLast))),
           Effect.andThen(store.admissions),
           Effect.tap((admissions) => Effect.sync(() => assert.deepStrictEqual(admissions, []))),

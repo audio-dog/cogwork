@@ -199,7 +199,6 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
             sql`
               DELETE FROM trigger_admissions
               WHERE work_item = ${keyOf(admission.event.key)}
-                AND revision = ${admissionRevision(admission)}
                 AND payload = ${encodeAdmission(admission)}
             `.pipe(
               Effect.andThen(sql<StoredAdmission>`
