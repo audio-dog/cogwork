@@ -226,6 +226,39 @@ describe("Slack Trigger source", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("keeps ambient observation moving past an unavailable thread", () =>
+    Effect.gen(function* () {
+      const root = message({ ts: "90.000", text: "Review this conversation" });
+      yield* Ref.set(yield* SlackClientStateRef, {
+        search: [],
+        history: [root],
+        reactions: [],
+        replies: [],
+        failure: null,
+        contextFailure: new SourceFailure({
+          source: "slack",
+          reason: "unavailable",
+          retryAfterMillis: null,
+          message: "Slack API error: thread_not_found",
+        }),
+      });
+      yield* TestClock.setTime(100_000);
+      const source = yield* make;
+      const events = yield* source
+        .observe([
+          subscription("slack.message-in-channel", [
+            { id: "channel", value: "C123" },
+            { id: "quiet-for", value: "0" },
+            { id: "at-most-every", value: "0" },
+          ]),
+        ])
+        .pipe(Stream.take(1), Stream.runCollect);
+
+      assert.strictEqual(events[0]?.revision, "90.000");
+      assert.include(events[0]?.workContext?.body ?? "", "Review this conversation");
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("waits for a quiet conversation", () =>
     Effect.gen(function* () {
       const state = yield* SlackClientStateRef;
@@ -518,6 +551,28 @@ describe("Slack Trigger source", () => {
       const messages = yield* makeHttpClient(http).searchMessages(session, 0);
 
       assert.strictEqual(messages[0]?.channel, "C123");
+    }),
+  );
+
+  it.effect("bounds mention search to the catch-up date", () =>
+    Effect.gen(function* () {
+      const http = HttpClient.make((request, url) => {
+        assert.strictEqual(url.searchParams.get("query"), "<@U123> after:2026-10-28");
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              JSON.stringify({
+                ok: true,
+                messages: { matches: [], paging: { page: 1, pages: 1 } },
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            ),
+          ),
+        );
+      });
+
+      yield* makeHttpClient(http).searchMessages(session, 1_793_275_200_000);
     }),
   );
 

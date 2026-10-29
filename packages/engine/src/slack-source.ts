@@ -6,6 +6,7 @@ import {
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -151,6 +152,7 @@ const cogworkAppId = "A0CD4UYHKPX";
 const defaultCatchUpMillis = Duration.toMillis(Duration.days(7));
 const defaultQuietMillis = Duration.toMillis(Duration.minutes(5));
 const defaultAtMostMillis = Duration.toMillis(Duration.minutes(30));
+const searchBoundaryPaddingMillis = Duration.toMillis(Duration.days(1));
 const pollSchedule = Schedule.spaced("1 minute");
 
 const parameterValue = (subscription: TriggerSubscription, id: string) =>
@@ -163,6 +165,11 @@ const durationOf = (subscription: TriggerSubscription, id: string, fallback: num
 };
 
 const timestampMillis = (timestamp: string) => Math.floor(Number(timestamp) * 1_000);
+
+const searchAfterDate = (oldestMillis: number) =>
+  DateTime.makeUnsafe(Math.max(0, oldestMillis - searchBoundaryPaddingMillis)).pipe(
+    DateTime.formatIsoDateUtc,
+  );
 
 const withCatchUpWindow = (subscription: TriggerSubscription, startedAtMillis: number) => {
   const activeSince = subscription.catchUp?.since ?? startedAtMillis;
@@ -396,7 +403,7 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
     searchMessages: Effect.fn("SlackClient.searchMessages")((session, oldestMillis) =>
       Stream.paginate(1, (page) =>
         callSlack(client, session, "search.messages", {
-          query: `<@${session.user}>`,
+          query: `<@${session.user}> after:${searchAfterDate(oldestMillis)}`,
           sort: "timestamp",
           sort_dir: "asc",
           highlight: "false",
@@ -689,8 +696,7 @@ const ambientEvents = Effect.fn("SlackSource.ambientEvents")(function* (
   const roots = yield* client.history(session, channel, since);
   return yield* Effect.forEach(roots, (root) =>
     Effect.gen(function* () {
-      const thread = yield* client.replies(session, channel, rootTimestampOf(root));
-      const complete = thread.length > 0 ? thread : [root];
+      const { thread: complete } = yield* hydratedThread(client, session, root);
       const author = parameterValue(subscription, "author") ?? "anyone";
       const relevant = complete.filter((message) => {
         const matchesAuthor = author !== "me" || message.user === session.user;
