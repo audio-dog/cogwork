@@ -215,6 +215,40 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("continues review-comment pagination past empty bodies", () => {
+    const comment = (id: number, body: string | null) => ({
+      id,
+      body,
+      created_at: "2026-09-09T12:00:00Z",
+      author_association: "MEMBER",
+      user: { login: "maintainer", type: "User" },
+      in_reply_to_id: null,
+      subject_type: "line",
+    });
+    const firstPage = Array.from({ length: 100 }, (_, index) =>
+      comment(index + 1, index === 0 ? null : `comment ${index + 1}`),
+    );
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [comment(101, "last")]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const comments = yield* client.listReviewComments(repo, 850);
+
+      assert.strictEqual(comments.length, 100);
+      assert.strictEqual(comments.at(-1)?.id, 101);
+      assert.deepStrictEqual(
+        fetch.mock.calls.map(([input]) =>
+          new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
+        ),
+        ["1", "2"],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("lists open and closed issues carrying one label", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(

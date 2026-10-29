@@ -1078,8 +1078,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
             `/pulls/${pullNumber}/comments?per_page=100&sort=created&direction=desc&page=${page}`,
           ),
         );
-        const current = yield* parseReviewComments(json);
-        if (current.length < 100) return current;
+        const comments = yield* Effect.mapError(decodeReviewComments(json), toUnavailable);
+        const current = comments.flatMap(toRawReviewComment);
+        if (comments.length < 100) return current;
         return [...current, ...(yield* collect(page + 1))];
       });
     return yield* withPaginationDeadline(collect());
