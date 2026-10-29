@@ -1,5 +1,6 @@
 import { linearTeams, type TriageRole, WorkflowActionArtifact, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { triageProposalAttribution } from "../comments";
 import type { CommentHost, CoordinationComment } from "../coordination";
@@ -76,6 +77,18 @@ const teamKeyOf = (identifier: string) => {
   return dash === -1 ? identifier : identifier.slice(0, dash);
 };
 
+const decodeKeySegment = Option.liftThrowable(decodeURIComponent);
+
+const issueOriginOf = (key: string) => {
+  const [kind, encodedWorkspace, encodedId, extra] = key.split(":");
+  const invalidShape = kind !== "issue" || !encodedWorkspace || !encodedId || extra !== undefined;
+  if (invalidShape) return null;
+  const workspace = decodeKeySegment(encodedWorkspace);
+  const id = decodeKeySegment(encodedId);
+  if (Option.isNone(workspace) || Option.isNone(id)) return null;
+  return { workspace: workspace.value, id: id.value };
+};
+
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
 const itemId = (identifier: string) => decodeItemId(identifier).pipe(Effect.orDie);
 
@@ -131,8 +144,13 @@ const writeNotConfirmed = (writeKey: string) =>
 export const makeIssueActions = (client: LinearClientService) => {
   const targetForCreate = Effect.fn("linear.workflowCreateTarget")(function* (
     workspace: WorkspaceIssueTrackerBinding,
+    input: CreateIssueInput,
   ) {
-    const target = targetsFor(workspace).at(0);
+    const targets = targetsFor(workspace);
+    const origin = issueOriginOf(input.origin.item);
+    const originMatchesWorkspace = origin?.workspace === workspace.config.name;
+    const originTeam = originMatchesWorkspace ? teamKeyOf(origin.id) : null;
+    const target = targets.find(({ team }) => team === originTeam) ?? targets.at(0);
     if (!target) return yield* notLinear(workspace);
     return target;
   });
@@ -179,7 +197,7 @@ export const makeIssueActions = (client: LinearClientService) => {
       workspace: WorkspaceIssueTrackerBinding,
       input: CreateIssueInput,
     ) {
-      const target = yield* targetForCreate(workspace);
+      const target = yield* targetForCreate(workspace, input);
       const existing = yield* client.findActionIssue(target, writeMarker(input.origin.writeKey));
       if (existing) {
         return WorkflowActionArtifact.make({

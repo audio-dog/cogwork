@@ -490,6 +490,27 @@ describe("linear work source adapter", () => {
     ),
   );
 
+  it.effect("creates an issue on the current item's configured team", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: multiTeamWorkspace.config.name, id: id("BIL-7") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker.createIssue(multiTeamWorkspace, {
+        title: "Created",
+        body: "Body",
+        labels: [],
+        origin,
+      });
+
+      assert.match(artifact.issue, /^BIL-/);
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
   it.effect("confirms workflow writes without loading admission prose", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
