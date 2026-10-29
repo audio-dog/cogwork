@@ -1,0 +1,76 @@
+packages/contracts/src/rpc.ts
+  s_ef6af093ab773d::t_68204597459588 293-297,369
+packages/engine/src/control-store.test.ts
+  s_ef6af093ab773d::t_5f36f1197589b8 186-191,712,720
+packages/engine/src/commands.ts
+  s_ef6af093ab773d::t_d9d87dd20d81a7 921,992-1021,1023-1025,1027-1030,1036-1037
+  s_ef6af093ab773d::t_0b8f38c30e1013 1026
+  s_ef6af093ab773d::t_2b5310e92c8561 1022
+  s_ef6af093ab773d::t_2214d3a126676a 1031-1035
+  s_ef6af093ab773d::t_6e21a975327d28 1038
+  s_f4abcd25549e05::t_2dcd46d843c241 87
+packages/engine/src/slack-login.ts
+  s_ef6af093ab773d::t_68204597459588 1-20
+  s_bb9c161548559a::t_ca59b83a22cae3 21-22
+packages/contracts/src/connection.ts
+  s_ef6af093ab773d::t_4d4e7aaa352a38 48
+  s_ef6af093ab773d::t_68204597459588 4,8,45-47
+  s_ef6af093ab773d::t_d8b6d74f2cb9a6 49
+packages/engine/src/commands.test.ts
+  s_ef6af093ab773d::t_a66930c8848ab3 84,2535-2600,2602-2603,2606-2620
+  s_ef6af093ab773d::t_f134b8c0ef04c4 2604-2605,2638
+  s_ef6af093ab773d::t_f36dfa575b8efe 2622-2635
+  s_ef6af093ab773d::t_f83a0ab5fb8e70 473-492,2601,2621,2636-2637
+  s_ef6af093ab773d::t_f56751767e9039 2639-2640
+packages/engine/src/connection.test.ts
+  s_ef6af093ab773d::t_c0e60d233c19ef 22,184-227
+packages/engine/src/connection.ts
+  s_ef6af093ab773d::t_d9d87dd20d81a7 32,39,92-99,107,239,251,320
+packages/engine/src/credential-store.ts
+  s_ef6af093ab773d::t_d9d87dd20d81a7 264
+packages/contracts/src/connection.test.ts
+  s_ef6af093ab773d::t_f9190bd66daf0b 67
+  s_ef6af093ab773d::t_5f36f1197589b8 66,68-83
+packages/engine/src/daemon.ts
+  s_ef6af093ab773d::t_a1a873464d75f7 47
+  s_ef6af093ab773d::t_8369292f3c1626 375,506
+  s_ef6af093ab773d::t_18d73aa7176855 399
+packages/engine/src/control-store-schema.ts
+  s_ef6af093ab773d::t_68204597459588 41
+packages/engine/src/connection-verify.ts
+  s_ef6af093ab773d::t_b43848b60d8c0c 160
+packages/engine/src/index.ts
+  s_bb9c161548559a::t_996864ae79d85b 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "114fb72d809df8cb9207889281e8124ce198a4f3",
+  "prompts": {},
+  "sessions": {
+    "s_bb9c161548559a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c2-e0ea-7dc1-91f4-35e655fe810b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ef6af093ab773d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c5-f171-79a3-9e38-7f01ceab3e4a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
