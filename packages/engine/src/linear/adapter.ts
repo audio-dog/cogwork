@@ -6,10 +6,11 @@ import { issueTrackerWorkflowCatalogContribution } from "../issue-workflow-catal
 import { LinearClient, type LinearClientService } from "./client";
 import { makeHost, makeIssueActions } from "./host";
 
-const make = (client: LinearClientService): IssueTrackerService => ({
-  ...makeCoordinationTracker(makeHost(client)),
-  ...makeIssueActions(client),
-});
+const make = (client: LinearClientService) =>
+  ({
+    ...makeCoordinationTracker(makeHost(client)),
+    ...makeIssueActions(client),
+  }) satisfies IssueTrackerService;
 
 export const layer = Layer.effect(
   IssueTracker,

@@ -30,25 +30,22 @@ export class WorkflowCatalogContributions extends Context.Service<
 
 export const firstPartyInstructionPackages = ["triage-agent", "implement-agent", "follow-up-agent"];
 
-const cogworkAction = (
-  key: string,
-  name: string,
-  agentInputs: ReadonlyArray<string>,
-): WorkflowCatalogEntry => ({
-  key: Schema.decodeSync(WorkflowCatalogKey)(key),
-  name,
-  kind: "action",
-  system: null,
-  connection: null,
-  requires: [],
-  parameters: [],
-  itemKind: null,
-  actsOn: ["*"],
-  requiresWorkspace: false,
-  permissionProfile: "read-only",
-  agentInputs,
-  emits: [],
-});
+const cogworkAction = (key: string, name: string, agentInputs: ReadonlyArray<string>) =>
+  ({
+    key: Schema.decodeSync(WorkflowCatalogKey)(key),
+    name,
+    kind: "action",
+    system: null,
+    connection: null,
+    requires: [],
+    parameters: [],
+    itemKind: null,
+    actsOn: ["*"],
+    requiresWorkspace: false,
+    permissionProfile: "read-only",
+    agentInputs,
+    emits: [],
+  }) satisfies WorkflowCatalogEntry;
 
 export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
   entries: [

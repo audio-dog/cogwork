@@ -1,11 +1,18 @@
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
-import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
+import {
+  HarnessName,
+  IssueTrackerType,
+  TrimmedNonEmptyString,
+  WorkItemId,
+  WorkspaceId,
+} from "./base-schemas";
 import { WorkItemKey } from "./coordination";
 import { PrincipalId } from "./principal";
 import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
+import { IssueTrackerConfig } from "./workspace";
 
 export const WorkflowId = TrimmedNonEmptyString.pipe(Schema.brand("WorkflowId"));
 export type WorkflowId = typeof WorkflowId.Type;
@@ -74,11 +81,19 @@ export const WorkflowAction = Schema.Struct({
 });
 export type WorkflowAction = typeof WorkflowAction.Type;
 
+const workflowActionTargetBinding = {
+  workspace: WorkspaceId,
+  app: IssueTrackerType,
+  issueTracker: IssueTrackerConfig,
+  repository: Schema.NullOr(TrimmedNonEmptyString),
+} as const;
+
 export const WorkflowActionTarget = Schema.TaggedUnion({
   Cogwork: {},
-  CurrentIssue: { workspace: WorkspaceId, issue: WorkItemId },
-  ExistingIssue: { workspace: WorkspaceId, issue: WorkItemId },
-  NewIssue: { workspace: WorkspaceId },
+  NoWorkspace: {},
+  CurrentIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
+  ExistingIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
+  NewIssue: workflowActionTargetBinding,
 });
 export type WorkflowActionTarget = typeof WorkflowActionTarget.Type;
 
@@ -115,6 +130,7 @@ export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("Workfl
   operation: WorkflowNodeId,
   revision: TrimmedNonEmptyString,
   createdAtMillis: Schema.Natural,
+  digest: TrimmedNonEmptyString,
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
   handOff: Schema.NullOr(WorkflowNodeId),
@@ -367,28 +383,48 @@ const answerFields = (operation: WorkflowOperation) =>
     ),
   );
 
-const inputFields = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
+const operationActionEntries = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
   const actionKeys = new Set(
     operation.transitions.flatMap(({ actions }) => actions.map(({ entry }) => entry)),
   );
-  const inputs = unique(
-    catalog.entries
-      .filter(({ key, kind }) => kind === "action" && actionKeys.has(key))
-      .flatMap(({ agentInputs }) => agentInputs),
-  );
+  return catalog.entries.filter(({ key, kind }) => kind === "action" && actionKeys.has(key));
+};
+
+const inputFields = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
+  const inputs = unique(operationActionEntries(operation, catalog).flatMap(({ agentInputs }) => agentInputs));
   return objectFields(inputs.map((input) => [input, Schema.String] as const));
 };
 
-export const workflowOperationResultSchema = (operation: WorkflowOperation, catalog: WorkflowCatalog) =>
-  Schema.Struct({
+export const workflowOperationResultSchema = (
+  operation: WorkflowOperation,
+  catalog: WorkflowCatalog,
+  workspaces: ReadonlyArray<WorkspaceId> = [],
+) => {
+  const fields = {
     summary: TrimmedNonEmptyString,
     stuck: Schema.Boolean,
     answers: Schema.Struct(answerFields(operation)),
     inputs: Schema.Struct(inputFields(operation, catalog)),
-  }).annotate({ parseOptions: { onExcessProperty: "error" } });
+  };
+  const parseOptions = { onExcessProperty: "error" } as const;
+  const needsWorkspace = operationActionEntries(operation, catalog).some(
+    ({ requiresWorkspace }) => requiresWorkspace,
+  );
+  return needsWorkspace
+    ? Schema.Struct({ ...fields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
+        parseOptions,
+      })
+    : Schema.Struct(fields).annotate({ parseOptions });
+};
 
-export const workflowOperationResultJsonSchema = (operation: WorkflowOperation, catalog: WorkflowCatalog) =>
-  Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog)));
+export const workflowOperationResultJsonSchema = (
+  operation: WorkflowOperation,
+  catalog: WorkflowCatalog,
+  workspaces: ReadonlyArray<WorkspaceId> = [],
+) =>
+  Schema.toStandardJSONSchemaV1(
+    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces)),
+  );
 
 export const matchWorkflowTransitions = (
   operation: WorkflowOperation,

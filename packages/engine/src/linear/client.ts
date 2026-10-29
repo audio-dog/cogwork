@@ -665,6 +665,34 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return yield* callWithCredential(ref, credential, run);
   });
 
+  const callOnceWithCredential = Effect.fn("linear.callOnceWithCredential")(function* <A>(
+    ref: LinearTeamRef,
+    credential: Credential,
+    run: (sdk: LinearSdk) => PromiseLike<A>,
+  ) {
+    const attemptStartedAt = yield* Clock.currentTimeMillis;
+    yield* holdOff(ref, attemptStartedAt);
+    return yield* withTransientAttemptDeadline(
+      Effect.tryPromise({
+        try: (signal) => run(new LinearSdk({ ...sdkAuth(credential), signal })),
+        catch: (cause) => fromSdkFailure(cause, attemptStartedAt),
+      }),
+    ).pipe(
+      Effect.mapError((failure) => failure.error),
+      Effect.tapError((error) =>
+        Effect.flatMap(Clock.currentTimeMillis, (nowMillis) => noteFailure(ref, nowMillis, error)),
+      ),
+    );
+  });
+
+  const callOnce = Effect.fn("linear.callOnce")(function* <A>(
+    ref: LinearTeamRef,
+    run: (sdk: LinearSdk) => PromiseLike<A>,
+  ) {
+    const credential = yield* credentialFor(ref);
+    return yield* callOnceWithCredential(ref, credential, run);
+  });
+
   // The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
   // only stays inside Linear's rate limit while these reads stay single documents.
   const rawData = Effect.fn("linear.rawRequest")(function* (
@@ -804,7 +832,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     operation: string,
     run: (sdk: LinearSdk) => PromiseLike<{ readonly success: boolean }>,
   ) {
-    const payload = yield* call(ref, run);
+    const payload = yield* callOnce(ref, run);
     yield* requireSuccess(operation, payload);
   });
 
@@ -821,7 +849,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     const { teamId, labelId } = yield* resolveLabel(ref, name);
     if (labelId !== null) return labelId;
     const payload = yield* Effect.mapError(
-      call(ref, (sdk) => sdk.createIssueLabel({ teamId, name })),
+      callOnce(ref, (sdk) => sdk.createIssueLabel({ teamId, name })),
       labelCreateRefused(ref, name),
     );
     yield* requireSuccess("issueLabelCreate", payload);
@@ -841,7 +869,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     }
     const team = yield* loadTeam(ref, metaShape);
     const labelIds = yield* Effect.forEach(input.labels, (label) => ensureLabel(ref, label));
-    const payload = yield* call(ref, (sdk) =>
+    const payload = yield* callOnce(ref, (sdk) =>
       sdk
         .createIssue({
           teamId: team.id,
@@ -984,9 +1012,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   };
 });
 
-type LinearClientImplementation = Effect.Success<ReturnType<typeof make>>;
-export type LinearClientService = Omit<LinearClientImplementation, "createIssue"> &
-  Partial<Pick<LinearClientImplementation, "createIssue">>;
+export type LinearClientService = Effect.Success<ReturnType<typeof make>>;
 
 export class LinearClient extends Context.Service<LinearClient, LinearClientService>()(
   "@cogwork/engine/linear/client/LinearClient",

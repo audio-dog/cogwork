@@ -10,13 +10,15 @@ A Workflow Run can finish its reasoning before an output write fails. Running th
 
 ## Decision
 
-The engine decodes each matched Transition into one typed action plan. It freezes every action entry, parameter, used agent input, target, and write key. It records the plan in the Control store before the first write and copies it into the Run ledger.
+The engine decodes each matched Transition into one typed action plan. It freezes every action entry, parameter, used agent input, app, Workspace tracker binding, target, and write key. A later Workspace rebind cannot redirect a stored plan. It records the plan in the Control store before the first write and copies it into the Run ledger.
 
 One executor runs approval, tracker writes in document order, notifications, and the final hand-off or Stop. It records each confirmed step before starting the next one. A retry resumes the stored plan and never reruns the agent.
 
 Each tracker write carries a stable write key in a hidden body marker. The adapter reads the marker back before it completes the step. Created artifacts also retain their Workflow origin in the plan.
 
 A retryable failure leaves its step pending. A permanent failure, or the third consecutive failure, marks the step failed and parks the item with `write-failed`. A handback skips completed and failed steps and runs the remaining plan. A new source revision withdraws the old plan.
+
+An action that needs a Workspace receives the agent's constrained Workspace choice. `none` parks the complete plan before any write.
 
 ## Consequences
 

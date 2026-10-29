@@ -112,7 +112,9 @@ export const coordinationSourceRevisions = sqliteTable(
   "coordination_source_revisions",
   {
     sequence: integer("sequence").primaryKey({ autoIncrement: true }),
-    workItem: text("work_item").notNull(),
+    workItem: text("work_item")
+      .notNull()
+      .references(() => coordinationItems.workItem),
     revision: text("revision").notNull(),
     processed: integer("processed", { mode: "boolean" }).notNull().default(false),
   },
@@ -230,9 +232,7 @@ export const workflows = sqliteTable(
 export const workflowActionPlans = sqliteTable(
   "workflow_action_plans",
   {
-    workItem: text("work_item")
-      .notNull()
-      .references(() => coordinationItems.workItem),
+    workItem: text("work_item").notNull(),
     workflow: text("workflow").notNull(),
     attempt: text("attempt").notNull(),
     createdAtMillis: integer("created_at_millis").notNull(),

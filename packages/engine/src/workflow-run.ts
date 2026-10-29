@@ -27,6 +27,7 @@ import { ContextAssembler } from "./context-assembler";
 import { Coordination, maxLineageHops } from "./coordination";
 import { Harness, type HarnessRunnerEnv } from "./harness";
 import { IssueTracker } from "./issue-tracker";
+import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
@@ -53,7 +54,7 @@ const handOffAdmission = (
   admission: TriggerAdmission,
   operation: TriggerAdmission["subscription"]["operation"],
   attempt: RunId,
-): TriggerAdmission => ({
+) => ({
   ...admission,
   subscription: { ...admission.subscription, operation },
   lineage: {
@@ -63,7 +64,17 @@ const handOffAdmission = (
   },
 });
 
-const initialAdmission = (admission: TriggerAdmission): TriggerAdmission | null => admission;
+const initialAdmission = (admission: TriggerAdmission) => admission as TriggerAdmission | null;
+
+const selectedWorkspaceIds = (
+  document: Parameters<typeof buildWorkflowActionPlan>[0]["document"],
+  workspaces: ReadonlyArray<RegisteredWorkspace>,
+) => {
+  const registered = workspaces.map(({ config }) => config.name);
+  return document.workspaces._tag === "Every"
+    ? registered
+    : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
+};
 
 const projection = [
   "Harness Adapter",
@@ -97,7 +108,6 @@ export const make = Effect.gen(function* () {
         Context.add(RunLedger, ledger),
         Context.add(WorkflowActionPlanStore, actionPlans),
         Context.add(WorkflowNotifications, notifications),
-        Context.add(WorkspaceRegistry, registry),
       ),
     ),
   );
@@ -147,6 +157,43 @@ export const make = Effect.gen(function* () {
       yield* coordination.markProcessed(admission.event.key, admission.event.revision);
       return;
     }
+    const pendingPlan = yield* actionPlans.pending(
+      keyOf(admission.event.key),
+      admission.subscription.workflow,
+    );
+    const stalePlan = pendingPlan !== null && pendingPlan.revision !== admission.event.revision;
+    if (stalePlan) {
+      yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
+    }
+    if (pendingPlan !== null && !stalePlan) {
+      const key = operationKeyOf(admission, pendingPlan.operation);
+      yield* Effect.acquireRelease(
+        coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
+        (activeClaim) =>
+          coordination
+            .release(admission.event.key, activeClaim)
+            .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
+      );
+      const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
+      if (execution._tag === "Retry" || execution._tag === "Parked") {
+        yield* settleAttempt(pendingPlan.attempt, "failed");
+        return;
+      }
+      if (execution._tag === "Complete") {
+        yield* coordination.recordAttempt(admission.event.key, {
+          operation: key,
+          outcome: "succeeded",
+          lineage: admission.lineage,
+        });
+        yield* settleAttempt(pendingPlan.attempt, "succeeded");
+        if (execution.handOff !== null) {
+          return handOffAdmission(admission, execution.handOff, pendingPlan.attempt);
+        }
+        yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+        return;
+      }
+    }
+
     const record = yield* workflows.get({ id: admission.subscription.workflow });
     const document = record.publishedCopy;
     const trigger = document?.triggers.find(({ id }) => id === admission.subscription.trigger);
@@ -157,41 +204,9 @@ export const make = Effect.gen(function* () {
     }
 
     const key = operationKeyOf(admission, operation.id);
-    const pendingPlan = yield* actionPlans.pending(
-      keyOf(admission.event.key),
-      admission.subscription.workflow,
-    );
-    const stalePlan = pendingPlan !== null && pendingPlan.revision !== admission.event.revision;
-    if (stalePlan) {
-      yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
-    }
-    if (pendingPlan !== null && !stalePlan) {
-      yield* Effect.acquireRelease(
-        coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
-        (activeClaim) =>
-          coordination
-            .release(admission.event.key, activeClaim)
-            .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
-      );
-      const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
-      if (execution._tag !== "Complete") {
-        yield* settleAttempt(pendingPlan.attempt, "failed");
-        return;
-      }
-      yield* coordination.recordAttempt(admission.event.key, {
-        operation: key,
-        outcome: "succeeded",
-        lineage: admission.lineage,
-      });
-      yield* settleAttempt(pendingPlan.attempt, "succeeded");
-      if (execution.handOff !== null) {
-        return handOffAdmission(admission, execution.handOff, pendingPlan.attempt);
-      }
-      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
-      return;
-    }
-
     const catalogResult = yield* workflows.catalog;
+    const registryState = yield* registry.state;
+    const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
     const selectedHarness = operation.model.harness ?? catalogResult.machine.defaultHarness;
     const hasMissingNeed = operation.requires.some(
       (need) => !catalogResult.machine.readyNeeds.includes(need),
@@ -258,7 +273,7 @@ export const make = Effect.gen(function* () {
       commands: [],
       hooks: [],
       middleware: [...harness.planMiddleware(selectedHarness)],
-      structuredOutput: workflowOperationResultJsonSchema(operation, catalogResult.catalog)[
+      structuredOutput: workflowOperationResultJsonSchema(operation, catalogResult.catalog, outputWorkspaces)[
         "~standard"
       ].jsonSchema.input({ target: "draft-2020-12" }),
       connections: [],
@@ -322,9 +337,9 @@ export const make = Effect.gen(function* () {
     }
 
     const output = Option.getOrUndefined(eventsExit.value);
-    const decoded = Schema.decodeUnknownExit(workflowOperationResultSchema(operation, catalogResult.catalog))(
-      output?.value.object,
-    );
+    const decoded = Schema.decodeUnknownExit(
+      workflowOperationResultSchema(operation, catalogResult.catalog, outputWorkspaces),
+    )(output?.value.object);
     if (Exit.isFailure(decoded)) {
       const issues = String(decoded.cause);
       yield* refuseResult(admission, key, run, issues);
@@ -355,7 +370,7 @@ export const make = Effect.gen(function* () {
         document,
         operation,
         catalog: catalogResult.catalog,
-        machine: catalogResult.machine,
+        workspaces: registryState.workspaces,
         output: decoded.value,
         attempt: run.id,
         createdAtMillis: yield* Clock.currentTimeMillis,

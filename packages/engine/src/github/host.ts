@@ -222,14 +222,12 @@ export const makeIssueActions = (client: GitHubClientService) => {
     ) {
       const repo = yield* target(workspace);
       const number = yield* issueNumberOf(id);
-      const closeIssue = client.closeIssue;
-      if (!closeIssue) return yield* writeNotConfirmed(writeKey);
       yield* writeOnce(
         repo,
         number,
         writeKey,
         client.readIssue(repo, number).pipe(Effect.map(({ state }) => state === "closed")),
-        closeIssue(repo, number),
+        client.closeIssue(repo, number),
       );
     }),
   };

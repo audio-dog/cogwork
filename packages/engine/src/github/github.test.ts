@@ -29,7 +29,7 @@ import { classify } from "../classify";
 import { triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
 import type { FollowUpMarker } from "../follow-up";
-import { actionsOf, IssueTracker, IssueTrackerError } from "../issue-tracker";
+import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
 import { SourceControlProvider } from "../source-control";
@@ -510,7 +510,7 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
 describe("GitHub adapters", () => {
   it.effect("executes issue actions once and confirms their write keys", () =>
     Effect.gen(function* () {
-      const tracker = actionsOf(yield* IssueTracker);
+      const tracker = yield* IssueTracker;
       const client = yield* GitHubClient;
       const origin = WorkflowActionOrigin.make({
         item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),

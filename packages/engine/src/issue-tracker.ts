@@ -111,6 +111,52 @@ export interface CreateIssueInput {
   readonly origin: WorkflowActionOrigin;
 }
 
+export interface IssueTrackerActionService {
+  readonly createIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    input: CreateIssueInput,
+  ) => Effect.Effect<WorkflowActionArtifact, IssueTrackerError>;
+  readonly commentIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    body: string,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly addLabels: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    labels: ReadonlyArray<string>,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly removeLabel: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    label: string,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly closeIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+}
+
+const unavailableAction = () =>
+  Effect.fail(
+    new IssueTrackerError({
+      reason: "unavailable",
+      message: "the issue tracker does not support Workflow actions",
+    }),
+  );
+
+export const unsupportedWorkflowActions: IssueTrackerActionService = {
+  createIssue: unavailableAction,
+  commentIssue: unavailableAction,
+  addLabels: unavailableAction,
+  removeLabel: unavailableAction,
+  closeIssue: unavailableAction,
+};
+
 const noAdapter = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
@@ -174,55 +220,10 @@ export const makeEmpty = Effect.succeed({
     failWhenRemote(workspace),
   reclassify: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: ReclassifyOutcome) =>
     failWhenRemote(workspace),
+  ...unsupportedWorkflowActions,
 } as const);
 
-export interface IssueTrackerActionService {
-  readonly createIssue: (
-    workspace: WorkspaceIssueTrackerBinding,
-    input: CreateIssueInput,
-  ) => Effect.Effect<WorkflowActionArtifact, IssueTrackerError>;
-  readonly commentIssue: (
-    workspace: WorkspaceIssueTrackerBinding,
-    itemId: WorkItemId,
-    body: string,
-    writeKey: string,
-  ) => Effect.Effect<void, IssueTrackerError>;
-  readonly addLabels: (
-    workspace: WorkspaceIssueTrackerBinding,
-    itemId: WorkItemId,
-    labels: ReadonlyArray<string>,
-    writeKey: string,
-  ) => Effect.Effect<void, IssueTrackerError>;
-  readonly removeLabel: (
-    workspace: WorkspaceIssueTrackerBinding,
-    itemId: WorkItemId,
-    label: string,
-    writeKey: string,
-  ) => Effect.Effect<void, IssueTrackerError>;
-  readonly closeIssue: (
-    workspace: WorkspaceIssueTrackerBinding,
-    itemId: WorkItemId,
-    writeKey: string,
-  ) => Effect.Effect<void, IssueTrackerError>;
-}
-
-export type IssueTrackerService = Effect.Success<typeof makeEmpty> & Partial<IssueTrackerActionService>;
-
-const unavailableAction = (..._args: ReadonlyArray<unknown>) =>
-  Effect.fail(
-    new IssueTrackerError({
-      reason: "unavailable",
-      message: "the issue tracker does not support Workflow actions",
-    }),
-  );
-
-export const actionsOf = (tracker: IssueTrackerService): IssueTrackerActionService => ({
-  createIssue: tracker.createIssue ?? unavailableAction,
-  commentIssue: tracker.commentIssue ?? unavailableAction,
-  addLabels: tracker.addLabels ?? unavailableAction,
-  removeLabel: tracker.removeLabel ?? unavailableAction,
-  closeIssue: tracker.closeIssue ?? unavailableAction,
-});
+export type IssueTrackerService = Effect.Success<typeof makeEmpty>;
 
 export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerService>()(
   "@cogwork/engine/issue-tracker/IssueTracker",

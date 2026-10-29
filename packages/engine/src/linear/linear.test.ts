@@ -21,7 +21,7 @@ import * as Schema from "effect/Schema";
 import { classify } from "../classify";
 import { triageProposalAttribution, triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
-import { actionsOf, IssueTracker, IssueTrackerError } from "../issue-tracker";
+import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
 import * as SourceControl from "../source-control";
@@ -391,7 +391,7 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
 describe("linear work source adapter", () => {
   it.effect("executes issue actions once and confirms their write keys", () =>
     Effect.gen(function* () {
-      const tracker = actionsOf(yield* IssueTracker);
+      const tracker = yield* IssueTracker;
       const client = yield* LinearClient;
       const origin = WorkflowActionOrigin.make({
         item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),

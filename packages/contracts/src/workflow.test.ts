@@ -29,6 +29,7 @@ const decodeHarness = Schema.decodeUnknownSync(HarnessName);
 const decodeNeed = Schema.decodeUnknownSync(NeedIdentity);
 const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
 const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
+const cogworkWorkspace = decodeWorkspaceId("cogwork");
 
 const baseDocument = decodeDocument({
   name: "Issue helper",
@@ -583,7 +584,7 @@ describe("Workflow edits", () => {
 });
 
 describe("Workflow Operation result", () => {
-  const schema = workflowOperationResultSchema(operation, baseCatalog);
+  const schema = workflowOperationResultSchema(operation, baseCatalog, [cogworkWorkspace]);
 
   it("decodes the flat result and refuses missing answers", () => {
     const decoded = Schema.decodeSync(schema)({
@@ -591,6 +592,7 @@ describe("Workflow Operation result", () => {
       stuck: false,
       answers: { decision: decodeNodeId("yes") },
       inputs: { comment: "Proceed." },
+      workspace: cogworkWorkspace,
     });
 
     assert.strictEqual(decoded.answers.decision, "yes");
@@ -600,17 +602,18 @@ describe("Workflow Operation result", () => {
         stuck: false,
         answers: {},
         inputs: { comment: "Proceed." },
+        workspace: cogworkWorkspace,
       }),
     );
   });
 
   it("builds one strict object with required fields", () => {
-    const json = workflowOperationResultJsonSchema(operation, baseCatalog)["~standard"].jsonSchema.input({
-      target: "draft-2020-12",
-    });
+    const json = workflowOperationResultJsonSchema(operation, baseCatalog, [cogworkWorkspace])[
+      "~standard"
+    ].jsonSchema.input({ target: "draft-2020-12" });
 
     assert.strictEqual(json.type, "object");
-    assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs"]);
+    assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs", "workspace"]);
     assert.strictEqual(json.additionalProperties, false);
   });
 

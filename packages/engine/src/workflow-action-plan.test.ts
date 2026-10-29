@@ -19,7 +19,6 @@ import * as Schema from "effect/Schema";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { IssueTracker, IssueTrackerError, makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import type { TriggerAdmission } from "./trigger-observation";
 import { executeWorkflowActionPlan } from "./workflow-action-plan";
@@ -46,6 +45,11 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 const item = decodeItem("#811");
+const linearConfig = Schema.decodeSync(WorkspaceConfig)({
+  name: "linear",
+  checkoutPath: "/linear",
+  issueTracker: { type: "linear", teams: ["CGW"] },
+});
 const ref = { _tag: "Issue", workspace: workspace.config.name, id: item } as const;
 const admission: TriggerAdmission = {
   event: {
@@ -80,6 +84,7 @@ const plan = (steps: ReadonlyArray<WorkflowActionPlanStep>) =>
     operation,
     revision: "1",
     createdAtMillis: 10,
+    digest: "plan-digest",
     summary: "write",
     answers: {},
     handOff: null,
@@ -92,7 +97,14 @@ const step = (position: number, entry: string, comment = "") =>
     entry: decodeEntry(entry),
     parameters: [],
     inputs: comment === "" ? {} : { comment },
-    target: { _tag: "CurrentIssue", workspace: workspace.config.name, issue: item },
+    target: {
+      _tag: "CurrentIssue",
+      workspace: workspace.config.name,
+      app: workspace.config.issueTracker.type,
+      issueTracker: workspace.config.issueTracker,
+      repository: null,
+      issue: item,
+    },
     writeKey: `write-${position}`,
     status: "pending",
     failures: 0,
@@ -138,7 +150,11 @@ const coordinationLayer = Layer.effect(
             Effect.andThen(Ref.get(probe.barrier)),
             Effect.map(viewAt),
           ),
-        handBack: () => Effect.die("unused"),
+        handBack: () =>
+          Ref.update(probe.barrier, (current) => current + 100).pipe(
+            Effect.andThen(Ref.get(probe.barrier)),
+            Effect.map(viewAt),
+          ),
         observe: () => Effect.die("unused"),
         markProcessed: () => Effect.void,
       }) satisfies CoordinationService,
@@ -180,12 +196,7 @@ const adapterLayers = Layer.merge(coordinationLayer, trackerLayer).pipe(
   Layer.provideMerge(ActionPlanProbe.layer),
 );
 
-const requirements = Layer.mergeAll(
-  engineTestLayer(),
-  workflowActionPlanStoreLayer,
-  adapterLayers,
-  Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces: [workspace], failures: [] })),
-);
+const requirements = Layer.mergeAll(engineTestLayer(), workflowActionPlanStoreLayer, adapterLayers);
 
 describe("Workflow action plan", () => {
   it.effect("parks the third retryable write failure with one stable write key", () =>
@@ -232,13 +243,63 @@ describe("Workflow action plan", () => {
 
       const parked = yield* executeWorkflowActionPlan(initial, admission);
       const saved = yield* store.pending(initial.item, initial.workflow);
-      yield* Ref.set(probe.barrier, initial.createdAtMillis + 1);
+      const stillParked = yield* executeWorkflowActionPlan(saved ?? initial, admission);
+      const callsBeforeHandback = yield* Ref.get(probe.calls);
+      yield* (yield* Coordination).handBack(admission.event.key, { by: "Taylor" });
       const completed = yield* executeWorkflowActionPlan(saved ?? initial, admission);
 
       assert.strictEqual(parked._tag, "Parked");
+      assert.strictEqual(stillParked._tag, "Parked");
+      assert.deepStrictEqual(callsBeforeHandback, ["first:write-0", "fail:write-1"]);
       assert.strictEqual(completed._tag, "Complete");
       assert.deepStrictEqual(yield* Ref.get(probe.calls), ["first:write-0", "fail:write-1", "close:write-2"]);
       assert.isNull(yield* store.pending(initial.item, initial.workflow));
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("parks before every write when the plan has no recognized Workspace", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const missingWorkspace = WorkflowActionPlanStep.make({
+        ...step(1, "github.close-this-issue"),
+        target: { _tag: "NoWorkspace" },
+      });
+      const initial = plan([step(0, "github.comment-this-item", "first"), missingWorkspace]);
+      yield* (yield* WorkflowActionPlanStore).create(initial);
+
+      const result = yield* executeWorkflowActionPlan(initial, admission);
+
+      assert.strictEqual(result._tag, "Parked");
+      assert.isEmpty(yield* Ref.get(probe.calls));
+      assert.deepInclude((yield* Ref.get(probe.parks))[0], {
+        _tag: "NoWorkspaceRecognized",
+        plan: initial.digest,
+      });
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("refuses an action whose frozen app does not match its entry", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const mismatched = WorkflowActionPlanStep.make({
+        ...step(0, "github.close-this-issue"),
+        target: {
+          _tag: "CurrentIssue",
+          workspace: linearConfig.name,
+          app: linearConfig.issueTracker.type,
+          issueTracker: linearConfig.issueTracker,
+          repository: null,
+          issue: item,
+        },
+      });
+      const initial = plan([mismatched]);
+      yield* (yield* WorkflowActionPlanStore).create(initial);
+
+      const result = yield* executeWorkflowActionPlan(initial, admission);
+
+      assert.strictEqual(result._tag, "Parked");
+      assert.isEmpty(yield* Ref.get(probe.calls));
+      assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "WriteFailed");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 });

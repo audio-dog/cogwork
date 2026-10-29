@@ -131,9 +131,7 @@ export const makeIssueActions = (client: LinearClientService) => {
     id: WorkItemId,
   ) {
     const targets = targetsFor(workspace);
-    const [first, ...rest] = targets;
-    if (!first) return yield* notLinear(workspace);
-    if (rest.length === 0) return first;
+    if (targets.length === 0) return yield* notLinear(workspace);
     const target = targets.find(({ team }) => team === teamKeyOf(id));
     if (!target) {
       return yield* new IssueTrackerError({
@@ -187,9 +185,7 @@ export const makeIssueActions = (client: LinearClientService) => {
           origin: input.origin,
         });
       }
-      const createIssue = client.createIssue;
-      if (!createIssue) return yield* writeNotConfirmed(input.origin.writeKey);
-      const created = yield* createIssue(target, {
+      const created = yield* client.createIssue(target, {
         title: input.title,
         body: markedBody(input.body, input.origin.writeKey),
         labels: input.labels,

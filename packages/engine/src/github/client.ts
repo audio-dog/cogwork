@@ -1423,9 +1423,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   };
 });
 
-type GitHubClientImplementation = Effect.Success<ReturnType<typeof make>>;
-export type GitHubClientService = Omit<GitHubClientImplementation, "closeIssue"> &
-  Partial<Pick<GitHubClientImplementation, "closeIssue">>;
+export type GitHubClientService = Effect.Success<ReturnType<typeof make>>;
 
 export class GitHubClient extends Context.Service<GitHubClient, GitHubClientService>()(
   "@cogwork/engine/github/client/GitHubClient",

@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
+import { IssueTracker, type IssueTrackerService, unsupportedWorkflowActions } from "./issue-tracker";
 import { route } from "./issue-tracker-router";
 import type { RegisteredWorkspace } from "./projector";
 
@@ -40,6 +40,7 @@ class RouterCalls extends Context.Service<RouterCalls, Ref.Ref<ReadonlyArray<Rec
 }
 
 const fakeSource = (source: string, calls: Ref.Ref<ReadonlyArray<Recorded>>): IssueTrackerService => ({
+  ...unsupportedWorkflowActions,
   rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
   readProse: () => Effect.succeed({ body: "", comments: [] }),

@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { makeAdapter as makeGitHub } from "./github/adapter";
 import { GitHubClient } from "./github/client";
-import { actionsOf, IssueTracker, type IssueTrackerService } from "./issue-tracker";
+import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { makeAdapter as makeLinear } from "./linear/adapter";
 import { LinearClient } from "./linear/client";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
@@ -10,7 +10,6 @@ import type { WorkspaceIssueTrackerBinding } from "./projector";
 export const route = (github: IssueTrackerService, linear: IssueTrackerService): IssueTrackerService => {
   const forWorkspace = (workspace: WorkspaceIssueTrackerBinding) =>
     workspace.config.issueTracker.type === "linear" ? linear : github;
-  const actionsFor = (workspace: WorkspaceIssueTrackerBinding) => actionsOf(forWorkspace(workspace));
 
   return {
     rateLimitScope: (workspace) => forWorkspace(workspace).rateLimitScope(workspace),
@@ -27,14 +26,14 @@ export const route = (github: IssueTrackerService, linear: IssueTrackerService):
     handBack: (workspace, id, outcome) => forWorkspace(workspace).handBack(workspace, id, outcome),
     stalled: (workspace, id, outcome) => forWorkspace(workspace).stalled(workspace, id, outcome),
     reclassify: (workspace, id, outcome) => forWorkspace(workspace).reclassify(workspace, id, outcome),
-    createIssue: (workspace, input) => actionsFor(workspace).createIssue(workspace, input),
+    createIssue: (workspace, input) => forWorkspace(workspace).createIssue(workspace, input),
     commentIssue: (workspace, id, body, writeKey) =>
-      actionsFor(workspace).commentIssue(workspace, id, body, writeKey),
+      forWorkspace(workspace).commentIssue(workspace, id, body, writeKey),
     addLabels: (workspace, id, labels, writeKey) =>
-      actionsFor(workspace).addLabels(workspace, id, labels, writeKey),
+      forWorkspace(workspace).addLabels(workspace, id, labels, writeKey),
     removeLabel: (workspace, id, label, writeKey) =>
-      actionsFor(workspace).removeLabel(workspace, id, label, writeKey),
-    closeIssue: (workspace, id, writeKey) => actionsFor(workspace).closeIssue(workspace, id, writeKey),
+      forWorkspace(workspace).removeLabel(workspace, id, label, writeKey),
+    closeIssue: (workspace, id, writeKey) => forWorkspace(workspace).closeIssue(workspace, id, writeKey),
   };
 };
 

@@ -7,6 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
@@ -899,7 +900,7 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("retries a mutation after a hanging attempt reaches its deadline", () =>
+  it.effect("does not retry a mutation after a hanging attempt reaches its deadline", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: { data: { commentCreate: { success: true } } } }));
       const onAbort = vi.fn();
@@ -910,8 +911,11 @@ describe("linear client", () => {
       const client = yield* LinearClient;
       const requestFiber = yield* Effect.forkChild(client.createComment(ref, "AUD-1", "body"));
       yield* TestClock.adjust("1 minute");
-      yield* Fiber.join(requestFiber);
-      assert.strictEqual(fetchStub.mock.calls.length, 2);
+      const result = yield* Effect.result(Fiber.join(requestFiber));
+      assert.isTrue(Result.isFailure(result));
+      if (Result.isSuccess(result)) return;
+      assert.strictEqual(result.failure.reason, "unavailable");
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
       assert.strictEqual(onAbort.mock.calls.length, 1);
     }).pipe(withToken()),
   );

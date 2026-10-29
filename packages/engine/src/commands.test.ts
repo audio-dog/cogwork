@@ -284,6 +284,7 @@ const trackerStub = (service: Partial<IssueTracker.IssueTrackerService>) =>
     handBack: () => Effect.void,
     stalled: () => Effect.void,
     reclassify: () => Effect.void,
+    ...IssueTracker.unsupportedWorkflowActions,
     ...service,
   }) satisfies IssueTracker.IssueTrackerService;
 
