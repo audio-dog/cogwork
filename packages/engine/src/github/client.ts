@@ -143,10 +143,7 @@ const GitHubIssueFieldSchema = Schema.Struct({
   data_type: Schema.String,
 });
 
-const CreatedIssueSchema = Schema.Struct({
-  number: Schema.Finite,
-  labels: Schema.Array(LabelName),
-});
+const SearchIssuesSchema = Schema.Struct({ items: Schema.Array(IssueSchema) });
 
 const CreatedPullSchema = Schema.Struct({
   number: Schema.Finite,
@@ -465,9 +462,9 @@ export const graphQlData = (
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodeIssue = Schema.decodeUnknownEffect(IssueSchema);
+const decodeSearchIssues = Schema.decodeUnknownEffect(SearchIssuesSchema);
 const decodeIssueFields = Schema.decodeUnknownEffect(Schema.Array(GitHubIssueFieldSchema));
 const decodeAuthenticatedUser = Schema.decodeUnknownEffect(AuthenticatedUserSchema);
-const decodeCreatedIssue = Schema.decodeUnknownEffect(CreatedIssueSchema);
 const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
 const decodeCreatedPulls = Schema.decodeUnknownEffect(Schema.Array(CreatedPullSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
@@ -1097,14 +1094,17 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         labels: input.labels,
       },
     );
-    if (Option.isNone(acceptedBody)) return;
-    yield* Effect.gen(function* () {
-      const created = yield* Effect.mapError(decodeCreatedIssue(acceptedBody.value), toUnavailable);
+    if (Option.isNone(acceptedBody)) {
+      return yield* unavailable("GitHub accepted issue creation but its response was unavailable", true);
+    }
+    return yield* Effect.gen(function* () {
+      const created = yield* Effect.mapError(decodeIssue(acceptedBody.value), toUnavailable);
       const applied = new Set(created.labels.map(labelName));
       yield* Effect.forEach(
         input.labels.filter((label) => !applied.has(label)),
         (label) => addLabel(repo, created.number, label),
       );
+      return toRawIssue(repo, created);
     }).pipe(Effect.mapError(toAcceptedWriteError));
   });
 
@@ -1321,6 +1321,19 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         Effect.flatMap((json) => Effect.mapError(decodeIssue(json), toUnavailable)),
         Effect.map((issue) => toRawIssue(repo, issue)),
       ),
+    findIssueWithMarker: Effect.fn("github.findIssueWithMarker")(function* (
+      repo: GitHubRepoRef,
+      marker: string,
+    ) {
+      const query = new URLSearchParams({
+        q: `repo:${repo.owner}/${repo.name} is:issue in:body "${marker}"`,
+        per_page: "1",
+      });
+      const json = yield* fetchJson(repo, `https://api.github.com/search/issues?${query}`);
+      const payload = yield* Effect.mapError(decodeSearchIssues(json), toUnavailable);
+      const issue = payload.items.at(0);
+      return issue ? toRawIssue(repo, issue) : null;
+    }),
     listIssueFieldValues: Effect.fn("github.listIssueFieldValues")(function* (
       repo: GitHubRepoRef,
       issueNodeIds: ReadonlyArray<string>,

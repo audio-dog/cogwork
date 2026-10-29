@@ -40,6 +40,18 @@ const pullResponse = (number: number) => ({
   author_association: "MEMBER",
 });
 
+const issueResponse = (number: number, labels: ReadonlyArray<string> = []) => ({
+  node_id: `I_issue_${number}`,
+  number,
+  title: "Daemon event loop delay is high",
+  html_url: `https://github.com/colonylabs/cogwork/issues/${number}`,
+  labels,
+  assignees: [],
+  body: "Signal: event-loop-delay",
+  state: "open",
+  created_at: "2026-09-09T12:00:00Z",
+});
+
 const emptyClosingReferences = {
   data: {
     repository: {
@@ -225,6 +237,29 @@ describe("GitHub client", () => {
           createdAtMillis: Date.UTC(2026, 8, 9, 12),
         },
       ]);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("finds one issue by body marker", () => {
+    const marker = "<!-- cogwork:write key=create-key -->";
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(jsonResponse({ items: [{ ...issueResponse(416), body: marker }] })),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const issue = yield* client.findIssueWithMarker(repo, marker);
+      const [input] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new URL(input instanceof Request ? input.url : String(input));
+
+      assert.strictEqual(issue?.number, 416);
+      assert.strictEqual(request.pathname, "/search/issues");
+      assert.strictEqual(
+        request.searchParams.get("q"),
+        `repo:colonylabs/cogwork is:issue in:body "${marker}"`,
+      );
+      assert.strictEqual(request.searchParams.get("per_page"), "1");
     }).pipe(withFetchClient(fetch));
   });
 
@@ -514,19 +549,19 @@ describe("GitHub client", () => {
 
   it.effect("creates an issue with its body and labels", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
-      Promise.resolve(
-        jsonResponse({ number: 415, labels: [{ name: "needs-triage" }, { name: "origin:selfperf" }] }, 201),
-      ),
+      Promise.resolve(jsonResponse(issueResponse(415, ["needs-triage", "origin:selfperf"]), 201)),
     );
 
     return Effect.gen(function* () {
       const client = yield* GitHubClient;
-      yield* client.createIssue(repo, {
+      const created = yield* client.createIssue(repo, {
         title: "Daemon event loop delay is high",
         body: "Signal: event-loop-delay",
         labels: ["needs-triage", "origin:selfperf"],
       });
 
+      assert.strictEqual(created.number, 415);
+      assert.strictEqual(created.body, "Signal: event-loop-delay");
       assert.strictEqual(fetch.mock.calls.length, 1);
       const [input, init] = fetch.mock.calls[0] ?? [];
       assert.isDefined(input);
@@ -636,7 +671,7 @@ describe("GitHub client", () => {
   it.effect("applies labels that GitHub silently drops during issue creation", () => {
     const response = vi
       .fn<() => Response>()
-      .mockReturnValueOnce(jsonResponse({ number: 415, labels: [] }, 201))
+      .mockReturnValueOnce(jsonResponse(issueResponse(415), 201))
       .mockReturnValue(jsonResponse([]));
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response()));
 
@@ -670,7 +705,7 @@ describe("GitHub client", () => {
   it.effect("marks label repair failures as possibly committed issue writes", () => {
     const response = vi
       .fn<() => Response>()
-      .mockReturnValueOnce(jsonResponse({ number: 415, labels: [] }, 201))
+      .mockReturnValueOnce(jsonResponse(issueResponse(415), 201))
       .mockReturnValue(jsonResponse({ message: "Validation failed" }, 422));
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(response()));
 
@@ -747,7 +782,7 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
-  it.effect("does not fail an accepted issue creation whose response body stalls", () => {
+  it.effect("reports an accepted issue creation whose response body stalls", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(hangingResponse("{", 201)));
 
     return Effect.gen(function* () {
@@ -761,7 +796,8 @@ describe("GitHub client", () => {
       );
       yield* TestClock.adjust("1 minute");
       assert.strictEqual(fetch.mock.calls.length, 1);
-      yield* Fiber.join(operation);
+      const error = yield* Effect.flip(Fiber.join(operation));
+      assert.isTrue(error.writeMayHaveCommitted);
     }).pipe(withFetchClient(fetch));
   });
 

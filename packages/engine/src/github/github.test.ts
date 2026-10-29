@@ -118,6 +118,7 @@ interface Seed {
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
   readonly priorities?: ReadonlyArray<{ readonly issue: number; readonly priority: Priority }>;
   readonly priorityError?: boolean;
+  readonly listIssuesError?: boolean;
   readonly priorityValueError?: boolean;
   readonly pullRequestError?: boolean;
 }
@@ -249,7 +250,14 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     });
   return {
     authenticatedLogin: () => Effect.succeed(bot.login),
-    listIssues: () => Ref.get(issuesRef),
+    listIssues: () =>
+      seed.listIssuesError
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue list unavailable" }))
+        : Ref.get(issuesRef),
+    findIssueWithMarker: (_repo, marker) =>
+      Ref.get(issuesRef).pipe(
+        Effect.map((issues) => issues.find(({ body }) => body.includes(marker)) ?? null),
+      ),
     readIssue: (_repo, number) =>
       Effect.gen(function* () {
         const issues = yield* Ref.get(issuesRef);
@@ -286,7 +294,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
     listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
     createIssue: (_repo, input) =>
-      Ref.update(issuesRef, (issues) => {
+      Ref.modify(issuesRef, (issues) => {
         const number = Math.max(0, ...issues.map(({ number }) => number)) + 1;
         const created: RawIssue = {
           nodeId: `I_issue_${number}`,
@@ -301,7 +309,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
           state: "open",
           createdAtMillis: 0,
         };
-        return [...issues, created];
+        return [created, [...issues, created]];
       }),
     createPull: () =>
       seed.pullRequestError
@@ -508,6 +516,36 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
 });
 
 describe("GitHub adapters", () => {
+  it.effect("creates an issue without scanning the issue list", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker
+        .createIssue(workspace, {
+          title: "Created",
+          body: "Body",
+          labels: [],
+          origin,
+        })
+        .pipe(Effect.match({ onFailure: () => null, onSuccess: (created) => created }));
+
+      assert.strictEqual(artifact?.issue, "#6");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: [] }],
+          listIssuesError: true,
+        }),
+      ),
+    ),
+  );
+
   it.effect("executes issue actions once and confirms their write keys", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;

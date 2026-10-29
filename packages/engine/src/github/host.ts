@@ -154,19 +154,16 @@ export const makeIssueActions = (client: GitHubClientService) => {
       input: CreateIssueInput,
     ) {
       const repo = yield* target(workspace);
-      const existing = (yield* client.listIssues(repo, { state: "all" })).find(({ body }) =>
-        carriesWriteKey(body, input.origin.writeKey),
-      );
+      const existing = yield* client.findIssueWithMarker(repo, writeMarker(input.origin.writeKey));
       if (existing) return yield* artifact(workspace, existing, input.origin);
-      yield* client.createIssue(repo, {
+      const created = yield* client.createIssue(repo, {
         title: input.title,
         body: markedBody(input.body, input.origin.writeKey),
         labels: input.labels,
       });
-      const created = (yield* client.listIssues(repo, { state: "all" })).find(({ body }) =>
-        carriesWriteKey(body, input.origin.writeKey),
-      );
-      if (!created) return yield* writeNotConfirmed(input.origin.writeKey);
+      if (!carriesWriteKey(created.body, input.origin.writeKey)) {
+        return yield* writeNotConfirmed(input.origin.writeKey);
+      }
       return yield* artifact(workspace, created, input.origin);
     }),
     commentIssue: Effect.fn("github.workflowCommentIssue")(function* (
