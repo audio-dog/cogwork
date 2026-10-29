@@ -5,7 +5,6 @@ import {
   LineageId,
   type WorkflowCatalog,
   type WorkflowRecord,
-  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as EffectCause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -13,7 +12,6 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
@@ -232,10 +230,7 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
   const matched = subscriptions.filter((subscription) => {
     const sameScheduleWorkflow =
       event.key._tag !== "ScheduleInstant" || event.key.workflow === subscription.workflow;
-    const sameWorkspace =
-      event.workspace === null ||
-      subscription.workspaces.length === 0 ||
-      subscription.workspaces.includes(event.workspace);
+    const sameWorkspace = event.workspace === null || subscription.workspaces.includes(event.workspace);
     const sameSchedule =
       event.key._tag !== "ScheduleInstant" || matchesScheduledInstant(subscription, event.key.instantMillis);
     const sameParameters = [...observed].every(([id, value]) =>
@@ -252,11 +247,15 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
   return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
 };
 
-const subscriptionsOf = (records: ReadonlyArray<WorkflowRecord>) =>
+const subscriptionsOf = (
+  records: ReadonlyArray<WorkflowRecord>,
+  everyWorkspace: ReadonlyArray<TriggerSubscription["workspaces"][number]>,
+) =>
   records.flatMap((record) => {
     const document = record.publishedCopy;
     if (!record.enabled || document === null) return [];
-    const workspaces = document.workspaces._tag === "Listed" ? document.workspaces.workspaces : [];
+    const workspaces =
+      document.workspaces._tag === "Listed" ? document.workspaces.workspaces : everyWorkspace;
     return document.triggers.map(
       (trigger) =>
         ({
@@ -288,11 +287,12 @@ const fingerprintOf = (subscriptions: ReadonlyArray<TriggerSubscription>) =>
     })),
   );
 
-const lineageOf = (ref: WorkItemRef): Lineage => ({
-  root: Schema.decodeSync(LineageId)(keyOf(ref)),
-  parent: null,
-  hop: 0,
-});
+const lineageOf = (event: TriggerEvent): Lineage => {
+  const current = Schema.decodeSync(LineageId)(keyOf(event.key));
+  if (event.cause._tag !== "Cogwork") return { root: current, parent: null, hop: 0 };
+  const origin = Schema.decodeSync(LineageId)(event.cause.origin);
+  return { root: origin, parent: origin, hop: 1 };
+};
 
 const waitForRetry = (retryAtMillis: number | null) =>
   retryAtMillis === null
@@ -313,8 +313,8 @@ export const make = Effect.gen(function* () {
   const bus = yield* DaemonEventBus;
   const store = yield* TriggerObservationStore;
   const sources = yield* TriggerSources;
-  const tracker = Option.getOrUndefined(yield* Effect.serviceOption(IssueTracker));
-  const registry = Option.getOrUndefined(yield* Effect.serviceOption(WorkspaceRegistry));
+  const tracker = yield* IssueTracker;
+  const registry = yield* WorkspaceRegistry;
   const fibers = yield* FiberMap.make<TriggerSource["id"]>();
   const fingerprints = yield* Ref.make<ReadonlyMap<TriggerSource["id"], string>>(new Map());
   const health = yield* Ref.make<ReadonlyMap<TriggerSource["id"], TriggerSourceHealth>>(
@@ -332,7 +332,7 @@ export const make = Effect.gen(function* () {
   const passesAssigneeGate = Effect.fn("TriggerObservation.passesAssigneeGate")(function* (
     event: TriggerEvent,
   ) {
-    if (event.workspace === null || tracker === undefined || registry === undefined) return true;
+    if (event.workspace === null) return true;
     const state = yield* registry.state;
     const workspace = state.workspaces.find(({ config }) => config.name === event.workspace);
     if (workspace === undefined) return false;
@@ -353,12 +353,13 @@ export const make = Effect.gen(function* () {
 
   const admit = Effect.fn("TriggerObservation.admit")(function* (event: TriggerEvent) {
     if (!(yield* passesAssigneeGate(event))) return;
-    const listed = yield* workflows.list;
-    const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
+    const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
+    const workspaceIds = registryState.workspaces.map(({ config }) => config.name);
+    const matched = matchTriggerEvent(subscriptionsOf(listed.workflows, workspaceIds), event);
     yield* Effect.forEach(matched, (subscription) =>
       coordination.observe(event.key, event.revision, event.cause).pipe(
         Effect.flatMap(() => {
-          const admission = { event, subscription, lineage: lineageOf(event.key) } satisfies TriggerAdmission;
+          const admission = { event, subscription, lineage: lineageOf(event) } satisfies TriggerAdmission;
           return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
         }),
       ),
@@ -414,8 +415,16 @@ export const make = Effect.gen(function* () {
     refreshGate.withPermit(
       workflows.list.pipe(
         Effect.flatMap((listed) =>
-          Clock.currentTimeMillis.pipe(
-            Effect.flatMap((atMillis) => store.activate(subscriptionsOf(listed.workflows), atMillis)),
+          Effect.all([Clock.currentTimeMillis, registry.state]).pipe(
+            Effect.flatMap(([atMillis, registryState]) =>
+              store.activate(
+                subscriptionsOf(
+                  listed.workflows,
+                  registryState.workspaces.map(({ config }) => config.name),
+                ),
+                atMillis,
+              ),
+            ),
             Effect.flatMap((subscriptions) =>
               Effect.forEach(
                 sources,

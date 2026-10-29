@@ -1,16 +1,15 @@
 import { linearTeams, WorkflowCatalogKey, type WorkflowOption, WorkItemId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import type { RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
   liveParameter,
+  type ProviderPollCheckpoint,
   parameterValue,
-  pollingStream,
+  providerPollingStream,
   sourceFailure,
   triggerEntry,
   workspaceSubscriptions,
@@ -33,14 +32,6 @@ export const linearTrackerEntries = [
 
 const itemId = Schema.decodeSync(WorkItemId);
 const graceMillis = 30_000;
-const batchSize = 50;
-
-interface PollState {
-  readonly first: boolean;
-  readonly cursor: number;
-  readonly pending: ReadonlyArray<TriggerEvent>;
-}
-
 const targetsFor = (workspace: RegistryState["workspaces"][number]) => {
   const account = credentialAccountFor(workspace.config);
   if (workspace.config.issueTracker.type !== "linear" || account === null) return [];
@@ -74,26 +65,33 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
   const target = targetsFor(workspace).find(({ team }) => issue.identifier.startsWith(`${team}-`));
   if (!target) return [];
   const prose = yield* client.readProse(target, issue.id);
-  const labelEvents = issueSubscriptions.flatMap((subscription) => {
-    if (subscription.entry !== issueHasLabelKey) return [];
-    const label = parameterValue(subscription.parameters, "label");
-    return [
-      {
-        key: {
-          _tag: "Issue",
+  const labelEvents = yield* Effect.forEach(issueSubscriptions, (subscription) =>
+    Effect.gen(function* () {
+      if (subscription.entry !== issueHasLabelKey) return [];
+      const label = parameterValue(subscription.parameters, "label");
+      const appliedAt = label
+        ? ((yield* client.labelAppliedAt(target, issue.id, label)) ??
+          issue.createdAtMillis ??
+          issue.updatedAtMillis)
+        : (issue.createdAtMillis ?? issue.updatedAtMillis);
+      return [
+        {
+          key: {
+            _tag: "Issue",
+            workspace: workspace.config.name,
+            id: itemId(issue.identifier),
+          },
+          revision: `label:${label}:${appliedAt}`,
+          cause: { _tag: "Unknown" },
+          atMillis: appliedAt,
+          entry: issueHasLabelKey,
           workspace: workspace.config.name,
-          id: itemId(issue.identifier),
-        },
-        revision: `label:${label}:${issue.updatedAtMillis}`,
-        cause: { _tag: "Unknown" },
-        atMillis: issue.updatedAtMillis,
-        entry: issueHasLabelKey,
-        workspace: workspace.config.name,
-        parameters: [{ id: "label", value: label ?? "" }],
-        prose: proseOf(prose.body, prose.comments),
-      } satisfies TriggerEvent,
-    ];
-  });
+          parameters: [{ id: "label", value: label ?? "" }],
+          prose: proseOf(prose.body, prose.comments),
+        } satisfies TriggerEvent,
+      ];
+    }),
+  );
   const commentEvents = issueSubscriptions.flatMap((subscription) => {
     if (subscription.entry !== newIssueCommentKey) return [];
     const label = parameterValue(subscription.parameters, "label");
@@ -123,66 +121,51 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
           }) satisfies TriggerEvent,
       );
   });
-  return [...labelEvents, ...commentEvents];
+  return [...labelEvents.flat(), ...commentEvents];
 });
 
 const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(function* (
   client: LinearClientService,
-  current: PollState,
+  cursor: number | undefined,
   subscriptions: ReadonlyArray<TriggerSubscription>,
   workspace: RegistryState["workspaces"][number],
   now: number,
 ) {
   const selected = workspaceSubscriptions(workspace.config.name, subscriptions);
-  if (selected.length === 0) return { events: [], cursor: current.cursor };
-  const updatedSince = current.first ? undefined : Math.max(0, current.cursor - graceMillis);
+  if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
+  const updatedSince = cursor === undefined ? undefined : Math.max(0, cursor - graceMillis);
   const issues = yield* Effect.forEach(targetsFor(workspace), (target) =>
-    client.observeIssues(target, null, workspace.config.issueTracker.assigneeAllowlist ?? null, updatedSince),
+    client.observeIssues(target, null, null, updatedSince),
   );
   const events = yield* Effect.forEach(issues.flat(), (issue) =>
     eventsForIssue(client, workspace, selected, issue, now),
   );
   return {
     events: events.flat(),
-    cursor: Math.max(current.cursor, ...issues.flat().map(({ updatedAtMillis }) => updatedAtMillis)),
+    cursor: Math.max(cursor ?? 0, ...issues.flat().map(({ updatedAtMillis }) => updatedAtMillis)),
+    workspace: workspace.config.name,
   };
 });
 
-const poll = Effect.fn("LinearTrackerTriggerSource.poll")(function* (
+const read = Effect.fn("LinearTrackerTriggerSource.read")(function* (
   client: LinearClientService,
   registry: Effect.Effect<RegistryState>,
   subscriptions: ReadonlyArray<TriggerSubscription>,
-  pollState: Ref.Ref<PollState>,
+  checkpoint: ProviderPollCheckpoint,
 ) {
-  const current = yield* Ref.get(pollState);
-  if (current.pending.length > 0) {
-    const emitted = current.pending.slice(0, batchSize);
-    yield* Ref.set(pollState, { ...current, pending: current.pending.slice(batchSize) });
-    return emitted;
-  }
   const now = yield* Clock.currentTimeMillis;
   const state = yield* registry;
   const workspaces = state.workspaces.filter(({ config }) => config.issueTracker.type === "linear");
   const reads = yield* Effect.forEach(workspaces, (workspace) =>
-    readWorkspace(client, current, subscriptions, workspace, now),
+    readWorkspace(client, checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
   );
-  const events = [
-    ...new Map(
-      reads
-        .flatMap(({ events }) => events)
-        .map((event) => [
-          `${event.entry}:${event.workspace}:${event.revision}:${JSON.stringify("parameters" in event ? (event.parameters ?? []) : [])}`,
-          event,
-        ]),
-    ).values(),
-  ].sort((left, right) => left.atMillis - right.atMillis);
-  const emitted = events.slice(0, batchSize);
-  yield* Ref.set(pollState, {
-    first: false,
-    cursor: Math.max(current.cursor, ...reads.map(({ cursor }) => cursor)),
-    pending: events.slice(batchSize),
-  });
-  return emitted;
+  return {
+    events: reads.flatMap(({ events }) => events),
+    cursors: new Map([
+      ...checkpoint.cursors,
+      ...reads.map(({ workspace, cursor }) => [workspace, cursor] as const),
+    ]),
+  };
 });
 
 export const makeLinearTrackerTriggerSource = (
@@ -206,15 +189,5 @@ export const makeLinearTrackerTriggerSource = (
       );
     }).pipe(Effect.mapError((error) => sourceFailure("linear", error))),
   observe: (subscriptions) =>
-    Stream.unwrap(
-      Ref.make<PollState>({ first: true, cursor: 0, pending: [] }).pipe(
-        Effect.map((pollState) =>
-          pollingStream(
-            poll(client, registry, subscriptions, pollState).pipe(
-              Effect.mapError((error) => sourceFailure("linear", error)),
-            ),
-          ),
-        ),
-      ),
-    ),
+    providerPollingStream("linear", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
 });

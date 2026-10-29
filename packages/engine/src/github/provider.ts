@@ -1,12 +1,10 @@
 import type { WorkItem, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import { checkState } from "../ci";
 import type { PrReview } from "../follow-up";
 import { IssueTrackerError } from "../issue-tracker";
-import type { RegisteredWorkspace } from "../projector";
-import { emptyRegistry } from "../projector";
+import type { RegisteredWorkspace, RegistryState } from "../projector";
 import { WorkspaceRegistry } from "../registry";
 import { type PrSignals, SourceControlProvider, type SourceControlProviderService } from "../source-control";
 import { branchBelongsToTicketSlug, branchName, ticketSlug } from "../worktree";
@@ -21,6 +19,7 @@ import {
   type ReviewDecision,
   reviewDecisionOf,
 } from "./client";
+import { trustedBotFeedback } from "./feedback";
 import { agentNoteMarker, hasCogworkMarker } from "./markers";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
@@ -71,9 +70,6 @@ const isHumanFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
   !botAllowlist.has(feedback.authorLogin) &&
   !hasCogworkMarker(feedback.body);
 
-const isTrustedBotFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
-  botAllowlist.has(feedback.authorLogin) && !hasCogworkMarker(feedback.body);
-
 const isPullRequestFeedback = (
   comment: RawIssueComment,
 ): comment is RawIssueComment & { readonly authorLogin: string } =>
@@ -114,23 +110,13 @@ export const botTriggerSignal = (
   botAllowlist: BotAllowlist,
 ) => {
   // Bot-specific HTML markers are private strings; GitHub's comment and thread shape is the stable boundary.
-  const isTrustedDiffFinding = (item: RawReviewComment) =>
-    botAllowlist.get(item.authorLogin)?.acceptsAnyComment === false &&
-    item.inReplyToId === null &&
-    item.subjectType === "line" &&
-    isTrustedBotFeedback(item, botAllowlist);
-  const isTrustedAnyComment = (item: Feedback) =>
-    botAllowlist.get(item.authorLogin)?.acceptsAnyComment === true &&
-    isTrustedBotFeedback(item, botAllowlist);
-  const findings = reviewComments.filter(isTrustedDiffFinding);
-  const unrestricted = [...reviewComments, ...pullRequestFeedback].filter(isTrustedAnyComment);
-  const newest = newestOf([...findings, ...unrestricted]);
+  const newest = newestOf(trustedBotFeedback([...reviewComments, ...pullRequestFeedback], botAllowlist));
   return { latestAtMillis: newest?.createdAtMillis ?? null };
 };
 
 const make = (
   client: GitHubClientService,
-  registry = Effect.succeed(emptyRegistry),
+  registry: Effect.Effect<RegistryState>,
 ): SourceControlProviderService => {
   const authenticatedTarget = Effect.fn("github.authenticatedSourceControlTarget")(function* (
     target: GitHubTargetConfig,
@@ -300,11 +286,8 @@ export const layer = Layer.effect(
   SourceControlProvider,
   Effect.gen(function* () {
     const client = yield* GitHubClient;
-    const registry = Option.match(yield* Effect.serviceOption(WorkspaceRegistry), {
-      onNone: () => Effect.succeed(emptyRegistry),
-      onSome: ({ state }) => state,
-    });
-    return make(client, registry);
+    const registry = yield* WorkspaceRegistry;
+    return make(client, registry.state);
   }),
 );
 

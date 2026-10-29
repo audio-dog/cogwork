@@ -100,6 +100,7 @@ it.effect("reads Linear updates and filters old or marked comments", () =>
               },
             ],
           }),
+        labelAppliedAt: () => Effect.succeed(3_000),
       }),
     ),
   ),

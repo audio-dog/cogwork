@@ -28,6 +28,7 @@ import type { FollowUpMarker } from "../follow-up";
 import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
+import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "../registry";
 import { SourceControlProvider } from "../source-control";
 import { layer as adapterLayer } from "./adapter";
 import {
@@ -280,6 +281,8 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     listIssueEvents: () => Effect.succeed([]),
     listAllComments: (_repo, number) =>
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
+    listTriggerComments: (_repo, number) =>
+      Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
     listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
     createIssue: () => Effect.void,
@@ -370,7 +373,12 @@ const prioritizedWorkspace: RegisteredWorkspace = {
 
 const withClient = (seed: Seed) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
-    Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))),
+    Layer.provideMerge(
+      Layer.merge(
+        Layer.effect(GitHubClient, fakeClient(seed)),
+        Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+      ),
+    ),
   );
 
 const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { GITHUB_TOKEN: "test-token" } }));
@@ -379,12 +387,15 @@ const withFetchClient = (fetch: typeof globalThis.fetch) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
     Layer.provideMerge(
       Layer.merge(
-        clientLayer.pipe(
-          Layer.provide(
-            FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetch))),
+        Layer.merge(
+          clientLayer.pipe(
+            Layer.provide(
+              FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetch))),
+            ),
           ),
+          configLayer,
         ),
-        configLayer,
+        Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       ),
     ),
   );
@@ -392,13 +403,16 @@ const withFetchClient = (fetch: typeof globalThis.fetch) =>
 const withIdentityFailure = (seed: Seed) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
     Layer.provideMerge(
-      Layer.effect(
-        GitHubClient,
-        Effect.map(fakeClient(seed), (client) => ({
-          ...client,
-          authenticatedLogin: () =>
-            Effect.fail(new IssueTrackerError({ reason: "auth", message: "GitHub identity unavailable" })),
-        })),
+      Layer.merge(
+        Layer.effect(
+          GitHubClient,
+          Effect.map(fakeClient(seed), (client) => ({
+            ...client,
+            authenticatedLogin: () =>
+              Effect.fail(new IssueTrackerError({ reason: "auth", message: "GitHub identity unavailable" })),
+          })),
+        ),
+        Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       ),
     ),
   );
@@ -406,22 +420,27 @@ const withIdentityFailure = (seed: Seed) =>
 const countingProviderLayer = (seed: Seed) =>
   providerLayer.pipe(
     Layer.provideMerge(
-      Layer.effect(
-        GitHubClient,
-        Effect.gen(function* () {
-          const calls = yield* ProviderCalls;
-          const baseClient = yield* fakeClient(seed);
-          return {
-            ...baseClient,
-            listPulls: (_target) =>
-              Ref.update(calls.listPulls, (count) => count + 1).pipe(Effect.andThen(baseClient.listPulls())),
-            listCheckRuns: (target, sha) =>
-              Ref.update(calls.details, (count) => count + 1).pipe(
-                Effect.andThen(baseClient.listCheckRuns(target, sha)),
-              ),
-          } satisfies GitHubClientService;
-        }),
-      ).pipe(Layer.provideMerge(ProviderCalls.layer)),
+      Layer.merge(
+        Layer.effect(
+          GitHubClient,
+          Effect.gen(function* () {
+            const calls = yield* ProviderCalls;
+            const baseClient = yield* fakeClient(seed);
+            return {
+              ...baseClient,
+              listPulls: (_target) =>
+                Ref.update(calls.listPulls, (count) => count + 1).pipe(
+                  Effect.andThen(baseClient.listPulls()),
+                ),
+              listCheckRuns: (target, sha) =>
+                Ref.update(calls.details, (count) => count + 1).pipe(
+                  Effect.andThen(baseClient.listCheckRuns(target, sha)),
+                ),
+            } satisfies GitHubClientService;
+          }),
+        ).pipe(Layer.provideMerge(ProviderCalls.layer)),
+        Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+      ),
     ),
   );
 

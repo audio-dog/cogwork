@@ -49,6 +49,7 @@ export interface RawIssue {
   readonly stateType: string;
   readonly openBlockers: number;
   readonly priority: Priority;
+  readonly createdAtMillis?: number;
   readonly updatedAtMillis: number;
 }
 
@@ -143,6 +144,7 @@ const IssueNode = Schema.Struct({
   title: Schema.String,
   url: Schema.String,
   priority: Schema.optional(Schema.Finite),
+  createdAt: Schema.optional(Schema.String),
   updatedAt: Schema.optional(Schema.String),
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
@@ -353,6 +355,7 @@ const issueFields = `
       title
       url
       priority
+      createdAt
       updatedAt
       labels(first: ${labelPageSize}) { nodes { name } }
       assignee { id }
@@ -435,6 +438,33 @@ query IssueComments($id: String!, $after: String) {
     }
   }
 }`;
+
+const issueHistoryQuery = `
+query IssueHistory($id: String!, $after: String) {
+  issue(id: $id) {
+    history(first: 250, after: $after, orderBy: createdAt) {
+      nodes { createdAt addedLabels { name } }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`;
+
+const HistoryPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({
+      history: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            createdAt: Schema.String,
+            addedLabels: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))),
+          }),
+        ),
+        pageInfo: PageInfoNode,
+      }),
+    }),
+  ),
+});
+const decodeHistory = Schema.decodeUnknownEffect(HistoryPayload);
 
 const coordinationCommentsQuery = `
 query IssueCoordinationComments($id: String!, $bot: ID!, $ledger: String!, $proposal: String!) {
@@ -535,6 +565,7 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   stateType: issue.state.type,
   openBlockers,
   priority: linearPriority(issue.priority),
+  createdAtMillis: millisFromIso(issue.createdAt ?? issue.updatedAt ?? ""),
   updatedAtMillis: millisFromIso(issue.updatedAt ?? ""),
 });
 
@@ -801,6 +832,30 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     );
   });
 
+  const labelAppliedAt = Effect.fn("linear.labelAppliedAt")(function* (
+    ref: LinearTeamRef,
+    issueId: string,
+    label: string,
+  ) {
+    const collect: (after?: string | null) => Effect.Effect<ReadonlyArray<number>, IssueTrackerError> =
+      Effect.fn("linear.collectLabelHistory")(function* (after = null) {
+        const data = yield* rawData(ref, issueHistoryQuery, { id: issueId, after });
+        const payload = yield* Effect.mapError(decodeHistory(data), toUnavailable);
+        const history = payload.issue?.history;
+        if (!history) return [];
+        const current = history.nodes.flatMap((entry) =>
+          entry.addedLabels?.some(({ name }) => name === label) ? [millisFromIso(entry.createdAt)] : [],
+        );
+        if (!history.pageInfo.hasNextPage) return current;
+        const cursor = history.pageInfo.endCursor;
+        if (cursor === null)
+          return yield* unavailable(`Linear label history page missing cursor: ${issueId}`);
+        return [...current, ...(yield* collect(cursor))];
+      });
+    const applied = yield* withPaginationDeadline("label history", collect());
+    return applied.at(-1) ?? null;
+  });
+
   const mutate = Effect.fn("linear.mutate")(function* (
     ref: LinearTeamRef,
     operation: string,
@@ -913,6 +968,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return yield* callWithCredential(ref, credential, (sdk) => sdk.viewer.then((viewer) => viewer.id));
     }),
     observeIssues,
+    labelAppliedAt,
     listWorkflowStates: (ref: LinearTeamRef) =>
       Effect.map(loadTeam(ref, metaShape), (team): ReadonlyArray<RawWorkflowState> => team.states.nodes),
     listComments: Effect.fn("linear.listComments")(function* (

@@ -987,6 +987,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     repo: GitHubRepoRef,
     issueNumber: number,
     path: string,
+    enforceAdmissionLimit: boolean,
     state?: IssueCommentPages,
   ) => Effect.Effect<ReadonlyArray<RawIssueComment>, IssueTrackerError> = Effect.fn(
     "github.collectIssueCommentPages",
@@ -994,6 +995,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     repo,
     issueNumber,
     path,
+    enforceAdmissionLimit,
     state = { pages: [], visited: new Set(), commentCount: 0, commentBytes: 0 },
   ) {
     if (state.visited.has(path)) {
@@ -1007,7 +1009,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       state.commentBytes + comments.reduce((total, comment) => total + issueCommentBytes(comment), 0);
     const withinAdmissionLimit =
       commentCount <= workContextCommentLimit && commentBytes <= workContextCommentByteLimit;
-    if (!withinAdmissionLimit) {
+    if (enforceAdmissionLimit && !withinAdmissionLimit) {
       return yield* new IssueTrackerError({
         reason: "unavailable",
         retryable: false,
@@ -1021,7 +1023,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       commentBytes,
     };
     if (nextPath === null) return nextState.pages.flat();
-    return yield* collectIssueCommentPages(repo, issueNumber, nextPath, nextState);
+    return yield* collectIssueCommentPages(repo, issueNumber, nextPath, enforceAdmissionLimit, nextState);
   });
 
   const uniquePulls = (pulls: ReadonlyArray<typeof PullSchema.Type>) => [
@@ -1039,29 +1041,48 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   });
 
   const listReviews = Effect.fn("github.listReviews")(function* (repo: GitHubRepoRef, pullNumber: number) {
-    const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}/reviews?per_page=100`));
-    const reviews = yield* Effect.mapError(decodeReviews(json), toUnavailable);
-    return reviews.map(
-      (review): RawReview => ({
-        authorLogin: review.user.login,
-        authorAssociation: review.author_association ?? "NONE",
-        ...(review.user.type ? { authorType: review.user.type } : {}),
-        state: review.state,
-        body: review.body ?? "",
-        submittedAtMillis: review.submitted_at ? commentMillis(review.submitted_at) : 0,
-      }),
-    );
+    const collect: (page?: number) => Effect.Effect<ReadonlyArray<RawReview>, IssueTrackerError> = Effect.fn(
+      "github.collectReviewPages",
+    )(function* (page = 1) {
+      const json = yield* fetchJson(
+        repo,
+        repoPath(repo, `/pulls/${pullNumber}/reviews?per_page=100&page=${page}`),
+      );
+      const reviews = yield* Effect.mapError(decodeReviews(json), toUnavailable);
+      const current = reviews.map(
+        (review): RawReview => ({
+          authorLogin: review.user.login,
+          authorAssociation: review.author_association ?? "NONE",
+          ...(review.user.type ? { authorType: review.user.type } : {}),
+          state: review.state,
+          body: review.body ?? "",
+          submittedAtMillis: review.submitted_at ? commentMillis(review.submitted_at) : 0,
+        }),
+      );
+      if (current.length < 100) return current;
+      return [...current, ...(yield* collect(page + 1))];
+    });
+    return yield* withPaginationDeadline(collect());
   });
 
   const listReviewComments = Effect.fn("github.listReviewComments")(function* (
     repo: GitHubRepoRef,
     pullNumber: number,
   ) {
-    const json = yield* fetchJson(
-      repo,
-      repoPath(repo, `/pulls/${pullNumber}/comments?per_page=100&sort=created&direction=desc`),
-    );
-    return yield* parseReviewComments(json);
+    const collect: (page?: number) => Effect.Effect<ReadonlyArray<RawReviewComment>, IssueTrackerError> =
+      Effect.fn("github.collectReviewCommentPages")(function* (page = 1) {
+        const json = yield* fetchJson(
+          repo,
+          repoPath(
+            repo,
+            `/pulls/${pullNumber}/comments?per_page=100&sort=created&direction=desc&page=${page}`,
+          ),
+        );
+        const current = yield* parseReviewComments(json);
+        if (current.length < 100) return current;
+        return [...current, ...(yield* collect(page + 1))];
+      });
+    return yield* withPaginationDeadline(collect());
   });
 
   const sendJson = Effect.fn("github.sendJson")(function* (
@@ -1431,16 +1452,35 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           repo,
           issueNumber,
           repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`),
+          true,
+        ),
+      );
+    }),
+    listTriggerComments: Effect.fn("github.listTriggerComments")(function* (
+      repo: GitHubRepoRef,
+      issueNumber: number,
+    ) {
+      return yield* withPaginationDeadline(
+        collectIssueCommentPages(
+          repo,
+          issueNumber,
+          repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`),
+          false,
         ),
       );
     }),
     listReviewComments,
     listReviews,
-    listCheckRuns: (repo: GitHubRepoRef, sha: string) =>
-      Effect.gen(function* () {
-        const json = yield* fetchJson(repo, repoPath(repo, `/commits/${sha}/check-runs?per_page=100`));
+    listCheckRuns: (repo: GitHubRepoRef, sha: string) => {
+      const collect: (page?: number) => Effect.Effect<ReadonlyArray<CheckRun>, IssueTrackerError> = Effect.fn(
+        "github.collectCheckRunPages",
+      )(function* (page = 1) {
+        const json = yield* fetchJson(
+          repo,
+          repoPath(repo, `/commits/${sha}/check-runs?per_page=100&page=${page}`),
+        );
         const decoded = yield* Effect.mapError(decodeCheckRuns(json), toUnavailable);
-        return decoded.check_runs.map(
+        const current = decoded.check_runs.map(
           (run): CheckRun => ({
             name: run.name,
             status: run.status,
@@ -1448,7 +1488,11 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
             startedAtMillis: millisFromIso(run.started_at),
           }),
         );
-      }),
+        if (current.length < 100) return current;
+        return [...current, ...(yield* collect(page + 1))];
+      });
+      return withPaginationDeadline(collect());
+    },
     createIssue,
     createPull,
     addLabel,

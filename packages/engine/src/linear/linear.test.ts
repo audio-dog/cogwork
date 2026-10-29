@@ -232,6 +232,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
           };
         }),
       ),
+    labelAppliedAt: () => Effect.succeed(null),
     addLabel: (ref, issueId, label) =>
       guard(
         inTeam(

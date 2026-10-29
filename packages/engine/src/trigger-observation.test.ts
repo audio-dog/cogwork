@@ -7,6 +7,8 @@ import {
   WorkflowId,
   WorkflowNodeId,
   type WorkflowRecord,
+  WorkItemId,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
@@ -23,6 +25,8 @@ import { clockEntries } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
+import { IssueTracker, makeEmpty as makeEmptyIssueTracker } from "./issue-tracker";
+import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { makeScriptedSource } from "./scripted-source";
 import {
   make,
@@ -146,6 +150,20 @@ describe("TriggerObservation", () => {
     assert.deepStrictEqual(matchTriggerEvent([later, subscription, other], event), [subscription]);
   });
 
+  it("does not treat an empty Workspace selection as every Workspace", () => {
+    const workspaceEvent = {
+      ...event,
+      key: {
+        _tag: "Issue" as const,
+        workspace: Schema.decodeSync(WorkspaceId)("selected"),
+        id: Schema.decodeSync(WorkItemId)("#1"),
+      },
+      workspace: Schema.decodeSync(WorkspaceId)("selected"),
+    };
+
+    assert.deepStrictEqual(matchTriggerEvent([subscription], workspaceEvent), []);
+  });
+
   it.effect("admits once and stops the source after switch-off", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
@@ -154,12 +172,15 @@ describe("TriggerObservation", () => {
       const scripted = yield* makeScriptedSource("clock", clockEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
+      const tracker = yield* makeEmptyIssueTracker;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
         Effect.provideService(Coordination, coordinationService(processed, observed)),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, tracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* Effect.yieldNow;
       yield* observation.refresh;

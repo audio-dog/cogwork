@@ -1,16 +1,15 @@
 import { WorkflowCatalogKey, type WorkflowOption, WorkItemId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import type { RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
   liveParameter,
+  type ProviderPollCheckpoint,
   parameterValue,
-  pollingStream,
+  providerPollingStream,
   sourceFailure,
   triggerEntry,
   workspaceSubscriptions,
@@ -33,13 +32,7 @@ export const githubTrackerEntries = [
 
 const itemId = Schema.decodeSync(WorkItemId);
 const graceMillis = 30_000;
-const batchSize = 50;
-
-interface PollState {
-  readonly first: boolean;
-  readonly cursor: number;
-  readonly pending: ReadonlyArray<TriggerEvent>;
-}
+const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 const proseOf = (issue: RawIssue, comments: ReadonlyArray<RawIssueComment>) => ({
   body: issue.body,
@@ -50,15 +43,6 @@ const proseOf = (issue: RawIssue, comments: ReadonlyArray<RawIssueComment>) => (
     createdAtMillis: comment.createdAtMillis,
   })),
 });
-
-const uniqueEvents = (events: ReadonlyArray<TriggerEvent>) => [
-  ...new Map(
-    events.map((event) => [
-      `${event.entry}:${event.workspace}:${event.revision}:${JSON.stringify("parameters" in event ? (event.parameters ?? []) : [])}`,
-      event,
-    ]),
-  ).values(),
-];
 
 const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(function* (
   client: GitHubClientService,
@@ -77,7 +61,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
   const needsComments = issueSubscriptions.some(({ entry }) => entry === newIssueCommentKey);
   const [history, comments] = yield* Effect.all([
     needsLabels ? client.listIssueEvents(target, issue.number) : Effect.succeed([]),
-    needsComments ? client.listAllComments(target, issue.number) : Effect.succeed([]),
+    needsComments ? client.listTriggerComments(target, issue.number) : Effect.succeed([]),
   ]);
   const labelEvents = issueSubscriptions.flatMap((subscription) => {
     if (subscription.entry !== issueHasLabelKey) return [];
@@ -112,6 +96,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
           comment.createdAtMillis > cutoff &&
           comment.authorLogin !== null &&
           comment.authorType !== "Bot" &&
+          personAssociations.has(comment.authorAssociation) &&
           !hasCogworkMarker(comment.body),
       )
       .map(
@@ -137,61 +122,49 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
 
 const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(function* (
   client: GitHubClientService,
-  current: PollState,
+  cursor: number | undefined,
   subscriptions: ReadonlyArray<TriggerSubscription>,
   workspace: RegistryState["workspaces"][number],
   now: number,
 ) {
   const selected = workspaceSubscriptions(workspace.config.name, subscriptions);
-  if (selected.length === 0) return { events: [], cursor: current.cursor };
+  if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
   const target = targetFor(workspace);
-  if (!target) return { events: [], cursor: current.cursor };
-  const since = current.first ? undefined : Math.max(0, current.cursor - graceMillis);
+  if (!target) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
+  const since = cursor === undefined ? undefined : Math.max(0, cursor - graceMillis);
   const issues = yield* client.listIssues(target, {
     state: "all",
     ...(since === undefined ? {} : { since }),
   });
-  const allowed = workspace.config.issueTracker.assigneeAllowlist;
-  const observed = allowed
-    ? issues.filter(({ assignees }) => assignees.some((assignee) => allowed.includes(assignee)))
-    : issues;
-  const events = yield* Effect.forEach(observed, (issue) =>
+  const events = yield* Effect.forEach(issues, (issue) =>
     eventsForIssue(client, target, workspace, selected, issue, now),
   );
   return {
     events: events.flat(),
-    cursor: Math.max(current.cursor, ...issues.map((issue) => issue.updatedAtMillis ?? 0)),
+    cursor: Math.max(cursor ?? 0, ...issues.map((issue) => issue.updatedAtMillis ?? 0)),
+    workspace: workspace.config.name,
   };
 });
 
-const poll = Effect.fn("GitHubTrackerTriggerSource.poll")(function* (
+const read = Effect.fn("GitHubTrackerTriggerSource.read")(function* (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
   subscriptions: ReadonlyArray<TriggerSubscription>,
-  pollState: Ref.Ref<PollState>,
+  checkpoint: ProviderPollCheckpoint,
 ) {
-  const current = yield* Ref.get(pollState);
-  if (current.pending.length > 0) {
-    const emitted = current.pending.slice(0, batchSize);
-    yield* Ref.set(pollState, { ...current, pending: current.pending.slice(batchSize) });
-    return emitted;
-  }
   const now = yield* Clock.currentTimeMillis;
   const state = yield* registry;
   const workspaces = state.workspaces.filter(({ config }) => config.issueTracker.type === "github");
   const reads = yield* Effect.forEach(workspaces, (workspace) =>
-    readWorkspace(client, current, subscriptions, workspace, now),
+    readWorkspace(client, checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
   );
-  const events = uniqueEvents(reads.flatMap(({ events }) => events)).sort(
-    (left, right) => left.atMillis - right.atMillis,
-  );
-  const emitted = events.slice(0, batchSize);
-  yield* Ref.set(pollState, {
-    first: false,
-    cursor: Math.max(current.cursor, ...reads.map(({ cursor }) => cursor)),
-    pending: events.slice(batchSize),
-  });
-  return emitted;
+  return {
+    events: reads.flatMap(({ events }) => events),
+    cursors: new Map([
+      ...checkpoint.cursors,
+      ...reads.map(({ workspace, cursor }) => [workspace, cursor] as const),
+    ]),
+  };
 });
 
 export const makeGitHubTrackerTriggerSource = (
@@ -217,16 +190,6 @@ export const makeGitHubTrackerTriggerSource = (
     availability: () => Effect.succeed({ _tag: "Available" }),
     listOptions,
     observe: (subscriptions) =>
-      Stream.unwrap(
-        Ref.make<PollState>({ first: true, cursor: 0, pending: [] }).pipe(
-          Effect.map((pollState) =>
-            pollingStream(
-              poll(client, registry, subscriptions, pollState).pipe(
-                Effect.mapError((error) => sourceFailure("github", error)),
-              ),
-            ),
-          ),
-        ),
-      ),
+      providerPollingStream("github", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
   };
 };

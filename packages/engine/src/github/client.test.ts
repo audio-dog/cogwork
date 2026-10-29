@@ -186,6 +186,35 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("lists every check run across GitHub pages", () => {
+    const check = (name: string) => ({
+      name,
+      status: "completed",
+      conclusion: "failure",
+      started_at: "2026-09-09T12:00:00Z",
+    });
+    const firstPage = Array.from({ length: 100 }, (_, index) => check(`check-${index + 1}`));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse({ check_runs: page === "1" ? firstPage : [check("check-101")] }));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const checks = yield* client.listCheckRuns(repo, "head-sha");
+
+      assert.strictEqual(checks.length, 101);
+      assert.strictEqual(checks.at(-1)?.name, "check-101");
+      assert.deepStrictEqual(
+        fetch.mock.calls.map(([input]) =>
+          new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
+        ),
+        ["1", "2"],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("lists open and closed issues carrying one label", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(

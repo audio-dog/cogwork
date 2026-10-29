@@ -4,7 +4,8 @@ import {
   type WorkflowParameterValue,
   type WorkspaceId,
 } from "@cogwork/contracts";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
+import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -71,7 +72,67 @@ export const catchUpSince = (
 export const workspaceSubscriptions = <A extends { readonly workspaces: ReadonlyArray<WorkspaceId> }>(
   workspace: WorkspaceId,
   subscriptions: ReadonlyArray<A>,
-) => subscriptions.filter(({ workspaces }) => workspaces.length === 0 || workspaces.includes(workspace));
+) => subscriptions.filter(({ workspaces }) => workspaces.includes(workspace));
 
-export const pollingStream = <E, R>(read: Effect.Effect<ReadonlyArray<TriggerEvent>, E, R>) =>
-  Stream.fromEffect(read).pipe(Stream.repeat(Schedule.spaced("5 seconds")), Stream.flattenIterable);
+export interface ProviderPollCheckpoint {
+  readonly cursors: ReadonlyMap<WorkspaceId, number>;
+}
+
+export interface ProviderPollRead extends ProviderPollCheckpoint {
+  readonly events: ReadonlyArray<TriggerEvent>;
+}
+
+interface ProviderPollState extends ProviderPollCheckpoint {
+  readonly pending: ReadonlyArray<TriggerEvent>;
+}
+
+const batchSize = 50;
+
+const eventIdentity = (event: TriggerEvent) =>
+  `${event.entry}:${event.workspace}:${event.revision}:${JSON.stringify(event.parameters ?? [])}`;
+
+const uniqueEvents = (events: ReadonlyArray<TriggerEvent>) =>
+  [...new Map(events.map((event) => [eventIdentity(event), event])).values()].sort(
+    (left, right) => left.atMillis - right.atMillis,
+  );
+
+const poll = <R>(
+  source: TriggerSourceId,
+  state: Ref.Ref<ProviderPollState>,
+  read: (checkpoint: ProviderPollCheckpoint) => Effect.Effect<ProviderPollRead, IssueTrackerError, R>,
+) =>
+  Ref.get(state).pipe(
+    Effect.flatMap((current) => {
+      if (current.pending.length > 0) {
+        const emitted = current.pending.slice(0, batchSize);
+        return Ref.set(state, { ...current, pending: current.pending.slice(batchSize) }).pipe(
+          Effect.map(() => emitted),
+        );
+      }
+      return read(current).pipe(
+        Effect.flatMap(({ events, cursors }) => {
+          const unique = uniqueEvents(events);
+          const emitted = unique.slice(0, batchSize);
+          return Ref.set(state, { cursors, pending: unique.slice(batchSize) }).pipe(
+            Effect.map(() => emitted),
+          );
+        }),
+      );
+    }),
+    Effect.mapError((error) => sourceFailure(source, error)),
+  );
+
+export const providerPollingStream = <R>(
+  source: TriggerSourceId,
+  read: (checkpoint: ProviderPollCheckpoint) => Effect.Effect<ProviderPollRead, IssueTrackerError, R>,
+) =>
+  Stream.unwrap(
+    Ref.make<ProviderPollState>({ cursors: new Map(), pending: [] }).pipe(
+      Effect.map((state) =>
+        Stream.fromEffect(poll(source, state, read)).pipe(
+          Stream.repeat(Schedule.spaced("60 seconds")),
+          Stream.flattenIterable,
+        ),
+      ),
+    ),
+  );

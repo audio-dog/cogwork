@@ -1,17 +1,15 @@
 import { WorkflowCatalogKey, type WorkflowOption, WorkItemId, type WorkItemRef } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import type { RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
   liveParameter,
+  type ProviderPollCheckpoint,
   parameterValue,
-  pollingStream,
-  sourceFailure,
+  providerPollingStream,
   triggerEntry,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
@@ -24,8 +22,9 @@ import type {
   RawReview,
   RawReviewComment,
 } from "./client";
+import { trustedBotFeedback } from "./feedback";
 import { hasCogworkMarker } from "./markers";
-import { baseDivergenceOf, sourceControlTargetFor } from "./source-control-target";
+import { baseDivergenceOf, botAllowlistFrom, sourceControlTargetFor } from "./source-control-target";
 
 const checksFailedKey = Schema.decodeSync(WorkflowCatalogKey)("github.pull-request-checks-failed");
 const conflictsKey = Schema.decodeSync(WorkflowCatalogKey)("github.pull-request-conflicts-with-base");
@@ -63,14 +62,7 @@ export const githubPullRequestEntries = [
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
 const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const workItemId = Schema.decodeSync(WorkItemId);
-const batchSize = 50;
 const graceMillis = 30_000;
-
-interface PollState {
-  readonly first: boolean;
-  readonly cursor: number;
-  readonly pending: ReadonlyArray<TriggerEvent>;
-}
 
 interface Feedback {
   readonly id: string;
@@ -79,6 +71,8 @@ interface Feedback {
   readonly authorType?: string;
   readonly body: string;
   readonly atMillis: number;
+  readonly inReplyToId?: number | null;
+  readonly subjectType?: "line" | "file";
 }
 
 const feedbackOf = (
@@ -107,6 +101,8 @@ const feedbackOf = (
     ...(comment.authorType ? { authorType: comment.authorType } : {}),
     body: comment.body,
     atMillis: comment.createdAtMillis,
+    inReplyToId: comment.inReplyToId,
+    subjectType: comment.subjectType,
   })),
   ...reviews.flatMap((review, index) =>
     review.body.length === 0
@@ -158,7 +154,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   const [checks, mergeable, issueComments, reviewComments, reviews] = yield* Effect.all([
     client.listCheckRuns(target, pull.headSha),
     client.pullMergeableState(target, pull.number),
-    client.listComments(target, pull.number),
+    client.listTriggerComments(target, pull.number),
     client.listReviewComments(target, pull.number),
     client.listReviews(target, pull.number),
   ]);
@@ -223,11 +219,9 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
     }
     if (subscription.entry !== botFindingKey) return [];
     const bot = parameterValue(subscription.parameters, "bot");
-    return feedback
-      .filter(
-        (comment) =>
-          comment.atMillis > cutoff && comment.authorLogin === bot && !hasCogworkMarker(comment.body),
-      )
+    const allowlist = bot ? botAllowlistFrom([bot]) : new Map();
+    return trustedBotFeedback(feedback, allowlist)
+      .filter((comment) => comment.atMillis > cutoff)
       .map(
         (comment) =>
           ({
@@ -247,61 +241,49 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
 
 const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(function* (
   client: GitHubClientService,
-  current: PollState,
+  cursor: number | undefined,
   subscriptions: ReadonlyArray<TriggerSubscription>,
   workspace: RegistryState["workspaces"][number],
   now: number,
 ) {
   const selected = workspaceSubscriptions(workspace.config.name, subscriptions);
   const target = selected.length > 0 ? sourceControlTargetFor(workspace) : null;
-  if (!target) return { events: [], cursor: current.cursor };
-  const since = current.first ? 0 : Math.max(0, current.cursor - graceMillis);
+  if (!target) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
+  const actorLogin = yield* client.authenticatedLogin(target);
+  const since = cursor === undefined ? 0 : Math.max(0, cursor - graceMillis);
   const pulls = (yield* client.listPulls(target)).filter(
-    ({ updatedAtMillis }) => current.first || updatedAtMillis >= since,
+    ({ authorAssociation, authorLogin, updatedAtMillis }) =>
+      (authorLogin === actorLogin || personAssociations.has(authorAssociation)) &&
+      (cursor === undefined || updatedAtMillis >= since),
   );
   const events = yield* Effect.forEach(pulls, (pull) =>
     eventsForPull(client, target, workspace, selected, pull, now),
   );
   return {
     events: events.flat(),
-    cursor: Math.max(current.cursor, ...pulls.map(({ updatedAtMillis }) => updatedAtMillis)),
+    cursor: Math.max(cursor ?? 0, ...pulls.map(({ updatedAtMillis }) => updatedAtMillis)),
+    workspace: workspace.config.name,
   };
 });
 
-const poll = Effect.fn("GitHubPullRequestTriggerSource.poll")(function* (
+const read = Effect.fn("GitHubPullRequestTriggerSource.read")(function* (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
   subscriptions: ReadonlyArray<TriggerSubscription>,
-  pollState: Ref.Ref<PollState>,
+  checkpoint: ProviderPollCheckpoint,
 ) {
-  const current = yield* Ref.get(pollState);
-  if (current.pending.length > 0) {
-    const emitted = current.pending.slice(0, batchSize);
-    yield* Ref.set(pollState, { ...current, pending: current.pending.slice(batchSize) });
-    return emitted;
-  }
   const now = yield* Clock.currentTimeMillis;
   const state = yield* registry;
   const reads = yield* Effect.forEach(state.workspaces, (workspace) =>
-    readWorkspace(client, current, subscriptions, workspace, now),
+    readWorkspace(client, checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
   );
-  const events = [
-    ...new Map(
-      reads
-        .flatMap(({ events }) => events)
-        .map((event) => [
-          `${event.entry}:${event.workspace}:${event.revision}:${JSON.stringify("parameters" in event ? (event.parameters ?? []) : [])}`,
-          event,
-        ]),
-    ).values(),
-  ].sort((left, right) => left.atMillis - right.atMillis);
-  const emitted = events.slice(0, batchSize);
-  yield* Ref.set(pollState, {
-    first: false,
-    cursor: Math.max(current.cursor, ...reads.map(({ cursor }) => cursor)),
-    pending: events.slice(batchSize),
-  });
-  return emitted;
+  return {
+    events: reads.flatMap(({ events }) => events),
+    cursors: new Map([
+      ...checkpoint.cursors,
+      ...reads.map(({ workspace, cursor }) => [workspace, cursor] as const),
+    ]),
+  };
 });
 
 export const makeGitHubPullRequestTriggerSource = (
@@ -326,15 +308,5 @@ export const makeGitHubPullRequestTriggerSource = (
       );
     }),
   observe: (subscriptions) =>
-    Stream.unwrap(
-      Ref.make<PollState>({ first: true, cursor: 0, pending: [] }).pipe(
-        Effect.map((pollState) =>
-          pollingStream(
-            poll(client, registry, subscriptions, pollState).pipe(
-              Effect.mapError((error) => sourceFailure("github", error)),
-            ),
-          ),
-        ),
-      ),
-    ),
+    providerPollingStream("github", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
 });

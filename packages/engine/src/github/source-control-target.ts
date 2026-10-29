@@ -19,6 +19,8 @@ const botAllowlistEntry = (entry: string): readonly [string, BotWakeMode] => {
   return [login, { acceptsAnyComment }];
 };
 
+export const botAllowlistFrom = (entries: ReadonlyArray<string>) => new Map(entries.map(botAllowlistEntry));
+
 const targetFromRepo = (
   repo: string,
   connectionId: ConnectionBindingId,
@@ -30,7 +32,7 @@ const targetFromRepo = (
   return {
     ...repository,
     ...(boundConnectionId ? { connectionId: boundConnectionId } : {}),
-    botAllowlist: new Map((botAllowlist ?? []).map(botAllowlistEntry)),
+    botAllowlist: botAllowlistFrom(botAllowlist ?? []),
   };
 };
 

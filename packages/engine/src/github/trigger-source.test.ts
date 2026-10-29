@@ -70,8 +70,22 @@ const issue = (number: number) => ({
 
 const pullClientLayer = () =>
   Layer.mock(GitHubClient, {
+    authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
     listPulls: () =>
       Effect.succeed([
+        {
+          number: 11,
+          url: "https://github.com/acme/example/pull/11",
+          authorLogin: "outside-user",
+          authorAssociation: "NONE",
+          draft: false,
+          headSha: "outside-sha",
+          baseSha: "base-sha",
+          headRef: "99-work",
+          headRepository: "outside/fork",
+          closingIssueNumbers: [99],
+          updatedAtMillis: 2_900,
+        },
         {
           number: 10,
           url: "https://github.com/acme/example/pull/10",
@@ -89,7 +103,7 @@ const pullClientLayer = () =>
     listCheckRuns: () =>
       Effect.succeed([{ name: "test", status: "completed", conclusion: "failure", startedAtMillis: 2_500 }]),
     pullMergeableState: () => Effect.succeed("dirty"),
-    listComments: () => Effect.succeed([]),
+    listTriggerComments: () => Effect.succeed([]),
     listReviewComments: () => Effect.succeed([]),
     listReviews: () =>
       Effect.succeed([
@@ -132,7 +146,7 @@ describe("GitHub Trigger sources", () => {
           listIssues: () => Effect.succeed([issue(1)]),
           listIssueEvents: () =>
             Effect.succeed([{ id: 1, event: "labeled", labelName: "needs-triage", createdAtMillis: 1_500 }]),
-          listAllComments: () =>
+          listTriggerComments: () =>
             Effect.succeed([
               {
                 id: 1,
@@ -147,6 +161,13 @@ describe("GitHub Trigger sources", () => {
                 authorAssociation: "MEMBER",
                 body: "new",
                 createdAtMillis: 2_000,
+              },
+              {
+                id: 5,
+                authorLogin: "outside-user",
+                authorAssociation: "NONE",
+                body: "outside",
+                createdAtMillis: 1_600,
               },
               {
                 id: 3,
@@ -180,7 +201,7 @@ describe("GitHub Trigger sources", () => {
 
       assert.isUndefined(collected.pollUnsafe());
 
-      yield* TestClock.adjust("5 seconds");
+      yield* TestClock.adjust("60 seconds");
       const events = yield* Fiber.join(collected);
       assert.lengthOf(events, 51);
       assert.strictEqual(events.at(-1)?.revision, "label:needs-triage:51");
@@ -192,7 +213,7 @@ describe("GitHub Trigger sources", () => {
             Effect.succeed([
               { id: number, event: "labeled", labelName: "needs-triage", createdAtMillis: number },
             ]),
-          listAllComments: () => Effect.succeed([]),
+          listTriggerComments: () => Effect.succeed([]),
         }),
       ),
     ),

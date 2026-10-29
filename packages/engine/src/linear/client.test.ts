@@ -330,6 +330,41 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("reads the label-applied moment through the final history page", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((_document, variables) => ({
+        body: {
+          data: {
+            issue: {
+              history: {
+                nodes:
+                  variables.after === null
+                    ? [{ createdAt: "2026-10-28T12:00:00.000Z", addedLabels: [{ name: "other" }] }]
+                    : [
+                        {
+                          createdAt: "2026-10-28T13:00:00.000Z",
+                          addedLabels: [{ name: "needs-triage" }],
+                        },
+                      ],
+                pageInfo:
+                  variables.after === null
+                    ? { hasNextPage: true, endCursor: "next" }
+                    : { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+
+      assert.strictEqual(
+        yield* client.labelAppliedAt(ref, "issue-id", "needs-triage"),
+        Date.UTC(2026, 9, 28, 13),
+      );
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+    }).pipe(withToken()),
+  );
+
   it.effect("follows the issues cursor until the backlog is exhausted", () =>
     Effect.gen(function* () {
       const pageOf = (nodes: ReadonlyArray<unknown>, endCursor: string | null) => ({
