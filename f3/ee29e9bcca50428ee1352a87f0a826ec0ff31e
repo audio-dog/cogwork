@@ -1,0 +1,29 @@
+apps/cli/src/commands.test.ts
+  s_dee3b081d33640::t_b58de692fa3818 115
+packages/engine/src/daemon.ts
+  s_dee3b081d33640::t_d16fba8341aff4 75,494-495,497
+  s_dee3b081d33640::t_68e6e78a8d71c4 300
+  s_dee3b081d33640::t_edf3761598c101 117,291
+packages/contracts/src/daemon.ts
+  s_dee3b081d33640::t_f5c815fb9d5081 275-281,288-291
+apps/cli/src/status.test.ts
+  s_dee3b081d33640::t_b58de692fa3818 48
+packages/engine/src/daemon-composition.test.ts
+  s_dee3b081d33640::t_104b1681529e9c 353,373-376
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f3ee29e9bcca50428ee1352a87f0a826ec0ff31e",
+  "prompts": {},
+  "sessions": {
+    "s_dee3b081d33640": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c6-8bf6-76a2-ba8d-440eec1136d5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
