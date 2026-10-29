@@ -161,6 +161,7 @@ export function ConnectionEstablishmentDialog({
   const [open, setOpen] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const fieldId = useId();
+  const showsCredentialSource = system !== "granola" && system !== "slack";
   const form = useForm({
     defaultValues: emptyEstablishmentFields(system, account),
     validationLogic: revalidateLogic(),
@@ -222,7 +223,7 @@ export function ConnectionEstablishmentDialog({
               </form.Field>
             ) : null}
 
-            {system === "granola" || system === "slack" ? null : (
+            {showsCredentialSource ? (
               <form.Field name="source">
                 {(field) => (
                   <CredentialSourceField
@@ -233,7 +234,7 @@ export function ConnectionEstablishmentDialog({
                   />
                 )}
               </form.Field>
-            )}
+            ) : null}
 
             <form.Subscribe selector={(state) => state.values.source}>
               {(source) => {
