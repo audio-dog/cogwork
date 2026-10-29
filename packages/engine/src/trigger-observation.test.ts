@@ -8,6 +8,7 @@ import {
   WorkflowNodeId,
   type WorkflowRecord,
   WorkItemId,
+  WorkspaceConfig,
   WorkspaceId,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -25,7 +26,8 @@ import { clockEntries } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
-import { IssueTracker, makeEmpty as makeEmptyIssueTracker } from "./issue-tracker";
+import { IssueTracker, makeEmpty as makeEmptyIssueTracker, type TrackerItem } from "./issue-tracker";
+import type { RegisteredWorkspace } from "./projector";
 import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { makeScriptedSource } from "./scripted-source";
 import {
@@ -61,12 +63,12 @@ const document = Schema.decodeSync(WorkflowDocument)({
   operations: [],
 });
 
-const record = (enabled: boolean): WorkflowRecord => ({
+const record = (enabled: boolean, publishedCopy = document): WorkflowRecord => ({
   id: workflowId,
   principal: localOwnerId,
-  workingCopy: document,
+  workingCopy: publishedCopy,
   workingRevision: 1,
-  publishedCopy: document,
+  publishedCopy,
   publishedRevision: 1,
   enabled,
   diagnostics: [],
@@ -93,6 +95,75 @@ const subscription: TriggerSubscription = {
   workspaces: [],
   catchUp: { since: 0 },
 };
+
+const selectedWorkspaceId = Schema.decodeSync(WorkspaceId)("selected");
+const selectedWorkspace: RegisteredWorkspace = {
+  source: "test",
+  contributions: [],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: selectedWorkspaceId,
+    checkoutPath: "/repos/selected",
+    issueTracker: { type: "github", assigneeAllowlist: ["owner"] },
+  }),
+};
+const selectedDocument = Schema.decodeSync(WorkflowDocument)({
+  ...document,
+  workspaces: { _tag: "Listed", workspaces: [selectedWorkspaceId] },
+});
+const selectedIssueId = Schema.decodeSync(WorkItemId)("#1");
+const selectedEvent = {
+  ...event,
+  key: { _tag: "Issue", workspace: selectedWorkspaceId, id: selectedIssueId },
+  workspace: selectedWorkspaceId,
+  revision: "issue-1",
+} as const;
+const selectedTrackerItem: TrackerItem = {
+  claimHeld: false,
+  claim: null,
+  claimedByUs: false,
+  attempts: [],
+  handback: null,
+  id: selectedIssueId,
+  title: "Selected issue",
+  url: "https://github.com/acme/example/issues/1",
+  roles: [],
+  assignees: ["owner"],
+  openBlockers: 0,
+  proposal: null,
+  priority: "medium",
+  followUp: null,
+};
+
+const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* () {
+  const current = yield* Ref.make(record(true, selectedDocument));
+  const processed = yield* Ref.make<string | null>(null);
+  const observed = yield* Ref.make(0);
+  const trackerCalls = yield* Ref.make(0);
+  const scripted = yield* makeScriptedSource("clock", clockEntries);
+  const store = yield* makeMemoryTriggerObservationStore;
+  const bus = yield* makeDaemonEventBus;
+  const emptyTracker = yield* makeEmptyIssueTracker;
+  const tracker = {
+    ...emptyTracker,
+    observe: () =>
+      Ref.update(trackerCalls, (count) => count + 1).pipe(Effect.map(() => [selectedTrackerItem])),
+  };
+  const observation = yield* make.pipe(
+    Effect.provideService(Workflows, workflowService(current)),
+    Effect.provideService(Coordination, coordinationService(processed, observed)),
+    Effect.provideService(TriggerSources, [scripted.source]),
+    Effect.provideService(TriggerObservationStore, store),
+    Effect.provideService(DaemonEventBus, bus),
+    Effect.provideService(IssueTracker, tracker),
+    Effect.provideService(
+      WorkspaceRegistry,
+      readOnlyRegistry({ workspaces: [selectedWorkspace], failures: [] }),
+    ),
+  );
+  yield* Effect.yieldNow;
+  yield* observation.refresh;
+  return { observation, scripted, trackerCalls };
+});
 
 const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => ({
   create: () => Effect.die("unused"),
@@ -220,6 +291,44 @@ describe("TriggerObservation", () => {
 
       assert.deepStrictEqual(yield* observation.eligible, []);
       assert.deepStrictEqual(yield* scripted.subscriptions, []);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("admits a standalone pull request through an assignee-gated Workspace", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, trackerCalls } = yield* makeWorkspaceObservation();
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        ...selectedEvent,
+        key: { _tag: "PullRequest", workspace: selectedWorkspaceId, number: 7 },
+        revision: "pull-7",
+      });
+      yield* TestClock.adjust("1 second");
+      const result = yield* Fiber.join(changed);
+
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(yield* Ref.get(trackerCalls), 0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("reuses one assignee snapshot for a Trigger batch", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, trackerCalls } = yield* makeWorkspaceObservation();
+      const changed = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(selectedEvent);
+      yield* scripted.emit({ ...selectedEvent, revision: "issue-2" });
+      yield* Fiber.join(changed);
+
+      assert.strictEqual(yield* Ref.get(trackerCalls), 1);
     }).pipe(Effect.scoped),
   );
 });

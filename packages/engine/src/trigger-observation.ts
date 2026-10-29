@@ -5,6 +5,8 @@ import {
   LineageId,
   type WorkflowCatalog,
   type WorkflowRecord,
+  type WorkItemId,
+  type WorkspaceId,
 } from "@cogwork/contracts";
 import * as EffectCause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -57,6 +59,11 @@ interface StoredAdmission {
   readonly payload: string;
 }
 
+interface AssigneeSnapshot {
+  readonly atMillis: number;
+  readonly assignees: ReadonlyMap<WorkItemId, ReadonlyArray<string>>;
+}
+
 export interface TriggerObservationStoreService {
   readonly admissions: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
   readonly put: (admission: TriggerAdmission) => Effect.Effect<void, TriggerObservationStoreError>;
@@ -80,6 +87,9 @@ const checkpointOf = (admission: TriggerAdmission) =>
   admission.event.key._tag === "ScheduleInstant"
     ? admission.event.key.instantMillis
     : admission.event.atMillis;
+const assigneeSnapshotTtl = 60_000;
+const freshAssignees = (snapshot: AssigneeSnapshot | undefined, now: number) =>
+  snapshot && now - snapshot.atMillis < assigneeSnapshotTtl ? snapshot.assignees : null;
 
 const activateSubscriptions = (
   subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -322,12 +332,37 @@ export const make = Effect.gen(function* () {
   );
   const changes = yield* PubSub.unbounded<TriggerAdmission>();
   const refreshGate = Semaphore.makeUnsafe(1);
+  const assigneeGate = Semaphore.makeUnsafe(1);
+  const assigneeSnapshots = yield* Ref.make<ReadonlyMap<WorkspaceId, AssigneeSnapshot>>(new Map());
 
   const setHealth = (
     source: TriggerSource["id"],
     status: TriggerSourceHealth["status"],
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
+
+  const refreshWorkspaceAssignees = Effect.fn("TriggerObservation.refreshWorkspaceAssignees")(function* (
+    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
+    now: number,
+  ) {
+    const current = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.name), now);
+    if (current) return current;
+    const items = yield* tracker.observe(workspace);
+    const assignees = new Map(items.map(({ id, assignees }) => [id, assignees] as const));
+    yield* Ref.update(assigneeSnapshots, (snapshots) =>
+      new Map(snapshots).set(workspace.config.name, { atMillis: now, assignees }),
+    );
+    return assignees;
+  });
+
+  const workspaceAssignees = Effect.fn("TriggerObservation.workspaceAssignees")(function* (
+    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
+  ) {
+    const now = yield* Clock.currentTimeMillis;
+    const cached = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.name), now);
+    if (cached) return cached;
+    return yield* assigneeGate.withPermit(refreshWorkspaceAssignees(workspace, now));
+  });
 
   const passesAssigneeGate = Effect.fn("TriggerObservation.passesAssigneeGate")(function* (
     event: TriggerEvent,
@@ -336,19 +371,11 @@ export const make = Effect.gen(function* () {
     const state = yield* registry.state;
     const workspace = state.workspaces.find(({ config }) => config.name === event.workspace);
     if (workspace === undefined) return false;
-    const allowlist = workspace?.config.issueTracker.assigneeAllowlist;
+    const allowlist = workspace.config.issueTracker.assigneeAllowlist;
     if (allowlist === undefined) return true;
-    if (event.key._tag !== "Issue") return false;
-    const issueId = event.key.id;
-    return yield* tracker.observe(workspace).pipe(
-      Effect.map(
-        (items) =>
-          items
-            .find(({ id }) => id === issueId)
-            ?.assignees.some((assignee) => allowlist.includes(assignee)) ?? false,
-      ),
-      Effect.catchTag("IssueTrackerError", () => Effect.succeed(false)),
-    );
+    if (event.key._tag !== "Issue") return true;
+    const assignees = (yield* workspaceAssignees(workspace)).get(event.key.id) ?? [];
+    return assignees.some((assignee) => allowlist.includes(assignee));
   });
 
   const admit = Effect.fn("TriggerObservation.admit")(function* (event: TriggerEvent) {
@@ -373,11 +400,16 @@ export const make = Effect.gen(function* () {
   ) =>
     source.observe(subscriptions).pipe(
       Stream.runForEach(admit),
-      Effect.catchTag("SourceFailure", (error: SourceFailure) =>
-        setHealth(source.id, "failed", error.message).pipe(
-          Effect.andThen(waitForRetry(error.retryAfterMillis)),
-        ),
-      ),
+      Effect.catchTags({
+        SourceFailure: (error: SourceFailure) =>
+          setHealth(source.id, "failed", error.message).pipe(
+            Effect.andThen(waitForRetry(error.retryAfterMillis)),
+          ),
+        IssueTrackerError: (error) =>
+          setHealth(source.id, "failed", error.message).pipe(
+            Effect.andThen(waitForRetry(error.retryAfterMillis ?? null)),
+          ),
+      }),
       Effect.catchCause((cause) =>
         EffectCause.hasInterruptsOnly(cause)
           ? Effect.void
