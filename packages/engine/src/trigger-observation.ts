@@ -419,22 +419,21 @@ export const make = Effect.gen(function* () {
         const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
         return Effect.forEach(current, (admission) =>
           coordination.read(admission.event.key).pipe(
-            Effect.map((view) => ({
-              admission,
-              enabled: enabled.has(admission.subscription.workflow),
-              gate: view.gate({
+            Effect.map((view) => {
+              const gate = view.gate({
                 workflow: admission.subscription.workflow,
                 operation: admission.subscription.operation,
-              }),
-            })),
+              });
+              const isEligible =
+                enabled.has(admission.subscription.workflow) &&
+                gate._tag === "Open" &&
+                view.revision?.observed === admission.event.revision;
+              return { admission, isEligible };
+            }),
           ),
         );
       }),
-      Effect.map((states) =>
-        states
-          .filter(({ enabled, gate }) => enabled && gate._tag === "Open")
-          .map(({ admission }) => admission),
-      ),
+      Effect.map((states) => states.filter(({ isEligible }) => isEligible).map(({ admission }) => admission)),
       Effect.catchCause(() => Effect.succeed([])),
     ),
     changes: Stream.fromPubSub(changes),

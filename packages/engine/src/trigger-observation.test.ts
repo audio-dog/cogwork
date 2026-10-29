@@ -8,6 +8,7 @@ import {
   WorkflowId,
   WorkflowNodeId,
   type WorkflowRecord,
+  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
@@ -124,19 +125,23 @@ const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => 
 const coordinationService = (
   processed: Ref.Ref<string | null>,
   observed: Ref.Ref<number>,
+  currentRevision: Ref.Ref<string | null>,
 ): CoordinationService => ({
   fold,
   read: () =>
-    Effect.map(Ref.get(processed), (revision) =>
-      fold(
-        {
-          claim: null,
-          attempts: [],
-          handbacks: [],
-          parks: [],
-          revision: { observed: event.revision, processed: revision },
-        },
-        "cogwork",
+    Effect.all([Ref.get(processed), Ref.get(currentRevision)]).pipe(
+      Effect.map(([processedRevision, observedRevision]) =>
+        fold(
+          {
+            claim: null,
+            attempts: [],
+            handbacks: [],
+            parks: [],
+            revision:
+              observedRevision === null ? null : { observed: observedRevision, processed: processedRevision },
+          },
+          "cogwork",
+        ),
       ),
     ),
   claim: () => Effect.die("unused"),
@@ -144,7 +149,12 @@ const coordinationService = (
   recordAttempt: () => Effect.die("unused"),
   park: () => Effect.die("unused"),
   handBack: () => Effect.die("unused"),
-  observe: () => Ref.modify(observed, (count) => [count === 0 ? "moved" : "redelivered", count + 1] as const),
+  observe: (_ref, revision) =>
+    Ref.modify(currentRevision, (current) => {
+      const outcome = current === revision ? "redelivered" : "moved";
+      const next = outcome === "redelivered" ? current : revision;
+      return [outcome, next] satisfies readonly ["moved" | "redelivered", string | null];
+    }).pipe(Effect.tap(() => Ref.update(observed, (count) => count + 1))),
   markProcessed: (_ref, revision) => Ref.set(processed, revision),
 });
 
@@ -173,12 +183,13 @@ describe("TriggerObservation", () => {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>(null);
       const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
       const scripted = yield* makeScriptedSource("clock", clockEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
-        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, currentRevision)),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
@@ -245,12 +256,13 @@ describe("TriggerObservation", () => {
       });
       const processed = yield* Ref.make<string | null>(null);
       const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
       const scripted = yield* makeScriptedSource("granola", granolaEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
-        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, currentRevision)),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
@@ -281,7 +293,7 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("records an unmatched source revision", () =>
+  it.effect("records an unmatched revision without reopening prior admissions", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make<WorkflowRecord>({
         ...record(true),
@@ -290,14 +302,20 @@ describe("TriggerObservation", () => {
       });
       const processed = yield* Ref.make<string | null>(null);
       const observed = yield* Ref.make(0);
-      const observedSignal = yield* Deferred.make<void>();
-      const baseCoordination = coordinationService(processed, observed);
+      const currentRevision = yield* Ref.make<string | null>(null);
+      const unmatchedRevision = "2026-10-29T16:00:00.000Z";
+      const unmatchedObserved = yield* Deferred.make<void>();
+      const baseCoordination = coordinationService(processed, observed, currentRevision);
       const coordination: CoordinationService = {
         ...baseCoordination,
         observe: (ref, revision, cause) =>
           baseCoordination
             .observe(ref, revision, cause)
-            .pipe(Effect.tap(() => Deferred.succeed(observedSignal, undefined))),
+            .pipe(
+              Effect.tap(() =>
+                revision === unmatchedRevision ? Deferred.succeed(unmatchedObserved, undefined) : Effect.void,
+              ),
+            ),
       };
       const scripted = yield* makeScriptedSource("granola", granolaEntries);
       const store = yield* makeMemoryTriggerObservationStore;
@@ -311,26 +329,48 @@ describe("TriggerObservation", () => {
       );
       yield* Effect.yieldNow;
       yield* observation.refresh;
-      const didObserve = yield* Deferred.await(observedSignal).pipe(
+      const firstRevision = "2026-10-29T15:00:00.000Z";
+      const key = {
+        _tag: "GranolaNote",
+        connection: connectionIdOf("granola", "person@example.com"),
+        noteId: "note-1",
+      } satisfies WorkItemRef;
+      const firstChanges = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key,
+        revision: firstRevision,
+        cause: { _tag: "Unknown" },
+        atMillis: 1,
+        entry: granolaEntry,
+        workspace: null,
+      });
+      yield* Fiber.join(firstChanges);
+      yield* coordination.markProcessed(key, firstRevision);
+
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
         Effect.timeoutOption("1 second"),
         Effect.forkChild({ startImmediately: true }),
       );
       yield* scripted.emit({
-        key: {
-          _tag: "GranolaNote",
-          connection: connectionIdOf("granola", "person@example.com"),
-          noteId: "note-1",
-        },
-        revision: "2026-10-29T16:00:00.000Z",
+        key,
+        revision: unmatchedRevision,
         cause: { _tag: "Unknown" },
-        atMillis: 1,
+        atMillis: 2,
         entry: granolaEditedEntry,
         workspace: null,
       });
+      yield* Deferred.await(unmatchedObserved);
       yield* TestClock.adjust("1 second");
 
-      assert.isTrue(Option.isSome(yield* Fiber.join(didObserve)));
+      assert.isTrue(Option.isNone(yield* Fiber.join(changed)));
       assert.deepStrictEqual(yield* observation.eligible, []);
+      assert.strictEqual(yield* Ref.get(observed), 2);
     }).pipe(Effect.scoped),
   );
 
@@ -344,12 +384,13 @@ describe("TriggerObservation", () => {
       });
       const processed = yield* Ref.make<string | null>(null);
       const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
       const scripted = yield* makeScriptedSource("granola", granolaEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
-        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, currentRevision)),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
