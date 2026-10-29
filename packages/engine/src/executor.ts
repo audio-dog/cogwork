@@ -112,7 +112,6 @@ const defaultFollowUp: FollowUpContext = {
   checks: "pending",
   humanCommentAtMillis: 0,
   botTriggerAtMillis: 0,
-  latestFailingCheckAtMillis: 0,
   noProgress: 0,
   stalled: false,
   fresh: false,
@@ -560,7 +559,7 @@ export const make = Effect.gen(function* () {
         if (!observed) return unavailable;
         return {
           checks: observed.checks,
-          latestFailingCheckAtMillis: observed.latestFailingCheckAtMillis ?? 0,
+          latestFailingCheckAtMillis: observed.latestFailingCheckAtMillis ?? undefined,
           baseDivergence: observed.baseDivergence,
         };
       }),

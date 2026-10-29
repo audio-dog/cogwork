@@ -1296,6 +1296,37 @@ const conflictingProviderLayer: Layer.Layer<SourceControlProvider | PostedCommen
   },
 ).pipe(Layer.provideMerge(PostedComments.layer));
 
+const clockCappedFailingProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
+  SourceControlProvider,
+  {
+    ...noopProvider,
+    observe: () =>
+      Effect.succeed(
+        new Map([
+          [
+            id("#5"),
+            {
+              number: 5,
+              url: "https://example.test/pull/5",
+              review: "changes-requested" as const,
+              checks: "failing" as const,
+              latestHumanCommentAtMillis: null,
+              latestBotTriggerAtMillis: null,
+              latestFailingCheckAtMillis: null,
+              observedAtMillis: 1,
+              fresh: false,
+              baseDivergence: "clean" as const,
+              waitingSinceMillis: 0,
+              headRef: "5-follow-up",
+              followable: true,
+              draft: false,
+            },
+          ],
+        ]),
+      ),
+  },
+).pipe(Layer.provideMerge(PostedComments.layer));
+
 const failedObservationProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
   SourceControlProvider,
   {
@@ -4584,6 +4615,21 @@ describe("Executor.execute", () => {
       const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
       assert.strictEqual(attempt?.baseDivergence, "conflict");
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, provider)));
+  });
+
+  it.effect("omits a clock-capped failing check watermark from the failure marker", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, followUpItem);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.latestFailingCheckAtMillis, undefined);
+    }).pipe(
+      Effect.provide(
+        provide([runner(stuckFollowUpEvents)], existingWorktree, clockCappedFailingProviderLayer),
+      ),
+    );
   });
 
   it.effect("names the prepared linked-branch checkout in a follow-up hand-off", () => {
