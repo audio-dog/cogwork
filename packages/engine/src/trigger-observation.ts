@@ -231,7 +231,21 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
     const sameWorkspace = event.workspace === null || subscription.workspaces.includes(event.workspace);
     const sameSchedule =
       event.key._tag !== "ScheduleInstant" || matchesScheduledInstant(subscription, event.key.instantMillis);
-    return subscription.entry === event.entry && sameScheduleWorkflow && sameWorkspace && sameSchedule;
+    const sameParameters =
+      event.parameters === undefined ||
+      (subscription.parameters.length === event.parameters.length &&
+        subscription.parameters.every((parameter) =>
+          event.parameters?.some(
+            (candidate) => candidate.id === parameter.id && candidate.value === parameter.value,
+          ),
+        ));
+    return (
+      subscription.entry === event.entry &&
+      sameScheduleWorkflow &&
+      sameWorkspace &&
+      sameSchedule &&
+      sameParameters
+    );
   });
   return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
 };
@@ -278,10 +292,8 @@ const lineageOf = (ref: WorkItemRef): Lineage => ({
   hop: 0,
 });
 
-const waitForRetry = (retryAtMillis: number | null) =>
-  retryAtMillis === null
-    ? Effect.void
-    : Clock.currentTimeMillis.pipe(Effect.flatMap((now) => Effect.sleep(Math.max(0, retryAtMillis - now))));
+const waitForRetry = (retryAfterMillis: number | null) =>
+  retryAfterMillis === null ? Effect.void : Effect.sleep(retryAfterMillis);
 
 export interface TriggerObservationService {
   readonly eligible: Effect.Effect<ReadonlyArray<TriggerAdmission>>;

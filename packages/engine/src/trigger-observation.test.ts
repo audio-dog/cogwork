@@ -31,7 +31,12 @@ import {
   matchTriggerEvent,
   TriggerObservationStore,
 } from "./trigger-observation";
-import { TriggerSources, type TriggerSubscription } from "./trigger-source";
+import {
+  SourceFailure,
+  type TriggerSource,
+  TriggerSources,
+  type TriggerSubscription,
+} from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
 
 const workflowId = Schema.decodeSync(WorkflowId)("daily-summary");
@@ -146,6 +151,23 @@ describe("TriggerObservation", () => {
     assert.deepStrictEqual(matchTriggerEvent([later, subscription, other], event), [subscription]);
   });
 
+  it("matches a source event only to the Trigger whose parameters produced it", () => {
+    const selected = {
+      ...subscription,
+      entry: Schema.decodeSync(WorkflowCatalogKey)("slack.i-am-mentioned"),
+      parameters: [{ id: "channel", value: "C123" }],
+    };
+    const other = { ...selected, parameters: [{ id: "channel", value: "C456" }] };
+    const slackEvent = {
+      ...event,
+      key: { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000" } as const,
+      entry: selected.entry,
+      parameters: selected.parameters,
+    };
+
+    assert.deepStrictEqual(matchTriggerEvent([other, selected], slackEvent), [selected]);
+  });
+
   it.effect("admits once and stops the source after switch-off", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
@@ -199,6 +221,63 @@ describe("TriggerObservation", () => {
 
       assert.deepStrictEqual(yield* observation.eligible, []);
       assert.deepStrictEqual(yield* scripted.subscriptions, []);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("restarts a rate-limited source only after Retry-After", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(1_000_000);
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const starts = yield* Ref.make(0);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const rateLimited: TriggerSource = {
+        id: "clock",
+        entries: clockEntries,
+        availability: () => Effect.succeed({ _tag: "Available" }),
+        listOptions: () => Effect.succeed([]),
+        observe: (subscriptions) =>
+          subscriptions.length === 0
+            ? Stream.empty
+            : Stream.unwrap(
+                Ref.updateAndGet(starts, (count) => count + 1).pipe(
+                  Effect.map((count) =>
+                    count === 1
+                      ? Stream.fail(
+                          new SourceFailure({
+                            source: "clock",
+                            reason: "rate-limited",
+                            retryAfterMillis: 12_000,
+                            message: "wait",
+                          }),
+                        )
+                      : Stream.never,
+                  ),
+                ),
+              ),
+      };
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(TriggerSources, [rateLimited]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      yield* Effect.yieldNow;
+
+      assert.strictEqual(yield* Ref.get(starts), 1);
+      yield* TestClock.adjust(11_999);
+      yield* observation.refresh;
+      assert.strictEqual(yield* Ref.get(starts), 1);
+      yield* TestClock.adjust(1);
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      yield* Effect.yieldNow;
+      assert.strictEqual(yield* Ref.get(starts), 2);
     }).pipe(Effect.scoped),
   );
 });
