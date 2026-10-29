@@ -111,6 +111,7 @@ export type RawReviewComment = RawCommentFields & {
 };
 
 export interface RawReview {
+  readonly id: number;
   readonly authorLogin: string;
   readonly authorAssociation: string;
   readonly authorType?: string;
@@ -187,6 +188,7 @@ const PullDetailSchema = Schema.Struct({
 });
 
 const ReviewSchema = Schema.Struct({
+  id: Schema.Finite,
   state: Schema.String,
   user: Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) }),
   body: Schema.NullOr(Schema.String),
@@ -1052,6 +1054,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       const reviews = yield* Effect.mapError(decodeReviews(json), toUnavailable);
       const current = reviews.map(
         (review): RawReview => ({
+          id: review.id,
           authorLogin: review.user.login,
           authorAssociation: review.author_association ?? "NONE",
           ...(review.user.type ? { authorType: review.user.type } : {}),

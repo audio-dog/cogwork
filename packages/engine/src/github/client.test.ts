@@ -192,6 +192,7 @@ describe("GitHub client", () => {
       status: "completed",
       conclusion: "failure",
       started_at: "2026-09-09T12:00:00Z",
+      completed_at: "2026-09-09T12:01:00Z",
     });
     const firstPage = Array.from({ length: 100 }, (_, index) => check(`check-${index + 1}`));
     const fetch = vi.fn<typeof globalThis.fetch>((input) => {
@@ -246,6 +247,30 @@ describe("GitHub client", () => {
         ),
         ["1", "2"],
       );
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("preserves review ids", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([
+          {
+            id: 123,
+            state: "COMMENTED",
+            user: { login: "maintainer", type: "User" },
+            body: "Review body",
+            author_association: "MEMBER",
+            submitted_at: "2026-09-09T12:00:00Z",
+          },
+        ]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const reviews = yield* client.listReviews(repo, 850);
+
+      assert.strictEqual(reviews[0]?.id, 123);
     }).pipe(withFetchClient(fetch));
   });
 

@@ -103,12 +103,12 @@ const feedbackOf = (
     inReplyToId: comment.inReplyToId,
     subjectType: comment.subjectType,
   })),
-  ...reviews.flatMap((review, index) =>
+  ...reviews.flatMap((review) =>
     review.body.length === 0
       ? []
       : [
           {
-            id: `review-${review.submittedAtMillis}-${index}`,
+            id: `review-${review.id}`,
             authorLogin: review.authorLogin,
             authorAssociation: review.authorAssociation,
             ...(review.authorType ? { authorType: review.authorType } : {}),
@@ -119,19 +119,19 @@ const feedbackOf = (
   ),
 ];
 
-const linkedItemRules = [
-  (pull: RawPull) => {
+const linkedItemByTracker: Readonly<Record<string, (pull: RawPull) => WorkItemId | null>> = {
+  github: (pull) => {
     const closing = pull.closingIssueNumbers.at(0);
     return closing === undefined ? null : workItemId(`#${closing}`);
   },
-  (pull: RawPull) => {
+  linear: (pull) => {
     const linear = /^([A-Z][A-Z0-9]+-\d+)(?:-|$)/.exec(pull.headRef)?.[1];
     return linear ? workItemId(linear) : null;
   },
-] as const;
+};
 
 const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull): WorkItemRef => {
-  const linked = linkedItemRules.map((rule) => rule(pull)).find((id) => id !== null) ?? null;
+  const linked = linkedItemByTracker[workspace.config.issueTracker.type]?.(pull) ?? null;
   return linked
     ? { _tag: "Issue", workspace: workspace.config.name, id: linked }
     : { _tag: "PullRequest", workspace: workspace.config.name, number: pull.number };

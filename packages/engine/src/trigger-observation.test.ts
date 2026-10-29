@@ -26,8 +26,13 @@ import { clockEntries } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
-import { IssueTracker, makeEmpty as makeEmptyIssueTracker, type TrackerItem } from "./issue-tracker";
-import type { RegisteredWorkspace } from "./projector";
+import {
+  IssueTracker,
+  IssueTrackerError,
+  makeEmpty as makeEmptyIssueTracker,
+  type TrackerItem,
+} from "./issue-tracker";
+import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { makeScriptedSource } from "./scripted-source";
 import {
@@ -36,6 +41,8 @@ import {
   makeMemoryTriggerObservationStore,
   matchTriggerEvent,
   TriggerObservationStore,
+  TriggerObservationStoreError,
+  type TriggerObservationStoreService,
 } from "./trigger-observation";
 import { TriggerSources, type TriggerSubscription } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
@@ -113,6 +120,7 @@ const selectedDocument = Schema.decodeSync(WorkflowDocument)({
   workspaces: { _tag: "Listed", workspaces: [selectedWorkspaceId] },
 });
 const selectedIssueId = Schema.decodeSync(WorkItemId)("#1");
+const nextSelectedIssueId = Schema.decodeSync(WorkItemId)("#2");
 const selectedEvent = {
   ...event,
   key: { _tag: "Issue", workspace: selectedWorkspaceId, id: selectedIssueId },
@@ -139,7 +147,8 @@ const selectedTrackerItem: TrackerItem = {
 const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* (
   options: {
     readonly observedItems?: ReadonlyArray<TrackerItem>;
-    readonly exactAssignees?: ReadonlyArray<string>;
+    readonly exactAssignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
+    readonly store?: TriggerObservationStoreService;
   } = {},
 ) {
   const current = yield* Ref.make(record(true, selectedDocument));
@@ -148,22 +157,21 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
   const trackerCalls = yield* Ref.make(0);
   const exactAssigneeCalls = yield* Ref.make(0);
   const scripted = yield* makeScriptedSource("clock", clockEntries);
-  const store = yield* makeMemoryTriggerObservationStore;
+  const store = options.store ?? (yield* makeMemoryTriggerObservationStore);
   const bus = yield* makeDaemonEventBus;
   const emptyTracker = yield* makeEmptyIssueTracker;
+  const exactAssignees = options.exactAssignees;
   const tracker = {
     ...emptyTracker,
     observe: () =>
       Ref.update(trackerCalls, (count) => count + 1).pipe(
         Effect.map(() => options.observedItems ?? [selectedTrackerItem]),
       ),
-    ...(options.exactAssignees === undefined
+    ...(exactAssignees === undefined
       ? {}
       : {
-          assignees: () =>
-            Ref.update(exactAssigneeCalls, (count) => count + 1).pipe(
-              Effect.map(() => options.exactAssignees ?? []),
-            ),
+          assignees: (_workspace: WorkspaceIssueTrackerBinding, itemId: WorkItemId) =>
+            Ref.update(exactAssigneeCalls, (count) => count + 1).pipe(Effect.andThen(exactAssignees(itemId))),
         }),
   };
   const observation = yield* make.pipe(
@@ -180,7 +188,7 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
   );
   yield* Effect.yieldNow;
   yield* observation.refresh;
-  return { observation, scripted, trackerCalls, exactAssigneeCalls };
+  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed };
 });
 
 const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => ({
@@ -368,7 +376,7 @@ describe("TriggerObservation", () => {
     Effect.gen(function* () {
       const { observation, scripted, trackerCalls, exactAssigneeCalls } = yield* makeWorkspaceObservation({
         observedItems: [],
-        exactAssignees: ["owner"],
+        exactAssignees: () => Effect.succeed(["owner"]),
       });
       const changed = yield* observation.changes.pipe(
         Stream.take(2),
@@ -383,6 +391,82 @@ describe("TriggerObservation", () => {
       assert.isTrue(Option.isSome(yield* Fiber.join(changed)));
       assert.strictEqual(yield* Ref.get(trackerCalls), 1);
       assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps observing after one assignee lookup fails", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, exactAssigneeCalls } = yield* makeWorkspaceObservation({
+        observedItems: [],
+        exactAssignees: (itemId) =>
+          itemId === selectedIssueId
+            ? Effect.fail(
+                new IssueTrackerError({
+                  reason: "unavailable",
+                  retryable: false,
+                  message: "unrecognized work item id",
+                }),
+              )
+            : Effect.succeed(["owner"]),
+      });
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Effect.yieldNow;
+      yield* scripted.emit(selectedEvent);
+      yield* scripted.emit({
+        ...selectedEvent,
+        key: { ...selectedEvent.key, id: nextSelectedIssueId },
+        revision: "issue-2",
+      });
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+
+      const result = yield* Fiber.join(changed);
+      assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 2);
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(Option.getOrThrow(result)[0]?.event.key._tag, "Issue");
+      assert.strictEqual(Option.getOrThrow(result)[0]?.event.revision, "issue-2");
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("does not record delivery before admission persistence succeeds", () =>
+    Effect.gen(function* () {
+      const memory = yield* makeMemoryTriggerObservationStore;
+      const firstPut = yield* Ref.make(true);
+      const store: TriggerObservationStoreService = {
+        ...memory,
+        put: (admission) =>
+          Ref.getAndSet(firstPut, false).pipe(
+            Effect.flatMap((fail) =>
+              fail
+                ? Effect.fail(new TriggerObservationStoreError({ message: "write failed" }))
+                : memory.put(admission),
+            ),
+          ),
+      };
+      const { observation, scripted, observed } = yield* makeWorkspaceObservation({ store });
+      yield* scripted.emit(selectedEvent);
+      yield* Effect.yieldNow;
+
+      assert.strictEqual((yield* Ref.get(observed)).size, 0);
+
+      yield* TestClock.adjust("5 seconds");
+      yield* observation.refresh;
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(selectedEvent);
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isSome(yield* Fiber.join(changed)));
+      assert.strictEqual((yield* Ref.get(observed)).size, 1);
     }).pipe(Effect.scoped),
   );
 

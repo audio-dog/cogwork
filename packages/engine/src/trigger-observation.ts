@@ -406,17 +406,27 @@ export const make = Effect.gen(function* () {
   });
 
   const admit = Effect.fn("TriggerObservation.admit")(function* (event: TriggerEvent) {
-    if (!(yield* passesAssigneeGate(event))) return;
+    const passesGate = yield* passesAssigneeGate(event).pipe(
+      Effect.catchTag("IssueTrackerError", (error) =>
+        Effect.logWarning("trigger assignee lookup failed", {
+          workspace: event.workspace,
+          item: keyOf(event.key),
+          message: error.message,
+        }).pipe(Effect.map(() => false)),
+      ),
+    );
+    if (!passesGate) return;
     const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
     const workspaceIds = registryState.workspaces.map(({ config }) => config.name);
     const matched = matchTriggerEvent(subscriptionsOf(listed.workflows, workspaceIds), event);
     if (matched.length === 0) return;
+    const admissions = matched.map(
+      (subscription) => ({ event, subscription, lineage: lineageOf(event) }) satisfies TriggerAdmission,
+    );
+    yield* Effect.forEach(admissions, store.put, { discard: true });
     const delivery = yield* coordination.observe(event.key, event.revision, event.cause);
     if (delivery === "redelivered") return;
-    yield* Effect.forEach(matched, (subscription) => {
-      const admission = { event, subscription, lineage: lineageOf(event) } satisfies TriggerAdmission;
-      return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
-    });
+    yield* Effect.forEach(admissions, (admission) => PubSub.publish(changes, admission), { discard: true });
   });
 
   const observe = (
@@ -430,10 +440,6 @@ export const make = Effect.gen(function* () {
         SourceFailure: (error: SourceFailure) =>
           setHealth(source.id, "failed", error.message).pipe(
             Effect.andThen(waitForRetry(error.retryAfterMillis)),
-          ),
-        IssueTrackerError: (error) =>
-          setHealth(source.id, "failed", error.message).pipe(
-            Effect.andThen(waitForRetry(error.retryAfterMillis ?? null)),
           ),
       }),
       Effect.catchCause((cause) =>

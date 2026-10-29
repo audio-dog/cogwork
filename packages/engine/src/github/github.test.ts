@@ -209,8 +209,9 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   const commentsRef = yield* Ref.make(seeded);
   const reviewCommentSeeds = seed.reviewComments ?? [];
   const reviewComments = yield* seedReviewComments(reviewCommentSeeds);
-  const reviewsByPull = (seed.reviews ?? []).reduce((all, review) => {
+  const reviewsByPull = (seed.reviews ?? []).reduce((all, review, index) => {
     const entry: RawReview = {
+      id: index + 1,
       authorLogin: review.authorLogin ?? "maintainer",
       authorAssociation: review.authorAssociation ?? "COLLABORATOR",
       state: review.state ?? "COMMENTED",

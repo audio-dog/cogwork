@@ -125,6 +125,7 @@ const pullClientLayer = (listedPulls = pulls) =>
     listReviews: () =>
       Effect.succeed([
         {
+          id: 88,
           authorLogin: "maintainer",
           authorAssociation: "MEMBER",
           authorType: "User",
@@ -465,6 +466,7 @@ describe("GitHub Trigger sources", () => {
           listReviews: () =>
             Effect.succeed([
               {
+                id: 89,
                 authorLogin: "maintainer",
                 authorAssociation: "MEMBER",
                 authorType: "User",
@@ -486,7 +488,7 @@ describe("GitHub Trigger sources", () => {
         .observe([subscription("github.new-review-comment-from-person", "review")])
         .pipe(Stream.take(1), Stream.runCollect);
 
-      assert.strictEqual(events[0]?.revision, "review-2800-0");
+      assert.strictEqual(events[0]?.revision, "review-88");
       assert.strictEqual(events[0]?.prose?.comments[0]?.body, "Review body");
     }).pipe(Effect.provide(pullClientLayer())),
   );
@@ -519,6 +521,33 @@ describe("GitHub Trigger sources", () => {
             headRepository: "acme/example",
             closingIssueNumbers: [],
             updatedAtMillis: 3_000,
+          },
+        ]),
+      ),
+    ),
+  );
+
+  it.effect("keeps a Linear-style branch unlinked in a GitHub tracker Workspace", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState));
+      const events = yield* source
+        .observe([subscription("github.pull-request-checks-failed", "checks")])
+        .pipe(Stream.take(1), Stream.runCollect);
+
+      assert.deepStrictEqual(events[0]?.key, {
+        _tag: "PullRequest",
+        workspace: workspaceId,
+        number: 21,
+      });
+    }).pipe(
+      Effect.provide(
+        pullClientLayer([
+          {
+            ...trustedPull,
+            number: 21,
+            headRef: "ENG-123-work",
+            closingIssueNumbers: [],
           },
         ]),
       ),
