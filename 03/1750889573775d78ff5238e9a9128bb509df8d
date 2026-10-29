@@ -1,0 +1,65 @@
+packages/engine/src/trigger-observation.ts
+  s_f4abcd25549e05::t_59e028f36fbe1b 26,46-53,439-447
+  s_f4abcd25549e05::t_80b9753f9c8f4b 540
+  s_f4abcd25549e05::t_e26494c30eb197 263-265,274
+packages/engine/src/workflow-run.ts
+  s_f4abcd25549e05::t_5d826d30dcd1ba 29,36,90-95,98-99,105,123,126,137,225,234-235,246-247,256-257,264,268,274-275,293,298
+packages/engine/src/workflow-run.test.ts
+  s_f4abcd25549e05::t_83f82ece124ee0 171,199,203-206,213,401
+packages/engine/src/trigger-observation.test.ts
+  s_f4abcd25549e05::t_757db78a56dbae 164
+  s_f4abcd25549e05::t_7a4a0bb2bf64dc 122-123,133,167-171,192,195,207,225-226,229,248,250-252,254-255,290,293,508-531
+  s_f4abcd25549e05::t_001878824125bf 230-232,238,241-242
+  s_f4abcd25549e05::t_57567f7c2bbded 124-132
+  s_f4abcd25549e05::t_ca6e1c445266c8 291-292
+packages/engine/src/provider-trigger-source.ts
+  s_f4abcd25549e05::t_e26494c30eb197 99
+packages/engine/src/coordination.ts
+  s_f4abcd25549e05::t_59c6434e46fd62 17,107-125,236-238,240,244-246,248,250,254,259,261,264,266,274-277,279,283,287,290,305,307-308,313,322,340,345
+  s_f4abcd25549e05::t_e13184e97a6149 247
+  s_f4abcd25549e05::t_52e544ee7a09a0 9
+packages/engine/src/scheduler.ts
+  s_f4abcd25549e05::t_9ebf9402f8f7f2 23,127-128
+  s_f4abcd25549e05::t_1843e4e5bd76f9 30
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_e26494c30eb197 119
+packages/engine/src/coordination-tracker.ts
+  s_f4abcd25549e05::t_419f198a9ff619 199,201,214,235,246,255,263,271,279,281,286
+packages/engine/src/scheduler.test.ts
+  s_f4abcd25549e05::t_9336d7182d4359 583-594,596-598,601
+  s_f4abcd25549e05::t_0e41c10d7074b5 573-582,595,599-600
+packages/engine/src/trigger-source.ts
+  s_f4abcd25549e05::t_e26494c30eb197 39-44
+packages/engine/src/github/trigger-source.test.ts
+  s_f4abcd25549e05::t_9247f8f329717c 141-142,548-549,551
+  s_f4abcd25549e05::t_12d52d4f74fc96 19,348-398
+  s_f4abcd25549e05::t_d42fef3eeb4b5a 53,550
+packages/engine/src/coordination-control-store.ts
+  s_f4abcd25549e05::t_ab11eb609ce223 20,82,238,259-260,262,281,296,313,324-325,327,338,353,376-383,388-395
+  s_f4abcd25549e05::t_00717a289025ed 19
+  s_f4abcd25549e05::t_0d8d296524f025 261
+  s_f4abcd25549e05::t_71f732efbbef9c 326
+packages/engine/src/github/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_e26494c30eb197 118
+packages/engine/src/linear/trigger-source.test.ts
+  s_f4abcd25549e05::t_9247f8f329717c 88-91,105
+  s_f4abcd25549e05::t_12d52d4f74fc96 107-109
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_f4abcd25549e05::t_e26494c30eb197 221,240
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "031750889573775d78ff5238e9a9128bb509df8d",
+  "prompts": {},
+  "sessions": {
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
