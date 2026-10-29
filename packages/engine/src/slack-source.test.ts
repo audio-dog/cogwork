@@ -11,6 +11,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -175,7 +176,7 @@ describe("Slack Trigger source", () => {
         ts: "90.000",
       });
       assert.strictEqual(event?.revision, "90.000");
-      assert.include(event?.workContext?.body ?? "", "Taylor: Could <@U123> review this?");
+      assert.include(event?.workContext?.body ?? "", "Taylor: Could @Morgan review this?");
       assert.include(event?.workContext?.body ?? "", "#reviews");
       assert.include(event?.workContext?.body ?? "", "https://example.slack.com/archives/C123/p90000");
       assert.deepStrictEqual(event?.workContext?.comments, [
@@ -340,7 +341,74 @@ describe("Slack Trigger source", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
-  it.effect("ends only the Slack stream with its Retry-After", () =>
+  it.effect("starts a zero-window subscription at observation time", () =>
+    Effect.gen(function* () {
+      const state = yield* SlackClientStateRef;
+      yield* TestClock.setTime(100_000);
+      const source = yield* make;
+      const events = yield* source
+        .observe([subscription("slack.i-am-mentioned", [{ id: "catch-up-at-most", value: "0" }])])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.timeoutOption("2 minutes"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* Ref.update(state, (current) => ({
+        ...current,
+        search: [message({ ts: "110.000", text: "New <@U123> mention" })],
+        replies: [message({ ts: "110.000", text: "New <@U123> mention" })],
+      }));
+      yield* TestClock.adjust("2 minutes");
+      const result = yield* Fiber.join(events);
+
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(Option.getOrUndefined(result)?.[0]?.revision, "110.000");
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("keeps ambient throttles across observation restarts", () =>
+    Effect.gen(function* () {
+      const state = yield* SlackClientStateRef;
+      const root = message({ ts: "950.000", text: "First message" });
+      yield* Ref.set(state, {
+        search: [],
+        history: [root],
+        reactions: [],
+        replies: [root],
+        failure: null,
+      });
+      yield* TestClock.setTime(1_000_000);
+      const source = yield* make;
+      const selected = subscription("slack.message-in-channel", [
+        { id: "channel", value: "C123" },
+        { id: "quiet-for", value: "0" },
+        { id: "at-most-every", value: "120000" },
+      ]);
+      yield* source.observe([selected]).pipe(Stream.take(1), Stream.runDrain);
+      yield* Ref.update(state, (current) => ({
+        ...current,
+        replies: [root, message({ ts: "1001.000", threadTs: root.ts, text: "Second message" })],
+      }));
+      const throttled = yield* source
+        .observe([selected])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.timeoutOption("1 minute"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* TestClock.adjust("1 minute");
+      assert.isTrue(Option.isNone(yield* Fiber.join(throttled)));
+
+      yield* TestClock.adjust("1 minute");
+      const resumed = yield* source.observe([selected]).pipe(Stream.take(1), Stream.runCollect);
+      assert.strictEqual(resumed[0]?.revision, "1001.000");
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("propagates Retry-After from the Slack client", () =>
     Effect.gen(function* () {
       yield* Ref.set(yield* SlackClientStateRef, {
         search: [],

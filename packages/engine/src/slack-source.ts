@@ -158,20 +158,28 @@ const parameterValue = (subscription: TriggerSubscription, id: string) =>
 
 const durationOf = (subscription: TriggerSubscription, id: string, fallback: number) => {
   const parsed = Number(parameterValue(subscription, id));
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  const isValidDuration = Number.isFinite(parsed) && parsed >= 0;
+  return isValidDuration ? parsed : fallback;
 };
 
 const timestampMillis = (timestamp: string) => Math.floor(Number(timestamp) * 1_000);
 
-const catchUpSince = (subscription: TriggerSubscription, now: number) => {
-  const activeSince = subscription.catchUp?.since ?? now;
+const withCatchUpWindow = (subscription: TriggerSubscription, startedAtMillis: number) => {
+  const activeSince = subscription.catchUp?.since ?? startedAtMillis;
   const window = durationOf(subscription, "catch-up-at-most", defaultCatchUpMillis);
-  return Math.max(activeSince, now - window);
+  return {
+    ...subscription,
+    catchUp: { since: Math.max(activeSince, startedAtMillis - window) },
+  } satisfies TriggerSubscription;
 };
+
+const catchUpSince = (subscription: TriggerSubscription, now: number) => subscription.catchUp?.since ?? now;
 
 const payloadHasWriteKey = (payload: unknown) => {
   if (typeof payload !== "object" || payload === null) return false;
-  return "write_key" in payload && typeof payload.write_key === "string" && payload.write_key.length > 0;
+  const hasWriteKey =
+    "write_key" in payload && typeof payload.write_key === "string" && payload.write_key.length > 0;
+  return hasWriteKey;
 };
 
 const isCogworkMessage = (message: SlackMessage) =>
@@ -376,7 +384,7 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
     ).pipe(Stream.runCollect);
 
   return {
-    searchMessages: (session, oldestMillis) =>
+    searchMessages: Effect.fn("SlackClient.searchMessages")((session, oldestMillis) =>
       Stream.paginate(1, (page) =>
         callSlack(client, session, "search.messages", {
           query: `<@${session.user}>`,
@@ -399,44 +407,48 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
         Stream.filter((message) => timestampMillis(message.ts) > oldestMillis),
         Stream.runCollect,
       ),
-    history: (session, channel, oldestMillis) =>
+    ),
+    history: Effect.fn("SlackClient.history")((session, channel, _oldestMillis) =>
       cursorPages(
         session,
         "conversations.history",
-        { channel, oldest: String(oldestMillis / 1_000), inclusive: "false", limit: "200" },
+        { channel, include_all_metadata: "true", limit: "200" },
         decodeSlack(HistoryResponse),
         (response) => [
           response.messages.map((message) => normalizeMessage(message, channel)),
           response.response_metadata?.next_cursor ?? "",
         ],
       ),
-    reactions: (session, oldestMillis) =>
+    ),
+    reactions: Effect.fn("SlackClient.reactions")((session, oldestMillis) =>
       cursorPages(
         session,
         "reactions.list",
         { user: session.user, full: "true", limit: "200" },
         decodeSlack(ReactionsResponse),
         (response) => [
-          response.items.flatMap((item) =>
-            item.type === "message" && item.channel && item.message
-              ? [normalizeMessage(item.message, item.channel)]
-              : [],
-          ),
+          response.items.flatMap((item) => {
+            const isMessageItem =
+              item.type === "message" && item.channel !== undefined && item.message !== undefined;
+            return isMessageItem ? [normalizeMessage(item.message, item.channel)] : [];
+          }),
           response.response_metadata?.next_cursor ?? "",
         ],
       ).pipe(Effect.map((messages) => messages.filter((item) => timestampMillis(item.ts) > oldestMillis))),
-    replies: (session, channel, threadTs) =>
+    ),
+    replies: Effect.fn("SlackClient.replies")((session, channel, threadTs) =>
       cursorPages(
         session,
         "conversations.replies",
-        { channel, ts: threadTs, limit: "200" },
+        { channel, ts: threadTs, include_all_metadata: "true", limit: "200" },
         decodeSlack(HistoryResponse),
         (response) => [
           response.messages.map((message) => normalizeMessage(message, channel)),
           response.response_metadata?.next_cursor ?? "",
         ],
       ),
-    channels: (session) =>
+    ),
+    channels: Effect.fn("SlackClient.channels")((session) =>
       Stream.paginate("", (cursor) =>
         callSlack(client, session, "conversations.list", {
           types: "public_channel,private_channel",
@@ -451,17 +463,20 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
           }),
         ),
       ).pipe(Stream.runCollect),
-    emojis: (session) =>
+    ),
+    emojis: Effect.fn("SlackClient.emojis")((session) =>
       callSlack(client, session, "emoji.list", {}).pipe(
         Effect.flatMap(decodeSlack(EmojiResponse)),
         Effect.map((response) => Object.keys(response.emoji).toSorted()),
       ),
-    channelName: (session, channel) =>
+    ),
+    channelName: Effect.fn("SlackClient.channelName")((session, channel) =>
       callSlack(client, session, "conversations.info", { channel }).pipe(
         Effect.flatMap(decodeSlack(ChannelResponse)),
         Effect.map((response) => response.channel.name),
       ),
-    userName: (session, user) =>
+    ),
+    userName: Effect.fn("SlackClient.userName")((session, user) =>
       callSlack(client, session, "users.info", { user }).pipe(
         Effect.flatMap(decodeSlack(UserResponse)),
         Effect.map(
@@ -472,11 +487,13 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
             response.user.name,
         ),
       ),
-    permalink: (session, channel, messageTs) =>
+    ),
+    permalink: Effect.fn("SlackClient.permalink")((session, channel, messageTs) =>
       callSlack(client, session, "chat.getPermalink", { channel, message_ts: messageTs }).pipe(
         Effect.flatMap(decodeSlack(PermalinkResponse)),
         Effect.map((response) => response.permalink),
       ),
+    ),
   };
 };
 
@@ -511,7 +528,12 @@ const resolvedWorkContext = Effect.fn("SlackSource.workContext")(function* (
 ) {
   const channelName = yield* client.channelName(session, selected.channel);
   const permalink = yield* client.permalink(session, selected.channel, selected.ts);
-  const users = [...new Set(thread.flatMap((message) => (message.user ? [message.user] : [])))];
+  const mentionedUsers = thread.flatMap((message) =>
+    [...message.text.matchAll(/<@([^>]+)>/g)].flatMap((match) => (match[1] ? [match[1]] : [])),
+  );
+  const users = [
+    ...new Set([...thread.flatMap((message) => (message.user ? [message.user] : [])), ...mentionedUsers]),
+  ];
   const names = new Map(
     yield* Effect.forEach(users, (user) =>
       Effect.map(client.userName(session, user), (name) => [user, name] as const),
@@ -519,19 +541,21 @@ const resolvedWorkContext = Effect.fn("SlackSource.workContext")(function* (
   );
   const authorOf = (message: SlackMessage) =>
     message.user ? (names.get(message.user) ?? message.user) : "Slack";
+  const resolvedText = (message: SlackMessage) =>
+    message.text.replaceAll(/<@([^>]+)>/g, (_mention, user: string) => `@${names.get(user) ?? user}`);
   return {
     body: [
       `${heading} in #${channelName}`,
       `Permalink: ${permalink}`,
       "",
-      `${authorOf(selected)}: ${selected.text}`,
+      `${authorOf(selected)}: ${resolvedText(selected)}`,
     ].join("\n"),
     comments: thread
       .filter((message) => message.ts !== selected.ts)
       .map((message) => ({
         author: authorOf(message),
         authorAssociation: null,
-        body: message.text,
+        body: resolvedText(message),
         createdAtMillis: timestampMillis(message.ts),
       })),
   };
@@ -552,13 +576,12 @@ const messageEvent = (
   session: SlackSession,
   subscription: TriggerSubscription,
   message: SlackMessage,
-  atMillis: number,
   workContext: NonNullable<TriggerEvent["workContext"]>,
 ): TriggerEvent => ({
   key: { _tag: "SlackMessage", team: session.team, channel: message.channel, ts: message.ts },
   revision: message.ts,
   cause: { _tag: "Person" },
-  atMillis,
+  atMillis: timestampMillis(message.ts),
   entry: subscription.entry,
   workspace: null,
   parameters: subscription.parameters,
@@ -588,7 +611,7 @@ const mentionEvents = Effect.fn("SlackSource.mentionEvents")(function* (
         hydrated.thread,
         "Slack message",
       );
-      return messageEvent(session, subscription, hydrated.selected, now, workContext);
+      return messageEvent(session, subscription, hydrated.selected, workContext);
     }),
   ).pipe(Effect.map((events) => events.filter((event) => event !== null)));
 });
@@ -603,7 +626,6 @@ const ambientEvent = (
   subscription: TriggerSubscription,
   root: SlackMessage,
   revision: string,
-  atMillis: number,
   workContext: NonNullable<TriggerEvent["workContext"]>,
 ): TriggerEvent => ({
   key: {
@@ -614,7 +636,7 @@ const ambientEvent = (
   },
   revision,
   cause: { _tag: "Person" },
-  atMillis,
+  atMillis: timestampMillis(revision),
   entry: subscription.entry,
   workspace: null,
   parameters: subscription.parameters,
@@ -637,9 +659,11 @@ const ambientEvents = Effect.fn("SlackSource.ambientEvents")(function* (
       const thread = yield* client.replies(session, channel, rootTimestampOf(root));
       const complete = thread.length > 0 ? thread : [root];
       const author = parameterValue(subscription, "author") ?? "anyone";
-      const relevant = complete.filter(
-        (message) => !isCogworkMessage(message) && (author !== "me" || message.user === session.user),
-      );
+      const relevant = complete.filter((message) => {
+        const matchesAuthor = author !== "me" || message.user === session.user;
+        const isRelevantMessage = !isCogworkMessage(message) && matchesAuthor;
+        return isRelevantMessage;
+      });
       const newest = relevant
         .toSorted((left, right) => timestampMillis(left.ts) - timestampMillis(right.ts))
         .at(-1);
@@ -655,7 +679,7 @@ const ambientEvents = Effect.fn("SlackSource.ambientEvents")(function* (
       yield* Ref.update(emissions, (current) =>
         new Map(current).set(key, { revision: newest.ts, atMillis: now }),
       );
-      return ambientEvent(session, subscription, root, newest.ts, now, workContext);
+      return ambientEvent(session, subscription, root, newest.ts, workContext);
     }),
   ).pipe(Effect.map((events) => events.filter((event) => event !== null)));
 });
@@ -672,10 +696,13 @@ const reactionEvents = Effect.fn("SlackSource.reactionEvents")(function* (
   const messages = yield* client.reactions(session, since);
   return yield* Effect.forEach(messages, (message) =>
     Effect.gen(function* () {
-      const matches = message.reactions.some(
-        (reaction) => reaction.name === emoji && reaction.users.includes(session.user),
-      );
-      if (!matches || timestampMillis(message.ts) <= since) return null;
+      const matches = message.reactions.some((reaction) => {
+        const isPersonsReaction = reaction.name === emoji && reaction.users.includes(session.user);
+        return isPersonsReaction;
+      });
+      const isOutsideCatchUp = timestampMillis(message.ts) <= since;
+      const shouldIgnore = !matches || isOutsideCatchUp;
+      if (shouldIgnore) return null;
       const hydrated = yield* hydratedThread(client, session, message);
       if (isCogworkMessage(hydrated.selected)) return null;
       const workContext = yield* resolvedWorkContext(
@@ -685,7 +712,7 @@ const reactionEvents = Effect.fn("SlackSource.reactionEvents")(function* (
         hydrated.thread,
         `Slack reaction :${emoji}:`,
       );
-      return messageEvent(session, subscription, hydrated.selected, now, workContext);
+      return messageEvent(session, subscription, hydrated.selected, workContext);
     }),
   ).pipe(Effect.map((events) => events.filter((event) => event !== null)));
 });
@@ -730,6 +757,7 @@ export const make = Effect.gen(function* () {
   const client = yield* SlackClient;
   const connections = yield* ConnectionStore;
   const session = slackSession(connections);
+  const emissions = yield* Ref.make<ReadonlyMap<string, AmbientEmission>>(new Map());
 
   const readEvents = Effect.fn("SlackSource.readEvents")(function* (
     subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -799,12 +827,15 @@ export const make = Effect.gen(function* () {
       subscriptions.length === 0
         ? Stream.empty
         : Stream.unwrap(
-            Ref.make<ReadonlyMap<string, AmbientEmission>>(new Map()).pipe(
-              Effect.map((emissions) =>
-                Stream.fromIterableEffect(readEvents(subscriptions, emissions)).pipe(
+            Clock.currentTimeMillis.pipe(
+              Effect.map((startedAtMillis) => {
+                const activeSubscriptions = subscriptions.map((subscription) =>
+                  withCatchUpWindow(subscription, startedAtMillis),
+                );
+                return Stream.fromIterableEffect(readEvents(activeSubscriptions, emissions)).pipe(
                   Stream.repeat(pollSchedule),
-                ),
-              ),
+                );
+              }),
             ),
           ),
   } satisfies TriggerSource;
