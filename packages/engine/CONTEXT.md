@@ -170,7 +170,7 @@ A concrete implementation of the source control provider port, with GitHub the o
 _Avoid_: Forge, code host, client (the HTTP client is a lower-level detail), plugin
 
 **Credential store**:
-The seam every Connection credential is resolved through. A Connection id selects a stored API key, an environment-variable reference, or a stored browser grant; the caller receives the token and discovered identity, never the persisted secret. Both Linear and GitHub resolve through it. A stored browser grant refreshes at read time when possible, and a rejected credential can be invalidated. The same store resolves **provider keys** (see below), so one instance holds external-system credentials and AI-provider keys in one file. A keychain-backed layer can arrive behind the same seam later.
+The seam every Connection credential is resolved through. A Connection id selects a stored API key, an environment-variable reference, or a stored browser grant; the caller receives the token and discovered identity, never the persisted secret. Linear, GitHub, Granola, and Slack resolve through it. A stored browser grant refreshes at read time when possible; Slack refresh also replaces the single-use refresh token. A rejected credential can be invalidated. The same store resolves **provider keys** (see below), so one instance holds external-system credentials and AI-provider keys in one file. A keychain-backed layer can arrive behind the same seam later.
 _Avoid_: Secret manager, token cache (the credential file, not the store, holds tokens), auth provider
 
 **Provider key**:
