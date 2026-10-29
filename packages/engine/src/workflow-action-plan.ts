@@ -514,8 +514,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
   );
   if (handedToPerson) {
     yield* coordination.park(admission.event.key, { _tag: "HandedToYou" });
-    return { _tag: "Parked" } as const;
   }
   yield* store.remove(state.plan.item, state.plan.workflow, state.plan.attempt);
-  return { _tag: "Complete", handOff: state.plan.handOff } as const;
+  return { _tag: "Complete", handOff: handedToPerson ? null : state.plan.handOff } as const;
 });

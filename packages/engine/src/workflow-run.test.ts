@@ -61,6 +61,7 @@ const trigger = decodeNode("schedule");
 const operation = decodeNode("summarize");
 const harnessName = Schema.decodeSync(HarnessName)("scripted");
 const notifyEntry = decodeEntry("cogwork.notify");
+const handToMeEntry = decodeEntry("cogwork.hand-to-me");
 const scheduleEntry = decodeEntry("schedule.daily");
 
 const document = Schema.decodeSync(WorkflowDocument)({
@@ -130,6 +131,21 @@ const workflowService: WorkflowsService = {
           requiresWorkspace: false,
           permissionProfile: "read-only",
           agentInputs: ["notification"],
+          emits: [],
+        },
+        {
+          key: handToMeEntry,
+          name: "Hand to me",
+          kind: "action",
+          system: null,
+          connection: null,
+          requires: [],
+          parameters: [],
+          itemKind: null,
+          actsOn: ["*"],
+          requiresWorkspace: false,
+          permissionProfile: "read-only",
+          agentInputs: ["hand_off"],
           emits: [],
         },
       ],
@@ -442,6 +458,58 @@ describe("WorkflowRun", () => {
         operation: publish,
         summary: "Published",
       });
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("settles a hand-to-me plan as succeeded and removes it", () =>
+    Effect.gen(function* () {
+      const [summarize] = document.operations;
+      assert.isDefined(summarize);
+      if (!summarize) return;
+      const handedDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        ...document,
+        operations: [
+          {
+            ...summarize,
+            transitions: [
+              {
+                when: [{ question: decodeNode("done"), choice: decodeNode("yes") }],
+                actions: [{ entry: handToMeEntry, parameters: [] }],
+                handOff: null,
+              },
+            ],
+          },
+        ],
+      });
+      const handedService: WorkflowsService = {
+        ...workflowService,
+        get: () =>
+          Effect.succeed({
+            ...workflowRecord,
+            workingCopy: handedDocument,
+            publishedCopy: handedDocument,
+          }),
+      };
+      const { runner, coordination } = yield* testProgram(
+        [
+          {
+            summary: "Needs your review",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { hand_off: "Please review" },
+          },
+        ],
+        {},
+        handedService,
+      );
+
+      yield* runner.execute(admission);
+
+      const [run] = yield* (yield* RunLedger).listRuns(10);
+      const pending = yield* (yield* WorkflowActionPlanStore).pending(keyOf(admission.event.key), workflow);
+      assert.strictEqual(run?.status, "succeeded");
+      assert.isNull(pending);
+      assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "HandedToYou");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
