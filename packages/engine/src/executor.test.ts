@@ -429,6 +429,7 @@ const followUpItem = {
   priorFailures: 0,
   workContext: workContext(id("#5")),
   followUp: {
+    previousMarker: null,
     checks: "failing" as const,
     humanCommentAtMillis: 0,
     botTriggerAtMillis: 0,
@@ -538,6 +539,10 @@ interface Call {
   readonly detail?: string;
   readonly summary?: string;
   readonly noProgress?: number;
+  readonly baseDivergence?: string;
+  readonly humanCommentAtMillis?: number;
+  readonly botTriggerAtMillis?: number;
+  readonly latestFailingCheckAtMillis?: number;
 }
 
 class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<Call>>>()(
@@ -614,6 +619,11 @@ function trackerRecorder(
             item: itemId,
             stage: outcome.operation,
             reason: outcome.reason,
+            baseDivergence: outcome.marker?.baseDivergence,
+            noProgress: outcome.marker?.noProgress,
+            humanCommentAtMillis: outcome.marker?.humanCommentAtMillis,
+            botTriggerAtMillis: outcome.marker?.botTriggerAtMillis,
+            latestFailingCheckAtMillis: outcome.marker?.latestFailingCheckAtMillis,
             terminal: outcome.terminal,
           });
           return attemptFailure ? recorded.pipe(Effect.andThen(Effect.fail(attemptFailure))) : recorded;
@@ -1253,6 +1263,77 @@ const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
 const noopProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
   SourceControlProvider,
   noopProvider,
+).pipe(Layer.provideMerge(PostedComments.layer));
+
+const conflictingProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
+  SourceControlProvider,
+  {
+    ...noopProvider,
+    observe: () =>
+      Effect.succeed(
+        new Map([
+          [
+            id("#5"),
+            {
+              number: 5,
+              url: "https://example.test/pull/5",
+              review: "changes-requested" as const,
+              checks: "failing" as const,
+              latestHumanCommentAtMillis: null,
+              latestBotTriggerAtMillis: null,
+              latestFailingCheckAtMillis: 90,
+              observedAtMillis: 1,
+              fresh: false,
+              baseDivergence: "conflict" as const,
+              waitingSinceMillis: 0,
+              headRef: "5-follow-up",
+              followable: true,
+              draft: false,
+            },
+          ],
+        ]),
+      ),
+  },
+).pipe(Layer.provideMerge(PostedComments.layer));
+
+const untimestampedFailingProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
+  SourceControlProvider,
+  {
+    ...noopProvider,
+    observe: () =>
+      Effect.succeed(
+        new Map([
+          [
+            id("#5"),
+            {
+              number: 5,
+              url: "https://example.test/pull/5",
+              review: "changes-requested" as const,
+              checks: "failing" as const,
+              latestHumanCommentAtMillis: null,
+              latestBotTriggerAtMillis: null,
+              latestFailingCheckAtMillis: null,
+              observedAtMillis: 1,
+              fresh: false,
+              baseDivergence: "clean" as const,
+              waitingSinceMillis: 0,
+              headRef: "5-follow-up",
+              followable: true,
+              draft: false,
+            },
+          ],
+        ]),
+      ),
+  },
+).pipe(Layer.provideMerge(PostedComments.layer));
+
+const failedObservationProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
+  SourceControlProvider,
+  {
+    ...noopProvider,
+    observe: () =>
+      Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull request refresh failed" })),
+  },
 ).pipe(Layer.provideMerge(PostedComments.layer));
 
 const recordingProvider: Layer.Layer<SourceControlProvider | PostedComments> = Layer.effect(
@@ -4466,6 +4547,89 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
+  });
+
+  it.effect("does not advance the stall count when a follow-up fails", () => {
+    const item = { ...followUpItem, followUp: { ...followUpItem.followUp, noProgress: 2 } };
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, item);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.noProgress, 1);
+    }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
+  });
+
+  it.effect("does not consume follow-up wakes when a follow-up fails", () => {
+    const previousMarker = {
+      checks: "passing" as const,
+      humanCommentAtMillis: 3,
+      botTriggerAtMillis: 4,
+      noProgress: 0,
+      baseDivergence: "none" as const,
+    };
+    const item = {
+      ...followUpItem,
+      followUp: {
+        ...followUpItem.followUp,
+        previousMarker,
+        humanCommentAtMillis: 10,
+        botTriggerAtMillis: 20,
+      },
+    };
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, item);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.humanCommentAtMillis, 3);
+      assert.strictEqual(attempt?.botTriggerAtMillis, 4);
+    }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree)));
+  });
+
+  it.effect("snapshots pull request state before recording a failed follow-up", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, followUpItem);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.baseDivergence, "conflict");
+      assert.strictEqual(attempt?.latestFailingCheckAtMillis, 90);
+    }).pipe(
+      Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, conflictingProviderLayer)),
+    );
+  });
+
+  it.effect.each([
+    { name: "no pull request signal", provider: noopProviderLayer },
+    { name: "refresh error", provider: failedObservationProviderLayer },
+  ])("records a conflict when failure refresh has $name", ({ provider }) => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, followUpItem);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.baseDivergence, "conflict");
+    }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, provider)));
+  });
+
+  it.effect("omits an unavailable failing check watermark from the failure marker", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, followUpWorkspace, followUpItem);
+
+      const attempt = (yield* Ref.get(calls)).find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.latestFailingCheckAtMillis, undefined);
+    }).pipe(
+      Effect.provide(
+        provide([runner(stuckFollowUpEvents)], existingWorktree, untimestampedFailingProviderLayer),
+      ),
+    );
   });
 
   it.effect("names the prepared linked-branch checkout in a follow-up hand-off", () => {

@@ -488,6 +488,23 @@ describe("coordination outcomes", () => {
     }),
   );
 
+  it.effect("attemptFailed snapshots the pull request state for a follow-up failure", () =>
+    Effect.gen(function* () {
+      const { host } = yield* makeFakeHost([{ number: 131, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      const failedMarker = { ...marker, attemptAtMillis: 14 };
+      yield* tracker.attemptFailed(workspace, decodeId("#131"), {
+        ...codingOperation("follow-up"),
+        atMillis: 14,
+        reason: "CI is still red",
+        marker: failedMarker,
+      });
+
+      const item = yield* observed(tracker, "#131");
+      assert.deepStrictEqual(item?.followUp, failedMarker);
+    }),
+  );
+
   it.effect("attemptFailed bounds and scrubs the recorded reason", () =>
     Effect.gen(function* () {
       const { host } = yield* makeFakeHost([{ number: 130, labels: ["ready-for-agent"] }]);
@@ -515,6 +532,7 @@ describe("coordination outcomes", () => {
       });
       const item = yield* observed(tracker, "#14");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-human"]);
+      assert.strictEqual(item?.engineHandoffAtMillis, 0);
       const stored = yield* itemAt(14);
       const note = stored?.comments.find((comment) => !Coordination.hasLedgerMarker(codec, comment.body));
       assert.strictEqual(note?.body, "Handing this to a human.");
@@ -526,10 +544,26 @@ describe("coordination outcomes", () => {
       Effect.gen(function* () {
         const addFailure = new IssueTrackerError({ reason: "unavailable", message: "add rejected" });
         const removeFailure = new IssueTrackerError({ reason: "unavailable", message: "remove rejected" });
+        const markerFailure = new IssueTrackerError({ reason: "unavailable", message: "marker rejected" });
         const noteFailure = new IssueTrackerError({ reason: "unavailable", message: "note rejected" });
         const add = yield* makeFakeHost([{ number: 151, labels: ["ready-for-agent"] }]);
         const remove = yield* makeFakeHost([{ number: 152, labels: ["ready-for-agent"] }]);
-        const note = yield* makeFakeHost([{ number: 153, labels: ["ready-for-agent"] }]);
+        const marker = yield* makeFakeHost([{ number: 153, labels: ["ready-for-agent"] }]);
+        const note = yield* makeFakeHost([
+          {
+            number: 154,
+            labels: ["ready-for-agent"],
+            comments: [
+              {
+                id: 1,
+                isBot: true,
+                createdAtMillis: 1,
+                body: coordinationBody([]),
+              },
+            ],
+          },
+        ]);
+        const markerComments = marker.host.comments;
         const noteComments = note.host.comments;
         const cases = [
           {
@@ -551,6 +585,13 @@ describe("coordination outcomes", () => {
           {
             id: "#153",
             tracker: makeCoordinationTracker({
+              ...marker.host,
+              comments: (ref) => ({ ...markerComments(ref), create: () => Effect.fail(markerFailure) }),
+            }),
+          },
+          {
+            id: "#154",
+            tracker: makeCoordinationTracker({
               ...note.host,
               comments: (ref) => ({ ...noteComments(ref), create: () => Effect.fail(noteFailure) }),
             }),
@@ -564,7 +605,7 @@ describe("coordination outcomes", () => {
         );
         assert.deepStrictEqual(
           errors.map((error) => error.reason),
-          ["unavailable", "unavailable", "unavailable"],
+          ["unavailable", "unavailable", "unavailable", "unavailable"],
         );
 
         const logs = yield* LogProbe;
@@ -577,7 +618,8 @@ describe("coordination outcomes", () => {
         assert.deepStrictEqual(failures, [
           ["hand-off write failed", { item: "#151", step: "add role", message: "add rejected" }],
           ["hand-off write failed", { item: "#152", step: "remove role", message: "remove rejected" }],
-          ["hand-off write failed", { item: "#153", step: "note", message: "note rejected" }],
+          ["hand-off write failed", { item: "#153", step: "marker", message: "marker rejected" }],
+          ["hand-off write failed", { item: "#154", step: "note", message: "note rejected" }],
         ]);
       }),
     );
@@ -606,6 +648,7 @@ describe("coordination outcomes", () => {
         record: { by: "local-owner", atMillis: 5 },
         changes,
         note: "Try the repaired worktree setup.",
+        trigger: { kind: "human-feedback", atMillis: 4 },
       });
 
       const item = yield* observed(tracker, "#17");
@@ -616,6 +659,7 @@ describe("coordination outcomes", () => {
         atMillis: 5,
         note: "Try the repaired worktree setup.",
       });
+      assert.deepStrictEqual(item?.followUpTrigger, { kind: "human-feedback", atMillis: 4 });
       assert.deepStrictEqual(yield* roleLog, [{ number: 17, changes }]);
 
       const stored = yield* itemAt(17);
@@ -639,7 +683,44 @@ describe("coordination outcomes", () => {
       );
 
       assert.strictEqual(error._tag, "IssueTrackerError");
-      assert.strictEqual((yield* itemAt(18))?.comments.length, 0);
+      const item = yield* itemAt(18);
+      assert.strictEqual(item?.comments.length, 0);
+      assert.deepStrictEqual(item?.labels, ["ready-for-human"]);
+    }),
+  );
+
+  it.effect("handBack leaves no barrier when the role transition fails", () =>
+    Effect.gen(function* () {
+      const failed = attemptRecord("#19", "follow-up", "failed", 2);
+      const { host } = yield* makeFakeHost(
+        [
+          {
+            number: 19,
+            labels: ["ready-for-human"],
+            comments: [
+              {
+                id: 1,
+                isBot: true,
+                createdAtMillis: 1,
+                body: coordinationBody([Coordination.serializeAttempt(codec, failed)]),
+              },
+            ],
+          },
+        ],
+        "ready-for-human",
+      );
+      const tracker = makeCoordinationTracker(host);
+      const error = yield* Effect.flip(
+        tracker.handBack(workspace, decodeId("#19"), {
+          record: { by: "cogwork", atMillis: 5 },
+          changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
+        }),
+      );
+
+      assert.strictEqual(error._tag, "IssueTrackerError");
+      const item = yield* observed(tracker, "#19");
+      assert.isNull(item?.handback ?? null);
+      assert.deepStrictEqual(item?.roles, ["ready-for-human"]);
     }),
   );
 
@@ -661,6 +742,7 @@ describe("coordination outcomes", () => {
       );
       const item = yield* observed(tracker, "#15");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-human"]);
+      assert.strictEqual(item?.engineHandoffAtMillis, 16);
       assert.deepStrictEqual(item?.attempts, [attemptRecord("#15", "follow-up", "abandoned", 16)]);
     }),
   );
@@ -685,14 +767,29 @@ describe("coordination outcomes", () => {
 
   it.effect("reclassify applies the role changes and posts the note", () =>
     Effect.gen(function* () {
-      const { host, itemAt, roleLog } = yield* makeFakeHost([{ number: 16, labels: ["needs-triage"] }]);
+      const { host, itemAt, roleLog } = yield* makeFakeHost([
+        {
+          number: 16,
+          labels: ["needs-triage"],
+          comments: [
+            {
+              id: 1,
+              isBot: true,
+              createdAtMillis: 1,
+              body: coordinationBody([Coordination.serializeEngineHandoff(codec, 1)]),
+            },
+          ],
+        },
+      ]);
       const tracker = makeCoordinationTracker(host);
       const changes: RoleChanges = { remove: ["needs-triage"], add: ["wontfix"] };
       yield* tracker.reclassify(workspace, decodeId("#16"), { changes, note: "Not planned." });
       const item = yield* observed(tracker, "#16");
       assert.deepStrictEqual([...(item?.roles ?? [])], ["wontfix"]);
       assert.deepStrictEqual(yield* roleLog, [{ number: 16, changes }]);
+      assert.strictEqual(item?.engineHandoffAtMillis, null);
       const stored = yield* itemAt(16);
+      assert.include(ledgerBody(stored?.comments ?? []), "engine-handoff at=none");
       const note = stored?.comments.find((comment) => !Coordination.hasLedgerMarker(codec, comment.body));
       assert.strictEqual(note?.body, "Not planned.");
     }),
