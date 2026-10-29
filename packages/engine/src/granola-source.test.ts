@@ -4,6 +4,7 @@ import {
   connectionIdOf,
   type ParkRecord,
   WorkflowCatalogKey,
+  type WorkItemRef,
 } from "@cogwork/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -59,6 +60,18 @@ const note: GranolaNoteSnapshot = {
   transcript: "Taylor: Ship the smaller change.\nAri: Agreed.",
 };
 
+const coordinationView = (revision: string | null, parks: ReadonlyArray<ParkRecord>) =>
+  fold(
+    {
+      claim: null,
+      attempts: [],
+      handbacks: [],
+      parks,
+      revision: revision === null ? null : { observed: revision, processed: null },
+    },
+    "cogwork",
+  );
+
 const coordinationService = (
   revisionOf: (noteId: string) => string | null = () => null,
   planRejected: (noteId: string) => boolean = () => false,
@@ -81,23 +94,16 @@ const coordinationService = (
           ]
         : []
     ) satisfies ReadonlyArray<ParkRecord>;
-    return Effect.succeed(
-      fold(
-        {
-          claim: null,
-          attempts: [],
-          handbacks: [],
-          parks,
-          revision: revision === null ? null : { observed: revision, processed: null },
-        },
-        "cogwork",
-      ),
-    );
+    return Effect.succeed(coordinationView(revision, parks));
   },
   claim: () => Effect.die("unused"),
   release: () => Effect.die("unused"),
   recordAttempt: () => Effect.die("unused"),
-  park: () => Effect.die("unused"),
+  park: (ref, reason) => {
+    const noteId = ref._tag === "GranolaNote" ? ref.noteId : null;
+    const revision = noteId === null ? null : revisionOf(noteId);
+    return Effect.succeed(coordinationView(revision, [{ reason, atMillis: 1 }]));
+  },
   handBack: () => Effect.die("unused"),
   observe: () => Effect.die("unused"),
   markProcessed: () => Effect.die("unused"),
@@ -293,6 +299,55 @@ it.effect("classifies the first complete revision as generated after a plan reje
       .pipe(Stream.take(1), Stream.runCollect);
 
     assert.strictEqual(events[0]?.entry, generated);
+  }),
+);
+
+it.effect("keeps a ready revision generated before rejection execution", () =>
+  Effect.gen(function* () {
+    const calls = yield* Ref.make(0);
+    const revision = yield* Ref.make<string | null>(null);
+    const rejected = yield* Ref.make(false);
+    const base = coordinationService();
+    const read = (ref: WorkItemRef) =>
+      Effect.all([Ref.get(revision), Ref.get(rejected)]).pipe(
+        Effect.flatMap(([currentRevision, isRejected]) =>
+          coordinationService(
+            () => currentRevision,
+            () => isRejected,
+          ).read(ref),
+        ),
+      );
+    const coordination: CoordinationService = {
+      ...base,
+      read,
+      park: (ref) => Ref.set(rejected, true).pipe(Effect.andThen(read(ref))),
+    };
+    const progressive: GranolaSourceAdapter = {
+      read: () =>
+        Ref.modify(calls, (count) => [count, count + 1]).pipe(
+          Effect.map((count) => [
+            count === 0
+              ? { ...note, transcript: null }
+              : {
+                  ...note,
+                  updatedAt: "2026-10-29T16:00:00.000Z",
+                  updatedAtMillis: Date.parse("2026-10-29T16:00:00.000Z"),
+                },
+          ]),
+        ),
+    };
+    const source = makeGranolaSource(
+      connectionStore(credential("stored-oauth")),
+      { rest: progressive, mcp: progressive },
+      coordination,
+    );
+    yield* source.observe([subscription]).pipe(Stream.take(1), Stream.runDrain);
+    yield* Ref.set(revision, note.updatedAt);
+    const events = yield* source
+      .observe([subscription, { ...subscription, entry: edited }])
+      .pipe(Stream.take(1), Stream.runCollect);
+
+    assert.deepStrictEqual([yield* Ref.get(rejected), events[0]?.entry], [true, generated]);
   }),
 );
 

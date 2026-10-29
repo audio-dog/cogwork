@@ -486,6 +486,7 @@ const payloadOf = (note: GranolaNoteSnapshot) => {
 
 const eventOf = Effect.fn("GranolaSource.eventOf")(function* (
   coordination: CoordinationService,
+  subscriptions: ReadonlyArray<TriggerSubscription>,
   note: GranolaNoteSnapshot,
 ) {
   const key = { _tag: "GranolaNote", connection: note.connection, noteId: note.noteId } as const;
@@ -501,7 +502,7 @@ const eventOf = Effect.fn("GranolaSource.eventOf")(function* (
     ParkReason.guards.PlanRejected(prior.park.reason) &&
     prior.park.reason.entry === generatedKey;
   const isGeneratedRevision = prior.revision === null || rejectedGeneratedRevision;
-  return {
+  const event = {
     key,
     revision: note.updatedAt,
     cause: { _tag: "Unknown" },
@@ -510,6 +511,20 @@ const eventOf = Effect.fn("GranolaSource.eventOf")(function* (
     workspace: null,
     payload: payloadOf(note),
   } satisfies TriggerEvent;
+  const matchedSubscription = subscriptions.some((subscription) => {
+    const afterCatchUp = subscription.catchUp === null || event.atMillis >= subscription.catchUp.since;
+    return subscription.entry === event.entry && afterCatchUp;
+  });
+  if (event.payload?._tag !== "GranolaNoteRejected") return event;
+  if (!matchedSubscription) return event;
+  yield* coordination
+    .park(key, { _tag: "PlanRejected", reason: event.payload.reason, entry: event.entry })
+    .pipe(
+      Effect.mapError((error) =>
+        adapterFailure("unavailable", `Could not record the Granola plan rejection: ${error.message}`),
+      ),
+    );
+  return event;
 });
 
 const updatedAfter = (subscriptions: ReadonlyArray<TriggerSubscription>, now: number) =>
@@ -519,6 +534,7 @@ function pollGranola(
   connections: ConnectionStoreService,
   adapters: GranolaSourceAdapters,
   coordination: CoordinationService,
+  subscriptions: ReadonlyArray<TriggerSubscription>,
   updatedAfterMillis: number,
 ) {
   return Effect.gen(function* () {
@@ -533,7 +549,7 @@ function pollGranola(
       .pipe(Effect.mapError((error) => connectionFailure(error.message)));
     const adapter = credential.source === "stored-oauth" ? adapters.mcp : adapters.rest;
     const notes = yield* adapter.read(credential, connection.id, updatedAfterMillis);
-    return yield* Effect.forEach(notes, (note) => eventOf(coordination, note));
+    return yield* Effect.forEach(notes, (note) => eventOf(coordination, subscriptions, note));
   });
 }
 
@@ -563,7 +579,7 @@ export const makeGranolaSource = (
       if (subscriptions.length === 0) return Stream.empty;
       const next = (state: { readonly watermark: number; readonly first: boolean }) =>
         (state.first ? Effect.void : Effect.sleep("60 seconds")).pipe(
-          Effect.andThen(pollGranola(connections, adapters, coordination, state.watermark)),
+          Effect.andThen(pollGranola(connections, adapters, coordination, subscriptions, state.watermark)),
           Effect.map((events) => {
             const watermark = events.reduce(
               (latest, event) => Math.max(latest, event.atMillis),
