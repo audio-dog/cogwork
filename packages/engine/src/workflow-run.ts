@@ -116,7 +116,7 @@ export const make = Effect.gen(function* () {
 
   const rejectPlan = (admission: TriggerAdmission, reason: string) =>
     coordination
-      .park(admission.event.key, { _tag: "PlanRejected", reason })
+      .park(admission.event.key, { _tag: "PlanRejected", reason, entry: admission.event.entry })
       .pipe(Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)));
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {

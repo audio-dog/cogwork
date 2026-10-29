@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionId } from "./connection";
 import { RunId } from "./run";
+import { WorkflowCatalogKey } from "./workflow";
 
 export const WorkItemKey = TrimmedNonEmptyString.pipe(Schema.brand("WorkItemKey"));
 export type WorkItemKey = typeof WorkItemKey.Type;
@@ -108,7 +109,7 @@ export const ParkReason = Schema.TaggedUnion({
   Exhausted: { reason: TrimmedNonEmptyString },
   HopCap: {},
   MissingOperation: {},
-  PlanRejected: { reason: TrimmedNonEmptyString },
+  PlanRejected: { reason: TrimmedNonEmptyString, entry: Schema.optional(WorkflowCatalogKey) },
   WriteFailed: { step: TrimmedNonEmptyString, error: TrimmedNonEmptyString },
   NoWorkspaceRecognized: { plan: TrimmedNonEmptyString },
   AwaitingApproval: {

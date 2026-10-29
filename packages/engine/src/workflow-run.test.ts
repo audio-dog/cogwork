@@ -375,6 +375,7 @@ describe("WorkflowRun", () => {
       assert.deepStrictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason, {
         _tag: "PlanRejected",
         reason: "Granola note has no transcript",
+        entry: granolaAdmission.event.entry,
       });
       assert.strictEqual(yield* Ref.get(coordination.processed), rejected.event.revision);
     }).pipe(Effect.provide(requirements), Effect.scoped),
