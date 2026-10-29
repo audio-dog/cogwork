@@ -1,0 +1,32 @@
+packages/engine/src/control-store-schema.ts
+  s_79a6dc92473e13::t_0fb49919b4075f 296-297
+packages/engine/src/coordination-control-store.ts
+  s_79a6dc92473e13::t_0fb49919b4075f 59-64,212,223-237,347-354
+packages/engine/src/coordination-contract.ts
+  s_79a6dc92473e13::t_da27e79225bf6c 11,32
+  s_ce0862dbe11574::t_d392ea25ec8181 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3fc937ef48d19f9173935904bb0ce3c7d9906779",
+  "prompts": {},
+  "sessions": {
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ce0862dbe11574": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188f7-19ef-7f33-80ad-de2c6dc7ec3b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
