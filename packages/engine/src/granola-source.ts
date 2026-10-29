@@ -307,7 +307,7 @@ const mcpPage = Effect.fn("GranolaSource.decodeMcpPage")(function* (
   if (response.result.isError === true)
     return yield* adapterFailure("unavailable", "Granola MCP rejected list_meetings");
   const text = response.result.content.map(({ text }) => text).join("\n");
-  const meetings = [...text.matchAll(/<meeting\s+([^>]*?)>([\s\S]*?)<\/meeting>/gi)];
+  const meetings = [...text.matchAll(/<meeting\s+((?:"[^"]*"|[^">])*)>([\s\S]*?)<\/meeting>/gi)];
   if (meetings.length > noteLimit)
     return yield* adapterFailure("decode", "Granola returned too many meetings");
   const now = yield* Clock.currentTimeMillis;

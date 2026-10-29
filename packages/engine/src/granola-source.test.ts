@@ -454,7 +454,7 @@ it.effect("reads every MCP page and decodes its XML-like text", () =>
       [
         response(
           "first",
-          `<meetings_data>${meeting("meeting-1", "First", "2026-10-29T15:00:00.000Z")}</meetings_data><pagination has_more="true" next_cursor="page-2" />`,
+          `<meetings_data>${meeting("meeting-1", "Q3 Goals > Planning", "2026-10-29T15:00:00.000Z")}</meetings_data><pagination has_more="true" next_cursor="page-2" />`,
         ),
         response(
           "page-2",
@@ -472,8 +472,11 @@ it.effect("reads every MCP page and decodes its XML-like text", () =>
     const requests = yield* Ref.get(bodies);
 
     assert.deepStrictEqual(
-      notes.map(({ noteId }) => noteId),
-      ["meeting-1", "meeting-2"],
+      notes.map(({ noteId, title }) => [noteId, title]),
+      [
+        ["meeting-1", "Q3 Goals > Planning"],
+        ["meeting-2", "Second"],
+      ],
     );
     assert.include(requests[0] ?? "", '"updated_after":"2026-10-28T00:00:00.000Z"');
     assert.notInclude(requests[0] ?? "", "time_range");
