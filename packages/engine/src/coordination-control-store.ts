@@ -56,7 +56,12 @@ const StoredHandback = Schema.Struct({
   note: Schema.NullOr(Schema.String),
 });
 
-const StoredPark = Schema.Struct({ reason: Schema.String, atMillis: Schema.Finite });
+const StoredPark = Schema.Struct({
+  reason: Schema.String,
+  workflow: Schema.NullOr(Schema.String),
+  operation: Schema.NullOr(Schema.String),
+  atMillis: Schema.Finite,
+});
 
 const StoredSourceRevision = Schema.Struct({
   observed: Schema.String,
@@ -204,7 +209,7 @@ const makeControlStoreAuthority = () =>
 
     const readParks = Effect.fn("ControlStoreCoordination.readParks")(function* (workItem: string) {
       const rows = yield* sql<Record<string, unknown>>`
-      SELECT reason, at_millis AS atMillis
+      SELECT reason, workflow, operation, at_millis AS atMillis
       FROM coordination_parks
       WHERE work_item = ${workItem}
       ORDER BY sequence
@@ -215,9 +220,21 @@ const makeControlStoreAuthority = () =>
             row === null
               ? Effect.succeed(null)
               : decoded("Park reason", Schema.decodeResult(ParkReasonJson)(row.reason)).pipe(
-                  Effect.map((reason) =>
-                    reason === null ? null : ParkRecord.make({ reason, atMillis: row.atMillis }),
-                  ),
+                  Effect.flatMap((reason) => {
+                    if (reason === null) return Effect.succeed(null);
+                    const hasNoOperation = row.workflow === null && row.operation === null;
+                    const operation = hasNoOperation
+                      ? {}
+                      : { operation: { workflow: row.workflow, operation: row.operation } };
+                    return decoded(
+                      "Park record",
+                      Schema.decodeUnknownResult(ParkRecord)({
+                        reason,
+                        ...operation,
+                        atMillis: row.atMillis,
+                      }),
+                    );
+                  }),
                 ),
           ),
         ),
@@ -327,8 +344,14 @@ const makeControlStoreAuthority = () =>
       yield* ensureItem(workItem);
       const reason = yield* Schema.encodeEffect(ParkReasonJson)(record.reason);
       yield* sql`
-      INSERT INTO coordination_parks (work_item, reason, at_millis)
-      VALUES (${workItem}, ${reason}, ${record.atMillis})
+      INSERT INTO coordination_parks (work_item, reason, workflow, operation, at_millis)
+      VALUES (
+        ${workItem},
+        ${reason},
+        ${record.operation?.workflow ?? null},
+        ${record.operation?.operation ?? null},
+        ${record.atMillis}
+      )
     `;
     });
 

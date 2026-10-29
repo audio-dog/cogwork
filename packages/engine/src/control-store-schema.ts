@@ -293,6 +293,8 @@ export const coordinationParks = sqliteTable(
       .notNull()
       .references(() => coordinationItems.workItem),
     reason: text("reason").notNull(),
+    workflow: text("workflow"),
+    operation: text("operation"),
     atMillis: integer("at_millis").notNull(),
   },
   (table) => [
