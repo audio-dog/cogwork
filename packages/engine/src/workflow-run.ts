@@ -167,6 +167,7 @@ export const make = Effect.gen(function* () {
         ? pendingPlan.operation
         : admission.subscription.operation;
     if (stalePlan) {
+      yield* settleAttempt(pendingPlan.attempt, "interrupted");
       yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
     }
     if (pendingPlan !== null && !stalePlan) {

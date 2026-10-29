@@ -14,6 +14,8 @@ import {
   WorkflowId,
   WorkflowNodeId,
   type WorkflowRecord,
+  WorkItemId,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -56,6 +58,8 @@ const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const decodeRun = Schema.decodeSync(RunId);
+const decodeWorkItem = Schema.decodeSync(WorkItemId);
+const decodeWorkspace = Schema.decodeSync(WorkspaceId);
 const workflow = decodeWorkflow("daily-summary");
 const trigger = decodeNode("schedule");
 const operation = decodeNode("summarize");
@@ -577,6 +581,55 @@ describe("WorkflowRun", () => {
       assert.deepInclude((yield* notifications.list)[0], {
         operation: publish,
         summary: "Published",
+      });
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("interrupts the Run for a plan withdrawn by a new source revision", () =>
+    Effect.gen(function* () {
+      const staleAttempt = decodeRun("stale-plan");
+      const stalePlan = WorkflowActionPlan.make({
+        item: keyOf(admission.event.key),
+        workflow,
+        attempt: staleAttempt,
+        operation,
+        revision: "999",
+        createdAtMillis: 1,
+        digest: "stale-plan",
+        summary: "Stale plan",
+        answers: {},
+        handOff: null,
+        steps: [],
+      });
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun({
+        id: staleAttempt,
+        workspace: decodeWorkspace(workflow),
+        workItem: decodeWorkItem(keyOf(admission.event.key)),
+        stage: "implement",
+        harness: harnessName,
+        branch: null,
+        session: null,
+        usage: null,
+        status: "running",
+        startedAtMillis: 1,
+        endedAtMillis: null,
+      });
+      yield* (yield* WorkflowActionPlanStore).create(stalePlan);
+      const { runner } = yield* testProgram([
+        {
+          summary: "Current plan",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "Current plan" },
+        },
+      ]);
+
+      yield* runner.execute(admission);
+
+      assert.deepInclude(yield* ledger.getRun(staleAttempt), {
+        status: "interrupted",
+        endedAtMillis: 0,
       });
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
