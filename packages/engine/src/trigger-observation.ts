@@ -155,12 +155,10 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
         .withWrite(
           sql.withTransaction(
             sql`
-              INSERT INTO trigger_admissions (work_item, revision, workflow, trigger, payload)
+              INSERT INTO trigger_admissions (work_item, revision, payload)
               VALUES (
                 ${keyOf(admission.event.key)},
                 ${admission.event.revision},
-                ${admission.subscription.workflow},
-                ${admission.subscription.trigger},
                 ${encodeAdmission(admission)}
               )
               ON CONFLICT (work_item, revision, workflow, trigger) DO UPDATE SET payload = excluded.payload
