@@ -1,0 +1,25 @@
+packages/engine/src/coordination-contract.ts
+  s_79a6dc92473e13::t_6cee71105dbda4 45-48,50-51
+packages/engine/src/coordination-tracker.ts
+  s_79a6dc92473e13::t_a70f957f342aa1 191,250
+packages/engine/src/coordination.ts
+  s_79a6dc92473e13::t_a70f957f342aa1 75,132-137,139-143,152-165,210-211,233
+packages/engine/src/coordination-control-store.ts
+  s_79a6dc92473e13::t_a70f957f342aa1 269-270,273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f3e2209679229432d0537288a6cca2f1fde4b38b",
+  "prompts": {},
+  "sessions": {
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
