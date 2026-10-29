@@ -33,7 +33,7 @@ import { defaultRunBudget } from "./provider-runner";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
-import type { TriggerAdmission } from "./trigger-observation";
+import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { Workflows } from "./workflow";
 import { WorkflowNotifications } from "./workflow-notification";
 
@@ -90,6 +90,7 @@ export const make = Effect.gen(function* () {
   const recorder = yield* RunRecorder;
   const contextAssembler = yield* ContextAssembler;
   const notifications = yield* WorkflowNotifications;
+  const observations = yield* TriggerObservationStore;
   const executionContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
     Effect.map(
       Context.pick(
@@ -109,15 +110,24 @@ export const make = Effect.gen(function* () {
       ledger.updateRun(record.id, { status, usage: null, endedAtMillis }),
     );
 
+  const complete = (admission: TriggerAdmission) =>
+    observations
+      .complete(admission)
+      .pipe(
+        Effect.flatMap((isLast) =>
+          isLast ? coordination.markProcessed(admission.event.key, admission.event.revision) : Effect.void,
+        ),
+      );
+
   const decline = (admission: TriggerAdmission) =>
     coordination
       .park(admission.event.key, { _tag: "MissingOperation" })
-      .pipe(Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)));
+      .pipe(Effect.andThen(complete(admission)));
 
   const rejectPlan = (admission: TriggerAdmission, reason: string) =>
     coordination
       .park(admission.event.key, { _tag: "PlanRejected", reason, entry: admission.event.entry })
-      .pipe(Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)));
+      .pipe(Effect.andThen(complete(admission)));
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
     const record = yield* workflows.get({ id: admission.subscription.workflow });
@@ -125,7 +135,7 @@ export const make = Effect.gen(function* () {
     const trigger = document?.triggers.find(({ id }) => id === admission.subscription.trigger);
     const operation = document?.operations.find(({ id }) => id === admission.subscription.operation);
     if (!record.enabled || document === null || trigger === undefined || operation === undefined) {
-      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+      yield* complete(admission);
       return;
     }
     if (admission.event.payload?._tag === "GranolaNoteRejected") {
@@ -258,7 +268,7 @@ export const make = Effect.gen(function* () {
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason });
-        yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+        yield* complete(admission);
       }
       return;
     }
@@ -280,7 +290,7 @@ export const make = Effect.gen(function* () {
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues });
-        yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+        yield* complete(admission);
       }
       return;
     }
@@ -298,7 +308,7 @@ export const make = Effect.gen(function* () {
         reason: decoded.value.summary,
       });
       yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary });
-      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+      yield* complete(admission);
       yield* settle(run, "failed");
       return;
     }
@@ -321,7 +331,7 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+    yield* complete(admission);
     yield* settle(run, "succeeded");
   });
 

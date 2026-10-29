@@ -510,7 +510,15 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const workflowRun = workflowRunLayer.pipe(
     Layer.provide(
-      Layer.mergeAll(workflows, coordination, harnessRuntime, runLedger, runRecorder, workflowNotifications),
+      Layer.mergeAll(
+        workflows,
+        coordination,
+        harnessRuntime,
+        runLedger,
+        runRecorder,
+        workflowNotifications,
+        triggerObservationStore,
+      ),
     ),
   );
   const base = Layer.mergeAll(

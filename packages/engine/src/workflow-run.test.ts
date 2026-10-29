@@ -38,7 +38,11 @@ import { defaultRunBudget } from "./provider-runner";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import type { TriggerAdmission } from "./trigger-observation";
+import {
+  makeMemoryTriggerObservationStore,
+  type TriggerAdmission,
+  TriggerObservationStore,
+} from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
@@ -49,6 +53,7 @@ const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const decodeRun = Schema.decodeSync(RunId);
 const workflow = decodeWorkflow("daily-summary");
 const trigger = decodeNode("schedule");
+const siblingTrigger = decodeNode("schedule-sibling");
 const operation = decodeNode("summarize");
 const harnessName = Schema.decodeSync(HarnessName)("scripted");
 const notifyEntry = decodeEntry("cogwork.notify");
@@ -57,7 +62,12 @@ const scheduleEntry = decodeEntry("schedule.daily");
 const document = Schema.decodeSync(WorkflowDocument)({
   name: "Daily summary",
   workspaces: { _tag: "Listed", workspaces: [] },
-  triggers: [{ id: trigger, entry: scheduleEntry, parameters: [], start: operation }],
+  triggers: [trigger, siblingTrigger].map((id) => ({
+    id,
+    entry: scheduleEntry,
+    parameters: [],
+    start: operation,
+  })),
   operations: [
     {
       id: operation,
@@ -188,6 +198,11 @@ const granolaAdmission: TriggerAdmission = {
   },
 };
 
+const siblingGranolaAdmission: TriggerAdmission = {
+  ...granolaAdmission,
+  subscription: { ...granolaAdmission.subscription, trigger: siblingTrigger },
+};
+
 const makeCoordination = () =>
   Effect.gen(function* () {
     const attempts = yield* Ref.make<ReadonlyArray<AttemptRecord>>([]);
@@ -277,6 +292,7 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
     const output = yield* Ref.make(objects);
     const coordination = yield* makeCoordination();
     const notifications = yield* makeNotifications;
+    const observations = yield* makeMemoryTriggerObservationStore;
     const harness = makeHarness([
       {
         name: harnessName,
@@ -315,9 +331,10 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
       Effect.provideService(Workflows, workflowService),
       Effect.provideService(Coordination, coordination.service),
       Effect.provideService(Harness, harness),
+      Effect.provideService(TriggerObservationStore, observations),
       Effect.provideService(WorkflowNotifications, notifications),
     );
-    return { runner, coordination, notifications };
+    return { runner, coordination, notifications, observations };
   });
 
 describe("WorkflowRun", () => {
@@ -359,7 +376,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("records a missing transcript as a Plan rejection without starting a Run", () =>
+  it.effect("waits for every sibling rejection before processing the source revision", () =>
     Effect.gen(function* () {
       const rejected: TriggerAdmission = {
         ...granolaAdmission,
@@ -368,7 +385,10 @@ describe("WorkflowRun", () => {
           payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
         },
       };
-      const { runner, coordination } = yield* testProgram([]);
+      const sibling = { ...rejected, subscription: siblingGranolaAdmission.subscription };
+      const { runner, coordination, observations } = yield* testProgram([]);
+      yield* observations.put(rejected);
+      yield* observations.put(sibling);
       yield* runner.execute(rejected);
 
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
@@ -377,6 +397,10 @@ describe("WorkflowRun", () => {
         reason: "Granola note has no transcript",
         entry: granolaAdmission.event.entry,
       });
+      assert.isNull(yield* Ref.get(coordination.processed));
+
+      yield* runner.execute(sibling);
+
       assert.strictEqual(yield* Ref.get(coordination.processed), rejected.event.revision);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
