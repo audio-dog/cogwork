@@ -12,6 +12,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -422,6 +423,41 @@ it.effect("reads every MCP page and decodes its XML-like text", () =>
     assert.include(requests[0] ?? "", '"updated_after":"2026-10-28T00:00:00.000Z"');
     assert.notInclude(requests[0] ?? "", "time_range");
     assert.include(requests[1] ?? "", '"cursor":"page-2"');
+  }),
+);
+
+it.effect("rejects pages that promise another page without a cursor", () =>
+  Effect.gen(function* () {
+    yield* TestClock.setTime(Date.parse("2026-10-30T00:00:00.000Z"));
+    const urls = yield* Ref.make<ReadonlyArray<string>>([]);
+    const bodies = yield* Ref.make<ReadonlyArray<string>>([]);
+    const adapters = yield* httpAdapters(
+      [
+        { data: [], has_more: true },
+        {
+          jsonrpc: "2.0",
+          id: "first",
+          result: {
+            content: [{ type: "text", text: '<meetings_data /><pagination has_more="true" />' }],
+            isError: false,
+          },
+        },
+      ],
+      urls,
+      bodies,
+    );
+    const rest = yield* Effect.result(
+      adapters.rest.read(credential("stored-key"), connectionId, subscription.catchUp?.since ?? 0),
+    );
+    const mcp = yield* Effect.result(
+      adapters.mcp.read(credential("stored-oauth"), connectionId, subscription.catchUp?.since ?? 0),
+    );
+
+    assert.deepStrictEqual([rest._tag, mcp._tag], ["Failure", "Failure"]);
+    [rest, mcp].filter(Result.isFailure).forEach(({ failure }) => {
+      assert.strictEqual(failure.reason, "decode");
+      assert.include(failure.message, "pagination cursor");
+    });
   }),
 );
 

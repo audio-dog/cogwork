@@ -151,6 +151,24 @@ const adapterFailure = (
   retryAfterMillis: number | null = null,
 ) => new SourceFailure({ source: "granola", reason, retryAfterMillis, message });
 
+const requiredPaginationCursor = Effect.fn("GranolaSource.requiredPaginationCursor")(function* (
+  cursor: string | null | undefined,
+) {
+  const isMissing = cursor === null || cursor === undefined;
+  if (isMissing) {
+    return yield* adapterFailure("decode", "Granola pagination cursor is missing");
+  }
+  return cursor;
+});
+
+const paginationCursor = Effect.fn("GranolaSource.paginationCursor")(function* (
+  hasMore: boolean,
+  cursor: string | null | undefined,
+) {
+  if (!hasMore) return null;
+  return yield* requiredPaginationCursor(cursor);
+});
+
 const attendeeText = (value: typeof RestAttendee.Type) => {
   if (typeof value === "string") return value;
   return [value.name, value.email].filter((member): member is string => member !== undefined).join(" · ");
@@ -198,12 +216,10 @@ const restPage = (connection: ConnectionId, input: unknown) =>
               })),
             ),
           ).pipe(
-            Effect.map(
-              (decodedNotes) =>
-                ({
-                  notes: decodedNotes,
-                  nextCursor: page.has_more === true ? (page.next_cursor ?? null) : null,
-                }) satisfies AdapterPage,
+            Effect.flatMap((notes) =>
+              paginationCursor(page.has_more === true, page.next_cursor).pipe(
+                Effect.map((nextCursor) => ({ notes, nextCursor }) satisfies AdapterPage),
+              ),
             ),
           );
         }),
@@ -308,9 +324,10 @@ const mcpPage = Effect.fn("GranolaSource.decodeMcpPage")(function* (
       adapterFailure("decode", `Granola MCP pagination did not decode: ${error.message}`),
     ),
   );
+  const nextCursor = yield* paginationCursor(pagination.has_more === "true", pagination.next_cursor);
   return {
     notes,
-    nextCursor: pagination.has_more === "true" ? (pagination.next_cursor ?? null) : null,
+    nextCursor,
   } satisfies AdapterPage;
 });
 
