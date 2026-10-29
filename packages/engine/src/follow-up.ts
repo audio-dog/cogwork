@@ -153,7 +153,7 @@ export const followUpContext = (pr: ObservedPr): FollowUpContext => {
     checks: pr.checks,
     humanCommentAtMillis: humanCommentAt(pr),
     botTriggerAtMillis: botTriggerAt(pr),
-    latestFailingCheckAtMillis: pr.latestFailingCheckAtMillis ?? 0,
+    latestFailingCheckAtMillis: pr.latestFailingCheckAtMillis ?? undefined,
     noProgress,
     stalled: noProgress >= followUpNoProgressLimit,
     fresh: pr.fresh,

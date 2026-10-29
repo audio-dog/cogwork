@@ -302,7 +302,7 @@ describe("followUpContext", () => {
     assert.strictEqual(context.baseDivergence, "conflict");
   });
 
-  it("carries the latest trigger timestamps and its previous marker", () => {
+  it("carries available trigger timestamps and leaves missing timestamps absent", () => {
     const previousMarker = {
       checks: "passing" as const,
       humanCommentAtMillis: 0,
@@ -320,6 +320,9 @@ describe("followUpContext", () => {
     assert.strictEqual(context.botTriggerAtMillis, 42);
     assert.strictEqual(context.latestFailingCheckAtMillis, 43);
     assert.deepStrictEqual(context.previousMarker, previousMarker);
+
+    const clockCapped = followUpContext(pr({ checks: "failing", latestFailingCheckAtMillis: null }));
+    assert.strictEqual(clockCapped.latestFailingCheckAtMillis, undefined);
   });
 
   it("stalls a bot round that follows rounds which changed nothing", () => {
