@@ -1,0 +1,33 @@
+packages/engine/src/coordination-control-store.test.ts
+  s_f4abcd25549e05::t_6ce6d2745a57f8 21-23,90-95
+  s_f4abcd25549e05::t_61622cd5d8947d 89
+  s_f4abcd25549e05::t_abc9ecd1ad07e1 1,8,20,24
+  s_f4abcd25549e05::t_99235e667423e4 96-106
+  s_ef6af093ab773d::t_069bb9139a6ff7 107-110
+packages/engine/src/coordination-control-store.ts
+  s_f4abcd25549e05::t_abc9ecd1ad07e1 82,393-397
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "323491a3382c575f085a0d304862081acdb660db",
+  "prompts": {},
+  "sessions": {
+    "s_ef6af093ab773d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c5-f171-79a3-9e38-7f01ceab3e4a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
