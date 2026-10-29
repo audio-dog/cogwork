@@ -66,10 +66,13 @@ const TokenResponse = Schema.Struct({
   access_token: Schema.NonEmptyString,
   refresh_token: Schema.NonEmptyString,
   expires_in: Schema.Finite.check(Schema.isGreaterThan(0)),
-  scope: Schema.String,
+  scope: Schema.optional(Schema.String),
   team: Schema.Struct({ id: Schema.NonEmptyString }),
-  authed_user: Schema.Struct({ id: Schema.NonEmptyString }),
-  app_id: Schema.NonEmptyString,
+  authed_user: Schema.Struct({
+    id: Schema.NonEmptyString,
+    scope: Schema.optional(Schema.String),
+  }),
+  app_id: Schema.optional(Schema.NonEmptyString),
 });
 
 const RefreshResponse = Schema.Struct({
@@ -178,7 +181,9 @@ const makeLogin = Effect.fn("slack.login")(function* (config: SlackLoginConfig) 
   );
   const client = yield* HttpClient.HttpClient;
   const tokens = yield* exchange(client, config, code, pkce.verifier);
-  if (tokens.app_id !== config.appId) return yield* failure("Slack returned a grant for another app");
+  const appIdMismatched = tokens.app_id !== undefined && tokens.app_id !== config.appId;
+  if (appIdMismatched) return yield* failure("Slack returned a grant for another app");
+  const grantedScope = [tokens.scope, tokens.authed_user.scope].find((scope) => scope !== undefined);
   const now = yield* Clock.currentTimeMillis;
   return {
     issueTracker: "slack",
@@ -190,7 +195,7 @@ const makeLogin = Effect.fn("slack.login")(function* (config: SlackLoginConfig) 
       accessToken: Redacted.make(tokens.access_token),
       refreshToken: Redacted.make(tokens.refresh_token),
       expiresAtMillis: now + tokens.expires_in * 1000,
-      scopes: scopesOf(tokens.scope),
+      scopes: scopesOf(grantedScope ?? ""),
     },
   } satisfies CredentialStore.StoredCredential;
 });

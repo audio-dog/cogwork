@@ -7,6 +7,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { BrowserOpener } from "./login";
 import { type SlackLoginConfig, slackLoginLayer } from "./slack-login";
@@ -83,10 +84,8 @@ describe("Slack browser login", () => {
               access_token: "slack-access",
               refresh_token: "slack-refresh-1",
               expires_in: 43_200,
-              scope: expectedScopes,
               team: { id: "T-STUB" },
-              authed_user: { id: "U-STUB" },
-              app_id: "A-STUB",
+              authed_user: { id: "U-STUB", scope: expectedScopes },
             }),
           );
         });
@@ -116,13 +115,17 @@ describe("Slack browser login", () => {
       });
 
       const context = yield* Layer.build(slackLoginLayer(config, browser));
-      const credential = yield* Context.get(context, Slack.SlackLogin).login;
+      const result = yield* Effect.result(Context.get(context, Slack.SlackLogin).login);
+      assert.isTrue(Result.isSuccess(result));
+      if (Result.isFailure(result)) return;
+      const credential = result.success;
 
       assert.strictEqual(opened[0]?.searchParams.get("scope"), expectedScopes);
       assert.strictEqual(opened[0]?.searchParams.get("code_challenge_method"), "S256");
       assert.strictEqual(credential.organization, "T-STUB");
       assert.strictEqual(credential.actorUserId, "U-STUB");
       assert.strictEqual(Redacted.value(credential.token.accessToken), "slack-access");
+      assert.deepStrictEqual(credential.token.scopes, expectedScopes.split(","));
       assert.strictEqual(tokenRequests[0]?.get("client_secret"), null);
       assert.strictEqual(tokenRequests[0]?.get("redirect_uri"), config.redirectUri);
       assert.strictEqual((tokenRequests[0]?.get("code_verifier")?.length ?? 0) > 0, true);
