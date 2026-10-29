@@ -1,4 +1,5 @@
 import {
+  connectionIdOf,
   keyOf,
   LineageId,
   localOwnerId,
@@ -23,6 +24,7 @@ import { clockEntries } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
+import { granolaEntries } from "./granola-source";
 import { makeScriptedSource } from "./scripted-source";
 import {
   make,
@@ -89,6 +91,19 @@ const subscription: TriggerSubscription = {
   workspaces: [],
   catchUp: { since: 0 },
 };
+const granolaEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-generated");
+const granolaTriggers = ["first", "second"].map((id) => ({
+  id: Schema.decodeSync(WorkflowNodeId)(id),
+  entry: granolaEntry,
+  parameters: [],
+  start: Schema.decodeSync(WorkflowNodeId)(`${id}-operation`),
+}));
+const granolaDocument = Schema.decodeSync(WorkflowDocument)({
+  name: "Granola",
+  workspaces: { _tag: "Listed", workspaces: [] },
+  triggers: granolaTriggers,
+  operations: [],
+});
 
 const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => ({
   create: () => Effect.die("unused"),
@@ -127,13 +142,18 @@ const coordinationService = (
   recordAttempt: () => Effect.die("unused"),
   park: () => Effect.die("unused"),
   handBack: () => Effect.die("unused"),
-  observe: () => Ref.update(observed, (count) => count + 1).pipe(Effect.map(() => "moved" as const)),
+  observe: () => Ref.modify(observed, (count) => [count === 0 ? "moved" : "redelivered", count + 1] as const),
   markProcessed: (_ref, revision) => Ref.set(processed, revision),
 });
 
 describe("TriggerObservation", () => {
   it("matches a schedule event to one Trigger with the scheduled parameters", () => {
     const other = { ...subscription, workflow: Schema.decodeSync(WorkflowId)("other") };
+    const expired = {
+      ...subscription,
+      trigger: Schema.decodeSync(WorkflowNodeId)("expired"),
+      catchUp: { since: event.atMillis + 1 },
+    };
     const later = {
       ...subscription,
       trigger: Schema.decodeSync(WorkflowNodeId)("later"),
@@ -143,7 +163,7 @@ describe("TriggerObservation", () => {
       ),
     };
 
-    assert.deepStrictEqual(matchTriggerEvent([later, subscription, other], event), [subscription]);
+    assert.deepStrictEqual(matchTriggerEvent([later, expired, subscription, other], event), [subscription]);
   });
 
   it.effect("admits once and stops the source after switch-off", () =>
@@ -175,6 +195,18 @@ describe("TriggerObservation", () => {
       assert.strictEqual(yield* Ref.get(observed), 1);
       assert.lengthOf(yield* scripted.subscriptions, 1);
 
+      const redelivered = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(event);
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(redelivered)));
+      assert.strictEqual(yield* Ref.get(observed), 2);
+
       yield* Ref.set(current, record(false));
       const declined = yield* observation.changes.pipe(
         Stream.take(1),
@@ -192,13 +224,58 @@ describe("TriggerObservation", () => {
       yield* TestClock.adjust("1 second");
 
       assert.isTrue(Option.isNone(yield* Fiber.join(declined)));
-      assert.strictEqual(yield* Ref.get(observed), 1);
+      assert.strictEqual(yield* Ref.get(observed), 2);
 
       yield* bus.publish({ _tag: "WorkflowChanged", workflow: record(false) });
       yield* Effect.yieldNow;
 
       assert.deepStrictEqual(yield* observation.eligible, []);
       assert.deepStrictEqual(yield* scripted.subscriptions, []);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("admits every matching Trigger after one revision move", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const changes = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key: {
+          _tag: "GranolaNote",
+          connection: connectionIdOf("granola", "person@example.com"),
+          noteId: "note-1",
+        },
+        revision: "2026-10-29T15:00:00.000Z",
+        cause: { _tag: "Unknown" },
+        atMillis: 1,
+        entry: granolaEntry,
+        workspace: null,
+      });
+
+      assert.lengthOf(yield* Fiber.join(changes), 2);
+      assert.lengthOf(yield* observation.eligible, 2);
+      assert.strictEqual(yield* Ref.get(observed), 1);
     }).pipe(Effect.scoped),
   );
 });
