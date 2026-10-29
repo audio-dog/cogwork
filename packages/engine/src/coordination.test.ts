@@ -16,10 +16,12 @@ import {
   formatNoteBody,
   parseAttempts,
   parseClaim,
+  parseFollowUp,
   parseHandback,
   selectLedger,
   serializeAttempt,
   serializeClaim,
+  serializeFollowUp,
   serializeHandback,
   upsertCoordination,
   type WireCodec,
@@ -94,6 +96,25 @@ for (const [wire, codec] of codecs) {
       assert.deepStrictEqual(parseClaim(codec, body), claim);
       assert.deepStrictEqual(parseAttempts(codec, body), [attempt]);
       assert.deepStrictEqual(parseHandback(codec, body), handback);
+    });
+
+    it("round-trips the failing-check watermark", () => {
+      const marker = {
+        checks: "failing" as const,
+        humanCommentAtMillis: 1,
+        noProgress: 2,
+        baseDivergence: "none" as const,
+        botTriggerAtMillis: 3,
+        latestFailingCheckAtMillis: 4,
+        attemptAtMillis: 5,
+      };
+      const body = formatCoordinationBody(codec, {
+        status: defaultStatus,
+        markers: [serializeFollowUp(codec, marker)],
+        detail: null,
+      });
+
+      assert.deepStrictEqual(parseFollowUp(codec, body), marker);
     });
 
     it("round-trips a failure reason and puts it on the status line", () => {

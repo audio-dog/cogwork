@@ -510,6 +510,7 @@ export const parseFollowUp = (codec: WireCodec, body: string) => {
         baseDivergence: pairs.base ?? "none",
         // Omit when absent so the schema default (0) applies rather than a NaN from `Number(undefined)`.
         ...(pairs.bot === undefined ? {} : { botTriggerAtMillis: Number(pairs.bot) }),
+        ...(pairs.failing === undefined ? {} : { latestFailingCheckAtMillis: Number(pairs.failing) }),
         ...(pairs.attempt === undefined ? {} : { attemptAtMillis: Number(pairs.attempt) }),
       }),
     ),
@@ -583,7 +584,7 @@ export const serializeEngineHandoffCleared = (codec: WireCodec) =>
 export const serializeFollowUp = (codec: WireCodec, marker: FollowUpMarker) =>
   codec.encode({
     name: "follow-up",
-    pairs: `checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence} bot=${marker.botTriggerAtMillis}${marker.attemptAtMillis === undefined ? "" : ` attempt=${marker.attemptAtMillis}`}`,
+    pairs: `checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence} bot=${marker.botTriggerAtMillis}${marker.latestFailingCheckAtMillis === undefined ? "" : ` failing=${marker.latestFailingCheckAtMillis}`}${marker.attemptAtMillis === undefined ? "" : ` attempt=${marker.attemptAtMillis}`}`,
   });
 
 const detailSection = (codec: WireCodec, detail: string | null) => {
