@@ -199,7 +199,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
       checks: checkState(checks),
       latestHumanCommentAtMillis: human.latestAtMillis,
       latestBotTriggerAtMillis: bot.latestAtMillis,
-      latestFailingCheckAtMillis: latestFailingCheckAtMillis(checks, observedAtMillis),
+      latestFailingCheckAtMillis: latestFailingCheckAtMillis(checks),
       observedAtMillis,
       fresh: human.fresh,
       baseDivergence: baseDivergenceOf(mergeableState),

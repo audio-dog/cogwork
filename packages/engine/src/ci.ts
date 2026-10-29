@@ -29,7 +29,7 @@ export const checkState = (runs: ReadonlyArray<CheckRun>): CheckState => {
   return "passing";
 };
 
-export const latestFailingCheckAtMillis = (runs: ReadonlyArray<CheckRun>, observedAtMillis: number) =>
+export const latestFailingCheckAtMillis = (runs: ReadonlyArray<CheckRun>) =>
   latestPerName(runs)
-    .filter((run) => isFailing(run) && (run.completedAtMillis ?? 0) <= observedAtMillis)
+    .filter(isFailing)
     .reduce((latest, run) => Math.max(latest, run.completedAtMillis ?? 0), 0) || null;

@@ -54,13 +54,10 @@ describe("checkState", () => {
     );
   });
 
-  it("ignores a failing check completion later than the observation clock", () => {
+  it("keeps a failing check completion when the daemon clock is behind", () => {
     assert.strictEqual(
-      latestFailingCheckAtMillis(
-        [run({ name: "ci", conclusion: "failure", completedAtMillis: 2_000 })],
-        1_000,
-      ),
-      null,
+      latestFailingCheckAtMillis([run({ name: "ci", conclusion: "failure", completedAtMillis: 2_000 })]),
+      2_000,
     );
   });
 });
