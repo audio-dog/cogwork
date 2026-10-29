@@ -1,0 +1,26 @@
+packages/engine/src/granola-source.test.ts
+  s_dee3b081d33640::t_9554cf3445cd2e 449-454
+  s_dee3b081d33640::t_074e4f07cb7a8a 456
+  s_dee3b081d33640::t_dc114404947dbc 15,429-448,455
+  s_dee3b081d33640::t_8d56829117e7e6 457-460
+  s_dee3b081d33640::t_8806f48248e736 461-463
+packages/engine/src/granola-source.ts
+  s_dee3b081d33640::t_c4903d8d2cdb09 164-170
+  s_dee3b081d33640::t_fee27ee068c705 154-163,171,219-222,327,330
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "198081f90cb2b438fad4281053395cece1427c29",
+  "prompts": {},
+  "sessions": {
+    "s_dee3b081d33640": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c6-8bf6-76a2-ba8d-440eec1136d5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
