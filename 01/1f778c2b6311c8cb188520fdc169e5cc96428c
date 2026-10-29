@@ -1,0 +1,28 @@
+packages/engine/src/trigger-observation.test.ts
+  s_dee3b081d33640::t_85ae32a9a173a8 25,519-532,536-537
+  s_c9fa8dfeb4b918::t_ffcd38ae61b0fb 533-535
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "011f778c2b6311c8cb188520fdc169e5cc96428c",
+  "prompts": {},
+  "sessions": {
+    "s_c9fa8dfeb4b918": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18936-e8e8-7212-b62f-6752657051d0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dee3b081d33640": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c6-8bf6-76a2-ba8d-440eec1136d5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
