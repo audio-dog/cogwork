@@ -603,13 +603,21 @@ const hydratedThread = Effect.fn("SlackSource.hydratedThread")(function* (
   session: SlackSession,
   message: SlackMessage,
 ) {
-  const thread = yield* withContextFallback(
-    client.replies(session, message.channel, rootTimestampOf(message)),
-    [message],
+  const replyLookup = yield* client.replies(session, message.channel, rootTimestampOf(message)).pipe(
+    Effect.map((thread) => ({ thread, fromSlack: true }) as const),
+    Effect.catchIf(isContextLookupFailure, () =>
+      Effect.succeed({ thread: [message], fromSlack: false } as const),
+    ),
   );
-  const selected = thread.find((candidate) => candidate.ts === message.ts) ?? message;
+  const thread = replyLookup.thread;
+  const hydrated = thread.find((candidate) => candidate.ts === message.ts);
+  const selected = hydrated ?? message;
   const complete = thread.some((candidate) => candidate.ts === selected.ts) ? thread : [selected, ...thread];
-  return { selected, thread: complete } as const;
+  return {
+    selected,
+    selectedFromThread: replyLookup.fromSlack && hydrated !== undefined,
+    thread: complete,
+  } as const;
 });
 
 const messageEvent = (
@@ -642,6 +650,10 @@ const mentionEvents = Effect.fn("SlackSource.mentionEvents")(function* (
       if (timestampMillis(message.ts) <= since) return null;
       if (channel && message.channel !== channel) return null;
       const hydrated = yield* hydratedThread(client, session, message);
+      const cogworkOriginUnknown = message.appId === cogworkAppId && !hydrated.selectedFromThread;
+      if (cogworkOriginUnknown) {
+        return yield* sourceFailure("unavailable", "Slack message origin metadata is unavailable");
+      }
       if (isCogworkMessage(hydrated.selected)) return null;
       if (!mentionedUserIds(hydrated.selected.text).includes(session.user)) return null;
       const workContext = yield* resolvedWorkContext(

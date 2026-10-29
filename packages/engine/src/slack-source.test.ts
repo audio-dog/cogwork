@@ -14,6 +14,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -223,6 +224,38 @@ describe("Slack Trigger source", () => {
       assert.include(events[0]?.workContext?.body ?? "", "#C123");
       assert.include(events[0]?.workContext?.body ?? "", "U456: Could @U123 review this?");
       assert.notInclude(events[0]?.workContext?.body ?? "", "Permalink:");
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("refuses a Cogwork mention when its origin metadata cannot be read", () =>
+    Effect.gen(function* () {
+      const cogworkMention = message({
+        ts: "90.000",
+        text: "Cogwork says <@U123> should review this",
+        appId: "A0CD4UYHKPX",
+      });
+      yield* Ref.set(yield* SlackClientStateRef, {
+        search: [cogworkMention],
+        history: [],
+        reactions: [],
+        replies: [],
+        failure: null,
+        contextFailure: new SourceFailure({
+          source: "slack",
+          reason: "unavailable",
+          retryAfterMillis: null,
+          message: "Slack API error: message_not_found",
+        }),
+      });
+      yield* TestClock.setTime(100_000);
+      const source = yield* make;
+      const result = yield* source
+        .observe([subscription("slack.i-am-mentioned", [])])
+        .pipe(Stream.take(1), Stream.runCollect, Effect.result);
+
+      assert.isTrue(Result.isFailure(result));
+      if (!Result.isFailure(result)) return;
+      assert.strictEqual(result.failure.reason, "unavailable");
     }).pipe(Effect.provide(testLayer)),
   );
 
