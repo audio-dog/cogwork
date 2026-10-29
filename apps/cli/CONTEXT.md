@@ -47,6 +47,10 @@ _Avoid_: Putting an API key in argv, editing the Control store directly
 The browser OAuth flow for Linear. It stores the grant, establishes the matching Connection through the daemon, and therefore installs the requiring Linear Plugin in the same act.
 _Avoid_: A Workspace-owned OAuth app or a separate establish step
 
+**login slack**:
+The browser OAuth flow for Slack. It uses Cogwork's public client id and fixed loopback redirect, stores the rotating user-token grant, establishes the team Connection, and installs the Slack Plugin in the same act.
+_Avoid_: A client secret, pasted token, bot token, app-level token, or separate establish step
+
 **workspace**:
 The daemon-backed management group. `register` admits a checkout and mints its `WorkspaceId`; `update` replaces its mutable non-path record from schema-decoded JSON; `re-bind` changes that identity's checkout path; `deregister` removes the registration and private tree without erasing Run history. All four require a running daemon.
 _Avoid_: The `worktree` command, which manages disposable checkouts under one registered Workspace

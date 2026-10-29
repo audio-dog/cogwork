@@ -29,12 +29,14 @@ const tokenEnvs: Record<ConnectionSystem, string> = {
   github: "GITHUB_TOKEN",
   linear: "LINEAR_API_KEY",
   granola: "GRANOLA_API_KEY",
+  slack: "SLACK_TOKEN",
 };
 
 const systemLabels: Record<ConnectionSystem, string> = {
   github: "GitHub",
   linear: "Linear",
   granola: "Granola",
+  slack: "Slack",
 };
 
 export const connectionOverview = (
@@ -87,6 +89,14 @@ const credentialAccountForEstablishment = (input: ConnectionEstablishment) =>
       clientCredentials: null,
       oauthClientId: null,
     }),
+    slack: ({ account }) => ({
+      key: `slack/${account}`,
+      issueTracker: "slack",
+      organization: account,
+      tokenEnv: "SLACK_TOKEN",
+      clientCredentials: null,
+      oauthClientId: null,
+    }),
   });
 
 const knownConnectionId = (input: ConnectionEstablishment, expectedAccount?: string) => {
@@ -94,6 +104,7 @@ const knownConnectionId = (input: ConnectionEstablishment, expectedAccount?: str
     github: () => null,
     linear: ({ account }) => account,
     granola: ({ account }) => account,
+    slack: ({ account }) => account,
   });
   if (requested !== null) return connectionIdOf(input.system, requested);
   if (expectedAccount !== undefined) return connectionIdOf(input.system, expectedAccount);
@@ -225,6 +236,7 @@ export const layer = Layer.effect(
       github: (_credential) => Effect.succeed(null),
       linear: (_credential) => Effect.succeed(null),
       granola: verifyGranolaWhenAvailable,
+      slack: (_credential) => Effect.succeed(null),
     };
     const verifyReadiness = (connection: Connection, credential: Credential) =>
       readinessVerifiers[connection.system](credential);
@@ -236,6 +248,7 @@ export const layer = Layer.effect(
       github: (credential) => verifier.verify("github", credential),
       linear: (credential) => verifier.verify("linear", credential),
       granola: verifyGranolaWhenAvailable,
+      slack: (_credential) => Effect.succeed(null),
     };
 
     const readiness = Effect.fn("ConnectionStore.readiness")(function* (connectionId: ConnectionId) {
@@ -304,6 +317,7 @@ export const layer = Layer.effect(
         github: () => discoveredAccount,
         linear: ({ account }) => account,
         granola: ({ account }) => account,
+        slack: ({ account }) => account,
       });
       if (!account) {
         return yield* new ConnectionNotReady({

@@ -183,6 +183,12 @@ const persistConnectionState = Effect.fn("test.persistConnectionState")((storePa
         account: "person@example.com",
         status: "established",
       });
+      yield* store.establishConnection({
+        id: connectionId("slack/T-STUB"),
+        system: "slack",
+        account: "T-STUB",
+        status: "established",
+      });
     }),
   ),
 );
@@ -703,7 +709,7 @@ layer(NodeServices.layer)((it) => {
       yield* persistConnectionState(storePath);
 
       const reloaded = yield* readControlStore(storePath);
-      assert.strictEqual(reloaded.connections.length, 2);
+      assert.strictEqual(reloaded.connections.length, 3);
       assert.deepStrictEqual(
         reloaded.connections
           .map(({ id, status }) => ({ id, status }))
@@ -711,6 +717,7 @@ layer(NodeServices.layer)((it) => {
         [
           { id: "granola/person@example.com", status: "established" },
           { id: "linear/acme", status: "revoked" },
+          { id: "slack/T-STUB", status: "established" },
         ],
       );
     }),

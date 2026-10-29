@@ -8,6 +8,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
@@ -182,6 +183,63 @@ describe("file-backed credential store", () => {
         });
         assert.strictEqual(credential.source, "stored-key");
         assert.strictEqual(Redacted.value(credential.token), "grn_secret");
+      }),
+    ),
+  );
+
+  it.effect("serializes writes across credential kinds", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        const connectionId = connectionIdOf("slack", "T-STUB");
+        yield* Effect.all(
+          [
+            file.save({
+              issueTracker: "slack",
+              organization: "T-STUB",
+              actorUserId: "U-STUB",
+              token: {
+                accessToken: Redacted.make("slack-access"),
+                refreshToken: Redacted.make("slack-refresh"),
+                expiresAtMillis: Number.MAX_SAFE_INTEGER,
+                scopes: ["channels:history"],
+              },
+            }),
+            file.saveProviderKey?.(providerKey("anthropic", "provider-key")) ?? Effect.void,
+            file.saveConnectionCredential?.({ _tag: "Stored", connectionId }) ?? Effect.void,
+          ],
+          { concurrency: "unbounded" },
+        );
+
+        assert.strictEqual((yield* file.load).length, 1);
+        assert.strictEqual((yield* file.loadProviderKeys ?? Effect.succeed([])).length, 1);
+        assert.strictEqual((yield* file.loadConnectionCredentials ?? Effect.succeed([])).length, 1);
+      }),
+    ),
+  );
+
+  it.effect("removes a Connection source and browser grant in one write", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        const connectionId = connectionIdOf("slack", "T-STUB");
+        yield* file.save({
+          issueTracker: "slack",
+          organization: "T-STUB",
+          actorUserId: "U-STUB",
+          token: {
+            accessToken: Redacted.make("slack-access"),
+            refreshToken: Redacted.make("slack-refresh"),
+            expiresAtMillis: Number.MAX_SAFE_INTEGER,
+            scopes: ["channels:history"],
+          },
+        });
+        yield* file.saveConnectionCredential?.({ _tag: "Stored", connectionId });
+
+        yield* CredentialStore.make({ stored: file }).removeConnection(connectionId);
+
+        assert.deepStrictEqual(yield* file.load, []);
+        assert.deepStrictEqual(yield* file.loadConnectionCredentials, []);
       }),
     ),
   );
@@ -406,5 +464,66 @@ describe("file-backed credential store", () => {
         Effect.provideService(FetchHttpClient.Fetch, tokenEndpoint),
       ),
     ),
+  );
+
+  it.effect("stores Slack's rotated refresh token", () =>
+    onDisk(({ filePath }) => {
+      const requests: Array<URLSearchParams> = [];
+      const endpoint: typeof globalThis.fetch = (input, init) => {
+        const request = new Request(input, init);
+        return request.text().then((body) => {
+          requests.push(new URLSearchParams(body));
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              access_token: "slack-rotated",
+              refresh_token: "slack-refresh-2",
+              expires_in: 43_200,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        });
+      };
+      return Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        yield* file.save({
+          issueTracker: "slack",
+          organization: "T-STUB",
+          actorUserId: "U-STUB",
+          oauthClientId: "slack-client",
+          oauthTokenEndpoint: "https://slack.example/token",
+          token: {
+            accessToken: Redacted.make("slack-stale"),
+            refreshToken: Redacted.make("slack-refresh-1"),
+            expiresAtMillis: 0,
+            scopes: ["channels:history"],
+          },
+        });
+        const store = yield* CredentialStore.CredentialStore;
+        const result = yield* Effect.result(
+          store.bearerToken({
+            key: "slack/T-STUB",
+            issueTracker: "slack",
+            organization: "T-STUB",
+            tokenEnv: "SLACK_TOKEN",
+            clientCredentials: null,
+            oauthClientId: null,
+          }),
+        );
+        assert.isTrue(Result.isSuccess(result));
+        if (Result.isFailure(result)) return;
+        const credential = result.success;
+        const saved = (yield* file.load)[0]?.token;
+
+        assert.strictEqual(Redacted.value(credential.token), "slack-rotated");
+        assert.strictEqual(saved?.refreshToken && Redacted.value(saved.refreshToken), "slack-refresh-2");
+        assert.deepStrictEqual(saved?.scopes, []);
+        assert.strictEqual(requests[0]?.get("client_secret"), null);
+        assert.strictEqual(requests[0]?.get("refresh_token"), "slack-refresh-1");
+      }).pipe(
+        Effect.provide(Layer.provide(layer(filePath), FetchHttpClient.layer)),
+        Effect.provideService(FetchHttpClient.Fetch, endpoint),
+      );
+    }),
   );
 });

@@ -55,6 +55,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import { fold } from "./coordination";
@@ -84,6 +85,7 @@ import {
 import { RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
+import { SlackLogin } from "./slack-login";
 
 const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
@@ -917,6 +919,7 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
     github: () => null,
     linear: ({ account }) => account,
     granola: ({ account }) => account,
+    slack: ({ account }) => account,
   });
   if (requestedAccount !== null && existing.account !== requestedAccount) {
     return yield* connectionFailure(
@@ -986,6 +989,58 @@ export const loginGranola = Effect.fn("Daemon.LoginGranola")(function* (payload:
     ),
   );
 });
+
+const findSlackConnection = Effect.fn("Daemon.findSlackConnection")(function* (
+  connections: ConnectionStoreService,
+  account: string,
+) {
+  const connection = yield* connections.findSystem("slack");
+  const accountChanged = connection !== null && connection.account !== account;
+  if (!accountChanged) return connection;
+  return yield* connectionFailure(
+    "login Slack",
+    connection.id,
+    `Connection is established for "${connection.account}". Remove it before connecting to "${account}".`,
+  );
+});
+
+const slackLoginGate = Semaphore.makeUnsafe(1);
+
+const loginSlackUnlocked = Effect.fn("Daemon.LoginSlack.unlocked")(function* () {
+  const connections = yield* ConnectionStore;
+  const credential = yield* (yield* SlackLogin).login;
+  const existing = yield* findSlackConnection(connections, credential.organization);
+  const store = yield* CredentialStore;
+  const withStoredCredential = store.withStoredCredential;
+  if (!withStoredCredential) {
+    return yield* connectionFailure(
+      "login Slack",
+      existing?.id ?? null,
+      "Credential store cannot stage a browser login",
+    );
+  }
+  const establishment = {
+    system: "slack",
+    account: credential.organization,
+    source: { _tag: "Stored" },
+  } as const;
+  const connect = existing ? reconnectConnection({ establishment }) : establishConnection({ establishment });
+  return yield* withStoredCredential(credential, connect).pipe(
+    Effect.mapError((error) =>
+      error._tag === "CredentialError"
+        ? new ConnectionFailure({
+            operation: "login Slack",
+            connectionId: existing?.id ?? null,
+            message: error.message,
+          })
+        : error,
+    ),
+  );
+});
+
+export const loginSlack = Effect.fn("Daemon.LoginSlack")(() =>
+  slackLoginGate.withPermit(loginSlackUnlocked()),
+);
 
 const boundWorkspaceName = (workspace: RegistryState["workspaces"][number], connectionId: ConnectionId) => {
   if (workspace.config.issueTracker.connectionId === connectionId) return workspace.config.name;

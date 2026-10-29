@@ -19,7 +19,7 @@ import * as Result from "effect/Result";
 import { ConnectionStore, connectionOverview, layer } from "./connection";
 import { acceptingLayer as acceptingVerifierLayer, ConnectionVerifier } from "./connection-verify";
 import { ControlStore, type ControlStoreService } from "./control-store";
-import { CredentialStore, type CredentialStoreService } from "./credential-store";
+import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
 
 const github = Connection.make({
   id: connectionIdOf("github", "default"),
@@ -181,6 +181,50 @@ const unavailableVerifier = Layer.succeed(ConnectionVerifier, {
 });
 
 describe("Connection verification", () => {
+  it.effect("reports a failed Slack refresh as not ready", () => {
+    const slack = Connection.make({
+      id: connectionIdOf("slack", "T-STUB"),
+      system: "slack",
+      account: "T-STUB",
+      status: "established",
+    });
+    return Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const readiness = yield* connections.readiness(slack.id);
+
+      assert.deepStrictEqual(readiness, {
+        _tag: "NotReady",
+        reason: "Slack token refresh failed: refresh token expired",
+      });
+      assert.strictEqual((yield* connections.find(slack.id))?.id, slack.id);
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(acceptingVerifierLayer),
+          Layer.provide(
+            Layer.succeed(CredentialStore, {
+              ...unusedCredentialStore,
+              bearerToken: () =>
+                Effect.fail(
+                  new CredentialError({
+                    account: slack.id,
+                    message: "Slack token refresh failed: refresh token expired",
+                    retryable: false,
+                  }),
+                ),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(ControlStore, {
+              ...controlStoreService,
+              picture: Effect.succeed({ ...defaultControlStore, connections: [slack] }),
+            }),
+          ),
+        ),
+      ),
+    );
+  });
+
   it.effect("keeps GitHub ready when its remote verifier is unavailable", () =>
     Effect.gen(function* () {
       const connections = yield* ConnectionStore;

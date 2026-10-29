@@ -1,0 +1,15 @@
+{
+  "pluginId": "slack",
+  "version": "1.0.0",
+  "provenance": "cogwork-0.0.1",
+  "authRecipe": null,
+  "requiredConnections": ["slack"],
+  "contributions": [
+    {
+      "kind": "mcp-server",
+      "localName": "slack",
+      "summary": "Slack's hosted MCP server.",
+      "file": "mcp/slack.json"
+    }
+  ]
+}

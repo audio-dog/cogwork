@@ -142,6 +142,7 @@ export interface StoredCredentials {
     issueTracker: string,
     organization: string,
   ) => Effect.Effect<void, CredentialError>;
+  readonly removeConnection?: (connectionId: ConnectionId) => Effect.Effect<void, CredentialError>;
 }
 
 export interface ProviderAccount {
@@ -261,6 +262,7 @@ const tokenEnvs = {
   github: "GITHUB_TOKEN",
   linear: "LINEAR_API_KEY",
   granola: "GRANOLA_API_KEY",
+  slack: "SLACK_TOKEN",
 } as const;
 
 export const expiryMargin = Duration.minutes(1);
@@ -323,21 +325,27 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     if (match?.live) return match.credential;
     const credential = match?.credential ?? stale;
     const presented = credential.token.refreshToken ?? fallbackRefreshToken;
-    const token = yield* refresh({
-      account: account.key,
-      issueTracker: credential.issueTracker,
-      clientId,
-      tokenEndpoint: credential.oauthTokenEndpoint,
-      resource: credential.oauthResource,
-      refreshToken: presented,
-    });
-    // Linear leaves refresh_token out of a response when it does not rotate one, so the presented
-    // token has to carry forward or the next refresh has nothing to present.
-    const rotated = {
-      ...credential,
-      token: { ...token, refreshToken: token.refreshToken ?? presented },
-    } satisfies StoredCredential;
-    yield* sources.stored.save(rotated);
+    const rotated = yield* Effect.uninterruptibleMask((restore) =>
+      restore(
+        refresh({
+          account: account.key,
+          issueTracker: credential.issueTracker,
+          clientId,
+          tokenEndpoint: credential.oauthTokenEndpoint,
+          resource: credential.oauthResource,
+          refreshToken: presented,
+        }),
+      ).pipe(
+        Effect.map(
+          (token) =>
+            ({
+              ...credential,
+              token: { ...token, refreshToken: token.refreshToken ?? presented },
+            }) satisfies StoredCredential,
+        ),
+        Effect.tap(sources.stored.save),
+      ),
+    );
     yield* Effect.logInfo("refreshed the stored credential", {
       organization: rotated.organization,
     });
@@ -537,21 +545,31 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         const account = accountOf(credential);
-        const previous = (yield* sources.stored.load).find((entry) => accountOf(entry) === account);
         const remove = sources.stored.removeCredential;
-        if (!previous && !remove) {
-          return yield* new CredentialError({
-            account,
-            message: "this credential store cannot stage a browser login",
-            retryable: false,
-          });
-        }
-        yield* sources.stored.save(credential);
+        const previous = yield* gateFor(account).withPermit(
+          sources.stored.load.pipe(
+            Effect.map((entries) => entries.find((entry) => accountOf(entry) === account)),
+            Effect.flatMap((previous) => {
+              if (!previous && !remove) {
+                return Effect.fail(
+                  new CredentialError({
+                    account,
+                    message: "this credential store cannot stage a browser login",
+                    retryable: false,
+                  }),
+                );
+              }
+              return sources.stored.save(credential).pipe(Effect.map(() => previous));
+            }),
+          ),
+        );
         const rollback = previous
           ? sources.stored.save(previous)
           : remove?.(credential.issueTracker, credential.organization);
         return yield* restore(effect).pipe(
-          Effect.onError(() => rollback?.pipe(Effect.ignore) ?? Effect.void),
+          Effect.onError(() =>
+            rollback ? gateFor(account).withPermit(rollback).pipe(Effect.ignore) : Effect.void,
+          ),
         );
       }),
     );
@@ -581,7 +599,10 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
         sources.stored.removeConnectionCredential?.(connectionId) ?? Effect.void;
       const removeCredential =
         system === null ? Effect.void : (sources.stored.removeCredential?.(system, account) ?? Effect.void);
-      return Effect.all([removeConnectionCredential, removeCredential], { discard: true });
+      const remove =
+        sources.stored.removeConnection?.(connectionId) ??
+        Effect.all([removeConnectionCredential, removeCredential], { discard: true });
+      return gateFor(connectionId).withPermit(remove);
     },
   };
 };
