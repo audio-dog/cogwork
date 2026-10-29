@@ -53,14 +53,14 @@ const subscription = (
   catchUp: { since },
 });
 
-const issue = (number: number) => ({
+const issue = (number: number, isPullRequest = false) => ({
   nodeId: `issue-${number}`,
   number,
   title: `Issue ${number}`,
   url: `https://github.com/acme/example/issues/${number}`,
   labels: ["needs-triage"],
   assignees: ["maintainer"],
-  isPullRequest: false,
+  isPullRequest,
   openBlockers: 0,
   body: "Body",
   state: "open" as const,
@@ -143,48 +143,59 @@ describe("GitHub Trigger sources", () => {
     }).pipe(
       Effect.provide(
         Layer.mock(GitHubClient, {
-          listIssues: () => Effect.succeed([issue(1)]),
-          listIssueEvents: () =>
-            Effect.succeed([{ id: 1, event: "labeled", labelName: "needs-triage", createdAtMillis: 1_500 }]),
-          listTriggerComments: () =>
+          listIssues: () => Effect.succeed([issue(2, true), issue(1)]),
+          listIssueEvents: (_target, number) =>
             Effect.succeed([
               {
-                id: 1,
-                authorLogin: "maintainer",
-                authorAssociation: "MEMBER",
-                body: "old",
-                createdAtMillis: 900,
-              },
-              {
-                id: 2,
-                authorLogin: "maintainer",
-                authorAssociation: "MEMBER",
-                body: "new",
-                createdAtMillis: 2_000,
-              },
-              {
-                id: 5,
-                authorLogin: "outside-user",
-                authorAssociation: "NONE",
-                body: "outside",
-                createdAtMillis: 1_600,
-              },
-              {
-                id: 3,
-                authorLogin: "maintainer",
-                authorAssociation: "MEMBER",
-                body: "written by Cogwork\n<!-- cogwork:agent-note -->",
-                createdAtMillis: 1_900,
-              },
-              {
-                id: 4,
-                authorLogin: "review-bot",
-                authorAssociation: "NONE",
-                authorType: "Bot",
-                body: "automated",
-                createdAtMillis: 1_800,
+                id: number,
+                event: "labeled",
+                labelName: "needs-triage",
+                createdAtMillis: number === 2 ? 1_200 : 1_500,
               },
             ]),
+          listTriggerComments: (_target, number) =>
+            Effect.succeed(
+              number === 2
+                ? []
+                : [
+                    {
+                      id: 1,
+                      authorLogin: "maintainer",
+                      authorAssociation: "MEMBER",
+                      body: "old",
+                      createdAtMillis: 900,
+                    },
+                    {
+                      id: 2,
+                      authorLogin: "maintainer",
+                      authorAssociation: "MEMBER",
+                      body: "new",
+                      createdAtMillis: 2_000,
+                    },
+                    {
+                      id: 5,
+                      authorLogin: "outside-user",
+                      authorAssociation: "NONE",
+                      body: "outside",
+                      createdAtMillis: 1_600,
+                    },
+                    {
+                      id: 3,
+                      authorLogin: "maintainer",
+                      authorAssociation: "MEMBER",
+                      body: "written by Cogwork\n<!-- cogwork:agent-note -->",
+                      createdAtMillis: 1_900,
+                    },
+                    {
+                      id: 4,
+                      authorLogin: "review-bot",
+                      authorAssociation: "NONE",
+                      authorType: "Bot",
+                      body: "automated",
+                      createdAtMillis: 1_800,
+                    },
+                  ],
+            ),
         }),
       ),
     ),

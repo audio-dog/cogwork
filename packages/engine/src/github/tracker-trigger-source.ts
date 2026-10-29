@@ -136,7 +136,8 @@ const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(func
     state: "all",
     ...(since === undefined ? {} : { since }),
   });
-  const events = yield* Effect.forEach(issues, (issue) =>
+  const trackerIssues = issues.filter(({ isPullRequest }) => !isPullRequest);
+  const events = yield* Effect.forEach(trackerIssues, (issue) =>
     eventsForIssue(client, target, workspace, selected, issue, now),
   );
   return {
