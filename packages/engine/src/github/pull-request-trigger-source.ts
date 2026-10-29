@@ -9,6 +9,7 @@ import {
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
+  providerModifiedSinceGraceMillis,
   providerPollingStream,
   triggerEntry,
   workspaceSubscriptions,
@@ -62,7 +63,6 @@ export const githubPullRequestEntries = [
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
 const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const workItemId = Schema.decodeSync(WorkItemId);
-const graceMillis = 30_000;
 
 interface Feedback {
   readonly id: string;
@@ -120,16 +120,21 @@ const feedbackOf = (
   ),
 ];
 
+const linkedItemRules = [
+  (pull: RawPull) => {
+    const closing = pull.closingIssueNumbers.at(0);
+    return closing === undefined ? null : workItemId(`#${closing}`);
+  },
+  (pull: RawPull) => {
+    const linear = /^([A-Z][A-Z0-9]+-\d+)(?:-|$)/.exec(pull.headRef)?.[1];
+    return linear ? workItemId(linear) : null;
+  },
+] as const;
+
 const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull): WorkItemRef => {
-  const closing = pull.closingIssueNumbers.at(0);
-  if (closing !== undefined) {
-    return { _tag: "Issue", workspace: workspace.config.name, id: workItemId(`#${closing}`) };
-  }
-  const linear = /^([A-Z][A-Z0-9]+-\d+)(?:-|$)/.exec(pull.headRef)?.[1];
-  if (linear) return { _tag: "Issue", workspace: workspace.config.name, id: workItemId(linear) };
-  const numeric = /^(\d+)(?:-|$)/.exec(pull.headRef)?.[1];
-  return numeric
-    ? { _tag: "Issue", workspace: workspace.config.name, id: workItemId(`#${numeric}`) }
+  const linked = linkedItemRules.map((rule) => rule(pull)).find((id) => id !== null) ?? null;
+  return linked
+    ? { _tag: "Issue", workspace: workspace.config.name, id: linked }
     : { _tag: "PullRequest", workspace: workspace.config.name, number: pull.number };
 };
 
@@ -250,7 +255,7 @@ const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(
   const target = selected.length > 0 ? sourceControlTargetFor(workspace) : null;
   if (!target) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
   const actorLogin = yield* client.authenticatedLogin(target);
-  const since = cursor === undefined ? 0 : Math.max(0, cursor - graceMillis);
+  const since = cursor === undefined ? 0 : Math.max(0, cursor - providerModifiedSinceGraceMillis);
   const pulls = (yield* client.listPulls(target)).filter(
     ({ authorAssociation, authorLogin, updatedAtMillis }) =>
       (authorLogin === actorLogin || personAssociations.has(authorAssociation)) &&

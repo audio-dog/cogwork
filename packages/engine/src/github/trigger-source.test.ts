@@ -10,12 +10,13 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import type { RegisteredWorkspace } from "../projector";
 import type { TriggerSubscription } from "../trigger-source";
-import { GitHubClient } from "./client";
+import { GitHubClient, type RawPull } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
   issueHasLabelKey,
@@ -38,6 +39,8 @@ const registryState = { workspaces: [workspace], failures: [] };
 const workflow = Schema.decodeSync(WorkflowId)("coding");
 const operation = Schema.decodeSync(WorkflowNodeId)("follow-up");
 const linkedIssueId = Schema.decodeSync(WorkItemId)("#7");
+const firstIssueId = Schema.decodeSync(WorkItemId)("#1");
+const secondIssueId = Schema.decodeSync(WorkItemId)("#2");
 const subscription = (
   entry: string,
   trigger: string,
@@ -68,38 +71,39 @@ const issue = (number: number, isPullRequest = false) => ({
   updatedAtMillis: number + 3_000,
 });
 
-const pullClientLayer = () =>
+const pulls: Array<RawPull> = [
+  {
+    number: 11,
+    url: "https://github.com/acme/example/pull/11",
+    authorLogin: "outside-user",
+    authorAssociation: "NONE",
+    draft: false,
+    headSha: "outside-sha",
+    baseSha: "base-sha",
+    headRef: "99-work",
+    headRepository: "outside/fork",
+    closingIssueNumbers: [99],
+    updatedAtMillis: 2_900,
+  },
+  {
+    number: 10,
+    url: "https://github.com/acme/example/pull/10",
+    authorLogin: "maintainer",
+    authorAssociation: "MEMBER",
+    draft: false,
+    headSha: "head-sha",
+    baseSha: "base-sha",
+    headRef: "7-work",
+    headRepository: "acme/example",
+    closingIssueNumbers: [7],
+    updatedAtMillis: 3_000,
+  },
+];
+
+const pullClientLayer = (listedPulls = pulls) =>
   Layer.mock(GitHubClient, {
     authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
-    listPulls: () =>
-      Effect.succeed([
-        {
-          number: 11,
-          url: "https://github.com/acme/example/pull/11",
-          authorLogin: "outside-user",
-          authorAssociation: "NONE",
-          draft: false,
-          headSha: "outside-sha",
-          baseSha: "base-sha",
-          headRef: "99-work",
-          headRepository: "outside/fork",
-          closingIssueNumbers: [99],
-          updatedAtMillis: 2_900,
-        },
-        {
-          number: 10,
-          url: "https://github.com/acme/example/pull/10",
-          authorLogin: "maintainer",
-          authorAssociation: "MEMBER",
-          draft: false,
-          headSha: "head-sha",
-          baseSha: "base-sha",
-          headRef: "7-work",
-          headRepository: "acme/example",
-          closingIssueNumbers: [7],
-          updatedAtMillis: 3_000,
-        },
-      ]),
+    listPulls: () => Effect.succeed(listedPulls),
     listCheckRuns: () =>
       Effect.succeed([{ name: "test", status: "completed", conclusion: "failure", startedAtMillis: 2_500 }]),
     pullMergeableState: () => Effect.succeed("dirty"),
@@ -230,6 +234,93 @@ describe("GitHub Trigger sources", () => {
     ),
   );
 
+  it.effect("keeps distinct items that share one source revision", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const collected = yield* source
+        .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
+        .pipe(
+          Stream.take(2),
+          Stream.runCollect,
+          Effect.timeoutOption("1 second"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+
+      const result = yield* Fiber.join(collected);
+      assert.isTrue(Option.isSome(result));
+      assert.deepStrictEqual(
+        Option.getOrThrow(result).map(({ key }) => key),
+        [
+          { _tag: "Issue", workspace: workspaceId, id: firstIssueId },
+          { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
+        ],
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () => Effect.succeed([issue(1), issue(2)]),
+          listIssueEvents: () =>
+            Effect.succeed([{ id: 1, event: "labeled", labelName: "needs-triage", createdAtMillis: 1_500 }]),
+          listTriggerComments: () => Effect.succeed([]),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("admits live comments with zero catch-up", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(120_000);
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const collected = yield* source
+        .observe([
+          subscription("github.new-comment-from-person", "comment", [
+            { id: "label", value: "needs-triage" },
+            { id: "catch-up-at-most", value: "0" },
+          ]),
+        ])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.timeoutOption("1 second"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+
+      const result = yield* Fiber.join(collected);
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(Option.getOrThrow(result)[0]?.revision, "comment:1");
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () => Effect.succeed([issue(1)]),
+          listIssueEvents: () => Effect.succeed([]),
+          listTriggerComments: () =>
+            Effect.succeed([
+              {
+                id: 2,
+                authorLogin: "maintainer",
+                authorAssociation: "MEMBER",
+                body: "stale",
+                createdAtMillis: 29_000,
+              },
+              {
+                id: 1,
+                authorLogin: "maintainer",
+                authorAssociation: "MEMBER",
+                body: "new",
+                createdAtMillis: 60_001,
+              },
+            ]),
+        }),
+      ),
+    ),
+  );
+
   it.effect("keys pull conditions by head and base revisions", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;
@@ -264,5 +355,39 @@ describe("GitHub Trigger sources", () => {
       assert.strictEqual(events[0]?.revision, "review-2800-0");
       assert.strictEqual(events[0]?.prose?.comments[0]?.body, "Review body");
     }).pipe(Effect.provide(pullClientLayer())),
+  );
+
+  it.effect("keeps an unlinked digit-prefixed branch as a pull request item", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState));
+      const events = yield* source
+        .observe([subscription("github.pull-request-checks-failed", "checks")])
+        .pipe(Stream.take(1), Stream.runCollect);
+
+      assert.deepStrictEqual(events[0]?.key, {
+        _tag: "PullRequest",
+        workspace: workspaceId,
+        number: 20,
+      });
+    }).pipe(
+      Effect.provide(
+        pullClientLayer([
+          {
+            number: 20,
+            url: "https://github.com/acme/example/pull/20",
+            authorLogin: "maintainer",
+            authorAssociation: "MEMBER",
+            draft: false,
+            headSha: "release-sha",
+            baseSha: "base-sha",
+            headRef: "2026-release",
+            headRepository: "acme/example",
+            closingIssueNumbers: [],
+            updatedAtMillis: 3_000,
+          },
+        ]),
+      ),
+    ),
   );
 });

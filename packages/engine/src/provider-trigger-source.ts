@@ -1,9 +1,11 @@
 import {
+  keyOf,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
   type WorkflowParameterValue,
   type WorkspaceId,
 } from "@cogwork/contracts";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
@@ -59,6 +61,10 @@ export const sourceFailure = (source: TriggerSourceId, error: IssueTrackerError)
 export const parameterValue = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
   parameters.find((parameter) => parameter.id === id)?.value;
 
+export const providerModifiedSinceGraceMillis = 30_000;
+const providerPollInterval = Duration.seconds(60);
+const zeroCatchUpGraceMillis = Duration.toMillis(providerPollInterval) + providerModifiedSinceGraceMillis;
+
 export const catchUpSince = (
   parameters: ReadonlyArray<WorkflowParameterValue>,
   switchedOnAt: number,
@@ -66,7 +72,8 @@ export const catchUpSince = (
 ) => {
   const configured = Number(parameterValue(parameters, "catch-up-at-most") ?? "7");
   const days = Number.isInteger(configured) && configured >= 0 && configured <= 30 ? configured : 7;
-  return Math.max(switchedOnAt, now - days * 86_400_000);
+  const windowMillis = days === 0 ? zeroCatchUpGraceMillis : days * 86_400_000;
+  return Math.max(switchedOnAt, now - windowMillis);
 };
 
 export const workspaceSubscriptions = <A extends { readonly workspaces: ReadonlyArray<WorkspaceId> }>(
@@ -89,7 +96,7 @@ interface ProviderPollState extends ProviderPollCheckpoint {
 const batchSize = 50;
 
 const eventIdentity = (event: TriggerEvent) =>
-  `${event.entry}:${event.workspace}:${event.revision}:${JSON.stringify(event.parameters ?? [])}`;
+  `${keyOf(event.key)}:${event.entry}:${event.workspace}:${event.revision}:${JSON.stringify(event.parameters ?? [])}`;
 
 const uniqueEvents = (events: ReadonlyArray<TriggerEvent>) =>
   [...new Map(events.map((event) => [eventIdentity(event), event])).values()].sort(
@@ -130,7 +137,7 @@ export const providerPollingStream = <R>(
     Ref.make<ProviderPollState>({ cursors: new Map(), pending: [] }).pipe(
       Effect.map((state) =>
         Stream.fromEffect(poll(source, state, read)).pipe(
-          Stream.repeat(Schedule.spaced("60 seconds")),
+          Stream.repeat(Schedule.spaced(providerPollInterval)),
           Stream.flattenIterable,
         ),
       ),

@@ -9,6 +9,7 @@ import {
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
+  providerModifiedSinceGraceMillis,
   providerPollingStream,
   sourceFailure,
   triggerEntry,
@@ -31,7 +32,6 @@ export const linearTrackerEntries = [
 ];
 
 const itemId = Schema.decodeSync(WorkItemId);
-const graceMillis = 30_000;
 const targetsFor = (workspace: RegistryState["workspaces"][number]) => {
   const account = credentialAccountFor(workspace.config);
   if (workspace.config.issueTracker.type !== "linear" || account === null) return [];
@@ -133,7 +133,8 @@ const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(func
 ) {
   const selected = workspaceSubscriptions(workspace.config.name, subscriptions);
   if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
-  const updatedSince = cursor === undefined ? undefined : Math.max(0, cursor - graceMillis);
+  const updatedSince =
+    cursor === undefined ? undefined : Math.max(0, cursor - providerModifiedSinceGraceMillis);
   const issues = yield* Effect.forEach(targetsFor(workspace), (target) =>
     client.observeIssues(target, null, null, updatedSince),
   );

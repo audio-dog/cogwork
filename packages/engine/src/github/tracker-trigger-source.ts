@@ -9,6 +9,7 @@ import {
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
+  providerModifiedSinceGraceMillis,
   providerPollingStream,
   sourceFailure,
   triggerEntry,
@@ -31,7 +32,6 @@ export const githubTrackerEntries = [
 ];
 
 const itemId = Schema.decodeSync(WorkItemId);
-const graceMillis = 30_000;
 const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 const proseOf = (issue: RawIssue, comments: ReadonlyArray<RawIssueComment>) => ({
@@ -131,7 +131,7 @@ const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(func
   if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
   const target = targetFor(workspace);
   if (!target) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
-  const since = cursor === undefined ? undefined : Math.max(0, cursor - graceMillis);
+  const since = cursor === undefined ? undefined : Math.max(0, cursor - providerModifiedSinceGraceMillis);
   const issues = yield* client.listIssues(target, {
     state: "all",
     ...(since === undefined ? {} : { since }),
