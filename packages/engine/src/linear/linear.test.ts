@@ -88,6 +88,7 @@ interface Seed {
   >;
   readonly states?: ReadonlyArray<RawWorkflowState>;
   readonly authError?: boolean;
+  readonly observeError?: boolean;
 }
 
 interface LinearClientCallsState {
@@ -207,6 +208,12 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     observeIssues: (ref, coordination, assigneeIds = null) =>
       guard(
         Effect.gen(function* () {
+          if (seed.observeError) {
+            return yield* new IssueTrackerError({
+              reason: "unavailable",
+              message: "backlog unavailable",
+            });
+          }
           yield* Ref.update(calls.observe, (count) => count + 1);
           yield* Ref.update(calls.assigneeFilters, (filters) => [...filters, assigneeIds]);
           const issues = yield* Ref.get(issuesRef);
@@ -234,6 +241,43 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
                 ?.body?.includes(marker) ?? false,
             comment: (comments.get(issueId) ?? []).some(({ body }) => body.includes(marker)),
           })),
+        ),
+      ),
+    readActionIssue: (_ref, issueId) =>
+      guard(
+        Effect.gen(function* () {
+          const issue = (yield* Ref.get(issuesRef)).find(
+            (candidate) => candidate.identifier === issueId || candidate.id === issueId,
+          );
+          if (!issue) {
+            return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
+          }
+          return {
+            id: issue.id,
+            identifier: issue.identifier,
+            url: issue.url,
+            body: issue.body ?? "",
+            labels: [...issue.labels],
+            stateType: issue.stateType,
+          };
+        }),
+      ),
+    findActionIssue: (_ref, marker) =>
+      guard(
+        Ref.get(issuesRef).pipe(
+          Effect.map((issues) => {
+            const issue = issues.find(({ body }) => body?.includes(marker));
+            return issue
+              ? {
+                  id: issue.id,
+                  identifier: issue.identifier,
+                  url: issue.url,
+                  body: issue.body ?? "",
+                  labels: [...issue.labels],
+                  stateType: issue.stateType,
+                }
+              : null;
+          }),
         ),
       ),
     readProse: (_ref, issueId) =>
@@ -458,6 +502,72 @@ describe("linear work source adapter", () => {
       Effect.provide(
         withClient({
           issues: [{ identifier: "AUD-5", title: "Existing", labels: [] }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("recovers a created issue without observing the backlog", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker
+        .createIssue(workspace, {
+          title: "Created",
+          body: "Body",
+          labels: [],
+          origin,
+        })
+        .pipe(Effect.match({ onFailure: () => null, onSuccess: (created) => created }));
+
+      assert.strictEqual(artifact?.issue, "AUD-77");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          observeError: true,
+          issues: [
+            {
+              identifier: "AUD-77",
+              title: "Created",
+              labels: [],
+              description: wireCodec.encode({ name: "write", pairs: "key=create-key" }),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("confirms a completed target without observing the backlog", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+
+      const closed = yield* tracker
+        .closeIssue(workspace, id("AUD-5"), "close-key")
+        .pipe(Effect.match({ onFailure: () => false, onSuccess: () => true }));
+
+      const comments = yield* (yield* LinearClient).listComments(teamRef, "AUD-5", botCoordination);
+      assert.isTrue(closed);
+      assert.isTrue(comments.some(({ body }) => body.includes("key=close-key")));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          observeError: true,
+          issues: [
+            {
+              identifier: "AUD-5",
+              title: "Done",
+              labels: [],
+              stateName: "Done",
+              stateType: "completed",
+            },
+          ],
         }),
       ),
     ),

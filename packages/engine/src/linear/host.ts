@@ -120,11 +120,6 @@ const completedStateId = Effect.fn("linear.completedStateId")(function* (
 const writeMarker = (writeKey: string) =>
   wireCodec.encode({ name: "write", pairs: `key=${encodeURIComponent(writeKey)}` });
 
-const carriesWriteKey = (body: string, writeKey: string) =>
-  wireCodec
-    .scan(body)
-    .some(({ name, pairs }) => name === "write" && pairs === `key=${encodeURIComponent(writeKey)}`);
-
 const markedBody = (body: string, writeKey: string) => [body.trim(), writeMarker(writeKey)].join("\n\n");
 
 const writeNotConfirmed = (writeKey: string) =>
@@ -170,14 +165,12 @@ export const makeIssueActions = (client: LinearClientService) => {
     target: LinearTarget,
     issue: string,
     writeKey: string,
-    applied: (issue: ObservedRawIssue) => boolean,
+    applied: (issue: { readonly labels: ReadonlyArray<string>; readonly stateType: string }) => boolean,
     write: Effect.Effect<unknown, IssueTrackerError>,
   ) {
     if (yield* commentsCarry(target, issue, writeKey)) return;
-    const current = (yield* client.observeIssues(target, null)).find(
-      ({ identifier }) => identifier === issue,
-    );
-    if (!current || !applied(current)) yield* write;
+    const current = yield* client.readActionIssue(target, issue);
+    if (!applied(current)) yield* write;
     yield* client.createComment(target, issue, writeMarker(writeKey));
     yield* confirmComment(target, issue, writeKey);
   });
@@ -187,9 +180,7 @@ export const makeIssueActions = (client: LinearClientService) => {
       input: CreateIssueInput,
     ) {
       const target = yield* targetForCreate(workspace);
-      const existing = (yield* client.observeIssues(target, null)).find(({ body }) =>
-        carriesWriteKey(body ?? "", input.origin.writeKey),
-      );
+      const existing = yield* client.findActionIssue(target, writeMarker(input.origin.writeKey));
       if (existing) {
         return WorkflowActionArtifact.make({
           workspace: workspace.config.name,

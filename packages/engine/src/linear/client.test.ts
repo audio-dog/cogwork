@@ -317,6 +317,78 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("reads one action issue by id", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document, variables) =>
+        document.includes("ActionIssue") && variables.id === "AUD-1"
+          ? {
+              body: {
+                data: {
+                  issue: {
+                    id: "issue-uuid",
+                    identifier: "AUD-1",
+                    url: "https://linear.app/acme/issue/AUD-1",
+                    description: "body",
+                    labels: { nodes: [{ id: "label-uuid", name: "ready" }] },
+                    state: { type: "completed" },
+                  },
+                },
+              },
+            }
+          : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
+      );
+      const client = yield* LinearClient;
+
+      assert.deepStrictEqual(yield* client.readActionIssue(ref, "AUD-1"), {
+        id: "issue-uuid",
+        identifier: "AUD-1",
+        url: "https://linear.app/acme/issue/AUD-1",
+        body: "body",
+        labels: ["ready"],
+        stateType: "completed",
+      });
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("finds one action issue by body marker", () =>
+    Effect.gen(function* () {
+      const marker = "<!-- cogwork:write key=create-key -->";
+      const fetchStub = stubLinear((document, variables) =>
+        document.includes("description: { contains: $marker }") && variables.marker === marker
+          ? {
+              body: {
+                data: {
+                  teams: {
+                    nodes: [
+                      {
+                        issues: {
+                          nodes: [
+                            {
+                              id: "issue-uuid",
+                              identifier: "AUD-1",
+                              url: "https://linear.app/acme/issue/AUD-1",
+                              description: marker,
+                              labels: { nodes: [] },
+                              state: { type: "started" },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            }
+          : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
+      );
+      const client = yield* LinearClient;
+
+      assert.strictEqual((yield* client.findActionIssue(ref, marker))?.identifier, "AUD-1");
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
   it.effect("follows the issues cursor until the backlog is exhausted", () =>
     Effect.gen(function* () {
       const pageOf = (nodes: ReadonlyArray<unknown>, endCursor: string | null) => ({

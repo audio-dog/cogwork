@@ -219,6 +219,21 @@ const IssueMarkerPayload = Schema.Struct({
   ),
 });
 
+const ActionIssueNode = Schema.Struct({
+  id: Schema.String,
+  identifier: Schema.String,
+  url: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }),
+  state: Schema.Struct({ type: Schema.String }),
+});
+
+const ActionIssuePayload = Schema.Struct({ issue: Schema.NullOr(ActionIssueNode) });
+
+const ActionIssuesTeamNode = Schema.Struct({
+  issues: Schema.Struct({ nodes: Schema.Array(ActionIssueNode) }),
+});
+
 const IssueRelationsPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ inverseRelations: RelationConnection })),
 });
@@ -230,6 +245,7 @@ const IssueLabelPayload = Schema.Struct({
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
 const decodeIssueMarker = Schema.decodeUnknownEffect(IssueMarkerPayload);
+const decodeActionIssue = Schema.decodeUnknownEffect(ActionIssuePayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
@@ -459,6 +475,20 @@ query IssueMarker($id: String!, $marker: String!) {
   }
 }`;
 
+const actionIssueSelection = `
+      id
+      identifier
+      url
+      description
+      labels(first: ${labelPageSize}) { nodes { id name } }
+      state { type }`;
+
+const actionIssueQuery = `
+query ActionIssue($id: String!) {
+  issue(id: $id) {${actionIssueSelection}
+  }
+}`;
+
 const issueRelationsQuery = `
 query IssueInverseRelations($id: String!, $after: String) {
   issue(id: $id) {
@@ -514,6 +544,15 @@ const coordinatedIssuesShape = teamShape(
   issuesSelection(coordinationFields),
   `${issuesArgs}, $bot: ID!, $ledger: String!, $proposal: String!`,
 );
+const actionIssueMarkerShape = teamShape(
+  ActionIssuesTeamNode,
+  `
+  issues(filter: { description: { contains: $marker } }, first: 1) {
+    nodes {${actionIssueSelection}
+    }
+  }`,
+  ", $marker: String!",
+);
 
 const isResolvedBlocker = (stateType: string) => stateType === "completed" || stateType === "canceled";
 
@@ -553,6 +592,15 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   stateType: issue.state.type,
   openBlockers,
   priority: linearPriority(issue.priority),
+});
+
+const toActionIssue = (issue: typeof ActionIssueNode.Type) => ({
+  id: issue.id,
+  identifier: issue.identifier,
+  url: issue.url,
+  body: issue.description ?? "",
+  labels: issue.labels.nodes.map(({ name }) => name),
+  stateType: issue.state.type,
 });
 
 const toRawComment = (comment: typeof CommentNode.Type) => {
@@ -1020,6 +1068,17 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
         body: payload.issue.description?.includes(marker) ?? false,
         comment: payload.issue.comments.nodes.length > 0,
       };
+    }),
+    readActionIssue: Effect.fn("linear.readActionIssue")(function* (ref: LinearTeamRef, issueId: string) {
+      const data = yield* rawData(ref, actionIssueQuery, { id: issueId });
+      const payload = yield* Effect.mapError(decodeActionIssue(data), toUnavailable);
+      if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
+      return toActionIssue(payload.issue);
+    }),
+    findActionIssue: Effect.fn("linear.findActionIssue")(function* (ref: LinearTeamRef, marker: string) {
+      const team = yield* loadTeam(ref, actionIssueMarkerShape, { marker });
+      const issue = team.issues.nodes.at(0);
+      return issue ? toActionIssue(issue) : null;
     }),
     readProse,
     createIssue,
