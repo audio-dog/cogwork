@@ -1,7 +1,9 @@
 import {
+  AttemptRecord,
   keyOf,
   LineageId,
   localOwnerId,
+  ParkRecord,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -460,6 +462,74 @@ describe("TriggerObservation", () => {
       assert.deepStrictEqual(
         (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
         ["100.000"],
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("offers later conversation activity after an exhausted operation park", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>("100.000");
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>("200.000");
+      const store = yield* makeMemoryTriggerObservationStore;
+      const conversation = {
+        _tag: "SlackConversation",
+        team: "T123",
+        channel: "C123",
+        threadTs: "100.000",
+      } as const;
+      const operation = { workflow: subscription.workflow, operation: subscription.operation };
+      const conversationLineage = {
+        ...lineage,
+        root: yield* Schema.decodeEffect(LineageId)(keyOf(conversation)),
+      };
+      const laterAdmission = {
+        event: { ...event, key: conversation, revision: "200.000", atMillis: 200_000 },
+        subscription,
+        lineage: conversationLineage,
+      };
+      yield* store.putAll([laterAdmission]);
+      const parkedCoordination = {
+        ...coordinationService(processed, observed, sourceRevision),
+        read: () =>
+          Effect.succeed(
+            fold(
+              {
+                claim: null,
+                attempts: [100_000, 110_000, 120_000].map((atMillis) =>
+                  AttemptRecord.make({
+                    operation,
+                    outcome: "failed",
+                    atMillis,
+                    lineage: conversationLineage,
+                  }),
+                ),
+                handbacks: [],
+                parks: [
+                  ParkRecord.make({
+                    reason: { _tag: "Exhausted", reason: "failure limit" },
+                    operation,
+                    atMillis: 150_000,
+                  }),
+                ],
+                revision: { observed: "200.000", processed: "100.000" },
+              },
+              "cogwork",
+            ),
+          ),
+      } satisfies CoordinationService;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, parkedCoordination),
+        Effect.provideService(TriggerSources, []),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+      );
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        ["200.000"],
       );
     }).pipe(Effect.scoped),
   );

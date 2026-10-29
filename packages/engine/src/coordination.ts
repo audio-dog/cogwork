@@ -101,7 +101,7 @@ export interface CoordinationView {
   readonly park: ParkRecord | null;
   readonly revision: SourceRevision | null;
   readonly counters: (key: OperationKey) => CoordinationCounters;
-  readonly gate: (key: OperationKey) => CoordinationGate;
+  readonly gate: (key: OperationKey, activityAtMillis?: number) => CoordinationGate;
 }
 
 const sameOperation = (left: OperationKey, right: OperationKey) =>
@@ -209,12 +209,12 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
   const latestPark = newestByTime(activeParks);
   const claims = claimStampsOf(ledger);
   const park = claimClearsPark(latestPark, claims) ? null : latestPark;
-  const claimAfterBarrier =
-    ledger.claim && ledger.claim.claimedAtMillis > barrierAtMillis ? ledger.claim : null;
-  const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > barrierAtMillis);
-  const hop = claimAfterBarrier?.lineage.hop ?? newestByTime(attemptsAfterBarrier)?.lineage.hop ?? 0;
-  const counters = (key: OperationKey): CoordinationCounters => {
-    const { consecutiveFailures, terminal } = failureStateFor(ledger.attempts, barrierAtMillis, key);
+  const countersAfter = (key: OperationKey, afterMillis: number): CoordinationCounters => {
+    const claimAfterBarrier =
+      ledger.claim && ledger.claim.claimedAtMillis > afterMillis ? ledger.claim : null;
+    const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > afterMillis);
+    const hop = claimAfterBarrier?.lineage.hop ?? newestByTime(attemptsAfterBarrier)?.lineage.hop ?? 0;
+    const { consecutiveFailures, terminal } = failureStateFor(ledger.attempts, afterMillis, key);
     return {
       consecutiveFailures,
       exhausted: terminal || consecutiveFailures >= maxAttemptsPerOperation,
@@ -222,16 +222,23 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
       hopCapped: hop >= maxLineageHops,
     };
   };
-  const gate = (key: OperationKey): CoordinationGate => {
+  const counters = (key: OperationKey) => countersAfter(key, barrierAtMillis);
+  const gate = (key: OperationKey, activityAtMillis?: number): CoordinationGate => {
+    const gateBarrierAtMillis = Math.max(barrierAtMillis, activityAtMillis ?? 0);
     const matchingPark = newestByTime(
-      activeParks.filter(
-        (candidate) => candidate.operation === undefined || sameOperation(candidate.operation, key),
-      ),
+      activeParks.filter((candidate) => {
+        const matchesOperation = candidate.operation === undefined || sameOperation(candidate.operation, key);
+        const clearedByActivity =
+          candidate.operation !== undefined &&
+          activityAtMillis !== undefined &&
+          candidate.atMillis <= activityAtMillis;
+        return matchesOperation && !clearedByActivity;
+      }),
     );
     const input = {
       ledger,
       park: claimClearsPark(matchingPark, claims) ? null : matchingPark,
-      counters: counters(key),
+      counters: countersAfter(key, gateBarrierAtMillis),
     };
     return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
   };

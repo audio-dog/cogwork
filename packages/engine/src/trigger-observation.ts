@@ -558,10 +558,13 @@ export const make = Effect.gen(function* () {
               coordination.read(admission.event.key).pipe(
                 Effect.map((view) => ({
                   admission,
-                  gate: view.gate({
-                    workflow: admission.subscription.workflow,
-                    operation: admission.subscription.operation,
-                  }),
+                  gate: view.gate(
+                    {
+                      workflow: admission.subscription.workflow,
+                      operation: admission.subscription.operation,
+                    },
+                    admission.event.atMillis,
+                  ),
                 })),
               ),
             ),
