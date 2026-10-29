@@ -93,6 +93,7 @@ interface Seed {
 interface LinearClientCallsState {
   readonly observe: Ref.Ref<number>;
   readonly assigneeFilters: Ref.Ref<ReadonlyArray<ReadonlyArray<string> | null>>;
+  readonly readProse: Ref.Ref<number>;
 }
 
 class LinearClientCalls extends Context.Service<LinearClientCalls, LinearClientCallsState>()(
@@ -103,6 +104,7 @@ class LinearClientCalls extends Context.Service<LinearClientCalls, LinearClientC
     Effect.all({
       observe: Ref.make(0),
       assigneeFilters: Ref.make<ReadonlyArray<ReadonlyArray<string> | null>>([]),
+      readProse: Ref.make(0),
     }),
   );
 }
@@ -161,6 +163,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
   const commentSeq = yield* Ref.make(100);
   const states = seed.states ?? [
     { id: "state-todo", name: "Todo", type: "unstarted" },
+    { id: "state-done", name: "Done", type: "completed" },
     { id: "state-canceled", name: "Canceled", type: "canceled" },
   ];
 
@@ -221,9 +224,22 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     listWorkflowStates: () => guard(Effect.succeed(states)),
     listComments: (_ref, issueId, _coordination) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
+    findMarker: (_ref, issueId, marker) =>
+      guard(
+        Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]).pipe(
+          Effect.map(([issues, comments]) => ({
+            body:
+              issues
+                .find((candidate) => candidate.identifier === issueId || candidate.id === issueId)
+                ?.body?.includes(marker) ?? false,
+            comment: (comments.get(issueId) ?? []).some(({ body }) => body.includes(marker)),
+          })),
+        ),
+      ),
     readProse: (_ref, issueId) =>
       guard(
         Effect.gen(function* () {
+          yield* Ref.update(calls.readProse, (count) => count + 1);
           const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
           const issue = issues.find(
             (candidate) => candidate.identifier === issueId || candidate.id === issueId,
@@ -419,12 +435,29 @@ describe("linear work source adapter", () => {
       assert.deepStrictEqual(artifact.origin, origin);
       assert.include(created?.body ?? "", "create-key");
       assert.deepStrictEqual(current?.labels, ["added"]);
-      assert.strictEqual(current?.stateType, "canceled");
+      assert.strictEqual(current?.stateType, "completed");
       assert.strictEqual(comments.filter(({ body }) => body.includes("Comment")).length, 1);
     }).pipe(
       Effect.provide(
         withClient({
           issues: [{ identifier: "AUD-5", title: "Existing", labels: ["old"] }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("confirms workflow writes without loading admission prose", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const calls = yield* LinearClientCalls;
+
+      yield* tracker.commentIssue(workspace, id("AUD-5"), "Comment", "comment-key");
+
+      assert.strictEqual(yield* Ref.get(calls.readProse), 0);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-5", title: "Existing", labels: [] }],
         }),
       ),
     ),

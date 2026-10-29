@@ -728,6 +728,31 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("finds a marker without loading the admission thread", () =>
+    Effect.gen(function* () {
+      const marker = "cogwork:write-key";
+      const fetchStub = stubLinear(() => ({
+        body: {
+          data: {
+            issue: {
+              description: `body ${marker}`,
+              comments: { nodes: [{ id: "write-comment" }] },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+
+      const presence = yield* client.findMarker(ref, "AUD-1", marker);
+      const [request] = sentRequests(fetchStub);
+
+      assert.deepStrictEqual(presence, { body: true, comment: true });
+      assert.deepStrictEqual(request?.variables, { id: "AUD-1", marker });
+      assert.include(request?.query ?? "", "comments(filter: { body: { contains: $marker } }, first: 1)");
+      assert.notInclude(request?.query ?? "", "pageInfo");
+    }).pipe(withToken()),
+  );
+
   it.effect("reads the current issue body and every comment page in order", () =>
     Effect.gen(function* () {
       const page = (id: string, endCursor: string | null) => ({

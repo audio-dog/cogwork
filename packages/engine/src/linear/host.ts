@@ -102,6 +102,21 @@ const canceledStateId = Effect.fn("linear.canceledStateId")(function* (
   return canceled.id;
 });
 
+const completedStateId = Effect.fn("linear.completedStateId")(function* (
+  client: LinearClientService,
+  target: LinearTarget,
+) {
+  const states = yield* client.listWorkflowStates(target);
+  const completed = states.find((state) => state.type === "completed");
+  if (!completed) {
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: `Linear team ${target.team} has no completed workflow state`,
+    });
+  }
+  return completed.id;
+});
+
 const writeMarker = (writeKey: string) =>
   wireCodec.encode({ name: "write", pairs: `key=${encodeURIComponent(writeKey)}` });
 
@@ -142,9 +157,7 @@ export const makeIssueActions = (client: LinearClientService) => {
     return target;
   });
   const commentsCarry = (target: LinearTarget, issue: string, writeKey: string) =>
-    client
-      .readProse(target, issue)
-      .pipe(Effect.map(({ comments }) => comments.some(({ body }) => carriesWriteKey(body, writeKey))));
+    client.findMarker(target, issue, writeMarker(writeKey)).pipe(Effect.map(({ comment }) => comment));
   const confirmComment = Effect.fn("linear.confirmWorkflowComment")(function* (
     target: LinearTarget,
     issue: string,
@@ -190,8 +203,8 @@ export const makeIssueActions = (client: LinearClientService) => {
         body: markedBody(input.body, input.origin.writeKey),
         labels: input.labels,
       });
-      const prose = yield* client.readProse(target, created.id);
-      if (!carriesWriteKey(prose.body, input.origin.writeKey)) {
+      const marker = yield* client.findMarker(target, created.id, writeMarker(input.origin.writeKey));
+      if (!marker.body) {
         return yield* writeNotConfirmed(input.origin.writeKey);
       }
       return WorkflowActionArtifact.make({
@@ -248,12 +261,12 @@ export const makeIssueActions = (client: LinearClientService) => {
       writeKey: string,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      const stateId = yield* canceledStateId(client, target);
+      const stateId = yield* completedStateId(client, target);
       yield* writeOnce(
         target,
         id,
         writeKey,
-        ({ stateType }) => stateType === "canceled",
+        ({ stateType }) => stateType === "completed",
         client.setState(target, id, stateId),
       );
     }),

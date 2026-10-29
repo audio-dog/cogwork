@@ -210,6 +210,15 @@ const CoordinationCommentsPayload = Schema.Struct({
   ),
 });
 
+const IssueMarkerPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({
+      description: Schema.NullOr(Schema.String),
+      comments: Schema.Struct({ nodes: Schema.Array(Schema.Struct({ id: Schema.String })) }),
+    }),
+  ),
+});
+
 const IssueRelationsPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ inverseRelations: RelationConnection })),
 });
@@ -220,6 +229,7 @@ const IssueLabelPayload = Schema.Struct({
 
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
+const decodeIssueMarker = Schema.decodeUnknownEffect(IssueMarkerPayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
@@ -438,6 +448,14 @@ query IssueComments($id: String!, $after: String) {
 const coordinationCommentsQuery = `
 query IssueCoordinationComments($id: String!, $bot: ID!, $ledger: String!, $proposal: String!) {
   issue(id: $id) {${coordinationFields}
+  }
+}`;
+
+const issueMarkerQuery = `
+query IssueMarker($id: String!, $marker: String!) {
+  issue(id: $id) {
+    description
+    comments(filter: { body: { contains: $marker } }, first: 1) { nodes { id } }
   }
 }`;
 
@@ -989,6 +1007,19 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return [...(payload.issue?.comments.nodes ?? []), ...(payload.issue?.proposalComments.nodes ?? [])].map(
         toRawComment,
       );
+    }),
+    findMarker: Effect.fn("linear.findMarker")(function* (
+      ref: LinearTeamRef,
+      issueId: string,
+      marker: string,
+    ) {
+      const data = yield* rawData(ref, issueMarkerQuery, { id: issueId, marker });
+      const payload = yield* Effect.mapError(decodeIssueMarker(data), toUnavailable);
+      if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
+      return {
+        body: payload.issue.description?.includes(marker) ?? false,
+        comment: payload.issue.comments.nodes.length > 0,
+      };
     }),
     readProse,
     createIssue,
