@@ -272,12 +272,23 @@ export class StaleControlStoreWrite extends Schema.TaggedError<StaleControlStore
   },
 ) {}
 
+export const TriggerSourceHealth = Schema.Struct({
+  source: Schema.Literals(["github", "linear", "granola", "slack", "clock"]),
+  status: Schema.Literals(["idle", "observing", "failed"]),
+  message: Schema.NullOr(Schema.String),
+});
+export type TriggerSourceHealth = typeof TriggerSourceHealth.Type;
+
 export const DaemonStatus = Schema.Struct({
   health: DaemonHealth,
   startedAtMillis: Schema.Natural,
   uptimeMillis: Schema.Natural,
   eventBusDroppedEvents: Schema.Natural,
   scheduler: SchedulerStats,
+  sources: Schema.Array(TriggerSourceHealth).pipe(
+    Schema.withConstructorDefault(Effect.succeed([])),
+    Schema.withDecodingDefaultKey(Effect.succeed([])),
+  ),
   workspaces: Schema.Array(WorkspaceInfo),
   failures: Schema.Array(WorkspaceFailureInfo),
 });

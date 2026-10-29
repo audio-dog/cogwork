@@ -112,6 +112,7 @@ const unavailableStoreStatus: DaemonStatus = {
     dailyBudgetLimit: 50,
     perWorkspace: [],
   },
+  sources: [],
   workspaces: [],
   failures: [],
 };
