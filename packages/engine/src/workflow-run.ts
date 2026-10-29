@@ -170,15 +170,22 @@ export const make = Effect.gen(function* () {
       yield* settleAttempt(pendingPlan.attempt, "interrupted");
       yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
     }
-    if (pendingPlan !== null && !stalePlan) {
-      const key = operationKeyOf(admission, pendingPlan.operation);
-      yield* Effect.acquireRelease(
-        coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
-        (activeClaim) =>
-          coordination
-            .release(admission.event.key, activeClaim)
-            .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
-      );
+    const pendingKey =
+      pendingPlan !== null && !stalePlan ? operationKeyOf(admission, pendingPlan.operation) : null;
+    const pendingClaim =
+      pendingKey === null
+        ? null
+        : yield* Effect.acquireRelease(
+            coordination.claim(admission.event.key, {
+              operation: pendingKey,
+              lineage: admission.lineage,
+            }),
+            (activeClaim) =>
+              coordination
+                .release(admission.event.key, activeClaim)
+                .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
+          );
+    if (pendingPlan !== null && pendingKey !== null) {
       const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
       if (execution._tag === "Retry" || execution._tag === "Parked") {
         yield* settleAttempt(pendingPlan.attempt, "failed");
@@ -186,7 +193,7 @@ export const make = Effect.gen(function* () {
       }
       if (execution._tag === "Complete") {
         yield* coordination.recordAttempt(admission.event.key, {
-          operation: key,
+          operation: pendingKey,
           outcome: "succeeded",
           lineage: admission.lineage,
         });
@@ -223,13 +230,15 @@ export const make = Effect.gen(function* () {
     );
     if (Result.isFailure(preflight)) return yield* decline(admission);
 
-    const claim = yield* Effect.acquireRelease(
-      coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
-      (activeClaim) =>
-        coordination
-          .release(admission.event.key, activeClaim)
-          .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
-    );
+    const claim =
+      pendingClaim ??
+      (yield* Effect.acquireRelease(
+        coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
+        (activeClaim) =>
+          coordination
+            .release(admission.event.key, activeClaim)
+            .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
+      ));
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(randomUUID());
     const workspace = workspaceId(admission.subscription.workflow);

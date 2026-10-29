@@ -199,6 +199,7 @@ const makeCoordination = () =>
     const parks = yield* Ref.make<ReadonlyArray<ParkRecord>>([]);
     const processed = yield* Ref.make<string | null>(null);
     const barrier = yield* Ref.make(0);
+    const claims = yield* Ref.make(0);
     const read = () =>
       Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed), Ref.get(barrier)]).pipe(
         Effect.map(([currentAttempts, currentParks, currentProcessed, barrierAtMillis]) => ({
@@ -219,7 +220,10 @@ const makeCoordination = () =>
       service: {
         fold,
         read,
-        claim: (_ref, input) => Effect.succeed(Claim.make({ ...input, by: "cogwork", claimedAtMillis: 1 })),
+        claim: (_ref, input) =>
+          Ref.update(claims, (current) => current + 1).pipe(
+            Effect.map(() => Claim.make({ ...input, by: "cogwork", claimedAtMillis: 1 })),
+          ),
         release: () => Effect.void,
         recordAttempt: (_ref, input) =>
           Ref.update(attempts, (current) => [
@@ -238,6 +242,7 @@ const makeCoordination = () =>
       attempts,
       parks,
       processed,
+      claims,
     };
   });
 
@@ -582,6 +587,7 @@ describe("WorkflowRun", () => {
         operation: publish,
         summary: "Published",
       });
+      assert.strictEqual(yield* Ref.get(coordination.claims), 1);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
