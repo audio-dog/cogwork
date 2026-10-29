@@ -1,0 +1,58 @@
+packages/engine/src/github/trigger-source.test.ts
+  s_f4abcd25549e05::t_e76c25c35b46c8 45-46
+  s_f4abcd25549e05::t_f7c8e60a230785 367,372-376,399,404-405,407,409-413,438
+  s_f4abcd25549e05::t_dd3a0d4c6fe2d7 85-98,113,406,408,461
+  s_f4abcd25549e05::t_ef1912e1b65f4c 17,40-44,47-49,139,150-153,155,161-162,168-169,366,368-371,377-398,400-403,414-434,439-460,462-478
+  s_f4abcd25549e05::t_8e86a396a2fccb 435-437
+  s_f4abcd25549e05::t_d11cc7d6ed026a 315
+  s_f4abcd25549e05::t_d84f3dd1d587c3 479-480
+packages/engine/src/linear/client.test.ts
+  s_f4abcd25549e05::t_ef1912e1b65f4c 334-346,838-861,867-868
+  s_f4abcd25549e05::t_1f5ba13d1ac96a 10,862-866
+  s_f4abcd25549e05::t_1eb53f9d3b8a65 869
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_f4abcd25549e05::t_8e86a396a2fccb 21-26,152,259-261
+  s_f4abcd25549e05::t_f7c8e60a230785 63,262-263,265-266,272
+  s_f4abcd25549e05::t_2472e07303b075 208
+  s_f4abcd25549e05::t_83c07748377428 264
+  s_f4abcd25549e05::t_47fd4e251f77d8 18
+packages/engine/src/github/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_d010e3bd333a7e 113
+  s_f4abcd25549e05::t_e76c25c35b46c8 22,63
+  s_f4abcd25549e05::t_f7c8e60a230785 70,118
+  s_f4abcd25549e05::t_2472e07303b075 101
+  s_f4abcd25549e05::t_8e86a396a2fccb 85,92
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_c4810f5872434e 67
+  s_f4abcd25549e05::t_016a312a88040c 139
+  s_f4abcd25549e05::t_f7c8e60a230785 97,119
+  s_f4abcd25549e05::t_d010e3bd333a7e 114
+packages/engine/src/linear/trigger-source.test.ts
+  s_f4abcd25549e05::t_02a301d0ab2be5 13,41-86,88,108-109,114,116
+  s_f4abcd25549e05::t_3b90d24cfc85c8 87,110,115
+  s_f4abcd25549e05::t_ef1912e1b65f4c 30,35,89,96,98,103-104
+  s_f4abcd25549e05::t_d733db9487c356 16,40
+packages/engine/src/linear/client.ts
+  s_f4abcd25549e05::t_6d44674ffcb186 407
+  s_f4abcd25549e05::t_6498dfde20ac72 989
+  s_f4abcd25549e05::t_8e86a396a2fccb 820
+  s_f4abcd25549e05::t_f7c8e60a230785 402-406,830,926,944,988,990,1019
+packages/engine/src/linear/linear.test.ts
+  s_f4abcd25549e05::t_8e86a396a2fccb 199-213,245-246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a0774246bee70339d7d351a8dea931f7e899dada",
+  "prompts": {},
+  "sessions": {
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
