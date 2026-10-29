@@ -1296,7 +1296,7 @@ const conflictingProviderLayer: Layer.Layer<SourceControlProvider | PostedCommen
   },
 ).pipe(Layer.provideMerge(PostedComments.layer));
 
-const clockCappedFailingProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
+const untimestampedFailingProviderLayer: Layer.Layer<SourceControlProvider | PostedComments> = Layer.succeed(
   SourceControlProvider,
   {
     ...noopProvider,
@@ -4617,7 +4617,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, provider)));
   });
 
-  it.effect("omits a clock-capped failing check watermark from the failure marker", () => {
+  it.effect("omits an unavailable failing check watermark from the failure marker", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
@@ -4627,7 +4627,7 @@ describe("Executor.execute", () => {
       assert.strictEqual(attempt?.latestFailingCheckAtMillis, undefined);
     }).pipe(
       Effect.provide(
-        provide([runner(stuckFollowUpEvents)], existingWorktree, clockCappedFailingProviderLayer),
+        provide([runner(stuckFollowUpEvents)], existingWorktree, untimestampedFailingProviderLayer),
       ),
     );
   });
