@@ -1,0 +1,33 @@
+packages/engine/src/trigger-observation.test.ts
+  s_79a6dc92473e13::t_bb10f5b5006a22 35,261,265-266,272-279
+  s_79a6dc92473e13::t_13c6c595c70f54 494-509
+  s_79a6dc92473e13::t_fa6f9aef4634ba 258,267-271,311
+  s_79a6dc92473e13::t_aee50448166b14 13,34,123,130,250-257,259-260,262-264,280-310,312-313
+  s_79a6dc92473e13::t_e3776a00c04c17 492,516,519,521,524-525
+  s_79a6dc92473e13::t_e63f5995d0c36d 468,486-491,520,522-523
+  s_79a6dc92473e13::t_da5c4a018768f8 314-316
+packages/engine/src/trigger-observation.ts
+  s_79a6dc92473e13::t_1d644b0bd11001 386-390
+  s_79a6dc92473e13::t_fa6f9aef4634ba 393-396
+  s_79a6dc92473e13::t_34a5c9230b2956 59-62,66,85-86,131-132,139,199-203,205-206,209-214,216-221
+  s_79a6dc92473e13::t_d85b27bcdd3e68 207-208
+  s_79a6dc92473e13::t_b7211edeca055d 104-107,112,114-118,133-138,170,204,215
+packages/engine/src/control-store-schema.ts
+  s_79a6dc92473e13::t_b7211edeca055d 134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0df50d518b81d73b1b3eed2cdd938d2ee04c39ff",
+  "prompts": {},
+  "sessions": {
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
