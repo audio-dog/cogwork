@@ -141,6 +141,14 @@ const writeNotConfirmed = (writeKey: string) =>
     message: `Linear write ${writeKey} was not confirmed by read-back`,
   });
 
+const ambiguousWriteNotConfirmed = (writeKey: string) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    retryable: false,
+    writeMayHaveCommitted: true,
+    message: `Linear write ${writeKey} may have committed but was not confirmed by read-back`,
+  });
+
 export const makeIssueActions = (client: LinearClientService) => {
   const targetForCreate = Effect.fn("linear.workflowCreateTarget")(function* (
     workspace: WorkspaceIssueTrackerBinding,
@@ -179,6 +187,29 @@ export const makeIssueActions = (client: LinearClientService) => {
     if (yield* commentsCarry(target, issue, writeKey)) return;
     return yield* writeNotConfirmed(writeKey);
   });
+  const recoverCreatedIssue = Effect.fn("linear.recoverWorkflowCreatedIssue")(function* (
+    target: LinearTarget,
+    writeKey: string,
+    error: IssueTrackerError,
+  ) {
+    if (!error.writeMayHaveCommitted) return yield* error;
+    const recovered = yield* client
+      .findActionIssue(target, writeMarker(writeKey))
+      .pipe(Effect.orElseSucceed(() => null));
+    if (recovered) return recovered;
+    return yield* ambiguousWriteNotConfirmed(writeKey);
+  });
+  const confirmCreatedIssue = Effect.fn("linear.confirmWorkflowCreatedIssue")(function* (
+    target: LinearTarget,
+    issue: { readonly id: string },
+    writeKey: string,
+  ) {
+    const marker = yield* client
+      .findMarker(target, issue.id, writeMarker(writeKey))
+      .pipe(Effect.mapError(() => ambiguousWriteNotConfirmed(writeKey)));
+    if (marker.body) return;
+    return yield* ambiguousWriteNotConfirmed(writeKey);
+  });
   const writeOnce = Effect.fn("linear.workflowWriteOnce")(function* (
     target: LinearTarget,
     issue: string,
@@ -207,15 +238,14 @@ export const makeIssueActions = (client: LinearClientService) => {
           origin: input.origin,
         });
       }
-      const created = yield* client.createIssue(target, {
-        title: input.title,
-        body: markedBody(input.body, input.origin.writeKey),
-        labels: input.labels,
-      });
-      const marker = yield* client.findMarker(target, created.id, writeMarker(input.origin.writeKey));
-      if (!marker.body) {
-        return yield* writeNotConfirmed(input.origin.writeKey);
-      }
+      const created = yield* client
+        .createIssue(target, {
+          title: input.title,
+          body: markedBody(input.body, input.origin.writeKey),
+          labels: input.labels,
+        })
+        .pipe(Effect.catch((error) => recoverCreatedIssue(target, input.origin.writeKey, error)));
+      yield* confirmCreatedIssue(target, created, input.origin.writeKey);
       return WorkflowActionArtifact.make({
         workspace: workspace.config.name,
         issue: yield* itemId(created.identifier),

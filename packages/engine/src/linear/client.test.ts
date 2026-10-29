@@ -1017,6 +1017,36 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("marks a timed-out issue create as possibly committed", () =>
+    Effect.gen(function* () {
+      const onAbort = vi.fn();
+      const fetchStub = vi.fn((_input: unknown, init?: RequestInit) => {
+        const request = requestOf(init);
+        if (request.query.includes("issueCreate")) {
+          init?.signal?.addEventListener("abort", onAbort);
+          return Promise.withResolvers<Response>().promise;
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: { teams: { nodes: [teamBundle] } } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      });
+      vi.stubGlobal("fetch", fetchStub);
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [] }),
+      );
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Effect.flip(Fiber.join(requestFiber));
+
+      assert.strictEqual(error.writeMayHaveCommitted, true);
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+      assert.strictEqual(onAbort.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
   it.effect("does not retry an auth failure", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ status: 401, body: {} }));

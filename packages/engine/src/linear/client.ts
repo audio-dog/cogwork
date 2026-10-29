@@ -253,6 +253,16 @@ const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
+const markWriteMayHaveCommitted = (error: IssueTrackerError) =>
+  new IssueTrackerError({
+    reason: error.reason,
+    message: error.message,
+    retryable: error.retryable,
+    retryAfterMillis: error.retryAfterMillis,
+    connectionId: error.connectionId,
+    writeMayHaveCommitted: true,
+  });
+
 const labelCreateRefused = (ref: LinearTeamRef, name: string) => (error: IssueTrackerError) =>
   new IssueTrackerError({
     reason: error.reason,
@@ -952,7 +962,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
                 issue: { id: value.id, identifier: value.identifier, url: value.url },
               }));
         }),
-    );
+    ).pipe(Effect.mapError(markWriteMayHaveCommitted));
     yield* requireSuccess("issueCreate", payload);
     if (payload.issue === null) return yield* unavailable("Linear issueCreate returned no issue");
     return payload.issue;

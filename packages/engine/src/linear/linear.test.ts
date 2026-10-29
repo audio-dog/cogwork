@@ -89,6 +89,8 @@ interface Seed {
   readonly states?: ReadonlyArray<RawWorkflowState>;
   readonly authError?: boolean;
   readonly observeError?: boolean;
+  readonly createIssueError?: boolean;
+  readonly hideActionIssue?: boolean;
 }
 
 interface LinearClientCallsState {
@@ -266,6 +268,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
       guard(
         Ref.get(issuesRef).pipe(
           Effect.map((issues) => {
+            if (seed.hideActionIssue) return null;
             const issue = issues.find(({ body }) => body?.includes(marker));
             return issue
               ? {
@@ -352,6 +355,13 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             priority: "medium",
           };
           yield* Ref.update(issuesRef, (current) => [...current, created]);
+          if (seed.createIssueError) {
+            return yield* new IssueTrackerError({
+              reason: "unavailable",
+              message: "Linear issueCreate timed out",
+              writeMayHaveCommitted: true,
+            });
+          }
           return { id: created.id, identifier: created.identifier, url: created.url };
         }),
       ),
@@ -509,6 +519,33 @@ describe("linear work source adapter", () => {
 
       assert.match(artifact.issue, /^BIL-/);
     }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("parks an ambiguous create when recovery cannot find the issue", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.retryable, false);
+      assert.strictEqual(error.writeMayHaveCommitted, true);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          createIssueError: true,
+          hideActionIssue: true,
+        }),
+      ),
+    ),
   );
 
   it.effect("confirms workflow writes without loading admission prose", () =>
