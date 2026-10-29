@@ -491,10 +491,14 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     TriggerSources,
     Effect.gen(function* () {
       const connectionStore = yield* ConnectionStore;
+      const coordinationService = yield* Coordination;
       const http = yield* HttpClient.HttpClient;
-      return [clockSource, makeGranolaSource(connectionStore, makeGranolaSourceAdapters(http))];
+      return [
+        clockSource,
+        makeGranolaSource(connectionStore, makeGranolaSourceAdapters(http), coordinationService),
+      ];
     }),
-  ).pipe(Layer.provide(connections));
+  ).pipe(Layer.provide(Layer.merge(connections, coordination)));
   const triggerObservationStore = controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
   const workflowNotifications = workflowNotificationsLayer.pipe(
     Layer.provide(Layer.merge(runLedger, runRecorder)),

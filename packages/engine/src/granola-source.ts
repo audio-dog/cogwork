@@ -14,6 +14,7 @@ import * as Stream from "effect/Stream";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { ConnectionStoreService } from "./connection";
+import type { CoordinationService } from "./coordination";
 import type { Credential } from "./credential-store";
 import { type GranolaHttpFailure, makeGranolaHttp } from "./granola-http";
 import {
@@ -30,7 +31,6 @@ const editedKey = Schema.decodeSync(WorkflowCatalogKey)("granola.note-edited");
 export interface GranolaNoteSnapshot {
   readonly connection: ConnectionId;
   readonly noteId: string;
-  readonly createdAt: string;
   readonly updatedAt: string;
   readonly updatedAtMillis: number;
   readonly title: string;
@@ -73,7 +73,6 @@ const RestTranscriptSegment = Schema.Struct({
 
 const RestNote = Schema.Struct({
   id: BoundedContent,
-  created_at: BoundedContent,
   updated_at: BoundedContent,
   title: BoundedContent,
   attendees: Schema.optional(Schema.Array(RestAttendee).check(Schema.isMaxLength(noteLimit))),
@@ -119,7 +118,6 @@ const McpCallResponse = Schema.Struct({
 
 const McpMeeting = Schema.Struct({
   noteId: BoundedContent,
-  createdAt: BoundedContent,
   updatedAt: BoundedContent,
   updatedAtMillis: Schema.Finite,
   title: BoundedContent,
@@ -187,7 +185,6 @@ const restPage = (connection: ConnectionId, input: unknown) =>
               Effect.map((updatedAtMillis) => ({
                 connection,
                 noteId: note.id,
-                createdAt: note.created_at,
                 updatedAt: note.updated_at,
                 updatedAtMillis,
                 title: note.title,
@@ -268,7 +265,6 @@ const decodeMcpMeeting = Effect.fn("GranolaSource.decodeMcpMeeting")(function* (
   const updatedAtMillis = yield* timestampOf(attributes.updated_at, now);
   return yield* Schema.decodeEffect(McpMeeting)({
     noteId: attributes.id,
-    createdAt: attributes.meeting_at,
     updatedAt: attributes.updated_at,
     updatedAtMillis,
     title: attributes.title,
@@ -447,9 +443,6 @@ const connectionFailure = (message: string) =>
     message,
   });
 
-const sourceEntry = (note: GranolaNoteSnapshot) =>
-  note.createdAt === note.updatedAt ? generatedKey : editedKey;
-
 const contentRequirements: ReadonlyArray<{
   readonly missing: (note: GranolaNoteSnapshot) => boolean;
   readonly reason: string;
@@ -474,32 +467,36 @@ const payloadOf = (note: GranolaNoteSnapshot) => {
   } satisfies TriggerEvent["payload"];
 };
 
-const eventOf = (note: GranolaNoteSnapshot) =>
-  ({
-    key: { _tag: "GranolaNote", connection: note.connection, noteId: note.noteId },
+const eventOf = Effect.fn("GranolaSource.eventOf")(function* (
+  coordination: CoordinationService,
+  note: GranolaNoteSnapshot,
+) {
+  const key = { _tag: "GranolaNote", connection: note.connection, noteId: note.noteId } as const;
+  const prior = yield* coordination
+    .read(key)
+    .pipe(
+      Effect.mapError((error) =>
+        adapterFailure("unavailable", `Could not read the prior Granola revision: ${error.message}`),
+      ),
+    );
+  return {
+    key,
     revision: note.updatedAt,
     cause: { _tag: "Unknown" },
     atMillis: note.updatedAtMillis,
-    entry: sourceEntry(note),
+    entry: prior.revision === null ? generatedKey : editedKey,
     workspace: null,
     payload: payloadOf(note),
-  }) satisfies TriggerEvent;
+  } satisfies TriggerEvent;
+});
 
 const updatedAfter = (subscriptions: ReadonlyArray<TriggerSubscription>, now: number) =>
   Math.min(...subscriptions.map(({ catchUp }) => catchUp?.since ?? now));
 
-const eventsFor = (
-  notes: ReadonlyArray<GranolaNoteSnapshot>,
-  subscriptions: ReadonlyArray<TriggerSubscription>,
-) => {
-  const entries = new Set(subscriptions.map(({ entry }) => entry));
-  return notes.map(eventOf).filter(({ entry }) => entries.has(entry));
-};
-
 function pollGranola(
   connections: ConnectionStoreService,
   adapters: GranolaSourceAdapters,
-  subscriptions: ReadonlyArray<TriggerSubscription>,
+  coordination: CoordinationService,
   updatedAfterMillis: number,
 ) {
   return Effect.gen(function* () {
@@ -514,11 +511,15 @@ function pollGranola(
       .pipe(Effect.mapError((error) => connectionFailure(error.message)));
     const adapter = credential.source === "stored-oauth" ? adapters.mcp : adapters.rest;
     const notes = yield* adapter.read(credential, connection.id, updatedAfterMillis);
-    return eventsFor(notes, subscriptions);
+    return yield* Effect.forEach(notes, (note) => eventOf(coordination, note));
   });
 }
 
-export const makeGranolaSource = (connections: ConnectionStoreService, adapters: GranolaSourceAdapters) =>
+export const makeGranolaSource = (
+  connections: ConnectionStoreService,
+  adapters: GranolaSourceAdapters,
+  coordination: CoordinationService,
+) =>
   ({
     id: "granola",
     entries: granolaEntries,
@@ -540,7 +541,7 @@ export const makeGranolaSource = (connections: ConnectionStoreService, adapters:
       if (subscriptions.length === 0) return Stream.empty;
       const next = (state: { readonly watermark: number; readonly first: boolean }) =>
         (state.first ? Effect.void : Effect.sleep("60 seconds")).pipe(
-          Effect.andThen(pollGranola(connections, adapters, subscriptions, state.watermark)),
+          Effect.andThen(pollGranola(connections, adapters, coordination, state.watermark)),
           Effect.map((events) => {
             const watermark = events.reduce(
               (latest, event) => Math.max(latest, event.atMillis),

@@ -12,6 +12,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import type { ConnectionStoreService } from "./connection";
+import { type CoordinationService, fold } from "./coordination";
 import type { Credential } from "./credential-store";
 import {
   type GranolaNoteSnapshot,
@@ -42,7 +43,6 @@ const subscription: TriggerSubscription = {
 const note: GranolaNoteSnapshot = {
   connection: connectionId,
   noteId: "note-1",
-  createdAt: "2026-10-29T15:00:00.000Z",
   updatedAt: "2026-10-29T15:00:00.000Z",
   updatedAtMillis: Date.parse("2026-10-29T15:00:00.000Z"),
   title: "Weekly product sync",
@@ -51,6 +51,34 @@ const note: GranolaNoteSnapshot = {
   summary: "Decided to ship the smaller change.",
   transcript: "Taylor: Ship the smaller change.\nAri: Agreed.",
 };
+
+const coordinationService = (
+  revisionOf: (noteId: string) => string | null = () => null,
+): CoordinationService => ({
+  fold,
+  read: (ref) => {
+    const revision = ref._tag === "GranolaNote" ? revisionOf(ref.noteId) : null;
+    return Effect.succeed(
+      fold(
+        {
+          claim: null,
+          attempts: [],
+          handbacks: [],
+          parks: [],
+          revision: revision === null ? null : { observed: revision, processed: null },
+        },
+        "cogwork",
+      ),
+    );
+  },
+  claim: () => Effect.die("unused"),
+  release: () => Effect.die("unused"),
+  recordAttempt: () => Effect.die("unused"),
+  park: () => Effect.die("unused"),
+  handBack: () => Effect.die("unused"),
+  observe: () => Effect.die("unused"),
+  markProcessed: () => Effect.die("unused"),
+});
 
 const credential = (source: Credential["source"]): Credential => ({
   source,
@@ -126,21 +154,24 @@ it.effect("uses the API-key adapter and freezes a complete Granola note", () =>
   Effect.gen(function* () {
     const restCalls = yield* Ref.make(0);
     const mcpCalls = yield* Ref.make(0);
-    const source = makeGranolaSource(connectionStore(credential("stored-key")), {
-      rest: adapter(restCalls, [
-        note,
-        {
-          ...note,
-          noteId: "note-2",
-          createdAt: "2026-10-29T14:00:00.000Z",
-          updatedAt: "2026-10-29T16:00:00.000Z",
-          updatedAtMillis: Date.parse("2026-10-29T16:00:00.000Z"),
-          summary: "Regenerated summary.",
-        },
-        { ...note, noteId: "note-3", transcript: null },
-      ]),
-      mcp: adapter(mcpCalls, [note]),
-    });
+    const source = makeGranolaSource(
+      connectionStore(credential("stored-key")),
+      {
+        rest: adapter(restCalls, [
+          note,
+          {
+            ...note,
+            noteId: "note-2",
+            updatedAt: "2026-10-29T16:00:00.000Z",
+            updatedAtMillis: Date.parse("2026-10-29T16:00:00.000Z"),
+            summary: "Regenerated summary.",
+          },
+          { ...note, noteId: "note-3", transcript: null },
+        ]),
+        mcp: adapter(mcpCalls, [note]),
+      },
+      coordinationService((noteId) => (noteId === "note-2" ? "2026-10-29T15:00:00.000Z" : null)),
+    );
     const events = yield* source
       .observe([subscription, { ...subscription, entry: edited }])
       .pipe(Stream.take(3), Stream.runCollect);
@@ -180,14 +211,37 @@ it.effect("uses the MCP adapter when the Connection has no API key", () =>
   Effect.gen(function* () {
     const restCalls = yield* Ref.make(0);
     const mcpCalls = yield* Ref.make(0);
-    const source = makeGranolaSource(connectionStore(credential("stored-oauth")), {
-      rest: adapter(restCalls, [note]),
-      mcp: adapter(mcpCalls, [note]),
-    });
+    const source = makeGranolaSource(
+      connectionStore(credential("stored-oauth")),
+      {
+        rest: adapter(restCalls, [note]),
+        mcp: adapter(mcpCalls, [note]),
+      },
+      coordinationService(),
+    );
     yield* source.observe([subscription]).pipe(Stream.take(1), Stream.runDrain);
 
     assert.strictEqual(yield* Ref.get(restCalls), 0);
     assert.strictEqual(yield* Ref.get(mcpCalls), 1);
+  }),
+);
+
+it.effect("classifies the first MCP note revision as generated", () =>
+  Effect.gen(function* () {
+    const calls = yield* Ref.make(0);
+    const source = makeGranolaSource(
+      connectionStore(credential("stored-oauth")),
+      {
+        rest: adapter(calls, []),
+        mcp: adapter(calls, [note]),
+      },
+      coordinationService(),
+    );
+    const events = yield* source
+      .observe([subscription, { ...subscription, entry: edited }])
+      .pipe(Stream.take(1), Stream.runCollect);
+
+    assert.strictEqual(events[0]?.entry, generated);
   }),
 );
 
@@ -196,10 +250,14 @@ it.effect("reports an unready Connection without reading either adapter", () =>
     const restCalls = yield* Ref.make(0);
     const mcpCalls = yield* Ref.make(0);
     const readiness: ConnectionReadiness = { _tag: "NotReady", reason: "Granola login expired" };
-    const source = makeGranolaSource(connectionStore(credential("stored-oauth"), readiness), {
-      rest: adapter(restCalls, [note]),
-      mcp: adapter(mcpCalls, [note]),
-    });
+    const source = makeGranolaSource(
+      connectionStore(credential("stored-oauth"), readiness),
+      {
+        rest: adapter(restCalls, [note]),
+        mcp: adapter(mcpCalls, [note]),
+      },
+      coordinationService(),
+    );
     const availability = yield* source.availability(generated);
     const failure = yield* Effect.flip(source.observe([subscription]).pipe(Stream.runDrain));
 
@@ -338,10 +396,14 @@ it.effect("advances the source watermark after a successful poll", () =>
           ),
         ),
     };
-    const source = makeGranolaSource(connectionStore(credential("stored-key")), {
-      rest: progressive,
-      mcp: progressive,
-    });
+    const source = makeGranolaSource(
+      connectionStore(credential("stored-key")),
+      {
+        rest: progressive,
+        mcp: progressive,
+      },
+      coordinationService(),
+    );
     const stopped = yield* source
       .observe([subscription])
       .pipe(Stream.runDrain, Effect.flip, Effect.forkChild({ startImmediately: true }));
