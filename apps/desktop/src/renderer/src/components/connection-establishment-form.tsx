@@ -107,14 +107,14 @@ function LinearCredentialSources({ id }: { readonly id: string }) {
 const credentialSources = {
   github: GitHubCredentialSources,
   linear: LinearCredentialSources,
-} satisfies Record<Exclude<ConnectionSystem, "granola">, typeof GitHubCredentialSources>;
+} satisfies Record<Exclude<ConnectionSystem, "granola" | "slack">, typeof GitHubCredentialSources>;
 
 function CredentialSourceOptions({
   id,
   system,
 }: {
   readonly id: string;
-  readonly system: Exclude<ConnectionSystem, "granola">;
+  readonly system: Exclude<ConnectionSystem, "granola" | "slack">;
 }) {
   const Sources = credentialSources[system];
   return <Sources id={id} />;
@@ -127,7 +127,7 @@ function CredentialSourceField({
   onChange,
 }: {
   readonly id: string;
-  readonly system: Exclude<ConnectionSystem, "granola">;
+  readonly system: Exclude<ConnectionSystem, "granola" | "slack">;
   readonly value: CredentialSourceTag;
   readonly onChange: (next: CredentialSourceTag) => void;
 }) {
@@ -222,7 +222,7 @@ export function ConnectionEstablishmentDialog({
               </form.Field>
             ) : null}
 
-            {system === "granola" ? null : (
+            {system === "granola" || system === "slack" ? null : (
               <form.Field name="source">
                 {(field) => (
                   <CredentialSourceField

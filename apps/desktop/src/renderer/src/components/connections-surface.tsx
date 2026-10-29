@@ -53,7 +53,14 @@ import {
 } from "@cogwork/ui/components/item";
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { RiAlertLine, RiCheckLine, RiDeleteBinLine, RiFileTextLine, RiPlugLine } from "@remixicon/react";
+import {
+  RiAlertLine,
+  RiCheckLine,
+  RiDeleteBinLine,
+  RiFileTextLine,
+  RiPlugLine,
+  RiSlackLine,
+} from "@remixicon/react";
 import { Link, linkOptions } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
@@ -62,6 +69,7 @@ import {
   connectionsAtom,
   establishConnectionAtom,
   loginGranolaAtom,
+  loginSlackAtom,
   pluginsAtom,
   reconnectConnectionAtom,
   removeConnectionAtom,
@@ -88,6 +96,7 @@ export interface ConnectionsValue {
     readonly establish: (establishment: ConnectionEstablishment) => Promise<string | null>;
     readonly reconnect: (establishment: ConnectionEstablishment) => Promise<string | null>;
     readonly loginGranola: (account: string) => Promise<string | null>;
+    readonly loginSlack: () => Promise<string | null>;
     readonly remove: (connectionId: ConnectionId) => void;
   };
   readonly meta: { readonly failure: string | null; readonly danglingWorkspaces: readonly string[] };
@@ -143,6 +152,7 @@ function ConnectionsLiveProvider({ children }: { readonly children: ReactNode })
   const establish = useAtomSet(establishConnectionAtom, { mode: "promiseExit" });
   const reconnect = useAtomSet(reconnectConnectionAtom, { mode: "promiseExit" });
   const loginGranola = useAtomSet(loginGranolaAtom, { mode: "promiseExit" });
+  const loginSlack = useAtomSet(loginSlackAtom, { mode: "promiseExit" });
   const [removeResult, remove] = useAtom(removeConnectionAtom);
   const board = BoardResult.$is("Success")(boardResult) ? boardResult.board : null;
   const overview = board?.connections ?? (queried._tag === "Success" ? queried.value : null);
@@ -156,6 +166,7 @@ function ConnectionsLiveProvider({ children }: { readonly children: ReactNode })
       establish: (establishment) => rejectionOf(establish({ payload: { establishment } })),
       reconnect: (establishment) => rejectionOf(reconnect({ payload: { establishment } })),
       loginGranola: (account) => rejectionOf(loginGranola({ payload: { account } })),
+      loginSlack: () => rejectionOf(loginSlack({ payload: undefined })),
       remove: (connectionId) => remove({ payload: { connectionId } }),
     },
     meta: {
@@ -291,7 +302,7 @@ function RemoveConnectionDialog({ item }: { readonly item: ConnectionItem }) {
 }
 
 function ConnectionSystemTile({ system }: { readonly system: ConnectionSystem }) {
-  const icons = { github: GithubIcon, linear: LinearIcon, granola: RiFileTextLine };
+  const icons = { github: GithubIcon, linear: LinearIcon, granola: RiFileTextLine, slack: RiSlackLine };
   const Icon = icons[system];
   return (
     <ItemMedia variant="icon" className="size-9 rounded-lg bg-muted text-foreground">
@@ -411,9 +422,40 @@ function GranolaConnectionActions({ item }: { readonly item: ConnectionItem }) {
   );
 }
 
+function SlackConnectionAction({ item }: { readonly item: ConnectionItem }) {
+  const {
+    actions: { loginSlack },
+  } = useConnections();
+  const [submitting, setSubmitting] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const submit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const result = await loginSlack();
+    setSubmitting(false);
+    setRefusal(result);
+  };
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button size="sm" onClick={submit} disabled={submitting}>
+        {submitting ? <Spinner data-icon="inline-start" /> : null}
+        {item.connection ? "Re-connect" : "Connect Slack"}
+      </Button>
+      {refusal ? <p className="text-xs text-destructive">{refusal}</p> : null}
+    </div>
+  );
+}
+
+const connectionActionComponents = {
+  github: ConnectionMutationDialog,
+  linear: ConnectionMutationDialog,
+  granola: GranolaConnectionActions,
+  slack: SlackConnectionAction,
+} satisfies Record<ConnectionSystem, typeof ConnectionMutationDialog>;
+
 function ConnectionActions({ item }: { readonly item: ConnectionItem }) {
-  if (item.system === "granola") return <GranolaConnectionActions item={item} />;
-  return <ConnectionMutationDialog item={item} />;
+  const Action = connectionActionComponents[item.system];
+  return <Action item={item} />;
 }
 
 function ConnectionsContent() {
