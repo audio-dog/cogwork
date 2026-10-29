@@ -15,10 +15,10 @@ import type * as HttpClientResponse from "effect/unstable/http/HttpClientRespons
 import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { awaitLoopbackAuthorization, BrowserOpener, browserOpenerLayer } from "./login";
 
-export const slackClientId = "663911259169.12446984597813";
-export const slackAppId = "A0CD4UYHKPX";
-export const slackRedirectUri = "http://localhost:39517/oauth/callback";
-export const slackScopes = [
+const slackClientId = "663911259169.12446984597813";
+const slackAppId = "A0CD4UYHKPX";
+const slackRedirectUri = "http://localhost:39517/oauth/callback";
+const slackScopes = [
   "channels:history",
   "groups:history",
   "im:history",
@@ -122,7 +122,7 @@ const exchange = Effect.fn("slack.oauth.exchange")(function* (
   code: string,
   verifier: string,
 ) {
-  const response = yield* execute(
+  return yield* execute(
     client
       .execute(
         HttpClientRequest.post(config.tokenEndpoint).pipe(
@@ -136,12 +136,16 @@ const exchange = Effect.fn("slack.oauth.exchange")(function* (
           }),
         ),
       )
-      .pipe(Effect.mapError(() => failure("Slack token exchange could not be reached"))),
+      .pipe(
+        Effect.mapError(() => failure("Slack token exchange could not be reached")),
+        Effect.flatMap((response) => readBody(response, "Slack token exchange")),
+        Effect.flatMap((body) =>
+          decodeTokenResponse(body).pipe(
+            Effect.mapError(() => failure("Slack token exchange returned an unexpected payload")),
+          ),
+        ),
+      ),
     "Slack token exchange",
-  );
-  const body = yield* readBody(response, "Slack token exchange");
-  return yield* decodeTokenResponse(body).pipe(
-    Effect.mapError(() => failure("Slack token exchange returned an unexpected payload")),
   );
 });
 
@@ -203,7 +207,7 @@ export const makeTokenRefresh = (client: HttpClient.HttpClient): CredentialStore
     if (!request.tokenEndpoint) {
       return yield* refreshFailure(request.account, "the stored grant has no token endpoint");
     }
-    const response = yield* client
+    const tokens = yield* client
       .execute(
         HttpClientRequest.post(request.tokenEndpoint).pipe(
           HttpClientRequest.setHeader("accept", "application/json"),
@@ -216,26 +220,29 @@ export const makeTokenRefresh = (client: HttpClient.HttpClient): CredentialStore
       )
       .pipe(
         Effect.mapError(() => refreshFailure(request.account, "the token endpoint could not be reached")),
+        Effect.flatMap((response) =>
+          response.status === 200
+            ? response.json.pipe(
+                Effect.mapError(() =>
+                  refreshFailure(request.account, "the token endpoint returned an unreadable body"),
+                ),
+              )
+            : Effect.fail(refreshFailure(request.account, `the token endpoint returned ${response.status}`)),
+        ),
+        Effect.flatMap((body) =>
+          decodeRefreshResponse(body).pipe(
+            Effect.mapError(() =>
+              refreshFailure(request.account, "the token endpoint returned an unexpected payload"),
+            ),
+          ),
+        ),
         Effect.timeout(requestDeadline),
-        Effect.mapError((error) =>
-          error._tag === "CredentialError"
-            ? error
-            : refreshFailure(request.account, `the token endpoint timed out after ${requestDeadline}`),
+        Effect.catchTag("TimeoutError", () =>
+          Effect.fail(
+            refreshFailure(request.account, `the token endpoint timed out after ${requestDeadline}`),
+          ),
         ),
       );
-    if (response.status !== 200) {
-      return yield* refreshFailure(request.account, `the token endpoint returned ${response.status}`);
-    }
-    const body = yield* response.json.pipe(
-      Effect.mapError(() =>
-        refreshFailure(request.account, "the token endpoint returned an unreadable body"),
-      ),
-    );
-    const tokens = yield* decodeRefreshResponse(body).pipe(
-      Effect.mapError(() =>
-        refreshFailure(request.account, "the token endpoint returned an unexpected payload"),
-      ),
-    );
     const now = yield* Clock.currentTimeMillis;
     return {
       accessToken: Redacted.make(tokens.access_token),

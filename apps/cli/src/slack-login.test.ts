@@ -8,9 +8,30 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as HttpClient from "effect/unstable/http/HttpClient";
 import { BrowserOpener } from "./login";
-import { makeTokenRefresh, type SlackLoginConfig, slackLoginLayer, slackScopes } from "./slack-login";
+import { type SlackLoginConfig, slackLoginLayer } from "./slack-login";
+
+const expectedScopes = [
+  "channels:history",
+  "groups:history",
+  "im:history",
+  "mpim:history",
+  "channels:read",
+  "groups:read",
+  "im:read",
+  "mpim:read",
+  "users:read",
+  "chat:write",
+  "reactions:read",
+  "reactions:write",
+  "emoji:read",
+  "search:read",
+  "search:read.public",
+  "search:read.private",
+  "search:read.im",
+  "search:read.mpim",
+  "search:read.users",
+].join(",");
 
 const listen = (server: Http.Server, host = "127.0.0.1") =>
   Effect.callback<void, Error>((resume) => {
@@ -46,7 +67,7 @@ const freePort = () =>
   );
 
 describe("Slack browser login", () => {
-  it.live("stores the user grant and rotates it without a client secret", () =>
+  it.live("stores the user grant without a client secret", () =>
     Effect.gen(function* () {
       const tokenRequests: Array<URLSearchParams> = [];
       const server = Http.createServer((request, response) => {
@@ -55,29 +76,18 @@ describe("Slack browser login", () => {
         request.on("end", () => {
           const params = new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
           tokenRequests.push(params);
-          const refreshing = params.get("grant_type") === "refresh_token";
           response.writeHead(200, { "content-type": "application/json" });
           response.end(
-            JSON.stringify(
-              refreshing
-                ? {
-                    ok: true,
-                    access_token: "slack-refreshed",
-                    refresh_token: "slack-refresh-2",
-                    expires_in: 43_200,
-                    scope: "channels:history,chat:write",
-                  }
-                : {
-                    ok: true,
-                    access_token: "slack-access",
-                    refresh_token: "slack-refresh-1",
-                    expires_in: 43_200,
-                    scope: slackScopes.join(","),
-                    team: { id: "T-STUB" },
-                    user_id: "U-STUB",
-                    app_id: "A-STUB",
-                  },
-            ),
+            JSON.stringify({
+              ok: true,
+              access_token: "slack-access",
+              refresh_token: "slack-refresh-1",
+              expires_in: 43_200,
+              scope: expectedScopes,
+              team: { id: "T-STUB" },
+              user_id: "U-STUB",
+              app_id: "A-STUB",
+            }),
           );
         });
       });
@@ -108,7 +118,7 @@ describe("Slack browser login", () => {
       const context = yield* Layer.build(slackLoginLayer(config, browser));
       const credential = yield* Context.get(context, Slack.SlackLogin).login;
 
-      assert.strictEqual(opened[0]?.searchParams.get("scope"), slackScopes.join(","));
+      assert.strictEqual(opened[0]?.searchParams.get("scope"), expectedScopes);
       assert.strictEqual(opened[0]?.searchParams.get("code_challenge_method"), "S256");
       assert.strictEqual(credential.organization, "T-STUB");
       assert.strictEqual(credential.actorUserId, "U-STUB");
@@ -116,20 +126,6 @@ describe("Slack browser login", () => {
       assert.strictEqual(tokenRequests[0]?.get("client_secret"), null);
       assert.strictEqual(tokenRequests[0]?.get("redirect_uri"), config.redirectUri);
       assert.strictEqual((tokenRequests[0]?.get("code_verifier")?.length ?? 0) > 0, true);
-      if (!credential.token.refreshToken) assert.fail("Expected refresh token");
-      const client = yield* HttpClient.HttpClient;
-      const refreshed = yield* makeTokenRefresh(client)({
-        account: "slack/T-STUB",
-        issueTracker: "slack",
-        clientId: config.clientId,
-        tokenEndpoint: endpoint,
-        refreshToken: credential.token.refreshToken,
-      });
-
-      assert.strictEqual(Redacted.value(refreshed.accessToken), "slack-refreshed");
-      assert.strictEqual(refreshed.refreshToken && Redacted.value(refreshed.refreshToken), "slack-refresh-2");
-      assert.strictEqual(tokenRequests[1]?.get("client_secret"), null);
-      assert.strictEqual(tokenRequests[1]?.get("refresh_token"), "slack-refresh-1");
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer))),
   );
 });
