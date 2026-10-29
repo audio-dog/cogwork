@@ -104,6 +104,14 @@ const writeNotConfirmed = (writeKey: string) =>
     message: `GitHub write ${writeKey} was not confirmed by read-back`,
   });
 
+const ambiguousWriteNotConfirmed = (writeKey: string) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    retryable: false,
+    writeMayHaveCommitted: true,
+    message: `GitHub write ${writeKey} may have committed but was not confirmed by read-back`,
+  });
+
 export const makeIssueActions = (client: GitHubClientService) => {
   const target = Effect.fn("github.workflowActionTarget")(function* (
     workspace: WorkspaceIssueTrackerBinding,
@@ -148,6 +156,29 @@ export const makeIssueActions = (client: GitHubClientService) => {
     yield* client.createComment(repo, number, writeMarker(writeKey));
     yield* confirmComment(repo, number, writeKey);
   });
+  const recoverCreatedIssue = Effect.fn("github.recoverWorkflowCreatedIssue")(function* (
+    repo: GitHubTarget,
+    writeKey: string,
+    error: IssueTrackerError,
+  ) {
+    if (!error.writeMayHaveCommitted) return yield* error;
+    const recovered = yield* client
+      .findIssueWithMarker(repo, writeMarker(writeKey))
+      .pipe(Effect.orElseSucceed(() => null));
+    if (recovered) return recovered;
+    return yield* ambiguousWriteNotConfirmed(writeKey);
+  });
+  const confirmCreatedIssue = Effect.fn("github.confirmWorkflowCreatedIssue")(function* (
+    repo: GitHubTarget,
+    issue: RawIssue,
+    writeKey: string,
+  ) {
+    const confirmed = yield* client
+      .readIssue(repo, issue.number)
+      .pipe(Effect.mapError(() => ambiguousWriteNotConfirmed(writeKey)));
+    if (carriesWriteKey(confirmed.body, writeKey)) return confirmed;
+    return yield* ambiguousWriteNotConfirmed(writeKey);
+  });
   return {
     createIssue: Effect.fn("github.workflowCreateIssue")(function* (
       workspace: WorkspaceIssueTrackerBinding,
@@ -156,15 +187,15 @@ export const makeIssueActions = (client: GitHubClientService) => {
       const repo = yield* target(workspace);
       const existing = yield* client.findIssueWithMarker(repo, writeMarker(input.origin.writeKey));
       if (existing) return yield* artifact(workspace, existing, input.origin);
-      const created = yield* client.createIssue(repo, {
-        title: input.title,
-        body: markedBody(input.body, input.origin.writeKey),
-        labels: input.labels,
-      });
-      if (!carriesWriteKey(created.body, input.origin.writeKey)) {
-        return yield* writeNotConfirmed(input.origin.writeKey);
-      }
-      return yield* artifact(workspace, created, input.origin);
+      const created = yield* client
+        .createIssue(repo, {
+          title: input.title,
+          body: markedBody(input.body, input.origin.writeKey),
+          labels: input.labels,
+        })
+        .pipe(Effect.catch((error) => recoverCreatedIssue(repo, input.origin.writeKey, error)));
+      const confirmed = yield* confirmCreatedIssue(repo, created, input.origin.writeKey);
+      return yield* artifact(workspace, confirmed, input.origin);
     }),
     commentIssue: Effect.fn("github.workflowCommentIssue")(function* (
       workspace: WorkspaceIssueTrackerBinding,

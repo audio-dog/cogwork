@@ -243,7 +243,14 @@ describe("GitHub client", () => {
   it.effect("finds one issue by body marker", () => {
     const marker = "<!-- cogwork:write key=create-key -->";
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
-      Promise.resolve(jsonResponse({ items: [{ ...issueResponse(416), body: marker }] })),
+      Promise.resolve(
+        jsonResponse({
+          items: [
+            { ...issueResponse(415), body: "<!-- cogwork:write key=another-create-key -->" },
+            { ...issueResponse(416), body: marker },
+          ],
+        }),
+      ),
     );
 
     return Effect.gen(function* () {
@@ -259,7 +266,7 @@ describe("GitHub client", () => {
         request.searchParams.get("q"),
         `repo:colonylabs/cogwork is:issue in:body "${marker}"`,
       );
-      assert.strictEqual(request.searchParams.get("per_page"), "1");
+      assert.strictEqual(request.searchParams.get("per_page"), "100");
     }).pipe(withFetchClient(fetch));
   });
 

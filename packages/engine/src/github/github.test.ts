@@ -4,6 +4,7 @@ import {
   type Claim,
   codingOperation,
   GitHubIssueFieldId,
+  issueTrackerErrorIsPermanent,
   keyOf,
   type LifecycleStage,
   LineageId,
@@ -121,6 +122,7 @@ interface Seed {
   readonly listIssuesError?: boolean;
   readonly priorityValueError?: boolean;
   readonly pullRequestError?: boolean;
+  readonly createIssueError?: IssueTrackerError;
 }
 
 class ProviderCalls extends Context.Service<
@@ -293,8 +295,9 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
     listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
-    createIssue: (_repo, input) =>
-      Ref.modify(issuesRef, (issues) => {
+    createIssue: (_repo, input) => {
+      if (seed.createIssueError) return Effect.fail(seed.createIssueError);
+      return Ref.modify(issuesRef, (issues) => {
         const number = Math.max(0, ...issues.map(({ number }) => number)) + 1;
         const created: RawIssue = {
           nodeId: `I_issue_${number}`,
@@ -310,7 +313,8 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
           createdAtMillis: 0,
         };
         return [created, [...issues, created]];
-      }),
+      });
+    },
     createPull: () =>
       seed.pullRequestError
         ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull request rejected" }))
@@ -541,6 +545,41 @@ describe("GitHub adapters", () => {
         withClient({
           issues: [{ number: 5, title: "Existing", labels: [] }],
           listIssuesError: true,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("parks an ambiguous issue creation when marker recovery cannot confirm it", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const result = yield* Effect.result(
+        tracker.createIssue(workspace, {
+          title: "Created",
+          body: "Body",
+          labels: [],
+          origin,
+        }),
+      );
+
+      if (result._tag !== "Failure") return assert.fail("expected ambiguous creation to fail");
+      assert.isTrue(issueTrackerErrorIsPermanent(result.failure));
+      assert.isTrue(result.failure.writeMayHaveCommitted);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: [] }],
+          createIssueError: new IssueTrackerError({
+            reason: "unavailable",
+            message: "response body unavailable",
+            writeMayHaveCommitted: true,
+          }),
         }),
       ),
     ),
