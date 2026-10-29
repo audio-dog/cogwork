@@ -1,0 +1,43 @@
+apps/cli/src/rpc.ts
+  s_ef6af093ab773d::t_74f8044925fb72 364
+  s_ef6af093ab773d::t_83e85df3243882 36
+apps/cli/src/slack-login.ts
+  s_ef6af093ab773d::t_18d73aa7176855 12,149-154
+  s_ef6af093ab773d::t_31a8a54dbb09d8 1-11,13,15-101,103-110,112-113,116-148,155-186,188-229,233-234,238-241,243-266
+  s_ef6af093ab773d::t_e4ba8b540e2a50 14,102,111,114-115,230-232,235-237
+  s_ef6af093ab773d::t_f67944b2557549 242
+  s_ef6af093ab773d::t_00a6c90e6e24f3 187
+apps/cli/src/login-commands.ts
+  s_ef6af093ab773d::t_1435734e221b26 81-86,92-102,130-132
+  s_ef6af093ab773d::t_b1f8e4afb635b0 1,87-91
+apps/cli/src/slack-login.test.ts
+  s_ef6af093ab773d::t_bf06aa793f524b 1-117,119-135
+  s_ef6af093ab773d::t_12c1478eebb4e0 118
+apps/cli/src/connection-commands.ts
+  s_ef6af093ab773d::t_48fe8011cb2bef 139
+  s_ef6af093ab773d::t_18d73aa7176855 135-138,140-141
+apps/cli/src/credentials.ts
+  s_ef6af093ab773d::t_74f8044925fb72 11,174
+apps/cli/src/connection-commands.test.ts
+  s_ef6af093ab773d::t_5f36f1197589b8 126-133
+apps/cli/src/credentials.test.ts
+  s_ef6af093ab773d::t_ed6b5b68183d46 412-413,415,429-430,463-464
+  s_ef6af093ab773d::t_12c1478eebb4e0 414,416-428
+  s_ef6af093ab773d::t_d41a4f54c4c1fa 410-411,431-462,465
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0ee02d72aece6b53e5bba7de40017c8c0ccea48e",
+  "prompts": {},
+  "sessions": {
+    "s_ef6af093ab773d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a188c5-f171-79a3-9e38-7f01ceab3e4a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
