@@ -1,0 +1,25 @@
+packages/engine/src/github/trigger-source.test.ts
+  s_f4abcd25549e05::t_f7204bb29e5e9c 10,22,262-264,266-267,269-273,275-305
+  s_f4abcd25549e05::t_da0203da8b3677 265,268,274
+  s_f4abcd25549e05::t_7c7216ceb2765d 306
+packages/engine/src/github/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_3197130585835d 12,150
+packages/engine/src/provider-trigger-source.ts
+  s_f4abcd25549e05::t_3197130585835d 68-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4699ba7036bd6cc6538535bc4444b01d1bb04fdb",
+  "prompts": {},
+  "sessions": {
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
