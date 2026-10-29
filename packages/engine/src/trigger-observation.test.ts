@@ -10,6 +10,7 @@ import {
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -30,6 +31,8 @@ import {
   makeMemoryTriggerObservationStore,
   matchTriggerEvent,
   TriggerObservationStore,
+  TriggerObservationStoreError,
+  type TriggerObservationStoreService,
 } from "./trigger-observation";
 import {
   SourceFailure,
@@ -117,14 +120,14 @@ const coordinationService = (
 ): CoordinationService => ({
   fold,
   read: () =>
-    Effect.map(Ref.get(processed), (revision) =>
+    Effect.map(Effect.all([Ref.get(processed), Ref.get(sourceRevision)]), ([revision, observedRevision]) =>
       fold(
         {
           claim: null,
           attempts: [],
           handbacks: [],
           parks: [],
-          revision: { observed: event.revision, processed: revision },
+          revision: { observed: observedRevision ?? event.revision, processed: revision },
         },
         "cogwork",
       ),
@@ -241,6 +244,73 @@ describe("TriggerObservation", () => {
       );
       assert.lengthOf(yield* observation.eligible, 2);
       assert.strictEqual(yield* Ref.get(observed), 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("repairs a partial Workflow admission on source redelivery", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const putCount = yield* Ref.make(0);
+      const failedPut = yield* Deferred.make<void>();
+      const repairedPut = yield* Deferred.make<void>();
+      const scripted = yield* makeScriptedSource("clock", clockEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const flakyStore: TriggerObservationStoreService = {
+        ...store,
+        put: (admission: Parameters<typeof store.put>[0]) =>
+          Ref.updateAndGet(putCount, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 2
+                ? Deferred.succeed(failedPut, undefined).pipe(
+                    Effect.andThen(
+                      Effect.fail(new TriggerObservationStoreError({ message: "write failed" })),
+                    ),
+                  )
+                : store
+                    .put(admission)
+                    .pipe(
+                      Effect.tap(() =>
+                        count === 4 ? Deferred.succeed(repairedPut, undefined) : Effect.void,
+                      ),
+                    ),
+            ),
+          ),
+      };
+      const workflows = {
+        ...workflowService(current),
+        list: Effect.succeed({
+          workflows: [record(true), { ...record(true), id: otherWorkflowId }],
+          unreadable: [],
+        }),
+      } satisfies WorkflowsService;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflows),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, flakyStore),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+      );
+      const sourceEvent = {
+        ...event,
+        key: { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000" },
+        revision: "900.000",
+        atMillis: 900_000,
+      } as const;
+      yield* observation.refresh;
+      yield* Effect.yieldNow;
+      yield* scripted.emit(sourceEvent);
+      yield* Deferred.await(failedPut);
+      assert.lengthOf(yield* store.admissions, 1);
+
+      yield* observation.refresh;
+      yield* Effect.yieldNow;
+      yield* scripted.emit(sourceEvent);
+      yield* Deferred.await(repairedPut);
+
+      assert.lengthOf(yield* observation.eligible, 2);
     }).pipe(Effect.scoped),
   );
 
@@ -395,7 +465,7 @@ describe("TriggerObservation", () => {
 });
 
 layer(NodeServices.layer)((it) => {
-  it.effect("persists every matching Workflow admission for one revision", () =>
+  it.effect("persists and completes every matching Workflow admission for one revision", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -413,26 +483,46 @@ layer(NodeServices.layer)((it) => {
         parent: null,
         hop: 0,
       } as const;
-      const stored = yield* makeControlStoreTriggerObservationStore.pipe(
+      const first = { event: sourceEvent, subscription, lineage: sourceLineage };
+      const second = {
+        event: sourceEvent,
+        subscription: { ...subscription, workflow: otherWorkflowId },
+        lineage: sourceLineage,
+      };
+      const result = yield* makeControlStoreTriggerObservationStore.pipe(
         Effect.flatMap((store) =>
-          store.put({ event: sourceEvent, subscription, lineage: sourceLineage }).pipe(
-            Effect.andThen(
-              store.put({
-                event: sourceEvent,
-                subscription: { ...subscription, workflow: otherWorkflowId },
-                lineage: sourceLineage,
-              }),
-            ),
-            Effect.andThen(store.admissions),
+          Effect.all([
+            store.put(first),
+            store.put(second),
+            store.admissions,
+            store.complete(first),
+            store.admissions,
+            store.complete(second),
+            store.admissions,
+          ]).pipe(
+            Effect.map(([, , stored, firstWasLast, afterFirst, secondWasLast, remaining]) => ({
+              stored,
+              firstWasLast,
+              afterFirst,
+              secondWasLast,
+              remaining,
+            })),
           ),
         ),
         Effect.provide(bootControlStoreLayer(storePath)),
       );
 
       assert.deepStrictEqual(
-        stored.map(({ subscription }) => subscription.workflow).toSorted(),
+        result.stored.map(({ subscription }) => subscription.workflow).toSorted(),
         [workflowId, otherWorkflowId].toSorted(),
       );
+      assert.isFalse(result.firstWasLast);
+      assert.deepStrictEqual(
+        result.afterFirst.map(({ subscription }) => subscription.workflow),
+        [otherWorkflowId],
+      );
+      assert.isTrue(result.secondWasLast);
+      assert.deepStrictEqual(result.remaining, []);
     }),
   );
 

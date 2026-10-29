@@ -56,9 +56,14 @@ interface StoredAdmission {
   readonly payload: string;
 }
 
+interface StoredAdmissionCount {
+  readonly remaining: number;
+}
+
 export interface TriggerObservationStoreService {
   readonly admissions: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
   readonly put: (admission: TriggerAdmission) => Effect.Effect<void, TriggerObservationStoreError>;
+  readonly complete: (admission: TriggerAdmission) => Effect.Effect<boolean, TriggerObservationStoreError>;
   readonly activate: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
     atMillis: number,
@@ -77,6 +82,8 @@ const storeError = (error: unknown) => new TriggerObservationStoreError({ messag
 const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workflow}:${trigger}`;
 const admissionKey = (admission: TriggerAdmission) =>
   `${keyOf(admission.event.key)}:${admission.event.revision}:${subscriptionKey(admission.subscription)}`;
+const sameRevision = (left: TriggerAdmission, right: TriggerAdmission) =>
+  keyOf(left.event.key) === keyOf(right.event.key) && left.event.revision === right.event.revision;
 const checkpointOf = (admission: TriggerAdmission) =>
   admission.event.key._tag === "ScheduleInstant"
     ? admission.event.key.instantMillis
@@ -94,14 +101,21 @@ const activateSubscriptions = (
   });
 
 export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
-  const admissions = yield* Ref.make<ReadonlyMap<string, TriggerAdmission>>(new Map());
+  const admissions = yield* Ref.make<{
+    readonly pending: ReadonlyMap<string, TriggerAdmission>;
+    readonly processed: ReadonlySet<string>;
+  }>({ pending: new Map(), processed: new Set() });
   const checkpoints = yield* Ref.make<
     ReadonlyMap<string, { readonly active: boolean; readonly checkpointMillis: number }>
   >(new Map());
   return {
-    admissions: Effect.map(Ref.get(admissions), (current) => [...current.values()]),
+    admissions: Effect.map(Ref.get(admissions), (current) => [...current.pending.values()]),
     put: (admission) =>
-      Ref.update(admissions, (current) => new Map(current).set(admissionKey(admission), admission)).pipe(
+      Ref.update(admissions, (current) => {
+        const key = admissionKey(admission);
+        if (current.processed.has(key)) return current;
+        return { ...current, pending: new Map(current.pending).set(key, admission) };
+      }).pipe(
         Effect.andThen(
           Ref.update(checkpoints, (current) => {
             const key = subscriptionKey(admission.subscription);
@@ -114,6 +128,15 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
           }),
         ),
       ),
+    complete: (admission) =>
+      Ref.modify(admissions, (current) => {
+        const key = admissionKey(admission);
+        const pending = new Map(current.pending);
+        pending.delete(key);
+        const processed = new Set(current.processed).add(key);
+        const hasSibling = [...pending.values()].some((candidate) => sameRevision(candidate, admission));
+        return [!hasSibling, { pending, processed }];
+      }),
     activate: (subscriptions, atMillis) =>
       Ref.modify(checkpoints, (current) => {
         const activated = activateSubscriptions(subscriptions, current, atMillis);
@@ -144,7 +167,7 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const controlStore = yield* ControlStore;
   return {
-    admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions`.pipe(
+    admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions WHERE processed = 0`.pipe(
       Effect.mapError(storeError),
       Effect.flatMap((rows) =>
         Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),
@@ -173,6 +196,29 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
           ),
         )
         .pipe(Effect.asVoid, Effect.mapError(storeError)),
+    complete: (admission) =>
+      controlStore
+        .withWrite(
+          sql.withTransaction(
+            sql`
+              UPDATE trigger_admissions SET processed = 1
+              WHERE work_item = ${keyOf(admission.event.key)}
+                AND revision = ${admission.event.revision}
+                AND workflow = ${admission.subscription.workflow}
+                AND trigger = ${admission.subscription.trigger}
+            `.pipe(
+              Effect.andThen(sql<StoredAdmissionCount>`
+                SELECT COUNT(*) AS remaining
+                FROM trigger_admissions
+                WHERE work_item = ${keyOf(admission.event.key)}
+                  AND revision = ${admission.event.revision}
+                  AND processed = 0
+              `),
+              Effect.map((rows) => rows[0]?.remaining === 0),
+            ),
+          ),
+        )
+        .pipe(Effect.mapError(storeError)),
     activate: (subscriptions, atMillis) =>
       controlStore
         .withWrite(
@@ -337,10 +383,17 @@ export const make = Effect.gen(function* () {
     const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
     if (matched.length === 0) return;
     const outcome = yield* coordination.observe(event.key, event.revision, event.cause);
-    if (outcome === "redelivered") return;
+    const current = outcome === "redelivered" ? yield* coordination.read(event.key) : null;
+    const redeliveryIsClosed =
+      current !== null &&
+      (current.revision?.observed !== event.revision || current.revision.processed === event.revision);
+    if (redeliveryIsClosed) return;
     yield* Effect.forEach(matched, (subscription) => {
       const admission = { event, subscription, lineage: lineageOf(event.key) } satisfies TriggerAdmission;
-      return store.put(admission).pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid);
+      const stored = store.put(admission);
+      return outcome === "moved"
+        ? stored.pipe(Effect.andThen(PubSub.publish(changes, admission)), Effect.asVoid)
+        : stored;
     });
   });
 

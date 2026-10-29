@@ -131,6 +131,7 @@ export const triggerAdmissions = sqliteTable(
     workItem: text("work_item").notNull(),
     revision: text("revision").notNull(),
     payload: text("payload").notNull(),
+    processed: integer("processed", { mode: "boolean" }).notNull().default(false),
     workflow: text("workflow").generatedAlwaysAs(sql`json_extract("payload", '$.subscription.workflow')`, {
       mode: "stored",
     }),
