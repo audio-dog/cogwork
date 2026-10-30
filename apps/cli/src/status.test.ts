@@ -45,6 +45,7 @@ const status = (over: Partial<DaemonStatus> = {}): DaemonStatus => ({
     dailyBudgetLimit: 50,
     perWorkspace: [],
   },
+  sources: over.sources ?? [],
   workspaces: [workspace()],
   failures: [],
   ...over,

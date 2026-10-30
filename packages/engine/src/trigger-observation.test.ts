@@ -1,4 +1,5 @@
 import {
+  connectionIdOf,
   keyOf,
   LineageId,
   localOwnerId,
@@ -7,9 +8,11 @@ import {
   WorkflowId,
   WorkflowNodeId,
   type WorkflowRecord,
+  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -19,23 +22,28 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { clockEntries } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
+import { granolaEntries } from "./granola-source";
 import { makeScriptedSource } from "./scripted-source";
 import {
   make,
   makeControlStoreTriggerObservationStore,
   makeMemoryTriggerObservationStore,
   matchTriggerEvent,
+  type TriggerAdmission,
   TriggerObservationStore,
+  TriggerObservationStoreError,
 } from "./trigger-observation";
 import { TriggerSources, type TriggerSubscription } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
 
 const workflowId = Schema.decodeSync(WorkflowId)("daily-summary");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
+const siblingTriggerId = Schema.decodeSync(WorkflowNodeId)("schedule-sibling");
 const entry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
 const scheduleParameters = [
   { id: "hour", value: "0" },
@@ -89,6 +97,20 @@ const subscription: TriggerSubscription = {
   workspaces: [],
   catchUp: { since: 0 },
 };
+const granolaEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-generated");
+const granolaEditedEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-edited");
+const granolaTriggers = ["first", "second"].map((id) => ({
+  id: Schema.decodeSync(WorkflowNodeId)(id),
+  entry: granolaEntry,
+  parameters: [],
+  start: Schema.decodeSync(WorkflowNodeId)(`${id}-operation`),
+}));
+const granolaDocument = Schema.decodeSync(WorkflowDocument)({
+  name: "Granola",
+  workspaces: { _tag: "Listed", workspaces: [] },
+  triggers: granolaTriggers,
+  operations: [],
+});
 
 const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => ({
   create: () => Effect.die("unused"),
@@ -107,19 +129,23 @@ const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => 
 const coordinationService = (
   processed: Ref.Ref<string | null>,
   observed: Ref.Ref<number>,
+  currentRevision: Ref.Ref<string | null>,
 ): CoordinationService => ({
   fold,
   read: () =>
-    Effect.map(Ref.get(processed), (revision) =>
-      fold(
-        {
-          claim: null,
-          attempts: [],
-          handbacks: [],
-          parks: [],
-          revision: { observed: event.revision, processed: revision },
-        },
-        "cogwork",
+    Effect.all([Ref.get(processed), Ref.get(currentRevision)]).pipe(
+      Effect.map(([processedRevision, observedRevision]) =>
+        fold(
+          {
+            claim: null,
+            attempts: [],
+            handbacks: [],
+            parks: [],
+            revision:
+              observedRevision === null ? null : { observed: observedRevision, processed: processedRevision },
+          },
+          "cogwork",
+        ),
       ),
     ),
   claim: () => Effect.die("unused"),
@@ -127,13 +153,23 @@ const coordinationService = (
   recordAttempt: () => Effect.die("unused"),
   park: () => Effect.die("unused"),
   handBack: () => Effect.die("unused"),
-  observe: () => Ref.update(observed, (count) => count + 1).pipe(Effect.map(() => "moved" as const)),
+  observe: (_ref, revision) =>
+    Ref.modify(currentRevision, (current) => {
+      const outcome = current === revision ? "redelivered" : "moved";
+      const next = outcome === "redelivered" ? current : revision;
+      return [outcome, next] satisfies readonly ["moved" | "redelivered", string | null];
+    }).pipe(Effect.tap(() => Ref.update(observed, (count) => count + 1))),
   markProcessed: (_ref, revision) => Ref.set(processed, revision),
 });
 
 describe("TriggerObservation", () => {
   it("matches a schedule event to one Trigger with the scheduled parameters", () => {
     const other = { ...subscription, workflow: Schema.decodeSync(WorkflowId)("other") };
+    const expired = {
+      ...subscription,
+      trigger: Schema.decodeSync(WorkflowNodeId)("expired"),
+      catchUp: { since: event.atMillis + 1 },
+    };
     const later = {
       ...subscription,
       trigger: Schema.decodeSync(WorkflowNodeId)("later"),
@@ -143,7 +179,7 @@ describe("TriggerObservation", () => {
       ),
     };
 
-    assert.deepStrictEqual(matchTriggerEvent([later, subscription, other], event), [subscription]);
+    assert.deepStrictEqual(matchTriggerEvent([later, expired, subscription, other], event), [subscription]);
   });
 
   it.effect("admits once and stops the source after switch-off", () =>
@@ -151,12 +187,13 @@ describe("TriggerObservation", () => {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>(null);
       const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
       const scripted = yield* makeScriptedSource("clock", clockEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
-        Effect.provideService(Coordination, coordinationService(processed, observed)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, currentRevision)),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
@@ -175,6 +212,18 @@ describe("TriggerObservation", () => {
       assert.strictEqual(yield* Ref.get(observed), 1);
       assert.lengthOf(yield* scripted.subscriptions, 1);
 
+      const redelivered = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(event);
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(redelivered)));
+      assert.strictEqual(yield* Ref.get(observed), 2);
+
       yield* Ref.set(current, record(false));
       const declined = yield* observation.changes.pipe(
         Stream.take(1),
@@ -192,7 +241,7 @@ describe("TriggerObservation", () => {
       yield* TestClock.adjust("1 second");
 
       assert.isTrue(Option.isNone(yield* Fiber.join(declined)));
-      assert.strictEqual(yield* Ref.get(observed), 1);
+      assert.strictEqual(yield* Ref.get(observed), 2);
 
       yield* bus.publish({ _tag: "WorkflowChanged", workflow: record(false) });
       yield* Effect.yieldNow;
@@ -201,10 +250,260 @@ describe("TriggerObservation", () => {
       assert.deepStrictEqual(yield* scripted.subscriptions, []);
     }).pipe(Effect.scoped),
   );
+
+  it.effect("retries a redelivered revision after its admission write fails", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make(record(true));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
+      const scripted = yield* makeScriptedSource("clock", clockEntries);
+      const baseStore = yield* makeMemoryTriggerObservationStore;
+      const putAttempts = yield* Ref.make(0);
+      const failedPut = yield* Deferred.make<void>();
+      const store = {
+        ...baseStore,
+        putAll: (admissions: ReadonlyArray<TriggerAdmission>) =>
+          Ref.getAndUpdate(putAttempts, (count) => count + 1).pipe(
+            Effect.flatMap((attempt) =>
+              attempt === 0
+                ? Deferred.succeed(failedPut, undefined).pipe(
+                    Effect.andThen(
+                      Effect.fail(new TriggerObservationStoreError({ message: "first write failed" })),
+                    ),
+                  )
+                : baseStore.putAll(admissions),
+            ),
+          ),
+      };
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, currentRevision)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      yield* scripted.emit(event);
+      yield* Deferred.await(failedPut);
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(event);
+      yield* Effect.yieldNow;
+      const eligible = yield* observation.eligible;
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isSome(yield* Fiber.join(changed)));
+      assert.lengthOf(eligible, 1);
+      assert.strictEqual(yield* Ref.get(putAttempts), 2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("observes and parks one rejection before admitting every matching Trigger", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
+      const parks = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const baseCoordination = coordinationService(processed, observed, currentRevision);
+      const coordination: CoordinationService = {
+        ...baseCoordination,
+        park: (ref, reason) =>
+          baseCoordination.read(ref).pipe(
+            Effect.tap((view) => Effect.sync(() => assert.isNotNull(view.revision))),
+            Effect.andThen(Ref.update(parks, (current) => [...current, reason])),
+            Effect.andThen(baseCoordination.read(ref)),
+          ),
+      };
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const changes = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key: {
+          _tag: "GranolaNote",
+          connection: connectionIdOf("granola", "person@example.com"),
+          noteId: "note-1",
+        },
+        revision: "2026-10-29T15:00:00.000Z",
+        cause: { _tag: "Unknown" },
+        atMillis: 1,
+        entry: granolaEntry,
+        workspace: null,
+        payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
+      });
+
+      assert.lengthOf(yield* Fiber.join(changes), 2);
+      assert.lengthOf(yield* observation.eligible, 2);
+      assert.strictEqual(yield* Ref.get(observed), 1);
+      assert.deepStrictEqual(yield* Ref.get(parks), [
+        {
+          _tag: "PlanRejected",
+          reason: "Granola note has no transcript",
+          entry: granolaEntry,
+        },
+      ]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("records an unmatched revision without reopening prior admissions", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
+      const unmatchedRevision = "2026-10-29T16:00:00.000Z";
+      const unmatchedObserved = yield* Deferred.make<void>();
+      const baseCoordination = coordinationService(processed, observed, currentRevision);
+      const coordination: CoordinationService = {
+        ...baseCoordination,
+        observe: (ref, revision, cause) =>
+          baseCoordination
+            .observe(ref, revision, cause)
+            .pipe(
+              Effect.tap(() =>
+                revision === unmatchedRevision ? Deferred.succeed(unmatchedObserved, undefined) : Effect.void,
+              ),
+            ),
+      };
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const firstRevision = "2026-10-29T15:00:00.000Z";
+      const key = {
+        _tag: "GranolaNote",
+        connection: connectionIdOf("granola", "person@example.com"),
+        noteId: "note-1",
+      } satisfies WorkItemRef;
+      const firstChanges = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key,
+        revision: firstRevision,
+        cause: { _tag: "Unknown" },
+        atMillis: 1,
+        entry: granolaEntry,
+        workspace: null,
+      });
+      yield* Fiber.join(firstChanges);
+      yield* coordination.markProcessed(key, firstRevision);
+
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key,
+        revision: unmatchedRevision,
+        cause: { _tag: "Unknown" },
+        atMillis: 2,
+        entry: granolaEditedEntry,
+        workspace: null,
+      });
+      yield* Deferred.await(unmatchedObserved);
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(changed)));
+      assert.deepStrictEqual(yield* observation.eligible, []);
+      assert.strictEqual(yield* Ref.get(observed), 2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps the activated catch-up window while admitting events", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(1_000);
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const currentRevision = yield* Ref.make<string | null>(null);
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, currentRevision)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const changes = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key: {
+          _tag: "GranolaNote",
+          connection: connectionIdOf("granola", "person@example.com"),
+          noteId: "note-before-switch-on",
+        },
+        revision: "2026-10-29T15:00:00.000Z",
+        cause: { _tag: "Unknown" },
+        atMillis: 999,
+        entry: granolaEntry,
+        workspace: null,
+      });
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(changes)));
+      assert.deepStrictEqual(yield* observation.eligible, []);
+    }).pipe(Effect.scoped),
+  );
 });
 
 layer(NodeServices.layer)((it) => {
-  it.effect("persists admissions and skips time spent switched off", () =>
+  it.effect("persists sibling completion and skips time spent switched off", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -214,7 +513,23 @@ layer(NodeServices.layer)((it) => {
         event,
         subscription,
         lineage,
-      } as const;
+      } satisfies TriggerAdmission;
+      const storedAdmission = {
+        ...admission,
+        event: {
+          ...admission.event,
+          key: { ...admission.event.key, instantMillis: 1_500 },
+          revision: "1500",
+          atMillis: 1_500,
+        },
+      } satisfies TriggerAdmission;
+      const siblingAdmission = {
+        ...storedAdmission,
+        subscription: {
+          ...storedAdmission.subscription,
+          trigger: siblingTriggerId,
+        },
+      } satisfies TriggerAdmission;
       const useStore = <A, E, R>(
         use: (
           store: Effect.Success<typeof makeControlStoreTriggerObservationStore>,
@@ -241,17 +556,7 @@ layer(NodeServices.layer)((it) => {
       yield* useStore((store) =>
         store.activate([subscription], 3_000).pipe(
           Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 1_000))),
-          Effect.andThen(
-            store.put({
-              ...admission,
-              event: {
-                ...admission.event,
-                key: { ...admission.event.key, instantMillis: 1_500 },
-                revision: "1500",
-                atMillis: 1_500,
-              },
-            }),
-          ),
+          Effect.andThen(store.put(storedAdmission).pipe(Effect.andThen(store.put(siblingAdmission)))),
         ),
       );
       yield* useStore((store) =>
@@ -259,6 +564,7 @@ layer(NodeServices.layer)((it) => {
           Effect.tap(([admissions, active]) =>
             Effect.sync(() => {
               assert.strictEqual(admissions[0]?.event.revision, "1500");
+              assert.lengthOf(admissions, 2);
               assert.strictEqual(active[0]?.catchUp?.since, 1_500);
             }),
           ),
@@ -271,6 +577,39 @@ layer(NodeServices.layer)((it) => {
           .pipe(
             Effect.tap((active) => Effect.sync(() => assert.strictEqual(active[0]?.catchUp?.since, 6_000))),
           ),
+      );
+      yield* useStore((store) =>
+        store.complete(storedAdmission).pipe(
+          Effect.tap((isLast) => Effect.sync(() => assert.isFalse(isLast))),
+          Effect.andThen(store.admissions),
+          Effect.tap((admissions) => Effect.sync(() => assert.lengthOf(admissions, 1))),
+        ),
+      );
+      yield* useStore((store) =>
+        store.complete(siblingAdmission).pipe(
+          Effect.tap((isLast) => Effect.sync(() => assert.isTrue(isLast))),
+          Effect.andThen(store.admissions),
+          Effect.tap((admissions) => Effect.sync(() => assert.deepStrictEqual(admissions, []))),
+        ),
+      );
+      yield* useStore((store) =>
+        store.put(storedAdmission).pipe(
+          Effect.andThen(SqlClient.SqlClient),
+          Effect.flatMap(
+            (sql) => sql`
+              UPDATE trigger_admissions
+              SET revision = ${storedAdmission.event.revision}
+              WHERE work_item = ${keyOf(storedAdmission.event.key)}
+            `,
+          ),
+        ),
+      );
+      yield* useStore((store) =>
+        store.complete(storedAdmission).pipe(
+          Effect.tap((isLast) => Effect.sync(() => assert.isTrue(isLast))),
+          Effect.andThen(store.admissions),
+          Effect.tap((admissions) => Effect.sync(() => assert.deepStrictEqual(admissions, []))),
+        ),
       );
     }),
   );
