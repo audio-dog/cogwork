@@ -473,14 +473,14 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("writes Notify me output and keeps the Run workspace-free", () =>
+  it.effect("writes frozen Notify me text and keeps the Run workspace-free", () =>
     Effect.gen(function* () {
       const { runner } = yield* testProgram([
         {
           summary: "All clear",
           stuck: false,
           answers: { done: "yes" },
-          inputs: { notification: "All clear" },
+          inputs: { notification: "Deploy ready" },
         },
       ]);
       yield* runner.execute(admission);
@@ -512,14 +512,14 @@ describe("WorkflowRun", () => {
       assert.isNull(plan?.sandbox.workspace);
       assert.isDefined(actionPlan);
       assert.strictEqual(frozenPlan.steps[0]?.entry, notifyEntry);
-      assert.deepStrictEqual(frozenPlan.steps[0]?.inputs, { notification: "All clear" });
+      assert.deepStrictEqual(frozenPlan.steps[0]?.inputs, { notification: "Deploy ready" });
       assert.strictEqual(
         plan?.instructions.find(({ source }) => source === "workflow-operation")?.content,
         "implement-agent:Summarize the day.",
       );
       assert.deepStrictEqual(
         (yield* restartedNotifications.list).map(({ summary, answers }) => ({ summary, answers })),
-        [{ summary: "All clear", answers: { done: "yes" } }],
+        [{ summary: "Deploy ready", answers: { done: "yes" } }],
       );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );

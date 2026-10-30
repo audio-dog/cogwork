@@ -360,7 +360,7 @@ const actionExecutors = {
         id: `${context.plan.workflow}:${context.plan.operation}:${context.plan.revision}`,
         workflow: context.plan.workflow,
         operation: context.plan.operation,
-        summary: context.plan.summary,
+        summary: context.step.inputs.notification ?? "",
         answers: context.plan.answers,
         atMillis: context.plan.createdAtMillis,
       })
