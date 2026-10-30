@@ -22,9 +22,11 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { clockEntries } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
+import { makeControlStoreCoordination } from "./coordination-control-store";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
 import { makeScriptedSource } from "./scripted-source";
 import {
@@ -32,6 +34,7 @@ import {
   makeControlStoreTriggerObservationStore,
   makeMemoryTriggerObservationStore,
   matchTriggerEvent,
+  type TriggerAdmission,
   TriggerObservationStore,
   TriggerObservationStoreError,
   type TriggerObservationStoreService,
@@ -165,6 +168,33 @@ const sourceFailingOnce = (starts: Ref.Ref<number>, failure: SourceFailure): Tri
           ),
         ),
 });
+
+const exerciseFailedLastAdmissionFinish = (storePath: string, admission: TriggerAdmission) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const store = yield* makeControlStoreTriggerObservationStore;
+    const coordination = yield* makeControlStoreCoordination;
+    yield* coordination.observe(event.key, event.revision, event.cause);
+    yield* store.putAll([admission]);
+    yield* sql`
+      CREATE TRIGGER fail_trigger_admission_finish
+      BEFORE UPDATE OF processed ON trigger_admissions
+      WHEN NEW.processed = 1
+      BEGIN
+        SELECT RAISE(ABORT, 'finish failed');
+      END
+    `;
+    const failure = yield* Effect.flip(
+      store.complete(admission, coordination.markProcessed(event.key, event.revision)),
+    );
+    const failedView = yield* coordination.read(event.key);
+    const pending = yield* store.admissions;
+    yield* sql`DROP TRIGGER fail_trigger_admission_finish`;
+    yield* store.complete(admission, coordination.markProcessed(event.key, event.revision));
+    const completedView = yield* coordination.read(event.key);
+    const remaining = yield* store.admissions;
+    return { failure, failedView, pending, completedView, remaining };
+  }).pipe(Effect.provide(bootControlStoreLayer(storePath)));
 
 describe("TriggerObservation", () => {
   it("matches a schedule event to one Trigger with the scheduled parameters", () => {
@@ -716,6 +746,26 @@ layer(NodeServices.layer)((it) => {
       );
       assert.strictEqual(result.closedAfterFirst, 0);
       assert.strictEqual(result.closedAfterSecond, 1);
+      assert.deepStrictEqual(result.remaining, []);
+    }),
+  );
+
+  it.effect("rolls back revision close when finishing the last admission fails", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-trigger-admissions-" });
+      const storePath = path.join(directory, "control.db");
+      const admission = { event, subscription, lineage } as const;
+      const result = yield* exerciseFailedLastAdmissionFinish(storePath, admission);
+
+      assert.strictEqual(result.failure._tag, "TriggerObservationStoreError");
+      assert.deepStrictEqual(result.failedView.revision, { observed: event.revision, processed: null });
+      assert.deepStrictEqual(result.pending, [admission]);
+      assert.deepStrictEqual(result.completedView.revision, {
+        observed: event.revision,
+        processed: event.revision,
+      });
       assert.deepStrictEqual(result.remaining, []);
     }),
   );

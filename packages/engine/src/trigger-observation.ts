@@ -20,6 +20,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlError from "effect/unstable/sql/SqlError";
 import { matchesScheduledInstant } from "./clock-source";
 import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
@@ -234,16 +235,20 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
         ),
       )
       .pipe(Effect.asVoid, Effect.mapError(storeError));
-  const finish = (admission: TriggerAdmission) =>
-    controlStore
-      .withWrite(sql`
+  const finishStatement = (admission: TriggerAdmission) =>
+    sql`
         UPDATE trigger_admissions SET processed = 1
         WHERE work_item = ${keyOf(admission.event.key)}
           AND revision = ${admission.event.revision}
           AND workflow = ${admission.subscription.workflow}
           AND trigger = ${admission.subscription.trigger}
-      `)
-      .pipe(Effect.asVoid, Effect.mapError(storeError));
+      `.pipe(Effect.asVoid);
+  const finish = (admission: TriggerAdmission) =>
+    controlStore.withWrite(finishStatement(admission)).pipe(Effect.mapError(storeError));
+  const closeAndFinish = <E, R>(admission: TriggerAdmission, closeRevision: Effect.Effect<void, E, R>) =>
+    sql
+      .withTransaction(closeRevision.pipe(Effect.andThen(finishStatement(admission))))
+      .pipe(Effect.mapError((error) => (SqlError.isSqlError(error) ? storeError(error) : error)));
   return {
     admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions WHERE processed = 0`.pipe(
       Effect.mapError(storeError),
@@ -268,8 +273,7 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
           Effect.mapError(storeError),
           Effect.flatMap((rows) => {
             const hasSibling = (rows[0]?.remaining ?? 0) > 0;
-            const beforeFinish = hasSibling ? Effect.void : closeRevision;
-            return beforeFinish.pipe(Effect.andThen(finish(admission)));
+            return hasSibling ? finish(admission) : closeAndFinish(admission, closeRevision);
           }),
         ),
       ),
