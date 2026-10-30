@@ -1,0 +1,21 @@
+packages/engine/src/workflow-run.test.ts
+  s_32b58d670b4dfe::t_f82c587090839f 476,483,515,522
+packages/engine/src/workflow-action-plan.ts
+  s_32b58d670b4dfe::t_f82c587090839f 363
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "68a2eb6a17ba0986f42f84e886929327211fd5a5",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
