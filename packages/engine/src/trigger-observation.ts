@@ -3,6 +3,8 @@ import {
   keyOf,
   Lineage,
   LineageId,
+  type ParkReason,
+  type TriggerSourceHealth,
   type WorkflowCatalog,
   type WorkflowRecord,
   type WorkItemRef,
@@ -326,12 +328,6 @@ export const controlStoreTriggerObservationStoreLayer = Layer.effect(
   makeControlStoreTriggerObservationStore,
 );
 
-export interface TriggerSourceHealth {
-  readonly source: TriggerSource["id"];
-  readonly status: "idle" | "observing" | "failed";
-  readonly message: string | null;
-}
-
 export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) => {
   const matched = subscriptions.filter((subscription) => {
     const sameScheduleWorkflow =
@@ -347,12 +343,14 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
             (candidate) => candidate.id === parameter.id && candidate.value === parameter.value,
           ),
         ));
+    const afterCatchUp = subscription.catchUp === null || event.atMillis >= subscription.catchUp.since;
     return (
       subscription.entry === event.entry &&
       sameScheduleWorkflow &&
       sameWorkspace &&
       sameSchedule &&
-      sameParameters
+      sameParameters &&
+      afterCatchUp
     );
   });
   return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
@@ -382,6 +380,15 @@ const sourceSubscriptions = (source: TriggerSource, subscriptions: ReadonlyArray
   return subscriptions.filter(({ entry }) => entries.has(entry));
 };
 
+const subscriptionIdentity = ({
+  workflow,
+  trigger,
+  operation,
+  entry,
+  parameters,
+  workspaces,
+}: TriggerSubscription) => JSON.stringify({ workflow, trigger, operation, entry, parameters, workspaces });
+
 const fingerprintOf = (subscriptions: ReadonlyArray<TriggerSubscription>) =>
   JSON.stringify(
     subscriptions.map(({ workflow, trigger, operation, entry, parameters, workspaces }) => ({
@@ -399,6 +406,17 @@ const lineageOf = (ref: WorkItemRef): Lineage => ({
   parent: null,
   hop: 0,
 });
+
+const planRejectionOf = (event: TriggerEvent) =>
+  event.payload?._tag === "GranolaNoteRejected"
+    ? ({ _tag: "PlanRejected", reason: event.payload.reason, entry: event.entry } satisfies ParkReason)
+    : null;
+
+const samePlanRejection = (left: ParkReason | undefined, right: ParkReason | null) =>
+  left?._tag === "PlanRejected" &&
+  right?._tag === "PlanRejected" &&
+  left.reason === right.reason &&
+  left.entry === right.entry;
 
 const waitForRetry = (failure: SourceFailure) => {
   const retryRules = [
@@ -436,19 +454,32 @@ export const make = Effect.gen(function* () {
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
 
-  const admit = Effect.fn("TriggerObservation.admit")(function* (source: TriggerSource, event: TriggerEvent) {
+  const admit = Effect.fn("TriggerObservation.admit")(function* (
+    source: TriggerSource,
+    subscriptions: ReadonlyArray<TriggerSubscription>,
+    event: TriggerEvent,
+  ) {
     const listed = yield* workflows.list;
-    const matched = matchTriggerEvent(subscriptionsOf(listed.workflows), event);
-    if (matched.length === 0) return;
+    const current = new Set(
+      sourceSubscriptions(source, subscriptionsOf(listed.workflows)).map(subscriptionIdentity),
+    );
+    const active = subscriptions.filter((subscription) => current.has(subscriptionIdentity(subscription)));
+    if (active.length === 0) return;
     const outcome = yield* coordination.observe(event.key, event.revision, event.cause);
-    const current = outcome === "redelivered" ? yield* coordination.read(event.key) : null;
+    const matched = matchTriggerEvent(active, event);
+    if (matched.length === 0) return;
+    const redeliveryView = outcome === "redelivered" ? yield* coordination.read(event.key) : null;
     const redeliveryIsClosed =
-      current !== null &&
-      (current.revision?.observed !== event.revision || current.revision.processed === event.revision);
+      redeliveryView !== null &&
+      (redeliveryView.revision?.observed !== event.revision ||
+        redeliveryView.revision.processed === event.revision);
     if (redeliveryIsClosed) return;
     const admissions = matched.map(
       (subscription) => ({ event, subscription, lineage: lineageOf(event.key) }) satisfies TriggerAdmission,
     );
+    const rejection = planRejectionOf(event);
+    const isAlreadyParked = samePlanRejection(redeliveryView?.park?.reason, rejection);
+    if (rejection !== null && !isAlreadyParked) yield* coordination.park(event.key, rejection);
     yield* store.putAll(admissions);
     yield* source.acknowledge?.(event, matched) ?? Effect.void;
     if (outcome === "redelivered") return;
@@ -463,7 +494,7 @@ export const make = Effect.gen(function* () {
     fingerprint: string,
   ) =>
     source.observe(subscriptions).pipe(
-      Stream.runForEach((event) => admit(source, event)),
+      Stream.runForEach((event) => admit(source, subscriptions, event)),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(Effect.andThen(waitForRetry(error))),
       ),
@@ -579,6 +610,7 @@ export const make = Effect.gen(function* () {
               coordination.read(admission.event.key).pipe(
                 Effect.map((view) => ({
                   admission,
+                  isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
                   gate: view.gate(
                     {
                       workflow: admission.subscription.workflow,
@@ -593,7 +625,9 @@ export const make = Effect.gen(function* () {
         );
       }),
       Effect.map((states) =>
-        states.filter(({ gate }) => gate._tag === "Open").map(({ admission }) => admission),
+        states
+          .filter(({ gate, isUnprocessedRevision }) => isUnprocessedRevision && gate._tag === "Open")
+          .map(({ admission }) => admission),
       ),
       Effect.catchCause(() => Effect.succeed([])),
     ),

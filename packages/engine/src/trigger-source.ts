@@ -39,6 +39,18 @@ export const TriggerEvent = Schema.Struct({
   workspace: Schema.NullOr(WorkspaceId),
   parameters: Schema.optional(Schema.Array(WorkflowParameterValue)),
   workContext: Schema.optional(RunPlanWorkContextProse),
+  payload: Schema.optional(
+    Schema.TaggedUnion({
+      GranolaNote: {
+        title: Schema.String,
+        attendees: Schema.Array(Schema.String),
+        calendarEvent: Schema.String,
+        summary: Schema.String,
+        transcript: Schema.String,
+      },
+      GranolaNoteRejected: { reason: Schema.String },
+    }),
+  ),
 });
 export type TriggerEvent = typeof TriggerEvent.Type;
 

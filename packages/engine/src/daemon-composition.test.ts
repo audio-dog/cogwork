@@ -350,6 +350,7 @@ describe("daemon server composition", () => {
       );
       const switched = yield* Effect.result(rpc.SwitchWorkflow({ id: created.id, enabled: true }));
       const catalog = yield* rpc.GetWorkflowCatalog();
+      const status = yield* rpc.GetStatus();
       const seed = yield* rpc
         .WatchEvents()
         .pipe(Stream.takeUntil(DaemonEvent.guards.SeedEnd), Stream.runCollect);
@@ -367,9 +368,13 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 11);
+      assert.lengthOf(catalog.catalog.entries, 13);
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "slack.i-am-mentioned"));
+      assert.deepStrictEqual(
+        status.sources.map(({ source }) => source),
+        ["clock", "granola", "slack"],
+      );
       assert.isTrue(
         [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
       );
@@ -409,6 +414,8 @@ describe("daemon server composition", () => {
           "Every hour",
           "Every day",
           "Every week",
+          "Note generated",
+          "Note edited",
           "I am mentioned",
           "Message in a channel",
           "Reaction added",

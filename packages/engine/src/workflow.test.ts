@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import {
+  availabilityOf,
   localOwner,
   MachineReadiness,
   Principal,
@@ -32,6 +33,7 @@ import * as Stream from "effect/Stream";
 import { clockEntries, clockSource } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import * as DaemonEventBus from "./daemon-event-bus";
+import { granolaWorkflowCatalogContribution } from "./granola-source";
 import * as Harness from "./harness";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import {
@@ -45,7 +47,10 @@ const decodeDocument = Schema.decodeUnknownSync(WorkflowDocument);
 const decodeEntry = Schema.decodeUnknownSync(WorkflowCatalogEntry);
 const machine = Schema.decodeSync(MachineReadiness)({
   workspaces: [{ id: "cogwork", binds: ["github"] }],
-  connections: [{ system: "github", ready: true, reason: null }],
+  connections: [
+    { system: "github", ready: true, reason: null },
+    { system: "granola", ready: false, reason: "Granola login expired" },
+  ],
   harnesses: [],
   defaultHarness: null,
   readyNeeds: [],
@@ -119,6 +124,7 @@ const temporaryStore = Effect.fn("test.temporaryWorkflowsStore")(function* () {
 const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
   triggerContribution,
+  granolaWorkflowCatalogContribution,
   clockContribution,
 ]);
 
@@ -151,6 +157,26 @@ const corruptStoredRow = (storePath: string, id: string) =>
   );
 
 layer(NodeServices.layer)((it) => {
+  it.effect("lists both Granola Triggers with Connection availability", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const result = yield* withWorkflows(storePath, ({ catalog }) => catalog);
+      const entries = result.catalog.entries.filter(({ system }) => system === "granola");
+
+      assert.deepStrictEqual(
+        entries.map(({ name }) => name),
+        ["Note generated", "Note edited"],
+      );
+      assert.deepStrictEqual(
+        entries.map((entry) => availabilityOf(entry, result.machine)),
+        [
+          { _tag: "Unavailable", reason: "Granola login expired" },
+          { _tag: "Unavailable", reason: "Granola login expired" },
+        ],
+      );
+    }),
+  );
+
   it.effect("keeps an incomplete working copy and refuses to publish it", () =>
     Effect.gen(function* () {
       const storePath = yield* temporaryStore();
@@ -380,7 +406,7 @@ layer(NodeServices.layer)((it) => {
       const storePath = yield* temporaryStore();
       const result = yield* withWorkflows(storePath, ({ catalog }) => catalog);
 
-      assert.lengthOf(result.catalog.entries, 9);
+      assert.lengthOf(result.catalog.entries, 11);
       assert.deepStrictEqual(result.catalog.instructionPackages, [
         "triage-agent",
         "implement-agent",

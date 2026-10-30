@@ -94,4 +94,29 @@ describe("coordination fold", () => {
     );
     assert.strictEqual(fold(ledger([]), "cogwork").gate(operation)._tag, "Open");
   });
+
+  const revisionRetryCases = [
+    {
+      name: "plan rejection",
+      reason: { _tag: "PlanRejected", reason: "Granola note has no transcript" },
+    },
+    { name: "missing operation", reason: { _tag: "MissingOperation" } },
+  ] as const;
+
+  revisionRetryCases.forEach(({ name, reason }) => {
+    it(`does not block a later revision after ${name}`, () => {
+      const view = fold(
+        {
+          claim: null,
+          attempts: [],
+          handbacks: [],
+          parks: [{ reason, atMillis: 1 }],
+          revision: { observed: "2", processed: "1" },
+        },
+        "cogwork",
+      );
+
+      assert.strictEqual(view.gate(operation)._tag, "Open");
+    });
+  });
 });

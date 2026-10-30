@@ -1,5 +1,6 @@
 import {
   AttemptRecord,
+  connectionIdOf,
   keyOf,
   LineageId,
   localOwnerId,
@@ -9,6 +10,7 @@ import {
   WorkflowId,
   WorkflowNodeId,
   type WorkflowRecord,
+  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
@@ -28,6 +30,7 @@ import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
+import { granolaEntries } from "./granola-source";
 import { makeScriptedSource } from "./scripted-source";
 import {
   make,
@@ -103,6 +106,20 @@ const subscription: TriggerSubscription = {
   workspaces: [],
   catchUp: { since: 0 },
 };
+const granolaEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-generated");
+const granolaEditedEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-edited");
+const granolaTriggers = ["first", "second"].map((id) => ({
+  id: Schema.decodeSync(WorkflowNodeId)(id),
+  entry: granolaEntry,
+  parameters: [],
+  start: Schema.decodeSync(WorkflowNodeId)(`${id}-operation`),
+}));
+const granolaDocument = Schema.decodeSync(WorkflowDocument)({
+  name: "Granola",
+  workspaces: { _tag: "Listed", workspaces: [] },
+  triggers: granolaTriggers,
+  operations: [],
+});
 
 const workflowService = (current: Ref.Ref<WorkflowRecord>): WorkflowsService => ({
   create: () => Effect.die("unused"),
@@ -681,6 +698,200 @@ describe("TriggerObservation", () => {
       });
       yield* Effect.yieldNow;
       assert.strictEqual(yield* Ref.get(starts), 2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("observes and parks one rejection before admitting every matching Trigger", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const parks = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const baseCoordination = coordinationService(processed, observed, sourceRevision);
+      const coordination: CoordinationService = {
+        ...baseCoordination,
+        park: (ref, reason) =>
+          baseCoordination.read(ref).pipe(
+            Effect.tap((view) => Effect.sync(() => assert.isNotNull(view.revision))),
+            Effect.andThen(Ref.update(parks, (current) => [...current, reason])),
+            Effect.andThen(baseCoordination.read(ref)),
+          ),
+      };
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const changes = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key: {
+          _tag: "GranolaNote",
+          connection: connectionIdOf("granola", "person@example.com"),
+          noteId: "note-1",
+        },
+        revision: "2026-10-29T15:00:00.000Z",
+        cause: { _tag: "Unknown" },
+        atMillis: 1,
+        entry: granolaEntry,
+        workspace: null,
+        payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
+      });
+
+      assert.lengthOf(yield* Fiber.join(changes), 2);
+      assert.lengthOf(yield* observation.eligible, 2);
+      assert.strictEqual(yield* Ref.get(observed), 1);
+      assert.deepStrictEqual(yield* Ref.get(parks), [
+        {
+          _tag: "PlanRejected",
+          reason: "Granola note has no transcript",
+          entry: granolaEntry,
+        },
+      ]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("records an unmatched revision without reopening prior admissions", () =>
+    Effect.gen(function* () {
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const unmatchedRevision = "2026-10-29T16:00:00.000Z";
+      const unmatchedObserved = yield* Deferred.make<void>();
+      const baseCoordination = coordinationService(processed, observed, sourceRevision);
+      const coordination: CoordinationService = {
+        ...baseCoordination,
+        observe: (ref, revision, cause) =>
+          baseCoordination
+            .observe(ref, revision, cause)
+            .pipe(
+              Effect.tap(() =>
+                revision === unmatchedRevision ? Deferred.succeed(unmatchedObserved, undefined) : Effect.void,
+              ),
+            ),
+      };
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const firstRevision = "2026-10-29T15:00:00.000Z";
+      const key = {
+        _tag: "GranolaNote",
+        connection: connectionIdOf("granola", "person@example.com"),
+        noteId: "note-1",
+      } satisfies WorkItemRef;
+      const firstChanges = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key,
+        revision: firstRevision,
+        cause: { _tag: "Unknown" },
+        atMillis: 1,
+        entry: granolaEntry,
+        workspace: null,
+      });
+      yield* Fiber.join(firstChanges);
+      yield* coordination.markProcessed(key, firstRevision);
+
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key,
+        revision: unmatchedRevision,
+        cause: { _tag: "Unknown" },
+        atMillis: 2,
+        entry: granolaEditedEntry,
+        workspace: null,
+      });
+      yield* Deferred.await(unmatchedObserved);
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(changed)));
+      assert.deepStrictEqual(yield* observation.eligible, []);
+      assert.strictEqual(yield* Ref.get(observed), 2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps the activated catch-up window while admitting events", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(1_000);
+      const current = yield* Ref.make<WorkflowRecord>({
+        ...record(true),
+        workingCopy: granolaDocument,
+        publishedCopy: granolaDocument,
+      });
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const scripted = yield* makeScriptedSource("granola", granolaEntries);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
+        Effect.provideService(TriggerSources, [scripted.source]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      const changes = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        key: {
+          _tag: "GranolaNote",
+          connection: connectionIdOf("granola", "person@example.com"),
+          noteId: "note-before-switch-on",
+        },
+        revision: "2026-10-29T15:00:00.000Z",
+        cause: { _tag: "Unknown" },
+        atMillis: 999,
+        entry: granolaEntry,
+        workspace: null,
+      });
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isNone(yield* Fiber.join(changes)));
+      assert.deepStrictEqual(yield* observation.eligible, []);
     }).pipe(Effect.scoped),
   );
 });
