@@ -62,7 +62,7 @@ import {
   RiSlackLine,
 } from "@remixicon/react";
 import { Link, linkOptions } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
+import type * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import { createContext, type FormEvent, type ReactNode, use, useId, useState } from "react";
 import {
@@ -81,6 +81,7 @@ import {
   connectionSystemLabel,
   pluginRequiring,
 } from "../features/connections-view";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import { type PluginLoadState, pluginSurfaceOf } from "../features/plugin-configuration";
 import { ConnectionEstablishmentDialog } from "./connection-establishment-form";
 
@@ -110,29 +111,18 @@ const useConnections = () => {
   return value;
 };
 
-// `Cause.pretty` renders the whole trace, which in a Vite renderer is a wall of bundler URLs. Every
-// error the daemon returns here carries a written message; that is the only part a person can act on.
-const messageOf = (cause: Cause.Cause<unknown>) => {
-  const error: unknown = Cause.squash(cause);
-  if (typeof error === "object" && error !== null && "message" in error) {
-    const { message } = error as { readonly message: unknown };
-    if (typeof message === "string" && message.length > 0) return message;
-  }
-  return "The daemon rejected the change. Check the daemon log for details.";
-};
-
 const failureOf = (
   ...results: ReadonlyArray<{ readonly _tag: string; readonly cause?: Cause.Cause<unknown> }>
 ) => {
   const failure = results.find((result) => result._tag === "Failure");
-  return failure?.cause ? messageOf(failure.cause) : null;
+  return failure?.cause ? daemonFailureMessage(failure.cause) : null;
 };
 
 // Establishment is the one mutation whose failure belongs to a form rather than to the page: the
 // person is looking at the field that caused it, so it never reaches the surface-level Alert.
 const rejectionOf = async (pending: Promise<Exit.Exit<unknown, unknown>>) => {
   const exit = await pending;
-  return Exit.isSuccess(exit) ? null : messageOf(exit.cause);
+  return Exit.isSuccess(exit) ? null : daemonFailureMessage(exit.cause);
 };
 
 function ConnectionsProvider({
