@@ -1,0 +1,63 @@
+packages/engine/src/scheduler.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 119,138,140-142,146,150-151,154-156,173-175,193,201-204,210
+packages/engine/src/daemon.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 116,497,501,504-509
+packages/engine/src/coordination-fold.test.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 84
+packages/engine/src/coordination-tracker.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 190,192,246-252
+packages/engine/src/control-store-schema.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 134-140,143-148,315-316
+packages/engine/src/slack-source.test.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 1-887
+packages/engine/src/workflow-run.test.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 27,34,53,70,192-202,233,287,290-294,346-347,358-359,397-401,405,457-458,493-494,498-632,676-680,961,963-967,975,980-985
+  s_32b58d670b4dfe::t_f04bc9dbe5ee3a 257
+packages/engine/src/coordination-control-store.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 59-64,212,223-237,269-270,273,275,350-357
+packages/engine/src/trigger-observation.test.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 2,7,31,43,45-50,54,141,145-154,163-170,174-215,228,231-414,420,426,445,453,482,487-565,568-594,596-630,632-640,643-644,650-656,659-687,690-692,694-700,713,715,778,781,860,866,900-984,994,1021-1033
+packages/engine/src/slack-source.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 1-1005
+packages/engine/src/coordination-contract.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 11,30,32,35-39,45-51
+packages/engine/src/coordination.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 75,77,104,132-165,212-221,229-248,304-308,370-379
+packages/engine/src/trigger-source.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 3,40-41,76-79
+packages/engine/src/control-store.test.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 132,426-463
+  s_32b58d670b4dfe::t_7df4c6a669308b 464-466
+packages/engine/src/daemon-composition.test.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 373,376,429-433
+  s_32b58d670b4dfe::t_f04bc9dbe5ee3a 371
+packages/engine/src/workflow-catalog.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 14,61-64,67-79
+  s_32b58d670b4dfe::t_f04bc9dbe5ee3a 65-66
+packages/engine/src/trigger-observation.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 25,62-65,71-74,92-109,128-131,135-143,145-146,154-155,158-164,166-180,210,220-226,240-253,255,257-259,261-281,338-345,352,393-402,421-427,471-476,484-488,499,555-574,579-586,596-623,627-631
+packages/contracts/src/coordination.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 123-127
+packages/engine/src/workflow-run.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 127,151-156,159-168,345,395,422
+  s_32b58d670b4dfe::t_69405fb122e6de 194
+packages/engine/src/scheduler.test.ts
+  s_32b58d670b4dfe::t_1b18c19b9b816e 42,461-464,494,506,531,585-633,705,737-767
+  s_32b58d670b4dfe::t_06db50114d132c 768-773
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0628e3c1bb2aab32a04ac4ee6bfab885023a8f78",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
