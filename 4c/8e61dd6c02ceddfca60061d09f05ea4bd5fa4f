@@ -1,0 +1,80 @@
+packages/engine/src/workflow-run.test.ts
+  s_6e0efcd2d554a9::t_dba5109305247f 933,953-965,967-969,971,973,975-1014
+  s_6e0efcd2d554a9::t_53f96269a072b9 194,475
+  s_6e0efcd2d554a9::t_420b6dbbaedef4 966,970,972,974
+  s_6e0efcd2d554a9::t_fd1e9b87cac8a9 512-523
+  s_6e0efcd2d554a9::t_5cd93df24eba54 464-465,467-473,476-478,530,609
+  s_6e0efcd2d554a9::t_2d0cd56a3a5ba6 11,20,46-52,367-368,382-383,426-427,509-511,524-529,531-608,610-665
+  s_6e0efcd2d554a9::t_24bf648a24ffcb 443,485-503,505-508
+  s_6e0efcd2d554a9::t_7750063dee1e63 195-202,434-442,444-463,466,474,479-480,482-484,504,666-668,1015-1016
+  s_6e0efcd2d554a9::t_c069ce42108b00 6,481
+  s_6e0efcd2d554a9::t_a0ebf36d3a76c0 1017
+  s_936ae9c16d2bf8::t_f174c2fb2f5dbc 54
+packages/engine/src/issue-search-tool.ts
+  s_6e0efcd2d554a9::t_48235d3fb20f6e 38
+  s_6e0efcd2d554a9::t_bb6767de5de7b4 1-37,39-47
+packages/engine/src/workflow-action-plan.test.ts
+  s_6e0efcd2d554a9::t_b7934726c28b5a 325,329-330,332-335
+  s_6e0efcd2d554a9::t_603fedeb0c4514 331
+packages/engine/src/issue-search-tool.test.ts
+  s_6e0efcd2d554a9::t_9ccab9aedec69f 1-5,7-21,23-46,51-64
+  s_6e0efcd2d554a9::t_b5731d88122507 6,22,47-50
+packages/engine/src/workflow-run.ts
+  s_6e0efcd2d554a9::t_bb6767de5de7b4 30,330-332,394,439-440
+  s_6e0efcd2d554a9::t_420b6dbbaedef4 49
+  s_6e0efcd2d554a9::t_ec6350691ae170 60-62
+  s_6e0efcd2d554a9::t_53f96269a072b9 141
+  s_6e0efcd2d554a9::t_7a4107d444b1f5 11,109-113,115-140,142-143,206,271,292,295,304,492,494-526
+  s_6e0efcd2d554a9::t_ecc96ecf62aaf9 114,204-205
+  s_6e0efcd2d554a9::t_7f46f55a0bd2fe 329
+  s_6e0efcd2d554a9::t_f5cee6bfdcfa44 493
+  s_6e0efcd2d554a9::t_cdfac594ea325d 50-59,63-64
+  s_6e0efcd2d554a9::t_307afbdf12c454 527-529
+packages/contracts/src/workflow.test.ts
+  s_6e0efcd2d554a9::t_5e01a34ecc5c83 605-610,644-649,651-655,657-658,660-669,671-672,674
+  s_6e0efcd2d554a9::t_8415de618c5c9a 613,621,624,656
+  s_6e0efcd2d554a9::t_2ef31a2f01b3c8 650,659
+  s_6e0efcd2d554a9::t_eeeccd2fe63fac 670
+  s_6e0efcd2d554a9::t_7c4191c4f07657 673
+  s_6e0efcd2d554a9::t_f23f919b81cacd 675
+packages/engine/src/provider-runner.ts
+  s_6e0efcd2d554a9::t_bb6767de5de7b4 236
+  s_6e0efcd2d554a9::t_6e423b2567d153 250
+packages/engine/src/harness.ts
+  s_6e0efcd2d554a9::t_bb6767de5de7b4 17,47
+packages/engine/src/workflow-action-plan.ts
+  s_6e0efcd2d554a9::t_b4e35fee48da9e 35-36,444
+packages/engine/src/provider-runner.test.ts
+  s_6e0efcd2d554a9::t_b9c2938c549ece 13-19,356-375
+  s_6e0efcd2d554a9::t_4a387266860d5b 376-378
+packages/engine/src/trigger-observation.ts
+  s_6e0efcd2d554a9::t_7a4107d444b1f5 9,47
+packages/contracts/src/workflow.ts
+  s_6e0efcd2d554a9::t_f3557e60a64bad 427,433,435-442
+  s_6e0efcd2d554a9::t_0124a779db8694 115-122,413,422-423,426,428,430,434,443-447
+  s_6e0efcd2d554a9::t_2bcd2070271b40 429,431-432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4c8e61dd6c02ceddfca60061d09f05ea4bd5fa4f",
+  "prompts": {},
+  "sessions": {
+    "s_6e0efcd2d554a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db2-ce82-77a1-be9c-7941c5028e9d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_936ae9c16d2bf8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db0-7922-7b11-83e1-53b5cb0d3b2d",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
