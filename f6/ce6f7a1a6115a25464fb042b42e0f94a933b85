@@ -1,0 +1,25 @@
+packages/engine/src/coordination.ts
+  s_1ac467ec482600::t_b4a791b4548cdf 27
+packages/engine/src/coordination-tracker.ts
+  s_1ac467ec482600::t_a401682ceb2e4f 124
+packages/engine/src/coordination-tracker.test.ts
+  s_1ac467ec482600::t_b78536f22ad187 676,690-715,720,722-728
+  s_1ac467ec482600::t_b24bd1b25125b0 16
+  s_1ac467ec482600::t_88c0b4fb972880 14,680,684,687,716-719,721
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f6ce6f7a1a6115a25464fb042b42e0f94a933b85",
+  "prompts": {},
+  "sessions": {
+    "s_1ac467ec482600": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18d33-303b-7e63-be31-73bc085729de",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
