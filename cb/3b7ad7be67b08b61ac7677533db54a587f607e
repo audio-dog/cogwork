@@ -1,0 +1,23 @@
+packages/engine/src/slack-source.test.ts
+  s_79a6dc92473e13::t_1cc66e6eb1029c 381,386,403-405
+  s_79a6dc92473e13::t_8e56f3ebc2cc51 392
+  s_79a6dc92473e13::t_13468ffc8eae8a 394-402,406,411,414-415,418-421
+packages/engine/src/slack-source.ts
+  s_79a6dc92473e13::t_94ff2f20a0e326 701
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb3b7ad7be67b08b61ac7677533db54a587f607e",
+  "prompts": {},
+  "sessions": {
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
