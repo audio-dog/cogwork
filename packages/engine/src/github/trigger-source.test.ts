@@ -168,11 +168,18 @@ describe("GitHub Trigger sources", () => {
 
   it.effect("emits current labels and keeps person-comment revisions distinct by label", () =>
     Effect.gen(function* () {
+      yield* TestClock.setTime(20_000);
       const client = yield* GitHubClient;
       const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const labelSubscription = subscription(
+        "github.issue-has-label",
+        "label",
+        [{ id: "label", value: "needs-triage" }],
+        10_000,
+      );
       const events = yield* source
         .observe([
-          subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }]),
+          labelSubscription,
           subscription("github.new-comment-from-person", "comment", [
             { id: "label", value: "needs-triage" },
             { id: "catch-up-at-most", value: "7" },
@@ -185,13 +192,16 @@ describe("GitHub Trigger sources", () => {
         .pipe(Stream.take(3), Stream.runCollect);
 
       assert.deepStrictEqual(
-        [...events].map(({ entry, revision, cause }) => [entry, revision, cause._tag]),
+        [...events].map(({ entry, revision, cause }) => `${entry}:${revision}:${cause._tag}`).toSorted(),
         [
-          [issueHasLabelKey, "label:needs-triage:1500", "Unknown"],
-          [newIssueCommentKey, "comment:2:label:needs-triage", "Person"],
-          [newIssueCommentKey, "comment:2:label:ready-for-human", "Person"],
-        ],
+          `${issueHasLabelKey}:label:needs-triage:1500:Unknown`,
+          `${newIssueCommentKey}:comment:2:label:needs-triage:Person`,
+          `${newIssueCommentKey}:comment:2:label:ready-for-human:Person`,
+        ].toSorted(),
       );
+      const labelEvent =
+        events.find(({ entry }) => entry === issueHasLabelKey) ?? assert.fail("missing label event");
+      assert.deepStrictEqual(matchTriggerEvent([labelSubscription], labelEvent), [labelSubscription]);
     }).pipe(
       Effect.provide(
         Layer.mock(GitHubClient, {
@@ -514,13 +524,18 @@ describe("GitHub Trigger sources", () => {
 
   it.effect("keys pull conditions by head and base revisions", () =>
     Effect.gen(function* () {
+      yield* TestClock.setTime(20_000);
       const client = yield* GitHubClient;
       const source = makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState));
+      const checksSubscription = subscription("github.pull-request-checks-failed", "checks", [], 10_000);
+      const conflictsSubscription = subscription(
+        "github.pull-request-conflicts-with-base",
+        "conflicts",
+        [],
+        10_000,
+      );
       const events = yield* source
-        .observe([
-          subscription("github.pull-request-checks-failed", "checks"),
-          subscription("github.pull-request-conflicts-with-base", "conflicts"),
-        ])
+        .observe([checksSubscription, conflictsSubscription])
         .pipe(Stream.take(2), Stream.runCollect);
 
       assert.deepStrictEqual(
@@ -532,6 +547,12 @@ describe("GitHub Trigger sources", () => {
         workspace: workspaceId,
         id: linkedIssueId,
       });
+      assert.deepStrictEqual(
+        [...events].map((event) =>
+          matchTriggerEvent([checksSubscription, conflictsSubscription], event).map(({ trigger }) => trigger),
+        ),
+        [[checksSubscription.trigger], [conflictsSubscription.trigger]],
+      );
     }).pipe(Effect.provide(pullClientLayer())),
   );
 

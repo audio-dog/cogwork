@@ -71,7 +71,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
     if (subscription.entry !== issueHasLabelKey) return [];
     const label = parameterValue(subscription.parameters, "label") ?? "";
     const applied = history.findLast((event) => event.event === "labeled" && event.labelName === label);
-    const atMillis = applied?.createdAtMillis ?? issue.createdAtMillis;
+    const appliedAt = applied?.createdAtMillis ?? issue.createdAtMillis;
     return [
       {
         key: {
@@ -79,9 +79,9 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
           workspace: workspace.config.name,
           id: itemId(`#${issue.number}`),
         },
-        revision: `label:${label}:${atMillis}`,
+        revision: `label:${label}:${appliedAt}`,
         cause: { _tag: "Unknown" },
-        atMillis,
+        atMillis: now,
         entry: issueHasLabelKey,
         workspace: workspace.config.name,
         parameters: [{ id: "label", value: label }],
