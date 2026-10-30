@@ -1,0 +1,86 @@
+packages/engine/src/github/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_5ce9f1410f9a3f 87,121
+packages/engine/src/github/trigger-source.test.ts
+  s_f4abcd25549e05::t_5ce9f1410f9a3f 615
+packages/engine/src/coordination.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 75,77,104,132-165,212-221,229-248,305,307,370-379
+  s_f4abcd25549e05::t_36c66ab8af2a23 269-271,273,277-278,280,284,289,291,294,296,310,314,318,321,337-338,343,352,383
+packages/engine/src/scheduler.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 119,138,140-142,146,150-151,154-156,173-175,193,201-204,210
+  s_f4abcd25549e05::t_82b280f33650cd 29
+packages/engine/src/coordination-fold.test.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 84
+packages/engine/src/control-store-schema.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 134-140,143-148,296-297
+packages/engine/src/daemon-composition.test.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 373,427-429
+  s_f4abcd25549e05::t_e92921d4168e9d 371,376
+packages/engine/src/coordination-tracker.ts
+  s_f4abcd25549e05::t_0aeddf9bda6aa4 15,191,193,202,204,217,238,247-253,255,264,272,280,288,290,295
+packages/engine/src/coordination-control-store.ts
+  s_f4abcd25549e05::t_72fade2b7155ac 7,11,59-64,78-80,90-91,212,223-237,259,269-270,273,275,283,302,317,334,345,350-357,362,377,400-407,411-422,424-431,435-436
+packages/engine/src/slack-source.test.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 1-887
+packages/engine/src/coordination-contract.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 11,30,32,35-39,45-51
+packages/engine/src/control-store.test.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 132,424-461
+  s_f4abcd25549e05::t_fdfff49127203b 462-464
+packages/engine/src/daemon.ts
+  s_f4abcd25549e05::t_df317777c85d49 522
+  s_f4abcd25549e05::t_80b3f805addf32 518,525
+  s_f4abcd25549e05::t_fa8836aa09a7e3 119
+packages/engine/src/scheduler.test.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 42,461-464,494,506,531,585-586,588,590-592,594-595,604-626,630-635,705,737-767
+  s_f4abcd25549e05::t_6a6fc18a7d348f 636-672,771-772
+  s_f4abcd25549e05::t_f34b212c8047c1 768-770
+  s_f4abcd25549e05::t_290e8c7db59e9f 773
+packages/engine/src/slack-source.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 1-1005
+packages/engine/src/trigger-observation.test.ts
+  s_f4abcd25549e05::t_c53aeba67f4917 209
+  s_f4abcd25549e05::t_d76795f1d614d4 30,549,1035-1036
+  s_f4abcd25549e05::t_0068814ed90423 873
+  s_f4abcd25549e05::t_fa8836aa09a7e3 2,7,34,56-61,65,238-240,243-254,261-270,273-314,327,344-382,385-444,447-504,507-533,537-539,545,566,574,702,705-726,729-787,790-796,799-818,820-833,836-856,858-866,869-870,879-881,883-915,920-922,924-930,941-943,945,1002-1034,1037-1083,1092-1094,1101,1134,1136-1137,1139-1185,1188-1189,1191-1197,1201,1203-1208,1210-1218,1221,1231,1258-1270
+  s_f4abcd25549e05::t_c907be05729ed2 383-384,445-446,505-506,727-728,797-798,834-835,916-917
+  s_f4abcd25549e05::t_61e6adf481370d 166-169,190,563,593,991
+  s_f4abcd25549e05::t_e730cc4da83f74 14
+packages/contracts/src/coordination.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 124-128
+packages/engine/src/trigger-observation.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 26,70-73,79-82,101-117,139-142,146-154,156-157,165-166,169-175,177-191,221,230,236-237,251-264,266,268-270,272-292,408-417,437-443,557-562,566-574,585,649-668,673-680,690-717,721-725
+  s_f4abcd25549e05::t_05af758202e5c9 29
+  s_f4abcd25549e05::t_a2963a361361d6 547,554
+packages/engine/src/trigger-source.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 3,47,82-85
+  s_f4abcd25549e05::t_80b3f805addf32 113-115
+packages/engine/src/workflow-run.test.ts
+  s_f4abcd25549e05::t_bc3bd3a0d87ff7 228-229,235,238-239,247,263,404,424,428,648,704
+  s_f4abcd25549e05::t_fa8836aa09a7e3 22,29,46,57,163-173,204,225-226,251-252,255-260,307-308,315-316,354-358,362,414-415,450-451,454-589,623-627,659,661-665,673,678-683
+packages/engine/src/workflow-run.ts
+  s_f4abcd25549e05::t_fa8836aa09a7e3 95,115-118,120-132,230,280,302,320
+  s_f4abcd25549e05::t_307fca91d89960 29,36,134-136,169,172,183,271,292-293,310,314,339
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_f4abcd25549e05::t_5ce9f1410f9a3f 91,122
+packages/engine/src/coordination-control-store.test.ts
+  s_f4abcd25549e05::t_fcd919e78316a2 1
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_f4abcd25549e05::t_29a844d7014f08 183,196,243
+  s_f4abcd25549e05::t_2fa17b41b4cca1 223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4b67787c8b3b868d2e7d80ceaccdcc47399952b9",
+  "prompts": {},
+  "sessions": {
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
