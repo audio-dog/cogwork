@@ -10,12 +10,12 @@ ADR 0003 made the issue tracker the coordination substrate: claims, attempt reco
 records live on the ticket, and the Run ledger is a disposable cache rebuilt from the tracker. That
 holds while every Run is about a tracker item.
 
-Workflows ([#656](https://github.com/colonylabs/cogwork/issues/656)) start Runs from Triggers that
+Workflows ([#656](https://github.com/taylorfsteele/cogwork/issues/656)) start Runs from Triggers that
 have no tracker behind them — a Granola note, a Slack message, a schedule tick, a pull request no
 issue links, and the child items a list-valued Operation result fans out into. Each still needs a
 claim, attempt records, a handback, and the failure counters. `product.md` names the seam: "the
 coordination store becomes ours when a work item has no tracker". Settled on
-[#782](https://github.com/colonylabs/cogwork/issues/782).
+[#782](https://github.com/taylorfsteele/cogwork/issues/782).
 
 ## Decision
 

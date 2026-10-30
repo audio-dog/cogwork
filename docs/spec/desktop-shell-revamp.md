@@ -1,6 +1,6 @@
 # Spec: desktop shell revamp — item tab, Attention, Activity, Settings, degraded engine states
 
-> Published as [colonylabs/cogwork#53](https://github.com/colonylabs/cogwork/issues/53) (`ready-for-agent`). The issue is the live copy; this file is a repo snapshot.
+> Published as [taylorfsteele/cogwork#53](https://github.com/taylorfsteele/cogwork/issues/53) (`ready-for-agent`). The issue is the live copy; this file is a repo snapshot.
 
 Spec produced from the wayfinder map #7 (**Wayfinder: desktop shell layout revamp — prototype to production**). All design tickets on the map are resolved; this spec collects every decision from the map, its child tickets, and the prototype branches into one buildable document.
 

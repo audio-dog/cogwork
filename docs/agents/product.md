@@ -23,7 +23,7 @@ Neither restates the other.
 first capability, not its definition.** The `triage → implement → follow-up → PR` pipeline is
 one workflow keyed by a work-item type, not the product itself. A Slack reply or meeting prep
 is a peer workflow over the same runtime, never another stage bolted onto the pipeline.
-([#168](https://github.com/colonylabs/cogwork/issues/168))
+([#168](https://github.com/taylorfsteele/cogwork/issues/168))
 
 **The general loop is sense → classify → schedule → act → record.** Issue-tracker-plus-coding-
 harness is its first instance. Nothing may assume that *sense* means polling a tracker or that
@@ -142,7 +142,7 @@ A claim here gists a decision; the decision itself lives in exactly one place.
 
 - `docs/adr/` — system-wide decisions, and the per-package `<context>/docs/adr/` beside them.
 - [`docs/spec/next-phase.md`](../spec/next-phase.md) — a superseded snapshot of closed wayfinder
-  map [#159](https://github.com/colonylabs/cogwork/issues/159). Its **Decision log** table is the
+  map [#159](https://github.com/taylorfsteele/cogwork/issues/159). Its **Decision log** table is the
   index from an area to the ticket that holds its full reasoning.
 - The issue tracker — every live map and its decision tickets. See
   [`docs/agents/issue-tracker.md`](./issue-tracker.md).

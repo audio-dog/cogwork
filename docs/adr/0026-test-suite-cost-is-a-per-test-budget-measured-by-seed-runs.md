@@ -9,8 +9,8 @@ The pull-request test step drifted from ~77s in mid-August to 147–220s in late
 suite of ~2,230 tests. Meanwhile the self-correction loop ADRs
 [0021](./0021-the-performance-sensor-files-its-own-tickets.md)/[0022](./0022-a-sensor-lives-where-its-signal-is-produced.md)
 designed for exactly this stalled one step from done: the comparison tool and the filer landed
-([#499](https://github.com/colonylabs/cogwork/issues/499)), but the schedule and the
-`issues: write` grant never did. [#500](https://github.com/colonylabs/cogwork/issues/500) parked at
+([#499](https://github.com/taylorfsteele/cogwork/issues/499)), but the schedule and the
+`issues: write` grant never did. [#500](https://github.com/taylorfsteele/cogwork/issues/500) parked at
 `ready-for-human` on two recorded blockers — `test:compare` permitted cache reads (a cached side
 measures 1.6–2.2s against 117–166s real, which is no measurement at all), and #498 closed without
 recording a materiality threshold while the ADRs forbid guessing one. Zero `origin:selfperf`
@@ -27,7 +27,7 @@ another's.
 
 **Concurrency tuning does not move the suite.** `TURBO_CONCURRENCY=1, VITEST_MAX_WORKERS=3` and
 `2/1` were both measured against the defaults on the runner: inconclusive, no significant
-difference. The tuning lever [#497](https://github.com/colonylabs/cogwork/issues/497) waited on is
+difference. The tuning lever [#497](https://github.com/taylorfsteele/cogwork/issues/497) waited on is
 measured dead.
 
 **The caches never warm.** No workflow runs on push to `main`, so no turbo cache entry ever exists
@@ -133,9 +133,9 @@ maintainer's own read that most tests are legitimately useful and slowness is an
 - A new workflow on `main` gains the seed run; the weekly sensor workflow gains `issues: write`.
   Every merge to `main` costs one uncached full-suite run — ~2.5 minutes today, ≤ ~67s once the
   budget is met, which is the point.
-- [#500](https://github.com/colonylabs/cogwork/issues/500) is unblocked and re-scoped;
-  [#570](https://github.com/colonylabs/cogwork/issues/570)'s budget evaluation lands inside this
-  sensor rather than the fortnightly one; [#497](https://github.com/colonylabs/cogwork/issues/497)
+- [#500](https://github.com/taylorfsteele/cogwork/issues/500) is unblocked and re-scoped;
+  [#570](https://github.com/taylorfsteele/cogwork/issues/570)'s budget evaluation lands inside this
+  sensor rather than the fortnightly one; [#497](https://github.com/taylorfsteele/cogwork/issues/497)
   is answerable from the September artifacts: the tuning it waited on measures as no effect.
 - The 50–70s target is met by two independent legs: the budget holds the uncached suite at
   ≤ 30 ms/test, and the seed-run cache makes the felt PR step smaller than that. Either leg
