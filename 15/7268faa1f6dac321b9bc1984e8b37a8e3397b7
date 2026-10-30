@@ -1,0 +1,181 @@
+packages/contracts/src/daemon.ts
+  s_f4abcd25549e05::t_25361e124dc33a 275-281,288-291
+packages/engine/src/granola-http.ts
+  s_f4abcd25549e05::t_25361e124dc33a 1-168
+packages/engine/src/index.ts
+  s_f4abcd25549e05::t_25361e124dc33a 46
+apps/desktop/src/renderer/src/components/connections-surface.test.tsx
+  s_f4abcd25549e05::t_25361e124dc33a 14-18,28,35,45-46
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_f4abcd25549e05::t_25361e124dc33a 130-131
+apps/desktop/src/renderer/src/components/connections-surface.tsx
+  s_f4abcd25549e05::t_25361e124dc33a 56-63,72,99,155,169,305,425-455,457-458
+packages/engine/src/scheduler.ts
+  s_f4abcd25549e05::t_25361e124dc33a 31,124-134,141-148,151,195,197-203,210,219-227,355-378,381-382,386,396-398,409-411
+packages/engine/src/trigger-observation.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 2,17,31,46,213-224,261-265,270,273,293-297,307,493,495,498-513,517,519-520,522-524,527-531,540-542,546-557,560,562-573,575-580,583-586,588-590,593-594,597,599-601,604-606,608,614-630,633-635,637-638,640-642,645-669,714,724-740,767,778-779,793-806
+  s_f4abcd25549e05::t_e2cfa59f822712 241-245,248,252-260,266-269,271-272,279-285
+  s_f4abcd25549e05::t_e44711a1a656fa 496-497,518,521,525-526
+  s_f4abcd25549e05::t_2a63ba85886afc 558-559,561,574,581-582,591-592,595-596,598,602-603,607,609-613
+  s_f4abcd25549e05::t_1eaa758ec0f3bc 174,328
+  s_f4abcd25549e05::t_7e5032aacea43d 631-632,636,639,643-644,698-702,708
+  s_f4abcd25549e05::t_4ac832e5122151 50
+  s_f4abcd25549e05::t_a2cfdfd89e620b 225-226
+  s_f4abcd25549e05::t_34491f8ec7d543 587
+packages/engine/src/trigger-observation.ts
+  s_f4abcd25549e05::t_25361e124dc33a 6-7,80-83,100,102-116,141-152,154-156,160,163-172,202-211,221-233,237,239-241,246-247,252-254,256-257,261,325,333,367-375,377,386-398,526,528-531,550-555,634-635,638-644
+  s_f4abcd25549e05::t_dfcbef08842a1a 648
+  s_f4abcd25549e05::t_1c967acdc50435 212-220,248-250
+  s_f4abcd25549e05::t_29d32f0e4a1817 332
+  s_f4abcd25549e05::t_835a8b07995b88 487-504,537
+  s_f4abcd25549e05::t_00d08e4af8f4c0 101
+  s_f4abcd25549e05::t_bc6a14f54239dd 505-509,520-524,527,539-541
+packages/engine/plugins/bundles/slack/plugin.json
+  s_f4abcd25549e05::t_25361e124dc33a 1-15
+packages/engine/src/workflow.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 3,36,50-53,127,160-179,409
+packages/engine/src/slack-login.ts
+  s_f4abcd25549e05::t_25361e124dc33a 1-22
+packages/engine/CONTEXT.md
+  s_f4abcd25549e05::t_25361e124dc33a 173
+packages/engine/src/workflow-run.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 41-44,46,57,66-71,178-205,309,348,351,355-392,394-413,416-418,420-443,445-447
+  s_f4abcd25549e05::t_4da125c76c7fda 260,393,414-415,419,444,498,523,545
+  s_f4abcd25549e05::t_df9e3186ccd308 45,212-213,215-217,223,226-227,235,239,246,250-251,261-264
+  s_f4abcd25549e05::t_6ccc2f58650d15 206
+  s_f4abcd25549e05::t_d19247debde258 265
+apps/cli/src/login-commands.ts
+  s_f4abcd25549e05::t_25361e124dc33a 1,81-102,130-132
+packages/engine/src/commands.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 84,473-492,2535-2637
+  s_f4abcd25549e05::t_c062e177ec183a 2638-2640
+apps/cli/CONTEXT.md
+  s_f4abcd25549e05::t_25361e124dc33a 50-53
+packages/contracts/src/connection.ts
+  s_f4abcd25549e05::t_25361e124dc33a 4,8,45-48
+  s_f4abcd25549e05::t_92b1d283454888 49
+packages/engine/src/scheduler.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 38,43,46-49,458-461,491-494,505,518,530,613-674
+  s_f4abcd25549e05::t_835a8b07995b88 590
+  s_79a6dc92473e13::t_5bfa072dd53bf6 675
+packages/engine/plugins/bundles/slack/mcp/slack.json
+  s_f4abcd25549e05::t_25361e124dc33a 1-3
+apps/cli/src/status.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 48
+packages/engine/src/trigger-source.ts
+  s_f4abcd25549e05::t_25361e124dc33a 59-68
+  s_79a6dc92473e13::t_1badcf4478c89d 69-70
+apps/desktop/src/renderer/src/features/connections-view.ts
+  s_f4abcd25549e05::t_25361e124dc33a 19
+packages/engine/src/commands.ts
+  s_f4abcd25549e05::t_25361e124dc33a 58,88,922,993-1043
+  s_f4abcd25549e05::t_29cebb552497d9 1044
+apps/cli/src/commands.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 115
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_f4abcd25549e05::t_25361e124dc33a 110,117,130,164,226,237
+packages/contracts/CONTEXT.md
+  s_f4abcd25549e05::t_25361e124dc33a 149,151,469
+packages/engine/src/workflow-run.ts
+  s_f4abcd25549e05::t_25361e124dc33a 49-72,99,129-131,152-156,235,285,287,307,309,325,327,348,350,355,362
+  s_f4abcd25549e05::t_35df150d77ab19 36-40,119-122,124-125,127-128,132-134,137-139,141
+  s_f4abcd25549e05::t_f990a04666d971 123
+  s_1ac467ec482600::t_99dcb701aefc13 140
+apps/cli/src/credentials.ts
+  s_f4abcd25549e05::t_25361e124dc33a 1,8,12,33,95-106,109-115,121-124,130-138,145,150,158,163-177,189,205
+packages/engine/src/connection.ts
+  s_f4abcd25549e05::t_25361e124dc33a 32,39,92-99,107,239,251,320
+apps/cli/src/slack-login.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 1-134
+packages/engine/src/coordination-fold.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 96-120
+apps/cli/src/credentials.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 11,190-246,468-528
+apps/desktop/src/renderer/src/features/connection-form.ts
+  s_f4abcd25549e05::t_25361e124dc33a 13,21
+packages/contracts/src/coordination.ts
+  s_f4abcd25549e05::t_25361e124dc33a 5,112
+packages/contracts/src/rpc.ts
+  s_f4abcd25549e05::t_25361e124dc33a 293-297,369
+packages/engine/src/credential-store.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 511-581,772-803
+  s_f4abcd25549e05::t_c4e8a0ed3ef49e 804
+packages/engine/src/daemon-composition.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 353,373-374,376
+  s_f4abcd25549e05::t_a8f35d9fcc5937 371,375,424-425
+packages/engine/src/daemon.ts
+  s_f4abcd25549e05::t_25361e124dc33a 48,76,78,122,296,305,383,407,511-512,514-516,519,521,547-555,564
+  s_f4abcd25549e05::t_73350317609e25 37,508-509
+  s_f4abcd25549e05::t_c6b98dc910b5d1 422-424,466,513,517-518,520,522
+  s_f4abcd25549e05::t_835a8b07995b88 506-507,510
+  s_38c737bec49a48::t_f54d5e78dd9b34 503-505
+apps/cli/src/slack-login.ts
+  s_f4abcd25549e05::t_25361e124dc33a 1-278
+apps/cli/src/connection-commands.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 6,127-143
+  s_f4abcd25549e05::t_263f214ce40f55 144-146
+packages/engine/src/granola-source.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 1-659
+packages/engine/src/granola-source.ts
+  s_f4abcd25549e05::t_25361e124dc33a 1-595
+packages/engine/src/connection.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 22,184-227
+packages/engine/plugins/catalog.json
+  s_f4abcd25549e05::t_25361e124dc33a 20-25
+packages/contracts/src/connection.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 66-83
+apps/cli/src/connection-commands.ts
+  s_f4abcd25549e05::t_25361e124dc33a 57-63,80,143
+packages/engine/src/control-store-schema.ts
+  s_f4abcd25549e05::t_25361e124dc33a 41
+packages/engine/src/control-store.test.ts
+  s_f4abcd25549e05::t_25361e124dc33a 186-191,712,720
+packages/engine/src/credential-store.ts
+  s_f4abcd25549e05::t_25361e124dc33a 145,265,328-348,549-565,570-572,602-605
+packages/engine/src/connection-verify.ts
+  s_f4abcd25549e05::t_25361e124dc33a 10,43-44,60-66,78
+apps/cli/src/rpc.ts
+  s_f4abcd25549e05::t_25361e124dc33a 36,364
+packages/engine/src/coordination.ts
+  s_f4abcd25549e05::t_25361e124dc33a 157-160,175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "157268faa1f6dac321b9bc1984e8b37a8e3397b7",
+  "prompts": {},
+  "sessions": {
+    "s_1ac467ec482600": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18d33-303b-7e63-be31-73bc085729de",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_38c737bec49a48": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18d2a-0184-72a3-bc54-7aaba7dd1b08",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f4abcd25549e05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-3735-7962-97bb-271900ed0de1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
