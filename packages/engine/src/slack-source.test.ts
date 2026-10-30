@@ -187,6 +187,7 @@ describe("Slack Trigger source", () => {
         team: "T123",
         channel: "C123",
         ts: "90.000",
+        threadTs: "90.000",
       });
       assert.strictEqual(event?.revision, "90.000");
       assert.include(event?.workContext?.body ?? "", "Taylor: Could @Morgan review this?");
@@ -515,7 +516,7 @@ describe("Slack Trigger source", () => {
         threadTs: root.ts,
         text: "Cogwork reply",
         appId: "A0CD4UYHKPX",
-        metadata: { eventPayload: { write_key: "run-1:step-1" } },
+        metadata: { eventType: "cogwork_write", writeKey: "run-1:step-1" },
       });
       yield* Ref.set(yield* SlackClientStateRef, {
         search: [],
@@ -577,6 +578,7 @@ describe("Slack Trigger source", () => {
         team: "T123",
         channel: "C123",
         ts: "900.000",
+        threadTs: "900.000",
       });
     }).pipe(Effect.provide(testLayer)),
   );
@@ -805,6 +807,32 @@ describe("Slack Trigger source", () => {
       });
 
       yield* makeHttpClient(http).history(session, "C123", 1_793_275_200_000);
+    }),
+  );
+
+  it.effect("lists Slack conversations for live channel options", () =>
+    Effect.gen(function* () {
+      const http = HttpClient.make((request, url) => {
+        assert.strictEqual(url.pathname, "/api/conversations.list");
+        assert.strictEqual(url.searchParams.get("types"), "public_channel,private_channel");
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              JSON.stringify({
+                ok: true,
+                channels: [{ id: "C123", name: "reviews" }],
+                response_metadata: { next_cursor: "" },
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            ),
+          ),
+        );
+      });
+
+      const channels = yield* makeHttpClient(http).channels(session);
+
+      assert.deepStrictEqual(channels, [{ id: "C123", name: "reviews" }]);
     }),
   );
 

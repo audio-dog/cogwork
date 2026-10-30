@@ -92,6 +92,13 @@ const workflowActionTargetBinding = {
 export const WorkflowActionTarget = Schema.TaggedUnion({
   Cogwork: {},
   NoWorkspace: {},
+  SlackChannel: { channel: TrimmedNonEmptyString },
+  SlackMessage: {
+    team: TrimmedNonEmptyString,
+    channel: TrimmedNonEmptyString,
+    ts: TrimmedNonEmptyString,
+    threadTs: TrimmedNonEmptyString,
+  },
   CurrentIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   ExistingIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   NewIssue: workflowActionTargetBinding,
@@ -112,6 +119,19 @@ export class WorkflowActionArtifact extends Schema.Class<WorkflowActionArtifact>
   origin: WorkflowActionOrigin,
 }) {}
 
+export class WorkflowSlackActionArtifact extends Schema.Class<WorkflowSlackActionArtifact>(
+  "WorkflowSlackActionArtifact",
+)({
+  team: TrimmedNonEmptyString,
+  channel: TrimmedNonEmptyString,
+  ts: TrimmedNonEmptyString,
+  threadTs: Schema.NullOr(TrimmedNonEmptyString),
+  origin: WorkflowActionOrigin,
+}) {}
+
+export const WorkflowActionPlanArtifact = Schema.Union([WorkflowActionArtifact, WorkflowSlackActionArtifact]);
+export type WorkflowActionPlanArtifact = typeof WorkflowActionPlanArtifact.Type;
+
 export class WorkflowActionPlanStep extends Schema.Class<WorkflowActionPlanStep>("WorkflowActionPlanStep")({
   position: Schema.Natural,
   entry: WorkflowCatalogKey,
@@ -119,9 +139,9 @@ export class WorkflowActionPlanStep extends Schema.Class<WorkflowActionPlanStep>
   inputs: Schema.Record(Schema.String, TrimmedNonEmptyString),
   target: WorkflowActionTarget,
   writeKey: TrimmedNonEmptyString,
-  status: Schema.Literals(["pending", "completed", "failed"]),
+  status: Schema.Literals(["pending", "executing", "completed", "failed"]),
   failures: Schema.Natural,
-  artifact: Schema.NullOr(WorkflowActionArtifact),
+  artifact: Schema.NullOr(WorkflowActionPlanArtifact),
 }) {}
 
 export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("WorkflowActionPlan")({

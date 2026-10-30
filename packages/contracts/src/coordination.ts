@@ -17,6 +17,7 @@ export const WorkItemRef = Schema.TaggedUnion({
     team: TrimmedNonEmptyString,
     channel: TrimmedNonEmptyString,
     ts: TrimmedNonEmptyString,
+    threadTs: Schema.optional(TrimmedNonEmptyString),
   },
   SlackConversation: {
     team: TrimmedNonEmptyString,
@@ -110,6 +111,7 @@ export const ParkReason = Schema.TaggedUnion({
   MissingOperation: {},
   PlanRejected: { reason: TrimmedNonEmptyString, entry: Schema.optional(TrimmedNonEmptyString) },
   WriteFailed: { step: TrimmedNonEmptyString, error: TrimmedNonEmptyString },
+  DraftOutcomeUnknown: { step: TrimmedNonEmptyString },
   NoWorkspaceRecognized: { plan: TrimmedNonEmptyString },
   AwaitingApproval: {
     plan: TrimmedNonEmptyString,

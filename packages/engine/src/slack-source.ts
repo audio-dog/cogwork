@@ -33,7 +33,8 @@ export interface SlackSession {
 }
 
 export interface SlackMetadata {
-  readonly eventPayload: unknown;
+  readonly eventType: string;
+  readonly writeKey: string | null;
 }
 
 export interface SlackReaction {
@@ -187,15 +188,10 @@ const withCatchUpWindow = (subscription: TriggerSubscription, startedAtMillis: n
 
 const catchUpSince = (subscription: TriggerSubscription, now: number) => subscription.catchUp?.since ?? now;
 
-const payloadHasWriteKey = (payload: unknown) => {
-  if (typeof payload !== "object" || payload === null) return false;
-  const hasWriteKey =
-    "write_key" in payload && typeof payload.write_key === "string" && payload.write_key.length > 0;
-  return hasWriteKey;
-};
-
 const isCogworkMessage = (message: SlackMessage) =>
-  message.appId === cogworkAppId && payloadHasWriteKey(message.metadata?.eventPayload);
+  message.appId === cogworkAppId &&
+  message.metadata?.eventType === "cogwork_write" &&
+  typeof message.metadata.writeKey === "string";
 
 const rootTimestampOf = (message: SlackMessage) => message.threadTs ?? message.ts;
 
@@ -218,7 +214,7 @@ const RawReaction = Schema.Struct({
 
 const RawMetadata = Schema.Struct({
   event_type: Schema.String,
-  event_payload: Schema.Unknown,
+  event_payload: Schema.Record(Schema.String, Schema.Unknown),
 });
 
 const RawMessage = Schema.Struct({
@@ -306,7 +302,15 @@ const normalizeMessage = (message: RawMessageValue, channel: string): SlackMessa
   text: message.text ?? "",
   user: message.user ?? null,
   appId: message.app_id ?? null,
-  metadata: message.metadata ? { eventPayload: message.metadata.event_payload } : null,
+  metadata: message.metadata
+    ? {
+        eventType: message.metadata.event_type,
+        writeKey:
+          typeof message.metadata.event_payload.write_key === "string"
+            ? message.metadata.event_payload.write_key
+            : null,
+      }
+    : null,
   reactions: (message.reactions ?? []).map((reaction) => ({
     name: reaction.name,
     users: reaction.users ?? [],
@@ -659,7 +663,13 @@ const messageEvent = (
   message: SlackMessage,
   workContext: NonNullable<TriggerEvent["workContext"]>,
 ): TriggerEvent => ({
-  key: { _tag: "SlackMessage", team: session.team, channel: message.channel, ts: message.ts },
+  key: {
+    _tag: "SlackMessage",
+    team: session.team,
+    channel: message.channel,
+    ts: message.ts,
+    threadTs: rootTimestampOf(message),
+  },
   revision: message.ts,
   cause: { _tag: "Person" },
   atMillis: timestampMillis(message.ts),
