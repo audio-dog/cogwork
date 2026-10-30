@@ -1,0 +1,42 @@
+packages/engine/src/workflow-action-plan.test.ts
+  s_edb7d3bbd85c87::t_6dfdd7a5bf44ac 7-8,26,28
+  s_edb7d3bbd85c87::t_8af76e17d216a2 27,43-44,520-521
+  s_edb7d3bbd85c87::t_b2f21646de90c1 462,501
+  s_edb7d3bbd85c87::t_53fa61c8c3013c 421,448,450,461,463-471,473,475-484,486-487,492
+  s_edb7d3bbd85c87::t_37a1242c89065a 2-3,36,145-157
+  s_edb7d3bbd85c87::t_67e47dab05dde0 436
+  s_edb7d3bbd85c87::t_b0b1decd12f700 422-435,437-447,449,451-460,485,488-491,493-498,513,529-530,532-535
+  s_edb7d3bbd85c87::t_b728d8c3aaab00 125-144,158
+  s_edb7d3bbd85c87::t_fd0a47795040c0 472,474
+  s_edb7d3bbd85c87::t_2370dd79f42e11 499-500,502-512,514-519,522-528,531
+packages/engine/src/workflow-action-plan.ts
+  s_edb7d3bbd85c87::t_ed87810fb971f4 21,28,75,77-79,110-130,132-138,369
+  s_edb7d3bbd85c87::t_cfa93d79876d6b 527
+  s_edb7d3bbd85c87::t_61e1a1fd7b0752 205-240,250-251,253-254
+  s_edb7d3bbd85c87::t_a71391eced9f6a 252
+  s_edb7d3bbd85c87::t_8441f87c4702f4 139,360-368,386,390-393,404-409,415,419-430,432,434-439
+  s_edb7d3bbd85c87::t_fd0a47795040c0 529,548
+  s_edb7d3bbd85c87::t_1aaef72c1d6bd1 433,510,524-526,528,535,547
+  s_edb7d3bbd85c87::t_f4f1bea9be0b1f 505
+  s_edb7d3bbd85c87::t_a3856b4d9f8b40 7,23,30,34,76,80-81,131,385,387,410-414,416-418,431,495-496,501,507,522-523,534,544,620-623
+  s_edb7d3bbd85c87::t_3319c694afc166 516,540
+  s_edb7d3bbd85c87::t_9510b494cbb13e 494,497-500,502-504,506,508-509,511-515,517-521,530-533,536-539,541-543,545-546
+  s_edb7d3bbd85c87::t_fa6bd4dd33597a 493,599,689-700,711-717
+  s_edb7d3bbd85c87::t_e6e573db79e8fb 140,370
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "47b58ab090d8efaf00892bcacf1ffaf1eaf9c33e",
+  "prompts": {},
+  "sessions": {
+    "s_edb7d3bbd85c87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db0-6a39-7811-b710-89572ba150bc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
