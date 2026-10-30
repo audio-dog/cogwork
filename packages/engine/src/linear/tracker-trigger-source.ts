@@ -185,7 +185,7 @@ export const makeLinearTrackerTriggerSource = (
       const registered = state.workspaces.find(({ config }) => config.name === workspace);
       if (!registered) return [];
       const issues = yield* Effect.forEach(targetsFor(registered), (target) =>
-        client.observeIssues(target, null),
+        client.observeIssues(target, null, null, undefined, true),
       );
       return [...new Set(issues.flat().flatMap(({ labels }) => labels))].map(
         (label) => ({ value: label, name: label, listedIn: [workspace] }) satisfies WorkflowOption,

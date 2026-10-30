@@ -27,6 +27,7 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 const registryState = { workspaces: [workspace], failures: [] };
+const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("linear.issue-has-label");
 const subscription = (entry: string, trigger: string, label = "needs-triage"): TriggerSubscription => ({
   workflow: Schema.decodeSync(WorkflowId)("coding"),
   trigger: Schema.decodeSync(WorkflowNodeId)(trigger),
@@ -89,6 +90,41 @@ const targetTriggerOf = (event: object) => {
   if (!("target" in event) || typeof event.target !== "object" || event.target === null) return undefined;
   return "trigger" in event.target ? event.target.trigger : undefined;
 };
+
+it.effect("lists labels from completed Linear issues", () => {
+  const listIssues = vi.fn<LinearClientService["observeIssues"]>(() =>
+    Effect.succeed([
+      {
+        id: "completed-issue-id",
+        identifier: "ENG-2",
+        title: "Completed issue",
+        url: "https://linear.app/acme/issue/ENG-2",
+        labels: ["completed-only"],
+        assignees: ["owner"],
+        stateName: "Done",
+        stateType: "completed",
+        openBlockers: 0,
+        priority: "medium" as const,
+        updatedAtMillis: 3_000,
+        coordinationComments: [],
+      },
+    ]),
+  );
+
+  return Effect.gen(function* () {
+    const client = yield* LinearClient;
+    const options = yield* makeLinearTrackerTriggerSource(client, Effect.succeed(registryState)).listOptions(
+      issueHasLabelKey,
+      "label",
+      workspaceId,
+    );
+
+    assert.deepStrictEqual(options, [
+      { value: "completed-only", name: "completed-only", listedIn: [workspaceId] },
+    ]);
+    assert.isTrue(listIssues.mock.calls[0]?.[4]);
+  }).pipe(Effect.provide(Layer.mock(LinearClient, { observeIssues: listIssues })));
+});
 
 it.effect("reads Linear updates and keeps comment revisions distinct by label", () =>
   Effect.gen(function* () {
