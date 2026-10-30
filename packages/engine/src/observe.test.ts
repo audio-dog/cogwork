@@ -8,7 +8,11 @@ import type { FollowUpMarker } from "./follow-up";
 import { type IssueTrackerService, type TrackerItem, unsupportedWorkflowActions } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
-import type { PrSignals, SourceControlProviderService } from "./source-control";
+import {
+  emptyService as emptySourceControl,
+  type PrSignals,
+  type SourceControlProviderService,
+} from "./source-control";
 
 const id = Schema.decodeSync(WorkItemId);
 const lineage = { root: LineageId.make("issue:7"), parent: null, hop: 0 };
@@ -76,6 +80,7 @@ const tracker = (
 });
 
 const provider = (signals: PrSignals): SourceControlProviderService => ({
+  ...emptySourceControl,
   observe: () => Effect.succeed(new Map([[id("#7"), signals]])),
   comment: () => Effect.void,
   findOpenPullRequest: () => Effect.succeed(null),

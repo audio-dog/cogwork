@@ -86,6 +86,7 @@ export interface RawPull {
   readonly draft: boolean;
   readonly headSha: string;
   readonly baseSha?: string;
+  readonly baseRef?: string;
   readonly headRef: string;
   readonly headRepository: string | null;
   readonly closingIssueNumbers: ReadonlyArray<number>;
@@ -175,7 +176,7 @@ const PullSchema = Schema.Struct({
     ref: Schema.String,
     repo: Schema.optional(Schema.NullOr(Schema.Struct({ full_name: Schema.String }))),
   }),
-  base: Schema.optional(Schema.Struct({ sha: Schema.String })),
+  base: Schema.optional(Schema.Struct({ sha: Schema.String, ref: Schema.optional(Schema.String) })),
   author_association: Schema.optional(Schema.String),
   updated_at: Schema.optional(Schema.NullOr(Schema.String)),
 });
@@ -185,6 +186,7 @@ const PullDetailSchema = Schema.Struct({
 });
 
 const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) });
+const GitHubCollaboratorsSchema = Schema.Array(GitHubUserSchema);
 
 const ReviewSchema = Schema.Struct({
   id: Schema.Finite,
@@ -1280,6 +1282,27 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     });
   });
 
+  const listCollaborators = Effect.fn("github.listCollaborators")(function* (repo: GitHubRepoRef) {
+    const json = yield* fetchJson(repo, repoPath(repo, "/collaborators?affiliation=all&per_page=100"));
+    const users = yield* Effect.mapError(
+      Schema.decodeUnknownEffect(GitHubCollaboratorsSchema)(json),
+      toUnavailable,
+    );
+    return users.map(({ login }) => login);
+  });
+
+  const requestReview = Effect.fn("github.requestReview")(function* (
+    repo: GitHubRepoRef,
+    pullNumber: number,
+    reviewer: string,
+  ) {
+    yield* sendJson(
+      repo,
+      HttpClientRequest.post(repoPath(repo, `/pulls/${pullNumber}/requested_reviewers`)),
+      { reviewers: [reviewer] },
+    );
+  });
+
   const createPerformanceComment = Effect.fn("github.createPerformanceComment")(function* (
     repo: GitHubRepoRef,
     issueNumber: number,
@@ -1428,6 +1451,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           baseSha: pull.base?.sha,
           headRef: pull.head.ref,
           headRepository: pull.head.repo?.full_name ?? null,
+          ...(pull.base?.ref ? { baseRef: pull.base.ref } : {}),
           closingIssueNumbers: references.get(pull.number) ?? [],
           updatedAtMillis: millisFromIso(pull.updated_at ?? null),
         }),
@@ -1538,6 +1562,8 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         state: "closed",
       }),
     createComment,
+    listCollaborators,
+    requestReview,
     createPerformanceComment,
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),

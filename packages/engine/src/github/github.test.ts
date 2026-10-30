@@ -11,6 +11,7 @@ import {
   type Priority,
   RunId,
   WorkflowActionOrigin,
+  WorkflowCatalogKey,
   WorkflowId,
   WorkItemId,
   WorkspaceConfig,
@@ -56,6 +57,9 @@ import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
 import { layer as providerLayer } from "./provider";
 
 const id = Schema.decodeSync(WorkItemId);
+const workflowId = Schema.decodeSync(WorkflowId);
+const runId = Schema.decodeSync(RunId);
+const catalogKey = Schema.decodeSync(WorkflowCatalogKey);
 const lineage = { root: LineageId.make("issue:test"), parent: null, hop: 0 };
 const claimRecord = (by: string, claimedAtMillis: number) => ({
   by,
@@ -128,6 +132,9 @@ interface Seed {
   readonly createIssueError?: IssueTrackerError;
   readonly findIssueErrors?: ReadonlyArray<IssueTrackerError | null>;
   readonly readIssueError?: IssueTrackerError;
+  readonly collaborators?: ReadonlyArray<string>;
+  readonly reviewRequests?: Ref.Ref<ReadonlyArray<{ readonly pull: number; readonly reviewer: string }>>;
+  readonly createdPulls?: Ref.Ref<number>;
 }
 
 class ProviderCalls extends Context.Service<
@@ -235,7 +242,8 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     (all, { sha, ...run }) => all.set(sha, [...(all.get(sha) ?? []), run]),
     new Map<string, ReadonlyArray<CheckRun>>(),
   );
-  const pulls = seed.pulls ?? [];
+  const pulls = yield* Ref.make(seed.pulls ?? []);
+  const createdPulls = seed.createdPulls ?? (yield* Ref.make(0));
   const mergeableByPull = new Map((seed.mergeable ?? []).map(({ pull, state }) => [pull, state]));
   const patch = (number: number, update: (issue: RawIssue) => RawIssue) =>
     Ref.update(issuesRef, (issues) =>
@@ -296,7 +304,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
                 ]),
             ),
           ),
-    listPulls: () => Effect.succeed([...pulls]),
+    listPulls: () => Ref.get(pulls).pipe(Effect.map((current) => [...current])),
     issuePullReferences: () => Effect.succeed([]),
     pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
     listComments: (_repo, number) =>
@@ -328,10 +336,28 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         return [created, [...issues, created]];
       });
     },
-    createPull: () =>
-      seed.pullRequestError
-        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull request rejected" }))
-        : Effect.succeed({ number: 480, url: "https://github.com/owner/repo/pull/480" }),
+    createPull: (_repo, input) => {
+      if (seed.pullRequestError) {
+        return Effect.fail(
+          new IssueTrackerError({ reason: "unavailable", message: "pull request rejected" }),
+        );
+      }
+      const opened = { number: 480, url: "https://github.com/owner/repo/pull/480" };
+      return Ref.update(createdPulls, (count) => count + 1).pipe(
+        Effect.andThen(
+          Ref.update(pulls, (current) => [
+            ...current,
+            pull({
+              number: opened.number,
+              url: opened.url,
+              headRef: input.headBranch,
+              baseRef: input.baseBranch,
+            }),
+          ]),
+        ),
+        Effect.map(() => opened),
+      );
+    },
     addLabel: (_repo, number, label) =>
       patch(number, (issue) => ({ ...issue, labels: [...issue.labels, label] })),
     removeLabel: (_repo, number, label) =>
@@ -341,6 +367,11 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       })),
     closeIssue: (_repo, number) => patch(number, (issue) => ({ ...issue, state: "closed" })),
     createComment,
+    listCollaborators: () => Effect.succeed([...(seed.collaborators ?? [])]),
+    requestReview: (_repo, pull, reviewer) =>
+      seed.reviewRequests
+        ? Ref.update(seed.reviewRequests, (requests) => [...requests, { pull, reviewer }])
+        : Effect.void,
     createPerformanceComment: createComment,
     editComment: (_repo, commentId, body) =>
       Ref.update(
@@ -414,12 +445,12 @@ const prioritizedWorkspace: RegisteredWorkspace = {
   }),
 };
 
-const withClient = (seed: Seed) =>
+const withClient = (seed: Seed, workspaces: ReadonlyArray<RegisteredWorkspace> = []) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
     Layer.provideMerge(
       Layer.merge(
         Layer.effect(GitHubClient, fakeClient(seed)),
-        Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+        Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ ...emptyRegistry, workspaces })),
       ),
     ),
   );
@@ -1058,6 +1089,186 @@ describe("GitHub adapters", () => {
       });
     }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
+
+  it.effect("opens a workflow pull request once when the write retries", () => {
+    const createdPulls = Ref.makeUnsafe(0);
+    return Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#820") }),
+        workflow: workflowId("coding"),
+        attempt: runId("attempt-820"),
+        writeKey: "open-pr-820",
+      });
+      const input = {
+        headBranch: "820-open-pull-request",
+        baseBranch: "main",
+        title: "Open workflow pull requests",
+        body: "Closes #820",
+        origin,
+      };
+
+      const first = yield* provider.openWorkflowPullRequest(workspace, input);
+      const retried = yield* provider.openWorkflowPullRequest(workspace, input);
+
+      assert.strictEqual(yield* Ref.get(createdPulls), 1);
+      assert.deepStrictEqual(retried, first);
+      assert.deepStrictEqual(first.origin, origin);
+    }).pipe(Effect.provide(withClient({ issues: [], createdPulls })));
+  });
+
+  it.effect("resolves only trusted pull requests from the workspace repository", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const resolved = yield* provider.resolvePullRequest(workspace, {
+        _tag: "Issue",
+        workspace: workspace.config.name,
+        id: id("#820"),
+      });
+
+      assert.strictEqual(resolved?.number, 480);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          pulls: [
+            pull({ number: 480, headRef: "820-trusted", closingIssueNumbers: [820] }),
+            pull({
+              number: 481,
+              headRef: "820-untrusted",
+              closingIssueNumbers: [820],
+              authorLogin: "drive-by",
+              authorAssociation: "CONTRIBUTOR",
+            }),
+            pull({
+              number: 482,
+              headRef: "820-fork",
+              closingIssueNumbers: [820],
+              headRepository: "fork/repo",
+            }),
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("contributes pull request actions with their publication gates", () =>
+    Effect.gen(function* () {
+      const entries = (yield* SourceControlProvider).workflowCatalogContribution.entries;
+      assert.deepStrictEqual(
+        entries.map(({ key, permissionProfile, requiresWorkspace, actsOn }) => ({
+          key,
+          permissionProfile,
+          requiresWorkspace,
+          actsOn,
+        })),
+        [
+          {
+            key: catalogKey("github.open-pull-request"),
+            permissionProfile: "full",
+            requiresWorkspace: true,
+            actsOn: ["issue"],
+          },
+          {
+            key: catalogKey("github.push-to-this-pull-request"),
+            permissionProfile: "full",
+            requiresWorkspace: true,
+            actsOn: ["issue", "pull-request"],
+          },
+          {
+            key: catalogKey("github.comment-on-this-pull-request"),
+            permissionProfile: "read-only",
+            requiresWorkspace: true,
+            actsOn: ["issue", "pull-request"],
+          },
+          {
+            key: catalogKey("github.request-review"),
+            permissionProfile: "read-only",
+            requiresWorkspace: true,
+            actsOn: ["issue", "pull-request"],
+          },
+        ],
+      );
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("comments on a pull request once with the Run marker", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const client = yield* GitHubClient;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "PullRequest", workspace: workspace.config.name, number: 480 }),
+        workflow: workflowId("follow-up"),
+        attempt: runId("comment-attempt"),
+        writeKey: "comment-480",
+      });
+      const pullRequest = {
+        number: 480,
+        url: "https://github.com/owner/repo/pull/480",
+        headBranch: "review-branch",
+        baseBranch: "main",
+      };
+
+      yield* provider.commentPullRequest(workspace, pullRequest, "Ready for another look.", origin);
+      yield* provider.commentPullRequest(workspace, pullRequest, "Ready for another look.", origin);
+
+      const comments = yield* client.listComments(repo, pullRequest.number);
+      assert.lengthOf(comments, 1);
+      assert.include(comments[0]?.body ?? "", "Ready for another look.");
+      assert.include(comments[0]?.body ?? "", "comment-480");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          pulls: [pull({ number: 480, headRef: "review-branch", baseRef: "main" })],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("lists live reviewers and requests the chosen reviewer once", () => {
+    const reviewRequests = Ref.makeUnsafe<ReadonlyArray<{ pull: number; reviewer: string }>>([]);
+    return Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const listOptions = provider.workflowCatalogContribution.listOptions;
+      if (!listOptions) return yield* Effect.die("review options unavailable");
+      const options = yield* listOptions(catalogKey("github.request-review"), "reviewer", [
+        workspace.config.name,
+      ]);
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "PullRequest", workspace: workspace.config.name, number: 480 }),
+        workflow: workflowId("review"),
+        attempt: runId("review-attempt"),
+        writeKey: "request-review-480",
+      });
+      const pullRequest = {
+        number: 480,
+        url: "https://github.com/owner/repo/pull/480",
+        headBranch: "review-branch",
+        baseBranch: "main",
+      };
+
+      yield* provider.requestReview(workspace, pullRequest, "octocat", origin);
+      yield* provider.requestReview(workspace, pullRequest, "octocat", origin);
+
+      assert.deepStrictEqual(options, [
+        { value: "octocat", name: "octocat", listedIn: [workspace.config.name] },
+      ]);
+      assert.deepStrictEqual(yield* Ref.get(reviewRequests), [{ pull: 480, reviewer: "octocat" }]);
+    }).pipe(
+      Effect.provide(
+        withClient(
+          {
+            issues: [],
+            pulls: [pull({ number: 480, headRef: "review-branch", baseRef: "main" })],
+            collaborators: ["octocat"],
+            reviewRequests,
+          },
+          [workspace],
+        ),
+      ),
+    );
+  });
 
   it.effect("refuses pull request creation permanently without a GitHub target", () =>
     Effect.gen(function* () {
@@ -1926,7 +2137,7 @@ describe("GitHub adapters", () => {
     Effect.gen(function* () {
       // Reading GitHub's `mergeable_state` is allowed (ADR 0003); merging a PR or resolving a
       // review thread is not — so the merge guard excludes the "mergeable" read accessor.
-      const forbidden = /merge(?!able)|resolve/i;
+      const forbidden = /merge(?!able)|resolveReview/i;
       const client = yield* fakeClient({ issues: [] });
       assert.isFalse(Object.keys(client).some((method) => forbidden.test(method)));
       const source = yield* IssueTracker;

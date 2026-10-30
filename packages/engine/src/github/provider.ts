@@ -1,13 +1,29 @@
-import type { WorkItem, WorkItemId } from "@cogwork/contracts";
+import {
+  WorkflowActionArtifact,
+  type WorkflowActionOrigin,
+  type WorkflowCatalogEntry,
+  WorkflowCatalogKey,
+  type WorkflowOptionList,
+  type WorkItem,
+  WorkItemId,
+  type WorkItemRef,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import { checkState, latestFailingCheckAtMillis } from "../ci";
 import type { PrReview } from "../follow-up";
 import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import { WorkspaceRegistry } from "../registry";
-import { type PrSignals, SourceControlProvider, type SourceControlProviderService } from "../source-control";
+import {
+  type PrSignals,
+  type ResolvedPullRequest,
+  SourceControlProvider,
+  type SourceControlProviderService,
+} from "../source-control";
+import type { WorkflowCatalogContribution } from "../workflow-catalog";
 import { branchBelongsToTicketSlug, branchName, ticketSlug } from "../worktree";
 import {
   GitHubClient,
@@ -21,7 +37,7 @@ import {
   reviewDecisionOf,
 } from "./client";
 import { trustedBotFeedback } from "./feedback";
-import { agentNoteMarker, hasCogworkMarker } from "./markers";
+import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
   type BotAllowlist,
@@ -31,6 +47,55 @@ import {
 } from "./source-control-target";
 
 export { baseDivergenceOf } from "./source-control-target";
+
+const catalogKey = Schema.decodeSync(WorkflowCatalogKey);
+
+const reviewerParameter = {
+  id: "reviewer",
+  required: true,
+  source: "live",
+  values: [],
+} satisfies WorkflowCatalogEntry["parameters"][number];
+
+const sourceControlAction = (
+  id: string,
+  name: string,
+  permissionProfile: WorkflowCatalogEntry["permissionProfile"],
+  agentInputs: ReadonlyArray<string>,
+  parameters: WorkflowCatalogEntry["parameters"] = [],
+  actsOn: ReadonlyArray<string> = ["issue", "pull-request"],
+) =>
+  ({
+    key: catalogKey(`github.${id}`),
+    name,
+    kind: "action",
+    system: "github",
+    connection: "github",
+    requires: [],
+    parameters,
+    itemKind: null,
+    actsOn,
+    requiresWorkspace: true,
+    permissionProfile,
+    agentInputs,
+    emits: [],
+  }) satisfies WorkflowCatalogEntry;
+
+export const githubSourceControlActionEntries = [
+  sourceControlAction(
+    "open-pull-request",
+    "Open a pull request",
+    "full",
+    ["pr_title", "pr_body"],
+    [],
+    ["issue"],
+  ),
+  sourceControlAction("push-to-this-pull-request", "Push to this pull request", "full", []),
+  sourceControlAction("comment-on-this-pull-request", "Comment on this pull request", "read-only", [
+    "comment",
+  ]),
+  sourceControlAction("request-review", "Request a review", "read-only", [], [reviewerParameter]),
+] as const;
 
 interface GitHubTarget extends GitHubTargetConfig {
   readonly actorLogin: string;
@@ -254,10 +319,119 @@ const make = (
     yield* client.createComment(target, pull.number, markedBody(body));
   });
 
+  const writeMarker = (writeKey: string) =>
+    wireCodec.encode({ name: "write", pairs: `key=${encodeURIComponent(writeKey)}` });
+
+  const carriesWriteKey = (body: string, writeKey: string) =>
+    wireCodec
+      .scan(body)
+      .some(({ name, pairs }) => name === "write" && pairs === `key=${encodeURIComponent(writeKey)}`);
+
+  const workflowMarkedBody = (body: string, writeKey: string) =>
+    [body.trim(), writeMarker(writeKey)].filter((part) => part.length > 0).join("\n\n");
+
+  const workflowArtifact = (
+    workspace: RegisteredWorkspace,
+    pullRequest: ResolvedPullRequest,
+    origin: WorkflowActionOrigin,
+  ) =>
+    WorkflowActionArtifact.make({
+      workspace: workspace.config.name,
+      issue: WorkItemId.make(`#${pullRequest.number}`),
+      url: pullRequest.url,
+      origin,
+    });
+
+  const resolvedPull = (workspace: RegisteredWorkspace, pull: RawPull): ResolvedPullRequest => ({
+    number: pull.number,
+    url: pull.url,
+    headBranch: pull.headRef,
+    baseBranch: pull.baseRef ?? workspace.config.worktrees?.baseBranch ?? "main",
+  });
+
+  const pullForItem = (item: WorkItemRef, pulls: ReadonlyArray<RawPull>) => {
+    if (item._tag === "PullRequest") {
+      return pulls.find(({ number }) => number === item.number) ?? null;
+    }
+    if (item._tag !== "Issue") return null;
+    const issueNumber = numericIssue.exec(item.id)?.[1];
+    const slug = ticketSlug(item.id);
+    const candidates = pulls.filter(
+      (pull) =>
+        (issueNumber !== undefined && pull.closingIssueNumbers.includes(Number(issueNumber))) ||
+        branchBelongsToSlug(pull.headRef, slug),
+    );
+    return candidates.toSorted((left, right) => right.number - left.number).at(0) ?? null;
+  };
+
+  const resolvePullRequest = Effect.fn("github.resolvePullRequest")(function* (
+    workspace: RegisteredWorkspace,
+    item: WorkItemRef,
+  ) {
+    const configuredTarget = yield* sourceControlTarget(workspace);
+    const target = yield* authenticatedTarget(configuredTarget);
+    const pulls = (yield* trustedPulls(target)).filter((pull) => sameRepositoryHead(target, pull));
+    const pull = pullForItem(item, pulls);
+    return pull ? resolvedPull(workspace, pull) : null;
+  });
+
+  const commentsCarry = (target: GitHubTargetConfig, pullNumber: number, writeKey: string) =>
+    client
+      .listAllComments(target, pullNumber)
+      .pipe(Effect.map((comments) => comments.some(({ body }) => carriesWriteKey(body, writeKey))));
+
+  const markPullRequest = Effect.fn("github.markWorkflowPullRequest")(function* (
+    target: GitHubTargetConfig,
+    pullNumber: number,
+    writeKey: string,
+  ) {
+    if (yield* commentsCarry(target, pullNumber, writeKey)) return;
+    yield* client.createComment(target, pullNumber, writeMarker(writeKey));
+  });
+
+  const contribution: WorkflowCatalogContribution = {
+    entries: githubSourceControlActionEntries,
+    templates: [],
+    listOptions: (entry, parameter, workspaces) => {
+      const listsReviewers = entry === catalogKey("github.request-review") && parameter === "reviewer";
+      if (!listsReviewers) return Effect.succeed([]);
+      return registry.pipe(
+        Effect.flatMap((state) =>
+          Effect.forEach(workspaces, (workspaceId) => {
+            const workspace = state.workspaces.find(({ config }) => config.name === workspaceId);
+            const target = workspace ? sourceControlTargetFor(workspace) : null;
+            if (!target) return Effect.succeed([]);
+            return client.listCollaborators(target).pipe(
+              Effect.map((reviewers) =>
+                reviewers.map((reviewer) => ({
+                  value: reviewer,
+                  name: reviewer,
+                  listedIn: [workspaceId],
+                })),
+              ),
+              Effect.catchTag("IssueTrackerError", () => Effect.succeed([])),
+            );
+          }),
+        ),
+        Effect.map((listed) => {
+          const byReviewer = listed.flat().reduce((options, option) => {
+            const current = options.get(option.value);
+            return options.set(option.value, {
+              ...option,
+              listedIn: [...new Set([...(current?.listedIn ?? []), ...option.listedIn])],
+            });
+          }, new Map<string, WorkflowOptionList[number]>());
+          return [...byReviewer.values()];
+        }),
+      );
+    },
+  };
+
   const empty: ReadonlyMap<WorkItemId, PrSignals> = new Map();
 
   return {
     triggerSources: [makeGitHubPullRequestTriggerSource(client, registry)],
+    workflowCatalogContribution: contribution,
     observe: (workspace, workItems) =>
       Effect.gen(function* () {
         const configuredTarget = sourceControlTargetFor(workspace);
@@ -282,6 +456,48 @@ const make = (
       Effect.gen(function* () {
         const target = yield* sourceControlTarget(workspace);
         return yield* client.createPull(target, input);
+      }),
+    resolvePullRequest,
+    openWorkflowPullRequest: (workspace, input) =>
+      Effect.gen(function* () {
+        const target = yield* sourceControlTarget(workspace);
+        const existing = yield* client
+          .listPulls(target, input.headBranch)
+          .pipe(Effect.map((pulls) => exactHeadPull(target, input.headBranch, pulls)));
+        const opened = existing
+          ? resolvedPull(workspace, existing)
+          : {
+              ...(yield* client.createPull(target, {
+                ...input,
+                body: workflowMarkedBody(input.body, input.origin.writeKey),
+              })),
+              headBranch: input.headBranch,
+              baseBranch: input.baseBranch,
+            };
+        return workflowArtifact(workspace, opened, input.origin);
+      }),
+    recordPullRequestPush: (workspace, pullRequest, origin) =>
+      Effect.gen(function* () {
+        const target = yield* sourceControlTarget(workspace);
+        yield* markPullRequest(target, pullRequest.number, origin.writeKey);
+        return workflowArtifact(workspace, pullRequest, origin);
+      }),
+    commentPullRequest: (workspace, pullRequest, body, origin) =>
+      Effect.gen(function* () {
+        const target = yield* sourceControlTarget(workspace);
+        if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
+          yield* client.createComment(target, pullRequest.number, workflowMarkedBody(body, origin.writeKey));
+        }
+        return workflowArtifact(workspace, pullRequest, origin);
+      }),
+    requestReview: (workspace, pullRequest, reviewer, origin) =>
+      Effect.gen(function* () {
+        const target = yield* sourceControlTarget(workspace);
+        if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
+          yield* client.requestReview(target, pullRequest.number, reviewer);
+          yield* markPullRequest(target, pullRequest.number, origin.writeKey);
+        }
+        return workflowArtifact(workspace, pullRequest, origin);
       }),
   };
 };
