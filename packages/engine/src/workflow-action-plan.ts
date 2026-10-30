@@ -459,24 +459,26 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     });
     return { _tag: "Parked" } as const;
   }
-  const active = hasFailedWrite
-    ? WorkflowActionPlan.make({
-        ...initial,
-        consumedHandbackAtMillis: coordinationView.barrierAtMillis,
-      })
-    : initial;
-  if (hasFailedWrite) yield* store.save(active);
-  const pending = active.steps.filter(({ status }) => status === "pending");
+  const planForParking = (plan: WorkflowActionPlan) =>
+    hasFailedWrite
+      ? WorkflowActionPlan.make({
+          ...plan,
+          consumedHandbackAtMillis: coordinationView.barrierAtMillis,
+        })
+      : plan;
+  const pending = initial.steps.filter(({ status }) => status === "pending");
   const state = yield* Effect.reduce(
     pending,
-    () => initialExecutionState(active),
+    () => initialExecutionState(initial),
     (state, step) =>
       Effect.gen(function* () {
         if (state.result !== null) return state;
         const executor = executorFor(step);
         if (!executor) {
           const error = invalidTarget(step);
-          const plan = replaceStep(state.plan, step, { failures: step.failures + 1, status: "failed" });
+          const plan = planForParking(
+            replaceStep(state.plan, step, { failures: step.failures + 1, status: "failed" }),
+          );
           yield* store.save(plan);
           yield* coordination.park(admission.event.key, {
             _tag: "WriteFailed",
@@ -499,10 +501,11 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
         const error = result.failure;
         const failures = step.failures + 1;
         const parked = issueTrackerErrorIsPermanent(error) || failures >= 3;
-        const plan = replaceStep(state.plan, step, {
+        const updated = replaceStep(state.plan, step, {
           failures,
           status: parked ? "failed" : "pending",
         });
+        const plan = parked ? planForParking(updated) : updated;
         yield* store.save(plan);
         if (!parked) {
           return { plan, result: { _tag: "Retry" } } satisfies ExecutionState;

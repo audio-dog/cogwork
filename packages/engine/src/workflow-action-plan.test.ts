@@ -275,12 +275,12 @@ describe("Workflow action plan", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("requires a fresh handback after resumed writes park again", () =>
+  it.effect("preserves retry budget until resumed writes park again", () =>
     Effect.gen(function* () {
       const probe = yield* ActionPlanProbe;
       const initial = plan([
         step(0, "github.comment-this-item", "fail"),
-        step(1, "github.comment-this-item", "fail"),
+        step(1, "github.comment-this-item", "retry"),
       ]);
       const store = yield* WorkflowActionPlanStore;
       yield* store.create(initial);
@@ -288,14 +288,25 @@ describe("Workflow action plan", () => {
       const first = yield* executeWorkflowActionPlan(initial, admission);
       const firstSaved = yield* store.pending(initial.item, initial.workflow);
       yield* (yield* Coordination).handBack(admission.event.key, { by: "Taylor" });
-      const resumed = yield* executeWorkflowActionPlan(firstSaved ?? initial, admission);
-      const resumedSaved = yield* store.pending(initial.item, initial.workflow);
-      const staleResume = yield* executeWorkflowActionPlan(resumedSaved ?? initial, admission);
+      const firstRetry = yield* executeWorkflowActionPlan(firstSaved ?? initial, admission);
+      const firstRetrySaved = yield* store.pending(initial.item, initial.workflow);
+      const secondRetry = yield* executeWorkflowActionPlan(firstRetrySaved ?? initial, admission);
+      const secondRetrySaved = yield* store.pending(initial.item, initial.workflow);
+      const parkedAgain = yield* executeWorkflowActionPlan(secondRetrySaved ?? initial, admission);
+      const parkedAgainSaved = yield* store.pending(initial.item, initial.workflow);
+      const staleResume = yield* executeWorkflowActionPlan(parkedAgainSaved ?? initial, admission);
 
       assert.strictEqual(first._tag, "Parked");
-      assert.strictEqual(resumed._tag, "Parked");
+      assert.strictEqual(firstRetry._tag, "Retry");
+      assert.strictEqual(secondRetry._tag, "Retry");
+      assert.strictEqual(parkedAgain._tag, "Parked");
       assert.strictEqual(staleResume._tag, "Parked");
-      assert.deepStrictEqual(yield* Ref.get(probe.calls), ["fail:write-0", "fail:write-1"]);
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), [
+        "fail:write-0",
+        "retry:write-1",
+        "retry:write-1",
+        "retry:write-1",
+      ]);
       assert.isNotNull(yield* store.pending(initial.item, initial.workflow));
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
