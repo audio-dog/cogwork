@@ -232,6 +232,9 @@ export const make = Effect.gen(function* () {
           );
     if (pendingPlan !== null && pendingKey !== null) {
       const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
+      if (execution._tag === "Replan") {
+        yield* settleAttempt(pendingPlan.attempt, "interrupted");
+      }
       if (execution._tag === "Retry" || execution._tag === "Parked") {
         yield* settleAttempt(pendingPlan.attempt, "failed");
         return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
@@ -448,6 +451,10 @@ export const make = Effect.gen(function* () {
     };
     yield* recorder.record(run, actionPlanEvent);
     const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
+    if (execution._tag === "Replan") {
+      yield* settle(run, "interrupted");
+      return admission;
+    }
     if (execution._tag !== "Complete") {
       yield* settle(run, "failed");
       return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);

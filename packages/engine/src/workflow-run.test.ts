@@ -73,6 +73,7 @@ const siblingTrigger = decodeNode("schedule-sibling");
 const operation = decodeNode("summarize");
 const harnessName = Schema.decodeSync(HarnessName)("scripted");
 const notifyEntry = decodeEntry("cogwork.notify");
+const waitForApprovalEntry = decodeEntry("cogwork.wait-for-approval");
 const handToMeEntry = decodeEntry("cogwork.hand-to-me");
 const scheduleEntry = decodeEntry("schedule.daily");
 
@@ -820,7 +821,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("replans the frozen operation after handback", () =>
+  it.effect("replans the frozen operation after handback and interrupts its prior Run", () =>
     Effect.gen(function* () {
       const publish = decodeNode("publish");
       const [summarize] = document.operations;
@@ -877,6 +878,20 @@ describe("WorkflowRun", () => {
           }),
         ],
       });
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun({
+        id: pending.attempt,
+        workspace: decodeWorkspace(workflow),
+        workItem: decodeWorkItem(keyOf(admission.event.key)),
+        stage: "implement",
+        harness: harnessName,
+        branch: null,
+        session: null,
+        usage: null,
+        status: "running",
+        startedAtMillis: 1,
+        endedAtMillis: null,
+      });
       yield* (yield* WorkflowActionPlanStore).create(pending);
       yield* coordination.service.handBack();
 
@@ -886,7 +901,118 @@ describe("WorkflowRun", () => {
         operation: publish,
         summary: "Published",
       });
+      assert.deepInclude(yield* ledger.getRun(pending.attempt), {
+        status: "interrupted",
+        endedAtMillis: 0,
+      });
       assert.strictEqual(yield* Ref.get(coordination.claims), 1);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("reruns the operation when handback overtakes a new approval plan", () =>
+    Effect.gen(function* () {
+      const [summarize] = document.operations;
+      assert.isDefined(summarize);
+      if (!summarize) return;
+      const waitingDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        ...document,
+        operations: [
+          {
+            ...summarize,
+            transitions: [
+              {
+                when: [{ question: decodeNode("done"), choice: decodeNode("yes") }],
+                actions: [{ entry: waitForApprovalEntry, parameters: [] }],
+                handOff: null,
+              },
+            ],
+          },
+        ],
+      });
+      const waitingService: WorkflowsService = {
+        ...workflowService,
+        get: () =>
+          Effect.succeed({
+            ...workflowRecord,
+            workingCopy: waitingDocument,
+            publishedCopy: waitingDocument,
+          }),
+        catalog: workflowService.catalog.pipe(
+          Effect.map((result) => ({
+            ...result,
+            catalog: {
+              ...result.catalog,
+              entries: [
+                ...result.catalog.entries,
+                {
+                  key: waitForApprovalEntry,
+                  name: "Wait for my approval",
+                  kind: "action",
+                  system: null,
+                  connection: null,
+                  requires: [],
+                  parameters: [],
+                  itemKind: null,
+                  actsOn: ["*"],
+                  requiresWorkspace: false,
+                  permissionProfile: "read-only",
+                  agentInputs: ["approval_request"],
+                  emits: [],
+                },
+              ],
+            },
+          })),
+        ),
+      };
+      const handbackOnRead = yield* Ref.make(true);
+      const { runner } = yield* testProgram(
+        [
+          {
+            summary: "First plan",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { approval_request: "Approve the first plan" },
+          },
+          {
+            summary: "Second plan",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { approval_request: "Approve the second plan" },
+          },
+        ],
+        {
+          coordination: (service) => ({
+            ...service,
+            read: (...args) =>
+              Ref.getAndSet(handbackOnRead, false).pipe(
+                Effect.flatMap((shouldHandBack) =>
+                  shouldHandBack
+                    ? service
+                        .handBack(admission.event.key, { by: "Taylor" })
+                        .pipe(
+                          Effect.andThen(TestClock.adjust("2001 millis")),
+                          Effect.andThen(service.read(...args)),
+                        )
+                    : service.read(...args),
+                ),
+              ),
+          }),
+        },
+        waitingService,
+      );
+
+      yield* runner.execute(admission);
+
+      const runs = yield* (yield* RunLedger).listRuns(10);
+      assert.lengthOf(runs, 2);
+      assert.lengthOf(
+        runs.filter(({ status }) => status === "interrupted"),
+        1,
+      );
+      assert.lengthOf(
+        runs.filter(({ status }) => status === "failed"),
+        1,
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
