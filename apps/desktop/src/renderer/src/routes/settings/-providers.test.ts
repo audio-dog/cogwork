@@ -44,6 +44,6 @@ describe("providerMutationFailure", () => {
     const currentFailure = AsyncResult.failure(Cause.fail(new Error("enablement failed")));
     const failure = providerMutationFailure(currentFailure, enablement);
     expect(failure?.title).toBe("Cogwork could not change this provider.");
-    expect(failure?.message).toContain("Error: enablement failed");
+    expect(failure?.message).toBe("enablement failed");
   });
 });
