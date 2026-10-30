@@ -378,42 +378,47 @@ describe("Slack Trigger source", () => {
       const root = message({ ts: "600.000", text: "First message" });
       yield* Ref.set(state, {
         search: [],
-        history: [root],
+        history: [],
         reactions: [],
         replies: [root],
         failure: null,
       });
-      yield* TestClock.setTime(1_000_000);
+      yield* TestClock.setTime(540_000);
       const source = yield* make;
       const selected = subscription("slack.message-in-channel", [
         { id: "channel", value: "C123" },
         { id: "quiet-for", value: "0" },
         { id: "at-most-every", value: "0" },
+        { id: "catch-up-at-most", value: "0" },
       ]);
-      const [first] = yield* source.observe([selected]).pipe(Stream.take(1), Stream.runCollect);
-      assert.isDefined(first);
-      if (!first) return;
-      yield* source.acknowledge?.(first, [selected]) ?? Effect.void;
+      const firstEvent = yield* Deferred.make<void>();
+      const eventsFiber = yield* source.observe([selected]).pipe(
+        Stream.tap((event) => source.acknowledge?.(event, [selected]) ?? Effect.void),
+        Stream.tap(() => Deferred.succeed(firstEvent, undefined)),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.timeoutOption("3 minutes"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Effect.yieldNow;
+      yield* Ref.update(state, (current) => ({ ...current, history: [root] }));
+      yield* TestClock.adjust("1 minute");
+      yield* Deferred.await(firstEvent);
       yield* Ref.set(state, {
         search: [],
         history: [],
         reactions: [],
-        replies: [root, message({ ts: "1001.000", threadTs: root.ts, text: "Later reply" })],
+        replies: [root, message({ ts: "660.000", threadTs: root.ts, text: "Later reply" })],
         failure: null,
       });
-      const nextEvent = yield* source
-        .observe([{ ...selected, catchUp: { since: first.atMillis } }])
-        .pipe(
-          Stream.take(1),
-          Stream.runCollect,
-          Effect.timeoutOption("1 minute"),
-          Effect.forkChild({ startImmediately: true }),
-        );
-      yield* TestClock.adjust("1 minute");
-      const result = yield* Fiber.join(nextEvent);
+      yield* TestClock.adjust("2 minutes");
+      const result = yield* Fiber.join(eventsFiber);
 
       assert.isTrue(Option.isSome(result));
-      assert.strictEqual(Option.getOrUndefined(result)?.[0]?.revision, "1001.000");
+      assert.deepStrictEqual(
+        Option.getOrElse(result, () => []).map(({ revision }) => revision),
+        ["600.000", "660.000"],
+      );
     }).pipe(Effect.provide(testLayer)),
   );
 

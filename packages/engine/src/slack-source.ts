@@ -698,7 +698,7 @@ const trackedAmbientRoots = Effect.fn("SlackSource.trackedAmbientRoots")(functio
   tracked: Ref.Ref<ReadonlyMap<string, AmbientRoot>>,
 ) {
   const subscriptionId = ambientSubscriptionKey(subscription);
-  const oldestMillis = now - durationOf(subscription, "catch-up-at-most", defaultCatchUpMillis);
+  const oldestMillis = catchUpSince(subscription, now);
   return yield* Ref.modify(tracked, (current) => {
     const retained = new Map(
       [...current].filter(([, root]) => {
