@@ -1,0 +1,62 @@
+packages/engine/src/trigger-source.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 39-50
+packages/engine/src/coordination-fold.test.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 96-120
+packages/engine/src/workflow-catalog.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 14,66
+packages/engine/src/workflow-run.test.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 48-52,69,79-84,206-234,338,377,380,384-475
+packages/contracts/src/coordination.ts
+  s_32b58d670b4dfe::t_eab7cb9f65be75 111
+packages/engine/src/workflow-run.ts
+  s_32b58d670b4dfe::t_62ecd1d6f7647f 168,170-171,189,191-192,198-199,233,245-246,403,437,449,468-471,473-477,479-483
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 36,48-71,127,151-159,161-166,255-259,342,392,394,419,421,460-461,490
+apps/cli/src/status.test.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 48
+packages/contracts/src/daemon.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 275-281,288-291
+packages/engine/src/scheduler.test.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 38,43,46-49,458-461,491-494,505,518,530,584-686
+  s_32b58d670b4dfe::t_cd72fb0c203e4a 687
+packages/engine/src/granola-http.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 1-168
+packages/engine/src/workflow.test.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 3,36,50-53,127,160-179,409
+packages/engine/src/trigger-observation.test.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 2,11,15,25,30,37,39,46,100-113,132,136-148,156-161,168-172,182,190,196,215-226,244,253-502,506,516-532,559,567,581-613
+packages/engine/src/coordination.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 136-139,154
+packages/engine/src/granola-source.test.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 1-659
+packages/engine/src/granola-source.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 1-595
+packages/engine/src/daemon.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 62,76,118,293,302,491-506,528
+packages/engine/src/connection-verify.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 10,43-44,60-66
+packages/engine/src/trigger-observation.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 6-7,64-67,84-101,123-134,136-138,142,145-154,184-209,213,215-217,222-224,226-228,230-231,235,292-299,328-336,338,346-358,388-392,394-395,397-419,428,504-505,508-514,518
+packages/engine/src/scheduler.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 30,123-133,139-146,149,193,195-201,208,217-225,353-376,379-380,384,394-396,407-409
+packages/engine/src/daemon-composition.test.ts
+  s_32b58d670b4dfe::t_62ecd1d6f7647f 371
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 353,373-376,425-426
+apps/cli/src/commands.test.ts
+  s_32b58d670b4dfe::t_8b3d05f4d75f2f 115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e319829ac326a92a4346a59e2c41e60d1078ada2",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
