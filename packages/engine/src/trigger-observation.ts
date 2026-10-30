@@ -65,7 +65,10 @@ export interface TriggerObservationStoreService {
   readonly putAll: (
     admissions: ReadonlyArray<TriggerAdmission>,
   ) => Effect.Effect<void, TriggerObservationStoreError>;
-  readonly complete: (admission: TriggerAdmission) => Effect.Effect<boolean, TriggerObservationStoreError>;
+  readonly complete: <E, R>(
+    admission: TriggerAdmission,
+    closeRevision: Effect.Effect<void, E, R>,
+  ) => Effect.Effect<void, TriggerObservationStoreError | E, R>;
   readonly activate: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
     atMillis: number,
@@ -86,8 +89,6 @@ const admissionKey = (admission: TriggerAdmission) =>
   `${keyOf(admission.event.key)}:${admission.event.revision}:${subscriptionKey(admission.subscription)}`;
 const sameRevision = (left: TriggerAdmission, right: TriggerAdmission) =>
   keyOf(left.event.key) === keyOf(right.event.key) && left.event.revision === right.event.revision;
-const sourceRevisionKey = (admission: TriggerAdmission) =>
-  JSON.stringify([keyOf(admission.event.key), admission.event.revision]);
 const admissionIsOlder = (candidate: TriggerAdmission, current: TriggerAdmission) =>
   candidate.event.atMillis < current.event.atMillis ||
   (candidate.event.atMillis === current.event.atMillis && candidate.event.revision < current.event.revision);
@@ -128,39 +129,52 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
   const checkpoints = yield* Ref.make<
     ReadonlyMap<string, { readonly active: boolean; readonly checkpointMillis: number }>
   >(new Map());
+  const completionGate = Semaphore.makeUnsafe(1);
+  const putAll = (batch: ReadonlyArray<TriggerAdmission>) =>
+    Ref.update(admissions, (current) => {
+      const pending = batch.reduce((next, admission) => {
+        const key = admissionKey(admission);
+        return current.processed.has(key) ? next : new Map(next).set(key, admission);
+      }, current.pending);
+      return { ...current, pending };
+    }).pipe(
+      Effect.andThen(
+        Ref.update(checkpoints, (current) => {
+          return batch.reduce((next, admission) => {
+            const key = subscriptionKey(admission.subscription);
+            const checkpoint = next.get(key);
+            if (!checkpoint) return next;
+            return new Map(next).set(key, {
+              ...checkpoint,
+              checkpointMillis: Math.max(checkpoint.checkpointMillis, checkpointOf(admission)),
+            });
+          }, current);
+        }),
+      ),
+    );
+  const finish = (admission: TriggerAdmission) =>
+    Ref.update(admissions, (current) => {
+      const key = admissionKey(admission);
+      const pending = new Map(current.pending);
+      pending.delete(key);
+      return { pending, processed: new Set(current.processed).add(key) };
+    });
   return {
     admissions: Effect.map(Ref.get(admissions), (current) => [...current.pending.values()]),
-    putAll: (batch) =>
-      Ref.update(admissions, (current) => {
-        const pending = batch.reduce((next, admission) => {
-          const key = admissionKey(admission);
-          return current.processed.has(key) ? next : new Map(next).set(key, admission);
-        }, current.pending);
-        return { ...current, pending };
-      }).pipe(
-        Effect.andThen(
-          Ref.update(checkpoints, (current) => {
-            return batch.reduce((next, admission) => {
-              const key = subscriptionKey(admission.subscription);
-              const checkpoint = next.get(key);
-              if (!checkpoint) return next;
-              return new Map(next).set(key, {
-                ...checkpoint,
-                checkpointMillis: Math.max(checkpoint.checkpointMillis, checkpointOf(admission)),
-              });
-            }, current);
+    putAll: (batch) => completionGate.withPermit(putAll(batch)),
+    complete: (admission, closeRevision) =>
+      completionGate.withPermit(
+        Ref.get(admissions).pipe(
+          Effect.flatMap((current) => {
+            const hasSibling = [...current.pending.values()].some(
+              (candidate) =>
+                admissionKey(candidate) !== admissionKey(admission) && sameRevision(candidate, admission),
+            );
+            const beforeFinish = hasSibling ? Effect.void : closeRevision;
+            return beforeFinish.pipe(Effect.andThen(finish(admission)));
           }),
         ),
       ),
-    complete: (admission) =>
-      Ref.modify(admissions, (current) => {
-        const key = admissionKey(admission);
-        const pending = new Map(current.pending);
-        pending.delete(key);
-        const processed = new Set(current.processed).add(key);
-        const hasSibling = [...pending.values()].some((candidate) => sameRevision(candidate, admission));
-        return [!hasSibling, { pending, processed }];
-      }),
     activate: (subscriptions, atMillis) =>
       Ref.modify(checkpoints, (current) => {
         const activated = activateSubscriptions(subscriptions, current, atMillis);
@@ -190,6 +204,46 @@ export const memoryTriggerObservationStoreLayer = Layer.effect(
 export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const controlStore = yield* ControlStore;
+  const completionGate = Semaphore.makeUnsafe(1);
+  const putAll = (admissions: ReadonlyArray<TriggerAdmission>) =>
+    controlStore
+      .withWrite(
+        sql.withTransaction(
+          Effect.forEach(
+            admissions,
+            (admission) =>
+              sql`
+                INSERT INTO trigger_admissions (work_item, revision, payload)
+                VALUES (
+                  ${keyOf(admission.event.key)},
+                  ${admission.event.revision},
+                  ${encodeAdmission(admission)}
+                )
+                ON CONFLICT (work_item, revision, workflow, trigger)
+                DO UPDATE SET payload = excluded.payload
+              `.pipe(
+                Effect.andThen(sql`
+                  UPDATE trigger_subscription_checkpoints
+                  SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
+                  WHERE workflow = ${admission.subscription.workflow}
+                    AND trigger = ${admission.subscription.trigger}
+                `),
+              ),
+            { discard: true },
+          ),
+        ),
+      )
+      .pipe(Effect.asVoid, Effect.mapError(storeError));
+  const finish = (admission: TriggerAdmission) =>
+    controlStore
+      .withWrite(sql`
+        UPDATE trigger_admissions SET processed = 1
+        WHERE work_item = ${keyOf(admission.event.key)}
+          AND revision = ${admission.event.revision}
+          AND workflow = ${admission.subscription.workflow}
+          AND trigger = ${admission.subscription.trigger}
+      `)
+      .pipe(Effect.asVoid, Effect.mapError(storeError));
   return {
     admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions WHERE processed = 0`.pipe(
       Effect.mapError(storeError),
@@ -197,58 +251,28 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
         Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),
       ),
     ),
-    putAll: (admissions) =>
-      controlStore
-        .withWrite(
-          sql.withTransaction(
-            Effect.forEach(
-              admissions,
-              (admission) =>
-                sql`
-                  INSERT INTO trigger_admissions (work_item, revision, payload)
-                  VALUES (
-                    ${keyOf(admission.event.key)},
-                    ${admission.event.revision},
-                    ${encodeAdmission(admission)}
-                  )
-                  ON CONFLICT (work_item, revision, workflow, trigger)
-                  DO UPDATE SET payload = excluded.payload
-                `.pipe(
-                  Effect.andThen(sql`
-                    UPDATE trigger_subscription_checkpoints
-                    SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
-                    WHERE workflow = ${admission.subscription.workflow}
-                      AND trigger = ${admission.subscription.trigger}
-                  `),
-                ),
-              { discard: true },
-            ),
-          ),
-        )
-        .pipe(Effect.asVoid, Effect.mapError(storeError)),
-    complete: (admission) =>
-      controlStore
-        .withWrite(
-          sql.withTransaction(
-            sql`
-              UPDATE trigger_admissions SET processed = 1
-              WHERE work_item = ${keyOf(admission.event.key)}
-                AND revision = ${admission.event.revision}
-                AND workflow = ${admission.subscription.workflow}
-                AND trigger = ${admission.subscription.trigger}
-            `.pipe(
-              Effect.andThen(sql<StoredAdmissionCount>`
-                SELECT COUNT(*) AS remaining
-                FROM trigger_admissions
-                WHERE work_item = ${keyOf(admission.event.key)}
-                  AND revision = ${admission.event.revision}
-                  AND processed = 0
-              `),
-              Effect.map((rows) => rows[0]?.remaining === 0),
-            ),
-          ),
-        )
-        .pipe(Effect.mapError(storeError)),
+    putAll: (admissions) => completionGate.withPermit(putAll(admissions)),
+    complete: (admission, closeRevision) =>
+      completionGate.withPermit(
+        sql<StoredAdmissionCount>`
+          SELECT COUNT(*) AS remaining
+          FROM trigger_admissions
+          WHERE work_item = ${keyOf(admission.event.key)}
+            AND revision = ${admission.event.revision}
+            AND processed = 0
+            AND NOT (
+              workflow = ${admission.subscription.workflow}
+              AND trigger = ${admission.subscription.trigger}
+            )
+        `.pipe(
+          Effect.mapError(storeError),
+          Effect.flatMap((rows) => {
+            const hasSibling = (rows[0]?.remaining ?? 0) > 0;
+            const beforeFinish = hasSibling ? Effect.void : closeRevision;
+            return beforeFinish.pipe(Effect.andThen(finish(admission)));
+          }),
+        ),
+      ),
     activate: (subscriptions, atMillis) =>
       controlStore
         .withWrite(
@@ -537,22 +561,15 @@ export const make = Effect.gen(function* () {
         const oldest = oldestRevisionAdmissions(current);
         const active = oldest.filter(({ subscription }) => enabled.has(subscription.workflow));
         const inactive = oldest.filter(({ subscription }) => !enabled.has(subscription.workflow));
-        const activeRevisions = new Set(active.map(sourceRevisionKey));
-        const inactiveRevisions = [
-          ...inactive
-            .filter((admission) => !activeRevisions.has(sourceRevisionKey(admission)))
-            .reduce(
-              (revisions, admission) => new Map(revisions).set(sourceRevisionKey(admission), admission),
-              new Map<string, TriggerAdmission>(),
-            )
-            .values(),
-        ];
         return Effect.forEach(
-          inactiveRevisions,
-          (admission) => coordination.markProcessed(admission.event.key, admission.event.revision),
+          inactive,
+          (admission) =>
+            store.complete(
+              admission,
+              coordination.markProcessed(admission.event.key, admission.event.revision),
+            ),
           { discard: true },
         ).pipe(
-          Effect.andThen(Effect.forEach(inactive, store.complete, { discard: true })),
           Effect.andThen(
             Effect.forEach(active, (admission) =>
               coordination.read(admission.event.key).pipe(

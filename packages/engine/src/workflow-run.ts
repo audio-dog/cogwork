@@ -89,18 +89,10 @@ export const make = Effect.gen(function* () {
     );
 
   const complete = Effect.fn("WorkflowRun.complete")(function* (admission: TriggerAdmission) {
-    const pending = yield* observationStore.admissions;
-    const hasSibling = pending.some(
-      (candidate) =>
-        keyOf(candidate.event.key) === keyOf(admission.event.key) &&
-        candidate.event.revision === admission.event.revision &&
-        (candidate.subscription.workflow !== admission.subscription.workflow ||
-          candidate.subscription.trigger !== admission.subscription.trigger),
+    yield* observationStore.complete(
+      admission,
+      coordination.markProcessed(admission.event.key, admission.event.revision),
     );
-    if (!hasSibling) {
-      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
-    }
-    yield* observationStore.complete(admission);
   });
 
   const decline = (admission: TriggerAdmission) =>

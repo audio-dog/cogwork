@@ -566,9 +566,9 @@ describe("TriggerObservation", () => {
         (yield* observation.eligible).map(({ subscription: candidate }) => candidate.workflow),
         [workflowId],
       );
-      assert.isTrue(yield* store.complete(enabledAdmission));
+      yield* store.complete(enabledAdmission, Ref.set(processed, event.revision));
       assert.deepStrictEqual(yield* store.admissions, []);
-      assert.isNull(yield* Ref.get(processed));
+      assert.strictEqual(yield* Ref.get(processed), event.revision);
     }).pipe(Effect.scoped),
   );
 
@@ -680,21 +680,25 @@ layer(NodeServices.layer)((it) => {
         subscription: { ...subscription, workflow: otherWorkflowId },
         lineage: sourceLineage,
       };
+      const closed = yield* Ref.make(0);
+      const closeRevision = Ref.update(closed, (count) => count + 1);
       const result = yield* makeControlStoreTriggerObservationStore.pipe(
         Effect.flatMap((store) =>
           Effect.all([
             store.putAll([first, second]),
             store.admissions,
-            store.complete(first),
+            store.complete(first, closeRevision),
+            Ref.get(closed),
             store.admissions,
-            store.complete(second),
+            store.complete(second, closeRevision),
+            Ref.get(closed),
             store.admissions,
           ]).pipe(
-            Effect.map(([, stored, firstWasLast, afterFirst, secondWasLast, remaining]) => ({
+            Effect.map(([, stored, , closedAfterFirst, afterFirst, , closedAfterSecond, remaining]) => ({
               stored,
-              firstWasLast,
+              closedAfterFirst,
               afterFirst,
-              secondWasLast,
+              closedAfterSecond,
               remaining,
             })),
           ),
@@ -706,12 +710,12 @@ layer(NodeServices.layer)((it) => {
         result.stored.map(({ subscription }) => subscription.workflow).toSorted(),
         [workflowId, otherWorkflowId].toSorted(),
       );
-      assert.isFalse(result.firstWasLast);
       assert.deepStrictEqual(
         result.afterFirst.map(({ subscription }) => subscription.workflow),
         [otherWorkflowId],
       );
-      assert.isTrue(result.secondWasLast);
+      assert.strictEqual(result.closedAfterFirst, 0);
+      assert.strictEqual(result.closedAfterSecond, 1);
       assert.deepStrictEqual(result.remaining, []);
     }),
   );

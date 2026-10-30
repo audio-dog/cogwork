@@ -43,6 +43,7 @@ import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
   TriggerObservationStore,
+  type TriggerObservationStoreService,
 } from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
@@ -268,13 +269,15 @@ interface HarnessBehavior {
   readonly preflight?: HarnessRunner["preflight"];
   readonly run?: HarnessRunner["run"];
   readonly coordination?: (service: CoordinationService) => CoordinationService;
+  readonly observationStore?: (service: TriggerObservationStoreService) => TriggerObservationStoreService;
 }
 
 const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior = {}) =>
   Effect.gen(function* () {
     const output = yield* Ref.make(objects);
     const coordination = yield* makeCoordination();
-    const observationStore = yield* makeMemoryTriggerObservationStore;
+    const baseObservationStore = yield* makeMemoryTriggerObservationStore;
+    const observationStore = behavior.observationStore?.(baseObservationStore) ?? baseObservationStore;
     const notifications = yield* makeNotifications;
     const harness = makeHarness([
       {
@@ -351,6 +354,54 @@ describe("WorkflowRun", () => {
 
       yield* runner.execute(siblingAdmission);
       assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("marks a source revision processed when sibling completions overlap", () =>
+    Effect.gen(function* () {
+      const siblingAdmission = {
+        ...admission,
+        subscription: { ...admission.subscription, workflow: siblingWorkflow },
+      } satisfies TriggerAdmission;
+      const readers = yield* Ref.make(0);
+      const bothReading = yield* Deferred.make<void>();
+      const { runner, coordination, observationStore } = yield* testProgram(
+        [
+          {
+            summary: "First complete",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { notification: "First complete" },
+          },
+          {
+            summary: "Second complete",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { notification: "Second complete" },
+          },
+        ],
+        {
+          observationStore: (service) => ({
+            ...service,
+            complete: (...args) =>
+              Ref.updateAndGet(readers, (count) => count + 1).pipe(
+                Effect.flatMap((count) =>
+                  count === 2 ? Deferred.succeed(bothReading, undefined) : Deferred.await(bothReading),
+                ),
+                Effect.andThen(service.complete(...args)),
+              ),
+          }),
+        },
+      );
+      yield* observationStore.putAll([admission, siblingAdmission]);
+
+      yield* Effect.all([runner.execute(admission), runner.execute(siblingAdmission)], {
+        concurrency: "unbounded",
+        discard: true,
+      });
+
+      assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+      assert.deepStrictEqual(yield* observationStore.admissions, []);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
