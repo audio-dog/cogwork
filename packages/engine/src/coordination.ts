@@ -98,6 +98,7 @@ export interface CoordinationView {
   readonly claim: ClaimType | null;
   readonly claimedByUs: boolean;
   readonly barrierAtMillis: number;
+  readonly handback: HandbackRecordType | null;
   readonly park: ParkRecord | null;
   readonly revision: SourceRevision | null;
   readonly counters: (key: OperationKey) => CoordinationCounters;
@@ -169,9 +170,12 @@ interface GateInput {
   readonly counters: CoordinationCounters;
 }
 
-const revisionRetryParks = new Set<ParkReason["_tag"]>(["MissingOperation", "PlanRejected"]);
-
-const blocksGate = (park: ParkRecord | null) => park !== null && !revisionRetryParks.has(park.reason._tag);
+const revisionClearedParks = new Set<ParkReason["_tag"]>([
+  "MissingOperation",
+  "PlanRejected",
+  "AwaitingApproval",
+  "Exhausted",
+]);
 
 const gateRules = [
   {
@@ -187,7 +191,7 @@ const gateRules = [
     resolve: (): CoordinationGate => ({ _tag: "Quiet" }),
   },
   {
-    when: ({ park }: GateInput) => blocksGate(park),
+    when: ({ park }: GateInput) => park !== null,
     resolve: ({ park }: GateInput): CoordinationGate => ({
       _tag: "Parked",
       reason: (park as ParkRecord).reason,
@@ -235,7 +239,7 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
     const matchingPark = newestByTime(
       activeParks.filter((candidate) => {
         const matchesOperation = candidate.operation === undefined || sameOperation(candidate.operation, key);
-        const clearedByRevision = candidate.operation !== undefined && isNewSourceRevision;
+        const clearedByRevision = isNewSourceRevision && revisionClearedParks.has(candidate.reason._tag);
         return matchesOperation && !clearedByRevision;
       }),
     );
@@ -252,6 +256,7 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
     claim: ledger.claim,
     claimedByUs: ledger.claim?.by === claimant,
     barrierAtMillis,
+    handback,
     park,
     revision: ledger.revision,
     counters,

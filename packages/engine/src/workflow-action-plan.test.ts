@@ -20,7 +20,11 @@ import { Coordination, type CoordinationService, fold } from "./coordination";
 import { IssueTracker, IssueTrackerError, makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import type { TriggerAdmission } from "./trigger-observation";
+import {
+  makeMemoryTriggerObservationStore,
+  type TriggerAdmission,
+  TriggerObservationStore,
+} from "./trigger-observation";
 import { executeWorkflowActionPlan } from "./workflow-action-plan";
 import {
   WorkflowActionPlanStore,
@@ -199,9 +203,36 @@ const adapterLayers = Layer.merge(coordinationLayer, trackerLayer).pipe(
   Layer.provideMerge(ActionPlanProbe.layer),
 );
 
-const requirements = Layer.mergeAll(engineTestLayer(), workflowActionPlanStoreLayer, adapterLayers);
+const triggerObservationStoreLayer = Layer.effect(TriggerObservationStore, makeMemoryTriggerObservationStore);
+const requirements = Layer.mergeAll(
+  engineTestLayer(),
+  workflowActionPlanStoreLayer,
+  triggerObservationStoreLayer,
+  adapterLayers,
+);
 
 describe("Workflow action plan", () => {
+  it.effect("withdraws the pending approval for this item", () =>
+    Effect.gen(function* () {
+      const store = yield* WorkflowActionPlanStore;
+      const observationStore = yield* TriggerObservationStore;
+      const waiting = WorkflowActionPlan.make({
+        ...plan([step(0, "cogwork.wait-for-approval")]),
+        attempt: decodeRun("waiting-attempt"),
+      });
+      const withdrawing = plan([step(0, "cogwork.withdraw-pending-approval")]);
+      yield* store.create(waiting);
+      yield* store.create(withdrawing);
+      yield* observationStore.putAll([admission]);
+
+      const result = yield* executeWorkflowActionPlan(withdrawing, admission);
+
+      assert.deepStrictEqual(result, { _tag: "Complete", handOff: null });
+      assert.isEmpty(yield* store.list);
+      assert.isEmpty(yield* observationStore.admissions);
+    }).pipe(Effect.provide(requirements)),
+  );
+
   it.effect("a completed stop clears the hand-off", () =>
     Effect.gen(function* () {
       const store = yield* WorkflowActionPlanStore;

@@ -116,7 +116,8 @@ describe("coordination fold", () => {
         "cogwork",
       );
 
-      assert.strictEqual(view.gate(operation)._tag, "Open");
+      assert.strictEqual(view.gate(operation, "1")._tag, "Parked");
+      assert.strictEqual(view.gate(operation, "2")._tag, "Open");
     });
   });
 });

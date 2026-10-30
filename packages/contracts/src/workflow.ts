@@ -9,7 +9,7 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
-import { WorkItemKey } from "./coordination";
+import { Lineage, ParkReason, WorkItemKey, WorkItemRef } from "./coordination";
 import { PrincipalId } from "./principal";
 import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
@@ -133,11 +133,80 @@ export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("Workfl
   createdAtMillis: Schema.Natural,
   consumedHandbackAtMillis: Schema.Natural.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
   digest: TrimmedNonEmptyString,
+  approvedDigest: Schema.NullOr(TrimmedNonEmptyString).pipe(
+    Schema.withConstructorDefault(Effect.succeed(null)),
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
+  inputs: Schema.Record(Schema.String, Schema.String).pipe(
+    Schema.withConstructorDefault(Effect.succeed({})),
+    Schema.withDecodingDefaultKey(Effect.succeed({})),
+  ),
+  workspace: Schema.NullOr(Schema.String).pipe(
+    Schema.withConstructorDefault(Effect.succeed(null)),
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
   handOff: Schema.NullOr(WorkflowNodeId),
   steps: Schema.Array(WorkflowActionPlanStep),
 }) {}
+
+export const WorkflowParkCommand = Schema.Literals([
+  "approve",
+  "reject",
+  "choose-answer",
+  "hand-back",
+  "open-workflow",
+]);
+export type WorkflowParkCommand = typeof WorkflowParkCommand.Type;
+
+export const WorkflowPark = Schema.Struct({
+  item: WorkItemRef,
+  workflow: WorkflowId,
+  publishedRevision: Schema.Int,
+  operation: WorkflowNodeId,
+  lineage: Lineage,
+  summary: TrimmedNonEmptyString,
+  changedSinceParked: Schema.Boolean,
+  commands: Schema.Array(WorkflowParkCommand),
+  reason: ParkReason,
+  attempt: Schema.NullOr(RunId),
+});
+export type WorkflowPark = typeof WorkflowPark.Type;
+
+export const WorkflowSkippedRecord = Schema.Struct({
+  summary: TrimmedNonEmptyString,
+  reason: TrimmedNonEmptyString,
+});
+export type WorkflowSkippedRecord = typeof WorkflowSkippedRecord.Type;
+
+export const WorkflowAttention = Schema.Struct({
+  parks: Schema.Array(WorkflowPark),
+  skipped: Schema.Array(
+    Schema.Struct({
+      workflow: WorkflowId,
+      steps: Schema.Array(WorkflowSkippedRecord),
+      events: Schema.Array(WorkflowSkippedRecord),
+    }),
+  ),
+});
+export type WorkflowAttention = typeof WorkflowAttention.Type;
+
+export class WorkflowTouchpointFailure extends Schema.TaggedError<WorkflowTouchpointFailure>()(
+  "WorkflowTouchpointFailure",
+  {
+    reason: Schema.Literals([
+      "not-found",
+      "stale-attempt",
+      "stale-digest",
+      "not-awaiting-approval",
+      "not-handed-to-you",
+      "invalid-edits",
+      "unavailable",
+    ]),
+    message: TrimmedNonEmptyString,
+  },
+) {}
 
 export const WorkflowTransition = Schema.Struct({
   when: Schema.Array(WorkflowTransitionAnswer),

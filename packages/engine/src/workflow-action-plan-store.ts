@@ -14,6 +14,11 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { ControlStore } from "./control-store";
 
 export interface WorkflowActionPlanStoreService {
+  readonly list: Effect.Effect<ReadonlyArray<WorkflowActionPlan>, ControlStoreFailure>;
+  readonly find: (
+    item: WorkItemKey,
+    attempt: RunId,
+  ) => Effect.Effect<WorkflowActionPlan | null, ControlStoreFailure>;
   readonly pending: (
     item: WorkItemKey,
     workflow: WorkflowId,
@@ -48,6 +53,14 @@ const snapshotPlan = (plan: WorkflowActionPlan) =>
 export const makeMemory = Effect.gen(function* () {
   const plans = yield* Ref.make<ReadonlyMap<string, WorkflowActionPlan>>(new Map());
   return {
+    list: Ref.get(plans).pipe(Effect.map((current) => [...current.values()])),
+    find: (item, attempt) =>
+      Ref.get(plans).pipe(
+        Effect.map(
+          (current) =>
+            [...current.values()].find((plan) => plan.item === item && plan.attempt === attempt) ?? null,
+        ),
+      ),
     pending: (item, workflow) =>
       Ref.get(plans).pipe(
         Effect.map(
@@ -102,6 +115,25 @@ export const makeControlStore = Effect.gen(function* () {
   const write = <A, E>(operation: string, effect: Effect.Effect<A, E>) =>
     store.withWrite(effect).pipe(Effect.mapError(failure(operation)));
   return {
+    list: sql<StoredPlan>`SELECT plan FROM workflow_action_plans`.pipe(
+      Effect.flatMap(decodeStoredPlans),
+      Effect.flatMap((rows) => Effect.forEach(rows, ({ plan }) => decodePlan(plan))),
+      Effect.mapError(failure("list Workflow action plans")),
+    ),
+    find: (item, attempt) =>
+      sql<StoredPlan>`
+        SELECT plan
+        FROM workflow_action_plans
+        WHERE work_item = ${item} AND attempt = ${attempt}
+        LIMIT 1
+      `.pipe(
+        Effect.flatMap(decodeStoredPlans),
+        Effect.flatMap((rows) => {
+          const row = rows.at(0);
+          return row ? Effect.map(decodePlan(row.plan), (plan) => plan) : Effect.succeed(null);
+        }),
+        Effect.mapError(failure("find Workflow action plan")),
+      ),
     pending: (item, workflow) =>
       sql<StoredPlan>`
         SELECT plan

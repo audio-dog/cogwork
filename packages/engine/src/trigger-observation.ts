@@ -116,6 +116,18 @@ const oldestRevisionAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) =
     return oldest !== undefined && sameRevision(admission, oldest);
   });
 };
+
+const revisionAdvancedParks = new Set<ParkReason["_tag"]>([
+  "AwaitingApproval",
+  "Exhausted",
+  "MissingOperation",
+  "PlanRejected",
+]);
+
+const sameSubscription = (left: TriggerAdmission, right: TriggerAdmission) =>
+  keyOf(left.event.key) === keyOf(right.event.key) &&
+  left.subscription.workflow === right.subscription.workflow &&
+  left.subscription.trigger === right.subscription.trigger;
 const checkpointOf = (admission: TriggerAdmission) =>
   admission.event.key._tag === "ScheduleInstant"
     ? admission.event.key.instantMillis
@@ -687,35 +699,52 @@ export const make = Effect.gen(function* () {
     eligible: Effect.all([workflows.list, store.admissions]).pipe(
       Effect.flatMap(([listed, current]) => {
         const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
-        const oldest = oldestRevisionAdmissions(current);
-        const active = oldest.filter(({ subscription }) => enabled.has(subscription.workflow));
-        const inactive = oldest.filter(({ subscription }) => !enabled.has(subscription.workflow));
-        return Effect.forEach(
-          inactive,
-          (admission) =>
-            store.complete(
-              admission,
-              coordination.markProcessed(admission.event.key, admission.event.revision),
-            ),
-          { discard: true },
-        ).pipe(
-          Effect.andThen(
-            Effect.forEach(active, (admission) =>
-              coordination.read(admission.event.key).pipe(
-                Effect.map((view) => ({
-                  admission,
-                  isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
-                  gate: view.gate(
-                    {
-                      workflow: admission.subscription.workflow,
-                      operation: admission.subscription.operation,
-                    },
-                    admission.event.revision,
-                  ),
-                })),
-              ),
-            ),
+        return Effect.forEach(oldestRevisionAdmissions(current), (admission) =>
+          coordination.read(admission.event.key).pipe(
+            Effect.flatMap((view) => {
+              const canAdvance = view.park !== null && revisionAdvancedParks.has(view.park.reason._tag);
+              if (!canAdvance) return Effect.succeed(admission);
+              const next = current
+                .filter((candidate) => sameSubscription(candidate, admission))
+                .filter((candidate) => admissionIsOlder(admission, candidate))
+                .toSorted((left, right) => (admissionIsOlder(left, right) ? -1 : 1))
+                .at(0);
+              if (next === undefined) return Effect.succeed(admission);
+              return store.complete(admission, Effect.void).pipe(Effect.map(() => next));
+            }),
           ),
+        ).pipe(
+          Effect.flatMap((oldest) => {
+            const active = oldest.filter(({ subscription }) => enabled.has(subscription.workflow));
+            const inactive = oldest.filter(({ subscription }) => !enabled.has(subscription.workflow));
+            return Effect.forEach(
+              inactive,
+              (admission) =>
+                store.complete(
+                  admission,
+                  coordination.markProcessed(admission.event.key, admission.event.revision),
+                ),
+              { discard: true },
+            ).pipe(
+              Effect.andThen(
+                Effect.forEach(active, (admission) =>
+                  coordination.read(admission.event.key).pipe(
+                    Effect.map((view) => ({
+                      admission,
+                      isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
+                      gate: view.gate(
+                        {
+                          workflow: admission.subscription.workflow,
+                          operation: admission.subscription.operation,
+                        },
+                        admission.event.revision,
+                      ),
+                    })),
+                  ),
+                ),
+              ),
+            );
+          }),
         );
       }),
       Effect.map((states) =>
