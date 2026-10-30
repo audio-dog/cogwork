@@ -16,6 +16,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import type { RegisteredWorkspace } from "../projector";
+import { matchTriggerEvent } from "../trigger-observation";
 import type { TriggerSubscription } from "../trigger-source";
 import { LinearClient, type LinearClientService } from "./client";
 import { makeLinearTrackerTriggerSource } from "./tracker-trigger-source";
@@ -134,10 +135,15 @@ it.effect("lists labels from completed Linear issues", () => {
 
 it.effect("reads Linear updates and keeps comment revisions distinct by label", () =>
   Effect.gen(function* () {
+    yield* TestClock.setTime(20_000);
     const client = yield* LinearClient;
+    const labelSubscription = {
+      ...subscription("linear.issue-has-label", "label"),
+      catchUp: { since: 10_000 },
+    };
     const events = yield* makeLinearTrackerTriggerSource(client, Effect.succeed(registryState))
       .observe([
-        subscription("linear.issue-has-label", "label"),
+        labelSubscription,
         subscription("linear.new-comment-from-person", "comment"),
         subscription("linear.new-comment-from-person", "ready-comment", "ready-for-human"),
       ])
@@ -154,6 +160,9 @@ it.effect("reads Linear updates and keeps comment revisions distinct by label", 
     assert.isTrue(observeIssues.mock.calls[0]?.[4]);
     assert.strictEqual(readTriggerProse.mock.calls.length, 1);
     assert.strictEqual(readProse.mock.calls.length, 0);
+    const labelEvent =
+      events.find(({ entry }) => entry === issueHasLabelKey) ?? assert.fail("missing label event");
+    assert.deepStrictEqual(matchTriggerEvent([labelSubscription], labelEvent), [labelSubscription]);
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {

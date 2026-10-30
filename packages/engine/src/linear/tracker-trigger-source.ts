@@ -85,7 +85,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
           },
           revision: `label:${label}:${appliedAt}`,
           cause: { _tag: "Unknown" },
-          atMillis: appliedAt,
+          atMillis: now,
           entry: issueHasLabelKey,
           workspace: workspace.config.name,
           parameters: [{ id: "label", value: label ?? "" }],
