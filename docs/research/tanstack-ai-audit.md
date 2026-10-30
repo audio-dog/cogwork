@@ -1,6 +1,6 @@
 # TanStack AI capability audit for the first-party runtime
 
-Resolves [#164](https://github.com/colonylabs/cogwork/issues/164), part of wayfinder map [#159](https://github.com/colonylabs/cogwork/issues/159). Context: engine ADR 0006 decided to build a first-party agent runtime as a TanStack AI `chat()` loop behind the existing `HarnessRunner` seam (`packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md`). This audit answers: **what does @tanstack/ai give us for free, and what do we have to build?**
+Resolves [#164](https://github.com/taylorfsteele/cogwork/issues/164), part of wayfinder map [#159](https://github.com/taylorfsteele/cogwork/issues/159). Context: engine ADR 0006 decided to build a first-party agent runtime as a TanStack AI `chat()` loop behind the existing `HarnessRunner` seam (`packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md`). This audit answers: **what does @tanstack/ai give us for free, and what do we have to build?**
 
 **Sources.** Installed packages read directly (`@tanstack/ai@0.42.0`, `@tanstack/ai-acp@0.2.3`, `@tanstack/ai-sandbox@0.2.4`, `@tanstack/ai-sandbox-local-process@0.2.0`, resolved under `node_modules/.pnpm/`), the official docs at tanstack.com/ai (fetched from the TanStack/ai `main` branch, 2026-08-05), and the real usage in `packages/cursor-acp/src/harness.ts`.
 

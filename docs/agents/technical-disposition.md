@@ -43,9 +43,9 @@ direction, or prior art. Research, compare, recommend, and let your confidence r
 establish **new product direction** not yet covered in [`product.md`](./product.md) or an ADR. The
 signs of a real fork: it trades off the product's identity, it moves the roadmap, or principled
 people would genuinely disagree and the choice *defines* the product. A question that **grows while
-you answer it** is the shape of a fork — [#132](https://github.com/colonylabs/cogwork/issues/132)'s
+you answer it** is the shape of a fork — [#132](https://github.com/taylorfsteele/cogwork/issues/132)'s
 first-party-integrations question arrived as a consequence of a resolvable one rather than as its
-own ticket, and went to [#172](https://github.com/colonylabs/cogwork/issues/172).
+own ticket, and went to [#172](https://github.com/taylorfsteele/cogwork/issues/172).
 
 **Defer it** — to the open ticket that owns defining the concept — when the question is undecidable
 rather than hard: what it asks about is not yet defined, so no answer would be sound. Escalation
@@ -89,14 +89,14 @@ same thing, compare, and let the evidence check and strengthen your reasoning ra
 reasoning is the wrong tool entirely. Dispatch a `/research` subagent and keep working: a
 recommendation delivered before the evidence arrives tends to survive by anchoring rather than by
 being right, and costs a correction later. Two of
-[#132](https://github.com/colonylabs/cogwork/issues/132)'s answers were reversed by research after a
+[#132](https://github.com/taylorfsteele/cogwork/issues/132)'s answers were reversed by research after a
 confident first recommendation.
 
 **What a tool writes to disk outranks what it says.** The strongest prior art is not the vendored
 source or the docs — it is the data the shipped product leaves on this machine, because that is the
 design after every compromise. Before escalating or inferring anything about how a mature tool
 handles a problem, look for its artifact: `~/.codex/`, `~/.cursor/`, `~/.claude/`. Read the files.
-Four of [#125](https://github.com/colonylabs/cogwork/issues/125)'s answers were reasoned out — one
+Four of [#125](https://github.com/taylorfsteele/cogwork/issues/125)'s answers were reasoned out — one
 escalated as an open fork — where three folders on disk settled the question in minutes. A folder
 beats a paragraph.
 
@@ -154,7 +154,7 @@ shape that does not, take the one that survives — but build no hosting, no aut
 Looking the other way, nothing is publicly released, so a breaking change costs a migration of zero
 installs: when the clean shape and the compatible shape differ, take the clean one and migrate.
 Compatibility owed to nobody has no beneficiary.
-(map [#159](https://github.com/colonylabs/cogwork/issues/159); [`product.md`](./product.md))
+(map [#159](https://github.com/taylorfsteele/cogwork/issues/159); [`product.md`](./product.md))
 
 ### Shape and change
 
@@ -266,8 +266,8 @@ it runs. Settled by reading what the shipped harnesses write to disk: every plug
 harness outside every bundle (`~/.codex/auth.json`, `~/.cursor/cli-config.json`). Three independent
 implementations, no spec between them — a **convergence**.
 (supersedes the open fork this section carried; the lifecycle detail lands with
-[#125](https://github.com/colonylabs/cogwork/issues/125), update-time consent with
-[#135](https://github.com/colonylabs/cogwork/issues/135))
+[#125](https://github.com/taylorfsteele/cogwork/issues/125), update-time consent with
+[#135](https://github.com/taylorfsteele/cogwork/issues/135))
 
 **Approval names what it approves.** When you require a human to approve something, what makes the
 approval real is that it names the specific thing it is approving — not that a human was sitting at
@@ -320,7 +320,7 @@ demand, not a second control surface that narrows the set per consumer. A per-co
 user's one setting into a request the system may decline, and it has to be designed, rendered, and
 maintained forever; lazy loading costs the user nothing and is simply the right way to build it.
 Where the loading mechanism is not ours yet, say so and wait for it rather than shipping the gate in
-its place. Resolved on [#130](https://github.com/colonylabs/cogwork/issues/130): every enabled
+its place. Resolved on [#130](https://github.com/taylorfsteele/cogwork/issues/130): every enabled
 contribution flows into every Run Plan for its workspace, and `TextOptions.lazyToolsConfig` is the
 mechanism now that the owned model loop exists. Note the corollary — **requiring is not narrowing**.
 An Operation Definition declaring a required need is a precondition, and it never implies the power
@@ -369,7 +369,7 @@ was already spent there three times over.
 
 ## One worked answer
 
-From [#132](https://github.com/colonylabs/cogwork/issues/132), on whether an inner contribution
+From [#132](https://github.com/taylorfsteele/cogwork/issues/132), on whether an inner contribution
 inside a Plugin carries its own version.
 
 The first answer was a confident yes, reasoned from first principles: versioned parts compose

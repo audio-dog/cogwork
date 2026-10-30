@@ -1,6 +1,6 @@
 # Provider auth and model-catalog landscape
 
-Resolves [#163](https://github.com/colonylabs/cogwork/issues/163) (part of wayfinder map #146).
+Resolves [#163](https://github.com/taylorfsteele/cogwork/issues/163) (part of wayfinder map #146).
 
 **Question:** For bring-your-own-provider in cogwork's TanStack AI runtime — which providers
 support subscription OAuth login vs API-key-only vs neither, what does the ToS actually say about a

@@ -57,7 +57,7 @@ the detail server-side. This is a robustness and UX practice, not secrecy.
 ## Amendment (2026-08-06) — the auth seam
 
 The original decision named *where* the trust boundary sits (the channel) but not *the
-seam* auth drops into. [Client contract and transport (#148)](https://github.com/colonylabs/cogwork/issues/161)
+seam* auth drops into. [Client contract and transport (#148)](https://github.com/taylorfsteele/cogwork/issues/161)
 resolved that seam. This amendment records it, so "add auth when remote" has a concrete
 insertion point rather than a reopened design.
 

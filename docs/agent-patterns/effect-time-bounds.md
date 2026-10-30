@@ -84,7 +84,7 @@ Local filesystem calls are deliberately absent from that list. `sandbox.handle.f
 The `SandboxFs` contract also takes no `AbortSignal`, so a deadline there returns control while the operation runs on, unwatched. On a write that is worse than no bound: the tool reports a timeout, the model writes something else, and the abandoned write lands last and wins. A wedged disk is already bounded by the run budget in `foldStream`.
 
 Where the cost is volume rather than latency — a recursive walk that reads every file — a per-call deadline never fires and is the wrong instrument. Bound the walk, or shell out to a tool that does it in one process.
-(Settled on [#554](https://github.com/colonylabs/cogwork/issues/554).)
+(Settled on [#554](https://github.com/taylorfsteele/cogwork/issues/554).)
 
 ## Make the underlying work abortable
 

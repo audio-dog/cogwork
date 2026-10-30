@@ -11,7 +11,7 @@ non-tracker sensor: deterministic engine code that watches the telemetry store a
 `needs-triage` ticket when the app's own health degrades. The test suite is the second signal
 worth sensing, and it arrives from somewhere else.
 
-The suite had been drifting. Issue [#432](https://github.com/colonylabs/cogwork/issues/432) fixed
+The suite had been drifting. Issue [#432](https://github.com/taylorfsteele/cogwork/issues/432) fixed
 the drift — package test tasks were serialised behind each other, and the slowest suite queued on
 one `git` subprocess at a time — and took an uncached `turbo run test` from 36.4s to 17.0s. The
 question this ADR answers is what stops it happening again without a person noticing that it has.
