@@ -128,6 +128,7 @@ const clientLayer: Layer.Layer<SlackClient | SlackClientStateRef> = Layer.effect
       );
     return {
       searchMessages: () => read((state) => state.search),
+      searchChannelMessages: () => read((state) => state.search),
       history: () => read((state) => state.history),
       reactions: () => read((state) => state.reactions),
       replies: () => readContext((state) => state.replies),
@@ -422,6 +423,53 @@ describe("Slack Trigger source", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("discovers a recent reply after restart when its root is outside channel history", () =>
+    Effect.gen(function* () {
+      const root = message({ ts: "600.000", text: "First message" });
+      const laterReply = message({
+        ts: "1001.000",
+        threadTs: root.ts,
+        text: "Later reply",
+      });
+      yield* Ref.set(yield* SlackClientStateRef, {
+        search: [laterReply],
+        history: [],
+        reactions: [],
+        replies: [root, laterReply],
+        failure: null,
+      });
+      yield* TestClock.setTime(1_100_000);
+      const source = yield* make;
+      const selected = subscription("slack.message-in-channel", [
+        { id: "channel", value: "C123" },
+        { id: "quiet-for", value: "0" },
+        { id: "at-most-every", value: "0" },
+        { id: "catch-up-at-most", value: "120000" },
+      ]);
+      const eventFiber = yield* source
+        .observe([selected])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.timeoutOption("2 minutes"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("2 minutes");
+      const result = yield* Fiber.join(eventFiber);
+      const events = Option.getOrElse(result, () => []);
+
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(events[0]?.revision, laterReply.ts);
+      assert.deepStrictEqual(events[0]?.key, {
+        _tag: "SlackConversation",
+        team: "T123",
+        channel: "C123",
+        threadTs: root.ts,
+      });
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("re-emits an ambient event until admission succeeds", () =>
     Effect.gen(function* () {
       const root = message({ ts: "600.000", text: "First message" });
@@ -699,6 +747,45 @@ describe("Slack Trigger source", () => {
       });
 
       yield* makeHttpClient(http).searchMessages(session, 1_793_275_200_000);
+    }),
+  );
+
+  it.effect("bounds channel search to the selected channel and catch-up date", () =>
+    Effect.gen(function* () {
+      const requests = yield* Ref.make<ReadonlyArray<URL>>([]);
+      const body = {
+        ok: true,
+        channel: { name: "reviews" },
+        messages: {
+          matches: [
+            { channel_id: "C123", ts: "1793275201.000", text: "Selected channel" },
+            { channel_id: "C999", ts: "1793275202.000", text: "Other channel" },
+          ],
+          paging: { page: 1, pages: 1 },
+        },
+      };
+      const http = HttpClient.make((request, url) => {
+        const response = HttpClientResponse.fromWeb(
+          request,
+          new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+        return Ref.update(requests, (current) => [...current, url]).pipe(Effect.map(() => response));
+      });
+
+      const messages = yield* makeHttpClient(http).searchChannelMessages(session, "C123", 1_793_275_200_000);
+      const [channelRequest, searchRequest] = yield* Ref.get(requests);
+
+      assert.strictEqual(channelRequest?.pathname, "/api/conversations.info");
+      assert.strictEqual(channelRequest?.searchParams.get("channel"), "C123");
+      assert.strictEqual(searchRequest?.pathname, "/api/search.messages");
+      assert.strictEqual(searchRequest?.searchParams.get("query"), "in:reviews after:2026-10-28");
+      assert.deepStrictEqual(
+        messages.map(({ channel }) => channel),
+        ["C123"],
+      );
     }),
   );
 

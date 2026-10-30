@@ -62,6 +62,11 @@ export interface SlackClientService {
     session: SlackSession,
     oldestMillis: number,
   ) => Effect.Effect<ReadonlyArray<SlackMessage>, SourceFailure>;
+  readonly searchChannelMessages: (
+    session: SlackSession,
+    channel: string,
+    oldestMillis: number,
+  ) => Effect.Effect<ReadonlyArray<SlackMessage>, SourceFailure>;
   readonly history: (
     session: SlackSession,
     channel: string,
@@ -405,30 +410,51 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
       ),
     ).pipe(Stream.runCollect);
 
+  const searchMessages = (session: SlackSession, query: string, oldestMillis: number) =>
+    Stream.paginate(1, (page) =>
+      callSlack(client, session, "search.messages", {
+        query,
+        sort: "timestamp",
+        sort_dir: "asc",
+        highlight: "false",
+        count: "100",
+        page: String(page),
+      }).pipe(
+        Effect.flatMap(decodeSlack(SearchResponse)),
+        Effect.map((response) => {
+          const paging = response.messages.paging;
+          return [
+            response.messages.matches.map((message) => normalizeMessage(message, message.channel_id ?? "")),
+            paging && paging.page < paging.pages ? Option.some(page + 1) : Option.none(),
+          ] as const;
+        }),
+      ),
+    ).pipe(
+      Stream.filter((message) => timestampMillis(message.ts) > oldestMillis),
+      Stream.runCollect,
+    );
+
+  const channelName = Effect.fn("SlackClient.channelName")((session: SlackSession, channel: string) =>
+    callSlack(client, session, "conversations.info", { channel }).pipe(
+      Effect.flatMap(decodeSlack(ChannelResponse)),
+      Effect.map((response) => response.channel.name),
+    ),
+  );
+
   return {
     searchMessages: Effect.fn("SlackClient.searchMessages")((session, oldestMillis) =>
-      Stream.paginate(1, (page) =>
-        callSlack(client, session, "search.messages", {
-          query: `<@${session.user}> after:${searchAfterDate(oldestMillis)}`,
-          sort: "timestamp",
-          sort_dir: "asc",
-          highlight: "false",
-          count: "100",
-          page: String(page),
-        }).pipe(
-          Effect.flatMap(decodeSlack(SearchResponse)),
-          Effect.map((response) => {
-            const paging = response.messages.paging;
-            return [
-              response.messages.matches.map((message) => normalizeMessage(message, message.channel_id ?? "")),
-              paging && paging.page < paging.pages ? Option.some(page + 1) : Option.none(),
-            ] as const;
-          }),
-        ),
-      ).pipe(
-        Stream.filter((message) => timestampMillis(message.ts) > oldestMillis),
-        Stream.runCollect,
-      ),
+      searchMessages(session, `<@${session.user}> after:${searchAfterDate(oldestMillis)}`, oldestMillis),
+    ),
+    searchChannelMessages: Effect.fn("SlackClient.searchChannelMessages")(
+      function* (session, channel, oldestMillis) {
+        const name = yield* channelName(session, channel);
+        const messages = yield* searchMessages(
+          session,
+          `in:${name} after:${searchAfterDate(oldestMillis)}`,
+          oldestMillis,
+        );
+        return messages.filter((message) => message.channel === channel);
+      },
     ),
     history: Effect.fn("SlackClient.history")((session, channel, oldestMillis) =>
       cursorPages(
@@ -505,12 +531,7 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
         ),
       ),
     ),
-    channelName: Effect.fn("SlackClient.channelName")((session, channel) =>
-      callSlack(client, session, "conversations.info", { channel }).pipe(
-        Effect.flatMap(decodeSlack(ChannelResponse)),
-        Effect.map((response) => response.channel.name),
-      ),
-    ),
+    channelName,
     userName: Effect.fn("SlackClient.userName")((session, user) =>
       callSlack(client, session, "users.info", { user }).pipe(
         Effect.flatMap(decodeSlack(UserResponse)),
@@ -756,11 +777,16 @@ const ambientEvents = Effect.fn("SlackSource.ambientEvents")(function* (
   const channel = parameterValue(subscription, "channel");
   if (!channel) return [];
   const since = catchUpSince(subscription, now);
-  const discovered = yield* client.history(session, channel, since);
+  const [history, searched] = yield* Effect.all([
+    client.history(session, channel, since),
+    client.searchChannelMessages(session, channel, since),
+  ]);
+  const discovered = [...history, ...searched];
   const roots = yield* trackedAmbientRoots(subscription, channel, now, discovered, trackedRoots);
   return yield* Effect.forEach(roots, (root) =>
     Effect.gen(function* () {
       const { thread: complete } = yield* hydratedThread(client, session, root);
+      const conversationRoot = complete.find((message) => message.ts === rootTimestampOf(root)) ?? root;
       const latestMillis = complete.reduce(
         (latest, message) => Math.max(latest, timestampMillis(message.ts)),
         timestampMillis(root.ts),
@@ -787,8 +813,14 @@ const ambientEvents = Effect.fn("SlackSource.ambientEvents")(function* (
       const priorAt = prior?.atMillis ?? 0;
       const atMostEvery = durationOf(subscription, "at-most-every", defaultAtMostMillis);
       if (prior?.revision === newest.ts || now - priorAt < atMostEvery) return null;
-      const workContext = yield* resolvedWorkContext(client, session, root, complete, "Slack conversation");
-      return ambientEvent(session, subscription, root, newest.ts, workContext);
+      const workContext = yield* resolvedWorkContext(
+        client,
+        session,
+        conversationRoot,
+        complete,
+        "Slack conversation",
+      );
+      return ambientEvent(session, subscription, conversationRoot, newest.ts, workContext);
     }),
   ).pipe(Effect.map((events) => events.filter((event) => event !== null)));
 });
