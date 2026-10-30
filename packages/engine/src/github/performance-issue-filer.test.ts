@@ -297,7 +297,8 @@ it.effect("builds a target from a GitHub client and repository reference", () =>
       {
         addLabel: () => Effect.void,
         authenticatedLogin: () => Effect.succeed("cogwork-bot"),
-        createIssue: () => Ref.update(created, (count) => count + 1),
+        createIssue: () =>
+          Ref.updateAndGet(created, (count) => count + 1).pipe(Effect.map((number) => issue(number, marker))),
         createPerformanceComment: unexpectedClientCall,
         issuePullReferences: noPullReferences,
         listIssues: () =>
@@ -340,6 +341,7 @@ it.effect("retries creation after a transient failure that did not report accept
                   authenticatedLogin: () => Effect.succeed("cogwork-bot"),
                   listIssues: () =>
                     Ref.get(calls).pipe(Effect.map((count) => (count >= 2 ? [issue(2, marker)] : []))),
+                  findIssueWithMarker: unexpectedClientCall,
                   readIssue: unexpectedClientCall,
                   listIssueFieldValues: unexpectedClientCall,
                   listPriorityFields: unexpectedClientCall,
@@ -365,11 +367,12 @@ it.effect("retries creation after a transient failure that did not report accept
                                 message: "transient create failure",
                               }),
                             )
-                          : Effect.void,
+                          : Effect.succeed(issue(2, marker)),
                       ),
                     ),
                   createPull: unexpectedClientCall,
                   removeLabel: unexpectedClientCall,
+                  closeIssue: unexpectedClientCall,
                   createComment: unexpectedClientCall,
                   editComment: unexpectedClientCall,
                   verifyCredential: unexpectedClientCall,

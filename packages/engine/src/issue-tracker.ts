@@ -8,6 +8,8 @@ import {
   type Priority,
   type RunPlanWorkContextProse,
   type TriageRole,
+  type WorkflowActionArtifact,
+  type WorkflowActionOrigin,
   type WorkItemId,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
@@ -107,6 +109,59 @@ export interface HandBackOutcome {
   readonly trigger?: FollowUpTrigger;
 }
 
+export interface CreateIssueInput {
+  readonly title: string;
+  readonly body: string;
+  readonly labels: ReadonlyArray<string>;
+  readonly origin: WorkflowActionOrigin;
+}
+
+export interface IssueTrackerActionService {
+  readonly createIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    input: CreateIssueInput,
+  ) => Effect.Effect<WorkflowActionArtifact, IssueTrackerError>;
+  readonly commentIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    body: string,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly addLabels: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    labels: ReadonlyArray<string>,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly removeLabel: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    label: string,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly closeIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+}
+
+const unavailableAction = () =>
+  Effect.fail(
+    new IssueTrackerError({
+      reason: "unavailable",
+      message: "the issue tracker does not support Workflow actions",
+    }),
+  );
+
+export const unsupportedWorkflowActions: IssueTrackerActionService = {
+  createIssue: unavailableAction,
+  commentIssue: unavailableAction,
+  addLabels: unavailableAction,
+  removeLabel: unavailableAction,
+  closeIssue: unavailableAction,
+};
+
 const noAdapter = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
@@ -170,6 +225,7 @@ export const makeEmpty = Effect.succeed({
     failWhenRemote(workspace),
   reclassify: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: ReclassifyOutcome) =>
     failWhenRemote(workspace),
+  ...unsupportedWorkflowActions,
 } as const);
 
 export type IssueTrackerService = Effect.Success<typeof makeEmpty> & {

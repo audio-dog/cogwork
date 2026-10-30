@@ -47,7 +47,12 @@ import {
   DaemonEventPublisher,
   layer as eventPublisherLayer,
 } from "./event-publisher";
-import { IssueTracker, type IssueTrackerService, type TrackerItem } from "./issue-tracker";
+import {
+  IssueTracker,
+  type IssueTrackerService,
+  type TrackerItem,
+  unsupportedWorkflowActions,
+} from "./issue-tracker";
 import { PluginManager } from "./plugin";
 import { classifiedItemsOf, schedulerStatsOf } from "./read-model";
 import * as Reconcile from "./reconcile";
@@ -308,6 +313,7 @@ const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerServi
   handBack: () => Effect.void,
   stalled: () => Effect.void,
   reclassify: () => Effect.void,
+  ...unsupportedWorkflowActions,
 });
 
 const providerStub = Layer.succeed(SourceControlProvider, {

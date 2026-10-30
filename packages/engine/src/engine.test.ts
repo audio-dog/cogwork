@@ -152,6 +152,7 @@ const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.
   handBack: () => Effect.void,
   stalled: () => Effect.void,
   reclassify: () => Effect.void,
+  ...IssueTracker.unsupportedWorkflowActions,
   ...service,
 });
 

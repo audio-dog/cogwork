@@ -43,6 +43,7 @@ export interface RawIssue {
   readonly identifier: string;
   readonly title: string;
   readonly url: string;
+  readonly body?: string;
   readonly labels: ReadonlyArray<string>;
   readonly assignees: ReadonlyArray<string>;
   readonly stateName: string;
@@ -143,6 +144,7 @@ const IssueNode = Schema.Struct({
   identifier: Schema.String,
   title: Schema.String,
   url: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
   priority: Schema.optional(Schema.Finite),
   createdAt: Schema.optional(Schema.String),
   updatedAt: Schema.optional(Schema.String),
@@ -178,6 +180,7 @@ const IssuesTeamNode = Schema.Struct({
 });
 
 const MetaTeamNode = Schema.Struct({
+  id: Schema.String,
   states: Schema.Struct({ nodes: Schema.Array(StateNode) }),
 });
 
@@ -211,6 +214,30 @@ const CoordinationCommentsPayload = Schema.Struct({
   ),
 });
 
+const IssueMarkerPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({
+      description: Schema.NullOr(Schema.String),
+      comments: Schema.Struct({ nodes: Schema.Array(Schema.Struct({ id: Schema.String })) }),
+    }),
+  ),
+});
+
+const ActionIssueNode = Schema.Struct({
+  id: Schema.String,
+  identifier: Schema.String,
+  url: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }),
+  state: Schema.Struct({ type: Schema.String }),
+});
+
+const ActionIssuePayload = Schema.Struct({ issue: Schema.NullOr(ActionIssueNode) });
+
+const ActionIssuesTeamNode = Schema.Struct({
+  issues: Schema.Struct({ nodes: Schema.Array(ActionIssueNode) }),
+});
+
 const IssueRelationsPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ inverseRelations: RelationConnection })),
 });
@@ -227,6 +254,8 @@ const IssueAssigneesPayload = Schema.Struct({
 
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
+const decodeIssueMarker = Schema.decodeUnknownEffect(IssueMarkerPayload);
+const decodeActionIssue = Schema.decodeUnknownEffect(ActionIssuePayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
@@ -235,11 +264,26 @@ const decodeIssueAssignees = Schema.decodeUnknownEffect(IssueAssigneesPayload);
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
+const markWriteMayHaveCommitted = (error: IssueTrackerError) =>
+  new IssueTrackerError({
+    reason: error.reason,
+    message: error.message,
+    retryable: error.retryable,
+    retryAfterMillis: error.retryAfterMillis,
+    connectionId: error.connectionId,
+    writeMayHaveCommitted: true,
+  });
+
+const classifyCreateFailure = (error: IssueTrackerError) => {
+  const mayHaveCommitted = error.reason === "unavailable" && error.retryable !== false;
+  return mayHaveCommitted ? markWriteMayHaveCommitted(error) : error;
+};
+
 const labelCreateRefused = (ref: LinearTeamRef, name: string) => (error: IssueTrackerError) =>
   new IssueTrackerError({
     reason: error.reason,
     message: `Linear refused creating the "${name}" label in team ${ref.team}: ${error.message}`,
-    retryable: error.reason === "rate-limited",
+    retryable: error.reason === "rate-limited" || error.retryable === true,
     retryAfterMillis: error.retryAfterMillis,
     connectionId: error.connectionId,
   });
@@ -320,7 +364,11 @@ const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, LinearRequ
     Effect.catchTag("TimeoutError", () =>
       Effect.fail(
         new LinearRequestFailure({
-          error: unavailable(`Linear request timed out after ${transientAttemptDeadline}`),
+          error: new IssueTrackerError({
+            reason: "unavailable",
+            message: `Linear request timed out after ${transientAttemptDeadline}`,
+            retryable: true,
+          }),
           retryable: true,
         }),
       ),
@@ -361,6 +409,7 @@ const issueFields = `
       identifier
       title
       url
+      description
       priority
       createdAt
       updatedAt
@@ -412,6 +461,7 @@ const issuesFilter = (
 });
 
 const metaSelection = `
+  id
   states { nodes { id name type } }`;
 
 // Linear caps an unpaginated connection at 50, and a team can hold more labels than that.
@@ -488,6 +538,28 @@ query IssueCoordinationComments($id: String!, $bot: ID!, $ledger: String!, $prop
   }
 }`;
 
+const issueMarkerQuery = `
+query IssueMarker($id: String!, $marker: String!) {
+  issue(id: $id) {
+    description
+    comments(filter: { body: { contains: $marker } }, first: 1) { nodes { id } }
+  }
+}`;
+
+const actionIssueSelection = `
+      id
+      identifier
+      url
+      description
+      labels(first: ${labelPageSize}) { nodes { id name } }
+      state { type }`;
+
+const actionIssueQuery = `
+query ActionIssue($id: String!) {
+  issue(id: $id) {${actionIssueSelection}
+  }
+}`;
+
 const issueRelationsQuery = `
 query IssueInverseRelations($id: String!, $after: String) {
   issue(id: $id) {
@@ -543,6 +615,15 @@ const coordinatedIssuesShape = teamShape(
   issuesSelection(coordinationFields),
   `${issuesArgs}, $bot: ID!, $ledger: String!, $proposal: String!`,
 );
+const actionIssueMarkerShape = teamShape(
+  ActionIssuesTeamNode,
+  `
+  issues(filter: { description: { contains: $marker } }, first: 1) {
+    nodes {${actionIssueSelection}
+    }
+  }`,
+  ", $marker: String!",
+);
 
 const isResolvedBlocker = (stateType: string) => stateType === "completed" || stateType === "canceled";
 
@@ -575,6 +656,7 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   identifier: issue.identifier,
   title: issue.title,
   url: issue.url,
+  body: issue.description ?? "",
   labels: issue.labels.nodes.map((label) => label.name),
   assignees: issue.assignee ? [issue.assignee.id] : [],
   stateName: issue.state.name,
@@ -583,6 +665,15 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   priority: linearPriority(issue.priority),
   createdAtMillis: millisFromIso(issue.createdAt ?? issue.updatedAt ?? ""),
   updatedAtMillis: millisFromIso(issue.updatedAt ?? ""),
+});
+
+const toActionIssue = (issue: typeof ActionIssueNode.Type) => ({
+  id: issue.id,
+  identifier: issue.identifier,
+  url: issue.url,
+  body: issue.description ?? "",
+  labels: issue.labels.nodes.map(({ name }) => name),
+  stateType: issue.state.type,
 });
 
 const toRawComment = (comment: typeof CommentNode.Type) => {
@@ -711,6 +802,34 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   ) {
     const credential = yield* credentialFor(ref);
     return yield* callWithCredential(ref, credential, run);
+  });
+
+  const callOnceWithCredential = Effect.fn("linear.callOnceWithCredential")(function* <A>(
+    ref: LinearTeamRef,
+    credential: Credential,
+    run: (sdk: LinearSdk) => PromiseLike<A>,
+  ) {
+    const attemptStartedAt = yield* Clock.currentTimeMillis;
+    yield* holdOff(ref, attemptStartedAt);
+    return yield* withTransientAttemptDeadline(
+      Effect.tryPromise({
+        try: (signal) => run(new LinearSdk({ ...sdkAuth(credential), signal })),
+        catch: (cause) => fromSdkFailure(cause, attemptStartedAt),
+      }),
+    ).pipe(
+      Effect.mapError((failure) => failure.error),
+      Effect.tapError((error) =>
+        Effect.flatMap(Clock.currentTimeMillis, (nowMillis) => noteFailure(ref, nowMillis, error)),
+      ),
+    );
+  });
+
+  const callOnce = Effect.fn("linear.callOnce")(function* <A>(
+    ref: LinearTeamRef,
+    run: (sdk: LinearSdk) => PromiseLike<A>,
+  ) {
+    const credential = yield* credentialFor(ref);
+    return yield* callOnceWithCredential(ref, credential, run);
   });
 
   // The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
@@ -878,7 +997,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     operation: string,
     run: (sdk: LinearSdk) => PromiseLike<{ readonly success: boolean }>,
   ) {
-    const payload = yield* call(ref, run);
+    const payload = yield* callOnce(ref, run);
     yield* requireSuccess(operation, payload);
   });
 
@@ -895,7 +1014,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     const { teamId, labelId } = yield* resolveLabel(ref, name);
     if (labelId !== null) return labelId;
     const payload = yield* Effect.mapError(
-      call(ref, (sdk) => sdk.createIssueLabel({ teamId, name })),
+      callOnce(ref, (sdk) => sdk.createIssueLabel({ teamId, name })),
       labelCreateRefused(ref, name),
     );
     yield* requireSuccess("issueLabelCreate", payload);
@@ -903,6 +1022,41 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return yield* unavailable(`Linear issueLabelCreate returned no label for ${name}`);
     }
     return payload.issueLabelId;
+  });
+
+  const createIssue = Effect.fn("linear.createIssue")(function* (
+    ref: LinearTeamRef,
+    input: { readonly title: string; readonly body: string; readonly labels: ReadonlyArray<string> },
+  ) {
+    interface CreatedIssue {
+      readonly success: boolean;
+      readonly issue: { readonly id: string; readonly identifier: string; readonly url: string } | null;
+    }
+    const team = yield* loadTeam(ref, metaShape);
+    const labelIds = yield* Effect.forEach(input.labels, (label) => ensureLabel(ref, label));
+    const payload = yield* callOnce(ref, (sdk) =>
+      sdk
+        .createIssue({
+          teamId: team.id,
+          title: input.title,
+          description: input.body,
+          labelIds,
+        })
+        .then((created): Promise<CreatedIssue> => {
+          const issue = created.issue;
+          return issue === undefined
+            ? Promise.resolve({ success: created.success, issue: null })
+            : issue.then((value) => ({
+                success: created.success,
+                issue: { id: value.id, identifier: value.identifier, url: value.url },
+              }));
+        }),
+    ).pipe(Effect.mapError(classifyCreateFailure));
+    yield* requireSuccess("issueCreate", payload);
+    if (payload.issue === null) {
+      return yield* markWriteMayHaveCommitted(unavailable("Linear issueCreate returned no issue"));
+    }
+    return payload.issue;
   });
 
   const issueLabelId = Effect.fn("linear.issueLabelId")(function* (
@@ -1015,7 +1169,32 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
         toRawComment,
       );
     }),
+    findMarker: Effect.fn("linear.findMarker")(function* (
+      ref: LinearTeamRef,
+      issueId: string,
+      marker: string,
+    ) {
+      const data = yield* rawData(ref, issueMarkerQuery, { id: issueId, marker });
+      const payload = yield* Effect.mapError(decodeIssueMarker(data), toUnavailable);
+      if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
+      return {
+        body: payload.issue.description?.includes(marker) ?? false,
+        comment: payload.issue.comments.nodes.length > 0,
+      };
+    }),
+    readActionIssue: Effect.fn("linear.readActionIssue")(function* (ref: LinearTeamRef, issueId: string) {
+      const data = yield* rawData(ref, actionIssueQuery, { id: issueId });
+      const payload = yield* Effect.mapError(decodeActionIssue(data), toUnavailable);
+      if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
+      return toActionIssue(payload.issue);
+    }),
+    findActionIssue: Effect.fn("linear.findActionIssue")(function* (ref: LinearTeamRef, marker: string) {
+      const team = yield* loadTeam(ref, actionIssueMarkerShape, { marker });
+      const issue = team.issues.nodes.at(0);
+      return issue ? toActionIssue(issue) : null;
+    }),
     readProse,
+    createIssue,
     readTriggerProse,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {

@@ -66,7 +66,12 @@ import {
   resolvedMcpSkills,
 } from "./harness";
 import { HarnessReadinessCache } from "./harness-readiness";
-import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
+import {
+  IssueTracker,
+  IssueTrackerError,
+  type IssueTrackerService,
+  unsupportedWorkflowActions,
+} from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import * as OperationResolution from "./operation-resolution";
 import { PluginManager } from "./plugin";
@@ -597,6 +602,7 @@ function trackerRecorder(
       TrackerCalls,
       (calls): IssueTrackerService => ({
         rateLimitScope: () => null,
+        ...unsupportedWorkflowActions,
         observe: () => Effect.succeed([]),
         readProse,
         claim: (_workspace, itemId) => recordClaim(calls, itemId, claimWriteActive, claimFailure),

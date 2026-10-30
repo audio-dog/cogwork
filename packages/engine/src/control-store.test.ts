@@ -130,6 +130,7 @@ const expectedSchemaObjects = [
   { type: "index", name: "run_events_at" },
   { type: "index", name: "runs_started_at" },
   { type: "index", name: "trigger_admissions_item_revision_workflow_trigger" },
+  { type: "index", name: "workflow_action_plans_pending" },
   { type: "table", name: "connections" },
   { type: "table", name: "contribution_settings" },
   { type: "table", name: "coordination_attempts" },
@@ -148,6 +149,7 @@ const expectedSchemaObjects = [
   { type: "table", name: "sessions" },
   { type: "table", name: "trigger_admissions" },
   { type: "table", name: "trigger_subscription_checkpoints" },
+  { type: "table", name: "workflow_action_plans" },
   { type: "table", name: "workflows" },
   { type: "table", name: "workspaces" },
 ];

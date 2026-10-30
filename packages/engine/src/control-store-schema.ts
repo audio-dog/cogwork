@@ -1,4 +1,4 @@
-import { maxSchedulerLimit, type WorkflowDocument } from "@cogwork/contracts";
+import { maxSchedulerLimit, type WorkflowActionPlan, type WorkflowDocument } from "@cogwork/contracts";
 import { desc, sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -238,6 +238,25 @@ export const workflows = sqliteTable(
       "workflows_published_revision",
       sql`${table.publishedRevision} IS NULL OR ${table.publishedRevision} >= 1`,
     ),
+  ],
+);
+
+export const workflowActionPlans = sqliteTable(
+  "workflow_action_plans",
+  {
+    workItem: text("work_item").notNull(),
+    workflow: text("workflow").notNull(),
+    attempt: text("attempt").notNull(),
+    createdAtMillis: integer("created_at_millis").notNull(),
+    plan: text("plan", { mode: "json" }).$type<WorkflowActionPlan>().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workItem, table.workflow, table.attempt] }),
+    index("workflow_action_plans_pending").on(table.workItem, table.workflow, desc(table.createdAtMillis)),
+    check("workflow_action_plans_workflow", sql`length(trim(${table.workflow})) > 0`),
+    check("workflow_action_plans_attempt", sql`length(trim(${table.attempt})) > 0`),
+    check("workflow_action_plans_created_at", sql`${table.createdAtMillis} >= 0`),
+    check("workflow_action_plans_plan_json", sql`json_valid(${table.plan})`),
   ],
 );
 

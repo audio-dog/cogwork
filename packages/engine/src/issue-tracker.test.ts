@@ -3,7 +3,12 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { IssueTrackerError, type IssueTrackerService, releaseClaim } from "./issue-tracker";
+import {
+  IssueTrackerError,
+  type IssueTrackerService,
+  releaseClaim,
+  unsupportedWorkflowActions,
+} from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 
 const id = Schema.decodeSync(WorkItemId);
@@ -34,6 +39,7 @@ const stub = (over: Partial<IssueTrackerService>): IssueTrackerService =>
     handBack: () => Effect.void,
     stalled: () => Effect.void,
     reclassify: () => Effect.void,
+    ...unsupportedWorkflowActions,
     ...over,
   }) satisfies IssueTrackerService;
 

@@ -4,9 +4,14 @@ import {
   type Claim,
   codingOperation,
   GitHubIssueFieldId,
+  issueTrackerErrorIsPermanent,
+  keyOf,
   type LifecycleStage,
   LineageId,
   type Priority,
+  RunId,
+  WorkflowActionOrigin,
+  WorkflowId,
   WorkItemId,
   WorkspaceConfig,
 } from "@cogwork/contracts";
@@ -18,6 +23,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -116,8 +122,12 @@ interface Seed {
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
   readonly priorities?: ReadonlyArray<{ readonly issue: number; readonly priority: Priority }>;
   readonly priorityError?: boolean;
+  readonly listIssuesError?: boolean;
   readonly priorityValueError?: boolean;
   readonly pullRequestError?: boolean;
+  readonly createIssueError?: IssueTrackerError;
+  readonly findIssueErrors?: ReadonlyArray<IssueTrackerError | null>;
+  readonly readIssueError?: IssueTrackerError;
 }
 
 class ProviderCalls extends Context.Service<
@@ -203,6 +213,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       }),
     ),
   );
+  const findIssueErrors = yield* Ref.make(seed.findIssueErrors ?? []);
   const issueCommentSeeds = seed.comments ?? [];
   const seeded = yield* seedIssueComments(issueCommentSeeds);
   const nextId = yield* Ref.make((seed.comments?.length ?? 0) + 1);
@@ -248,9 +259,19 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     });
   return {
     authenticatedLogin: () => Effect.succeed(bot.login),
-    listIssues: () => Ref.get(issuesRef),
+    listIssues: () =>
+      seed.listIssuesError
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue list unavailable" }))
+        : Ref.get(issuesRef),
+    findIssueWithMarker: (_repo, marker) =>
+      Effect.gen(function* () {
+        const error = yield* Ref.modify(findIssueErrors, ([next, ...rest]) => [next ?? null, rest]);
+        if (error) return yield* error;
+        return (yield* Ref.get(issuesRef)).find(({ body }) => body.includes(marker)) ?? null;
+      }),
     readIssue: (_repo, number) =>
       Effect.gen(function* () {
+        if (seed.readIssueError) return yield* seed.readIssueError;
         const issues = yield* Ref.get(issuesRef);
         const issue = issues.find((candidate) => candidate.number === number);
         if (!issue) {
@@ -287,7 +308,26 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
     listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
-    createIssue: () => Effect.void,
+    createIssue: (_repo, input) => {
+      if (seed.createIssueError) return Effect.fail(seed.createIssueError);
+      return Ref.modify(issuesRef, (issues) => {
+        const number = Math.max(0, ...issues.map(({ number }) => number)) + 1;
+        const created: RawIssue = {
+          nodeId: `I_issue_${number}`,
+          number,
+          title: input.title,
+          url: `https://github.com/owner/repo/issues/${number}`,
+          labels: input.labels,
+          assignees: [],
+          isPullRequest: false,
+          openBlockers: 0,
+          body: input.body,
+          state: "open",
+          createdAtMillis: 0,
+        };
+        return [created, [...issues, created]];
+      });
+    },
     createPull: () =>
       seed.pullRequestError
         ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull request rejected" }))
@@ -299,6 +339,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         ...issue,
         labels: issue.labels.filter((existing) => existing !== label),
       })),
+    closeIssue: (_repo, number) => patch(number, (issue) => ({ ...issue, state: "closed" })),
     createComment,
     createPerformanceComment: createComment,
     editComment: (_repo, commentId, body) =>
@@ -508,6 +549,213 @@ const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
 });
 
 describe("GitHub adapters", () => {
+  it.effect("creates an issue without scanning the issue list", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker
+        .createIssue(workspace, {
+          title: "Created",
+          body: "Body",
+          labels: [],
+          origin,
+        })
+        .pipe(Effect.match({ onFailure: () => null, onSuccess: (created) => created }));
+
+      assert.strictEqual(artifact?.issue, "#6");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: [] }],
+          listIssuesError: true,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("repairs labels when recovering an existing issue creation", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const client = yield* GitHubClient;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker.createIssue(workspace, {
+        title: "Created",
+        body: "Body",
+        labels: ["needs-triage"],
+        origin,
+      });
+      const issues = yield* client.listIssues(repo, { state: "all" });
+      const recovered = issues.find(({ number }) => number === 6);
+
+      assert.strictEqual(artifact.issue, "#6");
+      assert.deepStrictEqual(recovered?.labels, ["needs-triage"]);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 5, title: "Existing", labels: [] },
+            {
+              number: 6,
+              title: "Created",
+              labels: [],
+              body: wireCodec.encode({ name: "write", pairs: "key=create-key" }),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("parks an ambiguous issue creation when marker recovery cannot confirm it", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const result = yield* Effect.result(
+        tracker.createIssue(workspace, {
+          title: "Created",
+          body: "Body",
+          labels: [],
+          origin,
+        }),
+      );
+
+      if (result._tag !== "Failure") return assert.fail("expected ambiguous creation to fail");
+      assert.isTrue(issueTrackerErrorIsPermanent(result.failure));
+      assert.isTrue(result.failure.writeMayHaveCommitted);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: [] }],
+          createIssueError: new IssueTrackerError({
+            reason: "unavailable",
+            message: "response body unavailable",
+            writeMayHaveCommitted: true,
+          }),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("parks an ambiguous create when recovery lookup is unavailable", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.isTrue(issueTrackerErrorIsPermanent(error));
+      assert.isTrue(error.writeMayHaveCommitted);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: [] }],
+          createIssueError: new IssueTrackerError({
+            reason: "unavailable",
+            message: "response body unavailable",
+            writeMayHaveCommitted: true,
+          }),
+          findIssueErrors: [
+            null,
+            new IssueTrackerError({ reason: "rate-limited", message: "search rate limited" }),
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("confirms creation from the response before a read-back outage", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const result = yield* Effect.result(
+        tracker.createIssue(workspace, { title: "Created", body: "Body", labels: [], origin }),
+      );
+
+      assert.isTrue(Result.isSuccess(result));
+      if (Result.isFailure(result)) return;
+      assert.strictEqual(result.success.issue, "#6");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: [] }],
+          readIssueError: new IssueTrackerError({
+            reason: "unavailable",
+            message: "issue read unavailable",
+          }),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("executes issue actions once and confirms their write keys", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const client = yield* GitHubClient;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker.createIssue(workspace, {
+        title: "Created",
+        body: "Body",
+        labels: ["needs-triage"],
+        origin,
+      });
+      yield* tracker.commentIssue(workspace, id("#5"), "Comment", "comment-key");
+      yield* tracker.commentIssue(workspace, id("#5"), "Comment", "comment-key");
+      yield* tracker.addLabels(workspace, id("#5"), ["added"], "add-key");
+      yield* tracker.removeLabel(workspace, id("#5"), "old", "remove-key");
+      yield* tracker.closeIssue(workspace, id("#5"), "close-key");
+
+      const issues = yield* client.listIssues(repo, { state: "all" });
+      const current = issues.find(({ number }) => number === 5);
+      const created = issues.find(({ title }) => title === "Created");
+      const comments = yield* client.listComments(repo, 5);
+      assert.deepStrictEqual(artifact.origin, origin);
+      assert.include(created?.body ?? "", "create-key");
+      assert.deepStrictEqual(current?.labels, ["added"]);
+      assert.strictEqual(current?.state, "closed");
+      assert.strictEqual(comments.filter(({ body }) => body.includes("Comment")).length, 1);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: ["old"] }],
+        }),
+      ),
+    ),
+  );
+
   it.effect("reads current issue prose and comment attribution for admission", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;

@@ -125,6 +125,7 @@ import {
 } from "./trigger-observation";
 import { combineTriggerSources, TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
+import { controlStoreLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
 import { WorkflowNotifications, layer as workflowNotificationsLayer } from "./workflow-notification";
@@ -504,6 +505,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
     Layer.provide(controlStore),
   );
+  const workflowActionPlans = workflowActionPlanStoreLayer.pipe(Layer.provide(controlStore));
   const triggerSources: Layer.Layer<
     TriggerSources,
     E | PlatformError | SqlError,
@@ -551,8 +553,11 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         workflows,
         coordination,
         harnessRuntime,
+        issueTracker,
+        registry,
         runLedger,
         runRecorder,
+        workflowActionPlans,
         workflowNotifications,
         triggerObservationStore,
       ),
@@ -577,6 +582,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     triggerSources,
     triggerObservation,
     workflowNotifications,
+    workflowActionPlans,
     workflowRun,
     McpSkill.layer.pipe(Layer.provide(credentials)),
     runControlLayer,

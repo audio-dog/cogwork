@@ -27,7 +27,6 @@ import type {
   HandBackOutcome,
   HandOffOutcome,
   ImplementedOutcome,
-  IssueTrackerService,
   ReclassifyOutcome,
   RoleChanges,
   StalledOutcome,
@@ -304,9 +303,7 @@ const lineageFor = (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) => 
   hop: 0,
 });
 
-export const makeCoordinationTracker = <Ref, CommentId>(
-  host: CoordinationHost<Ref, CommentId>,
-): IssueTrackerService => {
+export const makeCoordinationTracker = <Ref, CommentId>(host: CoordinationHost<Ref, CommentId>) => {
   const { codec } = host;
   const records = makeTrackerRecords(host);
 

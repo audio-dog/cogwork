@@ -36,6 +36,7 @@ import {
   IssueTracker,
   IssueTrackerError,
   type IssueTrackerService,
+  unsupportedWorkflowActions,
 } from "./issue-tracker";
 import * as OperationResolution from "./operation-resolution";
 import type { RegisteredWorkspace } from "./projector";
@@ -344,6 +345,7 @@ interface RecoveryOptions {
 
 const issueTrackerStub = (probe: RecoveryProbeState) =>
   ({
+    ...unsupportedWorkflowActions,
     rateLimitScope: () => null,
     observe: () => Effect.succeed([]),
     readProse: () => Effect.succeed({ body: "", comments: [] }),

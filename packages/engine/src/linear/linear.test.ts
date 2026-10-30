@@ -2,10 +2,14 @@ import {
   type AttemptOutcome,
   type AttemptRecord,
   codingOperation,
+  issueTrackerErrorIsPermanent,
   keyOf,
   type LifecycleStage,
   LineageId,
   type Priority,
+  RunId,
+  WorkflowActionOrigin,
+  WorkflowId,
   WorkItemId,
   WorkspaceConfig,
 } from "@cogwork/contracts";
@@ -85,11 +89,17 @@ interface Seed {
   >;
   readonly states?: ReadonlyArray<RawWorkflowState>;
   readonly authError?: boolean;
+  readonly observeError?: boolean;
+  readonly createIssueError?: boolean;
+  readonly hideActionIssue?: boolean;
+  readonly findActionIssueErrors?: ReadonlyArray<IssueTrackerError | null>;
+  readonly findMarkerError?: IssueTrackerError;
 }
 
 interface LinearClientCallsState {
   readonly observe: Ref.Ref<number>;
   readonly assigneeFilters: Ref.Ref<ReadonlyArray<ReadonlyArray<string> | null>>;
+  readonly readProse: Ref.Ref<number>;
 }
 
 class LinearClientCalls extends Context.Service<LinearClientCalls, LinearClientCallsState>()(
@@ -100,6 +110,7 @@ class LinearClientCalls extends Context.Service<LinearClientCalls, LinearClientC
     Effect.all({
       observe: Ref.make(0),
       assigneeFilters: Ref.make<ReadonlyArray<ReadonlyArray<string> | null>>([]),
+      readProse: Ref.make(0),
     }),
   );
 }
@@ -132,6 +143,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         identifier: issue.identifier,
         title: issue.title,
         url: `https://linear.app/acme/issue/${issue.identifier}`,
+        body: issue.description ?? "",
         labels: issue.labels,
         assignees: issue.assignees ?? [],
         stateName: issue.stateName ?? "Todo",
@@ -155,9 +167,11 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     new Map<string, ReadonlyArray<RawComment>>(),
   );
   const commentsRef = yield* Ref.make(seededComments);
+  const findActionIssueErrors = yield* Ref.make(seed.findActionIssueErrors ?? []);
   const commentSeq = yield* Ref.make(100);
   const states = seed.states ?? [
     { id: "state-todo", name: "Todo", type: "unstarted" },
+    { id: "state-done", name: "Done", type: "completed" },
     { id: "state-canceled", name: "Canceled", type: "canceled" },
   ];
 
@@ -199,13 +213,16 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
   const readProse: LinearClientService["readProse"] = (_ref, issueId) =>
     guard(
       Effect.gen(function* () {
+        yield* Ref.update(calls.readProse, (count) => count + 1);
         const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
-        const issue = issues.find((candidate) => candidate.identifier === issueId);
+        const issue = issues.find(
+          (candidate) => candidate.identifier === issueId || candidate.id === issueId,
+        );
         if (!issue) {
           return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
         }
         return {
-          body: seed.issues.find((candidate) => candidate.identifier === issueId)?.description ?? "",
+          body: issue.body ?? "",
           comments: [...(comments.get(issueId) ?? [])],
         };
       }),
@@ -216,6 +233,12 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     observeIssues: (ref, coordination, assigneeIds = null) =>
       guard(
         Effect.gen(function* () {
+          if (seed.observeError) {
+            return yield* new IssueTrackerError({
+              reason: "unavailable",
+              message: "backlog unavailable",
+            });
+          }
           yield* Ref.update(calls.observe, (count) => count + 1);
           yield* Ref.update(calls.assigneeFilters, (filters) => [...filters, assigneeIds]);
           const issues = yield* Ref.get(issuesRef);
@@ -242,6 +265,59 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     listWorkflowStates: () => guard(Effect.succeed(states)),
     listComments: (_ref, issueId, _coordination) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
+    findMarker: (_ref, issueId, marker) =>
+      guard(
+        seed.findMarkerError
+          ? Effect.fail(seed.findMarkerError)
+          : Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]).pipe(
+              Effect.map(([issues, comments]) => ({
+                body:
+                  issues
+                    .find((candidate) => candidate.identifier === issueId || candidate.id === issueId)
+                    ?.body?.includes(marker) ?? false,
+                comment: (comments.get(issueId) ?? []).some(({ body }) => body.includes(marker)),
+              })),
+            ),
+      ),
+    readActionIssue: (_ref, issueId) =>
+      guard(
+        Effect.gen(function* () {
+          const issue = (yield* Ref.get(issuesRef)).find(
+            (candidate) => candidate.identifier === issueId || candidate.id === issueId,
+          );
+          if (!issue) {
+            return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
+          }
+          return {
+            id: issue.id,
+            identifier: issue.identifier,
+            url: issue.url,
+            body: issue.body ?? "",
+            labels: issue.labels.slice(0, 50),
+            stateType: issue.stateType,
+          };
+        }),
+      ),
+    findActionIssue: (_ref, marker) =>
+      guard(
+        Effect.gen(function* () {
+          const error = yield* Ref.modify(findActionIssueErrors, ([next, ...rest]) => [next ?? null, rest]);
+          if (error) return yield* error;
+          const issues = yield* Ref.get(issuesRef);
+          if (seed.hideActionIssue) return null;
+          const issue = issues.find(({ body }) => body?.includes(marker));
+          return issue
+            ? {
+                id: issue.id,
+                identifier: issue.identifier,
+                url: issue.url,
+                body: issue.body ?? "",
+                labels: [...issue.labels],
+                stateType: issue.stateType,
+              }
+            : null;
+        }),
+      ),
     readProse,
     readTriggerProse: readProse,
     labelAppliedAt: () => Effect.succeed(null),
@@ -279,6 +355,37 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             }));
           }).pipe(Effect.asVoid),
         ),
+      ),
+    createIssue: (ref, input) =>
+      guard(
+        Effect.gen(function* () {
+          const issues = yield* Ref.get(issuesRef);
+          const number = issues.length + 100;
+          const identifier = `${ref.team}-${number}`;
+          const created: RawIssue = {
+            id: `uuid-${identifier}`,
+            identifier,
+            title: input.title,
+            url: `https://linear.app/acme/issue/${identifier}`,
+            body: input.body,
+            labels: input.labels,
+            assignees: [],
+            stateName: "Todo",
+            stateType: "unstarted",
+            openBlockers: 0,
+            priority: "medium",
+            updatedAtMillis: 0,
+          };
+          yield* Ref.update(issuesRef, (current) => [...current, created]);
+          if (seed.createIssueError) {
+            return yield* new IssueTrackerError({
+              reason: "unavailable",
+              message: "Linear issueCreate timed out",
+              writeMayHaveCommitted: true,
+            });
+          }
+          return { id: created.id, identifier: created.identifier, url: created.url };
+        }),
       ),
     createComment: (ref, issueId, body) =>
       guard(
@@ -374,6 +481,290 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
   comments.filter((comment) => comment.authorId === bot.id);
 
 describe("linear work source adapter", () => {
+  it.effect("executes issue actions once and confirms their write keys", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const client = yield* LinearClient;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker.createIssue(workspace, {
+        title: "Created",
+        body: "Body",
+        labels: ["needs-triage"],
+        origin,
+      });
+      yield* tracker.commentIssue(workspace, id("AUD-5"), "Comment", "comment-key");
+      yield* tracker.commentIssue(workspace, id("AUD-5"), "Comment", "comment-key");
+      yield* tracker.addLabels(workspace, id("AUD-5"), ["added"], "add-key");
+      yield* tracker.removeLabel(workspace, id("AUD-5"), "old", "remove-key");
+      yield* tracker.closeIssue(workspace, id("AUD-5"), "close-key");
+
+      const issues = yield* client.observeIssues(teamRef, null);
+      const current = issues.find(({ identifier }) => identifier === "AUD-5");
+      const created = issues.find(({ title }) => title === "Created");
+      const comments = yield* client.listComments(teamRef, "AUD-5", botCoordination);
+      assert.deepStrictEqual(artifact.origin, origin);
+      assert.include(created?.body ?? "", "create-key");
+      assert.deepStrictEqual(current?.labels, ["added"]);
+      assert.strictEqual(current?.stateType, "completed");
+      assert.strictEqual(comments.filter(({ body }) => body.includes("Comment")).length, 1);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-5", title: "Existing", labels: ["old"] }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("removes a label beyond the first action-read page", () => {
+    const labels = [...Array.from({ length: 50 }, (_, index) => `label-${index}`), "remove-me"];
+    return Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const client = yield* LinearClient;
+
+      yield* tracker.removeLabel(workspace, id("AUD-5"), "remove-me", "remove-key");
+
+      const issue = (yield* client.observeIssues(teamRef, null)).find(
+        ({ identifier }) => identifier === "AUD-5",
+      );
+      assert.isFalse(issue?.labels.includes("remove-me") ?? true);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-5", title: "Existing", labels }],
+        }),
+      ),
+    );
+  });
+
+  it.effect("creates an issue on the current item's configured team", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: multiTeamWorkspace.config.name, id: id("BIL-7") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker.createIssue(multiTeamWorkspace, {
+        title: "Created",
+        body: "Body",
+        labels: [],
+        origin,
+      });
+
+      assert.match(artifact.issue, /^BIL-/);
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it.effect("parks an ambiguous create when recovery cannot find the issue", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.retryable, false);
+      assert.strictEqual(error.writeMayHaveCommitted, true);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          createIssueError: true,
+          hideActionIssue: true,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("keeps an ambiguous create recovery outage retryable", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          createIssueError: true,
+          findActionIssueErrors: [
+            null,
+            new IssueTrackerError({ reason: "rate-limited", message: "search rate limited" }),
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("keeps a create read-back outage retryable", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.isUndefined(error.retryable);
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          findMarkerError: new IssueTrackerError({
+            reason: "unavailable",
+            message: "issue marker read unavailable",
+          }),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("confirms workflow writes without loading admission prose", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const calls = yield* LinearClientCalls;
+
+      yield* tracker.commentIssue(workspace, id("AUD-5"), "Comment", "comment-key");
+
+      assert.strictEqual(yield* Ref.get(calls.readProse), 0);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-5", title: "Existing", labels: [] }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("recovers a created issue without observing the backlog", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker
+        .createIssue(workspace, {
+          title: "Created",
+          body: "Body",
+          labels: [],
+          origin,
+        })
+        .pipe(Effect.match({ onFailure: () => null, onSuccess: (created) => created }));
+
+      assert.strictEqual(artifact?.issue, "AUD-77");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          observeError: true,
+          issues: [
+            {
+              identifier: "AUD-77",
+              title: "Created",
+              labels: [],
+              description: wireCodec.encode({ name: "write", pairs: "key=create-key" }),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("confirms a completed target without observing the backlog", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+
+      const closed = yield* tracker
+        .closeIssue(workspace, id("AUD-5"), "close-key")
+        .pipe(Effect.match({ onFailure: () => false, onSuccess: () => true }));
+
+      const comments = yield* (yield* LinearClient).listComments(teamRef, "AUD-5", botCoordination);
+      assert.isTrue(closed);
+      assert.isTrue(comments.some(({ body }) => body.includes("key=close-key")));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          observeError: true,
+          issues: [
+            {
+              identifier: "AUD-5",
+              title: "Done",
+              labels: [],
+              stateName: "Done",
+              stateType: "completed",
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("reuses a confirmed close without workflow state metadata", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+
+      yield* tracker.closeIssue(workspace, id("AUD-5"), "close-key");
+
+      const comments = yield* (yield* LinearClient).listComments(teamRef, "AUD-5", botCoordination);
+      assert.strictEqual(comments.length, 1);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            {
+              identifier: "AUD-5",
+              title: "Done",
+              labels: [],
+              stateName: "Done",
+              stateType: "completed",
+            },
+          ],
+          comments: [
+            {
+              issue: "AUD-5",
+              authorId: bot.id,
+              body: wireCodec.encode({ name: "write", pairs: "key=close-key" }),
+              createdAtMillis: 1,
+            },
+          ],
+          states: [],
+        }),
+      ),
+    ),
+  );
+
   it.effect("reads current issue prose and comment attribution for admission", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
