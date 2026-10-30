@@ -1,0 +1,73 @@
+packages/engine/src/workflow-attention.ts
+  s_936ae9c16d2bf8::t_13c6e6a7388ad7 121-131
+  s_936ae9c16d2bf8::t_662e7275e11ac7 63-69,109-120,132
+packages/engine/src/workflow-run.ts
+  s_936ae9c16d2bf8::t_adce7213b6dc95 614,619,621
+  s_936ae9c16d2bf8::t_de69b5b5663899 30,162
+  s_936ae9c16d2bf8::t_da9965a8b1a2fa 756-759,798-799
+  s_936ae9c16d2bf8::t_64b0edc66af992 160,682-692,740,794-797,804,830
+  s_936ae9c16d2bf8::t_c0c8fb324ed885 107-110
+  s_936ae9c16d2bf8::t_aa34b97e7e630d 7,478,608-613,620,622-629,644
+  s_936ae9c16d2bf8::t_054f4dc063b4d1 617-618
+  s_936ae9c16d2bf8::t_6308f8938400e4 205,227,248,251,255,264,433,464,493,499,507,674,770
+  s_936ae9c16d2bf8::t_b10f8cd3b4caab 102-106,208,318,321,436,463
+  s_936ae9c16d2bf8::t_a0c975e5aa02e4 516,527-530,547-548
+  s_936ae9c16d2bf8::t_cf6e480f705ed1 531-533,535,539-540,544-546
+  s_936ae9c16d2bf8::t_13c6e6a7388ad7 517-526,569-573,600-605,615-616,734-737,812-815
+  s_936ae9c16d2bf8::t_61eb09a9abd1cb 536-538,541-543
+  s_edb7d3bbd85c87::t_1566d6b9f33b42 693
+packages/engine/src/trigger-observation.ts
+  s_936ae9c16d2bf8::t_73a591dafc2740 76,153-154,186,190,285
+  s_936ae9c16d2bf8::t_019f05c50eb7db 286-288
+  s_6e0efcd2d554a9::t_c33a0ddc8a330e 289-290
+packages/contracts/src/workflow.ts
+  s_936ae9c16d2bf8::t_d6f521db73de1a 136-138
+packages/engine/src/trigger-observation.test.ts
+  s_936ae9c16d2bf8::t_e03584b87250f1 738,803
+packages/engine/src/workflow-action-plan.ts
+  s_936ae9c16d2bf8::t_de69b5b5663899 52,68,70,255
+packages/engine/src/workflow-run.test.ts
+  s_936ae9c16d2bf8::t_d75ab4ad0f25b9 818-908,1178-1186
+  s_936ae9c16d2bf8::t_96599ba0d0975f 314,317-324,331,371
+  s_936ae9c16d2bf8::t_07a60c00601283 1305,1325
+  s_936ae9c16d2bf8::t_cddb76da770dad 1306-1311
+  s_936ae9c16d2bf8::t_efe7733f2b686f 1324
+  s_936ae9c16d2bf8::t_ed0604fbbf4ce2 1337-1346
+  s_936ae9c16d2bf8::t_61af640eaf2e97 1187
+packages/engine/src/commands.test.ts
+  s_936ae9c16d2bf8::t_377f26a06118b6 1211-1212
+packages/engine/src/workflow-attention.test.ts
+  s_936ae9c16d2bf8::t_93dbfdc2a2f9a4 130-138,157-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "609949c9dfb95c76f3a5f6f136e97739100c853b",
+  "prompts": {},
+  "sessions": {
+    "s_6e0efcd2d554a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db2-ce82-77a1-be9c-7941c5028e9d",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_936ae9c16d2bf8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db0-7922-7b11-83e1-53b5cb0d3b2d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_edb7d3bbd85c87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db0-6a39-7811-b710-89572ba150bc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
