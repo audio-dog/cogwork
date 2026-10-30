@@ -34,6 +34,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import type { SqlError } from "effect/unstable/sql/SqlError";
 import { Availability } from "./availability";
 import { clockSource } from "./clock-source";
 import {
@@ -59,7 +60,7 @@ import {
   updateWorkspace,
 } from "./commands";
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
-import { type ConnectionVerifier, layer as connectionVerifierLayer } from "./connection-verify";
+import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
 import { bootControlStoreLayer, ControlStore, type ControlStoreService } from "./control-store";
 import { Coordination } from "./coordination";
@@ -72,10 +73,12 @@ import {
   layer as eventPublisherLayer,
 } from "./event-publisher";
 import * as Executor from "./executor";
+import type { Git } from "./git";
 import * as GitHub from "./github";
 import { makeGranolaSource, makeGranolaSourceAdapters } from "./granola-source";
 import * as Harness from "./harness";
 import { HarnessReadinessCache, layer as harnessReadinessLayer } from "./harness-readiness";
+import { IssueTracker } from "./issue-tracker";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
@@ -114,12 +117,13 @@ import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
 import { make as makeSlackSource, httpClientLayer as slackClientLayer } from "./slack-source";
+import { SourceControlProvider } from "./source-control";
 import {
   controlStoreTriggerObservationStoreLayer,
   TriggerObservation,
   layer as triggerObservationLayer,
 } from "./trigger-observation";
-import { TriggerSources } from "./trigger-source";
+import { combineTriggerSources, TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import { controlStoreLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
@@ -417,6 +421,22 @@ export interface HostAdapters<E = never, R = never> {
   readonly performanceIssueWorkspace?: WorkspaceId;
 }
 
+const providerTriggerSourcesLayer = <E, R>(
+  issueTracker: Layer.Layer<IssueTracker | SourceControlProvider, E, R>,
+) =>
+  Layer.effect(
+    TriggerSources,
+    Effect.all([IssueTracker, SourceControlProvider]).pipe(
+      Effect.map(([tracker, provider]) =>
+        combineTriggerSources([
+          ...(tracker.triggerSources ?? []),
+          ...(provider.triggerSources ?? []),
+          clockSource,
+        ]),
+      ),
+    ),
+  ).pipe(Layer.provide(issueTracker));
+
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
   // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
@@ -425,7 +445,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // One GitHub client, built once: the issue tracker and the establish-time credential check must
   // share it, or the second instance resolves its own credentials and drifts from the first.
   const githubClient = GitHub.clientLayer.pipe(Layer.provide(credentials));
-  const issueTracker = Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
+  const issueTrackerAdapters = Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
     Layer.provide(githubClient),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
@@ -444,6 +464,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
   );
+  const issueTracker = issueTrackerAdapters.pipe(Layer.provide(registry));
+  const providerTriggerSources = providerTriggerSourcesLayer(issueTracker);
   const performanceIssueFiler = GitHub.performanceIssueFilerLayer(adapters.performanceIssueWorkspace).pipe(
     Layer.provide(githubClient),
     Layer.provide(registry),
@@ -486,22 +508,23 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const workflowActionPlans = workflowActionPlanStoreLayer.pipe(Layer.provide(controlStore));
   const triggerSources: Layer.Layer<
     TriggerSources,
-    E | PlatformError,
-    R | FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Exclude<R, ConnectionVerifier>
+    E | PlatformError | SqlError,
+    R | Crypto.Crypto | FileSystem.FileSystem | Git | HttpClient.HttpClient | Path.Path
   > = Layer.effect(
     TriggerSources,
     Effect.gen(function* () {
+      const sources = yield* TriggerSources;
       const connectionStore = yield* ConnectionStore;
       const coordinationService = yield* Coordination;
       const http = yield* HttpClient.HttpClient;
       const slackSource = yield* makeSlackSource;
-      return [
-        clockSource,
+      return combineTriggerSources([
+        ...sources,
         makeGranolaSource(connectionStore, makeGranolaSourceAdapters(http), coordinationService),
         slackSource,
-      ];
+      ]);
     }),
-  ).pipe(Layer.provide(Layer.mergeAll(connections, coordination, slackClientLayer)));
+  ).pipe(Layer.provide(Layer.mergeAll(providerTriggerSources, connections, coordination, slackClientLayer)));
   const workflows = workflowsLayer.pipe(
     Layer.provide(workflowCatalogContributionsLayer.pipe(Layer.provide(triggerSources))),
     Layer.provide(machineReadiness),
@@ -513,7 +536,15 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const triggerObservation = triggerObservationLayer.pipe(
     Layer.provide(
-      Layer.mergeAll(workflows, coordination, triggerSources, triggerObservationStore, daemonEventBusLayer),
+      Layer.mergeAll(
+        workflows,
+        coordination,
+        triggerSources,
+        triggerObservationStore,
+        daemonEventBusLayer,
+        issueTracker,
+        registry,
+      ),
     ),
   );
   const workflowRun = workflowRunLayer.pipe(

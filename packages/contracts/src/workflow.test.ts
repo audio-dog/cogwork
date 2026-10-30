@@ -439,6 +439,23 @@ describe("Workflow validator", () => {
     assert.isAbove(adviseReadiness(baseDocument, baseCatalog, machine).length, 0);
   });
 
+  it("reports how many selected Workspaces bind a Trigger app", () => {
+    const second = decodeWorkspaceId("second");
+    const document = documentWith({
+      workspaces: { _tag: "Listed", workspaces: [decodeWorkspaceId("cogwork"), second] },
+    });
+    const readiness = adviseReadiness(
+      document,
+      baseCatalog,
+      machineWith({ workspaces: [...baseMachine.workspaces, { id: second, binds: [] }] }),
+    );
+
+    assert.include(
+      readiness.map(({ message }) => message),
+      "github.issue-opened observes in 1 of 2 Workspaces",
+    );
+  });
+
   it("reports catalog entry availability from machine state", () => {
     const entry = baseCatalog.entries[0];
     if (!entry) throw new Error("missing test Catalog entry");

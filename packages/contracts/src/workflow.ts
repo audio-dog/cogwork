@@ -1303,13 +1303,18 @@ const bindingReadinessDiagnostics = (
     const system = catalog.entries.find(({ key }) => key === usage.entry)?.system;
     if (system === null || system === undefined) return [];
     const bound = machine.workspaces.filter(({ binds }) => binds.includes(system)).map(({ id }) => id);
-    const hasBinding =
-      document.workspaces._tag === "Every"
-        ? bound.length > 0
-        : selected.some((workspace) => bound.includes(workspace));
-    return hasBinding
-      ? []
-      : [diagnostic("system-unbound", "advisory", `No selected Workspace binds ${system}`, usage.location)];
+    const selection =
+      document.workspaces._tag === "Every" ? machine.workspaces.map(({ id }) => id) : selected;
+    const observed = selection.filter((workspace) => bound.includes(workspace)).length;
+    const messages = [
+      { when: observed === 0, value: `No selected Workspace binds ${system}` },
+      {
+        when: observed > 0 && observed < selection.length,
+        value: `${usage.entry} observes in ${observed} of ${selection.length} Workspaces`,
+      },
+    ];
+    const message = messages.find(({ when }) => when)?.value;
+    return message === undefined ? [] : [diagnostic("system-unbound", "advisory", message, usage.location)];
   });
 };
 

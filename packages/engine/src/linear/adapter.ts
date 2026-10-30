@@ -6,11 +6,17 @@ import { issueTrackerWorkflowCatalogContribution } from "../issue-workflow-catal
 import { LinearClient, type LinearClientService } from "./client";
 import { makeHost, makeIssueActions } from "./host";
 
-const make = (client: LinearClientService) =>
-  ({
-    ...makeCoordinationTracker(makeHost(client)),
+const make = (client: LinearClientService) => {
+  const host = makeHost(client);
+  return {
+    ...makeCoordinationTracker(host),
     ...makeIssueActions(client),
-  }) satisfies IssueTrackerService;
+    assignees: Effect.fn("LinearIssueTracker.assignees")(function* (workspace, id) {
+      const ref = yield* host.resolve(workspace, id);
+      return yield* client.issueAssignees(ref.target, ref.issueId);
+    }),
+  } satisfies IssueTrackerService;
+};
 
 export const layer = Layer.effect(
   IssueTracker,

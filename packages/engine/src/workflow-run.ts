@@ -289,7 +289,7 @@ export const make = Effect.gen(function* () {
       ));
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(randomUUID());
-    const workspace = workspaceId(admission.subscription.workflow);
+    const workspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
     const item = workItemId(keyOf(admission.event.key));
     const session = yield* sessions.mint(
       { workspace, harness: selectedHarness, createdAtMillis: startedAtMillis },

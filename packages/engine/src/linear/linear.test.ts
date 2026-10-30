@@ -150,6 +150,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         stateType: issue.stateType ?? "unstarted",
         openBlockers: issue.openBlockers ?? 0,
         priority: issue.priority ?? "medium",
+        updatedAtMillis: 0,
       }),
     ),
   );
@@ -209,6 +210,24 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             comment.body.includes(coordination.proposalMarker),
         );
 
+  const readProse: LinearClientService["readProse"] = (_ref, issueId) =>
+    guard(
+      Effect.gen(function* () {
+        yield* Ref.update(calls.readProse, (count) => count + 1);
+        const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
+        const issue = issues.find(
+          (candidate) => candidate.identifier === issueId || candidate.id === issueId,
+        );
+        if (!issue) {
+          return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
+        }
+        return {
+          body: issue.body ?? "",
+          comments: [...(comments.get(issueId) ?? [])],
+        };
+      }),
+    );
+
   return {
     authenticatedUserId: () => guard(Effect.succeed(bot.id)),
     observeIssues: (ref, coordination, assigneeIds = null) =>
@@ -232,6 +251,15 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
                 coordinationComments: coordinationFor(issue.identifier, comments, coordination),
               }),
             );
+        }),
+      ),
+    issueAssignees: (_ref, issueId) =>
+      guard(
+        Effect.flatMap(Ref.get(issuesRef), (issues) => {
+          const issue = issues.find((candidate) => candidate.identifier === issueId);
+          return issue
+            ? Effect.succeed([...issue.assignees])
+            : Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue missing" }));
         }),
       ),
     listWorkflowStates: () => guard(Effect.succeed(states)),
@@ -290,23 +318,9 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             : null;
         }),
       ),
-    readProse: (_ref, issueId) =>
-      guard(
-        Effect.gen(function* () {
-          yield* Ref.update(calls.readProse, (count) => count + 1);
-          const [issues, comments] = yield* Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]);
-          const issue = issues.find(
-            (candidate) => candidate.identifier === issueId || candidate.id === issueId,
-          );
-          if (!issue) {
-            return yield* new IssueTrackerError({ reason: "unavailable", message: "issue missing" });
-          }
-          return {
-            body: issue.body ?? "",
-            comments: [...(comments.get(issueId) ?? [])],
-          };
-        }),
-      ),
+    readProse,
+    readTriggerProse: readProse,
+    labelAppliedAt: () => Effect.succeed(null),
     addLabel: (ref, issueId, label) =>
       guard(
         inTeam(
@@ -360,6 +374,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             stateType: "unstarted",
             openBlockers: 0,
             priority: "medium",
+            updatedAtMillis: 0,
           };
           yield* Ref.update(issuesRef, (current) => [...current, created]);
           if (seed.createIssueError) {

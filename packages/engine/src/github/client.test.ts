@@ -198,6 +198,129 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("lists every check run across GitHub pages", () => {
+    const check = (name: string) => ({
+      name,
+      status: "completed",
+      conclusion: "failure",
+      started_at: "2026-09-09T12:00:00Z",
+      completed_at: "2026-09-09T12:01:00Z",
+    });
+    const firstPage = Array.from({ length: 100 }, (_, index) => check(`check-${index + 1}`));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse({ check_runs: page === "1" ? firstPage : [check("check-101")] }));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const checks = yield* client.listCheckRuns(repo, "head-sha");
+
+      assert.strictEqual(checks.length, 101);
+      assert.strictEqual(checks.at(-1)?.name, "check-101");
+      assert.deepStrictEqual(
+        fetch.mock.calls.map(([input]) =>
+          new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
+        ),
+        ["1", "2"],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("continues review-comment pagination past empty bodies and deleted accounts", () => {
+    const maintainer = { login: "maintainer", type: "User" };
+    const comment = (id: number, body: string | null, user: typeof maintainer | null = maintainer) => ({
+      id,
+      body,
+      created_at: "2026-09-09T12:00:00Z",
+      author_association: "MEMBER",
+      user,
+      in_reply_to_id: null,
+      subject_type: "line",
+    });
+    const firstPage = Array.from({ length: 100 }, (_, index) =>
+      comment(index + 1, index === 0 ? null : `comment ${index + 1}`, index === 1 ? null : maintainer),
+    );
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [comment(101, "last")]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const comments = yield* client.listReviewComments(repo, 850);
+
+      assert.strictEqual(comments.length, 99);
+      assert.notInclude(
+        comments.map(({ id }) => id),
+        2,
+      );
+      assert.strictEqual(comments.at(-1)?.id, 101);
+      assert.deepStrictEqual(
+        fetch.mock.calls.map(([input]) =>
+          new URL(input instanceof Request ? input.url : String(input)).searchParams.get("page"),
+        ),
+        ["1", "2"],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("continues review pagination past deleted accounts", () => {
+    const review = (id: number, user: { readonly login: string; readonly type: string } | null) => ({
+      id,
+      state: "COMMENTED",
+      user,
+      body: `review ${id}`,
+      author_association: "MEMBER",
+      submitted_at: "2026-09-09T12:00:00Z",
+    });
+    const firstPage = Array.from({ length: 100 }, (_, index) =>
+      review(index + 1, index === 0 ? null : { login: "maintainer", type: "User" }),
+    );
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(
+        jsonResponse(page === "1" ? firstPage : [review(101, { login: "maintainer", type: "User" })]),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const reviews = yield* client.listReviews(repo, 850);
+
+      assert.strictEqual(reviews.length, 100);
+      assert.strictEqual(reviews[0]?.id, 2);
+      assert.strictEqual(reviews.at(-1)?.id, 101);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("preserves review ids", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse([
+          {
+            id: 123,
+            state: "COMMENTED",
+            user: { login: "maintainer", type: "User" },
+            body: "Review body",
+            author_association: "MEMBER",
+            submitted_at: "2026-09-09T12:00:00Z",
+          },
+        ]),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const reviews = yield* client.listReviews(repo, 850);
+
+      assert.strictEqual(reviews[0]?.id, 123);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("lists open and closed issues carrying one label", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(
@@ -235,6 +358,7 @@ describe("GitHub client", () => {
           body: "<!-- cogwork:selfperf fingerprint=daemon.heap-headroom.below -->",
           state: "closed",
           createdAtMillis: Date.UTC(2026, 8, 9, 12),
+          updatedAtMillis: Date.UTC(2026, 8, 9, 12),
         },
       ]);
     }).pipe(withFetchClient(fetch));

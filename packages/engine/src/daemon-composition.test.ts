@@ -368,12 +368,12 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 25);
+      assert.lengthOf(catalog.catalog.entries, 33);
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "slack.i-am-mentioned"));
       assert.deepStrictEqual(
         status.sources.map(({ source }) => source),
-        ["clock", "granola", "slack"],
+        ["github", "linear", "clock", "granola", "slack"],
       );
       assert.isTrue(
         [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
@@ -423,6 +423,14 @@ describe("daemon server composition", () => {
           "Add a label",
           "Remove a label",
           "Close this issue",
+          "Issue has label",
+          "New comment from a person",
+          "Pull request checks failed",
+          "Pull request conflicts with its base",
+          "New review comment from a person",
+          "New finding from a bot",
+          "Issue has label",
+          "New comment from a person",
           "Every hour",
           "Every day",
           "Every week",

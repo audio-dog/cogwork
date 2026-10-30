@@ -6,11 +6,18 @@ import { issueTrackerWorkflowCatalogContribution } from "../issue-workflow-catal
 import { GitHubClient, type GitHubClientService } from "./client";
 import { makeHost, makeIssueActions } from "./host";
 
-const make = (client: GitHubClientService) =>
-  ({
-    ...makeCoordinationTracker(makeHost(client)),
+const make = (client: GitHubClientService) => {
+  const host = makeHost(client);
+  return {
+    ...makeCoordinationTracker(host),
     ...makeIssueActions(client),
-  }) satisfies IssueTrackerService;
+    assignees: Effect.fn("GitHubIssueTracker.assignees")(function* (workspace, id) {
+      const ref = yield* host.resolve(workspace, id);
+      const issue = yield* client.readIssue(ref.target, ref.number);
+      return issue.assignees;
+    }),
+  } satisfies IssueTrackerService;
+};
 
 export const layer = Layer.effect(
   IssueTracker,
