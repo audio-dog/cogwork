@@ -196,6 +196,11 @@ const release = (state: SchedulerState, candidate: Schedulable) => {
   };
 };
 
+const releaseActed = (state: SchedulerState, candidate: Schedulable) => ({
+  ...state,
+  acted: new Set([...state.acted].filter((key) => !candidate.keys.includes(key))),
+});
+
 const refundBudget = (state: SchedulerState) => ({
   ...state,
   budgetUsed: Math.max(0, state.budgetUsed - 1),
@@ -373,7 +378,12 @@ export const make = (config: SchedulerConfig) =>
           item: keyOf(candidate.admission.event.key),
           operation: candidate.admission.subscription.operation,
         },
-        workflowRun.execute(candidate.admission).pipe(Effect.map(() => true)),
+        workflowRun.execute(candidate.admission).pipe(
+          Effect.map(() => true),
+          Effect.onError(() =>
+            stateMetricsGate.withPermit(Ref.update(stateRef, (state) => releaseActed(state, candidate))),
+          ),
+        ),
       );
 
     const dispatch = (candidate: Schedulable) => {

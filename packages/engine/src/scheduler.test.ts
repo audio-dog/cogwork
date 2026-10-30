@@ -619,6 +619,43 @@ describe("Scheduler.tick", () => {
     ),
   );
 
+  it.effect("retries a failed Workflow admission that remains eligible", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 0);
+      assert.deepStrictEqual(yield* Ref.get(probe.workflowExecutions), ["1000", "1000"]);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 3 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [workflowAdmission(1_000)],
+            workflowExecute: (probe, admission) =>
+              Ref.updateAndGet(probe.workflowExecutions, (executions) => [
+                ...executions,
+                admission.event.revision,
+              ]).pipe(
+                Effect.flatMap((executions) =>
+                  executions.length === 1
+                    ? Effect.die("close failed")
+                    : Ref.set(probe.workflowAdmissions, []),
+                ),
+              ),
+          },
+        ),
+      ),
+    ),
+  );
+
   it.effect("isolates a crashing Workflow Run from other scheduled work", () =>
     Effect.gen(function* () {
       const scheduler = yield* Scheduler.Scheduler;
