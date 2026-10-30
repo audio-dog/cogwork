@@ -1,0 +1,151 @@
+packages/engine/src/workflow-attention.test.ts
+  s_936ae9c16d2bf8::t_d6460954967238 1-16,18-80,82-150
+  s_936ae9c16d2bf8::t_d625e68c4428cf 17
+  s_936ae9c16d2bf8::t_d3431dec2fd256 81
+packages/contracts/src/rpc.ts
+  s_936ae9c16d2bf8::t_a2111eee26856d 52,128-132,177,221,224-257,393-395
+  s_936ae9c16d2bf8::t_295d5808a1ec00 13,38
+packages/engine/src/scheduler.test.ts
+  s_936ae9c16d2bf8::t_8e6c15ecacf868 496-499
+packages/engine/src/workflow-run.test.ts
+  s_936ae9c16d2bf8::t_9655dfd12332ba 964,1011,1387
+  s_936ae9c16d2bf8::t_ec716b5b69926a 846,1016-1068,1079-1086
+  s_936ae9c16d2bf8::t_37ed74561a2d31 12,71,1149-1156,1164,1171-1174,1186-1188
+  s_936ae9c16d2bf8::t_0faa7ae2e1be10 196-213,215-225
+  s_936ae9c16d2bf8::t_fcd3761529edd1 10,853-854,897-898
+  s_936ae9c16d2bf8::t_f65b6f7f8b8309 858-896,899-903
+  s_936ae9c16d2bf8::t_a48623812df705 1322
+  s_936ae9c16d2bf8::t_912b6c9fabdb09 15,214
+  s_936ae9c16d2bf8::t_d333329e373b4d 1276,1296-1298
+  s_936ae9c16d2bf8::t_ff2771583de3c0 1069-1078,1189
+  s_936ae9c16d2bf8::t_164ea9cbdaff2c 226-241
+  s_936ae9c16d2bf8::t_0ed5c735ce9dd0 773-845,847-852,855-857
+  s_936ae9c16d2bf8::t_7719f13ac7f0e7 1443
+  s_936ae9c16d2bf8::t_ba5fb19acc2c92 84-89,376
+  s_936ae9c16d2bf8::t_8f27aa7575ab63 4,312,316-318,322,328,353-357,1087
+  s_936ae9c16d2bf8::t_9a52a888fe5ed7 1088-1089,1194-1220
+  s_936ae9c16d2bf8::t_875efb909cd283 1090
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_936ae9c16d2bf8::t_92f0038426939e 72,152-155,158-160,172,356,366
+  s_936ae9c16d2bf8::t_bc41568690b637 157
+  s_936ae9c16d2bf8::t_c197952dddff49 156
+  s_936ae9c16d2bf8::t_f699a9c6990763 174
+  s_fab52699974792::t_5eaf37f5fa1747 8
+packages/engine/src/coordination.ts
+  s_936ae9c16d2bf8::t_9bc0fea893a8cf 173,176-178
+  s_936ae9c16d2bf8::t_eee554b3633ce4 101,242,259
+  s_936ae9c16d2bf8::t_a48623812df705 174-175,194
+packages/engine/src/coordination-fold.test.ts
+  s_936ae9c16d2bf8::t_e6796840e02dce 119-120
+apps/cli/src/hand-back-command.test.ts
+  s_936ae9c16d2bf8::t_7f2b893e64223a 16,25-29,32,44-48,55,62,64,68,73-76,82,89
+  s_edb7d3bbd85c87::t_ec67bc3f0e8269 1
+packages/engine/src/trigger-observation.ts
+  s_936ae9c16d2bf8::t_7d3e372eac8f12 119-130,702-712,714-715,717-723,725-742,744,746-747
+  s_936ae9c16d2bf8::t_b2bb63d5edd2e9 713
+packages/contracts/src/workflow.ts
+  s_936ae9c16d2bf8::t_7a88c4b4a987b8 12,136,138-139,154-209
+  s_936ae9c16d2bf8::t_03dee29d2b6e25 137,142-149
+  s_936ae9c16d2bf8::t_4bf80eb89a50f1 210
+packages/engine/src/workflow-run.ts
+  s_936ae9c16d2bf8::t_8a35ccda7846e1 7,504-594,596-601,603-631,634-643,651-679,681-710,712-721,730-731,737-738,742-743,754-760,763-764
+  s_936ae9c16d2bf8::t_01b0b1ff24f943 680
+  s_936ae9c16d2bf8::t_c29d079509c86e 644-650
+  s_936ae9c16d2bf8::t_1c397a6b6250cf 722-729,761-762
+  s_936ae9c16d2bf8::t_6c5de92123c8ae 13,487
+  s_936ae9c16d2bf8::t_57a119ff2755a2 145
+  s_936ae9c16d2bf8::t_87876415751031 306-310
+  s_936ae9c16d2bf8::t_6207a3cd1679de 12,42-46,602
+  s_936ae9c16d2bf8::t_7fcea9ab457652 311-314
+  s_936ae9c16d2bf8::t_4ee05c334f0131 711
+  s_936ae9c16d2bf8::t_70f461c79e8358 247-249,316-322,355-357,361-362,486,488
+  s_936ae9c16d2bf8::t_d4a9ba8898777e 175
+  s_936ae9c16d2bf8::t_00d0860dd0e2ce 54,595,732-735
+  s_936ae9c16d2bf8::t_e64da05ddb992b 739-741,744-747
+  s_936ae9c16d2bf8::t_7e29d1f89e6fb3 632
+  s_936ae9c16d2bf8::t_2836d8496f79ab 633
+  s_936ae9c16d2bf8::t_eaad5dba2b9eab 358-360
+  s_936ae9c16d2bf8::t_db324961ed09c1 250
+  s_936ae9c16d2bf8::t_7288344131b65c 315
+  s_936ae9c16d2bf8::t_9d47ba626ea65d 15
+packages/engine/src/commands.ts
+  s_936ae9c16d2bf8::t_a663dad98c1a6c 287
+  s_936ae9c16d2bf8::t_8ae4152f0b79bc 290
+  s_936ae9c16d2bf8::t_a6f6aa5fee26f6 89
+  s_936ae9c16d2bf8::t_cdc05c75a391cf 44
+packages/engine/src/workflow-attention.ts
+  s_936ae9c16d2bf8::t_a686a8f6a8427e 50-52,55
+  s_936ae9c16d2bf8::t_2ece5fb57173cc 93
+  s_936ae9c16d2bf8::t_24d1644d592612 12,44
+  s_936ae9c16d2bf8::t_5c807e9965cf28 3,42
+  s_936ae9c16d2bf8::t_3633bbeb85bedd 45-49,53-54
+  s_936ae9c16d2bf8::t_15a858052b0800 120,122-126
+  s_936ae9c16d2bf8::t_0bb43fb0824749 1-2,4-11,13-41,43,56-61,115-116,118-119,121,127-129
+  s_936ae9c16d2bf8::t_b2bb63d5edd2e9 62-92,94-114,117
+packages/engine/src/workflow-action-plan.ts
+  s_936ae9c16d2bf8::t_1fd10be31229c0 65-77,256,259-260,264-266,480-481,507-513,614,620,622,625
+  s_936ae9c16d2bf8::t_dd95452bbbcfa9 542
+  s_936ae9c16d2bf8::t_46ad74d8e03a0f 454
+  s_936ae9c16d2bf8::t_57a119ff2755a2 20,27,303-305,332-338,340-382,387,500,573-583
+  s_936ae9c16d2bf8::t_c747f19cba502c 339,383-386
+apps/cli/src/hand-back-command.ts
+  s_936ae9c16d2bf8::t_d687fb2aa53b26 56
+  s_936ae9c16d2bf8::t_e16bf1daf60a62 5,32,54-55,57,60,64,71-72
+  s_936ae9c16d2bf8::t_985b148da030f9 3,7,65
+packages/engine/src/workflow-action-plan-store.ts
+  s_936ae9c16d2bf8::t_b42f4c4d8a2bf7 17-21,56-60,62-63,118-136
+  s_936ae9c16d2bf8::t_076c0123cbb95a 61
+packages/engine/src/daemon.ts
+  s_936ae9c16d2bf8::t_f7f0dc20d20de6 361,368-370
+  s_936ae9c16d2bf8::t_f66b8e0668221a 571,573,595
+  s_936ae9c16d2bf8::t_fe25f7a09c6096 572
+  s_6e0efcd2d554a9::t_c2a8f09647d1fb 129,133
+apps/desktop/src/renderer/src/components/item-tab-actions.test.tsx
+  s_936ae9c16d2bf8::t_fcc529fe712d34 112,134
+packages/engine/src/workflow-action-plan.test.ts
+  s_936ae9c16d2bf8::t_57a119ff2755a2 23-27,206-212
+  s_936ae9c16d2bf8::t_753099c10e4fce 215-235
+packages/engine/src/commands.test.ts
+  s_936ae9c16d2bf8::t_63cc8d29e1ec0a 89,1204-1211,1213,1216,1218-1219,1222,1227-1230,1233
+  s_edb7d3bbd85c87::t_637dbbeaeb27cc 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cd776fa951252ff797460577f6b63c1cee9fc03f",
+  "prompts": {},
+  "sessions": {
+    "s_6e0efcd2d554a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db2-ce82-77a1-be9c-7941c5028e9d",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_936ae9c16d2bf8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db0-7922-7b11-83e1-53b5cb0d3b2d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_edb7d3bbd85c87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db0-6a39-7811-b710-89572ba150bc",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_fab52699974792": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db0-729e-7ee2-b095-82591bad88a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
