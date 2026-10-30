@@ -186,6 +186,8 @@ const trackerLayer = Layer.effect(
         Ref.update(probe.calls, (current) => [...current, `${body}:${writeKey}`]).pipe(
           Effect.andThen(trackerResult(body)),
         ),
+      addLabels: (_workspace, _item, labels, writeKey) =>
+        Ref.update(probe.calls, (current) => [...current, `${labels.join(",")}:${writeKey}`]),
       closeIssue: (_workspace, _item, writeKey) =>
         Ref.update(probe.calls, (current) => [...current, `close:${writeKey}`]),
     };
@@ -315,6 +317,24 @@ describe("Workflow action plan", () => {
       assert.strictEqual(result._tag, "Parked");
       assert.isEmpty(yield* Ref.get(probe.calls));
       assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "WriteFailed");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("parks add-label with no labels before writing", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const initial = plan([step(0, "github.add-label")]);
+      yield* (yield* WorkflowActionPlanStore).create(initial);
+
+      const result = yield* executeWorkflowActionPlan(initial, admission);
+
+      assert.strictEqual(result._tag, "Parked");
+      assert.isEmpty(yield* Ref.get(probe.calls));
+      assert.deepInclude((yield* Ref.get(probe.parks))[0], {
+        _tag: "WriteFailed",
+        step: "github.add-label",
+        error: "Action github.add-label has an invalid target",
+      });
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 });

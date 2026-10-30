@@ -333,12 +333,9 @@ const actionExecutors = {
   "add-label": Effect.fn("WorkflowActionPlan.addLabel")(function* (context: ActionContext) {
     const workspace = yield* requireWorkspace(context);
     const issue = yield* requireIssueTarget(context.step);
-    yield* context.tracker.addLabels(
-      workspace,
-      issue,
-      parameterValues(context.step.parameters, "label"),
-      context.step.writeKey,
-    );
+    const labels = parameterValues(context.step.parameters, "label");
+    if (labels.length === 0) return yield* invalidTarget(context.step);
+    yield* context.tracker.addLabels(workspace, issue, labels, context.step.writeKey);
     return null;
   }),
   "remove-label": Effect.fn("WorkflowActionPlan.removeLabel")(function* (context: ActionContext) {
