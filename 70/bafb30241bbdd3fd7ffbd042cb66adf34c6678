@@ -1,0 +1,24 @@
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_38c737bec49a48::t_72ad739a669e0b 21,277
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_38c737bec49a48::t_72ad739a669e0b 11,20,67
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_38c737bec49a48::t_72ad739a669e0b 276
+  s_38c737bec49a48::t_ec4e08d6f92a5d 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "70bafb30241bbdd3fd7ffbd042cb66adf34c6678",
+  "prompts": {},
+  "sessions": {
+    "s_38c737bec49a48": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18d2a-0184-72a3-bc54-7aaba7dd1b08",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
