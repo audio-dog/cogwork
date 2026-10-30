@@ -731,6 +731,40 @@ describe("linear work source adapter", () => {
     ),
   );
 
+  it.effect("reuses a confirmed close without workflow state metadata", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+
+      yield* tracker.closeIssue(workspace, id("AUD-5"), "close-key");
+
+      const comments = yield* (yield* LinearClient).listComments(teamRef, "AUD-5", botCoordination);
+      assert.strictEqual(comments.length, 1);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            {
+              identifier: "AUD-5",
+              title: "Done",
+              labels: [],
+              stateName: "Done",
+              stateType: "completed",
+            },
+          ],
+          comments: [
+            {
+              issue: "AUD-5",
+              authorId: bot.id,
+              body: wireCodec.encode({ name: "write", pairs: "key=close-key" }),
+              createdAtMillis: 1,
+            },
+          ],
+          states: [],
+        }),
+      ),
+    ),
+  );
+
   it.effect("reads current issue prose and comment attribution for admission", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;

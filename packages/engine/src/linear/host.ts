@@ -291,13 +291,14 @@ export const makeIssueActions = (client: LinearClientService) => {
       writeKey: string,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      const stateId = yield* completedStateId(client, target);
       yield* writeOnce(
         target,
         id,
         writeKey,
         client.readActionIssue(target, id).pipe(Effect.map(({ stateType }) => stateType === "completed")),
-        client.setState(target, id, stateId),
+        completedStateId(client, target).pipe(
+          Effect.flatMap((stateId) => client.setState(target, id, stateId)),
+        ),
       );
     }),
   };
