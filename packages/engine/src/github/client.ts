@@ -187,10 +187,12 @@ const PullDetailSchema = Schema.Struct({
   mergeable_state: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
+const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) });
+
 const ReviewSchema = Schema.Struct({
   id: Schema.Finite,
   state: Schema.String,
-  user: Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) }),
+  user: GitHubUserSchema,
   body: Schema.NullOr(Schema.String),
   author_association: Schema.optional(Schema.String),
   submitted_at: Schema.optional(Schema.NullOr(Schema.String)),
@@ -212,12 +214,12 @@ const CommentFields = {
 
 const IssueCommentSchema = Schema.Struct({
   ...CommentFields,
-  user: Schema.NullOr(Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) })),
+  user: Schema.NullOr(GitHubUserSchema),
 });
 
 const ReviewCommentSchema = Schema.Struct({
   ...CommentFields,
-  user: Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) }),
+  user: GitHubUserSchema,
   in_reply_to_id: Schema.NullOr(Schema.Finite).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
   subject_type: Schema.Union([Schema.Literal("line"), Schema.Literal("file")]),
 });
@@ -231,14 +233,14 @@ const toRawIssueComment = (comment: typeof IssueCommentSchema.Type) => ({
   createdAtMillis: commentMillis(comment.created_at),
 });
 
-const toRawReviewComment = (comment: typeof ReviewCommentSchema.Type) =>
-  comment.body
+const toRawReviewComment = ({ user, ...comment }: typeof ReviewCommentSchema.Type) =>
+  comment.body && user
     ? [
         {
           id: comment.id,
-          authorLogin: comment.user.login,
+          authorLogin: user.login,
           authorAssociation: comment.author_association ?? "NONE",
-          ...(comment.user.type ? { authorType: comment.user.type } : {}),
+          ...(user.type ? { authorType: user.type } : {}),
           body: comment.body,
           createdAtMillis: commentMillis(comment.created_at),
           inReplyToId: comment.in_reply_to_id,
@@ -1052,18 +1054,21 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         repoPath(repo, `/pulls/${pullNumber}/reviews?per_page=100&page=${page}`),
       );
       const reviews = yield* Effect.mapError(decodeReviews(json), toUnavailable);
-      const current = reviews.map(
-        (review): RawReview => ({
-          id: review.id,
-          authorLogin: review.user.login,
-          authorAssociation: review.author_association ?? "NONE",
-          ...(review.user.type ? { authorType: review.user.type } : {}),
-          state: review.state,
-          body: review.body ?? "",
-          submittedAtMillis: review.submitted_at ? commentMillis(review.submitted_at) : 0,
-        }),
-      );
-      if (current.length < 100) return current;
+      const current = reviews.flatMap(({ user, ...review }): ReadonlyArray<RawReview> => {
+        if (user === null) return [];
+        return [
+          {
+            id: review.id,
+            authorLogin: user.login,
+            authorAssociation: review.author_association ?? "NONE",
+            ...(user.type ? { authorType: user.type } : {}),
+            state: review.state,
+            body: review.body ?? "",
+            submittedAtMillis: review.submitted_at ? commentMillis(review.submitted_at) : 0,
+          },
+        ];
+      });
+      if (reviews.length < 100) return current;
       return [...current, ...(yield* collect(page + 1))];
     });
     return yield* withPaginationDeadline(collect());
