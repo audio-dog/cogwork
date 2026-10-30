@@ -32,6 +32,8 @@ export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowAc
   { message: Schema.String },
 ) {}
 
+const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
+
 interface OperationOutput {
   readonly summary: string;
   readonly answers: Readonly<Record<string, string>>;
@@ -439,7 +441,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     }
     yield* coordination.park(admission.event.key, {
       _tag: "NoWorkspaceRecognized",
-      plan: initial.digest,
+      plan: encodeActionPlan(initial),
     });
     return { _tag: "Parked" } as const;
   }

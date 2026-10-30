@@ -112,6 +112,14 @@ export class WorkflowActionArtifact extends Schema.Class<WorkflowActionArtifact>
   origin: WorkflowActionOrigin,
 }) {}
 
+export const WorkflowOperationElement = Schema.Struct({
+  summary: TrimmedNonEmptyString,
+  answers: Schema.Record(Schema.String, Schema.String),
+  inputs: Schema.Record(Schema.String, Schema.String),
+  workspace: Schema.optional(Schema.String),
+});
+export type WorkflowOperationElement = typeof WorkflowOperationElement.Type;
+
 export class WorkflowActionPlanStep extends Schema.Class<WorkflowActionPlanStep>("WorkflowActionPlanStep")({
   position: Schema.Natural,
   entry: WorkflowCatalogKey,
@@ -402,9 +410,8 @@ export const workflowOperationResultSchema = (
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
 ) => {
-  const fields = {
+  const elementFields = {
     summary: TrimmedNonEmptyString,
-    stuck: Schema.Boolean,
     answers: Schema.Struct(answerFields(operation)),
     inputs: Schema.Struct(inputFields(operation, catalog)),
   };
@@ -412,11 +419,32 @@ export const workflowOperationResultSchema = (
   const needsWorkspace = operationActionEntries(operation, catalog).some(
     ({ requiresWorkspace }) => requiresWorkspace,
   );
-  return needsWorkspace
-    ? Schema.Struct({ ...fields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
+  const element = needsWorkspace
+    ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
         parseOptions,
       })
-    : Schema.Struct(fields).annotate({ parseOptions });
+    : Schema.Struct(elementFields).annotate({ parseOptions });
+  const once = needsWorkspace
+    ? Schema.Struct({
+        summary: TrimmedNonEmptyString,
+        stuck: Schema.Boolean,
+        answers: elementFields.answers,
+        inputs: elementFields.inputs,
+        workspace: Schema.Literals(["none", ...workspaces]),
+      }).annotate({ parseOptions })
+    : Schema.Struct({
+        summary: TrimmedNonEmptyString,
+        stuck: Schema.Boolean,
+        answers: elementFields.answers,
+        inputs: elementFields.inputs,
+      }).annotate({ parseOptions });
+  return operation.forEach === null
+    ? once
+    : Schema.Struct({
+        summary: TrimmedNonEmptyString,
+        stuck: Schema.Boolean,
+        elements: Schema.Array(element).check(Schema.isMaxLength(50)),
+      }).annotate({ parseOptions });
 };
 
 export const workflowOperationResultJsonSchema = (

@@ -233,6 +233,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             const tool = toolsByName.get(name);
             return tool ? [tool] : [];
           });
+          const engineTools = request.engineTools?.filter(({ name }) => plan.tools.includes(name)) ?? [];
           const persistence = withPersistence(store.persistence);
           const instructions = providerInstructionContext(plan);
           const middleware = plan.middleware.flatMap((name) =>
@@ -246,7 +247,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const chatStream = runChat({
             adapter,
             messages,
-            tools,
+            tools: [...tools, ...engineTools],
             middleware,
             agentLoopStrategy: maxIterations(defaultLoopBudget(plan.harness.profile)),
             abortController,

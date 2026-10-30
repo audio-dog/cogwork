@@ -6,6 +6,7 @@ import {
   type ParkReason,
   type TriggerSourceHealth,
   type WorkflowCatalog,
+  WorkflowOperationElement,
   type WorkflowRecord,
   type WorkItemId,
   type WorkspaceId,
@@ -43,6 +44,7 @@ export const TriggerAdmission = Schema.Struct({
   event: TriggerEvent,
   subscription: TriggerSubscription,
   lineage: Lineage,
+  element: Schema.optional(WorkflowOperationElement),
 });
 export type TriggerAdmission = typeof TriggerAdmission.Type;
 

@@ -10,7 +10,13 @@ import {
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
-import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
+import {
+  EventType,
+  InMemoryRunStore,
+  type ModelMessage,
+  type StreamChunk,
+  toolDefinition,
+} from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import {
   type ChatWithInterruptsPersistence,
@@ -344,6 +350,29 @@ describe("providerRunner", { timeout: 30_000 }, () => {
       );
 
       assert.strictEqual(capturedOptions[0]?.threadId, sessionId);
+    }),
+  );
+
+  it.live("renders an engine-owned issue search tool named by the Run Plan", () =>
+    Effect.gen(function* () {
+      const capturedOptions: Array<RunChatOptions> = [];
+      const runChat: RunChat = (options) => {
+        capturedOptions.push(options);
+        return toAsyncIterable(scriptedChunks);
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+      const base = request({ checkoutPath: null });
+      const issueSearch = toolDefinition({
+        name: "issue-search",
+        description: "Search issues",
+      }).server(() => Promise.resolve({ matches: [] }));
+      const plan = RunPlan.make({ ...base.plan, tools: [...base.plan.tools, "issue-search"] });
+
+      yield* Stream.runDrain(runner.run({ ...base, plan, engineTools: [issueSearch] })).pipe(
+        Effect.provide(providerRunnerLayer()),
+      );
+
+      assert.isTrue(capturedOptions[0]?.tools.some(({ name }) => name === "issue-search"));
     }),
   );
 

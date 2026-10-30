@@ -322,13 +322,17 @@ describe("Workflow action plan", () => {
       yield* (yield* WorkflowActionPlanStore).create(initial);
 
       const result = yield* executeWorkflowActionPlan(initial, admission);
+      const parked = (yield* Ref.get(probe.parks))[0];
 
       assert.strictEqual(result._tag, "Parked");
       assert.isEmpty(yield* Ref.get(probe.calls));
-      assert.deepInclude((yield* Ref.get(probe.parks))[0], {
-        _tag: "NoWorkspaceRecognized",
-        plan: initial.digest,
-      });
+      assert.strictEqual(parked?._tag, "NoWorkspaceRecognized");
+      if (parked?._tag !== "NoWorkspaceRecognized") return;
+      const parkedPlan = yield* Schema.decodeEffect(Schema.fromJsonString(WorkflowActionPlan))(parked.plan);
+      assert.deepStrictEqual(
+        parkedPlan.steps.map(({ entry }) => entry),
+        ["github.comment-this-item", "github.close-this-issue"],
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
