@@ -1,0 +1,26 @@
+packages/contracts/src/workflow.ts
+  s_32b58d670b4dfe::t_ee8a033fd6eb4e 2,134
+packages/engine/src/workflow-run.test.ts
+  s_32b58d670b4dfe::t_ee8a033fd6eb4e 861,903
+packages/engine/src/workflow-action-plan.ts
+  s_32b58d670b4dfe::t_ee8a033fd6eb4e 241,428-429,431,462-469,472
+packages/engine/src/workflow-action-plan.test.ts
+  s_32b58d670b4dfe::t_93dbf0b9e2e7d4 278-302
+  s_32b58d670b4dfe::t_ee8a033fd6eb4e 87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bffa6ae53e7b3e3fc088b13ea6539ff95f5912a2",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
