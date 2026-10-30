@@ -283,7 +283,7 @@ const labelCreateRefused = (ref: LinearTeamRef, name: string) => (error: IssueTr
   new IssueTrackerError({
     reason: error.reason,
     message: `Linear refused creating the "${name}" label in team ${ref.team}: ${error.message}`,
-    retryable: error.reason === "rate-limited",
+    retryable: error.reason === "rate-limited" || error.retryable === true,
     retryAfterMillis: error.retryAfterMillis,
     connectionId: error.connectionId,
   });
@@ -364,7 +364,11 @@ const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, LinearRequ
     Effect.catchTag("TimeoutError", () =>
       Effect.fail(
         new LinearRequestFailure({
-          error: unavailable(`Linear request timed out after ${transientAttemptDeadline}`),
+          error: new IssueTrackerError({
+            reason: "unavailable",
+            message: `Linear request timed out after ${transientAttemptDeadline}`,
+            retryable: true,
+          }),
           retryable: true,
         }),
       ),

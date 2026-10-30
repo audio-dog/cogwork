@@ -1141,6 +1141,43 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("keeps a timed-out label create retryable before issue creation", () =>
+    Effect.gen(function* () {
+      const onAbort = vi.fn();
+      const response = (data: unknown) =>
+        new Response(JSON.stringify({ data }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      const fetchStub = vi
+        .fn((_input: unknown, _init?: RequestInit) =>
+          Promise.reject<Response>(new Error("unexpected request")),
+        )
+        .mockResolvedValueOnce(response({ teams: { nodes: [teamBundle] } }))
+        .mockResolvedValueOnce(response({ teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } }))
+        .mockResolvedValueOnce(response({ issueLabels: { nodes: [] } }))
+        .mockImplementationOnce((_input, init) => {
+          init?.signal?.addEventListener("abort", onAbort);
+          return Promise.withResolvers<Response>().promise;
+        });
+      vi.stubGlobal("fetch", fetchStub);
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [claimLabelName] }),
+      );
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Effect.flip(Fiber.join(requestFiber));
+
+      assert.strictEqual(error.reason, "unavailable");
+      assert.include(error.message, "label");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+      assert.isUndefined(error.writeMayHaveCommitted);
+      assert.strictEqual(onAbort.mock.calls.length, 1);
+      assert.include(sentRequests(fetchStub)[3]?.query ?? "", "issueLabelCreate");
+      assert.isFalse(sentRequests(fetchStub).some((request) => request.query.includes("issueCreate")));
+    }).pipe(withToken()),
+  );
+
   it.effect("keeps a rate-limited issue create retryable", () =>
     Effect.gen(function* () {
       stubLinear((document) =>
