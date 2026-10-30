@@ -10,7 +10,10 @@ import {
   WorkflowId,
   WorkflowNodeId,
   type WorkflowRecord,
+  WorkItemId,
   type WorkItemRef,
+  WorkspaceConfig,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
@@ -31,6 +34,14 @@ import { Coordination, type CoordinationService, fold } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
 import { granolaEntries } from "./granola-source";
+import {
+  IssueTracker,
+  IssueTrackerError,
+  makeEmpty as makeEmptyIssueTracker,
+  type TrackerItem,
+} from "./issue-tracker";
+import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
+import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { makeScriptedSource } from "./scripted-source";
 import {
   make,
@@ -74,12 +85,12 @@ const document = Schema.decodeSync(WorkflowDocument)({
   operations: [],
 });
 
-const record = (enabled: boolean): WorkflowRecord => ({
+const record = (enabled: boolean, publishedCopy = document): WorkflowRecord => ({
   id: workflowId,
   principal: localOwnerId,
-  workingCopy: document,
+  workingCopy: publishedCopy,
   workingRevision: 1,
-  publishedCopy: document,
+  publishedCopy,
   publishedRevision: 1,
   enabled,
   diagnostics: [],
@@ -106,6 +117,94 @@ const subscription: TriggerSubscription = {
   workspaces: [],
   catchUp: { since: 0 },
 };
+const selectedWorkspaceId = Schema.decodeSync(WorkspaceId)("selected");
+const selectedWorkspace: RegisteredWorkspace = {
+  source: "test",
+  contributions: [],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: selectedWorkspaceId,
+    checkoutPath: "/repos/selected",
+    issueTracker: { type: "github", assigneeAllowlist: ["owner"] },
+  }),
+};
+const selectedDocument = Schema.decodeSync(WorkflowDocument)({
+  ...document,
+  workspaces: { _tag: "Listed", workspaces: [selectedWorkspaceId] },
+});
+const selectedIssueId = Schema.decodeSync(WorkItemId)("#1");
+const nextSelectedIssueId = Schema.decodeSync(WorkItemId)("#2");
+const selectedEvent = {
+  ...event,
+  key: { _tag: "Issue", workspace: selectedWorkspaceId, id: selectedIssueId },
+  workspace: selectedWorkspaceId,
+  revision: "issue-1",
+} as const;
+const selectedTrackerItem: TrackerItem = {
+  claimHeld: false,
+  claim: null,
+  claimedByUs: false,
+  attempts: [],
+  handback: null,
+  id: selectedIssueId,
+  title: "Selected issue",
+  url: "https://github.com/acme/example/issues/1",
+  roles: [],
+  assignees: ["owner"],
+  openBlockers: 0,
+  proposal: null,
+  priority: "medium",
+  followUp: null,
+};
+
+const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* (
+  options: {
+    readonly observedItems?: ReadonlyArray<TrackerItem>;
+    readonly exactAssignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
+    readonly store?: TriggerObservationStoreService;
+  } = {},
+) {
+  const current = yield* Ref.make(record(true, selectedDocument));
+  const processed = yield* Ref.make<string | null>(null);
+  const observed = yield* Ref.make(0);
+  const sourceRevision = yield* Ref.make<string | null>(null);
+  const trackerCalls = yield* Ref.make(0);
+  const exactAssigneeCalls = yield* Ref.make(0);
+  const scripted = yield* makeScriptedSource("clock", clockEntries);
+  const store = options.store ?? (yield* makeMemoryTriggerObservationStore);
+  const bus = yield* makeDaemonEventBus;
+  const emptyTracker = yield* makeEmptyIssueTracker;
+  const exactAssignees = options.exactAssignees;
+  const tracker = {
+    ...emptyTracker,
+    observe: () =>
+      Ref.update(trackerCalls, (count) => count + 1).pipe(
+        Effect.map(() => options.observedItems ?? [selectedTrackerItem]),
+      ),
+    ...(exactAssignees === undefined
+      ? {}
+      : {
+          assignees: (_workspace: WorkspaceIssueTrackerBinding, itemId: WorkItemId) =>
+            Ref.update(exactAssigneeCalls, (count) => count + 1).pipe(Effect.andThen(exactAssignees(itemId))),
+        }),
+  };
+  const coordination = coordinationService(processed, observed, sourceRevision);
+  const observation = yield* make.pipe(
+    Effect.provideService(Workflows, workflowService(current)),
+    Effect.provideService(Coordination, coordination),
+    Effect.provideService(TriggerSources, [scripted.source]),
+    Effect.provideService(TriggerObservationStore, store),
+    Effect.provideService(DaemonEventBus, bus),
+    Effect.provideService(IssueTracker, tracker),
+    Effect.provideService(
+      WorkspaceRegistry,
+      readOnlyRegistry({ workspaces: [selectedWorkspace], failures: [] }),
+    ),
+  );
+  yield* Effect.yieldNow;
+  yield* observation.refresh;
+  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed, coordination };
+});
+
 const granolaEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-generated");
 const granolaEditedEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-edited");
 const granolaTriggers = ["first", "second"].map((id) => ({
@@ -228,6 +327,20 @@ describe("TriggerObservation", () => {
     assert.deepStrictEqual(matchTriggerEvent([later, subscription, other], event), [subscription]);
   });
 
+  it("does not treat an empty Workspace selection as every Workspace", () => {
+    const workspaceEvent = {
+      ...event,
+      key: {
+        _tag: "Issue" as const,
+        workspace: Schema.decodeSync(WorkspaceId)("selected"),
+        id: Schema.decodeSync(WorkItemId)("#1"),
+      },
+      workspace: Schema.decodeSync(WorkspaceId)("selected"),
+    };
+
+    assert.deepStrictEqual(matchTriggerEvent([subscription], workspaceEvent), []);
+  });
+
   it("matches a source event only to the Trigger whose parameters produced it", () => {
     const selected = {
       ...subscription,
@@ -267,6 +380,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* observation.refresh;
       yield* Effect.yieldNow;
@@ -327,6 +442,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, blockedStore),
         Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* observation.refresh;
       yield* Effect.yieldNow;
@@ -385,6 +502,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, flakyStore),
         Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       const sourceEvent = {
         ...event,
@@ -427,6 +546,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* Effect.yieldNow;
       yield* observation.refresh;
@@ -479,6 +600,105 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.effect("admits a standalone pull request through an assignee-gated Workspace", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, trackerCalls } = yield* makeWorkspaceObservation();
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        ...selectedEvent,
+        key: { _tag: "PullRequest", workspace: selectedWorkspaceId, number: 7 },
+        revision: "pull-7",
+      });
+      yield* TestClock.adjust("1 second");
+      const result = yield* Fiber.join(changed);
+
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(yield* Ref.get(trackerCalls), 0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("reuses one assignee snapshot for a Trigger batch", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, trackerCalls } = yield* makeWorkspaceObservation();
+      const changed = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(selectedEvent);
+      yield* scripted.emit({ ...selectedEvent, revision: "issue-2" });
+      yield* Fiber.join(changed);
+
+      assert.strictEqual(yield* Ref.get(trackerCalls), 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("loads and reuses assignees for an item outside the tracker snapshot", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, trackerCalls, exactAssigneeCalls } = yield* makeWorkspaceObservation({
+        observedItems: [],
+        exactAssignees: () => Effect.succeed(["owner"]),
+      });
+      const changed = yield* observation.changes.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit(selectedEvent);
+      yield* scripted.emit({ ...selectedEvent, revision: "issue-2" });
+      yield* TestClock.adjust("1 second");
+
+      assert.isTrue(Option.isSome(yield* Fiber.join(changed)));
+      assert.strictEqual(yield* Ref.get(trackerCalls), 1);
+      assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps observing after one assignee lookup fails", () =>
+    Effect.gen(function* () {
+      const { observation, scripted, exactAssigneeCalls } = yield* makeWorkspaceObservation({
+        observedItems: [],
+        exactAssignees: (itemId) =>
+          itemId === selectedIssueId
+            ? Effect.fail(
+                new IssueTrackerError({
+                  reason: "unavailable",
+                  retryable: false,
+                  message: "unrecognized work item id",
+                }),
+              )
+            : Effect.succeed(["owner"]),
+      });
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Effect.yieldNow;
+      yield* scripted.emit(selectedEvent);
+      yield* scripted.emit({
+        ...selectedEvent,
+        key: { ...selectedEvent.key, id: nextSelectedIssueId },
+        revision: "issue-2",
+      });
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+
+      const result = yield* Fiber.join(changed);
+      assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 2);
+      assert.isTrue(Option.isSome(result));
+      assert.strictEqual(Option.getOrThrow(result)[0]?.event.key._tag, "Issue");
+      assert.strictEqual(Option.getOrThrow(result)[0]?.event.revision, "issue-2");
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("offers one conversation revision at a time", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
@@ -504,6 +724,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, []),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
 
       assert.deepStrictEqual(
@@ -572,6 +794,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, []),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
 
       assert.deepStrictEqual(
@@ -607,6 +831,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, []),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
 
       assert.deepStrictEqual(
@@ -644,6 +870,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, [rateLimited]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* Effect.yieldNow;
       yield* observation.refresh;
@@ -685,6 +913,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, [blocked]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* Effect.yieldNow;
       assert.strictEqual(yield* Ref.get(starts), 1);
@@ -725,12 +955,15 @@ describe("TriggerObservation", () => {
       const scripted = yield* makeScriptedSource("granola", granolaEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
+      const tracker = yield* makeEmptyIssueTracker;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
         Effect.provideService(Coordination, coordination),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, tracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* Effect.yieldNow;
       yield* observation.refresh;
@@ -799,6 +1032,8 @@ describe("TriggerObservation", () => {
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* Effect.yieldNow;
       yield* observation.refresh;
@@ -846,7 +1081,6 @@ describe("TriggerObservation", () => {
       assert.strictEqual(yield* Ref.get(observed), 2);
     }).pipe(Effect.scoped),
   );
-
   it.effect("keeps the activated catch-up window while admitting events", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(1_000);
@@ -861,12 +1095,15 @@ describe("TriggerObservation", () => {
       const scripted = yield* makeScriptedSource("granola", granolaEntries);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
+      const tracker = yield* makeEmptyIssueTracker;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
         Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
         Effect.provideService(TriggerSources, [scripted.source]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, tracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
       );
       yield* Effect.yieldNow;
       yield* observation.refresh;

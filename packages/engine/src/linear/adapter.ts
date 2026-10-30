@@ -5,7 +5,16 @@ import { IssueTracker, type IssueTrackerService } from "../issue-tracker";
 import { LinearClient, type LinearClientService } from "./client";
 import { makeHost } from "./host";
 
-const make = (client: LinearClientService): IssueTrackerService => makeCoordinationTracker(makeHost(client));
+const make = (client: LinearClientService): IssueTrackerService => {
+  const host = makeHost(client);
+  return {
+    ...makeCoordinationTracker(host),
+    assignees: Effect.fn("LinearIssueTracker.assignees")(function* (workspace, id) {
+      const ref = yield* host.resolve(workspace, id);
+      return yield* client.issueAssignees(ref.target, ref.issueId);
+    }),
+  };
+};
 
 export const layer = Layer.effect(
   IssueTracker,

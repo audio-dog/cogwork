@@ -49,6 +49,8 @@ export interface RawIssue {
   readonly stateType: string;
   readonly openBlockers: number;
   readonly priority: Priority;
+  readonly createdAtMillis?: number;
+  readonly updatedAtMillis: number;
 }
 
 export interface ObservedRawIssue extends RawIssue {
@@ -142,6 +144,8 @@ const IssueNode = Schema.Struct({
   title: Schema.String,
   url: Schema.String,
   priority: Schema.optional(Schema.Finite),
+  createdAt: Schema.optional(Schema.String),
+  updatedAt: Schema.optional(Schema.String),
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
   }),
@@ -215,11 +219,18 @@ const IssueLabelPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }) })),
 });
 
+const IssueAssigneesPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({ assignee: Schema.optional(Schema.NullOr(Schema.Struct({ id: Schema.String }))) }),
+  ),
+});
+
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
+const decodeIssueAssignees = Schema.decodeUnknownEffect(IssueAssigneesPayload);
 
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
@@ -351,6 +362,8 @@ const issueFields = `
       title
       url
       priority
+      createdAt
+      updatedAt
       labels(first: ${labelPageSize}) { nodes { name } }
       assignee { id }
       state { name type }
@@ -386,9 +399,16 @@ const issuesArgs = ", $filter: IssueFilter, $after: String";
 
 // Mirrors the classify-side assignee ownership gate: when the workspace names an allowlist, an
 // issue owned by anyone else can never classify, so fetching it only costs pages.
-const issuesFilter = (assigneeIds: ReadonlyArray<string> | null) => ({
-  state: { type: { nin: ["completed"] } },
+const issuesFilter = (
+  assigneeIds: ReadonlyArray<string> | null,
+  updatedSince?: number,
+  includeCompleted = false,
+) => ({
+  ...(includeCompleted ? {} : { state: { type: { nin: ["completed"] } } }),
   ...(assigneeIds !== null && assigneeIds.length > 0 ? { assignee: { id: { in: assigneeIds } } } : {}),
+  ...(updatedSince === undefined
+    ? {}
+    : { updatedAt: { gte: DateTime.formatIso(DateTime.makeUnsafe(updatedSince)) } }),
 });
 
 const metaSelection = `
@@ -414,6 +434,11 @@ query IssueLabelByName($id: String!, $label: String!) {
   }
 }`;
 
+const issueAssigneesQuery = `
+query IssueAssignees($id: String!) {
+  issue(id: $id) { assignee { id } }
+}`;
+
 const commentsQuery = `
 query IssueComments($id: String!, $after: String) {
   issue(id: $id) {
@@ -429,6 +454,33 @@ query IssueComments($id: String!, $after: String) {
     }
   }
 }`;
+
+const issueHistoryQuery = `
+query IssueHistory($id: String!, $after: String) {
+  issue(id: $id) {
+    history(first: 250, after: $after, orderBy: createdAt) {
+      nodes { createdAt addedLabels { name } }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`;
+
+const HistoryPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({
+      history: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            createdAt: Schema.String,
+            addedLabels: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))),
+          }),
+        ),
+        pageInfo: PageInfoNode,
+      }),
+    }),
+  ),
+});
+const decodeHistory = Schema.decodeUnknownEffect(HistoryPayload);
 
 const coordinationCommentsQuery = `
 query IssueCoordinationComments($id: String!, $bot: ID!, $ledger: String!, $proposal: String!) {
@@ -529,6 +581,8 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   stateType: issue.state.type,
   openBlockers,
   priority: linearPriority(issue.priority),
+  createdAtMillis: millisFromIso(issue.createdAt ?? issue.updatedAt ?? ""),
+  updatedAtMillis: millisFromIso(issue.updatedAt ?? ""),
 });
 
 const toRawComment = (comment: typeof CommentNode.Type) => {
@@ -762,6 +816,8 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     ref: LinearTeamRef,
     coordination: CoordinationScope | null,
     assigneeIds: ReadonlyArray<string> | null = null,
+    updatedSince?: number,
+    includeCompleted: boolean = false,
   ) {
     const shape = coordination ? coordinatedIssuesShape : issuesShape;
     const scopeVariables = coordination
@@ -771,7 +827,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
           proposal: coordination.proposalMarker,
         }
       : {};
-    const filter = issuesFilter(assigneeIds);
+    const filter = issuesFilter(assigneeIds, updatedSince, includeCompleted);
     const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
     const issues = yield* Stream.paginate<string | null, typeof IssueNode.Type, IssueTrackerError>(
       null,
@@ -791,6 +847,30 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return yield* Effect.forEach(issues, (issue) =>
       Effect.map(openBlockersOf(ref, issue), (openBlockers) => toObservedIssue(issue, openBlockers)),
     );
+  });
+
+  const labelAppliedAt = Effect.fn("linear.labelAppliedAt")(function* (
+    ref: LinearTeamRef,
+    issueId: string,
+    label: string,
+  ) {
+    const collect: (after?: string | null) => Effect.Effect<ReadonlyArray<number>, IssueTrackerError> =
+      Effect.fn("linear.collectLabelHistory")(function* (after = null) {
+        const data = yield* rawData(ref, issueHistoryQuery, { id: issueId, after });
+        const payload = yield* Effect.mapError(decodeHistory(data), toUnavailable);
+        const history = payload.issue?.history;
+        if (!history) return [];
+        const current = history.nodes.flatMap((entry) =>
+          entry.addedLabels?.some(({ name }) => name === label) ? [millisFromIso(entry.createdAt)] : [],
+        );
+        if (!history.pageInfo.hasNextPage) return current;
+        const cursor = history.pageInfo.endCursor;
+        if (cursor === null)
+          return yield* unavailable(`Linear label history page missing cursor: ${issueId}`);
+        return [...current, ...(yield* collect(cursor))];
+      });
+    const applied = yield* withPaginationDeadline("label history", collect());
+    return applied.at(-1) ?? null;
   });
 
   const mutate = Effect.fn("linear.mutate")(function* (
@@ -836,7 +916,14 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return payload.issue.labels.nodes.at(0)?.id ?? null;
   });
 
-  const readProse = (ref: LinearTeamRef, issueId: string) => {
+  const issueAssignees = Effect.fn("linear.issueAssignees")(function* (ref: LinearTeamRef, issueId: string) {
+    const data = yield* rawData(ref, issueAssigneesQuery, { id: issueId });
+    const payload = yield* Effect.mapError(decodeIssueAssignees(data), toUnavailable);
+    if (payload.issue === null) return yield* unavailable(`Linear issue not found: ${issueId}`);
+    return payload.issue.assignee ? [payload.issue.assignee.id] : [];
+  });
+
+  const readIssueProse = (ref: LinearTeamRef, issueId: string, enforceAdmissionLimit: boolean) => {
     const loadPage = Effect.fn("linear.loadCommentPage")(function* (state: CommentPaginationState) {
       const data = yield* rawData(ref, commentsQuery, { id: issueId, after: state.after });
       const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
@@ -854,7 +941,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
         (state.after === null ? Buffer.byteLength(payload.issue.description ?? "") : 0);
       const withinAdmissionLimit =
         commentCount <= workContextCommentLimit && proseBytes <= workContextProseByteLimit;
-      if (!withinAdmissionLimit) {
+      if (enforceAdmissionLimit && !withinAdmissionLimit) {
         return yield* new IssueTrackerError({
           reason: "unavailable",
           retryable: false,
@@ -898,6 +985,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     );
   };
 
+  const readProse = (ref: LinearTeamRef, issueId: string) => readIssueProse(ref, issueId, true);
+  const readTriggerProse = (ref: LinearTeamRef, issueId: string) => readIssueProse(ref, issueId, false);
+
   return {
     authenticatedUserId: Effect.fn("linear.authenticatedUserId")(function* (ref: LinearTeamRef) {
       const credential = yield* credentialFor(ref);
@@ -905,6 +995,8 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return yield* callWithCredential(ref, credential, (sdk) => sdk.viewer.then((viewer) => viewer.id));
     }),
     observeIssues,
+    issueAssignees,
+    labelAppliedAt,
     listWorkflowStates: (ref: LinearTeamRef) =>
       Effect.map(loadTeam(ref, metaShape), (team): ReadonlyArray<RawWorkflowState> => team.states.nodes),
     listComments: Effect.fn("linear.listComments")(function* (
@@ -924,6 +1016,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       );
     }),
     readProse,
+    readTriggerProse,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);

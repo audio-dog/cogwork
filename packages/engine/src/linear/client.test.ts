@@ -7,6 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
@@ -313,6 +314,68 @@ describe("linear client", () => {
         ["AUD-1"],
       );
       assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("passes the modified-since watermark through Linear's updatedAt filter", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, null, null, Date.UTC(2026, 9, 28, 12));
+      const [request] = sentRequests(fetchStub);
+
+      assert.deepStrictEqual(request?.variables?.filter, {
+        state: { type: { nin: ["completed"] } },
+        updatedAt: { gte: "2026-10-28T12:00:00.000Z" },
+      });
+    }).pipe(withToken()),
+  );
+
+  it.effect("includes completed issues in Trigger reads", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, null, null, Date.UTC(2026, 9, 28, 12), true);
+      const [request] = sentRequests(fetchStub);
+
+      assert.deepStrictEqual(request?.variables?.filter, {
+        updatedAt: { gte: "2026-10-28T12:00:00.000Z" },
+      });
+    }).pipe(withToken()),
+  );
+
+  it.effect("reads the label-applied moment through the final history page", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((_document, variables) => ({
+        body: {
+          data: {
+            issue: {
+              history: {
+                nodes:
+                  variables.after === null
+                    ? [{ createdAt: "2026-10-28T12:00:00.000Z", addedLabels: [{ name: "other" }] }]
+                    : [
+                        {
+                          createdAt: "2026-10-28T13:00:00.000Z",
+                          addedLabels: [{ name: "needs-triage" }],
+                        },
+                      ],
+                pageInfo:
+                  variables.after === null
+                    ? { hasNextPage: true, endCursor: "next" }
+                    : { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+
+      assert.strictEqual(
+        yield* client.labelAppliedAt(ref, "issue-id", "needs-triage"),
+        Date.UTC(2026, 9, 28, 13),
+      );
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
     }).pipe(withToken()),
   );
 
@@ -769,6 +832,38 @@ describe("linear client", () => {
         sentRequests(fetchStub).map(({ variables }) => variables.after),
         [null, "comment-cursor-1"],
       );
+    }).pipe(withToken()),
+  );
+
+  it.effect("reads Trigger prose beyond the Work context byte limit", () =>
+    Effect.gen(function* () {
+      const body = "x".repeat(16 * 1024 * 1024 + 1);
+      stubLinear(() => ({
+        body: {
+          data: {
+            issue: {
+              description: "Current issue body",
+              comments: {
+                nodes: [
+                  {
+                    id: "large",
+                    body,
+                    createdAt: "2026-07-31T00:00:00.000Z",
+                    user: { id: "author", active: true, guest: false, app: false, admin: false },
+                  },
+                ],
+                pageInfo: lastPage,
+              },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+      const result = yield* Effect.result(client.readTriggerProse(ref, "AUD-1"));
+
+      assert.isTrue(Result.isSuccess(result));
+      if (!Result.isSuccess(result)) return;
+      assert.strictEqual(result.success.comments[0]?.body.length, body.length);
     }).pipe(withToken()),
   );
 

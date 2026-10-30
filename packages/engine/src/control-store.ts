@@ -213,6 +213,14 @@ const classifySchemaStatement = (statement: string) =>
     statement,
   }) satisfies ControlStoreSchemaChange;
 
+// SQLite rejects ADD COLUMN ... NOT NULL without a default even on an empty table, so the table is
+// dropped and recreated from the schema; its rows are discarded, as ADR 0015 permits before release.
+const tableGainingRequiredColumn = (statement: string) => {
+  const table = /^ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s/i.exec(statement.trim())?.[1];
+  if (table === undefined || !/\bNOT\s+NULL\b/i.test(statement) || /\bDEFAULT\b/i.test(statement)) return [];
+  return [table];
+};
+
 const isForeignKeysPragma = (statement: string) => /^PRAGMA\s+foreign_keys\s*=/i.test(statement.trim());
 
 const disablesForeignKeys = (statement: string) =>
@@ -811,12 +819,18 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
   const statements = yield* schemaStatements;
   if (statements.length === 0) return;
   const changes = statements.map(classifySchemaStatement);
-  const transactionStatements = statements.filter((statement) => !isForeignKeysPragma(statement));
+  const resetTables = [...new Set(statements.flatMap(tableGainingRequiredColumn))];
   const transaction = sql.withTransaction(
     Effect.gen(function* () {
-      yield* Effect.forEach(transactionStatements, (statement) => sql.unsafe(statement), {
+      yield* Effect.forEach(resetTables, (table) => sql.unsafe(`DROP TABLE \`${table}\`;`), {
         discard: true,
       });
+      const pending = resetTables.length === 0 ? statements : yield* schemaStatements;
+      yield* Effect.forEach(
+        pending.filter((statement) => !isForeignKeysPragma(statement)),
+        (statement) => sql.unsafe(statement),
+        { discard: true },
+      );
       const remaining = yield* schemaStatements;
       if (remaining.length === 0) return;
       return yield* new ControlStoreBootError({
@@ -825,6 +839,11 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
     }),
   );
   yield* Effect.logInfo("converging Control store schema", { changes });
+  if (resetTables.length > 0) {
+    yield* Effect.logWarning("recreating Control store tables that gained a required column", {
+      tables: resetTables,
+    });
+  }
   if (!statements.some(disablesForeignKeys)) return yield* transaction;
   return yield* Effect.acquireUseRelease(
     sql.unsafe("PRAGMA foreign_keys=OFF;"),
