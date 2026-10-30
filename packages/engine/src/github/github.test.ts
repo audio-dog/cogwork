@@ -558,6 +558,45 @@ describe("GitHub adapters", () => {
     ),
   );
 
+  it.effect("repairs labels when recovering an existing issue creation", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const client = yield* GitHubClient;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+
+      const artifact = yield* tracker.createIssue(workspace, {
+        title: "Created",
+        body: "Body",
+        labels: ["needs-triage"],
+        origin,
+      });
+      const issues = yield* client.listIssues(repo, { state: "all" });
+      const recovered = issues.find(({ number }) => number === 6);
+
+      assert.strictEqual(artifact.issue, "#6");
+      assert.deepStrictEqual(recovered?.labels, ["needs-triage"]);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 5, title: "Existing", labels: [] },
+            {
+              number: 6,
+              title: "Created",
+              labels: [],
+              body: wireCodec.encode({ name: "write", pairs: "key=create-key" }),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it.effect("parks an ambiguous issue creation when marker recovery cannot confirm it", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;

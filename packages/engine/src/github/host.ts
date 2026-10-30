@@ -156,16 +156,30 @@ export const makeIssueActions = (client: GitHubClientService) => {
     yield* client.createComment(repo, number, writeMarker(writeKey));
     yield* confirmComment(repo, number, writeKey);
   });
+  const repairCreatedIssueLabels = Effect.fn("github.repairWorkflowCreatedIssueLabels")(function* (
+    repo: GitHubTarget,
+    issue: RawIssue,
+    labels: ReadonlyArray<string>,
+  ) {
+    const applied = new Set(issue.labels);
+    yield* Effect.forEach(
+      labels.filter((label) => !applied.has(label)),
+      (label) => client.addLabel(repo, issue.number, label),
+      { discard: true },
+    );
+    return issue;
+  });
   const recoverCreatedIssue = Effect.fn("github.recoverWorkflowCreatedIssue")(function* (
     repo: GitHubTarget,
     writeKey: string,
+    labels: ReadonlyArray<string>,
     error: IssueTrackerError,
   ) {
     if (!error.writeMayHaveCommitted) return yield* error;
     const recovered = yield* client
       .findIssueWithMarker(repo, writeMarker(writeKey))
       .pipe(Effect.catchTag("IssueTrackerError", () => Effect.fail(ambiguousWriteNotConfirmed(writeKey))));
-    if (recovered) return recovered;
+    if (recovered) return yield* repairCreatedIssueLabels(repo, recovered, labels);
     return yield* ambiguousWriteNotConfirmed(writeKey);
   });
   const confirmCreatedIssue = Effect.fn("github.confirmWorkflowCreatedIssue")(function* (
@@ -185,14 +199,17 @@ export const makeIssueActions = (client: GitHubClientService) => {
     ) {
       const repo = yield* target(workspace);
       const existing = yield* client.findIssueWithMarker(repo, writeMarker(input.origin.writeKey));
-      if (existing) return yield* artifact(workspace, existing, input.origin);
+      if (existing) {
+        const repaired = yield* repairCreatedIssueLabels(repo, existing, input.labels);
+        return yield* artifact(workspace, repaired, input.origin);
+      }
       const created = yield* client
         .createIssue(repo, {
           title: input.title,
           body: markedBody(input.body, input.origin.writeKey),
           labels: input.labels,
         })
-        .pipe(Effect.catch((error) => recoverCreatedIssue(repo, input.origin.writeKey, error)));
+        .pipe(Effect.catch((error) => recoverCreatedIssue(repo, input.origin.writeKey, input.labels, error)));
       const confirmed = yield* confirmCreatedIssue(repo, created, input.origin.writeKey);
       return yield* artifact(workspace, confirmed, input.origin);
     }),
