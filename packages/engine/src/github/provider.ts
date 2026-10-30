@@ -6,7 +6,7 @@ import {
   type WorkflowOptionList,
   type WorkItem,
   WorkItemId,
-  type WorkItemRef,
+  WorkItemRef,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -349,20 +349,21 @@ const make = (
     baseBranch: pull.baseRef ?? workspace.config.worktrees?.baseBranch ?? "main",
   });
 
-  const pullForItem = (item: WorkItemRef, pulls: ReadonlyArray<RawPull>) => {
-    if (item._tag === "PullRequest") {
-      return pulls.find(({ number }) => number === item.number) ?? null;
-    }
-    if (item._tag !== "Issue") return null;
-    const issueNumber = numericIssue.exec(item.id)?.[1];
-    const slug = ticketSlug(item.id);
-    const candidates = pulls.filter(
-      (pull) =>
-        (issueNumber !== undefined && pull.closingIssueNumbers.includes(Number(issueNumber))) ||
-        branchBelongsToSlug(pull.headRef, slug),
-    );
-    return candidates.toSorted((left, right) => right.number - left.number).at(0) ?? null;
-  };
+  const pullForItem = (target: GitHubTarget, item: WorkItemRef, pulls: ReadonlyArray<RawPull>) =>
+    WorkItemRef.match(item, {
+      Issue: ({ id }) =>
+        linkedPull(
+          target,
+          { id, title: "" },
+          pulls.filter(({ authorLogin }) => authorLogin === target.actorLogin),
+        ),
+      PullRequest: ({ number }) => pulls.find((pull) => pull.number === number) ?? null,
+      GranolaNote: () => null,
+      SlackMessage: () => null,
+      SlackConversation: () => null,
+      ScheduleInstant: () => null,
+      FanOutChild: () => null,
+    });
 
   const resolvePullRequest = Effect.fn("github.resolvePullRequest")(function* (
     workspace: RegisteredWorkspace,
@@ -371,17 +372,23 @@ const make = (
     const configuredTarget = yield* sourceControlTarget(workspace);
     const target = yield* authenticatedTarget(configuredTarget);
     const pulls = (yield* trustedPulls(target)).filter((pull) => sameRepositoryHead(target, pull));
-    const pull = pullForItem(item, pulls);
+    const pull = pullForItem(target, item, pulls);
     return pull ? resolvedPull(workspace, pull) : null;
   });
 
-  const commentsCarry = (target: GitHubTargetConfig, pullNumber: number, writeKey: string) =>
+  const commentsCarry = (target: GitHubTarget, pullNumber: number, writeKey: string) =>
     client
       .listAllComments(target, pullNumber)
-      .pipe(Effect.map((comments) => comments.some(({ body }) => carriesWriteKey(body, writeKey))));
+      .pipe(
+        Effect.map((comments) =>
+          comments.some(
+            ({ authorLogin, body }) => authorLogin === target.actorLogin && carriesWriteKey(body, writeKey),
+          ),
+        ),
+      );
 
   const markPullRequest = Effect.fn("github.markWorkflowPullRequest")(function* (
-    target: GitHubTargetConfig,
+    target: GitHubTarget,
     pullNumber: number,
     writeKey: string,
   ) {
@@ -460,10 +467,22 @@ const make = (
     resolvePullRequest,
     openWorkflowPullRequest: (workspace, input) =>
       Effect.gen(function* () {
-        const target = yield* sourceControlTarget(workspace);
+        const configuredTarget = yield* sourceControlTarget(workspace);
+        const target = yield* authenticatedTarget(configuredTarget);
         const existing = yield* client
           .listPulls(target, input.headBranch)
-          .pipe(Effect.map((pulls) => exactHeadPull(target, input.headBranch, pulls)));
+          .pipe(
+            Effect.map(
+              (pulls) =>
+                pulls.find(
+                  (pull) =>
+                    pull.headRef === input.headBranch &&
+                    pull.baseRef === input.baseBranch &&
+                    pull.authorLogin === target.actorLogin &&
+                    sameRepositoryHead(target, pull),
+                ) ?? null,
+            ),
+          );
         const opened = existing
           ? resolvedPull(workspace, existing)
           : {
@@ -478,13 +497,13 @@ const make = (
       }),
     recordPullRequestPush: (workspace, pullRequest, origin) =>
       Effect.gen(function* () {
-        const target = yield* sourceControlTarget(workspace);
+        const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
         yield* markPullRequest(target, pullRequest.number, origin.writeKey);
         return workflowArtifact(workspace, pullRequest, origin);
       }),
     commentPullRequest: (workspace, pullRequest, body, origin) =>
       Effect.gen(function* () {
-        const target = yield* sourceControlTarget(workspace);
+        const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
         if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
           yield* client.createComment(target, pullRequest.number, workflowMarkedBody(body, origin.writeKey));
         }
@@ -492,11 +511,12 @@ const make = (
       }),
     requestReview: (workspace, pullRequest, reviewer, origin) =>
       Effect.gen(function* () {
-        const target = yield* sourceControlTarget(workspace);
-        if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
+        const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
+        const requested = yield* client.listRequestedReviewers(target, pullRequest.number);
+        if (!requested.includes(reviewer)) {
           yield* client.requestReview(target, pullRequest.number, reviewer);
-          yield* markPullRequest(target, pullRequest.number, origin.writeKey);
         }
+        yield* markPullRequest(target, pullRequest.number, origin.writeKey);
         return workflowArtifact(workspace, pullRequest, origin);
       }),
   };

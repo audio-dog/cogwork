@@ -187,6 +187,7 @@ const PullDetailSchema = Schema.Struct({
 
 const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) });
 const GitHubCollaboratorsSchema = Schema.Array(GitHubUserSchema);
+const RequestedReviewersSchema = Schema.Struct({ users: Schema.Array(GitHubUserSchema) });
 
 const ReviewSchema = Schema.Struct({
   id: Schema.Finite,
@@ -1283,12 +1284,37 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   });
 
   const listCollaborators = Effect.fn("github.listCollaborators")(function* (repo: GitHubRepoRef) {
-    const json = yield* fetchJson(repo, repoPath(repo, "/collaborators?affiliation=all&per_page=100"));
-    const users = yield* Effect.mapError(
-      Schema.decodeUnknownEffect(GitHubCollaboratorsSchema)(json),
+    const collect: (page?: number) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError> = Effect.fn(
+      "github.collectCollaboratorPages",
+    )(function* (page = 1) {
+      const json = yield* fetchJson(
+        repo,
+        repoPath(repo, `/collaborators?affiliation=all&per_page=100&page=${page}`),
+      );
+      const users = yield* Effect.mapError(
+        Schema.decodeUnknownEffect(GitHubCollaboratorsSchema)(json),
+        toUnavailable,
+      );
+      const current = users.map(({ login }) => login);
+      if (current.length < 100) return current;
+      return [...current, ...(yield* collect(page + 1))];
+    });
+    return yield* withPaginationDeadline(collect());
+  });
+
+  const listRequestedReviewers = Effect.fn("github.listRequestedReviewers")(function* (
+    repo: GitHubRepoRef,
+    pullNumber: number,
+  ) {
+    const json = yield* fetchJson(
+      repo,
+      repoPath(repo, `/pulls/${pullNumber}/requested_reviewers?per_page=100`),
+    );
+    const response = yield* Effect.mapError(
+      Schema.decodeUnknownEffect(RequestedReviewersSchema)(json),
       toUnavailable,
     );
-    return users.map(({ login }) => login);
+    return response.users.map(({ login }) => login);
   });
 
   const requestReview = Effect.fn("github.requestReview")(function* (
@@ -1563,6 +1589,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       }),
     createComment,
     listCollaborators,
+    listRequestedReviewers,
     requestReview,
     createPerformanceComment,
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
