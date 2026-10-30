@@ -5,15 +5,16 @@ import * as Schema from "effect/Schema";
 import {
   HarnessName,
   IssueTrackerType,
+  SourceControlType,
   TrimmedNonEmptyString,
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
-import { WorkItemKey } from "./coordination";
+import { WorkItemKey, WorkItemRef } from "./coordination";
 import { PrincipalId } from "./principal";
 import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
-import { IssueTrackerConfig } from "./workspace";
+import { IssueTrackerConfig, SourceControlConfig } from "./workspace";
 
 export const WorkflowId = TrimmedNonEmptyString.pipe(Schema.brand("WorkflowId"));
 export type WorkflowId = typeof WorkflowId.Type;
@@ -89,12 +90,22 @@ const workflowActionTargetBinding = {
   repository: Schema.NullOr(TrimmedNonEmptyString),
 } as const;
 
+const sourceControlActionTargetBinding = {
+  workspace: WorkspaceId,
+  app: SourceControlType,
+  issueTracker: IssueTrackerConfig,
+  sourceControl: Schema.optional(SourceControlConfig),
+  repository: Schema.NullOr(TrimmedNonEmptyString),
+} as const;
+
 export const WorkflowActionTarget = Schema.TaggedUnion({
   Cogwork: {},
   NoWorkspace: {},
   CurrentIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   ExistingIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   NewIssue: workflowActionTargetBinding,
+  NewPullRequest: { ...sourceControlActionTargetBinding, issue: WorkItemId },
+  CurrentPullRequest: { ...sourceControlActionTargetBinding, item: WorkItemRef },
 });
 export type WorkflowActionTarget = typeof WorkflowActionTarget.Type;
 
