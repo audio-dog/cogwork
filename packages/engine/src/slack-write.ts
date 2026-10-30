@@ -106,6 +106,13 @@ const retryAfter = (response: HttpClientResponse.HttpClientResponse) => {
   return isValidRetryAfter ? ` Retry after ${seconds} seconds.` : "";
 };
 
+const invalidResponseFailureRule = {
+  matches: (response: HttpClientResponse.HttpClientResponse) =>
+    response.status < 200 || response.status >= 300,
+  make: (response: HttpClientResponse.HttpClientResponse) =>
+    fail("invalid", false, `Slack rejected the write (${response.status})`),
+};
+
 const responseFailureRules = [
   {
     matches: (response: HttpClientResponse.HttpClientResponse) => response.status === 429,
@@ -123,12 +130,7 @@ const responseFailureRules = [
     make: (response: HttpClientResponse.HttpClientResponse) =>
       fail("unavailable", true, `Slack write failed (${response.status})`),
   },
-  {
-    matches: (response: HttpClientResponse.HttpClientResponse) =>
-      response.status < 200 || response.status >= 300,
-    make: (response: HttpClientResponse.HttpClientResponse) =>
-      fail("invalid", false, `Slack rejected the write (${response.status})`),
-  },
+  invalidResponseFailureRule,
 ] satisfies ReadonlyArray<{
   readonly matches: (response: HttpClientResponse.HttpClientResponse) => boolean;
   readonly make: (response: HttpClientResponse.HttpClientResponse) => SlackWriteError;
@@ -141,7 +143,7 @@ const draftResponseFailureRules = [
     make: (response: HttpClientResponse.HttpClientResponse) =>
       fail("draft-outcome-unknown", false, `Slack draft outcome is unknown (${response.status})`),
   },
-  responseFailureRules[3],
+  invalidResponseFailureRule,
 ];
 
 const retryableApiErrors = new Set(["fatal_error", "internal_error", "ratelimited", "service_unavailable"]);
