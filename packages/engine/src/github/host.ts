@@ -162,7 +162,9 @@ export const makeIssueActions = (client: GitHubClientService) => {
     error: IssueTrackerError,
   ) {
     if (!error.writeMayHaveCommitted) return yield* error;
-    const recovered = yield* client.findIssueWithMarker(repo, writeMarker(writeKey));
+    const recovered = yield* client
+      .findIssueWithMarker(repo, writeMarker(writeKey))
+      .pipe(Effect.catchTag("IssueTrackerError", () => Effect.fail(ambiguousWriteNotConfirmed(writeKey))));
     if (recovered) return recovered;
     return yield* ambiguousWriteNotConfirmed(writeKey);
   });
@@ -171,6 +173,7 @@ export const makeIssueActions = (client: GitHubClientService) => {
     issue: RawIssue,
     writeKey: string,
   ) {
+    if (carriesWriteKey(issue.body, writeKey)) return issue;
     const confirmed = yield* client.readIssue(repo, issue.number);
     if (carriesWriteKey(confirmed.body, writeKey)) return confirmed;
     return yield* ambiguousWriteNotConfirmed(writeKey);

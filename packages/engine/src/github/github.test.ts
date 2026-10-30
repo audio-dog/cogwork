@@ -23,6 +23,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -592,7 +593,7 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("keeps an ambiguous create recovery outage retryable", () =>
+  it.effect("parks an ambiguous create when recovery lookup is unavailable", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
       const origin = WorkflowActionOrigin.make({
@@ -605,8 +606,8 @@ describe("GitHub adapters", () => {
         .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
         .pipe(Effect.flip);
 
-      assert.strictEqual(error.reason, "rate-limited");
-      assert.isFalse(issueTrackerErrorIsPermanent(error));
+      assert.isTrue(issueTrackerErrorIsPermanent(error));
+      assert.isTrue(error.writeMayHaveCommitted);
     }).pipe(
       Effect.provide(
         withClient({
@@ -625,7 +626,7 @@ describe("GitHub adapters", () => {
     ),
   );
 
-  it.effect("keeps a create read-back outage retryable", () =>
+  it.effect("confirms creation from the response before a read-back outage", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
       const origin = WorkflowActionOrigin.make({
@@ -634,12 +635,13 @@ describe("GitHub adapters", () => {
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
       });
-      const error = yield* tracker
-        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
-        .pipe(Effect.flip);
+      const result = yield* Effect.result(
+        tracker.createIssue(workspace, { title: "Created", body: "Body", labels: [], origin }),
+      );
 
-      assert.isUndefined(error.retryable);
-      assert.isFalse(issueTrackerErrorIsPermanent(error));
+      assert.isTrue(Result.isSuccess(result));
+      if (Result.isFailure(result)) return;
+      assert.strictEqual(result.success.issue, "#6");
     }).pipe(
       Effect.provide(
         withClient({
