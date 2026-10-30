@@ -1,24 +1,38 @@
 import { randomUUID } from "node:crypto";
-import { type WorkflowActionTarget, type WorkflowCatalogEntry, WorkflowCatalogKey } from "@cogwork/contracts";
+import {
+  SlackChannelId,
+  SlackMessageTs,
+  SlackTeamId,
+  type SlackWriteKey,
+  type WorkflowActionTarget,
+  type WorkflowCatalogEntry,
+  WorkflowCatalogKey,
+} from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
-import { SlackClient, type SlackClientService, type SlackMessage, type SlackSession } from "./slack-source";
+import { readJsonEventStream } from "./json-event-stream";
+import {
+  SlackClient,
+  type SlackClientService,
+  type SlackMessage,
+  type SlackSession,
+  slackSession,
+} from "./slack-source";
 
 type SlackMessageTarget = Omit<Extract<WorkflowActionTarget, { readonly _tag: "SlackMessage" }>, "_tag">;
 
 export interface SlackPostReceipt {
-  readonly team: string;
-  readonly channel: string;
-  readonly ts: string;
-  readonly threadTs: string | null;
+  readonly team: SlackTeamId;
+  readonly channel: SlackChannelId;
+  readonly ts: SlackMessageTs;
+  readonly threadTs: SlackMessageTs | null;
 }
 
 export class SlackWriteError extends Schema.TaggedError<SlackWriteError>()("SlackWriteError", {
@@ -35,14 +49,14 @@ export class SlackWriteError extends Schema.TaggedError<SlackWriteError>()("Slac
 
 export interface SlackWriteService {
   readonly sendMessage: (
-    channel: string,
+    channel: SlackChannelId,
     message: string,
-    writeKey: string,
+    writeKey: SlackWriteKey,
   ) => Effect.Effect<SlackPostReceipt, SlackWriteError>;
   readonly replyInThread: (
     target: SlackMessageTarget,
     message: string,
-    writeKey: string,
+    writeKey: SlackWriteKey,
   ) => Effect.Effect<SlackPostReceipt, SlackWriteError>;
   readonly addReaction: (target: SlackMessageTarget, emoji: string) => Effect.Effect<void, SlackWriteError>;
   readonly draftReply: (target: SlackMessageTarget, message: string) => Effect.Effect<void, SlackWriteError>;
@@ -61,7 +75,11 @@ const SlackEnvelope = Schema.Struct({
   ok: Schema.Boolean,
   error: Schema.optional(Schema.String),
 });
-const PostResponse = Schema.Struct({ ok: Schema.Literal(true), channel: Schema.String, ts: Schema.String });
+const PostResponse = Schema.Struct({
+  ok: Schema.Literal(true),
+  channel: SlackChannelId,
+  ts: SlackMessageTs,
+});
 const ReactionResponse = Schema.Struct({ ok: Schema.Literal(true) });
 const DraftResponse = Schema.Union([
   Schema.Struct({
@@ -116,6 +134,16 @@ const responseFailureRules = [
   readonly make: (response: HttpClientResponse.HttpClientResponse) => SlackWriteError;
 }>;
 
+const draftResponseFailureRules = [
+  ...responseFailureRules.slice(0, 2),
+  {
+    matches: (response: HttpClientResponse.HttpClientResponse) => response.status >= 500,
+    make: (response: HttpClientResponse.HttpClientResponse) =>
+      fail("draft-outcome-unknown", false, `Slack draft outcome is unknown (${response.status})`),
+  },
+  responseFailureRules[3],
+];
+
 const retryableApiErrors = new Set(["fatal_error", "internal_error", "ratelimited", "service_unavailable"]);
 const authApiErrors = new Set([
   "account_inactive",
@@ -146,23 +174,6 @@ const apiFailure = (error: string) => {
   return fail(retryable ? "unavailable" : "invalid", retryable, `Slack API error: ${error}`);
 };
 
-const connectionFailure = (error: { readonly message: string }) =>
-  fail("connection-not-ready", true, error.message);
-
-const sessionFor = Effect.fn("SlackWrite.session")(function* (connections: ConnectionStoreService) {
-  const connection = yield* connections.findSystem("slack").pipe(Effect.mapError(connectionFailure));
-  if (!connection) return yield* fail("connection-not-ready", true, "Slack Connection is not established");
-  const credential = yield* connections.bearer(connection.id).pipe(Effect.mapError(connectionFailure));
-  if (!credential.identity) {
-    return yield* fail("connection-not-ready", true, "Slack Connection identity is unavailable");
-  }
-  return {
-    team: credential.identity.organization,
-    user: credential.identity.actorUserId,
-    token: credential.token,
-  } satisfies SlackSession;
-});
-
 const decodeResponse =
   <S extends Schema.Top>(schema: S, message: string) =>
   (input: unknown) =>
@@ -173,65 +184,12 @@ const decodeDraftResponse = (input: unknown) =>
     Effect.mapError(() => fail("draft-outcome-unknown", false, "Slack returned an unreadable draft result")),
   );
 
-const parseDraftJson = (text: string) =>
-  Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(
-    Effect.mapError(() => fail("draft-outcome-unknown", false, "Slack returned an unreadable draft result")),
+const decodeSlackTeamId = Schema.decodeEffect(SlackTeamId);
+
+const readSlackBody = (response: HttpClientResponse.HttpClientResponse, reason: SlackWriteError["reason"]) =>
+  readJsonEventStream(response, "Slack response", responseByteLimit).pipe(
+    Effect.mapError((error) => fail(reason, reason === "unavailable", error.message)),
   );
-
-const readDraftEvent = (response: HttpClientResponse.HttpClientResponse) =>
-  response.stream.pipe(
-    Stream.decodeText(),
-    Stream.splitLines,
-    Stream.takeUntil((line) => line === ""),
-    Stream.runFoldEffect(
-      () => "",
-      (text, line) => {
-        const next = text === "" ? line : `${text}\n${line}`;
-        return next.length <= responseByteLimit
-          ? Effect.succeed(next)
-          : Effect.fail(fail("draft-outcome-unknown", false, "Slack draft result exceeded the size limit"));
-      },
-    ),
-    Effect.flatMap((text) => {
-      const data = text
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).replace(/^ /, ""))
-        .join("\n");
-      return data
-        ? parseDraftJson(data)
-        : Effect.fail(fail("draft-outcome-unknown", false, "Slack returned an empty draft result"));
-    }),
-    Effect.mapError((error) =>
-      error._tag === "SlackWriteError"
-        ? error
-        : fail("draft-outcome-unknown", false, "Slack draft outcome is unknown"),
-    ),
-  );
-
-const draftBodyReaders = new Map<
-  string,
-  (response: HttpClientResponse.HttpClientResponse) => Effect.Effect<unknown, SlackWriteError>
->([
-  [
-    "application/json",
-    (response) =>
-      response.json.pipe(
-        Effect.mapError(() => fail("draft-outcome-unknown", false, "Slack draft outcome is unknown")),
-      ),
-  ],
-  ["text/event-stream", readDraftEvent],
-]);
-
-const readDraftBody = (response: HttpClientResponse.HttpClientResponse) => {
-  const mediaType = response.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
-  const reader = draftBodyReaders.get(mediaType);
-  return reader
-    ? reader(response)
-    : Effect.fail(
-        fail("draft-outcome-unknown", false, `Slack returned unsupported content type "${mediaType}"`),
-      );
-};
 
 const apiRequest = (method: string, body: unknown) =>
   HttpClientRequest.bodyJson(HttpClientRequest.post(`${slackApi}/${method}`), body).pipe(
@@ -245,41 +203,70 @@ const apiResponse = Effect.fn("SlackWrite.apiResponse")(function* (
   body: unknown,
 ) {
   const request = yield* apiRequest(method, body);
-  const response = yield* http
-    .execute(request.pipe(HttpClientRequest.bearerToken(Redacted.value(session.token))))
-    .pipe(
-      Effect.mapError((error) => fail("unavailable", true, error.message)),
-      Effect.timeout(requestDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        fail("unavailable", true, `Slack did not respond within ${requestDeadline}`),
-      ),
-    );
-  const responseFailure = responseFailureRules.find(({ matches }) => matches(response));
-  if (responseFailure) return yield* responseFailure.make(response);
-  const bodyValue = yield* response.json.pipe(
-    Effect.mapError(() => fail("unavailable", true, "Slack returned an unreadable response")),
+  return yield* Effect.gen(function* () {
+    const response = yield* http
+      .execute(request.pipe(HttpClientRequest.bearerToken(Redacted.value(session.token))))
+      .pipe(Effect.mapError((error) => fail("unavailable", true, error.message)));
+    const responseFailure = responseFailureRules.find(({ matches }) => matches(response));
+    if (responseFailure) return yield* responseFailure.make(response);
+    const bodyValue = yield* readSlackBody(response, "unavailable");
+    return {
+      envelope: yield* decodeResponse(SlackEnvelope, "Slack returned an unexpected response")(bodyValue),
+      body: bodyValue,
+    };
+  }).pipe(
+    Effect.timeout(requestDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      fail("unavailable", true, `Slack did not respond within ${requestDeadline}`),
+    ),
   );
+});
+
+const receipt = Effect.fn("SlackWrite.receipt")(function* (session: SlackSession, message: SlackMessage) {
   return {
-    envelope: yield* decodeResponse(SlackEnvelope, "Slack returned an unexpected response")(bodyValue),
-    body: bodyValue,
+    team: yield* decodeSlackTeamId(session.team).pipe(
+      Effect.mapError(() => fail("connection-not-ready", false, "Slack Connection team is invalid")),
+    ),
+    channel: yield* Schema.decodeEffect(SlackChannelId)(message.channel).pipe(
+      Effect.mapError(() => fail("unavailable", true, "Slack returned an invalid channel")),
+    ),
+    ts: yield* Schema.decodeEffect(PostResponse.fields.ts)(message.ts).pipe(
+      Effect.mapError(() => fail("unavailable", true, "Slack returned an invalid timestamp")),
+    ),
+    threadTs: yield* Schema.decodeEffect(Schema.NullOr(PostResponse.fields.ts))(message.threadTs).pipe(
+      Effect.mapError(() => fail("unavailable", true, "Slack returned an invalid thread timestamp")),
+    ),
   };
 });
 
-const writeKeyMessage = (messages: ReadonlyArray<SlackMessage>, writeKey: string) =>
-  messages.find(({ metadata }) => metadata?.eventType === "cogwork_write" && metadata.writeKey === writeKey);
-
-const receipt = (session: SlackSession, message: SlackMessage): SlackPostReceipt => ({
-  team: session.team,
-  channel: message.channel,
-  ts: message.ts,
-  threadTs: message.threadTs,
-});
+const sourceFailureReasons = new Map<string, SlackWriteError["reason"]>([
+  ["auth", "connection-not-ready"],
+  ["connection-not-ready", "connection-not-ready"],
+  ["rate-limited", "rate-limited"],
+]);
 
 const sourceFailure = (error: { readonly reason: string; readonly message: string }) => {
   const retryable = error.reason !== "auth";
-  const reason = error.reason === "rate-limited" ? "rate-limited" : "unavailable";
+  const reason = sourceFailureReasons.get(error.reason) ?? "unavailable";
   return fail(reason, retryable, error.message);
 };
+
+type SlackWriteClient = Pick<SlackClientService, "findWrite">;
+
+const findWrite = (
+  client: SlackWriteClient,
+  session: SlackSession,
+  channel: SlackChannelId,
+  threadTs: SlackMessageTs | null,
+  writeKey: SlackWriteKey,
+) =>
+  client.findWrite(session, { channel, threadTs, writeKey }).pipe(
+    Effect.mapError(sourceFailure),
+    Effect.timeout(requestDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      fail("unavailable", true, `Slack write lookup did not finish within ${requestDeadline}`),
+    ),
+  );
 
 const requireTeam = (session: SlackSession, target: SlackMessageTarget) =>
   session.team === target.team
@@ -289,10 +276,10 @@ const requireTeam = (session: SlackSession, target: SlackMessageTarget) =>
 const post = Effect.fn("SlackWrite.post")(function* (
   http: HttpClient.HttpClient,
   session: SlackSession,
-  channel: string,
+  channel: SlackChannelId,
   message: string,
-  writeKey: string,
-  threadTs: string | null,
+  writeKey: SlackWriteKey,
+  threadTs: SlackMessageTs | null,
 ) {
   const response = yield* apiResponse(http, session, "chat.postMessage", {
     channel,
@@ -305,7 +292,10 @@ const post = Effect.fn("SlackWrite.post")(function* (
     PostResponse,
     "Slack returned an invalid posted message",
   )(response.body);
-  return { team: session.team, channel: posted.channel, ts: posted.ts, threadTs } satisfies SlackPostReceipt;
+  const team = yield* decodeSlackTeamId(session.team).pipe(
+    Effect.mapError(() => fail("connection-not-ready", false, "Slack Connection team is invalid")),
+  );
+  return { team, channel: posted.channel, ts: posted.ts, threadTs } satisfies SlackPostReceipt;
 });
 
 const draftRequest = (target: SlackMessageTarget, message: string) =>
@@ -326,24 +316,25 @@ const draftResponse = Effect.fn("SlackWrite.draftResponse")(function* (
   message: string,
 ) {
   const request = yield* draftRequest(target, message);
-  const response = yield* http
-    .execute(
-      request.pipe(
-        HttpClientRequest.bearerToken(Redacted.value(session.token)),
-        HttpClientRequest.setHeader("accept", "application/json, text/event-stream"),
-      ),
-    )
-    .pipe(
-      Effect.mapError(() => fail("draft-outcome-unknown", false, "Slack draft outcome is unknown")),
-      Effect.timeout(requestDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        fail("draft-outcome-unknown", false, `Slack draft outcome is unknown after ${requestDeadline}`),
-      ),
-    );
-  const responseFailure = responseFailureRules.find(({ matches }) => matches(response));
-  if (responseFailure) return yield* responseFailure.make(response);
-  const body = yield* readDraftBody(response);
-  return yield* decodeDraftResponse(body);
+  return yield* Effect.gen(function* () {
+    const response = yield* http
+      .execute(
+        request.pipe(
+          HttpClientRequest.bearerToken(Redacted.value(session.token)),
+          HttpClientRequest.setHeader("accept", "application/json, text/event-stream"),
+        ),
+      )
+      .pipe(Effect.mapError(() => fail("draft-outcome-unknown", false, "Slack draft outcome is unknown")));
+    const responseFailure = draftResponseFailureRules.find(({ matches }) => matches(response));
+    if (responseFailure) return yield* responseFailure.make(response);
+    const body = yield* readSlackBody(response, "draft-outcome-unknown");
+    return yield* decodeDraftResponse(body);
+  }).pipe(
+    Effect.timeout(requestDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      fail("draft-outcome-unknown", false, `Slack draft outcome is unknown after ${requestDeadline}`),
+    ),
+  );
 });
 
 type DraftResult = typeof DraftResponse.Type;
@@ -364,50 +355,43 @@ const draftFailureRules = [
 }>;
 
 export const make = (
-  client: SlackClientService,
+  client: SlackWriteClient,
   http: HttpClient.HttpClient,
   connections: ConnectionStoreService,
-): SlackWriteService => {
-  const session = sessionFor(connections);
-  return {
-    sendMessage: Effect.fn("SlackWrite.sendMessage")(function* (channel, message, writeKey) {
-      const connected = yield* session;
-      const messages = yield* client.history(connected, channel, 0).pipe(Effect.mapError(sourceFailure));
-      const existing = writeKeyMessage(messages, writeKey);
-      if (existing) return receipt(connected, existing);
-      return yield* post(http, connected, channel, message, writeKey, null);
-    }),
-    replyInThread: Effect.fn("SlackWrite.replyInThread")(function* (target, message, writeKey) {
-      const connected = yield* session;
-      yield* requireTeam(connected, target);
-      const messages = yield* client
-        .replies(connected, target.channel, target.threadTs)
-        .pipe(Effect.mapError(sourceFailure));
-      const existing = writeKeyMessage(messages, writeKey);
-      if (existing) return receipt(connected, existing);
-      return yield* post(http, connected, target.channel, message, writeKey, target.threadTs);
-    }),
-    addReaction: Effect.fn("SlackWrite.addReaction")(function* (target, emoji) {
-      const connected = yield* session;
-      yield* requireTeam(connected, target);
-      const response = yield* apiResponse(http, connected, "reactions.add", {
-        channel: target.channel,
-        timestamp: target.ts,
-        name: emoji,
-      });
-      if (response.envelope.error === "already_reacted") return;
-      if (!response.envelope.ok) return yield* apiFailure(response.envelope.error ?? "unknown");
-      yield* decodeResponse(ReactionResponse, "Slack returned an invalid reaction result")(response.body);
-    }),
-    draftReply: Effect.fn("SlackWrite.draftReply")(function* (target, message) {
-      const connected = yield* session;
-      yield* requireTeam(connected, target);
-      const response = yield* draftResponse(http, connected, target, message);
-      const failure = draftFailureRules.find(({ matches }) => matches(response));
-      if (failure) return yield* failure.make(response);
-    }),
-  };
-};
+): SlackWriteService => ({
+  sendMessage: Effect.fn("SlackWrite.sendMessage")(function* (channel, message, writeKey) {
+    const connected = yield* slackSession(connections).pipe(Effect.mapError(sourceFailure));
+    const existing = yield* findWrite(client, connected, channel, null, writeKey);
+    if (existing) return yield* receipt(connected, existing);
+    return yield* post(http, connected, channel, message, writeKey, null);
+  }),
+  replyInThread: Effect.fn("SlackWrite.replyInThread")(function* (target, message, writeKey) {
+    const connected = yield* slackSession(connections).pipe(Effect.mapError(sourceFailure));
+    yield* requireTeam(connected, target);
+    const existing = yield* findWrite(client, connected, target.channel, target.threadTs, writeKey);
+    if (existing) return yield* receipt(connected, existing);
+    return yield* post(http, connected, target.channel, message, writeKey, target.threadTs);
+  }),
+  addReaction: Effect.fn("SlackWrite.addReaction")(function* (target, emoji) {
+    const connected = yield* slackSession(connections).pipe(Effect.mapError(sourceFailure));
+    yield* requireTeam(connected, target);
+    const response = yield* apiResponse(http, connected, "reactions.add", {
+      channel: target.channel,
+      timestamp: target.ts,
+      name: emoji,
+    });
+    if (response.envelope.error === "already_reacted") return;
+    if (!response.envelope.ok) return yield* apiFailure(response.envelope.error ?? "unknown");
+    yield* decodeResponse(ReactionResponse, "Slack returned an invalid reaction result")(response.body);
+  }),
+  draftReply: Effect.fn("SlackWrite.draftReply")(function* (target, message) {
+    const connected = yield* slackSession(connections).pipe(Effect.mapError(sourceFailure));
+    yield* requireTeam(connected, target);
+    const response = yield* draftResponse(http, connected, target, message);
+    const failure = draftFailureRules.find(({ matches }) => matches(response));
+    if (failure) return yield* failure.make(response);
+  }),
+});
 
 export const layer = Layer.effect(
   SlackWrite,

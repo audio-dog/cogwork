@@ -1,4 +1,7 @@
 import {
+  type SlackChannelId,
+  type SlackMessageTs,
+  type SlackWriteKey,
   type WorkflowAvailability,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
@@ -19,6 +22,7 @@ import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
+import { readJsonEventStream } from "./json-event-stream";
 import {
   SourceFailure,
   type TriggerEvent,
@@ -58,6 +62,12 @@ export interface SlackChannel {
   readonly name: string;
 }
 
+export interface SlackWriteLookup {
+  readonly channel: SlackChannelId;
+  readonly threadTs: SlackMessageTs | null;
+  readonly writeKey: SlackWriteKey;
+}
+
 export interface SlackClientService {
   readonly searchMessages: (
     session: SlackSession,
@@ -82,6 +92,10 @@ export interface SlackClientService {
     channel: string,
     threadTs: string,
   ) => Effect.Effect<ReadonlyArray<SlackMessage>, SourceFailure>;
+  readonly findWrite: (
+    session: SlackSession,
+    lookup: SlackWriteLookup,
+  ) => Effect.Effect<SlackMessage | null, SourceFailure>;
   readonly channels: (session: SlackSession) => Effect.Effect<ReadonlyArray<SlackChannel>, SourceFailure>;
   readonly emojis: (session: SlackSession) => Effect.Effect<ReadonlyArray<string>, SourceFailure>;
   readonly channelName: (session: SlackSession, channel: string) => Effect.Effect<string, SourceFailure>;
@@ -319,6 +333,7 @@ const normalizeMessage = (message: RawMessageValue, channel: string): SlackMessa
 
 const slackApi = "https://slack.com/api";
 const slackRequestDeadline = "30 seconds";
+const slackResponseByteLimit = 16 * 1024 * 1024;
 
 const retryAfterMillis = (value: string | undefined) => {
   const seconds = Number(value);
@@ -352,13 +367,9 @@ function callSlack(
       HttpClientRequest.bearerToken(Redacted.value(session.token)),
       HttpClientRequest.setHeader("accept", "application/json"),
     );
-    const response = yield* client.execute(request).pipe(
-      Effect.mapError((error) => sourceFailure("unavailable", error.message)),
-      Effect.timeout(slackRequestDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        sourceFailure("unavailable", `Slack request timed out after ${slackRequestDeadline}`),
-      ),
-    );
+    const response = yield* client
+      .execute(request)
+      .pipe(Effect.mapError((error) => sourceFailure("unavailable", error.message)));
     const statusFailures = {
       401: () => sourceFailure("auth", "Slack rejected the Connection token"),
       403: () => sourceFailure("auth", "Slack rejected the Connection token"),
@@ -376,8 +387,8 @@ function callSlack(
       return yield* statusFailure?.() ??
         sourceFailure("unavailable", `Slack request failed (${response.status})`);
     }
-    const body = yield* response.json.pipe(
-      Effect.mapError(() => sourceFailure("decode", "Slack returned an unreadable response")),
+    const body = yield* readJsonEventStream(response, "Slack response", slackResponseByteLimit).pipe(
+      Effect.mapError((error) => sourceFailure("decode", error.message)),
     );
     const envelope = yield* decodeSlack(SlackEnvelope)(body);
     if (envelope.ok) return body;
@@ -395,10 +406,16 @@ function callSlack(
       : sourceFailure("unavailable", `Slack API error: ${error}`);
     const apiFailure = (apiFailures as Readonly<Record<string, () => SourceFailure>>)[error];
     return yield* apiFailure?.() ?? authFailure;
-  });
+  }).pipe(
+    Effect.timeout(slackRequestDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      sourceFailure("unavailable", `Slack request timed out after ${slackRequestDeadline}`),
+    ),
+  );
 }
 
 export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientService => {
+  const writeLookupPageLimit = 10;
   const cursorPages = <A>(
     session: SlackSession,
     method: string,
@@ -413,6 +430,43 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
         Effect.map(([messages, next]) => [messages, next ? Option.some(next) : Option.none()] as const),
       ),
     ).pipe(Stream.runCollect);
+
+  const findWrite = Effect.fn("SlackClient.findWrite")(function* (
+    session: SlackSession,
+    lookup: SlackWriteLookup,
+  ) {
+    const method = lookup.threadTs ? "conversations.replies" : "conversations.history";
+    const params = {
+      channel: lookup.channel,
+      include_all_metadata: "true",
+      limit: "200",
+      ...(lookup.threadTs ? { ts: lookup.threadTs } : {}),
+    };
+    const pages = yield* Stream.paginate({ cursor: "", page: 0 }, ({ cursor, page }) =>
+      callSlack(client, session, method, cursor ? { ...params, cursor } : params).pipe(
+        Effect.flatMap(decodeSlack(HistoryResponse)),
+        Effect.map((response) => {
+          const messages = response.messages.map((message) => normalizeMessage(message, lookup.channel));
+          const message = messages.find(
+            ({ metadata }) =>
+              metadata?.eventType === "cogwork_write" && metadata.writeKey === lookup.writeKey,
+          );
+          const nextCursor = response.response_metadata?.next_cursor ?? "";
+          const shouldContinue = !message && nextCursor !== "" && page + 1 < writeLookupPageLimit;
+          return [
+            [{ message: message ?? null, nextCursor }],
+            shouldContinue ? Option.some({ cursor: nextCursor, page: page + 1 }) : Option.none(),
+          ] as const;
+        }),
+      ),
+    ).pipe(Stream.runCollect);
+    const message = pages.find((page) => page.message)?.message ?? null;
+    if (message) return message;
+    const truncated = pages.at(-1)?.nextCursor;
+    return truncated
+      ? yield* sourceFailure("unavailable", "Slack write lookup exceeded the page limit")
+      : null;
+  });
 
   const searchMessages = (session: SlackSession, query: string, oldestMillis: number) =>
     Stream.paginate(1, (page) =>
@@ -506,6 +560,7 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
         ],
       ),
     ),
+    findWrite,
     channels: Effect.fn("SlackClient.channels")((session) =>
       Stream.paginate("", (cursor) =>
         callSlack(client, session, "conversations.list", {
@@ -559,7 +614,7 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
 
 export const httpClientLayer = Layer.effect(SlackClient, Effect.map(HttpClient.HttpClient, makeHttpClient));
 
-const slackSession = Effect.fn("SlackSource.session")(function* (connections: ConnectionStoreService) {
+export const slackSession = Effect.fn("SlackSource.session")(function* (connections: ConnectionStoreService) {
   const found = yield* connections
     .findSystem("slack")
     .pipe(Effect.mapError((error) => sourceFailure("connection-not-ready", error.message)));

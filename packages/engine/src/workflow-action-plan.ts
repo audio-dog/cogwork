@@ -4,6 +4,7 @@ import {
   keyOf,
   matchWorkflowTransitions,
   type RunId,
+  SlackWriteKey,
   WorkflowActionOrigin,
   WorkflowActionPlan,
   type WorkflowActionPlanArtifact,
@@ -183,9 +184,12 @@ const issueTargetProducer =
       Effect.flatMap((target) => producer(context.admission, target, context.inputs)),
     );
 
-const slackTarget = (
-  target: WorkflowActionTarget,
-): Effect.Effect<WorkflowActionTarget, WorkflowActionPlanDecodeError> => Effect.succeed(target);
+const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
+
+const slackTarget = (target: unknown) =>
+  decodeSlackTarget(target).pipe(
+    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "The Slack target is invalid" })),
+  );
 
 const slackItemTarget: TargetProducer = ({ admission }) =>
   WorkItemRef.matchOrElse(
@@ -214,7 +218,7 @@ const slackItemTarget: TargetProducer = ({ admission }) =>
 const slackChannelTarget: TargetProducer = ({ parameters }) => {
   const channel = parameters.find(({ id }) => id === "channel")?.value.trim();
   return channel
-    ? Effect.succeed<WorkflowActionTarget>({ _tag: "SlackChannel", channel })
+    ? slackTarget({ _tag: "SlackChannel", channel })
     : decodeFailure("The Slack message action needs a channel");
 };
 
@@ -385,6 +389,9 @@ const requireSlackMessage = (step: WorkflowActionPlanStep) =>
     ? Effect.succeed(step.target)
     : Effect.fail(slackInvalidTarget(step));
 
+const requireSlackWriteKey = (step: WorkflowActionPlanStep) =>
+  Schema.decodeEffect(SlackWriteKey)(step.writeKey).pipe(Effect.mapError(() => slackInvalidTarget(step)));
+
 const slackArtifact = (context: ActionContext, receipt: SlackPostReceipt) =>
   WorkflowSlackActionArtifact.make({
     ...receipt,
@@ -452,20 +459,18 @@ const actionExecutors: Record<string, ActionExecutor> = {
     if (!WorkflowActionTarget.guards.SlackChannel(context.step.target)) {
       return yield* slackInvalidTarget(context.step);
     }
+    const writeKey = yield* requireSlackWriteKey(context.step);
     const receipt = yield* context.slack.sendMessage(
       context.step.target.channel,
       context.step.inputs.message ?? "",
-      context.step.writeKey,
+      writeKey,
     );
     return slackArtifact(context, receipt);
   }),
   "reply-in-thread": Effect.fn("WorkflowActionPlan.replyInSlackThread")(function* (context: ActionContext) {
     const target = yield* requireSlackMessage(context.step);
-    const receipt = yield* context.slack.replyInThread(
-      target,
-      context.step.inputs.reply ?? "",
-      context.step.writeKey,
-    );
+    const writeKey = yield* requireSlackWriteKey(context.step);
+    const receipt = yield* context.slack.replyInThread(target, context.step.inputs.reply ?? "", writeKey);
     return slackArtifact(context, receipt);
   }),
   "add-reaction": Effect.fn("WorkflowActionPlan.addSlackReaction")(function* (context: ActionContext) {
@@ -561,12 +566,12 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     ({ entry, status }) => entry === "slack.draft-reply-in-slack" && status === "executing",
   );
   if (executingDraft) {
-    const plan = replaceStep(initial, executingDraft, { status: "failed" });
-    yield* store.save(plan);
     yield* coordination.park(admission.event.key, {
       _tag: "DraftOutcomeUnknown",
       step: executingDraft.entry,
     });
+    const plan = replaceStep(initial, executingDraft, { status: "failed" });
+    yield* store.save(plan);
     return { _tag: "Parked" } as const;
   }
   const lacksWorkspace = initial.steps.some(
@@ -654,12 +659,12 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
         }
         const error = result.failure;
         if (error._tag === "SlackWriteError" && error.reason === "draft-outcome-unknown") {
-          const plan = replaceStep(executingPlan, executingStep, { status: "failed" });
-          yield* store.save(plan);
           yield* coordination.park(admission.event.key, {
             _tag: "DraftOutcomeUnknown",
             step: executingStep.entry,
           });
+          const plan = replaceStep(executingPlan, executingStep, { status: "failed" });
+          yield* store.save(plan);
           return { plan, result: { _tag: "Parked" } } satisfies ExecutionState;
         }
         const failures = executingStep.failures + 1;

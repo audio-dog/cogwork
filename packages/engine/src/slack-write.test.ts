@@ -1,4 +1,10 @@
-import { Connection, connectionIdOf } from "@cogwork/contracts";
+import {
+  Connection,
+  connectionIdOf,
+  SlackChannelId,
+  SlackWriteKey,
+  WorkflowActionTarget,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -11,7 +17,7 @@ import type * as HttpClientRequest from "effect/unstable/http/HttpClientRequest"
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { ConnectionStoreService } from "./connection";
 import type { Credential } from "./credential-store";
-import type { SlackClientService, SlackMessage, SlackSession } from "./slack-source";
+import type { SlackMessage, SlackSession } from "./slack-source";
 import { make } from "./slack-write";
 
 const slackConnection = Connection.make({
@@ -24,6 +30,19 @@ const session: SlackSession = {
   team: "T123",
   user: "U123",
   token: Redacted.make("xoxp-test"),
+};
+const channelId = Schema.decodeSync(SlackChannelId);
+const writeKey = Schema.decodeSync(SlackWriteKey);
+const messageTarget = (channel: string, ts: string, threadTs: string) => {
+  const target = Schema.decodeSync(WorkflowActionTarget)({
+    _tag: "SlackMessage",
+    team: session.team,
+    channel,
+    ts,
+    threadTs,
+  });
+  if (!WorkflowActionTarget.guards.SlackMessage(target)) throw new Error("expected Slack message target");
+  return target;
 };
 const connections: ConnectionStoreService = {
   overview: Effect.die("unused"),
@@ -94,17 +113,22 @@ interface SlackState {
   readonly replies: ReadonlyArray<SlackMessage>;
 }
 
-const slackClient = (state: Ref.Ref<SlackState>): SlackClientService => ({
-  searchMessages: () => Effect.die("unused"),
-  searchChannelMessages: () => Effect.die("unused"),
-  history: () => Ref.get(state).pipe(Effect.map(({ history }) => history)),
-  reactions: () => Effect.die("unused"),
-  replies: () => Ref.get(state).pipe(Effect.map(({ replies }) => replies)),
-  channels: () => Effect.die("unused"),
-  emojis: () => Effect.die("unused"),
-  channelName: () => Effect.die("unused"),
-  userName: () => Effect.die("unused"),
-  permalink: () => Effect.die("unused"),
+const slackClient = (state: Ref.Ref<SlackState>) => ({
+  findWrite: (
+    _session: SlackSession,
+    lookup: { readonly threadTs: string | null; readonly writeKey: string },
+  ) =>
+    Ref.get(state).pipe(
+      Effect.map((current) => {
+        const messages = lookup.threadTs ? current.replies : current.history;
+        return (
+          messages.find(
+            ({ metadata }) =>
+              metadata?.eventType === "cogwork_write" && metadata.writeKey === lookup.writeKey,
+          ) ?? null
+        );
+      }),
+    ),
 });
 
 describe("Slack write port", () => {
@@ -138,12 +162,12 @@ describe("Slack write port", () => {
         );
       });
       const slack = make(slackClient(state), http, connections);
-      const item = { team: "T123", channel: "C123", ts: "900.000", threadTs: "900.000" };
+      const item = messageTarget("C123", "900.000", "900.000");
 
-      const sent = yield* slack.sendMessage("C456", "Hello", "send-key");
-      const retriedSend = yield* slack.sendMessage("C456", "Hello", "send-key");
-      const replied = yield* slack.replyInThread(item, "On it", "reply-key");
-      const retriedReply = yield* slack.replyInThread(item, "On it", "reply-key");
+      const sent = yield* slack.sendMessage(channelId("C456"), "Hello", writeKey("send-key"));
+      const retriedSend = yield* slack.sendMessage(channelId("C456"), "Hello", writeKey("send-key"));
+      const replied = yield* slack.replyInThread(item, "On it", writeKey("reply-key"));
+      const retriedReply = yield* slack.replyInThread(item, "On it", writeKey("reply-key"));
 
       assert.strictEqual((yield* Ref.get(posts)).length, 2);
       assert.strictEqual(sent.ts, "901.000");
@@ -167,7 +191,7 @@ describe("Slack write port", () => {
       const slack = make(slackClient(state), http, connections);
 
       const result = yield* Effect.exit(
-        slack.addReaction({ team: "T123", channel: "C123", ts: "900.000", threadTs: "900.000" }, "eyes"),
+        slack.addReaction(messageTarget("C123", "900.000", "900.000"), "eyes"),
       );
 
       assert.strictEqual(result._tag, "Success");
@@ -185,9 +209,40 @@ describe("Slack write port", () => {
       );
       const slack = make(slackClient(state), http, connections);
 
-      const failure = yield* Effect.flip(slack.sendMessage("C123", "Hello", "write-key"));
+      const failure = yield* Effect.flip(
+        slack.sendMessage(channelId("C123"), "Hello", writeKey("write-key")),
+      );
 
       assert.strictEqual(failure.reason, "rate-limited");
+      assert.isTrue(failure.retryable);
+    }),
+  );
+
+  it.effect("times out a stalled post response body", () =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make<SlackState>({ history: [], replies: [] });
+      const slack = make(
+        slackClient(state),
+        HttpClient.make((request) =>
+          Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              new Response(new ReadableStream({ start() {} }), {
+                headers: { "content-type": "application/json" },
+              }),
+            ),
+          ),
+        ),
+        connections,
+      );
+      const pending = yield* Effect.flip(
+        slack.sendMessage(channelId("C123"), "Hello", writeKey("write-key")),
+      ).pipe(Effect.forkChild({ startImmediately: true }));
+
+      yield* TestClock.adjust("30 seconds");
+      const failure = yield* Fiber.join(pending);
+
+      assert.strictEqual(failure.reason, "unavailable");
       assert.isTrue(failure.retryable);
     }),
   );
@@ -218,7 +273,7 @@ describe("Slack write port", () => {
       const slack = make(slackClient(state), http, connections);
 
       const result = yield* Effect.exit(
-        slack.draftReply({ team: "T123", channel: "C123", ts: "902.000", threadTs: "900.000" }, "Looks good"),
+        slack.draftReply(messageTarget("C123", "902.000", "900.000"), "Looks good"),
       );
 
       assert.strictEqual(result._tag, "Success");
@@ -246,7 +301,7 @@ describe("Slack write port", () => {
       const slack = make(slackClient(state), http, connections);
 
       const failure = yield* Effect.flip(
-        slack.draftReply({ team: "T123", channel: "C123", ts: "902.000", threadTs: "900.000" }, "Looks good"),
+        slack.draftReply(messageTarget("C123", "902.000", "900.000"), "Looks good"),
       );
 
       assert.strictEqual(failure.reason, "invalid");
@@ -254,16 +309,42 @@ describe("Slack write port", () => {
     }),
   );
 
-  it.effect("classifies a draft timeout as an unknown outcome", () =>
+  it.effect("classifies a draft server failure as an unknown outcome", () =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make<SlackState>({ history: [], replies: [] });
+      const http = HttpClient.make((request) =>
+        Effect.succeed(response(request, { error: "server failure" }, 500)),
+      );
+      const slack = make(slackClient(state), http, connections);
+
+      const failure = yield* Effect.flip(
+        slack.draftReply(messageTarget("C123", "902.000", "900.000"), "Looks good"),
+      );
+
+      assert.strictEqual(failure.reason, "draft-outcome-unknown");
+      assert.isFalse(failure.retryable);
+    }),
+  );
+
+  it.effect("classifies a stalled draft body as an unknown outcome", () =>
     Effect.gen(function* () {
       const state = yield* Ref.make<SlackState>({ history: [], replies: [] });
       const slack = make(
         slackClient(state),
-        HttpClient.make(() => Effect.never),
+        HttpClient.make((request) =>
+          Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              new Response(new ReadableStream({ start() {} }), {
+                headers: { "content-type": "application/json" },
+              }),
+            ),
+          ),
+        ),
         connections,
       );
       const pending = yield* Effect.flip(
-        slack.draftReply({ team: "T123", channel: "C123", ts: "902.000", threadTs: "900.000" }, "Looks good"),
+        slack.draftReply(messageTarget("C123", "902.000", "900.000"), "Looks good"),
       ).pipe(Effect.forkChild({ startImmediately: true }));
 
       yield* TestClock.adjust("30 seconds");

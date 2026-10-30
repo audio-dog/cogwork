@@ -2,8 +2,12 @@ import {
   keyOf,
   type ParkReason,
   RunId,
+  SlackChannelId,
+  SlackMessageTs,
+  SlackTeamId,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
+  WorkflowActionTarget,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -20,7 +24,7 @@ import * as Schema from "effect/Schema";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { IssueTracker, IssueTrackerError, makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { SlackWrite, SlackWriteError } from "./slack-write";
+import { SlackWrite, SlackWriteError, slackActionEntries } from "./slack-write";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import type { TriggerAdmission } from "./trigger-observation";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
@@ -33,6 +37,10 @@ const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
 const decodeRun = Schema.decodeSync(RunId);
 const decodeItem = Schema.decodeSync(WorkItemId);
+const decodeSlackTarget = Schema.decodeSync(WorkflowActionTarget);
+const decodeSlackChannel = Schema.decodeSync(SlackChannelId);
+const decodeSlackTs = Schema.decodeSync(SlackMessageTs);
+const slackTeam = Schema.decodeSync(SlackTeamId)("T123");
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const workflow = decodeWorkflow("issue-writes");
 const operation = decodeNode("write");
@@ -136,7 +144,7 @@ const slackStep = (
     entry: decodeEntry(entry),
     parameters,
     inputs: input,
-    target:
+    target: decodeSlackTarget(
       entry === "slack.send-message"
         ? { _tag: "SlackChannel", channel: "C456" }
         : {
@@ -146,6 +154,7 @@ const slackStep = (
             ts: "900.000",
             threadTs: "900.000",
           },
+    ),
     writeKey: `write-${position}`,
     status: "pending",
     failures: 0,
@@ -158,6 +167,7 @@ class ActionPlanProbe extends Context.Service<
     readonly calls: Ref.Ref<ReadonlyArray<string>>;
     readonly barrier: Ref.Ref<number>;
     readonly parks: Ref.Ref<ReadonlyArray<ParkReason>>;
+    readonly parkFailures: Ref.Ref<number>;
   }
 >()("@cogwork/engine/workflow-action-plan.test/ActionPlanProbe") {
   static readonly layer = Layer.effect(
@@ -166,6 +176,7 @@ class ActionPlanProbe extends Context.Service<
       calls: Ref.make<ReadonlyArray<string>>([]),
       barrier: Ref.make(0),
       parks: Ref.make<ReadonlyArray<ParkReason>>([]),
+      parkFailures: Ref.make(0),
     }),
   );
 }
@@ -187,7 +198,14 @@ const coordinationLayer = Layer.effect(
         release: () => Effect.die("unused"),
         recordAttempt: () => Effect.die("unused"),
         park: (_ref, reason) =>
-          Ref.update(probe.parks, (current) => [...current, reason]).pipe(
+          Ref.modify(probe.parkFailures, (failures) =>
+            failures > 0 ? [true, failures - 1] : [false, failures],
+          ).pipe(
+            Effect.flatMap((shouldFail) =>
+              shouldFail
+                ? Effect.die("park crashed")
+                : Ref.update(probe.parks, (current) => [...current, reason]),
+            ),
             Effect.andThen(Ref.get(probe.barrier)),
             Effect.map(viewAt),
           ),
@@ -239,11 +257,11 @@ const slackLayer = Layer.effect(
   SlackWrite,
   Effect.map(ActionPlanProbe, (probe) => {
     const record = (value: string) => Ref.update(probe.calls, (current) => [...current, value]);
-    const receipt = (channel: string, ts: string, threadTs: string | null) => ({
-      team: "T123",
+    const receipt = (channel: SlackChannelId, ts: string, threadTs: string | null) => ({
+      team: slackTeam,
       channel,
-      ts,
-      threadTs,
+      ts: decodeSlackTs(ts),
+      threadTs: threadTs ? decodeSlackTs(threadTs) : null,
     });
     const draftOutcomes = new Map<string, () => Effect.Effect<void, SlackWriteError>>([
       [
@@ -333,32 +351,8 @@ describe("Workflow action plan", () => {
         triggers: [],
         operations: [slackOperation],
       });
-      const actionEntry = (
-        key: string,
-        parameters: ReadonlyArray<string>,
-        agentInputs: ReadonlyArray<string>,
-      ) => ({
-        key: decodeEntry(key),
-        name: key,
-        kind: "action" as const,
-        system: "slack",
-        connection: "slack",
-        requires: [],
-        parameters: parameters.map((id) => ({ id, required: true, source: "live" as const, values: [] })),
-        itemKind: null,
-        actsOn: ["slack-message", "slack-conversation"],
-        requiresWorkspace: false,
-        permissionProfile: "read-only" as const,
-        agentInputs,
-        emits: [],
-      });
       const catalog = {
-        entries: [
-          actionEntry("slack.send-message", ["channel"], ["message"]),
-          actionEntry("slack.reply-in-thread", [], ["reply"]),
-          actionEntry("slack.add-reaction", ["emoji"], []),
-          actionEntry("slack.draft-reply-in-slack", [], ["reply"]),
-        ],
+        entries: slackActionEntries,
         instructionPackages: [],
         harnesses: [],
       };
@@ -377,10 +371,28 @@ describe("Workflow action plan", () => {
       assert.deepStrictEqual(
         built.steps.map(({ target }) => target),
         [
-          { _tag: "SlackChannel", channel: "C456" },
-          { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000", threadTs: "900.000" },
-          { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000", threadTs: "900.000" },
-          { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000", threadTs: "900.000" },
+          decodeSlackTarget({ _tag: "SlackChannel", channel: "C456" }),
+          decodeSlackTarget({
+            _tag: "SlackMessage",
+            team: "T123",
+            channel: "C123",
+            ts: "900.000",
+            threadTs: "900.000",
+          }),
+          decodeSlackTarget({
+            _tag: "SlackMessage",
+            team: "T123",
+            channel: "C123",
+            ts: "900.000",
+            threadTs: "900.000",
+          }),
+          decodeSlackTarget({
+            _tag: "SlackMessage",
+            team: "T123",
+            channel: "C123",
+            ts: "900.000",
+            threadTs: "900.000",
+          }),
         ],
       );
     }),
@@ -410,7 +422,6 @@ describe("Workflow action plan", () => {
         "reaction:900.000:eyes",
         "draft:900.000:Looks good",
       ]);
-      assert.deepInclude(initial.steps[0], { writeKey: "write-0" });
       assert.isNull(yield* store.pending(initial.item, initial.workflow));
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
@@ -456,9 +467,9 @@ describe("Workflow action plan", () => {
       assert.strictEqual(result._tag, "Retry");
       const artifact = saved?.steps[0]?.artifact;
       assert.deepInclude(artifact, {
-        team: "T123",
-        channel: "C456",
-        ts: "901.000",
+        team: slackTeam,
+        channel: decodeSlackChannel("C456"),
+        ts: decodeSlackTs("901.000"),
         threadTs: null,
       });
       assert.strictEqual(artifact?.origin.writeKey, "write-0");
@@ -508,6 +519,29 @@ describe("Workflow action plan", () => {
       assert.strictEqual(recovered._tag, "Success");
       if (recovered._tag === "Success") assert.strictEqual(recovered.value._tag, "Parked");
       assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:crash"]);
+      assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "DraftOutcomeUnknown");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("retries the park after an unknown draft outcome without drafting again", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const initial = WorkflowActionPlan.make({
+        ...plan([slackStep(0, "slack.draft-reply-in-slack", { reply: "unknown" })]),
+        item: keyOf(slackRef),
+      });
+      const store = yield* WorkflowActionPlanStore;
+      yield* store.create(initial);
+      yield* Ref.set(probe.parkFailures, 1);
+
+      const crashed = yield* Effect.exit(executeWorkflowActionPlan(initial, slackAdmission));
+      const inFlight = yield* store.pending(initial.item, initial.workflow);
+      const recovered = yield* executeWorkflowActionPlan(inFlight ?? initial, slackAdmission);
+
+      assert.strictEqual(crashed._tag, "Failure");
+      assert.strictEqual(inFlight?.steps[0]?.status, "executing");
+      assert.strictEqual(recovered._tag, "Parked");
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:unknown"]);
       assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "DraftOutcomeUnknown");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );

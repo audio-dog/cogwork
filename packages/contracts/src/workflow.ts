@@ -5,6 +5,9 @@ import * as Schema from "effect/Schema";
 import {
   HarnessName,
   IssueTrackerType,
+  SlackChannelId,
+  SlackMessageTs,
+  SlackTeamId,
   TrimmedNonEmptyString,
   WorkItemId,
   WorkspaceId,
@@ -92,12 +95,12 @@ const workflowActionTargetBinding = {
 export const WorkflowActionTarget = Schema.TaggedUnion({
   Cogwork: {},
   NoWorkspace: {},
-  SlackChannel: { channel: TrimmedNonEmptyString },
+  SlackChannel: { channel: SlackChannelId },
   SlackMessage: {
-    team: TrimmedNonEmptyString,
-    channel: TrimmedNonEmptyString,
-    ts: TrimmedNonEmptyString,
-    threadTs: TrimmedNonEmptyString,
+    team: SlackTeamId,
+    channel: SlackChannelId,
+    ts: SlackMessageTs,
+    threadTs: SlackMessageTs,
   },
   CurrentIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   ExistingIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
@@ -122,10 +125,10 @@ export class WorkflowActionArtifact extends Schema.Class<WorkflowActionArtifact>
 export class WorkflowSlackActionArtifact extends Schema.Class<WorkflowSlackActionArtifact>(
   "WorkflowSlackActionArtifact",
 )({
-  team: TrimmedNonEmptyString,
-  channel: TrimmedNonEmptyString,
-  ts: TrimmedNonEmptyString,
-  threadTs: Schema.NullOr(TrimmedNonEmptyString),
+  team: SlackTeamId,
+  channel: SlackChannelId,
+  ts: SlackMessageTs,
+  threadTs: Schema.NullOr(SlackMessageTs),
   origin: WorkflowActionOrigin,
 }) {}
 
