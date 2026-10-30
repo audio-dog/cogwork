@@ -9,7 +9,7 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
-import { WorkItemKey } from "./coordination";
+import { Lineage, WorkItemKey } from "./coordination";
 import { PrincipalId } from "./principal";
 import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
@@ -103,6 +103,7 @@ export class WorkflowActionOrigin extends Schema.Class<WorkflowActionOrigin>("Wo
   workflow: WorkflowId,
   attempt: RunId,
   writeKey: TrimmedNonEmptyString,
+  lineage: Lineage,
 }) {}
 
 export class WorkflowActionArtifact extends Schema.Class<WorkflowActionArtifact>("WorkflowActionArtifact")({
@@ -143,6 +144,7 @@ export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("Workfl
   digest: TrimmedNonEmptyString,
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
+  lineage: Lineage,
   handOff: Schema.NullOr(WorkflowNodeId),
   steps: Schema.Array(WorkflowActionPlanStep),
 }) {}

@@ -39,6 +39,7 @@ import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observ
 import { Workflows } from "./workflow";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 
 const runId = Schema.decodeSync(RunId);
@@ -46,6 +47,17 @@ const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
 const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
+const encodeArtifactContext = Schema.encodeSync(
+  Schema.fromJsonString(
+    Schema.Array(
+      Schema.Struct({
+        workspace: WorkspaceId,
+        issue: WorkItemId,
+        url: Schema.String,
+      }),
+    ),
+  ),
+);
 const issueSearchActionNames = new Set(["create-issue", "comment-issue", "comment-this-item"]);
 
 const needsIssueSearch = (
@@ -117,18 +129,13 @@ const fanOutAdmission = (
     event: {
       key: { _tag: "FanOutChild", parent, run: attempt, position },
       revision: `${admission.event.revision}:${attempt}:${position}`,
-      cause: { _tag: "Cogwork", origin: parent },
+      cause: { _tag: "Cogwork", origin: parent, lineage: admission.lineage },
       atMillis: admission.event.atMillis,
       entry: admission.event.entry,
       workspace: admission.event.workspace,
       workContext: {
-        body: [
-          admission.event.workContext?.body ?? workContextBody(admission, admission.subscription.workflow),
-          "",
-          `## ${admission.subscription.operation} element ${position + 1}`,
-          JSON.stringify(element, null, 2),
-        ].join("\n"),
-        comments: admission.event.workContext?.comments ?? [],
+        body: JSON.stringify(element, null, 2),
+        comments: [],
       },
     },
     subscription: admission.subscription,
@@ -137,7 +144,6 @@ const fanOutAdmission = (
       parent: LineageId.make(attempt),
       hop: admission.lineage.hop + 1,
     },
-    element,
   } satisfies TriggerAdmission;
 };
 
@@ -175,6 +181,7 @@ export const make = Effect.gen(function* () {
   const contextAssembler = yield* ContextAssembler;
   const notifications = yield* WorkflowNotifications;
   const actionPlans = yield* WorkflowActionPlanStore;
+  const artifacts = yield* WorkflowArtifactStore;
   const issueTracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
   const observationStore = yield* TriggerObservationStore;
@@ -185,6 +192,7 @@ export const make = Effect.gen(function* () {
         Context.add(IssueTracker, issueTracker),
         Context.add(RunLedger, ledger),
         Context.add(WorkflowActionPlanStore, actionPlans),
+        Context.add(WorkflowArtifactStore, artifacts),
         Context.add(WorkflowNotifications, notifications),
       ),
     ),
@@ -202,13 +210,24 @@ export const make = Effect.gen(function* () {
     );
 
   const settlePendingAttempt = (admission: TriggerAdmission, attempt: RunId, status: RunRecord["status"]) =>
-    admission.element === undefined ? settleAttempt(attempt, status) : Effect.void;
+    admission.event.key._tag === "FanOutChild" ? Effect.void : settleAttempt(attempt, status);
+
+  const closeRevision = (admission: TriggerAdmission) =>
+    coordination.markProcessed(admission.event.key, admission.event.revision);
 
   const complete = Effect.fn("WorkflowRun.complete")(function* (admission: TriggerAdmission) {
-    yield* observationStore.complete(
-      admission,
-      coordination.markProcessed(admission.event.key, admission.event.revision),
-    );
+    yield* observationStore.complete(admission, closeRevision(admission));
+  });
+
+  const parkCappedLineage = Effect.fn("WorkflowRun.parkCappedLineage")(function* (
+    admission: TriggerAdmission,
+    key: ReturnType<typeof operationKeyOf>,
+  ) {
+    const view = yield* coordination.read(admission.event.key);
+    if (!view.counters(key).hopCapped) return false;
+    yield* coordination.park(admission.event.key, { _tag: "HopCap" }, key);
+    yield* complete(admission);
+    return true;
   });
 
   const decline = (admission: TriggerAdmission) =>
@@ -253,11 +272,6 @@ export const make = Effect.gen(function* () {
   });
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
-    if (admission.lineage.hop >= maxLineageHops) {
-      yield* coordination.park(admission.event.key, { _tag: "HopCap" });
-      yield* complete(admission);
-      return "completed" as const;
-    }
     const pendingPlan = yield* actionPlans.pending(
       keyOf(admission.event.key),
       admission.subscription.workflow,
@@ -287,6 +301,7 @@ export const make = Effect.gen(function* () {
                 .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
           );
     if (pendingPlan !== null && pendingKey !== null) {
+      if (yield* parkCappedLineage(admission, pendingKey)) return "completed" as const;
       const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
       if (execution._tag === "Replan") {
         yield* settlePendingAttempt(admission, pendingPlan.attempt, "interrupted");
@@ -350,6 +365,7 @@ export const make = Effect.gen(function* () {
             .release(admission.event.key, activeClaim)
             .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
       ));
+    if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(randomUUID());
     const workspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
@@ -372,6 +388,25 @@ export const make = Effect.gen(function* () {
       generation: record.publishedRevision ?? 0,
       observedAtMillis: admission.event.atMillis,
     };
+    const lineageArtifacts = yield* artifacts.byLineage(admission.lineage.root);
+    const baseProse = admission.event.workContext ?? {
+      body: workContextBody(admission, record.id),
+      comments: [],
+    };
+    const artifactProse =
+      lineageArtifacts.length === 0
+        ? baseProse
+        : {
+            ...baseProse,
+            body: [
+              baseProse.body,
+              "",
+              "## Artifacts this lineage created",
+              encodeArtifactContext(
+                lineageArtifacts.map(({ workspace, issue, url }) => ({ workspace, issue, url })),
+              ),
+            ].join("\n"),
+          };
     const plan = RunPlan.make({
       id,
       operation: "implement",
@@ -405,10 +440,7 @@ export const make = Effect.gen(function* () {
       workContext: {
         reference: { workItem: item, url: null },
         facts: { roles: [], assignees: [], openBlockers: 0, claim, priority: "medium", pr: null },
-        prose: admission.event.workContext ?? {
-          body: workContextBody(admission, record.id),
-          comments: [],
-        },
+        prose: artifactProse,
         observation,
       },
       sandbox: { workspace: null, policy: operation.permissionProfile },
@@ -494,7 +526,34 @@ export const make = Effect.gen(function* () {
         admission: fanOutAdmission(admission, run.id, position, element),
         element,
       }));
-      const plans = yield* Effect.forEach(children, ({ admission: child, element }) =>
+      const acceptPlans = (plans: ReadonlyArray<WorkflowActionPlan>) =>
+        actionPlans.createAll(plans).pipe(
+          Effect.andThen(
+            Effect.forEach(
+              children,
+              ({ admission: child }) =>
+                coordination.observe(child.event.key, child.event.revision, child.event.cause),
+              { discard: true },
+            ),
+          ),
+          Effect.andThen(
+            coordination.recordAttempt(admission.event.key, {
+              operation: key,
+              outcome: "succeeded",
+              lineage: admission.lineage,
+            }),
+          ),
+          Effect.andThen(settle(run, "succeeded")),
+          Effect.andThen(
+            observationStore.fanOut(
+              admission,
+              children.map(({ admission: child }) => child),
+              closeRevision(admission),
+            ),
+          ),
+          Effect.map(() => "completed" as const),
+        );
+      return yield* Effect.forEach(children, ({ admission: child, element }) =>
         buildWorkflowActionPlan({
           admission: child,
           document,
@@ -505,26 +564,12 @@ export const make = Effect.gen(function* () {
           attempt: run.id,
           createdAtMillis: startedAtMillis,
         }),
-      ).pipe(Effect.result);
-      if (Result.isFailure(plans)) {
-        return yield* refuseResult(admission, key, run, plans.failure.message);
-      }
-      yield* Effect.forEach(plans.success, actionPlans.create, { discard: true });
-      yield* Effect.forEach(
-        children,
-        ({ admission: child }) =>
-          coordination.observe(child.event.key, child.event.revision, child.event.cause),
-        { discard: true },
+      ).pipe(
+        Effect.matchEffect({
+          onFailure: (error) => refuseResult(admission, key, run, error.message),
+          onSuccess: acceptPlans,
+        }),
       );
-      yield* observationStore.putAll(children.map(({ admission: child }) => child));
-      yield* coordination.recordAttempt(admission.event.key, {
-        operation: key,
-        outcome: "succeeded",
-        lineage: admission.lineage,
-      });
-      yield* settle(run, "succeeded");
-      yield* complete(admission);
-      return "completed" as const;
     }
 
     const actionPlanResult = yield* Effect.result(

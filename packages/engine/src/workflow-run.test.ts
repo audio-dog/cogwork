@@ -59,6 +59,7 @@ import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
   TriggerObservationStore,
+  TriggerObservationStoreError,
   type TriggerObservationStoreService,
 } from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
@@ -66,6 +67,7 @@ import {
   WorkflowActionPlanStore,
   memoryLayer as workflowActionPlanStoreLayer,
 } from "./workflow-action-plan-store";
+import { WorkflowArtifactStore, memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
 
@@ -273,12 +275,19 @@ const makeCoordination = () =>
     const processed = yield* Ref.make<string | null>(null);
     const barrier = yield* Ref.make(0);
     const claims = yield* Ref.make(0);
+    const activeClaim = yield* Ref.make<Claim | null>(null);
     const read = (_ref?: unknown) =>
-      Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed), Ref.get(barrier)]).pipe(
-        Effect.map(([currentAttempts, currentParks, currentProcessed, barrierAtMillis]) => ({
+      Effect.all([
+        Ref.get(attempts),
+        Ref.get(parks),
+        Ref.get(processed),
+        Ref.get(barrier),
+        Ref.get(activeClaim),
+      ]).pipe(
+        Effect.map(([currentAttempts, currentParks, currentProcessed, barrierAtMillis, currentClaim]) => ({
           ...fold(
             {
-              claim: null,
+              claim: currentClaim,
               attempts: currentAttempts,
               handbacks: [],
               parks: currentParks,
@@ -295,9 +304,10 @@ const makeCoordination = () =>
         read,
         claim: (_ref, input) =>
           Ref.update(claims, (current) => current + 1).pipe(
-            Effect.map(() => Claim.make({ ...input, by: "cogwork", claimedAtMillis: 1 })),
+            Effect.andThen(Effect.sync(() => Claim.make({ ...input, by: "cogwork", claimedAtMillis: 1 }))),
+            Effect.tap((claim) => Ref.set(activeClaim, claim)),
           ),
-        release: () => Effect.void,
+        release: () => Ref.set(activeClaim, null),
         recordAttempt: (_ref, input) =>
           Ref.update(attempts, (current) => [
             ...current,
@@ -334,6 +344,7 @@ const requirements = Layer.mergeAll(
   emptyIssueTrackerLayer,
   Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
   workflowActionPlanStoreLayer,
+  workflowArtifactStoreLayer,
   CredentialStore.layerEnv,
   NodeServices.layer,
   FetchHttpClient.layer,
@@ -430,82 +441,110 @@ const testProgram = (
     return { runner, coordination, notifications, observationStore };
   });
 
+const exerciseFanOut = Effect.fn("WorkflowRunTest.exerciseFanOut")(function* (
+  summaries: ReadonlyArray<string>,
+) {
+  const fanOutDocument = WorkflowDocument.make({
+    ...document,
+    operations: document.operations.map((candidate) => ({
+      ...candidate,
+      forEach: "commitment",
+    })),
+  });
+  const { runner, notifications, observationStore } = yield* testProgram(
+    [
+      {
+        summary: summaries.length === 0 ? "No commitments" : "Three commitments",
+        stuck: false,
+        elements: summaries.map((summary) => ({
+          summary,
+          answers: { done: "yes" },
+          inputs: { notification: summary },
+        })),
+      },
+    ],
+    {},
+    workflowServiceWith(fanOutDocument),
+  );
+  yield* observationStore.putAll([granolaAdmission]);
+
+  assert.strictEqual(yield* runner.execute(granolaAdmission), "completed");
+  const children = yield* observationStore.admissions;
+  assert.lengthOf(children, summaries.length);
+  const childRun = children[0]?.event.key._tag === "FanOutChild" ? children[0].event.key.run : null;
+  assert.deepStrictEqual(
+    children.map(({ event, lineage }) => ({
+      tag: event.key._tag,
+      parent: event.key._tag === "FanOutChild" ? event.key.parent : null,
+      run: event.key._tag === "FanOutChild" ? event.key.run : null,
+      position: event.key._tag === "FanOutChild" ? event.key.position : null,
+      lineage,
+    })),
+    summaries.map((_, position) => ({
+      tag: "FanOutChild" as const,
+      parent: keyOf(granolaAdmission.event.key),
+      run: childRun,
+      position,
+      lineage: {
+        root: granolaAdmission.lineage.root,
+        parent: childRun === null ? null : LineageId.make(childRun),
+        hop: 1,
+      },
+    })),
+  );
+  yield* Effect.forEach(children, runner.execute, { discard: true });
+  assert.deepStrictEqual(
+    (yield* notifications.list).map(({ summary }) => summary),
+    [...summaries],
+  );
+});
+
 describe("WorkflowRun", () => {
   it.effect("fans each result element into one child item with inherited lineage", () =>
-    Effect.gen(function* () {
-      const fanOutDocument = WorkflowDocument.make({
-        ...document,
-        operations: document.operations.map((candidate) => ({
-          ...candidate,
-          forEach: "commitment",
-        })),
-      });
-      const { runner, notifications, observationStore } = yield* testProgram(
-        [
-          {
-            summary: "Three commitments",
-            stuck: false,
-            elements: ["First", "Second", "Third"].map((summary) => ({
-              summary,
-              answers: { done: "yes" },
-              inputs: { notification: summary },
-            })),
-          },
-        ],
-        {},
-        workflowServiceWith(fanOutDocument),
-      );
-      yield* observationStore.putAll([granolaAdmission]);
-
-      assert.strictEqual(yield* runner.execute(granolaAdmission), "completed");
-      const children = yield* observationStore.admissions;
-
-      assert.lengthOf(children, 3);
-      const childRun = children[0]?.event.key._tag === "FanOutChild" ? children[0].event.key.run : null;
-      assert.isNotNull(childRun);
-      assert.deepStrictEqual(
-        children.map(({ event, lineage }) => ({
-          tag: event.key._tag,
-          parent: event.key._tag === "FanOutChild" ? event.key.parent : null,
-          run: event.key._tag === "FanOutChild" ? event.key.run : null,
-          position: event.key._tag === "FanOutChild" ? event.key.position : null,
-          lineage,
-        })),
-        [0, 1, 2].map((position) => ({
-          tag: "FanOutChild" as const,
-          parent: keyOf(granolaAdmission.event.key),
-          run: childRun,
-          position,
-          lineage: {
-            root: granolaAdmission.lineage.root,
-            parent: childRun === null ? null : LineageId.make(childRun),
-            hop: 1,
-          },
-        })),
-      );
-      yield* Effect.forEach(children, runner.execute, { discard: true });
-      assert.deepStrictEqual(
-        (yield* notifications.list).map(({ summary }) => summary),
-        ["First", "Second", "Third"],
-      );
+    Effect.forEach([[], ["First", "Second", "Third"]] as const, exerciseFanOut, {
+      discard: true,
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("completes an empty for-each result without child work", () =>
+  it.effect("retries a failed fan-out without exposing duplicate children", () =>
     Effect.gen(function* () {
       const fanOutDocument = WorkflowDocument.make({
         ...document,
         operations: document.operations.map((candidate) => ({ ...candidate, forEach: "commitment" })),
       });
+      const output = {
+        summary: "Two commitments",
+        stuck: false,
+        elements: ["First", "Second"].map((summary) => ({
+          summary,
+          answers: { done: "yes" },
+          inputs: { notification: summary },
+        })),
+      };
+      const failFanOut = yield* Ref.make(true);
       const { runner, observationStore } = yield* testProgram(
-        [{ summary: "No commitments", stuck: false, elements: [] }],
-        {},
+        [output, output],
+        {
+          observationStore: (base) => ({
+            ...base,
+            fanOut: (parent, children, closeRevision) =>
+              Ref.getAndSet(failFanOut, false).pipe(
+                Effect.flatMap((fail) =>
+                  fail
+                    ? Effect.fail(new TriggerObservationStoreError({ message: "fan-out write failed" }))
+                    : base.fanOut(parent, children, closeRevision),
+                ),
+              ),
+          }),
+        },
         workflowServiceWith(fanOutDocument),
       );
       yield* observationStore.putAll([granolaAdmission]);
 
+      assert.isTrue(Result.isFailure(yield* Effect.result(runner.execute(granolaAdmission))));
+      assert.deepStrictEqual(yield* observationStore.admissions, [granolaAdmission]);
       assert.strictEqual(yield* runner.execute(granolaAdmission), "completed");
-      assert.isEmpty(yield* observationStore.admissions);
+      assert.lengthOf(yield* observationStore.admissions, 2);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -701,6 +740,41 @@ describe("WorkflowRun", () => {
           "Taylor: Ship the smaller change.\nAri: Agreed.",
         ].join("\n"),
       );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("includes artifacts already created by the lineage in Work context", () =>
+    Effect.gen(function* () {
+      const artifact = WorkflowActionArtifact.make({
+        workspace: decodeWorkspace("cogwork"),
+        issue: decodeWorkItem("#99"),
+        url: "https://example.test/issues/99",
+        origin: {
+          item: keyOf(granolaAdmission.event.key),
+          workflow,
+          attempt: decodeRun("prior-run"),
+          writeKey: "prior-write",
+          lineage: granolaAdmission.lineage,
+        },
+      });
+      yield* (yield* WorkflowArtifactStore).record(artifact);
+      const { runner } = yield* testProgram([
+        {
+          summary: "Captured",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "Captured" },
+        },
+      ]);
+
+      yield* runner.execute(granolaAdmission);
+      const [run] = yield* (yield* RunLedger).listRuns(10);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.include(plan?.workContext.prose.body ?? "", "## Artifacts this lineage created");
+      assert.include(plan?.workContext.prose.body ?? "", "https://example.test/issues/99");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -1188,6 +1262,7 @@ describe("WorkflowRun", () => {
         digest: "publish-plan",
         summary: "Waiting for a Workspace",
         answers: {},
+        lineage: admission.lineage,
         handOff: null,
         steps: [
           WorkflowActionPlanStep.make({
@@ -1289,7 +1364,7 @@ describe("WorkflowRun", () => {
           })),
         ),
       };
-      const handbackOnRead = yield* Ref.make(true);
+      const coordinationReads = yield* Ref.make(0);
       const { runner } = yield* testProgram(
         [
           {
@@ -1309,9 +1384,9 @@ describe("WorkflowRun", () => {
           coordination: (service) => ({
             ...service,
             read: (...args) =>
-              Ref.getAndSet(handbackOnRead, false).pipe(
-                Effect.flatMap((shouldHandBack) =>
-                  shouldHandBack
+              Ref.updateAndGet(coordinationReads, (count) => count + 1).pipe(
+                Effect.flatMap((count) =>
+                  count === 2
                     ? service
                         .handBack(admission.event.key, { by: "Taylor" })
                         .pipe(
@@ -1355,6 +1430,7 @@ describe("WorkflowRun", () => {
         digest: "stale-plan",
         summary: "Stale plan",
         answers: {},
+        lineage: admission.lineage,
         handOff: null,
         steps: [],
       });
