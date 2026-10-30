@@ -25,7 +25,7 @@ import { IssueTracker, IssueTrackerError, makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
-import { SourceControlProvider } from "./source-control";
+import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import type { TriggerAdmission } from "./trigger-observation";
 import { executeWorkflowActionPlan } from "./workflow-action-plan";
@@ -162,6 +162,7 @@ class ActionPlanProbe extends Context.Service<
     readonly calls: Ref.Ref<ReadonlyArray<string>>;
     readonly barrier: Ref.Ref<number>;
     readonly parks: Ref.Ref<ReadonlyArray<ParkReason>>;
+    readonly pushOrigins: Ref.Ref<ReadonlyArray<WorkflowActionArtifact["origin"]>>;
   }
 >()("@cogwork/engine/workflow-action-plan.test/ActionPlanProbe") {
   static readonly layer = Layer.effect(
@@ -170,6 +171,7 @@ class ActionPlanProbe extends Context.Service<
       calls: Ref.make<ReadonlyArray<string>>([]),
       barrier: Ref.make(0),
       parks: Ref.make<ReadonlyArray<ParkReason>>([]),
+      pushOrigins: Ref.make<ReadonlyArray<WorkflowActionArtifact["origin"]>>([]),
     }),
   );
 }
@@ -420,22 +422,6 @@ describe("Workflow action plan", () => {
   );
 
   it.effect("completes a pull request push without a write when there are no new commits", () => {
-    const recorded = Ref.makeUnsafe(0);
-    const sourceControlLayer = Layer.mock(SourceControlProvider, {
-      workflowCatalogContribution: { entries: [], templates: [] },
-      resolvePullRequest: () => Effect.succeed(pullRequest),
-      recordPullRequestPush: (_workspace, resolved, origin) =>
-        Ref.update(recorded, (count) => count + 1).pipe(
-          Effect.map(() =>
-            WorkflowActionArtifact.make({
-              workspace: sourceWorkspace.config.name,
-              issue: decodeItem(`#${resolved.number}`),
-              url: resolved.url,
-              origin,
-            }),
-          ),
-        ),
-    });
     const worktreeLayer = Layer.mock(WorktreeManager, {
       pushBranchIfAhead: () => Effect.succeed(false),
     });
@@ -445,34 +431,42 @@ describe("Workflow action plan", () => {
     );
     const initial = plan([sourceStep("github.push-to-this-pull-request")]);
     return Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
       yield* (yield* WorkflowActionPlanStore).create(initial);
       const result = yield* executeWorkflowActionPlan(initial, admission);
 
       assert.deepStrictEqual(result, { _tag: "Complete", handOff: null });
-      assert.strictEqual(yield* Ref.get(recorded), 0);
+      assert.isEmpty(yield* Ref.get(probe.pushOrigins));
     }).pipe(
-      Effect.provide(Layer.mergeAll(requirements, sourceControlLayer, worktreeLayer, registryLayer)),
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.effect(
+            SourceControlProvider,
+            Effect.map(ActionPlanProbe, (probe) => ({
+              ...emptySourceControl,
+              resolvePullRequest: () => Effect.succeed(pullRequest),
+              recordPullRequestPush: (_workspace, resolved, origin) =>
+                Ref.update(probe.pushOrigins, (current) => [...current, origin]).pipe(
+                  Effect.map(() =>
+                    WorkflowActionArtifact.make({
+                      workspace: sourceWorkspace.config.name,
+                      issue: decodeItem(`#${resolved.number}`),
+                      url: resolved.url,
+                      origin,
+                    }),
+                  ),
+                ),
+            })),
+          ).pipe(Layer.provideMerge(requirements)),
+          worktreeLayer,
+          registryLayer,
+        ),
+      ),
       Effect.scoped,
     );
   });
 
   it.effect("records the Run origin when it pushes new pull request commits", () => {
-    const origins = Ref.makeUnsafe<ReadonlyArray<WorkflowActionArtifact["origin"]>>([]);
-    const sourceControlLayer = Layer.mock(SourceControlProvider, {
-      workflowCatalogContribution: { entries: [], templates: [] },
-      resolvePullRequest: () => Effect.succeed(pullRequest),
-      recordPullRequestPush: (_workspace, resolved, origin) =>
-        Ref.update(origins, (current) => [...current, origin]).pipe(
-          Effect.map(() =>
-            WorkflowActionArtifact.make({
-              workspace: sourceWorkspace.config.name,
-              issue: decodeItem(`#${resolved.number}`),
-              url: resolved.url,
-              origin,
-            }),
-          ),
-        ),
-    });
     const worktreeLayer = Layer.mock(WorktreeManager, {
       pushBranchIfAhead: () => Effect.succeed(true),
     });
@@ -483,19 +477,43 @@ describe("Workflow action plan", () => {
     const initial = plan([sourceStep("github.push-to-this-pull-request")]);
 
     return Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
       yield* (yield* WorkflowActionPlanStore).create(initial);
       yield* executeWorkflowActionPlan(initial, admission);
-      assert.deepInclude((yield* Ref.get(origins))[0], {
+      assert.deepInclude((yield* Ref.get(probe.pushOrigins))[0], {
         attempt: initial.attempt,
         writeKey: "write-0",
       });
     }).pipe(
-      Effect.provide(Layer.mergeAll(requirements, sourceControlLayer, worktreeLayer, registryLayer)),
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.effect(
+            SourceControlProvider,
+            Effect.map(ActionPlanProbe, (probe) => ({
+              ...emptySourceControl,
+              resolvePullRequest: () => Effect.succeed(pullRequest),
+              recordPullRequestPush: (_workspace, resolved, origin) =>
+                Ref.update(probe.pushOrigins, (current) => [...current, origin]).pipe(
+                  Effect.map(() =>
+                    WorkflowActionArtifact.make({
+                      workspace: sourceWorkspace.config.name,
+                      issue: decodeItem(`#${resolved.number}`),
+                      url: resolved.url,
+                      origin,
+                    }),
+                  ),
+                ),
+            })),
+          ).pipe(Layer.provideMerge(requirements)),
+          worktreeLayer,
+          registryLayer,
+        ),
+      ),
       Effect.scoped,
     );
   });
 
-  it.effect("returns a retryable decline when the pull request head is not ahead", () => {
+  it.effect("retries when pull request readiness changes after the plan is frozen", () => {
     const reason = "head 811-open-the-pull-request is not ahead of origin/main";
     const sourceControlLayer = Layer.mock(SourceControlProvider, {
       workflowCatalogContribution: { entries: [], templates: [] },
@@ -527,7 +545,7 @@ describe("Workflow action plan", () => {
       });
       yield* (yield* WorkflowActionPlanStore).create(initial);
       const result = yield* executeWorkflowActionPlan(initial, admission);
-      assert.deepStrictEqual(result, { _tag: "Declined", reason });
+      assert.deepStrictEqual(result, { _tag: "Retry" });
     }).pipe(
       Effect.provide(Layer.mergeAll(requirements, sourceControlLayer, worktreeLayer, registryLayer)),
       Effect.scoped,

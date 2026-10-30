@@ -18,7 +18,6 @@ import {
   type WorkflowParameterValue,
   WorkItemId,
 } from "@cogwork/contracts";
-import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -387,10 +386,6 @@ interface ActionContext {
   readonly worktrees: Effect.Success<typeof WorktreeManager> | null;
 }
 
-class PullRequestDeclined extends Data.TaggedError("PullRequestDeclined")<{
-  readonly reason: string;
-}> {}
-
 const requireIssueTarget = (step: WorkflowActionPlanStep) => {
   const issue = targetIssue(step);
   return issue === null ? Effect.fail(invalidTarget(step)) : Effect.succeed(issue);
@@ -401,7 +396,7 @@ const requireWorkspace = (context: ActionContext) =>
 
 type ActionExecutor = (
   context: ActionContext,
-) => Effect.Effect<WorkflowActionArtifact | null, IssueTrackerError | PullRequestDeclined>;
+) => Effect.Effect<WorkflowActionArtifact | null, IssueTrackerError>;
 
 const requireSourceWorkspace = (context: ActionContext) =>
   context.sourceWorkspace === null
@@ -502,7 +497,7 @@ const actionExecutors = {
       .pullRequestReadiness(workspace, item, run.branch)
       .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
     if (PullRequestReadiness.$is("Declined")(readiness)) {
-      return yield* new PullRequestDeclined({ reason: readiness.reason });
+      return yield* worktreeError(readiness.reason, true);
     }
     yield* worktrees
       .pushBranch(workspace, readiness.headBranch)
@@ -596,7 +591,6 @@ const replaceStep = (
 
 export type WorkflowActionPlanExecution =
   | { readonly _tag: "Complete"; readonly handOff: WorkflowNodeId | null }
-  | { readonly _tag: "Declined"; readonly reason: string }
   | { readonly _tag: "Retry" }
   | { readonly _tag: "Replan" }
   | { readonly _tag: "Parked" };
@@ -708,13 +702,6 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
           return initialExecutionState(plan);
         }
         const error = result.failure;
-        if (error._tag === "PullRequestDeclined") {
-          yield* store.remove(state.plan.item, state.plan.workflow, state.plan.attempt);
-          return {
-            plan: state.plan,
-            result: { _tag: "Declined", reason: error.reason },
-          } satisfies ExecutionState;
-        }
         const failures = step.failures + 1;
         const parked = issueTrackerErrorIsPermanent(error) || failures >= 3;
         const updated = replaceStep(state.plan, step, {

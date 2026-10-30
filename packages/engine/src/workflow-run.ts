@@ -10,6 +10,7 @@ import {
   type RunRecord,
   WorkflowActionPlan,
   WorkItemId,
+  WorkItemRef,
   WorkspaceId,
   workflowOperationResultJsonSchema,
   workflowOperationResultSchema,
@@ -41,13 +42,33 @@ import { Workflows } from "./workflow";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowNotifications } from "./workflow-notification";
-import { ticketSlug, WorktreeManager } from "./worktree";
+import { PullRequestReadiness, ticketSlug, WorktreeManager } from "./worktree";
 
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
 const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
+
+const fallbackBranch = WorkItemRef.match({
+  Issue: ({ id }) => ticketSlug(id),
+  PullRequest: () => "pull-request",
+  GranolaNote: () => "workflow",
+  SlackMessage: () => "workflow",
+  SlackConversation: () => "workflow",
+  ScheduleInstant: () => "workflow",
+  FanOutChild: () => "workflow",
+});
+
+const runItemId = WorkItemRef.match({
+  Issue: ({ id }) => id,
+  PullRequest: ({ number }) => workItemId(`#${number}`),
+  GranolaNote: () => workItemId("#workflow"),
+  SlackMessage: () => workItemId("#workflow"),
+  SlackConversation: () => workItemId("#workflow"),
+  ScheduleInstant: () => workItemId("#workflow"),
+  FanOutChild: () => workItemId("#workflow"),
+});
 
 export type WorkflowRunOutcome = "completed" | "retry" | "skipped";
 
@@ -165,17 +186,8 @@ export const make = Effect.gen(function* () {
     }
     const pullRequest =
       sourceControl === null ? null : yield* sourceControl.resolvePullRequest(workspace, admission.event.key);
-    const branch = BranchName.make(
-      pullRequest?.headBranch ??
-        (admission.event.key._tag === "Issue" ? ticketSlug(admission.event.key.id) : "pull-request"),
-    );
-    const item = {
-      id:
-        admission.event.key._tag === "Issue"
-          ? admission.event.key.id
-          : `#${admission.event.key._tag === "PullRequest" ? admission.event.key.number : "workflow"}`,
-      title: "",
-    };
+    const branch = BranchName.make(pullRequest?.headBranch ?? fallbackBranch(admission.event.key));
+    const item = { id: runItemId(admission.event.key), title: "" };
     if (worktrees === null) {
       return yield* new IssueTrackerError({
         reason: "unavailable",
@@ -232,6 +244,7 @@ export const make = Effect.gen(function* () {
     key: ReturnType<typeof operationKeyOf>,
     run: RunRecord,
     issues: string,
+    status: "failed" | "declined" = "failed",
   ) {
     yield* Ref.update(decodeIssues, (current) => new Map(current).set(keyOf(admission.event.key), issues));
     const view = yield* coordination.recordAttempt(admission.event.key, {
@@ -241,7 +254,7 @@ export const make = Effect.gen(function* () {
       reason: issues,
     });
     const exhausted = view.counters(key).exhausted;
-    yield* settle(run, exhausted ? "exhausted" : "failed");
+    yield* settle(run, exhausted ? "exhausted" : status);
     if (!exhausted) return "retry" as const;
     yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues }, key);
     yield* complete(admission);
@@ -286,12 +299,6 @@ export const make = Effect.gen(function* () {
       const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
       if (execution._tag === "Replan") {
         yield* settleAttempt(pendingPlan.attempt, "interrupted");
-      }
-      if (execution._tag === "Declined") {
-        const pendingRun = yield* ledger.getRun(pendingPlan.attempt);
-        if (pendingRun !== null) {
-          return yield* refuseResult(admission, pendingKey, pendingRun, execution.reason);
-        }
       }
       if (execution._tag === "Retry" || execution._tag === "Parked") {
         yield* settleAttempt(pendingPlan.attempt, "failed");
@@ -504,6 +511,26 @@ export const make = Effect.gen(function* () {
     if (Result.isFailure(actionPlanResult)) {
       return yield* refuseResult(admission, key, run, actionPlanResult.failure.message);
     }
+    const openPullRequest = actionPlanResult.success.steps.find(
+      ({ entry, status, target }) =>
+        entry === "github.open-pull-request" && status === "pending" && target._tag === "NewPullRequest",
+    );
+    const openPullRequestTarget = openPullRequest?.target;
+    if (openPullRequestTarget?._tag === "NewPullRequest" && run.branch !== null && worktrees !== null) {
+      const workspace = registryState.workspaces.find(
+        ({ config }) => config.name === openPullRequestTarget.workspace,
+      );
+      if (workspace) {
+        const readiness = yield* worktrees.pullRequestReadiness(
+          workspace,
+          { id: openPullRequestTarget.issue, title: "" },
+          run.branch,
+        );
+        if (PullRequestReadiness.$is("Declined")(readiness)) {
+          return yield* refuseResult(admission, key, run, readiness.reason, "declined");
+        }
+      }
+    }
     const actionPlan = yield* actionPlans.create(actionPlanResult.success);
     const actionPlanEvent: AgUiEvent = {
       type: "CUSTOM",
@@ -515,9 +542,6 @@ export const make = Effect.gen(function* () {
     if (execution._tag === "Replan") {
       yield* settle(run, "interrupted");
       return admission;
-    }
-    if (execution._tag === "Declined") {
-      return yield* refuseResult(admission, key, run, execution.reason);
     }
     if (execution._tag !== "Complete") {
       yield* settle(run, "failed");
