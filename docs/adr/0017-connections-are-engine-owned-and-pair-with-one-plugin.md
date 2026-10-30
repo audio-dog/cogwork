@@ -8,7 +8,7 @@
 ADR 0011 gave a Plugin a manifest with a Connection-*requirements* field and left one question open:
 whether a Plugin may introduce an external system the Engine has never seen. ADR 0013 declined to
 scope a Connection. ADR 0014 excluded Connection behaviour and struck four answers it had produced
-anyway. ADR 0015 declined a Connection record. Each deferral named [#172](https://github.com/colonylabs/cogwork/issues/172),
+anyway. ADR 0015 declined a Connection record. Each deferral named [#172](https://github.com/taylorfsteele/cogwork/issues/172),
 and the glossary carried *Connection* as *provisional, do not design against*.
 
 Underneath sat a product question. Setting up cogwork today means editing an executable
@@ -120,7 +120,7 @@ GitHub a bundle with an empty manifest whose provision path runs for zero files.
 - **Establishing a Connection installs the Plugin that requires it.** A person who connects Linear and
   then has to find and flip an MCP server has been handed a setup step disguised as a settings screen.
   Both entry paths converge on the same state. This once *amended ADR 0014*'s "after install every
-  contribution is off"; [#205](https://github.com/colonylabs/cogwork/issues/205) has since deleted that
+  contribution is off"; [#205](https://github.com/taylorfsteele/cogwork/issues/205) has since deleted that
   sentence outright, so the two paths converge with no exception to state — see the 2026-08-26
   amendment below.
 - Installing on establishment is a **one-time act, not an invariant.** "Linear as the tracker, without
@@ -154,7 +154,7 @@ installs. That is a rule change with no data migration, precisely because no fie
 - **One concept: each external system is one installable thing.** Rejected by the two cases above. It
   does not remove a concept; it moves the split to a worse place, between bundles that authenticate
   and bundles that do not.
-- **A Plugin contains its Connection.** Rejected on a fact and a case. The fact: [#125](https://github.com/colonylabs/cogwork/issues/125)
+- **A Plugin contains its Connection.** Rejected on a fact and a case. The fact: [#125](https://github.com/taylorfsteele/cogwork/issues/125)
   read every bundle under `~/.codex`, `~/.cursor`, and `~/.claude` and found **no secrets** — env-var
   names and public client ids only, with tokens in one file per harness outside every bundle. A Plugin
   is files; a Connection is a live grant. The case: a person who uninstalls the Linear Plugin because
@@ -200,12 +200,12 @@ installs. That is a rule change with no data migration, precisely because no fie
   We deviate on one point deliberately: Codex permits many plugins per connector, and we enforce
   one-to-one so the Plugin can be derived.
 
-Full reasoning: [#172](https://github.com/colonylabs/cogwork/issues/172).
+Full reasoning: [#172](https://github.com/taylorfsteele/cogwork/issues/172).
 
 
 ## Amendment (2026-08-26) — "paired install" is struck as a term, and the arrow is confirmed
 
-[#205](https://github.com/colonylabs/cogwork/issues/205) struck **paired install**. The word "paired"
+[#205](https://github.com/taylorfsteele/cogwork/issues/205) struck **paired install**. The word "paired"
 never said what was paired with what, so it needed explaining at every use, and it named an act nobody
 refers to twice. No replacement noun is minted. The behaviour is written as the sentence it always
 was: **establishing a Connection installs the Plugin that requires it**, and at most one first-party
@@ -229,7 +229,7 @@ Connection state.
 
 ## Amendment (2026-09-04) — GitHub repository identity comes from the checkout
 
-[#452](https://github.com/colonylabs/cogwork/issues/452) removes `issueTracker.repo` and
+[#452](https://github.com/taylorfsteele/cogwork/issues/452) removes `issueTracker.repo` and
 `sourceControl.repo`. No supported workspace observes work or pull requests in a different repository
 from its checkout. A Linear tracker with GitHub source control is cross-system, not cross-repository.
 

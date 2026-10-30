@@ -10,8 +10,8 @@
 
 ## Context
 
-The mission-control v1 spec ([#160](https://github.com/colonylabs/cogwork/issues/160),
-under wayfinder map [#159](https://github.com/colonylabs/cogwork/issues/159)) had to
+The mission-control v1 spec ([#160](https://github.com/taylorfsteele/cogwork/issues/160),
+under wayfinder map [#159](https://github.com/taylorfsteele/cogwork/issues/159)) had to
 settle how much the human sits in the loop. One candidate surface was "triage approve/veto" — a
 queue where triage *proposes* a classification and waits for the maintainer to approve before the
 work proceeds.

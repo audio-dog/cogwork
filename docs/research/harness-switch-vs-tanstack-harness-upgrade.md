@@ -5,7 +5,7 @@ Date: 2026-08-20.
 ## Recommendation
 
 The harness-switch design fits the new architecture unchanged, but implementation should wait until
-[#111](https://github.com/colonylabs/cogwork/issues/111) lands. This is sequencing for a clean diff,
+[#111](https://github.com/taylorfsteele/cogwork/issues/111) lands. This is sequencing for a clean diff,
 not an architectural dependency: #109–111 change result-schema preparation, terminal-event folding,
 and stage completion inside the executor, while explicitly preserving ordinary events and session
 behavior. The switch fix belongs earlier, where the executor selects one session before it inserts a
@@ -29,17 +29,17 @@ session, add lineage state, or move compatibility logic into individual runners.
 
 The landed TanStack upgrade was deliberately behavior-preserving: fresh sessions, resume handles,
 event recording, and provider-runner behavior had to remain unchanged
-([#108](https://github.com/colonylabs/cogwork/issues/108),
-[#112](https://github.com/colonylabs/cogwork/pull/112)). The three follow-on tickets deepen the
+([#108](https://github.com/taylorfsteele/cogwork/issues/108),
+[#112](https://github.com/taylorfsteele/cogwork/pull/112)). The three follow-on tickets deepen the
 existing `HarnessRunner` seam rather than replace it:
 
-- [#109](https://github.com/colonylabs/cogwork/issues/109) derives a structured-result schema from
+- [#109](https://github.com/taylorfsteele/cogwork/issues/109) derives a structured-result schema from
   `LifecycleStage`, supplies it through each TanStack adapter, folds exactly one
   `structured-output.complete` event, and Effect-decodes it before coordination. Its acceptance
   criteria explicitly retain owned-transcript session folding.
-- [#110](https://github.com/colonylabs/cogwork/issues/110) changes implement completion from transcript
+- [#110](https://github.com/taylorfsteele/cogwork/issues/110) changes implement completion from transcript
   sentinel parsing to the shared structured result.
-- [#111](https://github.com/colonylabs/cogwork/issues/111) does the same for follow-up and deletes the
+- [#111](https://github.com/taylorfsteele/cogwork/issues/111) does the same for follow-up and deletes the
   remaining text-result accumulator/protocol. It explicitly requires owned- and opaque-session
   behavior to remain unchanged.
 
@@ -101,11 +101,11 @@ research.
 
 ## Sources
 
-- Cogwork issues [#108](https://github.com/colonylabs/cogwork/issues/108),
-  [#109](https://github.com/colonylabs/cogwork/issues/109),
-  [#110](https://github.com/colonylabs/cogwork/issues/110), and
-  [#111](https://github.com/colonylabs/cogwork/issues/111), read with their comments and linked PRs.
-- Landed upgrade PR [#112](https://github.com/colonylabs/cogwork/pull/112).
+- Cogwork issues [#108](https://github.com/taylorfsteele/cogwork/issues/108),
+  [#109](https://github.com/taylorfsteele/cogwork/issues/109),
+  [#110](https://github.com/taylorfsteele/cogwork/issues/110), and
+  [#111](https://github.com/taylorfsteele/cogwork/issues/111), read with their comments and linked PRs.
+- Landed upgrade PR [#112](https://github.com/taylorfsteele/cogwork/pull/112).
 - Existing structured-output architecture research:
   [tanstack-ai-harness-structured-outputs.md](./tanstack-ai-harness-structured-outputs.md).
 - Current engine, contracts, runner, and SQLite ledger source linked inline above.

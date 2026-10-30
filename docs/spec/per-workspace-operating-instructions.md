@@ -106,7 +106,7 @@ source.
   responsibility.
 - **A workspace-record field or Control store change.** Rejected in the ADR.
 - **Discovering a `WorkspaceId`** (a `workspace list` command or similar). A real gap, deliberately
-  not a rider here; [#457](https://github.com/colonylabs/cogwork/issues/457) is the adjacent home
+  not a rider here; [#457](https://github.com/taylorfsteele/cogwork/issues/457) is the adjacent home
   for workspace-record surfacing.
 - **Policy profile overrides.** Still deferred to settings-as-data (`next-phase.md`); different
   noun.
@@ -119,6 +119,6 @@ source.
   floor — hold for every Run regardless of instruction text. The override moves no trust boundary:
   it is operator-authored machine config under the cogwork home, on the trusted side of ADR 0013's
   line.
-- Adjacent open work, no dependency either way: [#457](https://github.com/colonylabs/cogwork/issues/457)
+- Adjacent open work, no dependency either way: [#457](https://github.com/taylorfsteele/cogwork/issues/457)
   (publish the workspace record and its edit act) and
-  [#87](https://github.com/colonylabs/cogwork/issues/87) (run CI checks locally in follow-up).
+  [#87](https://github.com/taylorfsteele/cogwork/issues/87) (run CI checks locally in follow-up).

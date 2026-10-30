@@ -1,6 +1,6 @@
 # 0002 — External per-repo config for forked engineering skills
 
-- **Status:** accepted (historical — the sync toolkit that owned this config moved out of cogwork; see [#171](https://github.com/colonylabs/cogwork/issues/171))
+- **Status:** accepted (historical — the sync toolkit that owned this config moved out of cogwork; see [#171](https://github.com/taylorfsteele/cogwork/issues/171))
 - **Date:** 2026-07-22
 
 ## Context
