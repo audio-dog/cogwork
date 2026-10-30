@@ -11,6 +11,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { workflowCatalogContribution as githubActions } from "./github/adapter";
 import { workflowCatalogContribution as linearActions } from "./linear/adapter";
+import { slackActionEntries } from "./slack-write";
 import { type TriggerSource, TriggerSources } from "./trigger-source";
 
 export interface WorkflowCatalogContribution {
@@ -78,6 +79,17 @@ const sourceContribution = (source: TriggerSource): WorkflowCatalogContribution 
     );
   },
 });
+
+const slackActionContribution = (sources: ReadonlyArray<TriggerSource>): WorkflowCatalogContribution => ({
+  entries: slackActionEntries,
+  templates: [],
+  listOptions: (entry, parameter) =>
+    sources
+      .find(({ id }) => id === "slack")
+      ?.listOptions(entry, parameter)
+      .pipe(Effect.catchTag("SourceFailure", () => Effect.succeed([]))) ?? Effect.succeed([]),
+});
+
 export const workflowCatalogContributionsLayer = Layer.effect(
   WorkflowCatalogContributions,
   Effect.map(TriggerSources, (sources) => [
@@ -85,5 +97,6 @@ export const workflowCatalogContributionsLayer = Layer.effect(
     githubActions,
     linearActions,
     ...sources.map(sourceContribution),
+    slackActionContribution(sources),
   ]),
 );
