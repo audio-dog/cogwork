@@ -1,0 +1,19 @@
+packages/engine/src/slack-write.ts
+  s_fab52699974792::t_41a16e6327d377 109-115,133,146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e227331d503b403ee8290db089f1a7ba4f077c37",
+  "prompts": {},
+  "sessions": {
+    "s_fab52699974792": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18db0-729e-7ee2-b095-82591bad88a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
