@@ -1,0 +1,78 @@
+packages/contracts/src/daemon.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 275-281,288-291
+packages/engine/src/connection-verify.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 10,43-44,60-66
+packages/engine/src/workflow.test.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 3,36,50-53,127,160-179,409
+packages/engine/src/coordination-fold.test.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 97-121
+packages/engine/src/granola-source.test.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 1-659
+apps/cli/src/status.test.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 48
+packages/engine/src/workflow-run.test.ts
+  s_79a6dc92473e13::t_086194933285b5 59,68-73,191-219
+  s_79a6dc92473e13::t_b67945f4da2c28 571,585,587-589
+  s_79a6dc92473e13::t_d2c1abbe849c0f 366-413,416-449,452-454,456-458
+  s_79a6dc92473e13::t_38d32d845223bc 414-415,450-451,455
+  s_38c737bec49a48::t_8483bdcdba7725 220
+packages/engine/src/coordination.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 172-175,190
+packages/engine/src/trigger-observation.test.ts
+  s_79a6dc92473e13::t_7a3775242dceb6 3,13,33,109-122
+  s_79a6dc92473e13::t_83e45018664c11 703-896
+apps/cli/src/commands.test.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 115
+packages/engine/src/daemon.ts
+  s_79a6dc92473e13::t_1a15600d1c5e1a 495,499,502
+  s_79a6dc92473e13::t_7d0da4fad6d291 62,76,119,293,302,485,487-489,491-494,496-498,500-501
+packages/engine/src/workflow-run.ts
+  s_79a6dc92473e13::t_57876a3fa0bf96 45-68,129-140,149-152,231,281,283,303,305,323,346,351,358
+packages/engine/src/granola-source.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 1-595
+packages/engine/src/trigger-observation.ts
+  s_79a6dc92473e13::t_b96cc9937f0a46 613,629
+  s_79a6dc92473e13::t_0ec762b7c3e52d 6-7,346,352-353,383-391,410-420,457-461,463-467,469-471,473-475,480-482,497
+  s_79a6dc92473e13::t_685c48cc99f430 628,630
+packages/engine/src/granola-http.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 1-168
+packages/engine/src/trigger-source.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 42-53
+packages/contracts/src/coordination.ts
+  s_79a6dc92473e13::t_7d0da4fad6d291 5,112
+packages/engine/src/daemon-composition.test.ts
+  s_79a6dc92473e13::t_685c48cc99f430 417-418
+  s_79a6dc92473e13::t_7d0da4fad6d291 353,374-375,377
+  s_79a6dc92473e13::t_e58764185b80d7 371,376
+packages/engine/src/scheduler.test.ts
+  s_79a6dc92473e13::t_37f7a76bcd8236 44,506,519
+  s_79a6dc92473e13::t_29eb83e52dfa5c 458,461-464,494
+  s_79a6dc92473e13::t_6b3bbb81b229e9 38,455-457,492-493,495
+  s_79a6dc92473e13::t_12cc7211ef3387 633-736
+packages/engine/src/scheduler.ts
+  s_79a6dc92473e13::t_1a088662bb270e 30,124-134,199,201-204,211,220-228,356-379,382-383,387,397-399,410-412
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2a1d03cff966450a384ccac6c3357aca42b964aa",
+  "prompts": {},
+  "sessions": {
+    "s_38c737bec49a48": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18d2a-0184-72a3-bc54-7aaba7dd1b08",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_79a6dc92473e13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18942-0bdd-7651-9310-5283e3b07e02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
