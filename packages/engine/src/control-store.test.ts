@@ -1079,6 +1079,31 @@ layer(NodeServices.layer)((it) => {
     );
   });
 
+  it.effect("replaces a table that gains a required column and keeps every other table", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* pokeConvergedStore(
+        storePath,
+        `DROP TABLE trigger_admissions;
+         CREATE TABLE trigger_admissions (
+           work_item text NOT NULL,
+           revision text NOT NULL,
+           payload text NOT NULL,
+           PRIMARY KEY (work_item, revision)
+         );
+         INSERT INTO trigger_admissions (work_item, revision, payload) VALUES ('item', 'revision', '{}');
+         INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history)
+         VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 0);`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* query(storePath, "SELECT work_item FROM trigger_admissions"), []);
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
+        { id: "workspace-1", name: "kept" },
+      ]);
+    }),
+  );
+
   it.effect("restores a missing index without replacing the store", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
