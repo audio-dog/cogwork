@@ -184,8 +184,9 @@ export const makeGitHubTrackerTriggerSource = (
       const registered = state.workspaces.find(({ config }) => config.name === workspace);
       const target = registered ? targetFor(registered) : null;
       if (!target) return [];
-      const issues = yield* client.listIssues(target);
-      return [...new Set(issues.flatMap(({ labels }) => labels))].map(
+      const issues = yield* client.listIssues(target, { state: "all" });
+      const labels = issues.filter(({ isPullRequest }) => !isPullRequest).flatMap(({ labels }) => labels);
+      return [...new Set(labels)].map(
         (label) => ({ value: label, name: label, listedIn: [workspace] }) satisfies WorkflowOption,
       );
     }).pipe(Effect.mapError((error) => sourceFailure("github", error)));

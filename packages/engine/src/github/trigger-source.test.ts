@@ -142,6 +142,28 @@ const pullClientLayer = (listedPulls = pulls) =>
 const targetOf = (event: object) => ("target" in event ? event.target : undefined);
 
 describe("GitHub Trigger sources", () => {
+  it.effect("lists labels from every tracker issue and excludes pull request labels", () => {
+    const listIssues = vi.fn<GitHubClientService["listIssues"]>(() =>
+      Effect.succeed([
+        { ...issue(1), state: "closed", labels: ["closed-only"] },
+        { ...issue(2, true), labels: ["pull-only"] },
+      ]),
+    );
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const options = yield* makeGitHubTrackerTriggerSource(
+        client,
+        Effect.succeed(registryState),
+      ).listOptions(issueHasLabelKey, "label", workspaceId);
+
+      assert.deepStrictEqual(options, [
+        { value: "closed-only", name: "closed-only", listedIn: [workspaceId] },
+      ]);
+      assert.deepStrictEqual(listIssues.mock.calls[0]?.[1], { state: "all" });
+    }).pipe(Effect.provide(Layer.mock(GitHubClient, { listIssues })));
+  });
+
   it.effect("emits current labels and keeps person-comment revisions distinct by label", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;
