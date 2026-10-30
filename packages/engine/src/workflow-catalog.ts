@@ -11,6 +11,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { workflowCatalogContribution as githubActions } from "./github/adapter";
 import { workflowCatalogContribution as linearActions } from "./linear/adapter";
+import { SourceControlProvider } from "./source-control";
 import { type TriggerSource, TriggerSources } from "./trigger-source";
 
 export interface WorkflowCatalogContribution {
@@ -80,10 +81,15 @@ const sourceContribution = (source: TriggerSource): WorkflowCatalogContribution 
 });
 export const workflowCatalogContributionsLayer = Layer.effect(
   WorkflowCatalogContributions,
-  Effect.map(TriggerSources, (sources) => [
-    cogworkWorkflowCatalogContribution,
-    githubActions,
-    linearActions,
-    ...sources.map(sourceContribution),
-  ]),
+  Effect.gen(function* () {
+    const sources = yield* TriggerSources;
+    const sourceControl = yield* SourceControlProvider;
+    return [
+      cogworkWorkflowCatalogContribution,
+      githubActions,
+      linearActions,
+      sourceControl.workflowCatalogContribution,
+      ...sources.map(sourceContribution),
+    ];
+  }),
 );
