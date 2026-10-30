@@ -11,6 +11,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { clockEntries, clockSource } from "./clock-source";
 import { workflowCatalogContribution as githubActions } from "./github/adapter";
+import { granolaWorkflowCatalogContribution } from "./granola-source";
 import { workflowCatalogContribution as linearActions } from "./linear/adapter";
 
 export interface WorkflowCatalogContribution {
@@ -62,6 +63,7 @@ export const workflowCatalogContributionsLayer = Layer.succeed(WorkflowCatalogCo
   cogworkWorkflowCatalogContribution,
   githubActions,
   linearActions,
+  granolaWorkflowCatalogContribution,
   {
     entries: clockEntries,
     templates: [],

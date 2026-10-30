@@ -108,6 +108,7 @@ export const ParkReason = Schema.TaggedUnion({
   Exhausted: { reason: TrimmedNonEmptyString },
   HopCap: {},
   MissingOperation: {},
+  PlanRejected: { reason: TrimmedNonEmptyString, entry: Schema.optional(TrimmedNonEmptyString) },
   WriteFailed: { step: TrimmedNonEmptyString, error: TrimmedNonEmptyString },
   NoWorkspaceRecognized: { plan: TrimmedNonEmptyString },
   AwaitingApproval: {

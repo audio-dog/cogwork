@@ -33,7 +33,7 @@ import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
-import type { TriggerAdmission } from "./trigger-observation";
+import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { Workflows } from "./workflow";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
@@ -44,6 +44,30 @@ const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
 const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
+
+export type WorkflowRunOutcome = "completed" | "retry" | "skipped";
+
+const workContextBody = (admission: TriggerAdmission, workflow: string) => {
+  const payload = admission.event.payload;
+  if (payload?._tag !== "GranolaNote") {
+    return `Scheduled instant ${admission.event.revision} for Workflow ${workflow}.`;
+  }
+  return [
+    `# ${payload.title}`,
+    "",
+    "## Attendees",
+    payload.attendees.join("\n"),
+    "",
+    "## Calendar event",
+    payload.calendarEvent,
+    "",
+    "## Summary",
+    payload.summary,
+    "",
+    "## Transcript",
+    payload.transcript,
+  ].join("\n");
+};
 
 const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
   workflow: admission.subscription.workflow,
@@ -100,6 +124,7 @@ export const make = Effect.gen(function* () {
   const actionPlans = yield* WorkflowActionPlanStore;
   const issueTracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
+  const observations = yield* TriggerObservationStore;
   const executionContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
     Effect.map((context) =>
       context.pipe(
@@ -123,12 +148,27 @@ export const make = Effect.gen(function* () {
       ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
     );
 
-  const decline = (admission: TriggerAdmission) =>
-    coordination
-      .park(admission.event.key, { _tag: "MissingOperation" })
+  const complete = (admission: TriggerAdmission) =>
+    observations
+      .complete(admission)
       .pipe(
-        Effect.andThen(coordination.markProcessed(admission.event.key, admission.event.revision)),
-        Effect.asVoid,
+        Effect.flatMap((isLast) =>
+          isLast ? coordination.markProcessed(admission.event.key, admission.event.revision) : Effect.void,
+        ),
+      );
+
+  const decline = (admission: TriggerAdmission) =>
+    coordination.park(admission.event.key, { _tag: "MissingOperation" }).pipe(
+      Effect.andThen(complete(admission)),
+      Effect.map(() => "skipped" as const),
+    );
+
+  const rejectPlan = (admission: TriggerAdmission, reason: string) =>
+    coordination
+      .park(admission.event.key, { _tag: "PlanRejected", reason, entry: admission.event.entry })
+      .pipe(
+        Effect.andThen(complete(admission)),
+        Effect.map(() => "skipped" as const),
       );
 
   const refuseResult = Effect.fn("WorkflowRun.refuseResult")(function* (
@@ -146,16 +186,17 @@ export const make = Effect.gen(function* () {
     });
     const exhausted = view.counters(key).exhausted;
     yield* settle(run, exhausted ? "exhausted" : "failed");
-    if (!exhausted) return;
+    if (!exhausted) return "retry" as const;
     yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues });
-    yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+    yield* complete(admission);
+    return "completed" as const;
   });
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
     if (admission.lineage.hop >= maxLineageHops) {
       yield* coordination.park(admission.event.key, { _tag: "HopCap" });
-      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
-      return;
+      yield* complete(admission);
+      return "completed" as const;
     }
     const pendingPlan = yield* actionPlans.pending(
       keyOf(admission.event.key),
@@ -189,7 +230,7 @@ export const make = Effect.gen(function* () {
       const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
       if (execution._tag === "Retry" || execution._tag === "Parked") {
         yield* settleAttempt(pendingPlan.attempt, "failed");
-        return;
+        return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
       }
       if (execution._tag === "Complete") {
         yield* coordination.recordAttempt(admission.event.key, {
@@ -201,8 +242,8 @@ export const make = Effect.gen(function* () {
         if (execution.handOff !== null) {
           return handOffAdmission(admission, execution.handOff, pendingPlan.attempt);
         }
-        yield* coordination.markProcessed(admission.event.key, admission.event.revision);
-        return;
+        yield* complete(admission);
+        return "completed" as const;
       }
     }
 
@@ -211,8 +252,11 @@ export const make = Effect.gen(function* () {
     const trigger = document?.triggers.find(({ id }) => id === admission.subscription.trigger);
     const operation = document?.operations.find(({ id }) => id === operationId);
     if (!record.enabled || document === null || trigger === undefined || operation === undefined) {
-      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
-      return;
+      yield* complete(admission);
+      return "skipped" as const;
+    }
+    if (admission.event.payload?._tag === "GranolaNoteRejected") {
+      return yield* rejectPlan(admission, admission.event.payload.reason);
     }
 
     const key = operationKeyOf(admission, operation.id);
@@ -295,7 +339,7 @@ export const make = Effect.gen(function* () {
         reference: { workItem: item, url: null },
         facts: { roles: [], assignees: [], openBlockers: 0, claim, priority: "medium", pr: null },
         prose: {
-          body: `Scheduled instant ${admission.event.revision} for Workflow ${record.id}.`,
+          body: workContextBody(admission, record.id),
           comments: [],
         },
         observation,
@@ -345,9 +389,9 @@ export const make = Effect.gen(function* () {
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason });
-        yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+        yield* complete(admission);
       }
-      return;
+      return exhausted ? ("completed" as const) : ("retry" as const);
     }
 
     const output = Option.getOrUndefined(eventsExit.value);
@@ -356,8 +400,7 @@ export const make = Effect.gen(function* () {
     )(output?.value.object);
     if (Exit.isFailure(decoded)) {
       const issues = String(decoded.cause);
-      yield* refuseResult(admission, key, run, issues);
-      return;
+      return yield* refuseResult(admission, key, run, issues);
     }
 
     yield* Ref.update(decodeIssues, (current) => {
@@ -373,9 +416,9 @@ export const make = Effect.gen(function* () {
         reason: decoded.value.summary,
       });
       yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary });
-      yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+      yield* complete(admission);
       yield* settle(run, "failed");
-      return;
+      return "completed" as const;
     }
 
     const actionPlanResult = yield* Effect.result(
@@ -391,8 +434,7 @@ export const make = Effect.gen(function* () {
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
-      yield* refuseResult(admission, key, run, actionPlanResult.failure.message);
-      return;
+      return yield* refuseResult(admission, key, run, actionPlanResult.failure.message);
     }
     const actionPlan = yield* actionPlans.create(actionPlanResult.success);
     const actionPlanEvent: AgUiEvent = {
@@ -404,7 +446,7 @@ export const make = Effect.gen(function* () {
     const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
     if (execution._tag !== "Complete") {
       yield* settle(run, "failed");
-      return;
+      return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
     }
     yield* coordination.recordAttempt(admission.event.key, {
       operation: key,
@@ -415,29 +457,37 @@ export const make = Effect.gen(function* () {
     if (execution.handOff !== null) {
       return handOffAdmission(admission, execution.handOff, run.id);
     }
-    yield* coordination.markProcessed(admission.event.key, admission.event.revision);
+    yield* complete(admission);
+    return "completed" as const;
   });
 
   return {
     execute: (admission: TriggerAdmission) =>
       Effect.reduce(
         Array.from({ length: maxLineageHops + 1 }),
-        () => initialAdmission(admission),
-        (current) =>
-          current
-            ? executeRaw(current).pipe(
+        () => ({ current: initialAdmission(admission), outcome: "completed" as WorkflowRunOutcome }),
+        (state) =>
+          state.current
+            ? executeRaw(state.current).pipe(
                 Effect.scoped,
-                Effect.map((next) => next ?? null),
+                Effect.map((next) =>
+                  typeof next === "string"
+                    ? { current: null, outcome: next }
+                    : { current: next, outcome: state.outcome },
+                ),
               )
-            : Effect.succeed(null),
-      ).pipe(Effect.provide(executionContext), Effect.asVoid),
+            : Effect.succeed(state),
+      ).pipe(
+        Effect.provide(executionContext),
+        Effect.map(({ outcome }) => outcome),
+      ),
   } as const;
 });
 
 export const WorkflowRun = Context.Reference<Effect.Success<typeof make>>(
   "@cogwork/engine/workflow-run/WorkflowRun",
   {
-    defaultValue: () => ({ execute: () => Effect.void }),
+    defaultValue: () => ({ execute: () => Effect.succeed("completed" as const) }),
   },
 );
 

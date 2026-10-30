@@ -45,7 +45,11 @@ import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import type { TriggerAdmission } from "./trigger-observation";
+import {
+  makeMemoryTriggerObservationStore,
+  type TriggerAdmission,
+  TriggerObservationStore,
+} from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
 import {
   WorkflowActionPlanStore,
@@ -62,6 +66,7 @@ const decodeWorkItem = Schema.decodeSync(WorkItemId);
 const decodeWorkspace = Schema.decodeSync(WorkspaceId);
 const workflow = decodeWorkflow("daily-summary");
 const trigger = decodeNode("schedule");
+const siblingTrigger = decodeNode("schedule-sibling");
 const operation = decodeNode("summarize");
 const harnessName = Schema.decodeSync(HarnessName)("scripted");
 const notifyEntry = decodeEntry("cogwork.notify");
@@ -71,7 +76,12 @@ const scheduleEntry = decodeEntry("schedule.daily");
 const document = Schema.decodeSync(WorkflowDocument)({
   name: "Daily summary",
   workspaces: { _tag: "Listed", workspaces: [] },
-  triggers: [{ id: trigger, entry: scheduleEntry, parameters: [], start: operation }],
+  triggers: [trigger, siblingTrigger].map((id) => ({
+    id,
+    entry: scheduleEntry,
+    parameters: [],
+    start: operation,
+  })),
   operations: [
     {
       id: operation,
@@ -193,6 +203,35 @@ const admission: TriggerAdmission = {
   },
 };
 
+const granolaAdmission: TriggerAdmission = {
+  ...admission,
+  event: {
+    ...admission.event,
+    key: {
+      _tag: "GranolaNote",
+      connection: Schema.decodeSync(Schema.String.pipe(Schema.brand("ConnectionId")))(
+        "granola/person@example.com",
+      ),
+      noteId: "note-1",
+    },
+    revision: "2026-10-29T15:00:00.000Z",
+    atMillis: Date.UTC(2026, 9, 29, 15),
+    payload: {
+      _tag: "GranolaNote",
+      title: "Weekly product sync",
+      attendees: ["Taylor <taylor@example.com>", "Ari <ari@example.com>"],
+      calendarEvent: "Weekly product sync · 2026-10-29 09:00 MDT",
+      summary: "Decided to ship the smaller change.",
+      transcript: "Taylor: Ship the smaller change.\nAri: Agreed.",
+    },
+  },
+};
+
+const siblingGranolaAdmission: TriggerAdmission = {
+  ...granolaAdmission,
+  subscription: { ...granolaAdmission.subscription, trigger: siblingTrigger },
+};
+
 const makeCoordination = () =>
   Effect.gen(function* () {
     const attempts = yield* Ref.make<ReadonlyArray<AttemptRecord>>([]);
@@ -296,6 +335,7 @@ const testProgram = (
     const output = yield* Ref.make(objects);
     const coordination = yield* makeCoordination();
     const notifications = yield* makeNotifications;
+    const observations = yield* makeMemoryTriggerObservationStore;
     const harness = makeHarness([
       {
         name: harnessName,
@@ -334,12 +374,105 @@ const testProgram = (
       Effect.provideService(Workflows, service),
       Effect.provideService(Coordination, coordination.service),
       Effect.provideService(Harness, harness),
+      Effect.provideService(TriggerObservationStore, observations),
       Effect.provideService(WorkflowNotifications, notifications),
     );
-    return { runner, coordination, notifications };
+    return { runner, coordination, notifications, observations };
   });
 
 describe("WorkflowRun", () => {
+  it.effect("freezes the complete Granola note in Work context", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram([
+        {
+          summary: "Captured",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "Captured" },
+        },
+      ]);
+      yield* runner.execute(granolaAdmission);
+      const [run] = yield* (yield* RunLedger).listRuns(10);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.strictEqual(
+        plan?.workContext.prose.body,
+        [
+          "# Weekly product sync",
+          "",
+          "## Attendees",
+          "Taylor <taylor@example.com>",
+          "Ari <ari@example.com>",
+          "",
+          "## Calendar event",
+          "Weekly product sync · 2026-10-29 09:00 MDT",
+          "",
+          "## Summary",
+          "Decided to ship the smaller change.",
+          "",
+          "## Transcript",
+          "Taylor: Ship the smaller change.\nAri: Agreed.",
+        ].join("\n"),
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("waits for every sibling rejection before processing the source revision", () =>
+    Effect.gen(function* () {
+      const rejected: TriggerAdmission = {
+        ...granolaAdmission,
+        event: {
+          ...granolaAdmission.event,
+          payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
+        },
+      };
+      const sibling = { ...rejected, subscription: siblingGranolaAdmission.subscription };
+      const { runner, coordination, observations } = yield* testProgram([]);
+      yield* observations.put(rejected);
+      yield* observations.put(sibling);
+      yield* runner.execute(rejected);
+
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+      assert.deepStrictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason, {
+        _tag: "PlanRejected",
+        reason: "Granola note has no transcript",
+        entry: granolaAdmission.event.entry,
+      });
+      assert.isNull(yield* Ref.get(coordination.processed));
+
+      yield* runner.execute(sibling);
+
+      assert.strictEqual(yield* Ref.get(coordination.processed), rejected.event.revision);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("reports a rejected Granola note as skipped", () =>
+    Effect.gen(function* () {
+      const rejected: TriggerAdmission = {
+        ...granolaAdmission,
+        event: {
+          ...granolaAdmission.event,
+          payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
+        },
+      };
+      const { runner } = yield* testProgram([]);
+
+      assert.strictEqual(yield* runner.execute(rejected), "skipped");
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("reports a non-exhausted failure as retryable", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram([{}]);
+
+      assert.strictEqual(yield* runner.execute(admission), "retry");
+      assert.isNull(yield* Ref.get(coordination.processed));
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("writes Notify me output and keeps the Run workspace-free", () =>
     Effect.gen(function* () {
       const { runner } = yield* testProgram([

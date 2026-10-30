@@ -350,6 +350,7 @@ describe("daemon server composition", () => {
       );
       const switched = yield* Effect.result(rpc.SwitchWorkflow({ id: created.id, enabled: true }));
       const catalog = yield* rpc.GetWorkflowCatalog();
+      const status = yield* rpc.GetStatus();
       const seed = yield* rpc
         .WatchEvents()
         .pipe(Stream.takeUntil(DaemonEvent.guards.SeedEnd), Stream.runCollect);
@@ -367,8 +368,12 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 20);
+      assert.lengthOf(catalog.catalog.entries, 22);
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
+      assert.deepStrictEqual(
+        status.sources.map(({ source }) => source),
+        ["clock", "granola"],
+      );
       assert.isTrue(
         [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
       );
@@ -417,6 +422,8 @@ describe("daemon server composition", () => {
           "Add a label",
           "Remove a label",
           "Close this issue",
+          "Note generated",
+          "Note edited",
           "Every hour",
           "Every day",
           "Every week",
