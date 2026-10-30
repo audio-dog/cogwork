@@ -193,9 +193,7 @@ export const makeIssueActions = (client: LinearClientService) => {
     error: IssueTrackerError,
   ) {
     if (!error.writeMayHaveCommitted) return yield* error;
-    const recovered = yield* client
-      .findActionIssue(target, writeMarker(writeKey))
-      .pipe(Effect.orElseSucceed(() => null));
+    const recovered = yield* client.findActionIssue(target, writeMarker(writeKey));
     if (recovered) return recovered;
     return yield* ambiguousWriteNotConfirmed(writeKey);
   });
@@ -204,9 +202,7 @@ export const makeIssueActions = (client: LinearClientService) => {
     issue: { readonly id: string },
     writeKey: string,
   ) {
-    const marker = yield* client
-      .findMarker(target, issue.id, writeMarker(writeKey))
-      .pipe(Effect.mapError(() => ambiguousWriteNotConfirmed(writeKey)));
+    const marker = yield* client.findMarker(target, issue.id, writeMarker(writeKey));
     if (marker.body) return;
     return yield* ambiguousWriteNotConfirmed(writeKey);
   });

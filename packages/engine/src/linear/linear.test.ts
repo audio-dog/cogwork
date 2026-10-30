@@ -2,6 +2,7 @@ import {
   type AttemptOutcome,
   type AttemptRecord,
   codingOperation,
+  issueTrackerErrorIsPermanent,
   keyOf,
   type LifecycleStage,
   LineageId,
@@ -91,6 +92,8 @@ interface Seed {
   readonly observeError?: boolean;
   readonly createIssueError?: boolean;
   readonly hideActionIssue?: boolean;
+  readonly findActionIssueErrors?: ReadonlyArray<IssueTrackerError | null>;
+  readonly findMarkerError?: IssueTrackerError;
 }
 
 interface LinearClientCallsState {
@@ -163,6 +166,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     new Map<string, ReadonlyArray<RawComment>>(),
   );
   const commentsRef = yield* Ref.make(seededComments);
+  const findActionIssueErrors = yield* Ref.make(seed.findActionIssueErrors ?? []);
   const commentSeq = yield* Ref.make(100);
   const states = seed.states ?? [
     { id: "state-todo", name: "Todo", type: "unstarted" },
@@ -235,15 +239,17 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
     findMarker: (_ref, issueId, marker) =>
       guard(
-        Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]).pipe(
-          Effect.map(([issues, comments]) => ({
-            body:
-              issues
-                .find((candidate) => candidate.identifier === issueId || candidate.id === issueId)
-                ?.body?.includes(marker) ?? false,
-            comment: (comments.get(issueId) ?? []).some(({ body }) => body.includes(marker)),
-          })),
-        ),
+        seed.findMarkerError
+          ? Effect.fail(seed.findMarkerError)
+          : Effect.all([Ref.get(issuesRef), Ref.get(commentsRef)]).pipe(
+              Effect.map(([issues, comments]) => ({
+                body:
+                  issues
+                    .find((candidate) => candidate.identifier === issueId || candidate.id === issueId)
+                    ?.body?.includes(marker) ?? false,
+                comment: (comments.get(issueId) ?? []).some(({ body }) => body.includes(marker)),
+              })),
+            ),
       ),
     readActionIssue: (_ref, issueId) =>
       guard(
@@ -266,22 +272,23 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
       ),
     findActionIssue: (_ref, marker) =>
       guard(
-        Ref.get(issuesRef).pipe(
-          Effect.map((issues) => {
-            if (seed.hideActionIssue) return null;
-            const issue = issues.find(({ body }) => body?.includes(marker));
-            return issue
-              ? {
-                  id: issue.id,
-                  identifier: issue.identifier,
-                  url: issue.url,
-                  body: issue.body ?? "",
-                  labels: [...issue.labels],
-                  stateType: issue.stateType,
-                }
-              : null;
-          }),
-        ),
+        Effect.gen(function* () {
+          const error = yield* Ref.modify(findActionIssueErrors, ([next, ...rest]) => [next ?? null, rest]);
+          if (error) return yield* error;
+          const issues = yield* Ref.get(issuesRef);
+          if (seed.hideActionIssue) return null;
+          const issue = issues.find(({ body }) => body?.includes(marker));
+          return issue
+            ? {
+                id: issue.id,
+                identifier: issue.identifier,
+                url: issue.url,
+                body: issue.body ?? "",
+                labels: [...issue.labels],
+                stateType: issue.stateType,
+              }
+            : null;
+        }),
       ),
     readProse: (_ref, issueId) =>
       guard(
@@ -543,6 +550,63 @@ describe("linear work source adapter", () => {
           issues: [],
           createIssueError: true,
           hideActionIssue: true,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("keeps an ambiguous create recovery outage retryable", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          createIssueError: true,
+          findActionIssueErrors: [
+            null,
+            new IssueTrackerError({ reason: "rate-limited", message: "search rate limited" }),
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("keeps a create read-back outage retryable", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("AUD-5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.isUndefined(error.retryable);
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          findMarkerError: new IssueTrackerError({
+            reason: "unavailable",
+            message: "issue marker read unavailable",
+          }),
         }),
       ),
     ),
