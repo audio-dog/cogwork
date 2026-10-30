@@ -84,6 +84,7 @@ const plan = (steps: ReadonlyArray<WorkflowActionPlanStep>) =>
     operation,
     revision: "1",
     createdAtMillis: 10,
+    consumedHandbackAtMillis: 0,
     digest: "plan-digest",
     summary: "write",
     answers: {},
@@ -271,6 +272,31 @@ describe("Workflow action plan", () => {
       assert.strictEqual(completed._tag, "Complete");
       assert.deepStrictEqual(yield* Ref.get(probe.calls), ["first:write-0", "fail:write-1", "close:write-2"]);
       assert.isNull(yield* store.pending(initial.item, initial.workflow));
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("requires a fresh handback after resumed writes park again", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const initial = plan([
+        step(0, "github.comment-this-item", "fail"),
+        step(1, "github.comment-this-item", "fail"),
+      ]);
+      const store = yield* WorkflowActionPlanStore;
+      yield* store.create(initial);
+
+      const first = yield* executeWorkflowActionPlan(initial, admission);
+      const firstSaved = yield* store.pending(initial.item, initial.workflow);
+      yield* (yield* Coordination).handBack(admission.event.key, { by: "Taylor" });
+      const resumed = yield* executeWorkflowActionPlan(firstSaved ?? initial, admission);
+      const resumedSaved = yield* store.pending(initial.item, initial.workflow);
+      const staleResume = yield* executeWorkflowActionPlan(resumedSaved ?? initial, admission);
+
+      assert.strictEqual(first._tag, "Parked");
+      assert.strictEqual(resumed._tag, "Parked");
+      assert.strictEqual(staleResume._tag, "Parked");
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), ["fail:write-0", "fail:write-1"]);
+      assert.isNotNull(yield* store.pending(initial.item, initial.workflow));
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

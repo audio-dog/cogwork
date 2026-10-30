@@ -238,6 +238,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     operation: input.operation.id,
     revision: input.admission.event.revision,
     createdAtMillis: input.createdAtMillis,
+    consumedHandbackAtMillis: 0,
     summary: input.output.summary,
     answers: input.output.answers,
     handOff,
@@ -424,8 +425,10 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
   const ledger = yield* RunLedger;
   const coordinationView = yield* coordination.read(admission.event.key);
   const handbackAfterPlan = coordinationView.barrierAtMillis > initial.createdAtMillis;
+  const hasFreshHandback =
+    coordinationView.barrierAtMillis > Math.max(initial.createdAtMillis, initial.consumedHandbackAtMillis);
   const hasFailedWrite = initial.steps.some(({ status }) => status === "failed");
-  if (hasFailedWrite && !handbackAfterPlan) return { _tag: "Parked" } as const;
+  if (hasFailedWrite && !hasFreshHandback) return { _tag: "Parked" } as const;
   const lacksWorkspace = initial.steps.some(
     ({ target, status }) => target._tag === "NoWorkspace" && status === "pending",
   );
@@ -456,10 +459,17 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     });
     return { _tag: "Parked" } as const;
   }
-  const pending = initial.steps.filter(({ status }) => status === "pending");
+  const active = hasFailedWrite
+    ? WorkflowActionPlan.make({
+        ...initial,
+        consumedHandbackAtMillis: coordinationView.barrierAtMillis,
+      })
+    : initial;
+  if (hasFailedWrite) yield* store.save(active);
+  const pending = active.steps.filter(({ status }) => status === "pending");
   const state = yield* Effect.reduce(
     pending,
-    () => initialExecutionState(initial),
+    () => initialExecutionState(active),
     (state, step) =>
       Effect.gen(function* () {
         if (state.result !== null) return state;

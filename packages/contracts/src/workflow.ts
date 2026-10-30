@@ -1,4 +1,5 @@
 import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import {
@@ -130,6 +131,7 @@ export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("Workfl
   operation: WorkflowNodeId,
   revision: TrimmedNonEmptyString,
   createdAtMillis: Schema.Natural,
+  consumedHandbackAtMillis: Schema.Natural.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
   digest: TrimmedNonEmptyString,
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
