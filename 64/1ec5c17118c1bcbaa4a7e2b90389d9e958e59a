@@ -1,0 +1,22 @@
+packages/engine/src/github/host.ts
+  s_32b58d670b4dfe::t_e13a2544ec1d7d 165,174
+packages/engine/src/github/github.test.ts
+  s_32b58d670b4dfe::t_fb945893616298 127-128,214,264-268,271,595-654
+  s_32b58d670b4dfe::t_1e789c42c56453 655
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "641ec5c17118c1bcbaa4a7e2b90389d9e958e59a",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
