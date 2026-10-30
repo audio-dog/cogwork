@@ -124,6 +124,8 @@ interface Seed {
   readonly priorityValueError?: boolean;
   readonly pullRequestError?: boolean;
   readonly createIssueError?: IssueTrackerError;
+  readonly findIssueErrors?: ReadonlyArray<IssueTrackerError | null>;
+  readonly readIssueError?: IssueTrackerError;
 }
 
 class ProviderCalls extends Context.Service<
@@ -209,6 +211,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       }),
     ),
   );
+  const findIssueErrors = yield* Ref.make(seed.findIssueErrors ?? []);
   const issueCommentSeeds = seed.comments ?? [];
   const seeded = yield* seedIssueComments(issueCommentSeeds);
   const nextId = yield* Ref.make((seed.comments?.length ?? 0) + 1);
@@ -258,11 +261,14 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue list unavailable" }))
         : Ref.get(issuesRef),
     findIssueWithMarker: (_repo, marker) =>
-      Ref.get(issuesRef).pipe(
-        Effect.map((issues) => issues.find(({ body }) => body.includes(marker)) ?? null),
-      ),
+      Effect.gen(function* () {
+        const error = yield* Ref.modify(findIssueErrors, ([next, ...rest]) => [next ?? null, rest]);
+        if (error) return yield* error;
+        return (yield* Ref.get(issuesRef)).find(({ body }) => body.includes(marker)) ?? null;
+      }),
     readIssue: (_repo, number) =>
       Effect.gen(function* () {
+        if (seed.readIssueError) return yield* seed.readIssueError;
         const issues = yield* Ref.get(issuesRef);
         const issue = issues.find((candidate) => candidate.number === number);
         if (!issue) {
@@ -580,6 +586,67 @@ describe("GitHub adapters", () => {
             reason: "unavailable",
             message: "response body unavailable",
             writeMayHaveCommitted: true,
+          }),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("keeps an ambiguous create recovery outage retryable", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: [] }],
+          createIssueError: new IssueTrackerError({
+            reason: "unavailable",
+            message: "response body unavailable",
+            writeMayHaveCommitted: true,
+          }),
+          findIssueErrors: [
+            null,
+            new IssueTrackerError({ reason: "rate-limited", message: "search rate limited" }),
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("keeps a create read-back outage retryable", () =>
+    Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspace.config.name, id: id("#5") }),
+        workflow: WorkflowId.make("issue-actions"),
+        attempt: RunId.make("issue-actions-attempt"),
+        writeKey: "create-key",
+      });
+      const error = yield* tracker
+        .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
+        .pipe(Effect.flip);
+
+      assert.isUndefined(error.retryable);
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "Existing", labels: [] }],
+          readIssueError: new IssueTrackerError({
+            reason: "unavailable",
+            message: "issue read unavailable",
           }),
         }),
       ),
