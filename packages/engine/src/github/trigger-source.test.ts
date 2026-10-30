@@ -556,6 +556,44 @@ describe("GitHub Trigger sources", () => {
     }).pipe(Effect.provide(pullClientLayer())),
   );
 
+  it.effect("reads only pull request details required by the subscription", () => {
+    const listCheckRuns = vi.fn(() =>
+      Effect.succeed([
+        { name: "test", status: "completed" as const, conclusion: "failure", startedAtMillis: 2_500 },
+      ]),
+    );
+    const pullMergeableState = vi.fn(() => Effect.succeed("dirty" as const));
+    const listTriggerComments = vi.fn(() => Effect.succeed([]));
+    const listReviewComments = vi.fn(() => Effect.succeed([]));
+    const listReviews = vi.fn(() => Effect.succeed([]));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const events = yield* makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState))
+        .observe([subscription("github.pull-request-checks-failed", "checks")])
+        .pipe(Stream.take(1), Stream.runCollect);
+
+      assert.strictEqual(events[0]?.revision, "checks:head-sha:test:failure");
+      assert.strictEqual(listCheckRuns.mock.calls.length, 1);
+      assert.strictEqual(pullMergeableState.mock.calls.length, 0);
+      assert.strictEqual(listTriggerComments.mock.calls.length, 0);
+      assert.strictEqual(listReviewComments.mock.calls.length, 0);
+      assert.strictEqual(listReviews.mock.calls.length, 0);
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+          listPulls: () => Effect.succeed([trustedPull]),
+          listCheckRuns,
+          pullMergeableState,
+          listTriggerComments,
+          listReviewComments,
+          listReviews,
+        }),
+      ),
+    );
+  });
+
   it.effect("skips a failed GitHub pull request read", () => {
     const failedPull = { ...trustedPull, number: 12, headSha: "failed-sha", closingIssueNumbers: [12] };
     const healthyPull = { ...trustedPull, number: 13, headSha: "healthy-sha", closingIssueNumbers: [13] };

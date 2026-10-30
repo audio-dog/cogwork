@@ -32,6 +32,14 @@ const conflictsKey = Schema.decodeSync(WorkflowCatalogKey)("github.pull-request-
 const reviewCommentKey = Schema.decodeSync(WorkflowCatalogKey)("github.new-review-comment-from-person");
 const botFindingKey = Schema.decodeSync(WorkflowCatalogKey)("github.new-finding-from-bot");
 
+const pullReadEntries: Readonly<
+  Record<"checks" | "mergeable" | "feedback", ReadonlyArray<WorkflowCatalogKey>>
+> = {
+  checks: [checksFailedKey],
+  mergeable: [conflictsKey],
+  feedback: [reviewCommentKey, botFindingKey],
+};
+
 export const githubPullRequestEntries = [
   triggerEntry(
     "github.pull-request-checks-failed",
@@ -149,6 +157,13 @@ const proseOf = (pull: RawPull, feedback: ReadonlyArray<Feedback>) => ({
   })),
 });
 
+const readWhenSubscribed = <A, E, R>(
+  selected: ReadonlyArray<TriggerSubscription>,
+  entries: ReadonlyArray<WorkflowCatalogKey>,
+  read: () => Effect.Effect<A, E, R>,
+  fallback: A,
+) => (selected.some(({ entry }) => entries.includes(entry)) ? read() : Effect.succeed(fallback));
+
 const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(function* (
   client: GitHubClientService,
   target: GitHubTargetConfig,
@@ -158,11 +173,31 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   now: number,
 ) {
   const [checks, mergeable, issueComments, reviewComments, reviews] = yield* Effect.all([
-    client.listCheckRuns(target, pull.headSha),
-    client.pullMergeableState(target, pull.number),
-    client.listTriggerComments(target, pull.number),
-    client.listReviewComments(target, pull.number),
-    client.listReviews(target, pull.number),
+    readWhenSubscribed(
+      selected,
+      pullReadEntries.checks,
+      () => client.listCheckRuns(target, pull.headSha),
+      [],
+    ),
+    readWhenSubscribed(
+      selected,
+      pullReadEntries.mergeable,
+      () => client.pullMergeableState(target, pull.number),
+      null,
+    ),
+    readWhenSubscribed(
+      selected,
+      pullReadEntries.feedback,
+      () => client.listTriggerComments(target, pull.number),
+      [],
+    ),
+    readWhenSubscribed(
+      selected,
+      pullReadEntries.feedback,
+      () => client.listReviewComments(target, pull.number),
+      [],
+    ),
+    readWhenSubscribed(selected, pullReadEntries.feedback, () => client.listReviews(target, pull.number), []),
   ]);
   const feedback = feedbackOf(issueComments, reviewComments, reviews);
   const ref = itemRef(workspace, pull);
