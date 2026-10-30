@@ -6,6 +6,7 @@ import type { RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
+  isolateProviderItemRead,
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
@@ -141,7 +142,10 @@ const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(func
     client.observeIssues(target, null, null, updatedSince, true),
   );
   const events = yield* Effect.forEach(issues.flat(), (issue) =>
-    eventsForIssue(client, workspace, selected, issue, now),
+    isolateProviderItemRead(
+      { source: "linear", workspace: workspace.config.name, item: issue.identifier },
+      eventsForIssue(client, workspace, selected, issue, now),
+    ),
   );
   return {
     events: events.flat(),

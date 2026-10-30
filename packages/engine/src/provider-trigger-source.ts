@@ -84,6 +84,19 @@ export const workspaceSubscriptions = <A extends { readonly workspaces: Readonly
   subscriptions: ReadonlyArray<A>,
 ) => subscriptions.filter(({ workspaces }) => workspaces.includes(workspace));
 
+export const isolateProviderItemRead = <A, R>(
+  details: { readonly source: TriggerSourceId; readonly workspace: WorkspaceId; readonly item: string },
+  read: Effect.Effect<ReadonlyArray<A>, IssueTrackerError, R>,
+) =>
+  read.pipe(
+    Effect.catchTag("IssueTrackerError", (error) =>
+      Effect.logWarning("provider item read failed; skipping item", {
+        ...details,
+        message: error.message,
+      }).pipe(Effect.map(() => [] as ReadonlyArray<A>)),
+    ),
+  );
+
 export interface ProviderPollCheckpoint {
   readonly cursors: ReadonlyMap<WorkspaceId, number>;
 }

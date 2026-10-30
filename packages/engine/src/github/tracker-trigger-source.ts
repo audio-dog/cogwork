@@ -6,6 +6,7 @@ import type { RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
+  isolateProviderItemRead,
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
@@ -143,7 +144,10 @@ const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(func
   });
   const trackerIssues = issues.filter(({ isPullRequest }) => !isPullRequest);
   const events = yield* Effect.forEach(trackerIssues, (issue) =>
-    eventsForIssue(client, target, workspace, selected, issue, now),
+    isolateProviderItemRead(
+      { source: "github", workspace: workspace.config.name, item: `issue #${issue.number}` },
+      eventsForIssue(client, target, workspace, selected, issue, now),
+    ),
   );
   return {
     events: events.flat(),

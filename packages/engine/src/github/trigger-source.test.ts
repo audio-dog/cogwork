@@ -1,4 +1,5 @@
 import {
+  IssueTrackerError,
   WorkflowCatalogKey,
   WorkflowId,
   WorkflowNodeId,
@@ -55,6 +56,7 @@ const reviewTrigger = Schema.decodeSync(WorkflowNodeId)("review");
 const linkedIssueId = Schema.decodeSync(WorkItemId)("#7");
 const firstIssueId = Schema.decodeSync(WorkItemId)("#1");
 const secondIssueId = Schema.decodeSync(WorkItemId)("#2");
+const thirdIssueId = Schema.decodeSync(WorkItemId)("#3");
 const subscription = (
   entry: string,
   trigger: string,
@@ -326,6 +328,52 @@ describe("GitHub Trigger sources", () => {
     );
   });
 
+  it.effect("skips a failed GitHub issue read and advances the workspace cursor", () => {
+    const listIssues = vi
+      .fn<GitHubClientService["listIssues"]>()
+      .mockReturnValueOnce(Effect.succeed([issue(1), issue(2)]))
+      .mockReturnValue(Effect.succeed([issue(3)]));
+
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(100_000);
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const observed = yield* source
+        .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
+        .pipe(
+          Stream.take(2),
+          Stream.runCollect,
+          Effect.catchTag("SourceFailure", () => Effect.succeed([] as const)),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("60 seconds");
+      const events = yield* Fiber.join(observed);
+
+      assert.deepStrictEqual(
+        [...events].map(({ key }) => key),
+        [
+          { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
+          { _tag: "Issue", workspace: workspaceId, id: thirdIssueId },
+        ],
+      );
+      assert.strictEqual(listIssues.mock.calls[1]?.[1]?.since, 70_000);
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues,
+          listIssueEvents: (_target, number) =>
+            number === 1
+              ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue read failed" }))
+              : Effect.succeed([
+                  { id: number, event: "labeled", labelName: "needs-triage", createdAtMillis: number },
+                ]),
+          listTriggerComments: () => Effect.succeed([]),
+        }),
+      ),
+    );
+  });
+
   it.effect("keeps distinct items that share one source revision", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;
@@ -486,6 +534,46 @@ describe("GitHub Trigger sources", () => {
       });
     }).pipe(Effect.provide(pullClientLayer())),
   );
+
+  it.effect("skips a failed GitHub pull request read", () => {
+    const failedPull = { ...trustedPull, number: 12, headSha: "failed-sha", closingIssueNumbers: [12] };
+    const healthyPull = { ...trustedPull, number: 13, headSha: "healthy-sha", closingIssueNumbers: [13] };
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const events = yield* makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState))
+        .observe([subscription("github.pull-request-checks-failed", "checks")])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.catchTag("SourceFailure", () => Effect.succeed([] as const)),
+        );
+
+      assert.strictEqual(events[0]?.revision, "checks:healthy-sha:test:failure");
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+          listPulls: () => Effect.succeed([failedPull, healthyPull]),
+          listCheckRuns: (_target, sha) =>
+            sha === "failed-sha"
+              ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "pull read failed" }))
+              : Effect.succeed([
+                  {
+                    name: "test",
+                    status: "completed",
+                    conclusion: "failure",
+                    startedAtMillis: 2_500,
+                  },
+                ]),
+          pullMergeableState: () => Effect.succeed("clean"),
+          listTriggerComments: () => Effect.succeed([]),
+          listReviewComments: () => Effect.succeed([]),
+          listReviews: () => Effect.succeed([]),
+        }),
+      ),
+    );
+  });
 
   it.effect("polls pull conditions when the pull watermark does not move", () => {
     const listCheckRuns = vi.fn((_target: unknown, sha: string) =>

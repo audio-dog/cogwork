@@ -6,6 +6,7 @@ import type { RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
+  isolateProviderItemRead,
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
@@ -268,7 +269,10 @@ const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(
       ? trustedPulls
       : trustedPulls.filter(({ updatedAtMillis }) => updatedAtMillis >= since);
   const events = yield* Effect.forEach(pulls, (pull) =>
-    eventsForPull(client, target, workspace, selected, pull, now),
+    isolateProviderItemRead(
+      { source: "github", workspace: workspace.config.name, item: `pull request #${pull.number}` },
+      eventsForPull(client, target, workspace, selected, pull, now),
+    ),
   );
   return {
     events: events.flat(),
