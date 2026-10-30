@@ -54,6 +54,13 @@ const apiKeyInputFailure = (message: string) =>
     message,
   });
 
+const slackBrowserLoginFailure = () =>
+  new ConnectionFailure({
+    operation: "parse Connection account",
+    connectionId: null,
+    message: "Slack Connections use browser sign-in; run cogwork login slack",
+  });
+
 export const formatConnectionMutation = (
   verb: "Established" | "Re-connected" | "Removed",
   result: ConnectionMutationResult,
@@ -70,6 +77,7 @@ export const resolveConnectionSource = Effect.fn("connection.source")(function* 
   system: ConnectionSystemType,
   readApiKey: Effect.Effect<ApiKeySource, ConnectionFailure>,
 ) {
+  if (system === "slack") return yield* slackBrowserLoginFailure();
   const selected = [Option.isSome(options.env), options.githubCli, options.stored].filter(Boolean);
   if (selected.length > 1) {
     return yield* new ConnectionFailure({
@@ -132,6 +140,7 @@ export const establishmentOf = Effect.fn("connection.establishment")(function* (
   account: Option.Option<string>,
   source: ConnectionEstablishment["source"],
 ) {
+  if (system === "slack") return yield* slackBrowserLoginFailure();
   if (system === "github" && Option.isSome(account)) {
     return yield* new ConnectionFailure({
       operation: "parse Connection account",

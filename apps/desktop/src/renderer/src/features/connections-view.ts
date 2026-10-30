@@ -16,6 +16,7 @@ const connectionSystemLabels: Record<ConnectionSystem, string> = {
   github: "GitHub",
   linear: "Linear",
   granola: "Granola",
+  slack: "Slack",
 };
 
 export const connectionSystemLabel = (system: ConnectionSystem) => connectionSystemLabels[system];

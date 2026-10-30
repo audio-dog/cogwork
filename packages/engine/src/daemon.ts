@@ -44,6 +44,7 @@ import {
   handBack,
   installPlugin,
   loginGranola,
+  loginSlack,
   rebindWorkspace,
   reclassify,
   reconnectConnection,
@@ -372,6 +373,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   UninstallPlugin: uninstallPlugin,
   EstablishConnection: establishConnection,
   LoginGranola: loginGranola,
+  LoginSlack: loginSlack,
   ReconnectConnection: reconnectConnection,
   RemoveConnection: removeConnection,
   DeregisterWorkspace: deregisterWorkspace,
@@ -395,6 +397,7 @@ export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
   readonly granolaLogin?: Layer.Layer<never, E, R | Crypto.Crypto>;
+  readonly slackLogin?: Layer.Layer<never, E, R | Crypto.Crypto | HttpClient.HttpClient>;
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
@@ -512,6 +515,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     connections,
     githubClient,
     ...(adapters.granolaLogin ? [adapters.granolaLogin] : []),
+    ...(adapters.slackLogin ? [adapters.slackLogin] : []),
     daemonInfoLayer,
     issueTracker,
     adapters.performanceHealth,

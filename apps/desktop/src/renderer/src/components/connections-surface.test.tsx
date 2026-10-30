@@ -11,6 +11,11 @@ const scriptedClient: ConnectionsValue = {
           connection: null,
           readiness: { _tag: "NotReady", reason: "Not connected" },
         },
+        {
+          system: "slack",
+          connection: null,
+          readiness: { _tag: "NotReady", reason: "Not connected" },
+        },
       ],
     },
     plugins: { plugins: [] },
@@ -20,13 +25,14 @@ const scriptedClient: ConnectionsValue = {
     establish: () => Promise.resolve(null),
     reconnect: () => Promise.resolve(null),
     loginGranola: () => Promise.resolve(null),
+    loginSlack: () => Promise.resolve(null),
     remove: () => undefined,
   },
   meta: { failure: null, danglingWorkspaces: [] },
 };
 
 describe("Connections surface", () => {
-  it("renders Granola login and API key actions from the provider seam", () => {
+  it("renders browser login actions from the provider seam", () => {
     const markup = renderToStaticMarkup(
       <Connections.Provider value={scriptedClient}>
         <Connections.Content />
@@ -36,5 +42,7 @@ describe("Connections surface", () => {
     expect(markup).toContain("Granola");
     expect(markup).toContain("Log in");
     expect(markup).toContain("Add key");
+    expect(markup).toContain("Slack");
+    expect(markup).toContain("Connect Slack");
   });
 });

@@ -1,11 +1,11 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
 
-export const ConnectionSystem = Schema.Literals(["github", "linear", "granola"]);
+export const ConnectionSystem = Schema.Literals(["github", "linear", "granola", "slack"]);
 export type ConnectionSystem = typeof ConnectionSystem.Type;
 
 export const ConnectionId = TrimmedNonEmptyString.check(
-  Schema.isPattern(/^(github|linear|granola)\/.+$/),
+  Schema.isPattern(/^(github|linear|granola|slack)\/.+$/),
 ).pipe(Schema.brand("ConnectionId"));
 export type ConnectionId = typeof ConnectionId.Type;
 
@@ -41,6 +41,11 @@ export const ConnectionEstablishment = Schema.Union([
     system: Schema.Literal("granola"),
     account: TrimmedNonEmptyString,
     source: ConnectionSource,
+  }),
+  Schema.Struct({
+    system: Schema.Literal("slack"),
+    account: TrimmedNonEmptyString,
+    source: Schema.TaggedStruct("Stored", {}),
   }),
 ]).pipe(Schema.toTaggedUnion("system"));
 export type ConnectionEstablishment = typeof ConnectionEstablishment.Type;

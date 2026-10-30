@@ -43,6 +43,7 @@ export * as RunPreparation from "./run-preparation";
 export * as Scheduler from "./scheduler";
 export * as ScriptedSource from "./scripted-source";
 export * as SessionStore from "./session-store";
+export * as Slack from "./slack-login";
 export * as SourceControl from "./source-control";
 export * as Tools from "./tools";
 export * as TriggerObservation from "./trigger-observation";
