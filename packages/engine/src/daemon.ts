@@ -117,6 +117,7 @@ import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
 import { make as makeSlackSource, httpClientLayer as slackClientLayer } from "./slack-source";
+import { layer as slackWriteLayer } from "./slack-write";
 import { SourceControlProvider } from "./source-control";
 import {
   controlStoreTriggerObservationStoreLayer,
@@ -534,6 +535,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const workflowNotifications = workflowNotificationsLayer.pipe(
     Layer.provide(Layer.merge(runLedger, runRecorder)),
   );
+  const slackWrite = slackWriteLayer.pipe(Layer.provide(slackClientLayer), Layer.provide(connections));
   const triggerObservation = triggerObservationLayer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -559,6 +561,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         runRecorder,
         workflowActionPlans,
         workflowNotifications,
+        slackWrite,
         triggerObservationStore,
       ),
     ),
