@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   type AgUiEvent,
   agUiIsStructuredOutputComplete,
+  BranchName,
   keyOf,
   LineageId,
   RunId,
@@ -17,6 +18,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -26,18 +28,20 @@ import * as Stream from "effect/Stream";
 import { ContextAssembler } from "./context-assembler";
 import { Coordination, maxLineageHops } from "./coordination";
 import { Harness, type HarnessRunnerEnv } from "./harness";
-import { IssueTracker } from "./issue-tracker";
+import { IssueTracker, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
+import { SourceControlProvider } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { Workflows } from "./workflow";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowNotifications } from "./workflow-notification";
+import { ticketSlug, WorktreeManager } from "./worktree";
 
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -124,19 +128,67 @@ export const make = Effect.gen(function* () {
   const actionPlans = yield* WorkflowActionPlanStore;
   const issueTracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
+  const sourceControl = Option.getOrNull(yield* Effect.serviceOption(SourceControlProvider));
+  const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
+  const fs = yield* FileSystem.FileSystem;
   const observationStore = yield* TriggerObservationStore;
-  const executionContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
-    Effect.map((context) =>
-      context.pipe(
-        Context.add(Coordination, coordination),
-        Context.add(IssueTracker, issueTracker),
-        Context.add(RunLedger, ledger),
-        Context.add(WorkflowActionPlanStore, actionPlans),
-        Context.add(WorkflowNotifications, notifications),
-      ),
-    ),
+  const harnessContext = yield* Effect.context<HarnessRunnerEnv>();
+  const coreExecutionContext = harnessContext.pipe(
+    Context.add(Coordination, coordination),
+    Context.add(IssueTracker, issueTracker),
+    Context.add(RunLedger, ledger),
+    Context.add(WorkflowActionPlanStore, actionPlans),
+    Context.add(WorkflowNotifications, notifications),
+    Context.add(WorkspaceRegistry, registry),
   );
+  const sourceControlExecutionContext =
+    sourceControl === null
+      ? coreExecutionContext
+      : Context.add(coreExecutionContext, SourceControlProvider, sourceControl);
+  const executionContext =
+    worktrees === null
+      ? sourceControlExecutionContext
+      : Context.add(sourceControlExecutionContext, WorktreeManager, worktrees);
   const decodeIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+
+  const prepareCheckout = Effect.fn("WorkflowRun.prepareCheckout")(function* (
+    admission: TriggerAdmission,
+    workspace: RegisteredWorkspace | null,
+    permissionProfile: "read-only" | "full",
+  ) {
+    if (workspace === null) {
+      const path = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workflow-" });
+      return { path, branch: null } as const;
+    }
+    if (permissionProfile === "read-only") {
+      return { path: workspace.config.checkoutPath, branch: null } as const;
+    }
+    const pullRequest =
+      sourceControl === null ? null : yield* sourceControl.resolvePullRequest(workspace, admission.event.key);
+    const branch = BranchName.make(
+      pullRequest?.headBranch ??
+        (admission.event.key._tag === "Issue" ? ticketSlug(admission.event.key.id) : "pull-request"),
+    );
+    const item = {
+      id:
+        admission.event.key._tag === "Issue"
+          ? admission.event.key.id
+          : `#${admission.event.key._tag === "PullRequest" ? admission.event.key.number : "workflow"}`,
+      title: "",
+    };
+    if (worktrees === null) {
+      return yield* new IssueTrackerError({
+        reason: "unavailable",
+        retryable: false,
+        message: "Worktree manager is not configured",
+      });
+    }
+    const checkout = yield* worktrees.ensure(workspace, item, {
+      branch,
+      pushOwner: "engine",
+    });
+    return { path: checkout.path, branch } as const;
+  });
 
   const settle = (record: RunRecord, status: RunRecord["status"]) =>
     Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
@@ -235,6 +287,12 @@ export const make = Effect.gen(function* () {
       if (execution._tag === "Replan") {
         yield* settleAttempt(pendingPlan.attempt, "interrupted");
       }
+      if (execution._tag === "Declined") {
+        const pendingRun = yield* ledger.getRun(pendingPlan.attempt);
+        if (pendingRun !== null) {
+          return yield* refuseResult(admission, pendingKey, pendingRun, execution.reason);
+        }
+      }
       if (execution._tag === "Retry" || execution._tag === "Parked") {
         yield* settleAttempt(pendingPlan.attempt, "failed");
         return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
@@ -269,6 +327,8 @@ export const make = Effect.gen(function* () {
     const key = operationKeyOf(admission, operation.id);
     const catalogResult = yield* workflows.catalog;
     const registryState = yield* registry.state;
+    const workspace =
+      registryState.workspaces.find(({ config }) => config.name === admission.event.workspace) ?? null;
     const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
     const selectedHarness = operation.model.harness ?? catalogResult.machine.defaultHarness;
     const hasMissingNeed = operation.requires.some(
@@ -292,18 +352,19 @@ export const make = Effect.gen(function* () {
       ));
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(randomUUID());
-    const workspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
+    const checkout = yield* prepareCheckout(admission, workspace, operation.permissionProfile);
+    const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
     const item = workItemId(keyOf(admission.event.key));
     const session = yield* sessions.mint(
-      { workspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
+      { workspace: runWorkspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
       harness.sessionKind,
     );
     const priorIssues = (yield* Ref.get(decodeIssues)).get(keyOf(admission.event.key)) ?? null;
     const assembled = yield* contextAssembler.assemble({
       runId: id,
-      workspace,
-      cwd: "/",
-      projectRoot: "/",
+      workspace: runWorkspace,
+      cwd: checkout.path,
+      projectRoot: checkout.path,
       operatingInstructions: operation,
       contributions: [],
     });
@@ -351,7 +412,7 @@ export const make = Effect.gen(function* () {
         },
         observation,
       },
-      sandbox: { workspace: null, policy: operation.permissionProfile },
+      sandbox: { workspace: workspace ? checkout.path : null, policy: operation.permissionProfile },
       persistence: { sessionKind: harness.sessionKind(selectedHarness) },
       provenance: {
         resolution: [],
@@ -363,11 +424,11 @@ export const make = Effect.gen(function* () {
     });
     const run: RunRecord = {
       id,
-      workspace,
+      workspace: runWorkspace,
       workItem: item,
       stage: "implement",
       harness: selectedHarness,
-      branch: null,
+      branch: checkout.branch,
       session,
       usage: null,
       status: "running",
@@ -454,6 +515,9 @@ export const make = Effect.gen(function* () {
     if (execution._tag === "Replan") {
       yield* settle(run, "interrupted");
       return admission;
+    }
+    if (execution._tag === "Declined") {
+      return yield* refuseResult(admission, key, run, execution.reason);
     }
     if (execution._tag !== "Complete") {
       yield* settle(run, "failed");
