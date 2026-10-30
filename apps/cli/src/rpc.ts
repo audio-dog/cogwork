@@ -33,6 +33,7 @@ import { layer as ledgerLayer } from "./ledger";
 import { defaultTelemetryStorePath } from "./paths";
 import { readPerformanceHealthSnapshot } from "./performance-health";
 import { contextFsLayer, gitLayer, worktreeManagerLayer } from "./platform";
+import { slackLoginLayer } from "./slack-login";
 
 export interface DaemonOptions {
   readonly socketPath: string;
@@ -360,6 +361,7 @@ export const serverLayer = (options: DaemonOptions) =>
           transport: transportLayer(options.socketPath),
           credentials: credentialsLayer(options.credentialsPath),
           granolaLogin: granolaLoginLayer(),
+          slackLogin: slackLoginLayer(),
           contextAssembler: contextAssemblerLayer(nodePath.dirname(options.controlStorePath)),
           runLedger: ledgerLayer,
           controlStorePath: options.controlStorePath,

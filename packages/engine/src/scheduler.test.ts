@@ -35,13 +35,18 @@ import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { type TriggerAdmission, TriggerObservation } from "./trigger-observation";
-import { WorkflowRun } from "./workflow-run";
+import { WorkflowRun, type WorkflowRunOutcome } from "./workflow-run";
 
 const id = Schema.decodeSync(WorkItemId);
 const workflowId = Schema.decodeSync(WorkflowId)("scheduled-workflow");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
+const siblingTriggerId = Schema.decodeSync(WorkflowNodeId)("schedule-sibling");
 const operationId = Schema.decodeSync(WorkflowNodeId)("run");
 const scheduleEntry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
+const workflowRunOutcomes = new Set<unknown>(["completed", "retry", "skipped"]);
+
+const isWorkflowRunOutcome = (outcome: unknown): outcome is WorkflowRunOutcome =>
+  workflowRunOutcomes.has(outcome);
 
 const never = Latch.makeUnsafe(false).await;
 
@@ -450,7 +455,10 @@ interface SchedulerLayerDependencies {
   readonly snapshots: ReadonlyArray<SnapshotEntry>;
   readonly execute: ExecuteStub;
   readonly workflowAdmissions?: ReadonlyArray<TriggerAdmission>;
-  readonly workflowExecute?: (probe: SchedulerProbeState, admission: TriggerAdmission) => Effect.Effect<void>;
+  readonly workflowExecute?: (
+    probe: SchedulerProbeState,
+    admission: TriggerAdmission,
+  ) => Effect.Effect<unknown>;
 }
 
 const providedRegistryLayer = (deps: SchedulerLayerDependencies) => {
@@ -480,7 +488,10 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
         Layer.effect(
           WorkflowRun,
           Effect.map(SchedulerProbe, (state) => ({
-            execute: (admission: TriggerAdmission) => deps.workflowExecute?.(state, admission) ?? Effect.void,
+            execute: (admission: TriggerAdmission) =>
+              (deps.workflowExecute?.(state, admission) ?? Effect.void).pipe(
+                Effect.map((outcome) => (isWorkflowRunOutcome(outcome) ? outcome : "completed")),
+              ),
           })),
         ).pipe(Layer.provide(probe)),
         engineServices,
@@ -491,7 +502,7 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
   );
 };
 
-const workflowAdmission = (instantMillis: number): TriggerAdmission => {
+const workflowAdmission = (instantMillis: number, trigger = triggerId) => {
   const item = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis } as const;
   return {
     event: {
@@ -504,7 +515,7 @@ const workflowAdmission = (instantMillis: number): TriggerAdmission => {
     },
     subscription: {
       workflow: workflowId,
-      trigger: triggerId,
+      trigger,
       operation: operationId,
       entry: scheduleEntry,
       parameters: [],
@@ -516,7 +527,7 @@ const workflowAdmission = (instantMillis: number): TriggerAdmission => {
       parent: null,
       hop: 0,
     },
-  };
+  } satisfies TriggerAdmission;
 };
 
 describe("Scheduler.tick", () => {
@@ -576,7 +587,7 @@ describe("Scheduler.tick", () => {
       ...first,
       subscription: {
         ...first.subscription,
-        trigger: Schema.decodeSync(WorkflowNodeId)("sibling-trigger"),
+        trigger: siblingTriggerId,
       },
     };
     return Effect.gen(function* () {
@@ -598,6 +609,69 @@ describe("Scheduler.tick", () => {
       ),
     );
   });
+
+  it.effect("refunds a skipped Workflow admission without scheduling it twice", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 0);
+
+      assert.strictEqual((yield* scheduler.stats).budgetUsed, 0);
+      assert.deepStrictEqual(yield* Ref.get(probe.workflowExecutions), ["1000"]);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 1 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [workflowAdmission(1_000)],
+            workflowExecute: (probe, admission) =>
+              Ref.update(probe.workflowExecutions, (executions) => [
+                ...executions,
+                admission.event.revision,
+              ]).pipe(Effect.map(() => "skipped" as const)),
+          },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("retries a failed Workflow admission and charges each attempt", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+
+      assert.strictEqual((yield* scheduler.stats).budgetUsed, 2);
+      assert.deepStrictEqual(yield* Ref.get(probe.workflowExecutions), ["1000", "1000"]);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 2 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [workflowAdmission(1_000)],
+            workflowExecute: (probe, admission) =>
+              Ref.update(probe.workflowExecutions, (executions) => [
+                ...executions,
+                admission.event.revision,
+              ]).pipe(Effect.map(() => "retry" as const)),
+          },
+        ),
+      ),
+    ),
+  );
 
   it.effect("isolates a crashing Workflow Run from other scheduled work", () =>
     Effect.gen(function* () {

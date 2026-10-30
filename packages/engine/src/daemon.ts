@@ -34,6 +34,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import type { SqlError } from "effect/unstable/sql/SqlError";
 import { Availability } from "./availability";
 import { clockSource } from "./clock-source";
 import {
@@ -44,6 +45,7 @@ import {
   handBack,
   installPlugin,
   loginGranola,
+  loginSlack,
   rebindWorkspace,
   reclassify,
   reconnectConnection,
@@ -71,7 +73,9 @@ import {
   layer as eventPublisherLayer,
 } from "./event-publisher";
 import * as Executor from "./executor";
+import type { Git } from "./git";
 import * as GitHub from "./github";
+import { makeGranolaSource, makeGranolaSourceAdapters } from "./granola-source";
 import * as Harness from "./harness";
 import { HarnessReadinessCache, layer as harnessReadinessLayer } from "./harness-readiness";
 import { IssueTracker } from "./issue-tracker";
@@ -115,6 +119,7 @@ import * as SessionStore from "./session-store";
 import { SourceControlProvider } from "./source-control";
 import {
   controlStoreTriggerObservationStoreLayer,
+  TriggerObservation,
   layer as triggerObservationLayer,
 } from "./trigger-observation";
 import { combineTriggerSources, TriggerSources } from "./trigger-source";
@@ -288,6 +293,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const now = yield* Clock.currentTimeMillis;
     const bus = yield* DaemonEventBus;
     const controlStore = yield* ControlStore;
+    const triggerObservation = yield* TriggerObservation;
     const registry = yield* (yield* WorkspaceRegistry).state;
     const stateByName = statesByName(snapshot);
     return {
@@ -296,6 +302,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
       uptimeMillis: now - info.startedAtMillis,
       eventBusDroppedEvents: yield* bus.droppedEvents,
       scheduler: schedulerStatsOf(registry, config, stats),
+      sources: yield* triggerObservation.health,
       workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
       failures: registry.failures.map(({ name, displayName, source, message }) => ({
         ...(name === undefined ? {} : { name }),
@@ -373,6 +380,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   UninstallPlugin: uninstallPlugin,
   EstablishConnection: establishConnection,
   LoginGranola: loginGranola,
+  LoginSlack: loginSlack,
   ReconnectConnection: reconnectConnection,
   RemoveConnection: removeConnection,
   DeregisterWorkspace: deregisterWorkspace,
@@ -396,6 +404,7 @@ export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
   readonly granolaLogin?: Layer.Layer<never, E, R | Crypto.Crypto>;
+  readonly slackLogin?: Layer.Layer<never, E, R | Crypto.Crypto | HttpClient.HttpClient>;
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
@@ -410,7 +419,9 @@ export interface HostAdapters<E = never, R = never> {
   readonly performanceIssueWorkspace?: WorkspaceId;
 }
 
-const triggerSourcesLayer = <E, R>(issueTracker: Layer.Layer<IssueTracker | SourceControlProvider, E, R>) =>
+const providerTriggerSourcesLayer = <E, R>(
+  issueTracker: Layer.Layer<IssueTracker | SourceControlProvider, E, R>,
+) =>
   Layer.effect(
     TriggerSources,
     Effect.all([IssueTracker, SourceControlProvider]).pipe(
@@ -452,7 +463,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provideMerge(controlStore),
   );
   const issueTracker = issueTrackerAdapters.pipe(Layer.provide(registry));
-  const triggerSources = triggerSourcesLayer(issueTracker);
+  const providerTriggerSources = providerTriggerSourcesLayer(issueTracker);
   const performanceIssueFiler = GitHub.performanceIssueFilerLayer(adapters.performanceIssueWorkspace).pipe(
     Layer.provide(githubClient),
     Layer.provide(registry),
@@ -489,13 +500,30 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const machineReadiness = machineReadinessLayer.pipe(
     Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness)),
   );
+  const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
+    Layer.provide(controlStore),
+  );
+  const triggerSources: Layer.Layer<
+    TriggerSources,
+    E | PlatformError | SqlError,
+    R | Crypto.Crypto | FileSystem.FileSystem | Git | HttpClient.HttpClient | Path.Path
+  > = Layer.effect(
+    TriggerSources,
+    Effect.gen(function* () {
+      const sources = yield* TriggerSources;
+      const connectionStore = yield* ConnectionStore;
+      const coordinationService = yield* Coordination;
+      const http = yield* HttpClient.HttpClient;
+      return combineTriggerSources([
+        ...sources,
+        makeGranolaSource(connectionStore, makeGranolaSourceAdapters(http), coordinationService),
+      ]);
+    }),
+  ).pipe(Layer.provide(Layer.mergeAll(providerTriggerSources, connections, coordination)));
   const workflows = workflowsLayer.pipe(
     Layer.provide(workflowCatalogContributionsLayer.pipe(Layer.provide(triggerSources))),
     Layer.provide(machineReadiness),
     Layer.provide(Layer.mergeAll(controlStore, daemonEventBusLayer, harness)),
-  );
-  const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
-    Layer.provide(controlStore),
   );
   const triggerObservationStore = controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
   const workflowNotifications = workflowNotificationsLayer.pipe(
@@ -516,7 +544,15 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const workflowRun = workflowRunLayer.pipe(
     Layer.provide(
-      Layer.mergeAll(workflows, coordination, harnessRuntime, runLedger, runRecorder, workflowNotifications),
+      Layer.mergeAll(
+        workflows,
+        coordination,
+        harnessRuntime,
+        runLedger,
+        runRecorder,
+        workflowNotifications,
+        triggerObservationStore,
+      ),
     ),
   );
   const base = Layer.mergeAll(
@@ -525,6 +561,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     connections,
     githubClient,
     ...(adapters.granolaLogin ? [adapters.granolaLogin] : []),
+    ...(adapters.slackLogin ? [adapters.slackLogin] : []),
     daemonInfoLayer,
     issueTracker,
     adapters.performanceHealth,

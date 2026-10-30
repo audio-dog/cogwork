@@ -508,6 +508,77 @@ describe("CredentialStore (stored)", () => {
     }),
   );
 
+  it.effect("keeps a replacement browser grant ahead of an in-flight refresh", () =>
+    Effect.gen(function* () {
+      const previous = stored("acme", expiredWithRefresh());
+      const replacement = stored("acme", storedToken(far, "replacement-token"));
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([previous]);
+      const refreshStarted = yield* Deferred.make<void>();
+      const releaseRefresh = yield* Deferred.make<void>();
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) => Ref.set(credentials, [credential]),
+          removeCredential: () => Ref.set(credentials, []),
+        },
+        refresh: () =>
+          Deferred.succeed(refreshStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseRefresh)),
+            Effect.map(() => rotatedToken()),
+          ),
+      });
+      const refreshing = yield* store
+        .bearerToken(oauthAccount)
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.await(refreshStarted);
+      const withStoredCredential = store.withStoredCredential;
+      if (!withStoredCredential) return assert.fail("Expected staged credential support");
+      const replacing = yield* withStoredCredential(replacement, Effect.void).pipe(
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Deferred.succeed(releaseRefresh, undefined);
+      yield* Fiber.join(refreshing);
+      yield* Fiber.join(replacing);
+
+      const [saved] = yield* Ref.get(credentials);
+      assert.strictEqual(saved && Redacted.value(saved.token.accessToken), "replacement-token");
+    }),
+  );
+
+  it.effect("keeps a removed Connection clear after an in-flight refresh", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([
+        stored("acme", expiredWithRefresh()),
+      ]);
+      const refreshStarted = yield* Deferred.make<void>();
+      const releaseRefresh = yield* Deferred.make<void>();
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) => Ref.set(credentials, [credential]),
+          removeConnection: () => Ref.set(credentials, []),
+        },
+        refresh: () =>
+          Deferred.succeed(refreshStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseRefresh)),
+            Effect.map(() => rotatedToken()),
+          ),
+      });
+      const refreshing = yield* store
+        .bearerToken(oauthAccount)
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.await(refreshStarted);
+      const removing = yield* store
+        .removeConnection(connectionId("linear/acme"))
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.succeed(releaseRefresh, undefined);
+      yield* Fiber.join(refreshing);
+      yield* Fiber.join(removing);
+
+      assert.deepStrictEqual(yield* Ref.get(credentials), []);
+    }),
+  );
+
   it.effect("prefers a live stored token over the account's env var", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;
@@ -697,6 +768,39 @@ describe("CredentialStore (refresh)", () => {
       yield* store.bearerToken(oauthAccount);
       const token = yield* savedToken;
       assert.strictEqual(token && Redacted.value(token.accessToken), "rotated-token");
+      assert.strictEqual(token?.refreshToken && Redacted.value(token.refreshToken), "refresh-2");
+    }).pipe(withRefreshEnv),
+  );
+
+  it.effect("finishes saving a rotated token after interruption", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Ref.make<ReadonlyArray<StoredCredential>>([
+        stored("acme", expiredWithRefresh()),
+      ]);
+      const saveStarted = yield* Deferred.make<void>();
+      const releaseSave = yield* Deferred.make<void>();
+      const store = make({
+        stored: {
+          load: Ref.get(credentials),
+          save: (credential) =>
+            Deferred.succeed(saveStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(releaseSave)),
+              Effect.andThen(Ref.set(credentials, [credential])),
+            ),
+        },
+        refresh: () => Effect.succeed(rotatedToken()),
+      });
+      const resolving = yield* store
+        .bearerToken(oauthAccount)
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.await(saveStarted);
+      const interrupting = yield* Fiber.interrupt(resolving).pipe(
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Deferred.succeed(releaseSave, undefined);
+      yield* Fiber.join(interrupting);
+
+      const token = (yield* Ref.get(credentials))[0]?.token;
       assert.strictEqual(token?.refreshToken && Redacted.value(token.refreshToken), "refresh-2");
     }).pipe(withRefreshEnv),
   );

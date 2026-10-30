@@ -56,6 +56,18 @@ export const TriggerEvent = Schema.Struct({
       ),
     }),
   ),
+  payload: Schema.optional(
+    Schema.TaggedUnion({
+      GranolaNote: {
+        title: Schema.String,
+        attendees: Schema.Array(Schema.String),
+        calendarEvent: Schema.String,
+        summary: Schema.String,
+        transcript: Schema.String,
+      },
+      GranolaNoteRejected: { reason: Schema.String },
+    }),
+  ),
 });
 export type TriggerEvent = typeof TriggerEvent.Type;
 

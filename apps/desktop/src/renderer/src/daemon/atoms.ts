@@ -127,6 +127,8 @@ export const establishConnectionAtom = DaemonAtomRpc.mutation("EstablishConnecti
 
 export const loginGranolaAtom = DaemonAtomRpc.mutation("LoginGranola");
 
+export const loginSlackAtom = DaemonAtomRpc.mutation("LoginSlack");
+
 export const reconnectConnectionAtom = DaemonAtomRpc.mutation("ReconnectConnection");
 
 export const removeConnectionAtom = DaemonAtomRpc.mutation("RemoveConnection");

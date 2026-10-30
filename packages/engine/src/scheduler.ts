@@ -28,7 +28,7 @@ import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { day } from "./time";
 import { type TriggerAdmission, TriggerObservation, workflowAdmissionRefOf } from "./trigger-observation";
-import { WorkflowRun } from "./workflow-run";
+import { WorkflowRun, type WorkflowRunOutcome } from "./workflow-run";
 import { branchName, ticketSlug } from "./worktree";
 
 const runsInFlight = Metric.gauge("cogwork_scheduler_runs_in_flight", {
@@ -121,15 +121,34 @@ interface WorkflowCandidate {
 
 type Schedulable = Candidate | WorkflowCandidate;
 
+interface ReservationDisposition {
+  readonly refundBudget: boolean;
+  readonly retry: boolean;
+}
+
+const WORKFLOW_RUN_DISPOSITIONS = {
+  completed: { refundBudget: false, retry: false },
+  retry: { refundBudget: false, retry: true },
+  skipped: { refundBudget: true, retry: false },
+} satisfies Record<WorkflowRunOutcome, ReservationDisposition>;
+
 const isWorkflowCandidate = (candidate: Schedulable): candidate is WorkflowCandidate =>
   "admission" in candidate;
 
 const workflowKeyFor = (admission: TriggerAdmission) =>
   `workflow:${coordinationKeyOf(workflowAdmissionRefOf(admission))}`;
 
+const workflowAdmissionKeyFor = (admission: TriggerAdmission) =>
+  `workflow-admission:${JSON.stringify([
+    keyOf(admission.event.key),
+    admission.event.revision,
+    admission.subscription.workflow,
+    admission.subscription.trigger,
+  ])}`;
+
 const workflowCandidateOf = (admission: TriggerAdmission): WorkflowCandidate => ({
   admission,
-  keys: [workflowKeyFor(admission)],
+  keys: [workflowKeyFor(admission), workflowAdmissionKeyFor(admission)],
 });
 
 const workspaceReservation = (candidate: Schedulable) =>
@@ -173,14 +192,22 @@ const reserve = (state: SchedulerState, candidate: Schedulable) => {
   };
 };
 
-const release = (state: SchedulerState, candidate: Schedulable) => {
+const release = (state: SchedulerState, candidate: Schedulable, retry: boolean) => {
   const reservation = workspaceReservation(candidate);
+  const acted = isWorkflowCandidate(candidate)
+    ? new Set(
+        [...state.acted].filter((key) =>
+          retry ? !candidate.keys.includes(key) : key !== workflowKeyFor(candidate.admission),
+        ),
+      )
+    : state.acted;
   return {
     ...state,
     global: Math.max(0, state.global - 1),
     perWorkspace:
       reservation === null ? state.perWorkspace : bumped(state.perWorkspace, reservation.workspace, -1),
     inflight: new Set([...state.inflight].filter((key) => !candidate.keys.includes(key))),
+    acted,
   };
 };
 
@@ -188,6 +215,15 @@ const refundBudget = (state: SchedulerState) => ({
   ...state,
   budgetUsed: Math.max(0, state.budgetUsed - 1),
 });
+
+const finishReservation = (
+  state: SchedulerState,
+  candidate: Schedulable,
+  disposition: ReservationDisposition,
+) => {
+  const released = release(state, candidate, disposition.retry);
+  return disposition.refundBudget ? refundBudget(released) : released;
+};
 
 const rolledOver = (state: SchedulerState, day: number) =>
   state.budgetDay === day ? state : { ...state, budgetDay: day, budgetUsed: 0 };
@@ -316,31 +352,38 @@ export const make = (config: SchedulerConfig) =>
     const runReserved = <E, R>(
       candidate: Schedulable,
       correlation: Readonly<Record<string, string>>,
-      execute: Effect.Effect<boolean, E, R>,
-    ) =>
-      execute.pipe(
-        Effect.flatMap((started) =>
-          started
-            ? Effect.void
-            : stateMetricsGate.withPermit(
-                Ref.updateAndGet(stateRef, refundBudget).pipe(Effect.flatMap(updateStateMetrics)),
-              ),
-        ),
-        Effect.onExit(recordJobOutcome),
-        Effect.catchCauseIf(
-          (cause) => !Cause.hasInterruptsOnly(cause),
-          (cause) => Effect.logWarning("scheduled job crashed", cause),
-        ),
-        Effect.ensuring(
-          stateMetricsGate.withPermit(
-            Ref.updateAndGet(stateRef, (state) => release(state, candidate)).pipe(
-              Effect.flatMap(updateStateMetrics),
+      execute: Effect.Effect<ReservationDisposition, E, R>,
+    ) => {
+      const failedDisposition: ReservationDisposition = {
+        refundBudget: false,
+        retry: isWorkflowCandidate(candidate),
+      };
+      return Ref.make(failedDisposition).pipe(
+        Effect.flatMap((dispositionRef) =>
+          execute.pipe(
+            Effect.tap((disposition) => Ref.set(dispositionRef, disposition)),
+            Effect.asVoid,
+            Effect.onExit(recordJobOutcome),
+            Effect.catchCauseIf(
+              (cause) => !Cause.hasInterruptsOnly(cause),
+              (cause) => Effect.logWarning("scheduled job crashed", cause),
             ),
+            Effect.ensuring(
+              stateMetricsGate.withPermit(
+                Ref.get(dispositionRef).pipe(
+                  Effect.flatMap((disposition) =>
+                    Ref.updateAndGet(stateRef, (state) => finishReservation(state, candidate, disposition)),
+                  ),
+                  Effect.flatMap(updateStateMetrics),
+                ),
+              ),
+            ),
+            Effect.annotateLogs(correlation),
+            Effect.annotateSpans(correlation),
           ),
         ),
-        Effect.annotateLogs(correlation),
-        Effect.annotateSpans(correlation),
       );
+    };
 
     const runJob = (candidate: Candidate) =>
       runReserved(
@@ -350,7 +393,9 @@ export const make = (config: SchedulerConfig) =>
           item: candidate.work.id,
           stage: candidate.work.stage,
         },
-        executor.execute(candidate.workspace, candidate.work, candidate.observation),
+        executor
+          .execute(candidate.workspace, candidate.work, candidate.observation)
+          .pipe(Effect.map((started) => ({ refundBudget: !started, retry: false }))),
       );
 
     const runWorkflow = (candidate: WorkflowCandidate) =>
@@ -361,7 +406,9 @@ export const make = (config: SchedulerConfig) =>
           item: keyOf(candidate.admission.event.key),
           operation: candidate.admission.subscription.operation,
         },
-        workflowRun.execute(candidate.admission).pipe(Effect.map(() => true)),
+        workflowRun
+          .execute(candidate.admission)
+          .pipe(Effect.map((outcome) => WORKFLOW_RUN_DISPOSITIONS[outcome])),
       );
 
     const dispatch = (candidate: Schedulable) => {

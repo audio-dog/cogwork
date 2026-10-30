@@ -10,6 +10,7 @@ const environmentVariables: Record<ConnectionSystem, string> = {
   github: "GITHUB_TOKEN",
   linear: "LINEAR_API_KEY",
   granola: "GRANOLA_API_KEY",
+  slack: "SLACK_TOKEN",
 };
 
 export const environmentVariableFor = (system: ConnectionSystem) => environmentVariables[system];
@@ -17,7 +18,7 @@ export const environmentVariableFor = (system: ConnectionSystem) => environmentV
 // One flat record, because that is what the form binds to: every field stays mounted so switching
 // source keeps what was already typed. Which credential field is *required* is the filter's job.
 export const EstablishmentFields = Schema.Struct({
-  system: Schema.Literals(["github", "linear", "granola"]),
+  system: Schema.Literals(["github", "linear", "granola", "slack"]),
   account: Schema.String,
   source: CredentialSourceTag,
   apiKey: Schema.String,

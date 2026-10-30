@@ -38,7 +38,12 @@ import { defaultRunBudget } from "./provider-runner";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import type { TriggerAdmission } from "./trigger-observation";
+import {
+  makeMemoryTriggerObservationStore,
+  type TriggerAdmission,
+  TriggerObservationStore,
+  workflowAdmissionRefOf,
+} from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
@@ -49,6 +54,7 @@ const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const decodeRun = Schema.decodeSync(RunId);
 const workflow = decodeWorkflow("daily-summary");
 const trigger = decodeNode("schedule");
+const siblingTrigger = decodeNode("schedule-sibling");
 const operation = decodeNode("summarize");
 const harnessName = Schema.decodeSync(HarnessName)("scripted");
 const notifyEntry = decodeEntry("cogwork.notify");
@@ -57,7 +63,12 @@ const scheduleEntry = decodeEntry("schedule.daily");
 const document = Schema.decodeSync(WorkflowDocument)({
   name: "Daily summary",
   workspaces: { _tag: "Listed", workspaces: [] },
-  triggers: [{ id: trigger, entry: scheduleEntry, parameters: [], start: operation }],
+  triggers: [trigger, siblingTrigger].map((id) => ({
+    id,
+    entry: scheduleEntry,
+    parameters: [],
+    start: operation,
+  })),
   operations: [
     {
       id: operation,
@@ -164,26 +175,56 @@ const admission: TriggerAdmission = {
   },
 };
 
+const granolaAdmission: TriggerAdmission = {
+  ...admission,
+  event: {
+    ...admission.event,
+    key: {
+      _tag: "GranolaNote",
+      connection: Schema.decodeSync(Schema.String.pipe(Schema.brand("ConnectionId")))(
+        "granola/person@example.com",
+      ),
+      noteId: "note-1",
+    },
+    revision: "2026-10-29T15:00:00.000Z",
+    atMillis: Date.UTC(2026, 9, 29, 15),
+    payload: {
+      _tag: "GranolaNote",
+      title: "Weekly product sync",
+      attendees: ["Taylor <taylor@example.com>", "Ari <ari@example.com>"],
+      calendarEvent: "Weekly product sync · 2026-10-29 09:00 MDT",
+      summary: "Decided to ship the smaller change.",
+      transcript: "Taylor: Ship the smaller change.\nAri: Agreed.",
+    },
+  },
+};
+
+const siblingGranolaAdmission: TriggerAdmission = {
+  ...granolaAdmission,
+  subscription: { ...granolaAdmission.subscription, trigger: siblingTrigger },
+};
+
 const makeCoordination = () =>
   Effect.gen(function* () {
     const attempts = yield* Ref.make<ReadonlyArray<AttemptRecord>>([]);
     const parks = yield* Ref.make<ReadonlyArray<ParkRecord>>([]);
     const parkedRefs = yield* Ref.make<ReadonlyArray<Parameters<CoordinationService["park"]>[0]>>([]);
-    const processed = yield* Ref.make<string | null>(null);
-    const read = () =>
+    const processed = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+    const read = (ref: Parameters<CoordinationService["read"]>[0]) =>
       Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed)]).pipe(
-        Effect.map(([currentAttempts, currentParks, currentProcessed]) =>
-          fold(
+        Effect.map(([currentAttempts, currentParks, currentProcessed]) => {
+          const processedRevision = currentProcessed.get(JSON.stringify(ref)) ?? null;
+          return fold(
             {
               claim: null,
               attempts: currentAttempts,
               handbacks: [],
               parks: currentParks,
-              revision: { observed: "1000", processed: currentProcessed },
+              revision: { observed: "1000", processed: processedRevision },
             },
             "cogwork",
-          ),
-        ),
+          );
+        }),
       );
     return {
       service: {
@@ -191,22 +232,23 @@ const makeCoordination = () =>
         read,
         claim: (_ref, input) => Effect.succeed(Claim.make({ ...input, by: "cogwork", claimedAtMillis: 1 })),
         release: () => Effect.void,
-        recordAttempt: (_ref, input) =>
+        recordAttempt: (ref, input) =>
           Ref.update(attempts, (current) => [
             ...current,
             AttemptRecord.make({ ...input, atMillis: current.length + 1 }),
-          ]).pipe(Effect.andThen(read())),
+          ]).pipe(Effect.andThen(read(ref))),
         park: (ref, reason: ParkReason) =>
           Ref.update(parks, (current) => [
             ...current,
             ParkRecord.make({ reason, atMillis: current.length + 1 }),
           ]).pipe(
             Effect.andThen(Ref.update(parkedRefs, (current) => [...current, ref])),
-            Effect.andThen(read()),
+            Effect.andThen(read(ref)),
           ),
         handBack: () => Effect.die("unused"),
         observe: () => Effect.succeed("moved"),
-        markProcessed: (_ref, revision) => Ref.set(processed, revision),
+        markProcessed: (ref, revision) =>
+          Ref.update(processed, (current) => new Map(current).set(JSON.stringify(ref), revision)),
       } satisfies CoordinationService,
       attempts,
       parks,
@@ -214,6 +256,12 @@ const makeCoordination = () =>
       processed,
     };
   });
+
+const processedRevision = (processed: Ref.Ref<ReadonlyMap<string, string>>, admission: TriggerAdmission) =>
+  Effect.map(
+    Ref.get(processed),
+    (current) => current.get(JSON.stringify(workflowAdmissionRefOf(admission))) ?? null,
+  );
 
 const resultEvent = (object: unknown) => ({
   type: "CUSTOM" as const,
@@ -258,6 +306,7 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
     const output = yield* Ref.make(objects);
     const coordination = yield* makeCoordination();
     const notifications = yield* makeNotifications;
+    const observations = yield* makeMemoryTriggerObservationStore;
     const harness = makeHarness([
       {
         name: harnessName,
@@ -296,12 +345,106 @@ const testProgram = (objects: ReadonlyArray<unknown>, behavior: HarnessBehavior 
       Effect.provideService(Workflows, workflowService),
       Effect.provideService(Coordination, coordination.service),
       Effect.provideService(Harness, harness),
+      Effect.provideService(TriggerObservationStore, observations),
       Effect.provideService(WorkflowNotifications, notifications),
     );
-    return { runner, coordination, notifications };
+    return { runner, coordination, notifications, observations };
   });
 
 describe("WorkflowRun", () => {
+  it.effect("freezes the complete Granola note in Work context", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram([
+        {
+          summary: "Captured",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "Captured" },
+        },
+      ]);
+      yield* runner.execute(granolaAdmission);
+      const [run] = yield* (yield* RunLedger).listRuns(10);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.strictEqual(
+        plan?.workContext.prose.body,
+        [
+          "# Weekly product sync",
+          "",
+          "## Attendees",
+          "Taylor <taylor@example.com>",
+          "Ari <ari@example.com>",
+          "",
+          "## Calendar event",
+          "Weekly product sync · 2026-10-29 09:00 MDT",
+          "",
+          "## Summary",
+          "Decided to ship the smaller change.",
+          "",
+          "## Transcript",
+          "Taylor: Ship the smaller change.\nAri: Agreed.",
+        ].join("\n"),
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("processes sibling rejections independently", () =>
+    Effect.gen(function* () {
+      const rejected: TriggerAdmission = {
+        ...granolaAdmission,
+        event: {
+          ...granolaAdmission.event,
+          payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
+        },
+      };
+      const sibling = { ...rejected, subscription: siblingGranolaAdmission.subscription };
+      const { runner, coordination, observations } = yield* testProgram([]);
+      yield* observations.put(rejected);
+      yield* observations.put(sibling);
+      yield* runner.execute(rejected);
+
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+      assert.deepStrictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason, {
+        _tag: "PlanRejected",
+        reason: "Granola note has no transcript",
+        entry: granolaAdmission.event.entry,
+      });
+      assert.strictEqual(yield* processedRevision(coordination.processed, rejected), rejected.event.revision);
+      assert.isNull(yield* processedRevision(coordination.processed, sibling));
+
+      yield* runner.execute(sibling);
+
+      assert.strictEqual(yield* processedRevision(coordination.processed, sibling), rejected.event.revision);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("reports a rejected Granola note as skipped", () =>
+    Effect.gen(function* () {
+      const rejected: TriggerAdmission = {
+        ...granolaAdmission,
+        event: {
+          ...granolaAdmission.event,
+          payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" },
+        },
+      };
+      const { runner } = yield* testProgram([]);
+
+      assert.strictEqual(yield* runner.execute(rejected), "skipped");
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("reports a non-exhausted failure as retryable", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram([{}]);
+
+      assert.strictEqual(yield* runner.execute(admission), "retry");
+      assert.isNull(yield* processedRevision(coordination.processed, admission));
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("writes Notify me output and keeps the Run workspace-free", () =>
     Effect.gen(function* () {
       const { runner } = yield* testProgram([
@@ -352,7 +495,7 @@ describe("WorkflowRun", () => {
 
       assert.lengthOf(yield* Ref.get(coordination.attempts), 3);
       assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "Exhausted");
-      assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+      assert.strictEqual(yield* processedRevision(coordination.processed, admission), "1000");
       const ledger = yield* RunLedger;
       const plans = yield* Effect.forEach(yield* ledger.listRuns(10), ({ id }) => ledger.getRunPlan(id));
       assert.isTrue(
@@ -377,7 +520,7 @@ describe("WorkflowRun", () => {
 
       assert.lengthOf(yield* Ref.get(coordination.attempts), 1);
       assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "Stuck");
-      assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+      assert.strictEqual(yield* processedRevision(coordination.processed, admission), "1000");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -399,7 +542,7 @@ describe("WorkflowRun", () => {
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
       assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "MissingOperation");
       assert.strictEqual(String((yield* Ref.get(coordination.parkedRefs)).at(-1)?._tag), "WorkflowAdmission");
-      assert.strictEqual(yield* Ref.get(coordination.processed), "1000");
+      assert.strictEqual(yield* processedRevision(coordination.processed, admission), "1000");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
