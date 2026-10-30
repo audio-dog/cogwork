@@ -73,6 +73,7 @@ interface StoredAdmissionCount {
 
 export interface TriggerObservationStoreService {
   readonly admissions: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
+  readonly processed: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
   readonly putAll: (
     admissions: ReadonlyArray<TriggerAdmission>,
   ) => Effect.Effect<void, TriggerObservationStoreError>;
@@ -119,7 +120,6 @@ const oldestRevisionAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) =
 
 const revisionAdvancedParks = new Set<ParkReason["_tag"]>([
   "AwaitingApproval",
-  "Exhausted",
   "MissingOperation",
   "PlanRejected",
 ]);
@@ -150,8 +150,8 @@ const activateSubscriptions = (
 export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
   const admissions = yield* Ref.make<{
     readonly pending: ReadonlyMap<string, TriggerAdmission>;
-    readonly processed: ReadonlySet<string>;
-  }>({ pending: new Map(), processed: new Set() });
+    readonly processed: ReadonlyMap<string, TriggerAdmission>;
+  }>({ pending: new Map(), processed: new Map() });
   const checkpoints = yield* Ref.make<
     ReadonlyMap<string, { readonly active: boolean; readonly checkpointMillis: number }>
   >(new Map());
@@ -183,10 +183,11 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
       const key = admissionKey(admission);
       const pending = new Map(current.pending);
       pending.delete(key);
-      return { pending, processed: new Set(current.processed).add(key) };
+      return { pending, processed: new Map(current.processed).set(key, admission) };
     });
   return {
     admissions: Effect.map(Ref.get(admissions), (current) => [...current.pending.values()]),
+    processed: Effect.map(Ref.get(admissions), (current) => [...current.processed.values()]),
     putAll: (batch) => completionGate.withPermit(putAll(batch)),
     complete: (admission, closeRevision) =>
       completionGate.withPermit(
@@ -276,6 +277,12 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
       .pipe(Effect.mapError((error) => (SqlError.isSqlError(error) ? storeError(error) : error)));
   return {
     admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions WHERE processed = 0`.pipe(
+      Effect.mapError(storeError),
+      Effect.flatMap((rows) =>
+        Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),
+      ),
+    ),
+    processed: sql<StoredAdmission>`SELECT payload FROM trigger_admissions WHERE processed = 1`.pipe(
       Effect.mapError(storeError),
       Effect.flatMap((rows) =>
         Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),

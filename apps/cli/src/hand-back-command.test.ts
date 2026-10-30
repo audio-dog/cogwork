@@ -79,17 +79,6 @@ describe("hand-back command", () => {
     assert.strictEqual(error.message, "Could not hand back the work item: safe[2Jmessage INJECTED");
   });
 
-  it.effect("reports a successful handback", () =>
-    Effect.gen(function* () {
-      const request = yield* makeHandBackRequest({
-        workspace: "cogwork",
-        item: "284",
-      });
-
-      assert.strictEqual(formatHandBackResult(request), "Handed back issue:cogwork:284");
-    }),
-  );
-
   it.effect("appears in root help", () =>
     Effect.gen(function* () {
       yield* Command.runWith(cli, { version: "0.0.1" })(["--help"]).pipe(

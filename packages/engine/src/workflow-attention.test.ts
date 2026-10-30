@@ -127,6 +127,15 @@ const requirements = Layer.mergeAll(
 it.effect("lists one parked item and marks a later source revision", () =>
   Effect.gen(function* () {
     const observationStore = yield* TriggerObservationStore;
+    const rejected = {
+      ...admission("0", 0),
+      event: {
+        ...admission("0", 0).event,
+        payload: { _tag: "GranolaNoteRejected", reason: "Granola note has no transcript" } as const,
+      },
+    };
+    yield* observationStore.putAll([rejected]);
+    yield* observationStore.complete(rejected, Effect.void);
     yield* observationStore.putAll([admission("1", 1), admission("2", 3)]);
 
     const attention = yield* make;
@@ -145,6 +154,12 @@ it.effect("lists one parked item and marks a later source revision", () =>
       reason: { _tag: "Stuck", summary: "Needs a decision" },
       attempt: null,
     });
-    assert.deepStrictEqual(result.skipped, [{ workflow, steps: [], events: [] }]);
+    assert.deepStrictEqual(result.skipped, [
+      {
+        workflow,
+        steps: [],
+        events: [{ summary: entry, reason: "Granola note has no transcript" }],
+      },
+    ]);
   }).pipe(Effect.provide(requirements)),
 );

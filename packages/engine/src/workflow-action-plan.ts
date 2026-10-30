@@ -49,6 +49,7 @@ interface BuildInput {
   readonly output: OperationOutput;
   readonly attempt: RunId;
   readonly createdAtMillis: number;
+  readonly workflowRevision: number;
 }
 
 const actionName = (entry: string) => entry.slice(entry.indexOf(".") + 1);
@@ -64,11 +65,9 @@ const decodeFailure = (message: string) => Effect.fail(WorkflowActionPlanDecodeE
 
 const planJson = Schema.fromJsonString(WorkflowActionPlan);
 
-export const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function* (
-  plan: WorkflowActionPlan,
-) {
+const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function* (plan: WorkflowActionPlan) {
   const encoded = yield* Schema.encodeEffect(planJson)(
-    WorkflowActionPlan.make({ ...plan, digest: "pending", approvedDigest: null }),
+    WorkflowActionPlan.make({ ...plan, digest: "pending" }),
   ).pipe(
     Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "Action plan encoding failed" })),
   );
@@ -253,7 +252,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     revision: input.admission.event.revision,
     createdAtMillis: input.createdAtMillis,
     consumedHandbackAtMillis: 0,
-    approvedDigest: null,
+    workflowRevision: input.workflowRevision,
     summary: input.output.summary,
     answers: input.output.answers,
     inputs: input.output.inputs,

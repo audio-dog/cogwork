@@ -311,17 +311,24 @@ const makeCoordination = () =>
     const parks = yield* Ref.make<ReadonlyArray<ParkRecord>>([]);
     const handbacks = yield* Ref.make<ReadonlyArray<HandbackRecord>>([]);
     const processed = yield* Ref.make<string | null>(null);
+    const observed = yield* Ref.make("1000");
     const claims = yield* Ref.make(0);
     const read = (_ref?: unknown) =>
-      Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed), Ref.get(handbacks)]).pipe(
-        Effect.map(([currentAttempts, currentParks, currentProcessed, currentHandbacks]) =>
+      Effect.all([
+        Ref.get(attempts),
+        Ref.get(parks),
+        Ref.get(processed),
+        Ref.get(handbacks),
+        Ref.get(observed),
+      ]).pipe(
+        Effect.map(([currentAttempts, currentParks, currentProcessed, currentHandbacks, currentObserved]) =>
           fold(
             {
               claim: null,
               attempts: currentAttempts,
               handbacks: currentHandbacks,
               parks: currentParks,
-              revision: { observed: "1000", processed: currentProcessed },
+              revision: { observed: currentObserved, processed: currentProcessed },
             },
             "cogwork",
           ),
@@ -361,6 +368,7 @@ const makeCoordination = () =>
       attempts,
       parks,
       processed,
+      observed,
       claims,
     };
   });
@@ -807,6 +815,97 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
+  it.effect("refuses approval after the source revision advances", () =>
+    Effect.gen(function* () {
+      const waitingDocument = yield* documentWithTransition({
+        when: [{ question: decodeNode("done"), choice: decodeNode("yes") }],
+        actions: [{ entry: waitForApprovalEntry, parameters: [] }],
+        handOff: null,
+      });
+      const { runner, coordination, observationStore } = yield* testProgram(
+        [
+          {
+            summary: "Ready",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { approval_request: "Run this plan" },
+          },
+        ],
+        {},
+        workflowServiceFor(waitingDocument, [waitForApprovalCatalogEntry]),
+      );
+      yield* observationStore.putAll([admission]);
+      yield* runner.execute(admission);
+      const plan = yield* (yield* WorkflowActionPlanStore).pending(keyOf(admission.event.key), workflow);
+      assert.isNotNull(plan);
+      if (plan === null) return;
+      yield* Ref.set(coordination.observed, "1001");
+
+      const failure = yield* Effect.flip(
+        runner.approve({ item: admission.event.key, attempt: plan.attempt, digest: plan.digest }),
+      );
+
+      assert.strictEqual(failure.reason, "stale-attempt");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("refuses edited approval after the published Workflow changes", () =>
+    Effect.gen(function* () {
+      const waitingDocument = yield* documentWithTransition({
+        when: [{ question: decodeNode("done"), choice: decodeNode("yes") }],
+        actions: [
+          { entry: waitForApprovalEntry, parameters: [] },
+          { entry: notifyEntry, parameters: [] },
+        ],
+        handOff: null,
+      });
+      const publishedRevision = yield* Ref.make(1);
+      const baseService = workflowServiceFor(waitingDocument, [waitForApprovalCatalogEntry]);
+      const service: WorkflowsService = {
+        ...baseService,
+        get: () =>
+          Ref.get(publishedRevision).pipe(
+            Effect.map((revision) => ({
+              ...workflowRecord,
+              workingCopy: waitingDocument,
+              workingRevision: revision,
+              publishedCopy: waitingDocument,
+              publishedRevision: revision,
+            })),
+          ),
+      };
+      const { runner, observationStore } = yield* testProgram(
+        [
+          {
+            summary: "Ready",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { approval_request: "Run this plan", notification: "Original" },
+          },
+        ],
+        {},
+        service,
+      );
+      yield* observationStore.putAll([admission]);
+      yield* runner.execute(admission);
+      const plan = yield* (yield* WorkflowActionPlanStore).pending(keyOf(admission.event.key), workflow);
+      assert.isNotNull(plan);
+      if (plan === null) return;
+      yield* Ref.set(publishedRevision, 2);
+
+      const failure = yield* Effect.flip(
+        runner.approve({
+          item: admission.event.key,
+          attempt: plan.attempt,
+          digest: plan.digest,
+          edits: { notification: "Edited" },
+        }),
+      );
+
+      assert.strictEqual(failure.reason, "stale-digest");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("rebuilds edited approval text and records the digest that runs", () =>
     Effect.gen(function* () {
       const waitingDocument = yield* documentWithTransition({
@@ -1076,6 +1175,16 @@ describe("WorkflowRun", () => {
       );
       assert.strictEqual(stale.reason, "stale-attempt");
 
+      const invalid = yield* Effect.flip(
+        runner.chooseAnswer({
+          item: admission.event.key,
+          attempt: plan.attempt,
+          answers: { done: "later" },
+          inputs: { notification: "Ignored" },
+        }),
+      );
+      assert.strictEqual(invalid.reason, "invalid-edits");
+
       yield* runner.chooseAnswer({
         item: admission.event.key,
         attempt: plan.attempt,
@@ -1193,8 +1302,13 @@ describe("WorkflowRun", () => {
 
   it.effect("resumes a stuck Operation session with the person's note", () =>
     Effect.gen(function* () {
-      const { runner } = yield* testProgram([
-        { summary: "Needs a decision", stuck: true },
+      const { runner, coordination } = yield* testProgram([
+        {
+          summary: "Needs a decision",
+          stuck: true,
+          answers: { done: "yes" },
+          inputs: { notification: "Wait" },
+        },
         {
           summary: "Recovered",
           stuck: false,
@@ -1207,6 +1321,8 @@ describe("WorkflowRun", () => {
       const [parked] = yield* ledger.listRuns(10);
       assert.isDefined(parked);
       if (parked === undefined) return;
+      assert.lengthOf(yield* Ref.get(coordination.parks), 1);
+      assert.isNotNull((yield* coordination.service.read(admission.event.key)).park);
 
       yield* runner.handBack({ item: admission.event.key, note: "Use the human decision" });
       yield* runner.execute(admission);
@@ -1215,6 +1331,16 @@ describe("WorkflowRun", () => {
       assert.strictEqual(resumed?.session, parked.session);
       const resumedPlan = resumed === undefined ? null : yield* ledger.getRunPlan(resumed.id);
       assert.include(resumedPlan?.messages[0]?.content ?? "", "Person's note: Use the human decision");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("refuses handback without an active park", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram([]);
+
+      const failure = yield* Effect.flip(runner.handBack({ item: admission.event.key }));
+
+      assert.strictEqual(failure.reason, "not-found");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

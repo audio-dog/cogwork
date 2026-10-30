@@ -133,9 +133,9 @@ export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("Workfl
   createdAtMillis: Schema.Natural,
   consumedHandbackAtMillis: Schema.Natural.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
   digest: TrimmedNonEmptyString,
-  approvedDigest: Schema.NullOr(TrimmedNonEmptyString).pipe(
-    Schema.withConstructorDefault(Effect.succeed(null)),
-    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  workflowRevision: Schema.Int.pipe(
+    Schema.withConstructorDefault(Effect.succeed(0)),
+    Schema.withDecodingDefaultKey(Effect.succeed(0)),
   ),
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),

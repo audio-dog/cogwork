@@ -174,7 +174,6 @@ const revisionClearedParks = new Set<ParkReason["_tag"]>([
   "MissingOperation",
   "PlanRejected",
   "AwaitingApproval",
-  "Exhausted",
 ]);
 
 const gateRules = [

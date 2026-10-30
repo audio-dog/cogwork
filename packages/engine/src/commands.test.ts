@@ -1208,7 +1208,8 @@ describe("HandBack", () => {
       approve: () => Effect.die("Unexpected approval"),
       reject: () => Effect.die("Unexpected rejection"),
       chooseAnswer: () => Effect.die("Unexpected answer"),
-      handBack: (payload) => Ref.update(handedBack, (calls) => [...calls, payload]),
+      handBack: (payload) =>
+        Ref.update(handedBack, (calls) => [...calls, payload]).pipe(Effect.map(() => undefined)),
     });
     const item = WorkItemRef.cases.Issue.make({ workspace: wsid("example"), id: id("AUD-5") });
     return Effect.gen(function* () {

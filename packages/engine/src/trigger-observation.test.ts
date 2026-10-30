@@ -735,7 +735,7 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("offers a later conversation revision posted before an exhausted operation park", () =>
+  it.effect("keeps a later conversation revision behind an exhausted operation park", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>("100.000");
@@ -800,7 +800,7 @@ describe("TriggerObservation", () => {
 
       assert.deepStrictEqual(
         (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
-        ["200.000"],
+        [],
       );
     }).pipe(Effect.scoped),
   );

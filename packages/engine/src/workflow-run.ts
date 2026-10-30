@@ -4,6 +4,7 @@ import {
   agUiIsStructuredOutputComplete,
   keyOf,
   LineageId,
+  matchWorkflowTransitions,
   Principal,
   RunId,
   RunPlan,
@@ -26,6 +27,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { ContextAssembler } from "./context-assembler";
 import { Coordination, maxLineageHops } from "./coordination";
@@ -97,7 +99,15 @@ const handOffAdmission = (
   },
 });
 
-const initialAdmission = (admission: TriggerAdmission) => admission as TriggerAdmission | null;
+const parkedAdmission = (admission: TriggerAdmission, attempt: RunId): TriggerAdmission => ({
+  ...admission,
+  lineage: { ...admission.lineage, parent: LineageId.make(attempt) },
+});
+
+interface AdmissionExecutionState {
+  readonly current: TriggerAdmission | null;
+  readonly outcome: WorkflowRunOutcome;
+}
 
 const selectedWorkspaceIds = (
   document: Parameters<typeof buildWorkflowActionPlan>[0]["document"],
@@ -147,13 +157,9 @@ export const make = Effect.gen(function* () {
     ),
   );
   const decodeIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+  const touchpointGate = Semaphore.makeUnsafe(1);
 
-  const settle = (record: RunRecord, status: RunRecord["status"]) =>
-    Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
-      ledger.updateRun(record.id, { status, usage: null, endedAtMillis }),
-    );
-
-  const settleAttempt = (attempt: RunId, status: RunRecord["status"]) =>
+  const settle = (attempt: RunId, status: RunRecord["status"]) =>
     Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
       ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
     );
@@ -196,9 +202,10 @@ export const make = Effect.gen(function* () {
       reason: issues,
     });
     const exhausted = view.counters(key).exhausted;
-    yield* settle(run, exhausted ? "exhausted" : "failed");
+    yield* settle(run.id, exhausted ? "exhausted" : "failed");
     if (!exhausted) return "retry" as const;
     yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues }, key);
+    yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
     return "completed" as const;
   });
 
@@ -217,7 +224,7 @@ export const make = Effect.gen(function* () {
         ? pendingPlan.operation
         : admission.subscription.operation;
     if (stalePlan) {
-      yield* settleAttempt(pendingPlan.attempt, "interrupted");
+      yield* settle(pendingPlan.attempt, "interrupted");
       yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
     }
     const pendingKey =
@@ -238,14 +245,14 @@ export const make = Effect.gen(function* () {
     if (pendingPlan !== null && pendingKey !== null) {
       const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
       if (execution._tag === "Replan") {
-        yield* settleAttempt(pendingPlan.attempt, "interrupted");
+        yield* settle(pendingPlan.attempt, "interrupted");
       }
       if (execution._tag === "Retry" || execution._tag === "Parked") {
-        yield* settleAttempt(pendingPlan.attempt, "failed");
+        yield* settle(pendingPlan.attempt, "failed");
         return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
       }
       if (execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou") {
-        yield* settleAttempt(pendingPlan.attempt, "succeeded");
+        yield* settle(pendingPlan.attempt, "succeeded");
         return "completed" as const;
       }
       if (execution._tag === "Complete") {
@@ -254,7 +261,7 @@ export const make = Effect.gen(function* () {
           outcome: "succeeded",
           lineage: admission.lineage,
         });
-        yield* settleAttempt(pendingPlan.attempt, "succeeded");
+        yield* settle(pendingPlan.attempt, "succeeded");
         if (execution.handOff !== null) {
           return handOffAdmission(admission, execution.handOff, pendingPlan.attempt);
         }
@@ -308,9 +315,10 @@ export const make = Effect.gen(function* () {
       coordinationView.handback !== null && coordinationView.handback.atMillis > admission.event.atMillis
         ? coordinationView.handback
         : null;
+    const parkedAttempt = admission.lineage.parent === null ? null : RunId.make(admission.lineage.parent);
     const resumeReaders = [
       pendingPlan !== null && !stalePlan ? () => ledger.getRun(pendingPlan.attempt) : null,
-      handback !== null ? () => ledger.latestRunForItem(workspace, item) : null,
+      handback !== null && parkedAttempt !== null ? () => ledger.getRun(parkedAttempt) : null,
     ];
     const resumedRun = yield* resumeReaders.find((read) => read !== null)?.() ?? Effect.succeed(null);
     const session =
@@ -422,9 +430,10 @@ export const make = Effect.gen(function* () {
         reason,
       });
       const exhausted = view.counters(key).exhausted;
-      yield* settle(run, exhausted ? "exhausted" : "failed");
+      yield* settle(run.id, exhausted ? "exhausted" : "failed");
       if (exhausted) {
         yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, key);
+        yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
       }
       return exhausted ? ("completed" as const) : ("retry" as const);
     }
@@ -451,7 +460,8 @@ export const make = Effect.gen(function* () {
         reason: decoded.value.summary,
       });
       yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary }, key);
-      yield* settle(run, "failed");
+      yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
+      yield* settle(run.id, "failed");
       return "completed" as const;
     }
 
@@ -465,6 +475,7 @@ export const make = Effect.gen(function* () {
         output: decoded.value,
         attempt: run.id,
         createdAtMillis: yield* Clock.currentTimeMillis,
+        workflowRevision: record.publishedRevision ?? record.workingRevision,
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
@@ -479,13 +490,13 @@ export const make = Effect.gen(function* () {
     yield* recorder.record(run, actionPlanEvent);
     const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
     if (execution._tag === "Replan") {
-      yield* settle(run, "interrupted");
+      yield* settle(run.id, "interrupted");
       return admission;
     }
     if (execution._tag !== "Complete") {
       const status =
         execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou" ? "succeeded" : "failed";
-      yield* settle(run, status);
+      yield* settle(run.id, status);
       return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
     }
     yield* coordination.recordAttempt(admission.event.key, {
@@ -493,7 +504,7 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* settle(run, "succeeded");
+    yield* settle(run.id, "succeeded");
     if (execution.handOff !== null) {
       return handOffAdmission(admission, execution.handOff, run.id);
     }
@@ -502,21 +513,39 @@ export const make = Effect.gen(function* () {
   });
 
   const executeAdmission = (admission: TriggerAdmission) =>
-    Effect.reduce(
-      Array.from({ length: maxLineageHops + 1 }),
-      () => ({ current: initialAdmission(admission), outcome: "completed" as WorkflowRunOutcome }),
-      (state) =>
-        state.current
-          ? executeRaw(state.current).pipe(
+    observationStore.admissions.pipe(
+      Effect.map(
+        (admissions) =>
+          admissions.find(
+            (candidate) =>
+              keyOf(candidate.event.key) === keyOf(admission.event.key) &&
+              candidate.event.revision === admission.event.revision &&
+              candidate.subscription.workflow === admission.subscription.workflow &&
+              candidate.subscription.trigger === admission.subscription.trigger,
+          ) ?? admission,
+      ),
+      Effect.flatMap((current) =>
+        Effect.reduce(
+          Array.from({ length: maxLineageHops + 1 }),
+          (): AdmissionExecutionState => ({ current, outcome: "completed" }),
+          (state) => {
+            if (state.current === null) return Effect.succeed(state);
+            return executeRaw(state.current).pipe(
               Effect.scoped,
-              Effect.map((next) =>
-                typeof next === "string"
-                  ? { current: null, outcome: next }
-                  : { current: next, outcome: state.outcome },
-              ),
-            )
-          : Effect.succeed(state),
-    ).pipe(
+              Effect.flatMap((next) => {
+                if (typeof next === "string") {
+                  return Effect.succeed<AdmissionExecutionState>({ current: null, outcome: next });
+                }
+                return observationStore
+                  .putAll([next])
+                  .pipe(
+                    Effect.map((): AdmissionExecutionState => ({ current: next, outcome: state.outcome })),
+                  );
+              }),
+            );
+          },
+        ),
+      ),
       Effect.provide(executionContext),
       Effect.map(({ outcome }) => outcome),
     );
@@ -536,6 +565,11 @@ export const make = Effect.gen(function* () {
         hasCurrentPlan ? "stale-attempt" : "not-found",
         hasCurrentPlan ? `Attempt ${attempt} is no longer current` : "No pending plan exists for this item",
       );
+    }
+    const view = yield* coordination.read(item);
+    const observedRevision = view.revision?.observed;
+    if (observedRevision !== undefined && observedRevision !== plan.revision) {
+      return yield* failTouchpoint("stale-attempt", `Attempt ${attempt} is no longer current`);
     }
     const admissions = yield* observationStore.admissions;
     const admission = admissions.find(
@@ -563,8 +597,36 @@ export const make = Effect.gen(function* () {
     if (document === null || document === undefined || operation === undefined) {
       return yield* failTouchpoint("unavailable", "The published Workflow operation is unavailable");
     }
+    if (record.publishedRevision !== plan.workflowRevision) {
+      return yield* failTouchpoint(
+        "stale-digest",
+        "The published Workflow changed after this plan was displayed",
+      );
+    }
     const catalogResult = yield* workflows.catalog;
     const registryState = yield* registry.state;
+    const unknownAnswer = Object.keys(answers).find(
+      (answer) => !operation.questions.some(({ id }) => id === answer),
+    );
+    const invalidAnswer = operation.questions.find(
+      (question) => !question.choices.some(({ id }) => id === answers[question.id]),
+    );
+    const matchedTransitions = matchWorkflowTransitions(operation, answers);
+    const invalidAnswers =
+      unknownAnswer !== undefined || invalidAnswer !== undefined || matchedTransitions.length === 0;
+    if (invalidAnswers) {
+      return yield* failTouchpoint("invalid-edits", "The answers do not match the published Operation");
+    }
+    const matchedEntries = new Set(
+      matchedTransitions.flatMap(({ actions }) => actions.map(({ entry }) => entry)),
+    );
+    const missingInput = catalogResult.catalog.entries
+      .filter(({ key }) => matchedEntries.has(key))
+      .flatMap(({ agentInputs }) => agentInputs)
+      .find((input) => !inputs[input]?.trim());
+    if (missingInput !== undefined) {
+      return yield* failTouchpoint("invalid-edits", `The plan needs input ${missingInput}`);
+    }
     return yield* buildWorkflowActionPlan({
       admission,
       document,
@@ -579,6 +641,7 @@ export const make = Effect.gen(function* () {
       },
       attempt: plan.attempt,
       createdAtMillis,
+      workflowRevision: plan.workflowRevision,
     }).pipe(Effect.mapError((error) => touchpointFailure("invalid-edits", error.message)));
   });
 
@@ -608,13 +671,25 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* settleAttempt(plan.attempt, "succeeded");
+    yield* settle(plan.attempt, "succeeded");
     if (execution.handOff === null) {
       yield* complete(admission);
       return;
     }
     yield* executeAdmission(handOffAdmission(admission, execution.handOff, plan.attempt));
   });
+
+  const executeClaimedPlan = Effect.fn("WorkflowRun.executeClaimedPlan")(
+    (plan: WorkflowActionPlan, admission: TriggerAdmission) =>
+      Effect.acquireUseRelease(
+        coordination.claim(admission.event.key, {
+          operation: operationKeyOf(admission, plan.operation),
+          lineage: admission.lineage,
+        }),
+        () => executeWorkflowActionPlan(plan, admission),
+        (claim) => coordination.release(admission.event.key, claim).pipe(Effect.ignore),
+      ),
+  );
 
   const approve = Effect.fn("WorkflowRun.approve")(function* (payload: {
     readonly item: WorkItemRef;
@@ -650,16 +725,19 @@ export const make = Effect.gen(function* () {
           );
     const approved = WorkflowActionPlan.make({
       ...rebuilt,
-      approvedDigest: rebuilt.digest,
       steps: rebuilt.steps.map((step) =>
         step.entry === "cogwork.wait-for-approval"
           ? WorkflowActionPlanStep.make({ ...step, status: "completed" })
           : step,
       ),
     });
+    const latest = yield* coordination.read(admission.event.key);
+    if (latest.revision?.observed !== undefined && latest.revision.observed !== approved.revision) {
+      return yield* failTouchpoint("stale-attempt", `Attempt ${approved.attempt} is no longer current`);
+    }
     yield* actionPlans.save(approved);
     yield* recordDecision(approved, "workflow.plan-approved", { digest: approved.digest });
-    const execution = yield* executeWorkflowActionPlan(approved, admission);
+    const execution = yield* executeClaimedPlan(approved, admission);
     yield* finishTouchpointPlan(approved, admission, execution);
   });
 
@@ -675,6 +753,10 @@ export const make = Effect.gen(function* () {
     if (!waiting) {
       return yield* failTouchpoint("not-awaiting-approval", "The item is not awaiting approval");
     }
+    const latest = yield* coordination.read(admission.event.key);
+    if (latest.revision?.observed !== undefined && latest.revision.observed !== plan.revision) {
+      return yield* failTouchpoint("stale-attempt", `Attempt ${plan.attempt} is no longer current`);
+    }
     yield* recordDecision(plan, "workflow.plan-rejected", {
       digest: plan.digest,
       note: payload.note ?? null,
@@ -685,7 +767,7 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* settleAttempt(plan.attempt, "succeeded");
+    yield* settle(plan.attempt, "succeeded");
     yield* complete(admission);
   });
 
@@ -702,8 +784,6 @@ export const make = Effect.gen(function* () {
     if (!handedToPerson) {
       return yield* failTouchpoint("not-handed-to-you", "The item is not handed to you");
     }
-    const principal = yield* Principal;
-    yield* coordination.handBack(payload.item, { by: principal.id });
     const rebuilt = yield* rebuildPlan(
       plan,
       admission,
@@ -711,11 +791,17 @@ export const make = Effect.gen(function* () {
       { ...plan.inputs, ...payload.inputs },
       yield* Clock.currentTimeMillis,
     );
+    const latest = yield* coordination.read(admission.event.key);
+    if (latest.revision?.observed !== undefined && latest.revision.observed !== rebuilt.revision) {
+      return yield* failTouchpoint("stale-attempt", `Attempt ${rebuilt.attempt} is no longer current`);
+    }
+    const principal = yield* Principal;
+    yield* coordination.handBack(payload.item, { by: principal.id });
     yield* actionPlans.save(rebuilt);
     yield* recordDecision(rebuilt, "workflow.answer-chosen", {
       answers: payload.answers,
     });
-    const execution = yield* executeWorkflowActionPlan(rebuilt, admission);
+    const execution = yield* executeClaimedPlan(rebuilt, admission);
     yield* finishTouchpointPlan(rebuilt, admission, execution);
   });
 
@@ -723,6 +809,10 @@ export const make = Effect.gen(function* () {
     readonly item: WorkItemRef;
     readonly note?: string;
   }) {
+    const view = yield* coordination.read(payload.item);
+    if (view.park === null) {
+      return yield* failTouchpoint("not-found", "This item is not parked");
+    }
     const principal = yield* Principal;
     yield* coordination.handBack(payload.item, { by: principal.id, note: payload.note });
   });
@@ -737,7 +827,7 @@ export const make = Effect.gen(function* () {
     );
 
   const runTouchpoint = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    touchpoint(effect).pipe(Effect.provide(executionContext));
+    touchpointGate.withPermit(touchpoint(effect).pipe(Effect.provide(executionContext)));
 
   return {
     execute: executeAdmission,

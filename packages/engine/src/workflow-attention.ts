@@ -60,8 +60,13 @@ export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
 
   return {
-    list: Effect.all([observationStore.admissions, actionPlans.list, workflows.list]).pipe(
-      Effect.flatMap(([admissions, plans, listed]) => {
+    list: Effect.all([
+      observationStore.admissions,
+      observationStore.processed,
+      actionPlans.list,
+      workflows.list,
+    ]).pipe(
+      Effect.flatMap(([admissions, processed, plans, listed]) => {
         const records = new Map(listed.workflows.map((record) => [record.id, record]));
         return Effect.forEach(parkedAdmissions(admissions), (admission) =>
           coordination.read(admission.event.key).pipe(
@@ -101,7 +106,30 @@ export const make = Effect.gen(function* () {
           Effect.map((parks) =>
             WorkflowAttentionSchema.make({
               parks: parks.filter((park) => park !== null),
-              skipped: listed.workflows.map(({ id }) => ({ workflow: id, steps: [], events: [] })),
+              skipped: listed.workflows.map(({ id }) => ({
+                workflow: id,
+                steps: plans
+                  .filter(({ workflow }) => workflow === id)
+                  .flatMap(({ steps }) =>
+                    steps
+                      .filter(({ target }) => target._tag === "NoWorkspace")
+                      .map(({ entry }) => ({
+                        summary: entry,
+                        reason: "No Workspace was recognized",
+                      })),
+                  ),
+                events: processed.flatMap((admission) =>
+                  admission.subscription.workflow === id &&
+                  admission.event.payload?._tag === "GranolaNoteRejected"
+                    ? [
+                        {
+                          summary: admission.event.entry,
+                          reason: admission.event.payload.reason,
+                        },
+                      ]
+                    : [],
+                ),
+              })),
             }),
           ),
         );
