@@ -1,11 +1,12 @@
-import type { ConnectionBindingId, ConnectionId, WorkItem, WorkItemId } from "@cogwork/contracts";
+import type { WorkItem, WorkItemId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { checkState, latestFailingCheckAtMillis } from "../ci";
-import type { BaseDivergence, PrReview } from "../follow-up";
+import type { PrReview } from "../follow-up";
 import { IssueTrackerError } from "../issue-tracker";
-import type { RegisteredWorkspace } from "../projector";
+import type { RegisteredWorkspace, RegistryState } from "../projector";
+import { WorkspaceRegistry } from "../registry";
 import { type PrSignals, SourceControlProvider, type SourceControlProviderService } from "../source-control";
 import { branchBelongsToTicketSlug, branchName, ticketSlug } from "../worktree";
 import {
@@ -17,56 +18,23 @@ import {
   type RawReview,
   type RawReviewComment,
   type ReviewDecision,
-  repoRefFromRepository,
   reviewDecisionOf,
 } from "./client";
+import { trustedBotFeedback } from "./feedback";
 import { agentNoteMarker, hasCogworkMarker } from "./markers";
+import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
+import {
+  type BotAllowlist,
+  baseDivergenceOf,
+  type GitHubTargetConfig,
+  sourceControlTargetFor,
+} from "./source-control-target";
 
-interface BotWakeMode {
-  readonly acceptsAnyComment: boolean;
-}
-
-type BotAllowlist = ReadonlyMap<string, BotWakeMode>;
-
-interface GitHubTargetConfig extends GitHubRepoRef {
-  readonly botAllowlist: BotAllowlist;
-}
+export { baseDivergenceOf } from "./source-control-target";
 
 interface GitHubTarget extends GitHubTargetConfig {
   readonly actorLogin: string;
 }
-
-const botAllowlistEntry = (entry: string): readonly [string, BotWakeMode] => {
-  const acceptsAnyComment = entry.endsWith(":any");
-  const login = acceptsAnyComment ? entry.slice(0, -4) : entry;
-  return [login, { acceptsAnyComment }];
-};
-
-const targetFromRepo = (
-  repo: string,
-  connectionId: ConnectionBindingId,
-  botAllowlist: ReadonlyArray<string> | undefined,
-): GitHubTargetConfig | null => {
-  const repository = repoRefFromRepository(repo);
-  if (!repository) return null;
-  const boundConnectionId: ConnectionId | undefined = connectionId === "unbound" ? undefined : connectionId;
-  return {
-    ...repository,
-    ...(boundConnectionId ? { connectionId: boundConnectionId } : {}),
-    botAllowlist: new Map((botAllowlist ?? []).map(botAllowlistEntry)),
-  };
-};
-
-export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTargetConfig | null => {
-  const explicit = workspace.config.sourceControl;
-  if (explicit) {
-    if (explicit.type !== "github" || !workspace.repository) return null;
-    return targetFromRepo(workspace.repository, explicit.connectionId, explicit.botAllowlist);
-  }
-  const source = workspace.config.issueTracker;
-  if (source.type !== "github" || !workspace.repository) return null;
-  return targetFromRepo(workspace.repository, source.connectionId, source.botAllowlist);
-};
 
 const missingSourceControlTarget = () =>
   new IssueTrackerError({
@@ -81,12 +49,6 @@ const sourceControlTarget = (workspace: RegisteredWorkspace) => {
 };
 
 export const branchBelongsToSlug = branchBelongsToTicketSlug;
-
-export const baseDivergenceOf = (mergeableState: string | null): BaseDivergence => {
-  if (mergeableState === "dirty") return "conflict";
-  if (mergeableState === "behind") return "clean";
-  return "none";
-};
 
 export const prReview = (pull: RawPull, decision: ReviewDecision): PrReview => {
   if (pull.draft) return "pending";
@@ -108,9 +70,6 @@ const isHumanFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
   writeAccess.has(feedback.authorAssociation) &&
   !botAllowlist.has(feedback.authorLogin) &&
   !hasCogworkMarker(feedback.body);
-
-const isTrustedBotFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
-  botAllowlist.has(feedback.authorLogin) && !hasCogworkMarker(feedback.body);
 
 const isPullRequestFeedback = (
   comment: RawIssueComment,
@@ -152,21 +111,14 @@ export const botTriggerSignal = (
   botAllowlist: BotAllowlist,
 ) => {
   // Bot-specific HTML markers are private strings; GitHub's comment and thread shape is the stable boundary.
-  const isTrustedDiffFinding = (item: RawReviewComment) =>
-    botAllowlist.get(item.authorLogin)?.acceptsAnyComment === false &&
-    item.inReplyToId === null &&
-    item.subjectType === "line" &&
-    isTrustedBotFeedback(item, botAllowlist);
-  const isTrustedAnyComment = (item: Feedback) =>
-    botAllowlist.get(item.authorLogin)?.acceptsAnyComment === true &&
-    isTrustedBotFeedback(item, botAllowlist);
-  const findings = reviewComments.filter(isTrustedDiffFinding);
-  const unrestricted = [...reviewComments, ...pullRequestFeedback].filter(isTrustedAnyComment);
-  const newest = newestOf([...findings, ...unrestricted]);
+  const newest = newestOf(trustedBotFeedback([...reviewComments, ...pullRequestFeedback], botAllowlist));
   return { latestAtMillis: newest?.createdAtMillis ?? null };
 };
 
-const make = (client: GitHubClientService): SourceControlProviderService => {
+const make = (
+  client: GitHubClientService,
+  registry: Effect.Effect<RegistryState>,
+): SourceControlProviderService => {
   const authenticatedTarget = Effect.fn("github.authenticatedSourceControlTarget")(function* (
     target: GitHubTargetConfig,
   ) {
@@ -305,6 +257,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   const empty: ReadonlyMap<WorkItemId, PrSignals> = new Map();
 
   return {
+    triggerSources: [makeGitHubPullRequestTriggerSource(client, registry)],
     observe: (workspace, workItems) =>
       Effect.gen(function* () {
         const configuredTarget = sourceControlTargetFor(workspace);
@@ -333,6 +286,13 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   };
 };
 
-export const layer = Layer.effect(SourceControlProvider, Effect.map(GitHubClient, make));
+export const layer = Layer.effect(
+  SourceControlProvider,
+  Effect.gen(function* () {
+    const client = yield* GitHubClient;
+    const registry = yield* WorkspaceRegistry;
+    return make(client, registry.state);
+  }),
+);
 
 export { make as makeProvider };

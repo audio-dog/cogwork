@@ -2,7 +2,6 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionId } from "./connection";
 import { RunId } from "./run";
-import { WorkflowCatalogKey } from "./workflow";
 
 export const WorkItemKey = TrimmedNonEmptyString.pipe(Schema.brand("WorkItemKey"));
 export type WorkItemKey = typeof WorkItemKey.Type;
@@ -109,7 +108,7 @@ export const ParkReason = Schema.TaggedUnion({
   Exhausted: { reason: TrimmedNonEmptyString },
   HopCap: {},
   MissingOperation: {},
-  PlanRejected: { reason: TrimmedNonEmptyString, entry: Schema.optional(WorkflowCatalogKey) },
+  PlanRejected: { reason: TrimmedNonEmptyString, entry: Schema.optional(TrimmedNonEmptyString) },
   WriteFailed: { step: TrimmedNonEmptyString, error: TrimmedNonEmptyString },
   NoWorkspaceRecognized: { plan: TrimmedNonEmptyString },
   AwaitingApproval: {
@@ -121,7 +120,11 @@ export const ParkReason = Schema.TaggedUnion({
 });
 export type ParkReason = typeof ParkReason.Type;
 
-export const ParkRecord = Schema.Struct({ reason: ParkReason, atMillis: Schema.Natural });
+export const ParkRecord = Schema.Struct({
+  reason: ParkReason,
+  operation: Schema.optional(OperationKey),
+  atMillis: Schema.Natural,
+});
 export type ParkRecord = typeof ParkRecord.Type;
 
 export const SourceRevision = Schema.Struct({

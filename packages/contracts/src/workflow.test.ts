@@ -29,6 +29,7 @@ const decodeHarness = Schema.decodeUnknownSync(HarnessName);
 const decodeNeed = Schema.decodeUnknownSync(NeedIdentity);
 const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
 const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
+const cogworkWorkspace = decodeWorkspaceId("cogwork");
 
 const baseDocument = decodeDocument({
   name: "Issue helper",
@@ -438,6 +439,23 @@ describe("Workflow validator", () => {
     assert.isAbove(adviseReadiness(baseDocument, baseCatalog, machine).length, 0);
   });
 
+  it("reports how many selected Workspaces bind a Trigger app", () => {
+    const second = decodeWorkspaceId("second");
+    const document = documentWith({
+      workspaces: { _tag: "Listed", workspaces: [decodeWorkspaceId("cogwork"), second] },
+    });
+    const readiness = adviseReadiness(
+      document,
+      baseCatalog,
+      machineWith({ workspaces: [...baseMachine.workspaces, { id: second, binds: [] }] }),
+    );
+
+    assert.include(
+      readiness.map(({ message }) => message),
+      "github.issue-opened observes in 1 of 2 Workspaces",
+    );
+  });
+
   it("reports catalog entry availability from machine state", () => {
     const entry = baseCatalog.entries[0];
     if (!entry) throw new Error("missing test Catalog entry");
@@ -583,7 +601,7 @@ describe("Workflow edits", () => {
 });
 
 describe("Workflow Operation result", () => {
-  const schema = workflowOperationResultSchema(operation, baseCatalog);
+  const schema = workflowOperationResultSchema(operation, baseCatalog, [cogworkWorkspace]);
 
   it("decodes the flat result and refuses missing answers", () => {
     const decoded = Schema.decodeSync(schema)({
@@ -591,6 +609,7 @@ describe("Workflow Operation result", () => {
       stuck: false,
       answers: { decision: decodeNodeId("yes") },
       inputs: { comment: "Proceed." },
+      workspace: cogworkWorkspace,
     });
 
     assert.strictEqual(decoded.answers.decision, "yes");
@@ -600,17 +619,18 @@ describe("Workflow Operation result", () => {
         stuck: false,
         answers: {},
         inputs: { comment: "Proceed." },
+        workspace: cogworkWorkspace,
       }),
     );
   });
 
   it("builds one strict object with required fields", () => {
-    const json = workflowOperationResultJsonSchema(operation, baseCatalog)["~standard"].jsonSchema.input({
-      target: "draft-2020-12",
-    });
+    const json = workflowOperationResultJsonSchema(operation, baseCatalog, [cogworkWorkspace])[
+      "~standard"
+    ].jsonSchema.input({ target: "draft-2020-12" });
 
     assert.strictEqual(json.type, "object");
-    assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs"]);
+    assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs", "workspace"]);
     assert.strictEqual(json.additionalProperties, false);
   });
 

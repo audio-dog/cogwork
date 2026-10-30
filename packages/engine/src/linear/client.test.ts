@@ -7,6 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
@@ -313,6 +314,140 @@ describe("linear client", () => {
         ["AUD-1"],
       );
       assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("reads one action issue by id", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document, variables) =>
+        document.includes("ActionIssue") && variables.id === "AUD-1"
+          ? {
+              body: {
+                data: {
+                  issue: {
+                    id: "issue-uuid",
+                    identifier: "AUD-1",
+                    url: "https://linear.app/acme/issue/AUD-1",
+                    description: "body",
+                    labels: { nodes: [{ id: "label-uuid", name: "ready" }] },
+                    state: { type: "completed" },
+                  },
+                },
+              },
+            }
+          : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
+      );
+      const client = yield* LinearClient;
+
+      assert.deepStrictEqual(yield* client.readActionIssue(ref, "AUD-1"), {
+        id: "issue-uuid",
+        identifier: "AUD-1",
+        url: "https://linear.app/acme/issue/AUD-1",
+        body: "body",
+        labels: ["ready"],
+        stateType: "completed",
+      });
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("finds one action issue by body marker", () =>
+    Effect.gen(function* () {
+      const marker = "<!-- cogwork:write key=create-key -->";
+      const fetchStub = stubLinear((document, variables) =>
+        document.includes("description: { contains: $marker }") && variables.marker === marker
+          ? {
+              body: {
+                data: {
+                  teams: {
+                    nodes: [
+                      {
+                        issues: {
+                          nodes: [
+                            {
+                              id: "issue-uuid",
+                              identifier: "AUD-1",
+                              url: "https://linear.app/acme/issue/AUD-1",
+                              description: marker,
+                              labels: { nodes: [] },
+                              state: { type: "started" },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            }
+          : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
+      );
+      const client = yield* LinearClient;
+
+      assert.strictEqual((yield* client.findActionIssue(ref, marker))?.identifier, "AUD-1");
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("passes the modified-since watermark through Linear's updatedAt filter", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, null, null, Date.UTC(2026, 9, 28, 12));
+      const [request] = sentRequests(fetchStub);
+
+      assert.deepStrictEqual(request?.variables?.filter, {
+        state: { type: { nin: ["completed"] } },
+        updatedAt: { gte: "2026-10-28T12:00:00.000Z" },
+      });
+    }).pipe(withToken()),
+  );
+
+  it.effect("includes completed issues in Trigger reads", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, null, null, Date.UTC(2026, 9, 28, 12), true);
+      const [request] = sentRequests(fetchStub);
+
+      assert.deepStrictEqual(request?.variables?.filter, {
+        updatedAt: { gte: "2026-10-28T12:00:00.000Z" },
+      });
+    }).pipe(withToken()),
+  );
+
+  it.effect("reads the label-applied moment through the final history page", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((_document, variables) => ({
+        body: {
+          data: {
+            issue: {
+              history: {
+                nodes:
+                  variables.after === null
+                    ? [{ createdAt: "2026-10-28T12:00:00.000Z", addedLabels: [{ name: "other" }] }]
+                    : [
+                        {
+                          createdAt: "2026-10-28T13:00:00.000Z",
+                          addedLabels: [{ name: "needs-triage" }],
+                        },
+                      ],
+                pageInfo:
+                  variables.after === null
+                    ? { hasNextPage: true, endCursor: "next" }
+                    : { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+
+      assert.strictEqual(
+        yield* client.labelAppliedAt(ref, "issue-id", "needs-triage"),
+        Date.UTC(2026, 9, 28, 13),
+      );
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
     }).pipe(withToken()),
   );
 
@@ -727,6 +862,31 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("finds a marker without loading the admission thread", () =>
+    Effect.gen(function* () {
+      const marker = "cogwork:write-key";
+      const fetchStub = stubLinear(() => ({
+        body: {
+          data: {
+            issue: {
+              description: `body ${marker}`,
+              comments: { nodes: [{ id: "write-comment" }] },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+
+      const presence = yield* client.findMarker(ref, "AUD-1", marker);
+      const [request] = sentRequests(fetchStub);
+
+      assert.deepStrictEqual(presence, { body: true, comment: true });
+      assert.deepStrictEqual(request?.variables, { id: "AUD-1", marker });
+      assert.include(request?.query ?? "", "comments(filter: { body: { contains: $marker } }, first: 1)");
+      assert.notInclude(request?.query ?? "", "pageInfo");
+    }).pipe(withToken()),
+  );
+
   it.effect("reads the current issue body and every comment page in order", () =>
     Effect.gen(function* () {
       const page = (id: string, endCursor: string | null) => ({
@@ -769,6 +929,38 @@ describe("linear client", () => {
         sentRequests(fetchStub).map(({ variables }) => variables.after),
         [null, "comment-cursor-1"],
       );
+    }).pipe(withToken()),
+  );
+
+  it.effect("reads Trigger prose beyond the Work context byte limit", () =>
+    Effect.gen(function* () {
+      const body = "x".repeat(16 * 1024 * 1024 + 1);
+      stubLinear(() => ({
+        body: {
+          data: {
+            issue: {
+              description: "Current issue body",
+              comments: {
+                nodes: [
+                  {
+                    id: "large",
+                    body,
+                    createdAt: "2026-07-31T00:00:00.000Z",
+                    user: { id: "author", active: true, guest: false, app: false, admin: false },
+                  },
+                ],
+                pageInfo: lastPage,
+              },
+            },
+          },
+        },
+      }));
+      const client = yield* LinearClient;
+      const result = yield* Effect.result(client.readTriggerProse(ref, "AUD-1"));
+
+      assert.isTrue(Result.isSuccess(result));
+      if (!Result.isSuccess(result)) return;
+      assert.strictEqual(result.success.comments[0]?.body.length, body.length);
     }).pipe(withToken()),
   );
 
@@ -899,7 +1091,7 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("retries a mutation after a hanging attempt reaches its deadline", () =>
+  it.effect("does not retry a mutation after a hanging attempt reaches its deadline", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: { data: { commentCreate: { success: true } } } }));
       const onAbort = vi.fn();
@@ -910,9 +1102,130 @@ describe("linear client", () => {
       const client = yield* LinearClient;
       const requestFiber = yield* Effect.forkChild(client.createComment(ref, "AUD-1", "body"));
       yield* TestClock.adjust("1 minute");
-      yield* Fiber.join(requestFiber);
+      const result = yield* Effect.result(Fiber.join(requestFiber));
+      assert.isTrue(Result.isFailure(result));
+      if (Result.isSuccess(result)) return;
+      assert.strictEqual(result.failure.reason, "unavailable");
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+      assert.strictEqual(onAbort.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("marks a timed-out issue create as possibly committed", () =>
+    Effect.gen(function* () {
+      const onAbort = vi.fn();
+      const fetchStub = vi.fn((_input: unknown, init?: RequestInit) => {
+        const request = requestOf(init);
+        if (request.query.includes("issueCreate")) {
+          init?.signal?.addEventListener("abort", onAbort);
+          return Promise.withResolvers<Response>().promise;
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: { teams: { nodes: [teamBundle] } } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      });
+      vi.stubGlobal("fetch", fetchStub);
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [] }),
+      );
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Effect.flip(Fiber.join(requestFiber));
+
+      assert.strictEqual(error.writeMayHaveCommitted, true);
       assert.strictEqual(fetchStub.mock.calls.length, 2);
       assert.strictEqual(onAbort.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("keeps a timed-out label create retryable before issue creation", () =>
+    Effect.gen(function* () {
+      const onAbort = vi.fn();
+      const response = (data: unknown) =>
+        new Response(JSON.stringify({ data }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      const fetchStub = vi
+        .fn((_input: unknown, _init?: RequestInit) =>
+          Promise.reject<Response>(new Error("unexpected request")),
+        )
+        .mockResolvedValueOnce(response({ teams: { nodes: [teamBundle] } }))
+        .mockResolvedValueOnce(response({ teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } }))
+        .mockResolvedValueOnce(response({ issueLabels: { nodes: [] } }))
+        .mockImplementationOnce((_input, init) => {
+          init?.signal?.addEventListener("abort", onAbort);
+          return Promise.withResolvers<Response>().promise;
+        });
+      vi.stubGlobal("fetch", fetchStub);
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [claimLabelName] }),
+      );
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Effect.flip(Fiber.join(requestFiber));
+
+      assert.strictEqual(error.reason, "unavailable");
+      assert.include(error.message, "label");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+      assert.isUndefined(error.writeMayHaveCommitted);
+      assert.strictEqual(onAbort.mock.calls.length, 1);
+      assert.include(sentRequests(fetchStub)[3]?.query ?? "", "issueLabelCreate");
+      assert.isFalse(sentRequests(fetchStub).some((request) => request.query.includes("issueCreate")));
+    }).pipe(withToken()),
+  );
+
+  it.effect("keeps a rate-limited issue create retryable", () =>
+    Effect.gen(function* () {
+      stubLinear((document) =>
+        document.includes("issueCreate")
+          ? { status: 429, body: {} }
+          : { body: { data: { teams: { nodes: [teamBundle] } } } },
+      );
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [] }),
+      );
+
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.isUndefined(error.writeMayHaveCommitted);
+    }).pipe(withToken()),
+  );
+
+  it.effect("keeps a rejected issue create uncommitted", () =>
+    Effect.gen(function* () {
+      stubLinear((document) =>
+        document.includes("issueCreate")
+          ? { status: 401, body: {} }
+          : { body: { data: { teams: { nodes: [teamBundle] } } } },
+      );
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [] }),
+      );
+
+      assert.strictEqual(error.reason, "auth");
+      assert.isUndefined(error.writeMayHaveCommitted);
+    }).pipe(withToken()),
+  );
+
+  it.effect("marks a successful create without an issue as possibly committed", () =>
+    Effect.gen(function* () {
+      stubLinear((document) =>
+        document.includes("issueCreate")
+          ? { body: { data: { issueCreate: { success: true } } } }
+          : { body: { data: { teams: { nodes: [teamBundle] } } } },
+      );
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(
+        client.createIssue(ref, { title: "Created", body: "Body", labels: [] }),
+      );
+
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(error.writeMayHaveCommitted, true);
     }).pipe(withToken()),
   );
 

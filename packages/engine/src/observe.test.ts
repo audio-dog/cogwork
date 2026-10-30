@@ -5,7 +5,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
 import type { FollowUpMarker } from "./follow-up";
-import type { IssueTrackerService, TrackerItem } from "./issue-tracker";
+import { type IssueTrackerService, type TrackerItem, unsupportedWorkflowActions } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
 import type { PrSignals, SourceControlProviderService } from "./source-control";
@@ -58,6 +58,7 @@ const tracker = (
   tracked: TrackerItem,
   handBack: IssueTrackerService["handBack"] = () => Effect.void,
 ): IssueTrackerService => ({
+  ...unsupportedWorkflowActions,
   rateLimitScope: () => null,
   observe: () => Effect.succeed([tracked]),
   readProse: () => Effect.succeed({ body: "", comments: [] }),

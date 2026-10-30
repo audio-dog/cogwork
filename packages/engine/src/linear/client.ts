@@ -43,12 +43,15 @@ export interface RawIssue {
   readonly identifier: string;
   readonly title: string;
   readonly url: string;
+  readonly body?: string;
   readonly labels: ReadonlyArray<string>;
   readonly assignees: ReadonlyArray<string>;
   readonly stateName: string;
   readonly stateType: string;
   readonly openBlockers: number;
   readonly priority: Priority;
+  readonly createdAtMillis?: number;
+  readonly updatedAtMillis: number;
 }
 
 export interface ObservedRawIssue extends RawIssue {
@@ -141,7 +144,10 @@ const IssueNode = Schema.Struct({
   identifier: Schema.String,
   title: Schema.String,
   url: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
   priority: Schema.optional(Schema.Finite),
+  createdAt: Schema.optional(Schema.String),
+  updatedAt: Schema.optional(Schema.String),
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
   }),
@@ -174,6 +180,7 @@ const IssuesTeamNode = Schema.Struct({
 });
 
 const MetaTeamNode = Schema.Struct({
+  id: Schema.String,
   states: Schema.Struct({ nodes: Schema.Array(StateNode) }),
 });
 
@@ -207,6 +214,30 @@ const CoordinationCommentsPayload = Schema.Struct({
   ),
 });
 
+const IssueMarkerPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({
+      description: Schema.NullOr(Schema.String),
+      comments: Schema.Struct({ nodes: Schema.Array(Schema.Struct({ id: Schema.String })) }),
+    }),
+  ),
+});
+
+const ActionIssueNode = Schema.Struct({
+  id: Schema.String,
+  identifier: Schema.String,
+  url: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }),
+  state: Schema.Struct({ type: Schema.String }),
+});
+
+const ActionIssuePayload = Schema.Struct({ issue: Schema.NullOr(ActionIssueNode) });
+
+const ActionIssuesTeamNode = Schema.Struct({
+  issues: Schema.Struct({ nodes: Schema.Array(ActionIssueNode) }),
+});
+
 const IssueRelationsPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ inverseRelations: RelationConnection })),
 });
@@ -215,20 +246,44 @@ const IssueLabelPayload = Schema.Struct({
   issue: Schema.NullOr(Schema.Struct({ labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }) })),
 });
 
+const IssueAssigneesPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({ assignee: Schema.optional(Schema.NullOr(Schema.Struct({ id: Schema.String }))) }),
+  ),
+});
+
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
+const decodeIssueMarker = Schema.decodeUnknownEffect(IssueMarkerPayload);
+const decodeActionIssue = Schema.decodeUnknownEffect(ActionIssuePayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
+const decodeIssueAssignees = Schema.decodeUnknownEffect(IssueAssigneesPayload);
 
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
+
+const markWriteMayHaveCommitted = (error: IssueTrackerError) =>
+  new IssueTrackerError({
+    reason: error.reason,
+    message: error.message,
+    retryable: error.retryable,
+    retryAfterMillis: error.retryAfterMillis,
+    connectionId: error.connectionId,
+    writeMayHaveCommitted: true,
+  });
+
+const classifyCreateFailure = (error: IssueTrackerError) => {
+  const mayHaveCommitted = error.reason === "unavailable" && error.retryable !== false;
+  return mayHaveCommitted ? markWriteMayHaveCommitted(error) : error;
+};
 
 const labelCreateRefused = (ref: LinearTeamRef, name: string) => (error: IssueTrackerError) =>
   new IssueTrackerError({
     reason: error.reason,
     message: `Linear refused creating the "${name}" label in team ${ref.team}: ${error.message}`,
-    retryable: error.reason === "rate-limited",
+    retryable: error.reason === "rate-limited" || error.retryable === true,
     retryAfterMillis: error.retryAfterMillis,
     connectionId: error.connectionId,
   });
@@ -309,7 +364,11 @@ const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, LinearRequ
     Effect.catchTag("TimeoutError", () =>
       Effect.fail(
         new LinearRequestFailure({
-          error: unavailable(`Linear request timed out after ${transientAttemptDeadline}`),
+          error: new IssueTrackerError({
+            reason: "unavailable",
+            message: `Linear request timed out after ${transientAttemptDeadline}`,
+            retryable: true,
+          }),
           retryable: true,
         }),
       ),
@@ -350,7 +409,10 @@ const issueFields = `
       identifier
       title
       url
+      description
       priority
+      createdAt
+      updatedAt
       labels(first: ${labelPageSize}) { nodes { name } }
       assignee { id }
       state { name type }
@@ -386,12 +448,20 @@ const issuesArgs = ", $filter: IssueFilter, $after: String";
 
 // Mirrors the classify-side assignee ownership gate: when the workspace names an allowlist, an
 // issue owned by anyone else can never classify, so fetching it only costs pages.
-const issuesFilter = (assigneeIds: ReadonlyArray<string> | null) => ({
-  state: { type: { nin: ["completed"] } },
+const issuesFilter = (
+  assigneeIds: ReadonlyArray<string> | null,
+  updatedSince?: number,
+  includeCompleted = false,
+) => ({
+  ...(includeCompleted ? {} : { state: { type: { nin: ["completed"] } } }),
   ...(assigneeIds !== null && assigneeIds.length > 0 ? { assignee: { id: { in: assigneeIds } } } : {}),
+  ...(updatedSince === undefined
+    ? {}
+    : { updatedAt: { gte: DateTime.formatIso(DateTime.makeUnsafe(updatedSince)) } }),
 });
 
 const metaSelection = `
+  id
   states { nodes { id name type } }`;
 
 // Linear caps an unpaginated connection at 50, and a team can hold more labels than that.
@@ -414,6 +484,11 @@ query IssueLabelByName($id: String!, $label: String!) {
   }
 }`;
 
+const issueAssigneesQuery = `
+query IssueAssignees($id: String!) {
+  issue(id: $id) { assignee { id } }
+}`;
+
 const commentsQuery = `
 query IssueComments($id: String!, $after: String) {
   issue(id: $id) {
@@ -430,9 +505,58 @@ query IssueComments($id: String!, $after: String) {
   }
 }`;
 
+const issueHistoryQuery = `
+query IssueHistory($id: String!, $after: String) {
+  issue(id: $id) {
+    history(first: 250, after: $after, orderBy: createdAt) {
+      nodes { createdAt addedLabels { name } }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`;
+
+const HistoryPayload = Schema.Struct({
+  issue: Schema.NullOr(
+    Schema.Struct({
+      history: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            createdAt: Schema.String,
+            addedLabels: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))),
+          }),
+        ),
+        pageInfo: PageInfoNode,
+      }),
+    }),
+  ),
+});
+const decodeHistory = Schema.decodeUnknownEffect(HistoryPayload);
+
 const coordinationCommentsQuery = `
 query IssueCoordinationComments($id: String!, $bot: ID!, $ledger: String!, $proposal: String!) {
   issue(id: $id) {${coordinationFields}
+  }
+}`;
+
+const issueMarkerQuery = `
+query IssueMarker($id: String!, $marker: String!) {
+  issue(id: $id) {
+    description
+    comments(filter: { body: { contains: $marker } }, first: 1) { nodes { id } }
+  }
+}`;
+
+const actionIssueSelection = `
+      id
+      identifier
+      url
+      description
+      labels(first: ${labelPageSize}) { nodes { id name } }
+      state { type }`;
+
+const actionIssueQuery = `
+query ActionIssue($id: String!) {
+  issue(id: $id) {${actionIssueSelection}
   }
 }`;
 
@@ -491,6 +615,15 @@ const coordinatedIssuesShape = teamShape(
   issuesSelection(coordinationFields),
   `${issuesArgs}, $bot: ID!, $ledger: String!, $proposal: String!`,
 );
+const actionIssueMarkerShape = teamShape(
+  ActionIssuesTeamNode,
+  `
+  issues(filter: { description: { contains: $marker } }, first: 1) {
+    nodes {${actionIssueSelection}
+    }
+  }`,
+  ", $marker: String!",
+);
 
 const isResolvedBlocker = (stateType: string) => stateType === "completed" || stateType === "canceled";
 
@@ -523,12 +656,24 @@ const toRawIssue = (issue: typeof IssueNode.Type, openBlockers: number) => ({
   identifier: issue.identifier,
   title: issue.title,
   url: issue.url,
+  body: issue.description ?? "",
   labels: issue.labels.nodes.map((label) => label.name),
   assignees: issue.assignee ? [issue.assignee.id] : [],
   stateName: issue.state.name,
   stateType: issue.state.type,
   openBlockers,
   priority: linearPriority(issue.priority),
+  createdAtMillis: millisFromIso(issue.createdAt ?? issue.updatedAt ?? ""),
+  updatedAtMillis: millisFromIso(issue.updatedAt ?? ""),
+});
+
+const toActionIssue = (issue: typeof ActionIssueNode.Type) => ({
+  id: issue.id,
+  identifier: issue.identifier,
+  url: issue.url,
+  body: issue.description ?? "",
+  labels: issue.labels.nodes.map(({ name }) => name),
+  stateType: issue.state.type,
 });
 
 const toRawComment = (comment: typeof CommentNode.Type) => {
@@ -659,6 +804,34 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return yield* callWithCredential(ref, credential, run);
   });
 
+  const callOnceWithCredential = Effect.fn("linear.callOnceWithCredential")(function* <A>(
+    ref: LinearTeamRef,
+    credential: Credential,
+    run: (sdk: LinearSdk) => PromiseLike<A>,
+  ) {
+    const attemptStartedAt = yield* Clock.currentTimeMillis;
+    yield* holdOff(ref, attemptStartedAt);
+    return yield* withTransientAttemptDeadline(
+      Effect.tryPromise({
+        try: (signal) => run(new LinearSdk({ ...sdkAuth(credential), signal })),
+        catch: (cause) => fromSdkFailure(cause, attemptStartedAt),
+      }),
+    ).pipe(
+      Effect.mapError((failure) => failure.error),
+      Effect.tapError((error) =>
+        Effect.flatMap(Clock.currentTimeMillis, (nowMillis) => noteFailure(ref, nowMillis, error)),
+      ),
+    );
+  });
+
+  const callOnce = Effect.fn("linear.callOnce")(function* <A>(
+    ref: LinearTeamRef,
+    run: (sdk: LinearSdk) => PromiseLike<A>,
+  ) {
+    const credential = yield* credentialFor(ref);
+    return yield* callOnceWithCredential(ref, credential, run);
+  });
+
   // The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
   // only stays inside Linear's rate limit while these reads stay single documents.
   const rawData = Effect.fn("linear.rawRequest")(function* (
@@ -762,6 +935,8 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     ref: LinearTeamRef,
     coordination: CoordinationScope | null,
     assigneeIds: ReadonlyArray<string> | null = null,
+    updatedSince?: number,
+    includeCompleted: boolean = false,
   ) {
     const shape = coordination ? coordinatedIssuesShape : issuesShape;
     const scopeVariables = coordination
@@ -771,7 +946,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
           proposal: coordination.proposalMarker,
         }
       : {};
-    const filter = issuesFilter(assigneeIds);
+    const filter = issuesFilter(assigneeIds, updatedSince, includeCompleted);
     const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
     const issues = yield* Stream.paginate<string | null, typeof IssueNode.Type, IssueTrackerError>(
       null,
@@ -793,12 +968,36 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     );
   });
 
+  const labelAppliedAt = Effect.fn("linear.labelAppliedAt")(function* (
+    ref: LinearTeamRef,
+    issueId: string,
+    label: string,
+  ) {
+    const collect: (after?: string | null) => Effect.Effect<ReadonlyArray<number>, IssueTrackerError> =
+      Effect.fn("linear.collectLabelHistory")(function* (after = null) {
+        const data = yield* rawData(ref, issueHistoryQuery, { id: issueId, after });
+        const payload = yield* Effect.mapError(decodeHistory(data), toUnavailable);
+        const history = payload.issue?.history;
+        if (!history) return [];
+        const current = history.nodes.flatMap((entry) =>
+          entry.addedLabels?.some(({ name }) => name === label) ? [millisFromIso(entry.createdAt)] : [],
+        );
+        if (!history.pageInfo.hasNextPage) return current;
+        const cursor = history.pageInfo.endCursor;
+        if (cursor === null)
+          return yield* unavailable(`Linear label history page missing cursor: ${issueId}`);
+        return [...current, ...(yield* collect(cursor))];
+      });
+    const applied = yield* withPaginationDeadline("label history", collect());
+    return applied.at(-1) ?? null;
+  });
+
   const mutate = Effect.fn("linear.mutate")(function* (
     ref: LinearTeamRef,
     operation: string,
     run: (sdk: LinearSdk) => PromiseLike<{ readonly success: boolean }>,
   ) {
-    const payload = yield* call(ref, run);
+    const payload = yield* callOnce(ref, run);
     yield* requireSuccess(operation, payload);
   });
 
@@ -815,7 +1014,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     const { teamId, labelId } = yield* resolveLabel(ref, name);
     if (labelId !== null) return labelId;
     const payload = yield* Effect.mapError(
-      call(ref, (sdk) => sdk.createIssueLabel({ teamId, name })),
+      callOnce(ref, (sdk) => sdk.createIssueLabel({ teamId, name })),
       labelCreateRefused(ref, name),
     );
     yield* requireSuccess("issueLabelCreate", payload);
@@ -823,6 +1022,41 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return yield* unavailable(`Linear issueLabelCreate returned no label for ${name}`);
     }
     return payload.issueLabelId;
+  });
+
+  const createIssue = Effect.fn("linear.createIssue")(function* (
+    ref: LinearTeamRef,
+    input: { readonly title: string; readonly body: string; readonly labels: ReadonlyArray<string> },
+  ) {
+    interface CreatedIssue {
+      readonly success: boolean;
+      readonly issue: { readonly id: string; readonly identifier: string; readonly url: string } | null;
+    }
+    const team = yield* loadTeam(ref, metaShape);
+    const labelIds = yield* Effect.forEach(input.labels, (label) => ensureLabel(ref, label));
+    const payload = yield* callOnce(ref, (sdk) =>
+      sdk
+        .createIssue({
+          teamId: team.id,
+          title: input.title,
+          description: input.body,
+          labelIds,
+        })
+        .then((created): Promise<CreatedIssue> => {
+          const issue = created.issue;
+          return issue === undefined
+            ? Promise.resolve({ success: created.success, issue: null })
+            : issue.then((value) => ({
+                success: created.success,
+                issue: { id: value.id, identifier: value.identifier, url: value.url },
+              }));
+        }),
+    ).pipe(Effect.mapError(classifyCreateFailure));
+    yield* requireSuccess("issueCreate", payload);
+    if (payload.issue === null) {
+      return yield* markWriteMayHaveCommitted(unavailable("Linear issueCreate returned no issue"));
+    }
+    return payload.issue;
   });
 
   const issueLabelId = Effect.fn("linear.issueLabelId")(function* (
@@ -836,7 +1070,14 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return payload.issue.labels.nodes.at(0)?.id ?? null;
   });
 
-  const readProse = (ref: LinearTeamRef, issueId: string) => {
+  const issueAssignees = Effect.fn("linear.issueAssignees")(function* (ref: LinearTeamRef, issueId: string) {
+    const data = yield* rawData(ref, issueAssigneesQuery, { id: issueId });
+    const payload = yield* Effect.mapError(decodeIssueAssignees(data), toUnavailable);
+    if (payload.issue === null) return yield* unavailable(`Linear issue not found: ${issueId}`);
+    return payload.issue.assignee ? [payload.issue.assignee.id] : [];
+  });
+
+  const readIssueProse = (ref: LinearTeamRef, issueId: string, enforceAdmissionLimit: boolean) => {
     const loadPage = Effect.fn("linear.loadCommentPage")(function* (state: CommentPaginationState) {
       const data = yield* rawData(ref, commentsQuery, { id: issueId, after: state.after });
       const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
@@ -854,7 +1095,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
         (state.after === null ? Buffer.byteLength(payload.issue.description ?? "") : 0);
       const withinAdmissionLimit =
         commentCount <= workContextCommentLimit && proseBytes <= workContextProseByteLimit;
-      if (!withinAdmissionLimit) {
+      if (enforceAdmissionLimit && !withinAdmissionLimit) {
         return yield* new IssueTrackerError({
           reason: "unavailable",
           retryable: false,
@@ -898,6 +1139,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     );
   };
 
+  const readProse = (ref: LinearTeamRef, issueId: string) => readIssueProse(ref, issueId, true);
+  const readTriggerProse = (ref: LinearTeamRef, issueId: string) => readIssueProse(ref, issueId, false);
+
   return {
     authenticatedUserId: Effect.fn("linear.authenticatedUserId")(function* (ref: LinearTeamRef) {
       const credential = yield* credentialFor(ref);
@@ -905,6 +1149,8 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return yield* callWithCredential(ref, credential, (sdk) => sdk.viewer.then((viewer) => viewer.id));
     }),
     observeIssues,
+    issueAssignees,
+    labelAppliedAt,
     listWorkflowStates: (ref: LinearTeamRef) =>
       Effect.map(loadTeam(ref, metaShape), (team): ReadonlyArray<RawWorkflowState> => team.states.nodes),
     listComments: Effect.fn("linear.listComments")(function* (
@@ -923,7 +1169,33 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
         toRawComment,
       );
     }),
+    findMarker: Effect.fn("linear.findMarker")(function* (
+      ref: LinearTeamRef,
+      issueId: string,
+      marker: string,
+    ) {
+      const data = yield* rawData(ref, issueMarkerQuery, { id: issueId, marker });
+      const payload = yield* Effect.mapError(decodeIssueMarker(data), toUnavailable);
+      if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
+      return {
+        body: payload.issue.description?.includes(marker) ?? false,
+        comment: payload.issue.comments.nodes.length > 0,
+      };
+    }),
+    readActionIssue: Effect.fn("linear.readActionIssue")(function* (ref: LinearTeamRef, issueId: string) {
+      const data = yield* rawData(ref, actionIssueQuery, { id: issueId });
+      const payload = yield* Effect.mapError(decodeActionIssue(data), toUnavailable);
+      if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
+      return toActionIssue(payload.issue);
+    }),
+    findActionIssue: Effect.fn("linear.findActionIssue")(function* (ref: LinearTeamRef, marker: string) {
+      const team = yield* loadTeam(ref, actionIssueMarkerShape, { marker });
+      const issue = team.issues.nodes.at(0);
+      return issue ? toActionIssue(issue) : null;
+    }),
     readProse,
+    createIssue,
+    readTriggerProse,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);

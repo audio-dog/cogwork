@@ -25,11 +25,11 @@ import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
-import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { harnessCatalogsAtom, harnessReadinessAtom, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { workspaceConnectionChoices } from "../features/connections-view";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import {
   type AvailableHarnessCatalog,
   harnessCatalogLoad,
@@ -273,7 +273,7 @@ function LoadedOperationSettings({
         <Alert variant="destructive">
           <RiAlertLine />
           <AlertTitle>Could not save that setting</AlertTitle>
-          <AlertDescription>{Cause.pretty(writeResult.cause)}</AlertDescription>
+          <AlertDescription>{daemonFailureMessage(writeResult.cause)}</AlertDescription>
         </Alert>
       ) : null}
     </OperationSettings.Provider>

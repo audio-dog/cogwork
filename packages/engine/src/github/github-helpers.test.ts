@@ -33,6 +33,7 @@ const comment = (over: Partial<RawReviewComment>): RawReviewComment => ({
 });
 
 const rawReview = (over: Partial<RawReview>): RawReview => ({
+  id: 1,
   authorLogin: "maintainer",
   authorAssociation: "COLLABORATOR",
   state: "COMMENTED",

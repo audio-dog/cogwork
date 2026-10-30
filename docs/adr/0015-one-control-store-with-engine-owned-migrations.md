@@ -6,6 +6,7 @@
 - **Amended:** 2026-08-27 — pre-alpha: no migrations, see [Amendment](#amendment-2026-08-27--pre-alpha-no-migrations-no-cutover-no-backups)
 - **Amended:** 2026-09-01 — migrations return as declarative convergence, see [Amendment](#amendment-2026-09-01--migrations-return-as-declarative-convergence)
 - **Amended:** 2026-09-10 — run-event retention is bounded without breaking owned transcripts, see [Amendment](#amendment-2026-09-10--run-event-retention-is-bounded-without-breaking-owned-transcripts)
+- **Amended:** 2026-10-30 — a table that gains a required column is recreated, see [Amendment](#amendment-2026-10-30--a-table-that-gains-a-required-column-is-recreated)
 
 ## Context
 
@@ -373,3 +374,20 @@ created.
 **New stores use incremental auto-vacuum.** Boot enables it before creating a new Control store and
 requests bounded incremental reclamation after pruning. Existing stores keep their current auto-vacuum mode:
 deleted pages can be reused, but boot never runs a blocking full `VACUUM` to retrofit them.
+
+## Amendment (2026-10-30) — a table that gains a required column is recreated
+
+The 2026-09-01 amendment named a rename-shaped diff as the one case the differ cannot resolve. There is
+a second. When a schema change adds a `NOT NULL` column with no default to an existing table, the
+differ emits `ALTER TABLE … ADD … NOT NULL`, and SQLite rejects that statement even on an empty table.
+Before this amendment, boot failed closed on every existing store.
+
+**Boot drops that table and diffs again, inside the converge transaction.** The second diff creates
+the table from the schema. Its rows are discarded, and every other table keeps its rows. Moving the
+whole store aside, as a rename-shaped diff does, would discard every Workspace and setting to remove
+rows that no longer have a value for the new column. The first case was `trigger_admissions`, which
+gained `workflow` and `trigger` key columns. Its old rows were keyed for per-work-item coordination,
+so keeping them would have scheduled Runs again that had already run.
+
+This is pre-release policy, and it flips with the others: before the first release, a required column
+on a table with rows needs a default or a transform, and boot fails closed until one ships.
