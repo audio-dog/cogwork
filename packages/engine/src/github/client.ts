@@ -192,7 +192,7 @@ const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.opti
 const ReviewSchema = Schema.Struct({
   id: Schema.Finite,
   state: Schema.String,
-  user: GitHubUserSchema,
+  user: Schema.NullOr(GitHubUserSchema),
   body: Schema.NullOr(Schema.String),
   author_association: Schema.optional(Schema.String),
   submitted_at: Schema.optional(Schema.NullOr(Schema.String)),
@@ -219,7 +219,7 @@ const IssueCommentSchema = Schema.Struct({
 
 const ReviewCommentSchema = Schema.Struct({
   ...CommentFields,
-  user: GitHubUserSchema,
+  user: Schema.NullOr(GitHubUserSchema),
   in_reply_to_id: Schema.NullOr(Schema.Finite).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
   subject_type: Schema.Union([Schema.Literal("line"), Schema.Literal("file")]),
 });
