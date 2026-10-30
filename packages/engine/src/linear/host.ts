@@ -210,12 +210,11 @@ export const makeIssueActions = (client: LinearClientService) => {
     target: LinearTarget,
     issue: string,
     writeKey: string,
-    applied: (issue: { readonly labels: ReadonlyArray<string>; readonly stateType: string }) => boolean,
+    applied: Effect.Effect<boolean, IssueTrackerError>,
     write: Effect.Effect<unknown, IssueTrackerError>,
   ) {
     if (yield* commentsCarry(target, issue, writeKey)) return;
-    const current = yield* client.readActionIssue(target, issue);
-    if (!applied(current)) yield* write;
+    if (!(yield* applied)) yield* write;
     yield* client.createComment(target, issue, writeMarker(writeKey));
     yield* confirmComment(target, issue, writeKey);
   });
@@ -271,7 +270,9 @@ export const makeIssueActions = (client: LinearClientService) => {
         target,
         id,
         writeKey,
-        (issue) => labels.every((label) => issue.labels.includes(label)),
+        client
+          .readActionIssue(target, id)
+          .pipe(Effect.map((issue) => labels.every((label) => issue.labels.includes(label)))),
         Effect.forEach(labels, (label) => client.addLabel(target, id, label), { discard: true }),
       );
     }),
@@ -282,13 +283,7 @@ export const makeIssueActions = (client: LinearClientService) => {
       writeKey: string,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      yield* writeOnce(
-        target,
-        id,
-        writeKey,
-        (issue) => !issue.labels.includes(label),
-        client.removeLabel(target, id, label),
-      );
+      yield* writeOnce(target, id, writeKey, Effect.succeed(false), client.removeLabel(target, id, label));
     }),
     closeIssue: Effect.fn("linear.workflowCloseIssue")(function* (
       workspace: WorkspaceIssueTrackerBinding,
@@ -301,7 +296,7 @@ export const makeIssueActions = (client: LinearClientService) => {
         target,
         id,
         writeKey,
-        ({ stateType }) => stateType === "completed",
+        client.readActionIssue(target, id).pipe(Effect.map(({ stateType }) => stateType === "completed")),
         client.setState(target, id, stateId),
       );
     }),

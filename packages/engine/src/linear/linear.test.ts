@@ -265,7 +265,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
             identifier: issue.identifier,
             url: issue.url,
             body: issue.body ?? "",
-            labels: [...issue.labels],
+            labels: issue.labels.slice(0, 50),
             stateType: issue.stateType,
           };
         }),
@@ -506,6 +506,27 @@ describe("linear work source adapter", () => {
       ),
     ),
   );
+
+  it.effect("removes a label beyond the first action-read page", () => {
+    const labels = [...Array.from({ length: 50 }, (_, index) => `label-${index}`), "remove-me"];
+    return Effect.gen(function* () {
+      const tracker = yield* IssueTracker;
+      const client = yield* LinearClient;
+
+      yield* tracker.removeLabel(workspace, id("AUD-5"), "remove-me", "remove-key");
+
+      const issue = (yield* client.observeIssues(teamRef, null)).find(
+        ({ identifier }) => identifier === "AUD-5",
+      );
+      assert.isFalse(issue?.labels.includes("remove-me") ?? true);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-5", title: "Existing", labels }],
+        }),
+      ),
+    );
+  });
 
   it.effect("creates an issue on the current item's configured team", () =>
     Effect.gen(function* () {
