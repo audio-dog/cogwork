@@ -1,5 +1,6 @@
 import {
   Cause,
+  RunPlanWorkContextProse,
   type WorkflowAvailability,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
@@ -36,6 +37,8 @@ export const TriggerEvent = Schema.Struct({
   atMillis: Schema.Natural,
   entry: WorkflowCatalogKey,
   workspace: Schema.NullOr(WorkspaceId),
+  parameters: Schema.optional(Schema.Array(WorkflowParameterValue)),
+  workContext: Schema.optional(RunPlanWorkContextProse),
   payload: Schema.optional(
     Schema.TaggedUnion({
       GranolaNote: {
@@ -70,6 +73,10 @@ export interface TriggerSource {
   readonly observe: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
   ) => Stream.Stream<TriggerEvent, SourceFailure>;
+  readonly acknowledge?: (
+    event: TriggerEvent,
+    subscriptions: ReadonlyArray<TriggerSubscription>,
+  ) => Effect.Effect<void>;
 }
 
 export class TriggerSources extends Context.Service<TriggerSources, ReadonlyArray<TriggerSource>>()(

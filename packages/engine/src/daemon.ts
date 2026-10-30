@@ -113,6 +113,7 @@ import {
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
+import { make as makeSlackSource, httpClientLayer as slackClientLayer } from "./slack-source";
 import {
   controlStoreTriggerObservationStoreLayer,
   TriggerObservation,
@@ -479,11 +480,6 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const machineReadiness = machineReadinessLayer.pipe(
     Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness)),
   );
-  const workflows = workflowsLayer.pipe(
-    Layer.provide(workflowCatalogContributionsLayer),
-    Layer.provide(machineReadiness),
-    Layer.provide(Layer.mergeAll(controlStore, daemonEventBusLayer, harness)),
-  );
   const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
     Layer.provide(controlStore),
   );
@@ -498,12 +494,19 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
       const connectionStore = yield* ConnectionStore;
       const coordinationService = yield* Coordination;
       const http = yield* HttpClient.HttpClient;
+      const slackSource = yield* makeSlackSource;
       return [
         clockSource,
         makeGranolaSource(connectionStore, makeGranolaSourceAdapters(http), coordinationService),
+        slackSource,
       ];
     }),
-  ).pipe(Layer.provide(Layer.merge(connections, coordination)));
+  ).pipe(Layer.provide(Layer.mergeAll(connections, coordination, slackClientLayer)));
+  const workflows = workflowsLayer.pipe(
+    Layer.provide(workflowCatalogContributionsLayer.pipe(Layer.provide(triggerSources))),
+    Layer.provide(machineReadiness),
+    Layer.provide(Layer.mergeAll(controlStore, daemonEventBusLayer, harness)),
+  );
   const triggerObservationStore = controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
   const workflowNotifications = workflowNotificationsLayer.pipe(
     Layer.provide(Layer.merge(runLedger, runRecorder)),

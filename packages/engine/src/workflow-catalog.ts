@@ -9,10 +9,9 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { clockEntries, clockSource } from "./clock-source";
 import { workflowCatalogContribution as githubActions } from "./github/adapter";
-import { granolaWorkflowCatalogContribution } from "./granola-source";
 import { workflowCatalogContribution as linearActions } from "./linear/adapter";
+import { TriggerSources } from "./trigger-source";
 
 export interface WorkflowCatalogContribution {
   readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
@@ -59,18 +58,22 @@ export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
   templates: [],
 };
 
-export const workflowCatalogContributionsLayer = Layer.succeed(WorkflowCatalogContributions, [
-  cogworkWorkflowCatalogContribution,
-  githubActions,
-  linearActions,
-  granolaWorkflowCatalogContribution,
-  {
-    entries: clockEntries,
-    templates: [],
-    listOptions: (entry, parameter, workspaces) =>
-      clockSource.listOptions(entry, parameter).pipe(
-        Effect.map((options) => options.map((option) => ({ ...option, listedIn: workspaces }))),
-        Effect.catchTag("SourceFailure", () => Effect.succeed([])),
-      ),
-  },
-]);
+export const workflowCatalogContributionsLayer = Layer.effect(
+  WorkflowCatalogContributions,
+  Effect.map(TriggerSources, (sources) => [
+    cogworkWorkflowCatalogContribution,
+    githubActions,
+    linearActions,
+    ...sources.map(
+      (source): WorkflowCatalogContribution => ({
+        entries: source.entries,
+        templates: [],
+        listOptions: (entry, parameter, workspaces) =>
+          source.listOptions(entry, parameter).pipe(
+            Effect.map((options) => options.map((option) => ({ ...option, listedIn: workspaces }))),
+            Effect.catchTag("SourceFailure", () => Effect.succeed([])),
+          ),
+      }),
+    ),
+  ]),
+);

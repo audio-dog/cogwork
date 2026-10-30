@@ -39,14 +39,11 @@ import { WorkflowRun, type WorkflowRunOutcome } from "./workflow-run";
 
 const id = Schema.decodeSync(WorkItemId);
 const workflowId = Schema.decodeSync(WorkflowId)("scheduled-workflow");
+const siblingWorkflowId = Schema.decodeSync(WorkflowId)("sibling-workflow");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
 const siblingTriggerId = Schema.decodeSync(WorkflowNodeId)("schedule-sibling");
 const operationId = Schema.decodeSync(WorkflowNodeId)("run");
 const scheduleEntry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
-const workflowRunOutcomes = new Set<unknown>(["completed", "retry", "skipped"]);
-
-const isWorkflowRunOutcome = (outcome: unknown): outcome is WorkflowRunOutcome =>
-  workflowRunOutcomes.has(outcome);
 
 const never = Latch.makeUnsafe(false).await;
 
@@ -461,6 +458,10 @@ interface SchedulerLayerDependencies {
   ) => Effect.Effect<unknown>;
 }
 
+const isWorkflowRunOutcome = Schema.is(Schema.Literals(["completed", "retry", "skipped"]));
+const workflowRunOutcomeOf = (outcome: unknown): WorkflowRunOutcome =>
+  isWorkflowRunOutcome(outcome) ? outcome : "completed";
+
 const providedRegistryLayer = (deps: SchedulerLayerDependencies) => {
   if (deps.registryService) return Layer.succeed(Registry.WorkspaceRegistry, deps.registryService);
   return registryLayer(deps.registry);
@@ -490,7 +491,7 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
           Effect.map(SchedulerProbe, (state) => ({
             execute: (admission: TriggerAdmission) =>
               (deps.workflowExecute?.(state, admission) ?? Effect.void).pipe(
-                Effect.map((outcome) => (isWorkflowRunOutcome(outcome) ? outcome : "completed")),
+                Effect.map(workflowRunOutcomeOf),
               ),
           })),
         ).pipe(Layer.provide(probe)),
@@ -502,7 +503,7 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
   );
 };
 
-const workflowAdmission = (instantMillis: number, trigger = triggerId) => {
+const workflowAdmission = (instantMillis: number, trigger: WorkflowNodeId = triggerId): TriggerAdmission => {
   const item = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis } as const;
   return {
     event: {
@@ -527,7 +528,7 @@ const workflowAdmission = (instantMillis: number, trigger = triggerId) => {
       parent: null,
       hop: 0,
     },
-  } satisfies TriggerAdmission;
+  };
 };
 
 describe("Scheduler.tick", () => {
@@ -581,7 +582,55 @@ describe("Scheduler.tick", () => {
     ),
   );
 
-  it.effect("schedules every sibling Workflow admission without a restart", () =>
+  it.effect("runs sibling Workflow admissions for one source item serially", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+
+      assert.deepStrictEqual(yield* Ref.get(probe.workflowExecutions), [workflowId, siblingWorkflowId]);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 2, perWorkspaceLimit: 1, dailyBudget: 2 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [
+              workflowAdmission(1_000),
+              {
+                ...workflowAdmission(1_000),
+                subscription: {
+                  ...workflowAdmission(1_000).subscription,
+                  workflow: siblingWorkflowId,
+                },
+              },
+            ],
+            workflowExecute: (state, admission) =>
+              Ref.update(state.workflowExecutions, (executions) => [
+                ...executions,
+                admission.subscription.workflow,
+              ]).pipe(
+                Effect.andThen(
+                  Ref.update(state.workflowAdmissions, (admissions) =>
+                    admissions.filter(
+                      (candidate) => candidate.subscription.workflow !== admission.subscription.workflow,
+                    ),
+                  ),
+                ),
+              ),
+          },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("schedules every sibling Trigger admission without a restart", () =>
     Effect.gen(function* () {
       const scheduler = yield* Scheduler.Scheduler;
       const probe = yield* SchedulerProbe;
@@ -653,7 +702,7 @@ describe("Scheduler.tick", () => {
     ),
   );
 
-  it.effect("retries a failed Workflow admission and charges each attempt", () =>
+  it.effect("retries a Workflow admission outcome and charges each attempt", () =>
     Effect.gen(function* () {
       const scheduler = yield* Scheduler.Scheduler;
       const probe = yield* SchedulerProbe;
@@ -679,6 +728,43 @@ describe("Scheduler.tick", () => {
                 ...executions,
                 admission.event.revision,
               ]).pipe(Effect.map(() => "retry" as const)),
+          },
+        ),
+      ),
+    ),
+  );
+
+  it.effect("retries a failed Workflow admission that remains eligible", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual(yield* scheduler.tick(), 0);
+      assert.deepStrictEqual(yield* Ref.get(probe.workflowExecutions), ["1000", "1000"]);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 3 },
+          {
+            registry: [],
+            snapshots: [],
+            execute: succeed,
+            workflowAdmissions: [workflowAdmission(1_000)],
+            workflowExecute: (probe, admission) =>
+              Ref.updateAndGet(probe.workflowExecutions, (executions) => [
+                ...executions,
+                admission.event.revision,
+              ]).pipe(
+                Effect.flatMap((executions) =>
+                  executions.length === 1
+                    ? Effect.die("close failed")
+                    : Ref.set(probe.workflowAdmissions, []),
+                ),
+              ),
           },
         ),
       ),

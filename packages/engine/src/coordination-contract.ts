@@ -8,6 +8,7 @@ import type { CoordinationService } from "./coordination";
 export const verifyCoordinationContract = (coordination: CoordinationService, ref: WorkItemRef) =>
   Effect.gen(function* () {
     const operation = codingOperation("implement");
+    const siblingOperation = codingOperation("triage");
     const lineage = { root: LineageId.make(keyOf(ref)), parent: null, hop: 0 };
     assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
 
@@ -26,17 +27,28 @@ export const verifyCoordinationContract = (coordination: CoordinationService, re
 
     yield* coordination.release(ref, claim);
     yield* TestClock.setTime(2);
-    const parked = yield* coordination.park(ref, { _tag: "Stuck", summary: "needs a person" });
+    const parked = yield* coordination.park(ref, { _tag: "Stuck", summary: "needs a person" }, operation);
     assert.strictEqual(parked.gate(operation)._tag, "Parked");
+    assert.strictEqual(parked.gate(siblingOperation)._tag, "Open");
 
     yield* TestClock.setTime(3);
+    const siblingClaim = yield* coordination.claim(ref, { operation: siblingOperation, lineage });
+    yield* coordination.release(ref, siblingClaim);
+    assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Parked");
+
+    yield* TestClock.setTime(4);
     const clearingClaim = yield* coordination.claim(ref, { operation, lineage });
     yield* coordination.release(ref, clearingClaim);
     assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
 
-    yield* TestClock.setTime(4);
-    yield* coordination.park(ref, { _tag: "Stuck", summary: "still needs a person" });
     yield* TestClock.setTime(5);
+    const laterSiblingClaim = yield* coordination.claim(ref, { operation: siblingOperation, lineage });
+    yield* coordination.release(ref, laterSiblingClaim);
+    assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
+
+    yield* TestClock.setTime(6);
+    yield* coordination.park(ref, { _tag: "Stuck", summary: "still needs a person" });
+    yield* TestClock.setTime(7);
     const handedBack = yield* coordination.handBack(ref, { by: "person", note: "try again" });
     assert.strictEqual(handedBack.gate(operation)._tag, "Open");
     assert.strictEqual(handedBack.counters(operation).consecutiveFailures, 0);
