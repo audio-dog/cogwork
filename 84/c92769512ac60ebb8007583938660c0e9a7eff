@@ -1,0 +1,21 @@
+configs/lint/staging.grit
+  s_f2eeb83ee80569::t_cd951f96661ada 27
+configs/lint/tests/rules.test.mjs
+  s_f2eeb83ee80569::t_a5f032fab52fc6 168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "84c92769512ac60ebb8007583938660c0e9a7eff",
+  "prompts": {},
+  "sessions": {
+    "s_f2eeb83ee80569": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2f500735-a6b0-4b75-8be4-4efe837652c7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
