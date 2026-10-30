@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/daemon-failure.test.ts
+  s_38c737bec49a48::t_e3e576cb05242e 23-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "48a7ebe19ccdf90f1d44c476daea2018c120cebc",
+  "prompts": {},
+  "sessions": {
+    "s_38c737bec49a48": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18d2a-0184-72a3-bc54-7aaba7dd1b08",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
