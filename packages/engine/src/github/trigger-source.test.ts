@@ -612,7 +612,7 @@ describe("GitHub Trigger sources", () => {
         .pipe(Stream.take(1), Stream.runCollect);
 
       assert.strictEqual(events[0]?.revision, "review-88");
-      assert.strictEqual(events[0]?.prose?.comments[0]?.body, "Review body");
+      assert.strictEqual(events[0]?.workContext?.comments[0]?.body, "Review body");
       assert.deepStrictEqual(events[0] ? targetOf(events[0]) : undefined, {
         workflow,
         trigger: reviewTrigger,

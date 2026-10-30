@@ -1,11 +1,10 @@
-import { codingOperation, keyOf, LineageId, WorkItemRef } from "@cogwork/contracts";
+import { codingOperation, keyOf, LineageId, type WorkItemRef } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Result from "effect/Result";
-import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import { bootControlStoreLayer, controlStoreClientLayer } from "./control-store";
 import { verifyCoordinationContract } from "./coordination-contract";
@@ -17,11 +16,6 @@ const item = {
   channel: "C1",
   ts: "1234.5",
 } as const satisfies WorkItemRef;
-const issue = Schema.decodeSync(WorkItemRef)({
-  _tag: "Issue",
-  workspace: "selected",
-  id: "#1",
-});
 const operation = codingOperation("implement");
 const lineage = { root: LineageId.make(keyOf(item)), parent: null, hop: 0 };
 
@@ -80,28 +74,6 @@ layer(NodeServices.layer)((it) => {
               assert.deepStrictEqual(view.revision, { observed: "message:1", processed: "message:1" });
               assert.strictEqual(view.gate(operation)._tag, "Quiet");
             }),
-          ),
-        ),
-      );
-    }),
-  );
-
-  it.effect("coordinates source revisions for an Issue Trigger", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-coordination-" });
-
-      yield* withCoordination(path.join(directory, "control.db"), (coordination) =>
-        coordination.observe(issue, "label:1", { _tag: "Unknown" }).pipe(
-          Effect.tap((delivery) => Effect.sync(() => assert.strictEqual(delivery, "moved"))),
-          Effect.andThen(coordination.observe(issue, "label:1", { _tag: "Unknown" })),
-          Effect.tap((delivery) => Effect.sync(() => assert.strictEqual(delivery, "redelivered"))),
-          Effect.andThen(coordination.read(issue)),
-          Effect.tap((view) =>
-            Effect.sync(() =>
-              assert.deepStrictEqual(view.revision, { observed: "label:1", processed: null }),
-            ),
           ),
         ),
       );

@@ -4,9 +4,11 @@ import {
   type Cause,
   Claim,
   HandbackRecord,
+  keyOf,
   ParkReason,
   ParkRecord,
   TrimmedNonEmptyString,
+  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
@@ -16,8 +18,6 @@ import { ControlStore } from "./control-store";
 import {
   CoordinationError,
   type CoordinationLedger,
-  type CoordinationRef,
-  coordinationKeyOf,
   defaultClaimant,
   makeCoordination,
 } from "./coordination";
@@ -56,7 +56,12 @@ const StoredHandback = Schema.Struct({
   note: Schema.NullOr(Schema.String),
 });
 
-const StoredPark = Schema.Struct({ reason: Schema.String, atMillis: Schema.Finite });
+const StoredPark = Schema.Struct({
+  reason: Schema.String,
+  workflow: Schema.NullOr(Schema.String),
+  operation: Schema.NullOr(Schema.String),
+  atMillis: Schema.Finite,
+});
 
 const StoredSourceRevision = Schema.Struct({
   observed: Schema.String,
@@ -70,6 +75,9 @@ const coordinationError = (
   retryable = reason === "unavailable",
 ) => new CoordinationError({ reason, message, retryable });
 
+const notThisAuthority = () =>
+  coordinationError("not-this-authority", "tracker items use tracker authority", false);
+
 const claimsMatch = (actual: Claim, expected: Claim) =>
   actual.by === expected.by &&
   actual.claimedAtMillis === expected.claimedAtMillis &&
@@ -79,7 +87,8 @@ const claimsMatch = (actual: Claim, expected: Claim) =>
   actual.lineage.parent === expected.lineage.parent &&
   actual.lineage.hop === expected.lineage.hop;
 
-const controlRef = (ref: CoordinationRef) => Effect.succeed(coordinationKeyOf(ref));
+const controlRef = (ref: WorkItemRef) =>
+  ref._tag === "Issue" ? Effect.fail(notThisAuthority()) : Effect.succeed(keyOf(ref));
 
 const makeControlStoreAuthority = () =>
   Effect.gen(function* () {
@@ -200,7 +209,7 @@ const makeControlStoreAuthority = () =>
 
     const readParks = Effect.fn("ControlStoreCoordination.readParks")(function* (workItem: string) {
       const rows = yield* sql<Record<string, unknown>>`
-      SELECT reason, at_millis AS atMillis
+      SELECT reason, workflow, operation, at_millis AS atMillis
       FROM coordination_parks
       WHERE work_item = ${workItem}
       ORDER BY sequence
@@ -211,9 +220,21 @@ const makeControlStoreAuthority = () =>
             row === null
               ? Effect.succeed(null)
               : decoded("Park reason", Schema.decodeResult(ParkReasonJson)(row.reason)).pipe(
-                  Effect.map((reason) =>
-                    reason === null ? null : ParkRecord.make({ reason, atMillis: row.atMillis }),
-                  ),
+                  Effect.flatMap((reason) => {
+                    if (reason === null) return Effect.succeed(null);
+                    const hasNoOperation = row.workflow === null && row.operation === null;
+                    const operation = hasNoOperation
+                      ? {}
+                      : { operation: { workflow: row.workflow, operation: row.operation } };
+                    return decoded(
+                      "Park record",
+                      Schema.decodeUnknownResult(ParkRecord)({
+                        reason,
+                        ...operation,
+                        atMillis: row.atMillis,
+                      }),
+                    );
+                  }),
                 ),
           ),
         ),
@@ -235,7 +256,7 @@ const makeControlStoreAuthority = () =>
       return yield* decoded("Source revision", Schema.decodeUnknownResult(StoredSourceRevision)(unknown));
     });
 
-    const read = Effect.fn("ControlStoreCoordination.read")(function* (ref: CoordinationRef) {
+    const read = Effect.fn("ControlStoreCoordination.read")(function* (ref: WorkItemRef) {
       const workItem = yield* controlRef(ref);
       const [claims, attempts, handbacks, parks, revision] = yield* Effect.all([
         claimEvents(workItem),
@@ -245,10 +266,13 @@ const makeControlStoreAuthority = () =>
         readRevision(workItem),
       ]);
       const [latest] = claims;
-      const latestClaim = claims.find(({ claim }) => claim !== null)?.claim ?? null;
+      const claimHistory = claims.flatMap(({ claim }) => (claim === null ? [] : [claim]));
+      const [latestClaim] = claimHistory;
       return {
         claim: latest?.claim ?? null,
+        claims: claimHistory,
         latestClaimAtMillis: latestClaim?.claimedAtMillis,
+        latestClaimOperation: latestClaim?.operation,
         attempts,
         handbacks,
         parks,
@@ -256,10 +280,7 @@ const makeControlStoreAuthority = () =>
       } satisfies CoordinationLedger;
     });
 
-    const claim = Effect.fn("ControlStoreCoordination.claim")(function* (
-      ref: CoordinationRef,
-      record: Claim,
-    ) {
+    const claim = Effect.fn("ControlStoreCoordination.claim")(function* (ref: WorkItemRef, record: Claim) {
       const workItem = yield* controlRef(ref);
       yield* ensureItem(workItem);
       if ((yield* activeClaim(workItem)) !== null) {
@@ -278,7 +299,7 @@ const makeControlStoreAuthority = () =>
     });
 
     const release = Effect.fn("ControlStoreCoordination.release")(function* (
-      ref: CoordinationRef,
+      ref: WorkItemRef,
       expected: Claim,
     ) {
       const workItem = yield* controlRef(ref);
@@ -293,7 +314,7 @@ const makeControlStoreAuthority = () =>
     });
 
     const recordAttempt = Effect.fn("ControlStoreCoordination.recordAttempt")(function* (
-      ref: CoordinationRef,
+      ref: WorkItemRef,
       record: AttemptRecord,
     ) {
       const workItem = yield* controlRef(ref);
@@ -310,7 +331,7 @@ const makeControlStoreAuthority = () =>
     });
 
     const handBack = Effect.fn("ControlStoreCoordination.handBack")(function* (
-      ref: CoordinationRef,
+      ref: WorkItemRef,
       record: HandbackRecord,
     ) {
       const workItem = yield* controlRef(ref);
@@ -321,21 +342,24 @@ const makeControlStoreAuthority = () =>
     `;
     });
 
-    const park = Effect.fn("ControlStoreCoordination.park")(function* (
-      ref: CoordinationRef,
-      record: ParkRecord,
-    ) {
+    const park = Effect.fn("ControlStoreCoordination.park")(function* (ref: WorkItemRef, record: ParkRecord) {
       const workItem = yield* controlRef(ref);
       yield* ensureItem(workItem);
       const reason = yield* Schema.encodeEffect(ParkReasonJson)(record.reason);
       yield* sql`
-      INSERT INTO coordination_parks (work_item, reason, at_millis)
-      VALUES (${workItem}, ${reason}, ${record.atMillis})
+      INSERT INTO coordination_parks (work_item, reason, workflow, operation, at_millis)
+      VALUES (
+        ${workItem},
+        ${reason},
+        ${record.operation?.workflow ?? null},
+        ${record.operation?.operation ?? null},
+        ${record.atMillis}
+      )
     `;
     });
 
     const observe = Effect.fn("ControlStoreCoordination.observe")(function* (
-      ref: CoordinationRef,
+      ref: WorkItemRef,
       revision: string,
     ) {
       const workItem = yield* controlRef(ref);
@@ -350,7 +374,7 @@ const makeControlStoreAuthority = () =>
     });
 
     const markProcessed = Effect.fn("ControlStoreCoordination.markProcessed")(function* (
-      ref: CoordinationRef,
+      ref: WorkItemRef,
       revision: string,
     ) {
       const workItem = yield* controlRef(ref);
@@ -373,32 +397,41 @@ const makeControlStoreAuthority = () =>
     const safeRead = <A, E>(effect: Effect.Effect<A, E>) => effect.pipe(Effect.mapError(mapFailure));
 
     return {
-      read: (ref: CoordinationRef) => safeRead(read(ref)),
-      claim: (ref: CoordinationRef, record: Claim) => write(claim(ref, record)),
-      release: (ref: CoordinationRef, record: Claim) => write(release(ref, record)),
-      recordAttempt: (ref: CoordinationRef, record: AttemptRecord) => write(recordAttempt(ref, record)),
-      park: (ref: CoordinationRef, record: ParkRecord) => write(park(ref, record)),
-      handBack: (ref: CoordinationRef, record: HandbackRecord) => write(handBack(ref, record)),
-      observe: (ref: CoordinationRef, revision: string, _cause: Cause) => write(observe(ref, revision)),
-      markProcessed: (ref: CoordinationRef, revision: string) => write(markProcessed(ref, revision)),
+      read: (ref: WorkItemRef) => safeRead(read(ref)),
+      claim: (ref: WorkItemRef, record: Claim) => write(claim(ref, record)),
+      release: (ref: WorkItemRef, record: Claim) => write(release(ref, record)),
+      recordAttempt: (ref: WorkItemRef, record: AttemptRecord) => write(recordAttempt(ref, record)),
+      park: (ref: WorkItemRef, record: ParkRecord) => write(park(ref, record)),
+      handBack: (ref: WorkItemRef, record: HandbackRecord) => write(handBack(ref, record)),
+      observe: (ref: WorkItemRef, revision: string, _cause: Cause) => write(observe(ref, revision)),
+      markProcessed: (ref: WorkItemRef, revision: string) => write(markProcessed(ref, revision)),
     };
   });
 
+const trackerAuthority = {
+  read: (_ref: WorkItemRef) => Effect.fail(notThisAuthority()),
+  claim: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(notThisAuthority()),
+  release: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(notThisAuthority()),
+  recordAttempt: (_ref: WorkItemRef, _attempt: AttemptRecord, _reason?: string) =>
+    Effect.fail(notThisAuthority()),
+  park: (_ref: WorkItemRef, _park: ParkRecord) => Effect.fail(notThisAuthority()),
+  handBack: (_ref: WorkItemRef, _record: HandbackRecord) => Effect.fail(notThisAuthority()),
+  observe: (_ref: WorkItemRef, _revision: string, _cause: Cause) => Effect.fail(notThisAuthority()),
+  markProcessed: (_ref: WorkItemRef, _revision: string) => Effect.fail(notThisAuthority()),
+};
+
 const unavailableAuthority = (error: CoordinationError) => ({
-  read: (_ref: CoordinationRef) => Effect.fail(error),
-  claim: (_ref: CoordinationRef, _claim: Claim) => Effect.fail(error),
-  release: (_ref: CoordinationRef, _claim: Claim) => Effect.fail(error),
-  recordAttempt: (_ref: CoordinationRef, _attempt: AttemptRecord, _reason?: string) => Effect.fail(error),
-  park: (_ref: CoordinationRef, _park: ParkRecord) => Effect.fail(error),
-  handBack: (_ref: CoordinationRef, _record: HandbackRecord) => Effect.fail(error),
-  observe: (_ref: CoordinationRef, _revision: string, _cause: Cause) => Effect.fail(error),
-  markProcessed: (_ref: CoordinationRef, _revision: string) => Effect.fail(error),
+  read: (_ref: WorkItemRef) => Effect.fail(error),
+  claim: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(error),
+  release: (_ref: WorkItemRef, _claim: Claim) => Effect.fail(error),
+  recordAttempt: (_ref: WorkItemRef, _attempt: AttemptRecord, _reason?: string) => Effect.fail(error),
+  park: (_ref: WorkItemRef, _park: ParkRecord) => Effect.fail(error),
+  handBack: (_ref: WorkItemRef, _record: HandbackRecord) => Effect.fail(error),
+  observe: (_ref: WorkItemRef, _revision: string, _cause: Cause) => Effect.fail(error),
+  markProcessed: (_ref: WorkItemRef, _revision: string) => Effect.fail(error),
 });
 
 export const makeControlStoreCoordination = Effect.match(makeControlStoreAuthority(), {
-  onFailure: (error) => {
-    const unavailable = unavailableAuthority(error);
-    return makeCoordination(unavailable, unavailable, defaultClaimant);
-  },
-  onSuccess: (control) => makeCoordination(control, control, defaultClaimant),
+  onFailure: (error) => makeCoordination(trackerAuthority, unavailableAuthority(error), defaultClaimant),
+  onSuccess: (control) => makeCoordination(trackerAuthority, control, defaultClaimant),
 });

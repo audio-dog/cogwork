@@ -26,18 +26,14 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { ContextAssembler } from "./context-assembler";
-import { Coordination, coordinationKeyOf } from "./coordination";
+import { Coordination } from "./coordination";
 import { CredentialStore } from "./credential-store";
 import { Harness, type HarnessRunnerEnv } from "./harness";
 import { defaultRunBudget } from "./provider-runner";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
-import {
-  type TriggerAdmission,
-  TriggerObservationStore,
-  workflowAdmissionRefOf,
-} from "./trigger-observation";
+import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { Workflows } from "./workflow";
 import { WorkflowNotifications } from "./workflow-notification";
 
@@ -96,7 +92,7 @@ export const make = Effect.gen(function* () {
   const recorder = yield* RunRecorder;
   const contextAssembler = yield* ContextAssembler;
   const notifications = yield* WorkflowNotifications;
-  const observations = yield* TriggerObservationStore;
+  const observationStore = yield* TriggerObservationStore;
   const executionContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
     Effect.map(
       Context.pick(
@@ -116,34 +112,34 @@ export const make = Effect.gen(function* () {
       ledger.updateRun(record.id, { status, usage: null, endedAtMillis }),
     );
 
-  const complete = (admission: TriggerAdmission) => {
-    const coordinationRef = workflowAdmissionRefOf(admission);
-    return observations
-      .complete(admission)
-      .pipe(Effect.andThen(coordination.markProcessed(coordinationRef, admission.event.revision)));
-  };
-
-  const decline = (admission: TriggerAdmission) => {
-    const coordinationRef = workflowAdmissionRefOf(admission);
-    return coordination.park(coordinationRef, { _tag: "MissingOperation" }).pipe(
-      Effect.andThen(complete(admission)),
-      Effect.map(() => "skipped" as const),
+  const complete = Effect.fn("WorkflowRun.complete")(function* (admission: TriggerAdmission) {
+    yield* observationStore.complete(
+      admission,
+      coordination.markProcessed(admission.event.key, admission.event.revision),
     );
-  };
+  });
 
-  const rejectPlan = (admission: TriggerAdmission, reason: string) => {
-    const coordinationRef = workflowAdmissionRefOf(admission);
-    return coordination
-      .park(coordinationRef, { _tag: "PlanRejected", reason, entry: admission.event.entry })
+  const decline = (admission: TriggerAdmission) =>
+    coordination
+      .park(
+        admission.event.key,
+        { _tag: "MissingOperation" },
+        operationKeyOf(admission, admission.subscription.operation),
+      )
       .pipe(
         Effect.andThen(complete(admission)),
         Effect.map(() => "skipped" as const),
       );
-  };
+
+  const rejectPlan = (admission: TriggerAdmission, reason: string) =>
+    coordination
+      .park(admission.event.key, { _tag: "PlanRejected", reason, entry: admission.event.entry })
+      .pipe(
+        Effect.andThen(complete(admission)),
+        Effect.map(() => "skipped" as const),
+      );
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
-    const coordinationRef = workflowAdmissionRefOf(admission);
-    const admissionKey = coordinationKeyOf(coordinationRef);
     const record = yield* workflows.get({ id: admission.subscription.workflow });
     const document = record.publishedCopy;
     const trigger = document?.triggers.find(({ id }) => id === admission.subscription.trigger);
@@ -170,10 +166,10 @@ export const make = Effect.gen(function* () {
 
     const key = operationKeyOf(admission, operation.id);
     const claim = yield* Effect.acquireRelease(
-      coordination.claim(coordinationRef, { operation: key, lineage: admission.lineage }),
+      coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
       (activeClaim) =>
         coordination
-          .release(coordinationRef, activeClaim)
+          .release(admission.event.key, activeClaim)
           .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
     );
     const startedAtMillis = yield* Clock.currentTimeMillis;
@@ -184,7 +180,7 @@ export const make = Effect.gen(function* () {
       { workspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
       harness.sessionKind,
     );
-    const priorIssues = (yield* Ref.get(decodeIssues)).get(admissionKey) ?? null;
+    const priorIssues = (yield* Ref.get(decodeIssues)).get(keyOf(admission.event.key)) ?? null;
     const assembled = yield* contextAssembler.assemble({
       runId: id,
       workspace,
@@ -231,7 +227,7 @@ export const make = Effect.gen(function* () {
       workContext: {
         reference: { workItem: item, url: null },
         facts: { roles: [], assignees: [], openBlockers: 0, claim, priority: "medium", pr: null },
-        prose: admission.event.prose ?? {
+        prose: admission.event.workContext ?? {
           body: workContextBody(admission, record.id),
           comments: [],
         },
@@ -272,7 +268,7 @@ export const make = Effect.gen(function* () {
     if (Exit.isFailure(eventsExit)) {
       const reason = String(eventsExit.cause);
       yield* recorder.record(run, failedTerminal);
-      const view = yield* coordination.recordAttempt(coordinationRef, {
+      const view = yield* coordination.recordAttempt(admission.event.key, {
         operation: key,
         outcome: "failed",
         lineage: admission.lineage,
@@ -281,7 +277,7 @@ export const make = Effect.gen(function* () {
       const exhausted = view.counters(key).exhausted;
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
-        yield* coordination.park(coordinationRef, { _tag: "Exhausted", reason });
+        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, key);
         yield* complete(admission);
       }
       return exhausted ? ("completed" as const) : ("retry" as const);
@@ -293,8 +289,8 @@ export const make = Effect.gen(function* () {
     );
     if (Exit.isFailure(decoded)) {
       const issues = String(decoded.cause);
-      yield* Ref.update(decodeIssues, (current) => new Map(current).set(admissionKey, issues));
-      const view = yield* coordination.recordAttempt(coordinationRef, {
+      yield* Ref.update(decodeIssues, (current) => new Map(current).set(keyOf(admission.event.key), issues));
+      const view = yield* coordination.recordAttempt(admission.event.key, {
         operation: key,
         outcome: "failed",
         lineage: admission.lineage,
@@ -303,7 +299,7 @@ export const make = Effect.gen(function* () {
       const exhausted = view.counters(key).exhausted;
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
-        yield* coordination.park(coordinationRef, { _tag: "Exhausted", reason: issues });
+        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues }, key);
         yield* complete(admission);
       }
       return exhausted ? ("completed" as const) : ("retry" as const);
@@ -311,17 +307,17 @@ export const make = Effect.gen(function* () {
 
     yield* Ref.update(decodeIssues, (current) => {
       const next = new Map(current);
-      next.delete(admissionKey);
+      next.delete(keyOf(admission.event.key));
       return next;
     });
     if (decoded.value.stuck) {
-      yield* coordination.recordAttempt(coordinationRef, {
+      yield* coordination.recordAttempt(admission.event.key, {
         operation: key,
         outcome: "failed",
         lineage: admission.lineage,
         reason: decoded.value.summary,
       });
-      yield* coordination.park(coordinationRef, { _tag: "Stuck", summary: decoded.value.summary });
+      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary }, key);
       yield* complete(admission);
       yield* settle(run, "failed");
       return "completed" as const;
@@ -340,7 +336,7 @@ export const make = Effect.gen(function* () {
         atMillis: yield* Clock.currentTimeMillis,
       });
     }
-    yield* coordination.recordAttempt(coordinationRef, {
+    yield* coordination.recordAttempt(admission.event.key, {
       operation: key,
       outcome: "succeeded",
       lineage: admission.lineage,

@@ -130,12 +130,22 @@ export const triggerAdmissions = sqliteTable(
   {
     workItem: text("work_item").notNull(),
     revision: text("revision").notNull(),
-    workflow: text("workflow").notNull(),
-    trigger: text("trigger").notNull(),
     payload: text("payload").notNull(),
+    processed: integer("processed", { mode: "boolean" }).notNull().default(false),
+    workflow: text("workflow").generatedAlwaysAs(sql`json_extract("payload", '$.subscription.workflow')`, {
+      mode: "stored",
+    }),
+    trigger: text("trigger").generatedAlwaysAs(sql`json_extract("payload", '$.subscription.trigger')`, {
+      mode: "stored",
+    }),
   },
   (table) => [
-    primaryKey({ columns: [table.workItem, table.revision, table.workflow, table.trigger] }),
+    uniqueIndex("trigger_admissions_item_revision_workflow_trigger").on(
+      table.workItem,
+      table.revision,
+      table.workflow,
+      table.trigger,
+    ),
     check("trigger_admissions_payload_json", sql`json_valid(${table.payload})`),
   ],
 );
@@ -283,6 +293,8 @@ export const coordinationParks = sqliteTable(
       .notNull()
       .references(() => coordinationItems.workItem),
     reason: text("reason").notNull(),
+    workflow: text("workflow"),
+    operation: text("operation"),
     atMillis: integer("at_millis").notNull(),
   },
   (table) => [

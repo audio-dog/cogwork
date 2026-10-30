@@ -88,7 +88,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
           entry: issueHasLabelKey,
           workspace: workspace.config.name,
           parameters: [{ id: "label", value: label ?? "" }],
-          prose: proseOf(prose.body, prose.comments),
+          workContext: proseOf(prose.body, prose.comments),
         } satisfies TriggerEvent,
       ];
     }),
@@ -119,7 +119,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
             workspace: workspace.config.name,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
-            prose: proseOf(prose.body, prose.comments),
+            workContext: proseOf(prose.body, prose.comments),
           }) satisfies TriggerEvent,
       );
   });

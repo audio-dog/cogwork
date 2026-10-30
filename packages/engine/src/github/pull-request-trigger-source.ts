@@ -180,7 +180,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             atMillis: pull.updatedAtMillis,
             entry: checksFailedKey,
             workspace: workspace.config.name,
-            prose,
+            workContext: prose,
           },
         ]
       : []),
@@ -193,7 +193,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             atMillis: pull.updatedAtMillis,
             entry: conflictsKey,
             workspace: workspace.config.name,
-            prose,
+            workContext: prose,
           },
         ]
       : []),
@@ -220,7 +220,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
               entry: reviewCommentKey,
               workspace: workspace.config.name,
               target: { workflow: subscription.workflow, trigger: subscription.trigger },
-              prose,
+              workContext: prose,
             }) satisfies TriggerEvent,
         );
     }
@@ -240,7 +240,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             workspace: workspace.config.name,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "bot", value: bot ?? "" }],
-            prose,
+            workContext: prose,
           }) satisfies TriggerEvent,
       );
   });

@@ -1,5 +1,6 @@
 import {
   Cause,
+  RunPlanWorkContextProse,
   type WorkflowAvailability,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
@@ -43,19 +44,7 @@ export const TriggerEvent = Schema.Struct({
     }),
   ),
   parameters: Schema.optional(Schema.Array(WorkflowParameterValue)),
-  prose: Schema.optional(
-    Schema.Struct({
-      body: Schema.String,
-      comments: Schema.Array(
-        Schema.Struct({
-          author: Schema.NullOr(Schema.String),
-          authorAssociation: Schema.NullOr(Schema.String),
-          body: Schema.String,
-          createdAtMillis: Schema.Natural,
-        }),
-      ),
-    }),
-  ),
+  workContext: Schema.optional(RunPlanWorkContextProse),
   payload: Schema.optional(
     Schema.TaggedUnion({
       GranolaNote: {
@@ -90,6 +79,10 @@ export interface TriggerSource {
   readonly observe: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
   ) => Stream.Stream<TriggerEvent, SourceFailure>;
+  readonly acknowledge?: (
+    event: TriggerEvent,
+    subscriptions: ReadonlyArray<TriggerSubscription>,
+  ) => Effect.Effect<void>;
 }
 
 const ownsEntry = (source: TriggerSource, entry: WorkflowCatalogKey) =>
@@ -117,6 +110,9 @@ export const combineTriggerSources = (sources: ReadonlyArray<TriggerSource>) =>
             .map(({ source, subscriptions: selected }) => source.observe(selected));
           return streams.length === 0 ? Stream.empty : Stream.mergeAll(streams, { concurrency: "unbounded" });
         },
+        acknowledge: (event, subscriptions) =>
+          grouped.find((source) => ownsEntry(source, event.entry))?.acknowledge?.(event, subscriptions) ??
+          Effect.void,
       }) satisfies TriggerSource,
   );
 

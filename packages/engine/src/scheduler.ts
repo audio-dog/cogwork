@@ -20,14 +20,13 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import type { EligibleWork } from "./classify";
-import { coordinationKeyOf } from "./coordination";
 import { Executor } from "./executor";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { day } from "./time";
-import { type TriggerAdmission, TriggerObservation, workflowAdmissionRefOf } from "./trigger-observation";
+import { type TriggerAdmission, TriggerObservation } from "./trigger-observation";
 import { WorkflowRun, type WorkflowRunOutcome } from "./workflow-run";
 import { branchName, ticketSlug } from "./worktree";
 
@@ -117,6 +116,7 @@ export interface Candidate {
 interface WorkflowCandidate {
   readonly admission: TriggerAdmission;
   readonly keys: ReadonlyArray<string>;
+  readonly reservationKeys: ReadonlyArray<string>;
 }
 
 type Schedulable = Candidate | WorkflowCandidate;
@@ -135,21 +135,24 @@ const WORKFLOW_RUN_DISPOSITIONS = {
 const isWorkflowCandidate = (candidate: Schedulable): candidate is WorkflowCandidate =>
   "admission" in candidate;
 
-const workflowKeyFor = (admission: TriggerAdmission) =>
-  `workflow:${coordinationKeyOf(workflowAdmissionRefOf(admission))}`;
+const workflowItemKeyFor = (admission: TriggerAdmission) => `workflow:${keyOf(admission.event.key)}`;
 
-const workflowAdmissionKeyFor = (admission: TriggerAdmission) =>
-  `workflow-admission:${JSON.stringify([
-    keyOf(admission.event.key),
+const workflowKeyFor = (admission: TriggerAdmission) =>
+  JSON.stringify([
+    workflowItemKeyFor(admission),
     admission.event.revision,
     admission.subscription.workflow,
     admission.subscription.trigger,
-  ])}`;
+  ]);
 
 const workflowCandidateOf = (admission: TriggerAdmission): WorkflowCandidate => ({
   admission,
-  keys: [workflowKeyFor(admission), workflowAdmissionKeyFor(admission)],
+  keys: [workflowKeyFor(admission)],
+  reservationKeys: [workflowItemKeyFor(admission)],
 });
+
+const reservationKeysOf = (candidate: Schedulable) =>
+  isWorkflowCandidate(candidate) ? candidate.reservationKeys : candidate.keys;
 
 const workspaceReservation = (candidate: Schedulable) =>
   isWorkflowCandidate(candidate)
@@ -167,8 +170,9 @@ const fits = (candidate: Schedulable, state: SchedulerState, config: SchedulerCo
     state.budgetUsed < config.dailyBudget;
   const workspaceAvailable =
     reservation === null || (state.perWorkspace.get(reservation.workspace) ?? 0) < reservation.limit;
-  const keysAvailable = candidate.keys.every((key) => !state.inflight.has(key) && !state.acted.has(key));
-  return schedulerAvailable && workspaceAvailable && keysAvailable;
+  const identityAvailable = candidate.keys.every((key) => !state.acted.has(key));
+  const reservationAvailable = reservationKeysOf(candidate).every((key) => !state.inflight.has(key));
+  return schedulerAvailable && workspaceAvailable && identityAvailable && reservationAvailable;
 };
 
 const bumped = (map: ReadonlyMap<WorkspaceId, number>, key: WorkspaceId, delta: number) => {
@@ -186,7 +190,7 @@ const reserve = (state: SchedulerState, candidate: Schedulable) => {
     global: state.global + 1,
     perWorkspace:
       reservation === null ? state.perWorkspace : bumped(state.perWorkspace, reservation.workspace, 1),
-    inflight: new Set([...state.inflight, ...candidate.keys]),
+    inflight: new Set([...state.inflight, ...reservationKeysOf(candidate)]),
     acted: new Set([...state.acted, ...candidate.keys]),
     budgetUsed: state.budgetUsed + 1,
   };
@@ -194,19 +198,16 @@ const reserve = (state: SchedulerState, candidate: Schedulable) => {
 
 const release = (state: SchedulerState, candidate: Schedulable, retry: boolean) => {
   const reservation = workspaceReservation(candidate);
-  const acted = isWorkflowCandidate(candidate)
-    ? new Set(
-        [...state.acted].filter((key) =>
-          retry ? !candidate.keys.includes(key) : key !== workflowKeyFor(candidate.admission),
-        ),
-      )
-    : state.acted;
+  const acted =
+    isWorkflowCandidate(candidate) && retry
+      ? new Set([...state.acted].filter((key) => !candidate.keys.includes(key)))
+      : state.acted;
   return {
     ...state,
     global: Math.max(0, state.global - 1),
     perWorkspace:
       reservation === null ? state.perWorkspace : bumped(state.perWorkspace, reservation.workspace, -1),
-    inflight: new Set([...state.inflight].filter((key) => !candidate.keys.includes(key))),
+    inflight: new Set([...state.inflight].filter((key) => !reservationKeysOf(candidate).includes(key))),
     acted,
   };
 };

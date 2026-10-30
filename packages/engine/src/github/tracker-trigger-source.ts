@@ -84,7 +84,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
         entry: issueHasLabelKey,
         workspace: workspace.config.name,
         parameters: [{ id: "label", value: label }],
-        prose: proseOf(issue, comments),
+        workContext: proseOf(issue, comments),
       } satisfies TriggerEvent,
     ];
   });
@@ -118,7 +118,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
             workspace: workspace.config.name,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
-            prose: proseOf(issue, comments),
+            workContext: proseOf(issue, comments),
           }) satisfies TriggerEvent,
       );
   });

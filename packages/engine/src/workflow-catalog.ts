@@ -79,7 +79,6 @@ const sourceContribution = (source: TriggerSource): WorkflowCatalogContribution 
     );
   },
 });
-
 export const workflowCatalogContributionsLayer = Layer.effect(
   WorkflowCatalogContributions,
   Effect.map(TriggerSources, (sources) => [

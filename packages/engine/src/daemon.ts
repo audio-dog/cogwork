@@ -116,6 +116,7 @@ import {
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
+import { make as makeSlackSource, httpClientLayer as slackClientLayer } from "./slack-source";
 import { SourceControlProvider } from "./source-control";
 import {
   controlStoreTriggerObservationStoreLayer,
@@ -514,12 +515,14 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
       const connectionStore = yield* ConnectionStore;
       const coordinationService = yield* Coordination;
       const http = yield* HttpClient.HttpClient;
+      const slackSource = yield* makeSlackSource;
       return combineTriggerSources([
         ...sources,
         makeGranolaSource(connectionStore, makeGranolaSourceAdapters(http), coordinationService),
+        slackSource,
       ]);
     }),
-  ).pipe(Layer.provide(Layer.mergeAll(providerTriggerSources, connections, coordination)));
+  ).pipe(Layer.provide(Layer.mergeAll(providerTriggerSources, connections, coordination, slackClientLayer)));
   const workflows = workflowsLayer.pipe(
     Layer.provide(workflowCatalogContributionsLayer.pipe(Layer.provide(triggerSources))),
     Layer.provide(machineReadiness),

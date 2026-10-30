@@ -129,6 +129,7 @@ const expectedSchemaObjects = [
   { type: "index", name: "coordination_source_revisions_item_sequence" },
   { type: "index", name: "run_events_at" },
   { type: "index", name: "runs_started_at" },
+  { type: "index", name: "trigger_admissions_item_revision_workflow_trigger" },
   { type: "table", name: "connections" },
   { type: "table", name: "contribution_settings" },
   { type: "table", name: "coordination_attempts" },
@@ -416,6 +417,47 @@ layer(NodeServices.layer)((it) => {
         (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
           (column) => column.name === "linear_history" && column.type === "INTEGER",
         ),
+      );
+    }),
+  );
+
+  it.effect("preserves admissions while widening their identity", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* convergeStore(storePath);
+      yield* poke(
+        storePath,
+        `DROP TABLE trigger_admissions;
+         CREATE TABLE trigger_admissions (
+           work_item TEXT NOT NULL,
+           revision TEXT NOT NULL,
+           payload TEXT NOT NULL,
+           PRIMARY KEY (work_item, revision),
+           CONSTRAINT trigger_admissions_payload_json CHECK (json_valid(payload))
+         );
+         INSERT INTO trigger_admissions (work_item, revision, payload)
+         VALUES (
+           'slack:T123:C123:900.000',
+           '900.000',
+           '{"subscription":{"workflow":"daily-summary","trigger":"schedule"}}'
+         );`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(
+        yield* query(
+          storePath,
+          "SELECT work_item, revision, workflow, trigger, payload FROM trigger_admissions",
+        ),
+        [
+          {
+            work_item: "slack:T123:C123:900.000",
+            revision: "900.000",
+            workflow: "daily-summary",
+            trigger: "schedule",
+            payload: '{"subscription":{"workflow":"daily-summary","trigger":"schedule"}}',
+          },
+        ],
       );
     }),
   );
@@ -1085,31 +1127,6 @@ layer(NodeServices.layer)((it) => {
       }),
     );
   });
-
-  it.effect("replaces a table that gains a required column and keeps every other table", () =>
-    Effect.gen(function* () {
-      const { storePath } = yield* temporaryStore();
-      yield* pokeConvergedStore(
-        storePath,
-        `DROP TABLE trigger_admissions;
-         CREATE TABLE trigger_admissions (
-           work_item text NOT NULL,
-           revision text NOT NULL,
-           payload text NOT NULL,
-           PRIMARY KEY (work_item, revision)
-         );
-         INSERT INTO trigger_admissions (work_item, revision, payload) VALUES ('item', 'revision', '{}');
-         INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history)
-         VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 0);`,
-      );
-
-      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-      assert.deepStrictEqual(yield* query(storePath, "SELECT work_item FROM trigger_admissions"), []);
-      assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
-        { id: "workspace-1", name: "kept" },
-      ]);
-    }),
-  );
 
   it.effect("restores a missing index without replacing the store", () =>
     Effect.gen(function* () {
