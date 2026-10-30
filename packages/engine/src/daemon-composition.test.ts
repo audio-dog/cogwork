@@ -368,11 +368,12 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 10);
+      assert.lengthOf(catalog.catalog.entries, 13);
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
+      assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "slack.i-am-mentioned"));
       assert.deepStrictEqual(
         status.sources.map(({ source }) => source),
-        ["clock", "granola"],
+        ["clock", "granola", "slack"],
       );
       assert.isTrue(
         [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
@@ -410,11 +411,14 @@ describe("daemon server composition", () => {
           "Withdraw the pending approval",
           "Hand to me",
           "Stop",
-          "Note generated",
-          "Note edited",
           "Every hour",
           "Every day",
           "Every week",
+          "Note generated",
+          "Note edited",
+          "I am mentioned",
+          "Message in a channel",
+          "Reaction added",
         ],
       );
       assert.isTrue(Result.isFailure(result.readiness));

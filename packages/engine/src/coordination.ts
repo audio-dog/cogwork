@@ -72,7 +72,9 @@ export const maxLineageHops = 25;
 
 export interface CoordinationLedger {
   readonly claim: ClaimType | null;
+  readonly claims?: ReadonlyArray<ClaimType>;
   readonly latestClaimAtMillis?: number;
+  readonly latestClaimOperation?: OperationKey;
   readonly attempts: ReadonlyArray<AttemptRecord>;
   readonly handbacks: ReadonlyArray<HandbackRecordType>;
   readonly parks: ReadonlyArray<ParkRecord>;
@@ -99,7 +101,7 @@ export interface CoordinationView {
   readonly park: ParkRecord | null;
   readonly revision: SourceRevision | null;
   readonly counters: (key: OperationKey) => CoordinationCounters;
-  readonly gate: (key: OperationKey) => CoordinationGate;
+  readonly gate: (key: OperationKey, sourceRevision?: string) => CoordinationGate;
 }
 
 const sameOperation = (left: OperationKey, right: OperationKey) =>
@@ -126,6 +128,40 @@ const newestByTime = <A extends { readonly atMillis: number }>(records: Readonly
     (latest, record) => (latest === null || record.atMillis > latest.atMillis ? record : latest),
     null,
   );
+
+interface ClaimStamp {
+  readonly atMillis: number;
+  readonly operation: OperationKey;
+}
+
+const claimClearsPark = (park: ParkRecord | null, claims: ReadonlyArray<ClaimStamp>) =>
+  park !== null &&
+  claims.some((claim) => {
+    const claimMatchesOperation =
+      park.operation === undefined || sameOperation(park.operation, claim.operation);
+    return claim.atMillis >= park.atMillis && claimMatchesOperation;
+  });
+
+const recordedClaimOf = (ledger: CoordinationLedger) => {
+  const { latestClaimAtMillis, latestClaimOperation } = ledger;
+  const hasRecordedClaim = latestClaimAtMillis !== undefined && latestClaimOperation !== undefined;
+  if (!hasRecordedClaim) return null;
+  return { atMillis: latestClaimAtMillis, operation: latestClaimOperation };
+};
+
+const claimStampsOf = (ledger: CoordinationLedger) => {
+  const claims = ledger.claims?.map(({ claimedAtMillis, operation }) => ({
+    atMillis: claimedAtMillis,
+    operation,
+  }));
+  const recordedClaim = recordedClaimOf(ledger);
+  const legacyClaims = recordedClaim === null ? [] : [recordedClaim];
+  const activeClaims =
+    ledger.claim === null
+      ? []
+      : [{ atMillis: ledger.claim.claimedAtMillis, operation: ledger.claim.operation }];
+  return [...(claims ?? legacyClaims), ...activeClaims];
+};
 
 interface GateInput {
   readonly ledger: CoordinationLedger;
@@ -173,20 +209,16 @@ const gateRules = [
 export const fold = (ledger: CoordinationLedger, claimant: string): CoordinationView => {
   const handback = newestByTime(ledger.handbacks);
   const barrierAtMillis = handback?.atMillis ?? 0;
-  const latestPark = newestByTime(ledger.parks.filter((park) => park.atMillis > barrierAtMillis));
-  const claimTimes = [ledger.latestClaimAtMillis, ledger.claim?.claimedAtMillis].filter(
-    (atMillis): atMillis is number => atMillis !== undefined,
-  );
-  const latestClaimAtMillis = claimTimes.length === 0 ? null : Math.max(...claimTimes);
-  const claimClearedPark =
-    latestPark !== null && latestClaimAtMillis !== null && latestClaimAtMillis >= latestPark.atMillis;
-  const park = claimClearedPark ? null : latestPark;
-  const claimAfterBarrier =
-    ledger.claim && ledger.claim.claimedAtMillis > barrierAtMillis ? ledger.claim : null;
-  const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > barrierAtMillis);
-  const hop = claimAfterBarrier?.lineage.hop ?? newestByTime(attemptsAfterBarrier)?.lineage.hop ?? 0;
-  const counters = (key: OperationKey): CoordinationCounters => {
-    const { consecutiveFailures, terminal } = failureStateFor(ledger.attempts, barrierAtMillis, key);
+  const activeParks = ledger.parks.filter((park) => park.atMillis > barrierAtMillis);
+  const latestPark = newestByTime(activeParks);
+  const claims = claimStampsOf(ledger);
+  const park = claimClearsPark(latestPark, claims) ? null : latestPark;
+  const countersAfter = (key: OperationKey, afterMillis: number): CoordinationCounters => {
+    const claimAfterBarrier =
+      ledger.claim && ledger.claim.claimedAtMillis > afterMillis ? ledger.claim : null;
+    const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > afterMillis);
+    const hop = claimAfterBarrier?.lineage.hop ?? newestByTime(attemptsAfterBarrier)?.lineage.hop ?? 0;
+    const { consecutiveFailures, terminal } = failureStateFor(ledger.attempts, afterMillis, key);
     return {
       consecutiveFailures,
       exhausted: terminal || consecutiveFailures >= maxAttemptsPerOperation,
@@ -194,8 +226,26 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
       hopCapped: hop >= maxLineageHops,
     };
   };
-  const gate = (key: OperationKey): CoordinationGate => {
-    const input = { ledger, park, counters: counters(key) };
+  const counters = (key: OperationKey) => countersAfter(key, barrierAtMillis);
+  const gate = (key: OperationKey, sourceRevision?: string): CoordinationGate => {
+    const processedRevision = ledger.revision?.processed;
+    const hasProcessedRevision = processedRevision !== null && processedRevision !== undefined;
+    const isNewSourceRevision =
+      sourceRevision !== undefined && hasProcessedRevision && sourceRevision !== processedRevision;
+    const matchingPark = newestByTime(
+      activeParks.filter((candidate) => {
+        const matchesOperation = candidate.operation === undefined || sameOperation(candidate.operation, key);
+        const clearedByRevision = candidate.operation !== undefined && isNewSourceRevision;
+        return matchesOperation && !clearedByRevision;
+      }),
+    );
+    const input = {
+      ledger,
+      park: claimClearsPark(matchingPark, claims) ? null : matchingPark,
+      counters: isNewSourceRevision
+        ? { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false }
+        : countersAfter(key, barrierAtMillis),
+    };
     return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
   };
   return {
@@ -251,7 +301,11 @@ export interface CoordinationService {
       readonly reason?: string;
     },
   ) => Effect.Effect<CoordinationView, CoordinationError>;
-  readonly park: (ref: WorkItemRef, reason: ParkReason) => Effect.Effect<CoordinationView, CoordinationError>;
+  readonly park: (
+    ref: WorkItemRef,
+    reason: ParkReason,
+    operation?: OperationKey,
+  ) => Effect.Effect<CoordinationView, CoordinationError>;
   readonly handBack: (
     ref: WorkItemRef,
     input: { readonly by: string; readonly note?: string },
@@ -313,8 +367,16 @@ export const makeCoordination = (
     yield* authority(ref).recordAttempt(ref, attempt, input.reason);
     return yield* read(ref);
   });
-  const park = Effect.fn("Coordination.park")(function* (ref: WorkItemRef, reason: ParkReason) {
-    yield* authority(ref).park(ref, { reason, atMillis: yield* Clock.currentTimeMillis });
+  const park = Effect.fn("Coordination.park")(function* (
+    ref: WorkItemRef,
+    reason: ParkReason,
+    operation?: OperationKey,
+  ) {
+    yield* authority(ref).park(ref, {
+      reason,
+      ...(operation ? { operation } : {}),
+      atMillis: yield* Clock.currentTimeMillis,
+    });
     return yield* read(ref);
   });
   const handBack = Effect.fn("Coordination.handBack")(function* (

@@ -188,7 +188,9 @@ export const makeTrackerCoordination = <Ref, CommentId>(
   const state: { ledger: Coordination.CoordinationLedger } = {
     ledger: {
       claim: item.claimLabeled ? parsedClaim : null,
+      claims: parsedClaims,
       latestClaimAtMillis: parsedClaim?.claimedAtMillis,
+      latestClaimOperation: parsedClaim?.operation,
       attempts: Coordination.parseAttempts(host.codec, body),
       handbacks: Coordination.parseHandbacks(host.codec, body),
       parks: Coordination.parseParks(host.codec, body),
@@ -242,7 +244,13 @@ export const makeTrackerCoordination = <Ref, CommentId>(
         yield* records
           .claim(native, record)
           .pipe(Effect.mapError((error) => trackerAuthorityError(error.message)));
-        yield* update({ ...state.ledger, claim: record, latestClaimAtMillis: record.claimedAtMillis });
+        yield* update({
+          ...state.ledger,
+          claim: record,
+          claims: [...(state.ledger.claims ?? []), record],
+          latestClaimAtMillis: record.claimedAtMillis,
+          latestClaimOperation: record.operation,
+        });
       }),
     release: (ref: WorkItemRef, record: Claim) =>
       Effect.gen(function* () {

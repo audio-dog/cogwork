@@ -92,7 +92,7 @@ export const make = Effect.gen(function* () {
   const recorder = yield* RunRecorder;
   const contextAssembler = yield* ContextAssembler;
   const notifications = yield* WorkflowNotifications;
-  const observations = yield* TriggerObservationStore;
+  const observationStore = yield* TriggerObservationStore;
   const executionContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
     Effect.map(
       Context.pick(
@@ -112,20 +112,24 @@ export const make = Effect.gen(function* () {
       ledger.updateRun(record.id, { status, usage: null, endedAtMillis }),
     );
 
-  const complete = (admission: TriggerAdmission) =>
-    observations
-      .complete(admission)
-      .pipe(
-        Effect.flatMap((isLast) =>
-          isLast ? coordination.markProcessed(admission.event.key, admission.event.revision) : Effect.void,
-        ),
-      );
+  const complete = Effect.fn("WorkflowRun.complete")(function* (admission: TriggerAdmission) {
+    yield* observationStore.complete(
+      admission,
+      coordination.markProcessed(admission.event.key, admission.event.revision),
+    );
+  });
 
   const decline = (admission: TriggerAdmission) =>
-    coordination.park(admission.event.key, { _tag: "MissingOperation" }).pipe(
-      Effect.andThen(complete(admission)),
-      Effect.map(() => "skipped" as const),
-    );
+    coordination
+      .park(
+        admission.event.key,
+        { _tag: "MissingOperation" },
+        operationKeyOf(admission, admission.subscription.operation),
+      )
+      .pipe(
+        Effect.andThen(complete(admission)),
+        Effect.map(() => "skipped" as const),
+      );
 
   const rejectPlan = (admission: TriggerAdmission, reason: string) =>
     coordination
@@ -223,7 +227,7 @@ export const make = Effect.gen(function* () {
       workContext: {
         reference: { workItem: item, url: null },
         facts: { roles: [], assignees: [], openBlockers: 0, claim, priority: "medium", pr: null },
-        prose: {
+        prose: admission.event.workContext ?? {
           body: workContextBody(admission, record.id),
           comments: [],
         },
@@ -273,7 +277,7 @@ export const make = Effect.gen(function* () {
       const exhausted = view.counters(key).exhausted;
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
-        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason });
+        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, key);
         yield* complete(admission);
       }
       return exhausted ? ("completed" as const) : ("retry" as const);
@@ -295,7 +299,7 @@ export const make = Effect.gen(function* () {
       const exhausted = view.counters(key).exhausted;
       yield* settle(run, exhausted ? "exhausted" : "failed");
       if (exhausted) {
-        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues });
+        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues }, key);
         yield* complete(admission);
       }
       return exhausted ? ("completed" as const) : ("retry" as const);
@@ -313,7 +317,7 @@ export const make = Effect.gen(function* () {
         lineage: admission.lineage,
         reason: decoded.value.summary,
       });
-      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary });
+      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary }, key);
       yield* complete(admission);
       yield* settle(run, "failed");
       return "completed" as const;
