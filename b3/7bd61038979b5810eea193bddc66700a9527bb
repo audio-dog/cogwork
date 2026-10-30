@@ -1,0 +1,90 @@
+packages/engine/src/github/feedback.ts
+  s_32b58d670b4dfe::t_b280681547378a 1-19
+packages/engine/src/github/source-control-target.ts
+  s_32b58d670b4dfe::t_b280681547378a 1-54
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_32b58d670b4dfe::t_b280681547378a 9,377-393
+packages/engine/src/linear/client.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 392-453,935-965
+  s_32b58d670b4dfe::t_7c9bbf35d0fbc6 966
+packages/contracts/src/workflow.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 442-458
+packages/engine/src/provider-trigger-source.ts
+  s_32b58d670b4dfe::t_b280681547378a 1-161
+packages/engine/src/source-control.ts
+  s_32b58d670b4dfe::t_b280681547378a 8,27
+packages/engine/src/control-store.ts
+  s_32b58d670b4dfe::t_b280681547378a 216-223,822,825,828-833,842-846
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_32b58d670b4dfe::t_b280681547378a 1-200
+packages/engine/src/workflow-run.ts
+  s_32b58d670b4dfe::t_b280681547378a 292
+packages/engine/src/github/provider.ts
+  s_32b58d670b4dfe::t_b280681547378a 1,6,8-9,23,25-31,33,114,118-121,260,289-296
+packages/engine/src/github/tracker-trigger-source.ts
+  s_32b58d670b4dfe::t_b280681547378a 1-206
+packages/engine/src/issue-tracker-router.ts
+  s_32b58d670b4dfe::t_b280681547378a 5,9,11,18,21,48-60
+packages/engine/src/linear/trigger-source.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 1-224
+packages/engine/src/github/trigger-source.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 1-771
+packages/engine/src/trigger-source.ts
+  s_32b58d670b4dfe::t_b280681547378a 15,17,40-45,88-117
+  s_32b58d670b4dfe::t_c460a6ae582e33 118
+packages/engine/src/issue-tracker.ts
+  s_32b58d670b4dfe::t_b280681547378a 22,231-237
+packages/engine/src/trigger-observation.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 13,15-16,37-44,88,91,93,120-207,330-343,383-384,445-446,505-506,549-550,603-701,727-728,797-798,834-835,873-874,916-917,958,965-966,1035-1036,1098,1105-1106
+packages/engine/src/github/client.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 201-323,361
+packages/engine/src/github/client.ts
+  s_32b58d670b4dfe::t_b280681547378a 64,68-74,88,99,114,117,149,178,187-188,190,192,198-204,214,219,228,233-234,238,240,614,992,1000,1014,1028,1046-1071,1078-1092,1299,1309-1313,1428,1447-1471,1481-1494,1500-1507,1509,1518-1522
+packages/engine/src/github/github.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 38,223,225,304,307-308,419-424,433-437,439,441,449-458,466-486
+packages/engine/src/workflow-catalog.ts
+  s_32b58d670b4dfe::t_b280681547378a 14,61-80,87
+packages/engine/src/linear/linear.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 153,213-215,217,221-224,226-230,256-264,321-323
+  s_32b58d670b4dfe::t_0d0c2af91ea8b5 216,218-220,225
+  s_32b58d670b4dfe::t_f70608228684bc 377
+packages/engine/src/linear/adapter.ts
+  s_32b58d670b4dfe::t_8ea222845e2a59 9,18
+  s_32b58d670b4dfe::t_b280681547378a 10-12,14-17,19
+packages/contracts/src/workflow.ts
+  s_32b58d670b4dfe::t_b280681547378a 1306-1317
+packages/engine/src/github/adapter.ts
+  s_32b58d670b4dfe::t_b280681547378a 10-12,14-18,20
+  s_32b58d670b4dfe::t_8ea222845e2a59 9,19
+packages/engine/src/daemon-composition.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 376,426-433
+  s_32b58d670b4dfe::t_8ea222845e2a59 371
+packages/engine/src/daemon.ts
+  s_32b58d670b4dfe::t_b280681547378a 37,63,76,81,120,126,424-439,448,467-468,511-512,516,521-522,525,527,539-547
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 354,356
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_32b58d670b4dfe::t_b280681547378a 1-327
+packages/engine/src/trigger-observation.ts
+  s_32b58d670b4dfe::t_b280681547378a 10-11,31-32,65-69,123-125,343,350-355,362,370-373,377-378,419-424,459-460,468-469,477-531,537-548,550,564,624-633
+packages/engine/src/github/github-helpers.test.ts
+  s_32b58d670b4dfe::t_b280681547378a 36
+packages/engine/src/linear/client.ts
+  s_32b58d670b4dfe::t_b280681547378a 53-54,149-150,249-254,262,410-411,447-452,454-456,483-487,504-530,662-663,934-935,945,967-990,1069-1076,1094,1138-1140,1148-1149,1194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b37bd61038979b5810eea193bddc66700a9527bb",
+  "prompts": {},
+  "sessions": {
+    "s_32b58d670b4dfe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18410-64bd-7800-8f0a-1f5a30b622fe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
