@@ -1,5 +1,9 @@
-appId: com.scribehow.cogwork
+extends: ./app-identity.json
 productName: cogwork
+protocols:
+  - name: Cogwork
+    schemes:
+      - cogwork
 directories:
   buildResources: build
 files:
