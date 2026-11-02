@@ -1,0 +1,57 @@
+packages/engine/src/daemon-composition.test.ts
+  s_9fd7d719c90ee1::t_aa4dcaf1e83480 371,504
+packages/engine/src/workflow.test.ts
+  s_9fd7d719c90ee1::t_3121eae9ec2e52 471-473
+  s_9fd7d719c90ee1::t_4724a4a5673621 435-449,451-458,460-465
+  s_9fd7d719c90ee1::t_34b615b32af096 412
+  s_9fd7d719c90ee1::t_016f257b0fd5ea 38,130-131,422-434,466-470
+  s_9fd7d719c90ee1::t_200de9419f2178 450,459
+packages/engine/src/issue-workflow-catalog.ts
+  s_9fd7d719c90ee1::t_0bcf45c59024ba 1,47,49-50,52-98,100-109,111-115,120-123,125
+  s_9fd7d719c90ee1::t_af1ff0f01da7ff 39,42-46,48,51,124
+  s_9fd7d719c90ee1::t_6e85947ee7573f 142
+  s_9fd7d719c90ee1::t_12c19aaab4d920 40,110
+  s_9fd7d719c90ee1::t_8e3ef4a502a372 41
+  s_9fd7d719c90ee1::t_d4dc646f6c09cc 99,116-119
+packages/engine/src/daemon.ts
+  s_9fd7d719c90ee1::t_aa28c8cc693ede 40,437,439-440
+  s_9fd7d719c90ee1::t_63f68af049e056 438
+packages/engine/src/clock-source.ts
+  s_9fd7d719c90ee1::t_ca6c58cf3be4e6 126-134,141-142,302
+  s_9fd7d719c90ee1::t_59470e53d7af3a 364
+  s_9fd7d719c90ee1::t_4f0b5a4dc03ab8 359-363,365-396,400-403,429-431
+packages/engine/src/clock-source.test.ts
+  s_9fd7d719c90ee1::t_b2dbef301bc6f3 144
+  s_9fd7d719c90ee1::t_aadc88e405eefc 88,102,105-107,114,117-121
+  s_9fd7d719c90ee1::t_6e7d3b1c66f306 9-10,139-143,145-168
+  s_9fd7d719c90ee1::t_faad33269a102e 169-170
+packages/engine/src/trigger-observation.test.ts
+  s_9fd7d719c90ee1::t_0f61b4868f6952 510,513,555-586,597-630,635,645,653-654,656-661,663,668-669,671,676-683
+  s_9fd7d719c90ee1::t_692e7864c55e6d 395-410
+  s_9fd7d719c90ee1::t_b2dbef301bc6f3 590
+  s_9fd7d719c90ee1::t_8a773bc146ee8d 517,533,535-549,551,553,587-589,591-595,641-644,649
+  s_9fd7d719c90ee1::t_f8d102ad1d7eb3 554
+packages/engine/src/trigger-observation.ts
+  s_9fd7d719c90ee1::t_4c057e2c209280 594-596
+  s_9fd7d719c90ee1::t_36429edbfa79b7 9,144,148-156,588-593,597-598
+packages/engine/src/workflow-action-plan.ts
+  s_9fd7d719c90ee1::t_c933ffd0af4bd0 19,24,305,391-393,592
+packages/engine/src/workflow-action-plan.test.ts
+  s_9fd7d719c90ee1::t_6d0c0199378b4d 230,241,248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ec4df3dca4f5a0b2f37d57fdb03e186ad5039d7",
+  "prompts": {},
+  "sessions": {
+    "s_9fd7d719c90ee1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d58-a706-72e1-9a2c-5b30c0af3f52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

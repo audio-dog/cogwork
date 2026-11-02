@@ -1,0 +1,28 @@
+packages/engine/src/issue-tracker-router.test.ts
+  s_9fd7d719c90ee1::t_8fae126e25cb14 32,66-68,70,122-126,130-133
+  s_9fd7d719c90ee1::t_06ca5db1774ce5 134-136
+  s_9fd7d719c90ee1::t_f55b655d5d03be 127-129
+  s_9fd7d719c90ee1::t_7323763c88c577 69
+packages/engine/src/issue-tracker-router.ts
+  s_9fd7d719c90ee1::t_3161c41f4ff72e 6
+  s_9fd7d719c90ee1::t_ed8faf94110b35 23-33
+packages/engine/src/coordination-tracker.ts
+  s_9fd7d719c90ee1::t_ed8faf94110b35 382-396,398
+  s_9fd7d719c90ee1::t_4240c051f5ea47 58-59,431-432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "03443fc31bb76d13e1d1009b694bd970682b6b18",
+  "prompts": {},
+  "sessions": {
+    "s_9fd7d719c90ee1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d58-a706-72e1-9a2c-5b30c0af3f52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
