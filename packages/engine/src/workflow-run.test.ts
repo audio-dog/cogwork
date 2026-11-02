@@ -1,5 +1,6 @@
 import {
   AttemptRecord,
+  BranchName,
   Claim,
   HandbackRecord,
   HarnessName,
@@ -59,6 +60,7 @@ import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry 
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SlackWrite } from "./slack-write";
+import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   makeMemoryTriggerObservationStore,
@@ -75,6 +77,7 @@ import {
 import { WorkflowArtifactStore, memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
+import { PullRequestReadiness, WorktreeManager } from "./worktree";
 
 const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
@@ -1187,6 +1190,172 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
+  it.effect("declines an empty pull request before recording its action plan", () => {
+    const workspace = {
+      source: "control-store:workspace",
+      repository: "owner/repo",
+      contributions: [],
+      config: Schema.decodeSync(WorkspaceConfig)({
+        name: "github",
+        checkoutPath: "/repos/github",
+        issueTracker: { type: "github" },
+      }),
+    } satisfies RegisteredWorkspace;
+    const issue = decodeWorkItem("#820");
+    const issueEntry = decodeEntry("github.issue-label");
+    const openEntry = decodeEntry("github.open-pull-request");
+    const reason = "head 820 is not ahead of origin/main";
+    const issueAdmission = {
+      ...admission,
+      event: {
+        ...admission.event,
+        key: { _tag: "Issue", workspace: workspace.config.name, id: issue },
+        entry: issueEntry,
+        workspace: workspace.config.name,
+      },
+      subscription: {
+        ...admission.subscription,
+        entry: issueEntry,
+        workspaces: [workspace.config.name],
+      },
+    } satisfies TriggerAdmission;
+    const pullRequestDocument = Schema.decodeSync(WorkflowDocument)({
+      ...document,
+      workspaces: { _tag: "Listed", workspaces: [workspace.config.name] },
+      triggers: [{ ...document.triggers[0], entry: issueEntry, parameters: [] }],
+      operations: [
+        {
+          ...document.operations[0],
+          permissionProfile: "full",
+          questions: [],
+          transitions: [
+            {
+              when: [],
+              actions: [{ entry: openEntry, parameters: [] }],
+              handOff: null,
+            },
+          ],
+        },
+      ],
+    });
+    const sourceService = {
+      ...emptySourceControl,
+      resolvePullRequest: () => Effect.succeed(null),
+      openWorkflowPullRequest: () => Effect.die("must not open"),
+    };
+    const worktreeService = {
+      ensure: () => Effect.succeed({ branch: BranchName.make("820"), path: "/worktrees/820", created: true }),
+      pullRequestReadiness: () => Effect.succeed(PullRequestReadiness.Declined({ reason })),
+    };
+    const service = {
+      ...workflowService,
+      list: Effect.succeed({
+        workflows: [{ ...workflowRecord, publishedCopy: pullRequestDocument }],
+        unreadable: [],
+      }),
+      get: () => Effect.succeed({ ...workflowRecord, publishedCopy: pullRequestDocument }),
+      catalog: Effect.succeed({
+        catalog: {
+          entries: [
+            {
+              key: issueEntry,
+              name: "Issue has label",
+              kind: "trigger",
+              system: "github",
+              connection: "github",
+              requires: [],
+              parameters: [],
+              itemKind: "issue",
+              actsOn: [],
+              requiresWorkspace: true,
+              permissionProfile: "read-only",
+              agentInputs: [],
+              emits: [],
+            },
+            {
+              key: openEntry,
+              name: "Open a pull request",
+              kind: "action",
+              system: "github",
+              connection: "github",
+              requires: [],
+              parameters: [],
+              itemKind: null,
+              actsOn: ["issue"],
+              requiresWorkspace: true,
+              permissionProfile: "full",
+              agentInputs: ["pr_title", "pr_body"],
+              emits: [],
+            },
+          ],
+          instructionPackages: [],
+          harnesses: [],
+        },
+        machine: {
+          workspaces: [
+            {
+              id: workspace.config.name,
+              binds: ["github"],
+            },
+          ],
+          connections: [],
+          harnesses: [{ name: harnessName, available: true }],
+          defaultHarness: harnessName,
+          readyNeeds: [],
+        },
+      }),
+    } satisfies WorkflowsService;
+
+    const testLayer = Layer.mergeAll(
+      requirements,
+      Layer.succeed(SourceControlProvider, sourceService),
+      Layer.mock(WorktreeManager, worktreeService),
+    );
+
+    return Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram(
+        [
+          {
+            summary: "Open it",
+            stuck: false,
+            workspace: workspace.config.name,
+            answers: {},
+            inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
+          },
+          {
+            summary: "Open it",
+            stuck: false,
+            workspace: workspace.config.name,
+            answers: {},
+            inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
+          },
+        ],
+        { registry: { ...emptyRegistry, workspaces: [workspace] } },
+        service,
+      );
+
+      assert.strictEqual(yield* runner.execute(issueAdmission), "retry");
+      assert.strictEqual(yield* runner.execute(issueAdmission), "retry");
+      const ledger = yield* RunLedger;
+      const runs = yield* ledger.listRuns(10);
+      const plans = yield* Effect.forEach(runs, ({ id }) => ledger.getRunPlan(id));
+      const attempts = yield* Ref.get(coordination.attempts);
+      assert.deepStrictEqual(
+        { statuses: runs.map(({ status }) => status), reasons: attempts.map(({ reason }) => reason) },
+        { statuses: ["declined", "declined"], reasons: [reason, reason] },
+      );
+      assert.isTrue(
+        plans.some((plan) =>
+          plan?.operatingInstructions.resources.some(
+            ({ source, content }) => source === "previous-result-issues" && content.includes(reason),
+          ),
+        ),
+      );
+      assert.isNull(
+        yield* (yield* WorkflowActionPlanStore).pending(keyOf(issueAdmission.event.key), workflow),
+      );
+    }).pipe(Effect.provide(testLayer), Effect.scoped);
+  });
   it.effect("refuses approval when the displayed plan digest is stale", () =>
     Effect.gen(function* () {
       const waitingDocument = yield* documentWithTransition({

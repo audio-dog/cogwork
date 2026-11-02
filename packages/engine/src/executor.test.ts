@@ -81,6 +81,7 @@ import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import { projectedContributionName } from "./run-plan";
 import {
+  emptyService as emptySourceControl,
   type OpenPullRequestInput,
   SourceControlProvider,
   type SourceControlProviderService,
@@ -909,6 +910,7 @@ const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
   pullRequestReadiness: (_workspace, item) =>
     Effect.succeed(PullRequestReadiness.Ready({ headBranch: branchName(item), baseBranch: "main" })),
   pushBranch: () => Effect.void,
+  pushBranchIfAhead: () => Effect.succeed(false),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -1205,6 +1207,7 @@ class PostedComments extends Context.Service<PostedComments, Ref.Ref<ReadonlyArr
 }
 
 const noopProvider: SourceControlProviderService = {
+  ...emptySourceControl,
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
   findOpenPullRequest: () => Effect.succeed(null),
@@ -1241,6 +1244,7 @@ const pullRequestProvider = (options: PullRequestProviderOptions = {}) =>
       Effect.map(
         PullRequestCalls,
         (probe): SourceControlProviderService => ({
+          ...emptySourceControl,
           observe: () => Effect.succeed(new Map()),
           findOpenPullRequest: (_workspace, headBranch) =>
             Ref.update(probe.observations, (count) => count + 1).pipe(
@@ -1347,6 +1351,7 @@ const recordingProvider: Layer.Layer<SourceControlProvider | PostedComments> = L
   Effect.map(
     PostedComments,
     (posted): SourceControlProviderService => ({
+      ...emptySourceControl,
       observe: () => Effect.succeed(new Map()),
       comment: (_workspace, item, body) => Ref.update(posted, (xs) => [...xs, { item: item.id, body }]),
       findOpenPullRequest: () => Effect.succeed(null),
@@ -1356,6 +1361,7 @@ const recordingProvider: Layer.Layer<SourceControlProvider | PostedComments> = L
 ).pipe(Layer.provideMerge(PostedComments.layer));
 
 const unavailableCommentProvider: SourceControlProviderService = {
+  ...emptySourceControl,
   observe: () => Effect.succeed(new Map()),
   comment: () =>
     Effect.fail(

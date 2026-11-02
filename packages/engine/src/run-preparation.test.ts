@@ -194,6 +194,7 @@ const worktreeLayer = ({
         pullRequestReadiness: (_workspace, item) =>
           Effect.succeed(PullRequestReadiness.Ready({ headBranch: branchName(item), baseBranch: "main" })),
         pushBranch: () => Effect.void,
+        pushBranchIfAhead: () => Effect.succeed(false),
         list: () => Effect.succeed([]),
         remove: () => Effect.void,
         reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),

@@ -5,6 +5,7 @@ import {
   matchWorkflowTransitions,
   type RunId,
   SlackWriteKey,
+  SourceControlType,
   WorkflowActionArtifact,
   WorkflowActionOrigin,
   WorkflowActionPlan,
@@ -24,16 +25,20 @@ import {
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
 import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
+import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { type SlackPostReceipt, SlackWrite, SlackWriteError } from "./slack-write";
+import { SourceControlProvider } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
+import { PullRequestReadiness, WorktreeManager } from "./worktree";
 
 export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
   "WorkflowActionPlanDecodeError",
@@ -92,6 +97,13 @@ type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
   readonly config: WorkspaceIssueTrackerBinding["config"];
 };
 
+type FrozenSourceControlTarget = Pick<RegisteredWorkspace, "repository"> & {
+  readonly app: SourceControlType;
+  readonly config: Pick<RegisteredWorkspace["config"], "name" | "issueTracker" | "sourceControl">;
+};
+
+const githubSourceControlType = Schema.decodeSync(SourceControlType)("github");
+
 const issueTrackerApps = ["github", "linear"] as const;
 
 const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(function* (
@@ -118,6 +130,37 @@ const targetFields = (target: FrozenIssueTarget) => ({
   app: target.app,
   issueTracker: target.config.issueTracker,
   repository: target.repository ?? null,
+});
+
+const sourceControlTargetFields = (target: FrozenSourceControlTarget) => ({
+  workspace: target.config.name,
+  app: target.app,
+  issueTracker: target.config.issueTracker,
+  ...(target.config.sourceControl ? { sourceControl: target.config.sourceControl } : {}),
+  repository: target.repository ?? null,
+});
+
+const frozenSourceControlTarget = Effect.fn("WorkflowActionPlan.frozenSourceControlTarget")(function* (
+  entry: WorkflowCatalogEntry,
+  selected: ReadonlyArray<RegisteredWorkspace>,
+  workspaceId: string | undefined,
+) {
+  if (workspaceId === "none") return null;
+  if (workspaceId === undefined) return yield* decodeFailure(`Action ${entry.key} needs a Workspace`);
+  const workspace = selected.find(({ config }) => config.name === workspaceId);
+  const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
+  if (entry.system !== "github" || app !== "github" || !workspace) {
+    return yield* decodeFailure(`Workspace ${workspaceId} does not bind ${entry.system ?? "the action app"}`);
+  }
+  return {
+    app: githubSourceControlType,
+    config: {
+      name: workspace.config.name,
+      issueTracker: workspace.config.issueTracker,
+      ...(workspace.config.sourceControl ? { sourceControl: workspace.config.sourceControl } : {}),
+    },
+    repository: workspace.repository,
+  } satisfies FrozenSourceControlTarget;
 });
 
 const currentIssueTarget = (admission: TriggerAdmission, target: FrozenIssueTarget | null) => {
@@ -183,6 +226,42 @@ const issueTargetProducers = new Map<string, IssueTargetProducer>([
   ["remove-label", currentIssueTarget],
   ["close-this-issue", currentIssueTarget],
 ]);
+
+const sourceControlActions = new Set([
+  "open-pull-request",
+  "push-to-this-pull-request",
+  "comment-on-this-pull-request",
+  "request-review",
+]);
+
+const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTargetFor")(function* (
+  entry: WorkflowCatalogEntry,
+  admission: TriggerAdmission,
+  selected: ReadonlyArray<RegisteredWorkspace>,
+  workspaceId: string | undefined,
+) {
+  const target = yield* frozenSourceControlTarget(entry, selected, workspaceId);
+  if (target === null) return { _tag: "NoWorkspace" } as const;
+  const item = admission.event.key;
+  if (actionName(entry.key) === "open-pull-request") {
+    if (item._tag !== "Issue" || item.workspace !== target.config.name) {
+      return yield* decodeFailure("Open a pull request needs an Issue in the selected Workspace");
+    }
+    return {
+      _tag: "NewPullRequest",
+      ...sourceControlTargetFields(target),
+      issue: item.id,
+    } as const;
+  }
+  if ((item._tag !== "Issue" && item._tag !== "PullRequest") || item.workspace !== target.config.name) {
+    return yield* decodeFailure("The action cannot target this pull request in the selected Workspace");
+  }
+  return {
+    _tag: "CurrentPullRequest",
+    ...sourceControlTargetFields(target),
+    item,
+  } as const;
+});
 
 const cogworkTarget = Effect.succeed<WorkflowActionTarget>({ _tag: "Cogwork" });
 
@@ -260,7 +339,11 @@ const targetFor = (
   parameters: ReadonlyArray<WorkflowParameterValue>,
   workspace: string | undefined,
 ) => {
-  const producer = targetProducers.get(actionName(entry.key));
+  const name = actionName(entry.key);
+  if (sourceControlActions.has(name)) {
+    return sourceControlTargetFor(entry, admission, workspaces, workspace);
+  }
+  const producer = targetProducers.get(name);
   return producer?.({ entry, admission, workspaces, inputs, parameters, workspace }) ?? cogworkTarget;
 };
 
@@ -370,6 +453,17 @@ const targetIssue = (step: WorkflowActionPlanStep) => {
   return target._tag === "CurrentIssue" || target._tag === "ExistingIssue" ? target.issue : null;
 };
 
+const sourceTargetWorkspace = (
+  step: WorkflowActionPlanStep,
+  workspaces: ReadonlyArray<RegisteredWorkspace>,
+) => {
+  const target = step.target;
+  if (target._tag !== "NewPullRequest" && target._tag !== "CurrentPullRequest") return null;
+  const workspace = workspaces.find(({ config }) => config.name === target.workspace);
+  const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
+  return app === target.app ? (workspace ?? null) : null;
+};
+
 const invalidTarget = (step: WorkflowActionPlanStep) =>
   new IssueTrackerError({
     reason: "unavailable",
@@ -385,6 +479,9 @@ interface ActionContext {
   readonly tracker: IssueTrackerActionService;
   readonly notifications: Effect.Success<typeof WorkflowNotifications>;
   readonly ledger: Effect.Success<typeof RunLedger>;
+  readonly sourceControl: Effect.Success<typeof SourceControlProvider> | null;
+  readonly sourceWorkspace: RegisteredWorkspace | null;
+  readonly worktrees: Effect.Success<typeof WorktreeManager> | null;
   readonly slack: Effect.Success<typeof SlackWrite>;
   readonly actionPlans: Effect.Success<typeof WorkflowActionPlanStore>;
   readonly coordination: Effect.Success<typeof Coordination>;
@@ -429,6 +526,42 @@ const slackArtifact = (context: ActionContext, receipt: SlackPostReceipt) =>
       lineage: context.plan.lineage,
     }),
   });
+
+const requireSourceWorkspace = (context: ActionContext) =>
+  context.sourceWorkspace === null
+    ? Effect.fail(invalidTarget(context.step))
+    : Effect.succeed(context.sourceWorkspace);
+
+const requireSourceControl = (context: ActionContext) =>
+  context.sourceControl === null
+    ? Effect.fail(invalidTarget(context.step))
+    : Effect.succeed(context.sourceControl);
+
+const requireWorktrees = (context: ActionContext) =>
+  context.worktrees === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.worktrees);
+
+const actionOrigin = (context: ActionContext) =>
+  WorkflowActionOrigin.make({
+    item: context.plan.item,
+    workflow: context.plan.workflow,
+    attempt: context.plan.attempt,
+    writeKey: context.step.writeKey,
+    lineage: context.plan.lineage,
+  });
+
+const requirePullRequest = Effect.fn("WorkflowActionPlan.requirePullRequest")(function* (
+  context: ActionContext,
+) {
+  const workspace = yield* requireSourceWorkspace(context);
+  const sourceControl = yield* requireSourceControl(context);
+  if (context.step.target._tag !== "CurrentPullRequest") return yield* invalidTarget(context.step);
+  const pullRequest = yield* sourceControl.resolvePullRequest(workspace, context.step.target.item);
+  if (pullRequest === null) return yield* invalidTarget(context.step);
+  return { workspace, pullRequest };
+});
+
+const worktreeError = (message: string, retryable: boolean) =>
+  new IssueTrackerError({ reason: "unavailable", message, retryable });
 
 const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (context: ActionContext) {
   const workspace = yield* requireWorkspace(context);
@@ -539,6 +672,62 @@ const actionExecutors: Record<string, ActionExecutor> = {
     yield* context.tracker.closeIssue(workspace, issue, context.step.writeKey);
     return null;
   }),
+  "open-pull-request": Effect.fn("WorkflowActionPlan.openPullRequest")(function* (context: ActionContext) {
+    const workspace = yield* requireSourceWorkspace(context);
+    const sourceControl = yield* requireSourceControl(context);
+    const worktrees = yield* requireWorktrees(context);
+    if (context.step.target._tag !== "NewPullRequest") return yield* invalidTarget(context.step);
+    const run = yield* context.ledger.getRun(context.plan.attempt);
+    if (run?.branch === null || run?.branch === undefined) return yield* invalidTarget(context.step);
+    const item = { id: context.step.target.issue, title: "" };
+    const readiness = yield* worktrees
+      .pullRequestReadiness(workspace, item, run.branch)
+      .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
+    if (PullRequestReadiness.$is("Declined")(readiness)) {
+      return yield* worktreeError(readiness.reason, true);
+    }
+    yield* worktrees
+      .pushBranch(workspace, readiness.headBranch)
+      .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
+    return yield* sourceControl.openWorkflowPullRequest(workspace, {
+      headBranch: readiness.headBranch,
+      baseBranch: readiness.baseBranch,
+      title: context.step.inputs.pr_title ?? "",
+      body: context.step.inputs.pr_body ?? "",
+      origin: actionOrigin(context),
+    });
+  }),
+  "push-to-this-pull-request": Effect.fn("WorkflowActionPlan.pushPullRequest")(function* (
+    context: ActionContext,
+  ) {
+    const { workspace, pullRequest } = yield* requirePullRequest(context);
+    const sourceControl = yield* requireSourceControl(context);
+    const worktrees = yield* requireWorktrees(context);
+    const pushed = yield* worktrees
+      .pushBranchIfAhead(workspace, pullRequest.headBranch)
+      .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
+    if (!pushed) return null;
+    return yield* sourceControl.recordPullRequestPush(workspace, pullRequest, actionOrigin(context));
+  }),
+  "comment-on-this-pull-request": Effect.fn("WorkflowActionPlan.commentPullRequest")(function* (
+    context: ActionContext,
+  ) {
+    const { workspace, pullRequest } = yield* requirePullRequest(context);
+    const sourceControl = yield* requireSourceControl(context);
+    return yield* sourceControl.commentPullRequest(
+      workspace,
+      pullRequest,
+      context.step.inputs.comment ?? "",
+      actionOrigin(context),
+    );
+  }),
+  "request-review": Effect.fn("WorkflowActionPlan.requestReview")(function* (context: ActionContext) {
+    const { workspace, pullRequest } = yield* requirePullRequest(context);
+    const sourceControl = yield* requireSourceControl(context);
+    const reviewer = parameterValues(context.step.parameters, "reviewer").at(0);
+    if (!reviewer) return yield* invalidTarget(context.step);
+    return yield* sourceControl.requestReview(workspace, pullRequest, reviewer, actionOrigin(context));
+  }),
   "send-message": Effect.fn("WorkflowActionPlan.sendSlackMessage")(function* (context: ActionContext) {
     if (!WorkflowActionTarget.guards.SlackChannel(context.step.target)) {
       return yield* slackInvalidTarget(context.step);
@@ -648,6 +837,10 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
   const tracker = yield* IssueTracker;
   const notifications = yield* WorkflowNotifications;
   const ledger = yield* RunLedger;
+  const sourceControl = Option.getOrNull(yield* Effect.serviceOption(SourceControlProvider));
+  const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
+  const registry = Option.getOrNull(yield* Effect.serviceOption(WorkspaceRegistry));
+  const registeredWorkspaces = registry === null ? [] : (yield* registry.state).workspaces;
   const slack = yield* SlackWrite;
   const observationStore = yield* TriggerObservationStore;
   const coordinationView = yield* coordination.read(admission.event.key);
@@ -740,6 +933,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
         if (executingPlan !== state.plan) yield* store.save(executingPlan);
         const executingStep = executingPlan.steps.find(({ position }) => position === step.position) ?? step;
         const workspace = targetWorkspace(executingStep);
+        const sourceWorkspace = sourceTargetWorkspace(executingStep, registeredWorkspaces);
         const context = {
           item: admission.event.key,
           plan: executingPlan,
@@ -748,6 +942,9 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
           tracker,
           notifications,
           ledger,
+          sourceControl,
+          sourceWorkspace,
+          worktrees,
           slack,
           actionPlans: store,
           coordination,

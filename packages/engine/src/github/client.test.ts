@@ -1012,6 +1012,23 @@ describe("GitHub client", () => {
     }).pipe(withHttpClient(httpClient));
   });
 
+  it.effect("lists collaborators from every page", () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({ login: `reviewer-${index}` }));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [{ login: "reviewer-100" }]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const reviewers = yield* client.listCollaborators(repo);
+      assert.lengthOf(reviewers, 101);
+      assert.strictEqual(reviewers.at(-1), "reviewer-100");
+      assert.strictEqual(fetch.mock.calls.length, 2);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("fails an open-pull pagination timeout without returning a partial page", () => {
     const respond = (request: HttpClientRequest.HttpClientRequest) => {
       const currentPage = Number(new URL(request.url).searchParams.get("page") ?? "1");

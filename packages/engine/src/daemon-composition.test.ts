@@ -64,6 +64,7 @@ const worktreeLayer = Layer.succeed(WorktreeManager, {
   ensure: () => Effect.die("unused"),
   pullRequestReadiness: () => Effect.die("unused"),
   pushBranch: () => Effect.die("unused"),
+  pushBranchIfAhead: () => Effect.die("unused"),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
@@ -368,7 +369,7 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 37);
+      assert.lengthOf(catalog.catalog.entries, 41);
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "slack.i-am-mentioned"));
       assert.deepInclude(
@@ -494,6 +495,10 @@ describe("daemon server composition", () => {
           "Add a label",
           "Remove a label",
           "Close this issue",
+          "Open a pull request",
+          "Push to this pull request",
+          "Comment on this pull request",
+          "Request a review",
           "Issue has label",
           "New comment from a person",
           "Pull request checks failed",
