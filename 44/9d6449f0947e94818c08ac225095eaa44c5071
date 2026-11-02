@@ -1,0 +1,22 @@
+packages/contracts/src/workflow.ts
+  s_ba08b7cf6195a4::t_5f7d90914a5a79 193
+  s_ba08b7cf6195a4::t_bfea3c19164bac 185-186,267,272
+packages/contracts/src/rpc.ts
+  s_ba08b7cf6195a4::t_bfea3c19164bac 235,260-264,401
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "449d6449f0947e94818c08ac225095eaa44c5071",
+  "prompts": {},
+  "sessions": {
+    "s_ba08b7cf6195a4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d57-75f5-7743-aa07-3fa49250abf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
