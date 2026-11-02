@@ -101,6 +101,8 @@ export const make = Effect.gen(function* () {
                 commands: commandsByReason[gate.reason._tag],
                 reason: gate.reason,
                 attempt: plan?.attempt ?? null,
+                parkedAtMillis: view.park?.atMillis ?? plan?.createdAtMillis ?? admission.event.atMillis,
+                plan: plan ?? null,
               };
             }),
           ),
@@ -112,12 +114,13 @@ export const make = Effect.gen(function* () {
                 workflow: id,
                 steps: plans
                   .filter(({ workflow }) => workflow === id)
-                  .flatMap(({ steps }) =>
+                  .flatMap(({ steps, createdAtMillis }) =>
                     steps
                       .filter(({ target }) => target._tag === "NoWorkspace")
                       .map(({ entry }) => ({
                         summary: entry,
                         reason: "No Workspace was recognized",
+                        atMillis: createdAtMillis,
                       })),
                   ),
                 events: processed.flatMap((admission) =>
@@ -127,6 +130,7 @@ export const make = Effect.gen(function* () {
                         {
                           summary: admission.event.entry,
                           reason: admission.event.payload.reason,
+                          atMillis: admission.event.atMillis,
                         },
                       ]
                     : [],
