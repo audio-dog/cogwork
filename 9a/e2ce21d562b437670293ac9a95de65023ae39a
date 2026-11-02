@@ -1,0 +1,58 @@
+packages/engine/src/workflow-notification.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 4,17,19-58,63,73-80,83-93,100-106
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 146-157
+packages/engine/src/workflow-attention.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 104-105,117,123,133
+packages/engine/src/trigger-observation.test.ts
+  s_9fd7d719c90ee1::t_ee78d5f7b25a64 691
+  s_13f57de9b25a2d::t_6db7f9c825091b 510-520,522-530,532,534-546,548-550,552-617,620-649,651-664,667-671,673-678,680-690
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_9fd7d719c90ee1::t_219a1493e0bc45 1-364
+packages/engine/src/workflow-action-plan.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 19,475,769-772,777-779
+packages/engine/src/workflow-attention.test.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 6-7,26-29,38,146-164,180-182,188
+packages/engine/src/daemon.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 374-375
+packages/contracts/src/workflow.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 8,219-220,227,299-301,303-304,309
+packages/engine/src/workflow-run.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 978
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_9fd7d719c90ee1::t_219a1493e0bc45 1-2,15,115,124,128-133,161,164,220-221,262,267,396-398,409,411,423,428,432-438,448,452,543-551,560,655,661-671,676-680,684,695,697,739-747,750,904,1006,1030-1034
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 1,8-9,13,16,18-21,26,71-72,93-94,136,140,150,155-165,218,220
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_9fd7d719c90ee1::t_219a1493e0bc45 1-2,6-16,33-47,49-53,56-63,65-68,70-76,81
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_9fd7d719c90ee1::t_219a1493e0bc45 1-410
+packages/contracts/src/rpc.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 48,236,261-265,402
+packages/engine/src/workflow-run.test.ts
+  s_9fd7d719c90ee1::t_219a1493e0bc45 1487,1515,1522-1526,1535-1539
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9ae2ce21d562b437670293ac9a95de65023ae39a",
+  "prompts": {},
+  "sessions": {
+    "s_13f57de9b25a2d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8d5284ae-4c42-43a8-ac5e-c2510cbaeda7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9fd7d719c90ee1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d58-a706-72e1-9a2c-5b30c0af3f52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
