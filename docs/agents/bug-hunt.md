@@ -30,20 +30,26 @@ Hunt each category explicitly:
   lookup that finds nothing.
 - **Logic slips**: an inverted condition, the wrong operator, the wrong variable, a copied line that
   kept its old name, a case a branch or a table leaves out.
-- **Failure paths**: an error caught and lost, a retry that repeats a side effect, state left half
-  written after a failure, a resource the failure path never releases.
-- **State and order**: a stale or cached value read after it changed, a shared value mutated in
-  place, a step that runs before what it depends on, an operation that is not safe to run twice.
-- **Concurrency and time**: two callers that interleave, a timeout that fires mid-write, a clock,
-  time zone, or ordering assumption.
+- **Failure paths**: a typed failure caught too widely and lost, a defect that should be a typed
+  failure, a retry that repeats a side effect, state left half written after a failure, a scope or
+  finalizer the failure path never runs. `docs/agent-patterns/effect-control-flow.md` and
+  `docs/agent-patterns/effect-error-design.md` hold this repo's failure rules.
+- **State and order**: a stale value read after it changed, a shared value mutated in place, a step
+  that runs before what it depends on, an operation that is not safe to run twice, such as a Run
+  claimed twice or a Control store write repeated on recovery.
+- **Concurrency and time**: two fibers that interleave, a forked fiber nobody supervises or
+  interrupts, a timeout that fires mid-write, a clock or ordering assumption.
+  `docs/agent-patterns/effect-fiber-lifecycle.md` and `docs/agent-patterns/effect-time-bounds.md`
+  hold this repo's rules.
 - **Contracts across the change**: a caller the change breaks, a changed return shape or meaning, data
-  written in one shape and read in another, a parse or serialization round trip that loses data.
+  written in one shape and decoded in another, a Schema decode that rejects data an older writer
+  produced, a daemon message the desktop app reads differently.
 
 ## Leave out
 
-Style; what the typecheck, linter, or formatter catches; pre-existing bugs; missing test coverage; an
-effect on code you cannot name with a `file:line`. A finding must be one the author would want to
-fix. When no finding meets that bar, report none.
+Style; what the typecheck, Biome, or the GritQL rules in `configs/lint/` catch; pre-existing bugs; missing test
+coverage; an effect on code you cannot name with a `file:line`. A finding must be one the author
+would want to fix. When no finding meets that bar, report none.
 
 ## Evidence rule
 

@@ -2,12 +2,6 @@
 
 - **Status:** proposed
 - **Date:** 2026-09-30
-- **Note:** 2026-11-02 — ADR [0027](./0027-headless-review-is-one-bounded-round-of-report-only-reviewers.md)
-  is amended to four reviewers. "ADR 0027's three-review bound" below means its one bounded round,
-  which still holds. The implement package gains a third red source, **Review**: a bug-hunter
-  finding's test, run on the reviewed commit before the fix. A second shared resource,
-  `shared/bug-hunt/BUG-HUNT.md`, ships the same way as `TEST-VALUE.md`, to the implement package
-  only.
 
 ## Context
 

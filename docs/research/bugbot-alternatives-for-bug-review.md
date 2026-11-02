@@ -60,11 +60,13 @@ fidelity.
    Plus or higher) and `claude-code-action` with the `code-review` plugin both post that shape.
    Claude Code Review needs a Team or Enterprise plan. `codex-action` and PR-Agent post a
    pull-request-level comment by default.
-6. **Recommendation: add a fourth report-only `bug-hunter` reviewer, and verify its findings with
-   the fix round's existing red proof.** The engine ships the brief as a shared resource, the same
-   way it ships `test-value/TEST-VALUE.md`. A blocking bug finding gets a failing test before a
-   fix; a finding whose test does not fail gets the disposition *invalid*. This amends ADR 0027.
-   A CI-side reviewer stays optional workspace data: one Bot allowlist entry.
+6. **Recommendation: add a report-only `bug-hunter` reviewer, and verify its findings with the
+   fix round's existing red proof.** Bug review is how this repo builds Cogwork, not a Cogwork
+   feature, so the brief lives in the repo (`docs/agents/bug-hunt.md`) and `AGENTS.md` adds the
+   reviewer. The stock package gains only a generic line: a repo's own guidance may add reviewers
+   to the round. A blocking bug finding gets a failing test before a fix; a finding whose test does
+   not fail gets *won't-fix* with the passing run as the reason. This amends ADR 0027. A CI-side
+   reviewer stays optional workspace data: one Bot allowlist entry.
 
 ---
 
@@ -356,7 +358,11 @@ The reviewer definitions are per-Harness files that the sync toolkit writes outs
 names the consequence: "The minimalist's brief is an ambient subagent definition, so the resource
 travels in the dispatch." The engine-owned path that reaches every Workspace and Harness is a shared
 resource that `context-assembler.ts` copies into each stock package, as it does for
-`test-value/TEST-VALUE.md` (ADR 0031).
+`test-value/TEST-VALUE.md` (ADR 0031). The repo-owned path that reaches every Harness in one
+Workspace is a doc in the repo that its `AGENTS.md` names. A repo Subagent file does not reach a
+Run: the engine scans `<repo>/.agents/subagents/` into the Run Plan, but the external Harnesses do
+not project Subagents
+([`external-harness-runtime.ts`](../../packages/engine/src/external-harness-runtime.ts)).
 
 Two Harness facts limit a nested verify step:
 
@@ -495,19 +501,28 @@ round.**
 
 How it works:
 
-1. The engine ships the bug-hunter brief as a shared resource, `shared/bug-hunt/BUG-HUNT.md`, copied
-   into each stock package beside `test-value/TEST-VALUE.md`. The review stage hands it to the
-   reviewer in the dispatch. *Explicit over ambient* makes this the right carrier for a mandatory
-   reviewer. ADR 0031 is the precedent.
-2. The bug-hunter reports per the brief in Question 3. Each finding carries a failing test sketch
+1. **The brief is repo content.** Bug review is part of how this repo builds Cogwork, not a
+   product feature, so the brief lives at `docs/agents/bug-hunt.md`, and the repo's `AGENTS.md`
+   adds the reviewer to every review of a diff. An earlier draft of this note shipped the brief as
+   an engine shared resource beside `test-value/TEST-VALUE.md`. That made every Cogwork user's
+   implement Runs carry this repo's process, so the draft was dropped.
+2. **The carrier is a repo doc, not a Subagent file.** The engine scans `<repo>/.agents/subagents/`
+   into the Run Plan, but the external Harnesses project no Subagents
+   ([`external-harness-runtime.ts`](../../packages/engine/src/external-harness-runtime.ts),
+   `externalHarnessDeclaration.projectedMembers`). Every Harness reads `AGENTS.md`, and the Run's
+   worktree holds the doc, so the dispatch hands the reviewer the doc's path.
+3. **The stock package gains one generic line.** The review round dispatches its three reviewers
+   plus each reviewer the repo's own guidance adds. Without that line, an `AGENTS.md` reviewer
+   contradicts "Dispatch three reviews", which outranks it.
+4. The bug-hunter reports per the brief in Question 3. Each finding carries a failing test sketch
    where a test can express the bug.
-3. In the fix round, the implementer writes the test for each blocking bug-hunter finding first and
-   runs it on the unfixed commit. A red test becomes the finding's red proof, recorded in
-   **Test proof**. A test that passes gives the disposition *invalid*, with the test as evidence. A
-   finding no test can express gets a judgment call recorded in Open questions, as today. The
-   unfixed commit is a third red source beside Base and Mutation; the Checks text must name it
-   **(inference: a wording decision for the change, not settled here)**.
-4. Nothing else changes: one round, no re-review, report-only reviewers, the perfection guard.
+5. In the fix round, the implementer writes the test for each blocking bug-hunter finding first and
+   runs it on the reviewed code. A red test is recorded as a Mutation whose named break is the
+   finding (`Mutation: B1 unfixed`). A test that passes refutes the finding, which gets *won't-fix*
+   with the passing run as the reason. A finding no test can express gets a judgment call. The
+   existing red sources and dispositions carry all three cases, so the stock text needs no new
+   ones.
+6. Nothing else changes: one round, no re-review, report-only reviewers, the perfection guard.
 
 Why, against the technical disposition:
 
@@ -523,11 +538,11 @@ Why, against the technical disposition:
   sides, so it does not force that fork.
 
 **ADR to amend: [0027](../adr/0027-headless-review-is-one-bounded-round-of-report-only-reviewers.md).**
-Replace "Bugbot leaves the fan-out — CI owns it" with the fourth reviewer, its shared-resource brief,
-and the test-first fix rule. The one-round bound stays. ADR 0027 did not drop the bug review; it
-moved it to CI. A fourth in-run reviewer puts the same concern back where a Run can act on it. Add a
-note to ADR [0031](../adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md): its
-"three-review bound" means 0027's bound as amended, and its red sources gain the unfixed commit.
+The amendment is generic: a repo's own guidance may add reviewers to the round, and the three stay.
+The one-round bound stays. ADR 0027 did not drop the bug review; it moved it to CI. A repo-added
+reviewer puts the same concern back where a Run can act on it. ADR
+[0031](../adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md) needs no change:
+the stock round keeps three reviewers and two red sources.
 
 **What stays optional.** A CI-side reviewer remains one Bot allowlist entry. If the maintainer has
 ChatGPT Plus or higher, Codex cloud review fits the wake shape, costs no API key, posts only P0 and
@@ -541,7 +556,7 @@ needs no ADR and no code.
 - *A nested three-voter panel per finding.* It is proven on Claude Code only. Revisit when a second
   Harness documents nested subagents.
 - *Several shuffled bug-hunter passes with a vote.* It is measured to raise recall, but it multiplies
-  the slowest reviewer. Revisit if the fix round's *invalid* rate stays low and misses appear in
+  the slowest reviewer. Revisit if the fix round's refuted-finding rate stays low and misses appear in
   human review.
 
 ---

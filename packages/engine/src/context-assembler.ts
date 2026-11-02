@@ -84,7 +84,7 @@ const isSafePathSegment = (segment: string) =>
 
 const sharedResourceBundles: Readonly<Record<string, ReadonlyArray<string>>> = {
   "follow-up-agent": ["test-value"],
-  "implement-agent": ["bug-hunt", "test-value"],
+  "implement-agent": ["test-value"],
 };
 
 const workflowInstructionFraming = [
