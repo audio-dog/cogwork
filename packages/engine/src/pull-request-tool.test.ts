@@ -20,36 +20,31 @@ const workspace: RegisteredWorkspace = {
 
 it.effect("reads a named pull request from a selected Workspace", () =>
   Effect.gen(function* () {
-    const reads = yield* Ref.make(0);
+    const reads = yield* Ref.make<ReadonlyArray<readonly [RegisteredWorkspace, string]>>([]);
+    const recorded = yield* Ref.make<ReadonlyArray<readonly [RegisteredWorkspace, number]>>([]);
+    const pullRequest = {
+      number: 826,
+      url: "https://github.com/owner/repo/pull/826",
+      headBranch: "review-actions",
+      baseBranch: "main",
+      headSha: "abc123",
+      title: "Add review actions",
+      description: "Adds review actions.",
+      diff: "diff --git a/src.ts b/src.ts",
+      changedFiles: [],
+      comments: [],
+    };
     const tool = makePullRequestTool(
       {
         ...emptyService,
-        readPullRequest: () =>
-          Ref.update(reads, (count) => count + 1).pipe(
-            Effect.map(() => ({
-              number: 826,
-              url: "https://github.com/owner/repo/pull/826",
-              headBranch: "review-actions",
-              baseBranch: "main",
-              headSha: "abc123",
-              title: "Add review actions",
-              description: "Adds review actions.",
-              diff: "diff --git a/src.ts b/src.ts",
-              changedFiles: [
-                {
-                  path: "src.ts",
-                  status: "modified",
-                  additions: 1,
-                  deletions: 0,
-                  changes: 1,
-                  patch: "@@ -1 +1 @@\n-old\n+new",
-                },
-              ],
-              comments: [{ author: "reviewer", body: "Please check this.", path: null, line: null }],
-            })),
+        readPullRequest: (selected, reference) =>
+          Ref.update(reads, (current) => [...current, [selected, reference] as const]).pipe(
+            Effect.map(() => pullRequest),
           ),
       },
       [workspace],
+      (selected, observed) =>
+        Ref.update(recorded, (current) => [...current, [selected, observed.number] as const]),
     );
     const execute = tool.execute;
     if (execute === undefined) throw new Error("pull request tool is missing a server executor");
@@ -57,29 +52,8 @@ it.effect("reads a named pull request from a selected Workspace", () =>
       Promise.resolve(execute({ workspace: "cogwork", pull_request: "#826" })),
     );
 
-    assert.strictEqual(yield* Ref.get(reads), 1);
-    assert.deepStrictEqual(result, {
-      pullRequest: {
-        number: 826,
-        url: "https://github.com/owner/repo/pull/826",
-        headBranch: "review-actions",
-        baseBranch: "main",
-        headSha: "abc123",
-        title: "Add review actions",
-        description: "Adds review actions.",
-        diff: "diff --git a/src.ts b/src.ts",
-        changedFiles: [
-          {
-            path: "src.ts",
-            status: "modified",
-            additions: 1,
-            deletions: 0,
-            changes: 1,
-            patch: "@@ -1 +1 @@\n-old\n+new",
-          },
-        ],
-        comments: [{ author: "reviewer", body: "Please check this.", path: null, line: null }],
-      },
-    });
+    assert.deepStrictEqual(yield* Ref.get(reads), [[workspace, "#826"]]);
+    assert.deepStrictEqual(yield* Ref.get(recorded), [[workspace, 826]]);
+    assert.deepStrictEqual(result, { pullRequest });
   }),
 );

@@ -154,77 +154,30 @@ export class SourceControlProvider extends Context.Service<
   SourceControlProviderService
 >()("@cogwork/engine/source-control/SourceControlProvider") {}
 
+const unavailable = () =>
+  Effect.fail(
+    new IssueTrackerError({
+      reason: "unavailable",
+      retryable: false,
+      message: "source control provider is not configured",
+    }),
+  );
+
 export const emptyService: SourceControlProviderService = {
   workflowCatalogContribution: { entries: [], templates: [] },
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
   findOpenPullRequest: () => Effect.succeed(null),
-  openPullRequest: () =>
-    Effect.fail(
-      new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "source control provider is not configured",
-      }),
-    ),
+  openPullRequest: unavailable,
   resolvePullRequest: () => Effect.succeed(null),
   readPullRequest: () => Effect.succeed(null),
-  openWorkflowPullRequest: () =>
-    Effect.fail(
-      new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "source control provider is not configured",
-      }),
-    ),
-  recordPullRequestPush: () =>
-    Effect.fail(
-      new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "source control provider is not configured",
-      }),
-    ),
-  commentPullRequest: () =>
-    Effect.fail(
-      new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "source control provider is not configured",
-      }),
-    ),
-  requestReview: () =>
-    Effect.fail(
-      new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "source control provider is not configured",
-      }),
-    ),
-  commentNamedPullRequest: () =>
-    Effect.fail(
-      new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "source control provider is not configured",
-      }),
-    ),
-  postReview: () =>
-    Effect.fail(
-      new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "source control provider is not configured",
-      }),
-    ),
-  draftReview: () =>
-    Effect.fail(
-      new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "source control provider is not configured",
-      }),
-    ),
+  openWorkflowPullRequest: unavailable,
+  recordPullRequestPush: unavailable,
+  commentPullRequest: unavailable,
+  requestReview: unavailable,
+  commentNamedPullRequest: unavailable,
+  postReview: unavailable,
+  draftReview: unavailable,
 };
 
 // The binding for a workspace with no source control provider — a Linear tracker with no

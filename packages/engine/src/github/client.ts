@@ -222,6 +222,7 @@ const PullFileSchema = Schema.Struct({
   changes: Schema.Natural,
   patch: Schema.optional(Schema.NullOr(Schema.String)),
 });
+const CompareSchema = Schema.Struct({ files: Schema.Array(PullFileSchema) });
 
 const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) });
 const GitHubCollaboratorsSchema = Schema.Array(GitHubUserSchema);
@@ -541,7 +542,7 @@ const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
 const decodeCreatedPulls = Schema.decodeUnknownEffect(Schema.Array(CreatedPullSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
-const decodePullFiles = Schema.decodeUnknownEffect(Schema.Array(PullFileSchema));
+const decodeCompare = Schema.decodeUnknownEffect(CompareSchema);
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
 const decodeIssueComments = Schema.decodeUnknownEffect(Schema.Array(IssueCommentSchema));
 const decodeReviewComments = Schema.decodeUnknownEffect(Schema.Array(ReviewCommentSchema));
@@ -798,6 +799,9 @@ const acceptResponse = () => Effect.void;
 
 const repoPath = (repo: GitHubRepoRef, suffix: string) =>
   `https://api.github.com/repos/${repo.owner}/${repo.name}${suffix}`;
+
+const comparePath = (repo: GitHubRepoRef, baseSha: string, headSha: string) =>
+  repoPath(repo, `/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(headSha)}`);
 
 const orgPath = (repo: GitHubRepoRef, suffix: string) => `https://api.github.com/orgs/${repo.owner}${suffix}`;
 
@@ -1380,7 +1384,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     pullNumber: number,
     input: CreateReviewInput,
   ) {
-    yield* sendJson(repo, HttpClientRequest.post(repoPath(repo, `/pulls/${pullNumber}/reviews`)), {
+    yield* sendAcceptedOnce(repo, HttpClientRequest.post(repoPath(repo, `/pulls/${pullNumber}/reviews`)), {
       commit_id: input.commitId,
       body: input.body,
       comments: input.comments.map((comment) => ({ ...comment, side: "RIGHT" })),
@@ -1411,26 +1415,19 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
 
   const listPullFiles = Effect.fn("github.listPullFiles")(function* (
     repo: GitHubRepoRef,
-    pullNumber: number,
+    baseSha: string,
+    headSha: string,
   ) {
-    const collect: (page?: number) => Effect.Effect<ReadonlyArray<RawPullFile>, IssueTrackerError> =
-      Effect.fn("github.collectPullFilePages")(function* (page = 1) {
-        const json = yield* fetchJson(
-          repo,
-          repoPath(repo, `/pulls/${pullNumber}/files?per_page=100&page=${page}`),
-        );
-        const decoded = yield* Effect.mapError(decodePullFiles(json), toUnavailable);
-        const current = decoded.map((file) => ({
-          path: file.filename,
-          status: file.status,
-          additions: file.additions,
-          deletions: file.deletions,
-          changes: file.changes,
-          patch: file.patch ?? null,
-        }));
-        return current.length < 100 ? current : [...current, ...(yield* collect(page + 1))];
-      });
-    return yield* withPaginationDeadline(collect());
+    const json = yield* fetchJson(repo, comparePath(repo, baseSha, headSha));
+    const comparison = yield* Effect.mapError(decodeCompare(json), toUnavailable);
+    return comparison.files.map((file) => ({
+      path: file.filename,
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      changes: file.changes,
+      patch: file.patch ?? null,
+    }));
   });
 
   const createPerformanceComment = Effect.fn("github.createPerformanceComment")(function* (
@@ -1588,11 +1585,15 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       );
     }),
     getPull,
-    getPullDiff: Effect.fn("github.getPullDiff")(function* (repo: GitHubRepoRef, pullNumber: number) {
+    getPullDiff: Effect.fn("github.getPullDiff")(function* (
+      repo: GitHubRepoRef,
+      baseSha: string,
+      headSha: string,
+    ) {
       return yield* withTransientRetry(
         send(
           repo,
-          HttpClientRequest.get(repoPath(repo, `/pulls/${pullNumber}`)).pipe(
+          HttpClientRequest.get(comparePath(repo, baseSha, headSha)).pipe(
             HttpClientRequest.setHeader("accept", "application/vnd.github.v3.diff"),
           ),
           (response) => response.text,

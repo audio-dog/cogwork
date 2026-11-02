@@ -75,6 +75,10 @@ interface BuildInput {
   readonly createdAtMillis: number;
   readonly workflowRevision: number;
   readonly sourceControl?: SourceControlProviderService;
+  readonly pullRequestSnapshots?: ReadonlyArray<{
+    readonly workspace: string;
+    readonly pullRequest: PullRequestContext;
+  }>;
 }
 
 const actionName = (entry: string) => entry.slice(entry.indexOf(".") + 1);
@@ -271,8 +275,11 @@ const diffNewSideLines = (patch: string) =>
   ).lines;
 
 const reviewCommentFailure = (comment: WorkflowReviewComment, pullRequest: PullRequestContext) => {
-  const file = pullRequest?.changedFiles.find(({ path }) => path === comment.path);
-  const lineIsInDiff = file?.patch ? diffNewSideLines(file.patch).has(comment.line) : false;
+  const fileIsChanged = pullRequest.changedFiles.some(({ path }) => path === comment.path);
+  const fileDiff = pullRequest.diff
+    .split(/(?=^diff --git )/m)
+    .find((section) => section.split("\n").includes(`+++ b/${comment.path}`));
+  const lineIsInDiff = fileIsChanged && fileDiff ? diffNewSideLines(fileDiff).has(comment.line) : false;
   return lineIsInDiff
     ? null
     : `Review comment ${comment.path}:${comment.line} is not on the new side of the diff`;
@@ -285,6 +292,9 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
   inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
   sourceControl: SourceControlProviderService | undefined,
   workspaceId: string | undefined,
+  snapshots:
+    | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
+    | undefined,
 ) {
   const target = yield* frozenSourceControlTarget(entry, selected, workspaceId);
   if (target === null) return { _tag: "NoWorkspace" } as const;
@@ -294,10 +304,21 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
     const workspace = selected.find(({ config }) => config.name === target.config.name);
     if (!workspace) return yield* decodeFailure("The named pull request Workspace is unavailable");
     if (!sourceControl) return yield* decodeFailure("Source control provider is not configured");
-    const pullRequest = yield* sourceControl
+    const currentPullRequest = yield* sourceControl
       .readPullRequest(workspace, reference)
       .pipe(Effect.mapError((error) => WorkflowActionPlanDecodeError.make({ message: error.message })));
-    if (pullRequest === null) return yield* decodeFailure(`Pull request ${reference} was not found`);
+    if (currentPullRequest === null) return yield* decodeFailure(`Pull request ${reference} was not found`);
+    const snapshot = snapshots?.findLast(
+      ({ workspace: snapshotWorkspace, pullRequest }) =>
+        snapshotWorkspace === workspace.config.name && pullRequest.number === currentPullRequest.number,
+    );
+    if (snapshots && !snapshot) {
+      return yield* decodeFailure(`Read pull request ${reference} with the pull-request Tool`);
+    }
+    if (snapshot && snapshot.pullRequest.headSha !== currentPullRequest.headSha) {
+      return yield* decodeFailure(`Pull request ${reference} received a new commit after it was read`);
+    }
+    const pullRequest = snapshot?.pullRequest ?? currentPullRequest;
     const comments = Array.isArray(inputs.review_comments) ? inputs.review_comments : [];
     const failure = comments.map((comment) => reviewCommentFailure(comment, pullRequest)).find(Boolean);
     if (failure) return yield* decodeFailure(failure);
@@ -409,10 +430,13 @@ const targetFor = (
   parameters: ReadonlyArray<WorkflowParameterValue>,
   sourceControl: SourceControlProviderService | undefined,
   workspace: string | undefined,
+  snapshots:
+    | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
+    | undefined,
 ) => {
   const name = actionName(entry.key);
   if (sourceControlActions.has(name)) {
-    return sourceControlTargetFor(entry, admission, workspaces, inputs, sourceControl, workspace);
+    return sourceControlTargetFor(entry, admission, workspaces, inputs, sourceControl, workspace, snapshots);
   }
   const producer = targetProducers.get(name);
   return (
@@ -477,6 +501,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
         action.parameters,
         input.sourceControl,
         input.output.workspace,
+        input.pullRequestSnapshots,
       );
       return WorkflowActionPlanStep.make({
         position,

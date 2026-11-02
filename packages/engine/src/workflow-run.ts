@@ -46,7 +46,7 @@ import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { SlackWrite } from "./slack-write";
-import { SourceControlProvider } from "./source-control";
+import { type PullRequestContext, SourceControlProvider } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { Workflows } from "./workflow";
 import {
@@ -79,36 +79,29 @@ const encodeArtifactContext = Schema.encodeSync(
 const issueSearchActionNames = new Set(["create-issue", "comment-issue", "comment-this-item"]);
 const namedPullRequestActionNames = new Set(["comment-on-named-pull-request", "post-review", "draft-review"]);
 
-const needsIssueSearch = (
+const needsActionTool = (
   operation: Parameters<typeof workflowOperationResultSchema>[0],
   catalog: Parameters<typeof workflowOperationResultSchema>[1],
+  names: ReadonlySet<string>,
 ) => {
   const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
   return operation.transitions
     .flatMap(({ actions }) => actions)
     .some(({ entry }) => {
       const catalogEntry = entries.get(entry);
-      return (
-        catalogEntry?.kind === "action" && issueSearchActionNames.has(entry.slice(entry.indexOf(".") + 1))
-      );
+      return catalogEntry?.kind === "action" && names.has(entry.slice(entry.indexOf(".") + 1));
     });
 };
+
+const needsIssueSearch = (
+  operation: Parameters<typeof workflowOperationResultSchema>[0],
+  catalog: Parameters<typeof workflowOperationResultSchema>[1],
+) => needsActionTool(operation, catalog, issueSearchActionNames);
 
 const needsPullRequestTool = (
   operation: Parameters<typeof workflowOperationResultSchema>[0],
   catalog: Parameters<typeof workflowOperationResultSchema>[1],
-) => {
-  const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
-  return operation.transitions
-    .flatMap(({ actions }) => actions)
-    .some(({ entry }) => {
-      const catalogEntry = entries.get(entry);
-      return (
-        catalogEntry?.kind === "action" &&
-        namedPullRequestActionNames.has(entry.slice(entry.indexOf(".") + 1))
-      );
-    });
-};
+) => needsActionTool(operation, catalog, namedPullRequestActionNames);
 
 const agentInputIsMissing = (value: WorkflowAgentInputValue | undefined) =>
   value === undefined || (typeof value === "string" && value.trim().length === 0);
@@ -602,10 +595,20 @@ export const make = Effect.gen(function* () {
     };
     yield* ledger.acceptRun(run, plan);
 
+    const pullRequestSnapshots = yield* Ref.make<
+      ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
+    >([]);
     const engineTools = [
       ...(issueSearchEnabled ? [makeIssueSearchTool(issueTracker, toolWorkspaces)] : []),
       ...(pullRequestToolEnabled && sourceControl
-        ? [makePullRequestTool(sourceControl, toolWorkspaces)]
+        ? [
+            makePullRequestTool(sourceControl, toolWorkspaces, (selected, pullRequest) =>
+              Ref.update(pullRequestSnapshots, (snapshots) => [
+                ...snapshots,
+                { workspace: selected.config.name, pullRequest },
+              ]),
+            ),
+          ]
         : []),
     ];
     const eventsExit = yield* harness.run({ plan, session, mcpCredentials: new Map(), engineTools }).pipe(
@@ -660,6 +663,8 @@ export const make = Effect.gen(function* () {
       return "completed" as const;
     }
 
+    const reviewedPullRequests = yield* Ref.get(pullRequestSnapshots);
+
     if ("elements" in decoded.value) {
       const children = decoded.value.elements.map((element, position) => ({
         admission: fanOutAdmission(admission, run.id, position, element),
@@ -704,6 +709,7 @@ export const make = Effect.gen(function* () {
           createdAtMillis: startedAtMillis,
           workflowRevision: record.publishedRevision ?? record.workingRevision,
           ...(sourceControl ? { sourceControl } : {}),
+          pullRequestSnapshots: reviewedPullRequests,
         }),
       ).pipe(
         Effect.matchEffect({
@@ -725,6 +731,7 @@ export const make = Effect.gen(function* () {
         createdAtMillis: yield* Clock.currentTimeMillis,
         workflowRevision: record.publishedRevision ?? record.workingRevision,
         ...(sourceControl ? { sourceControl } : {}),
+        pullRequestSnapshots: reviewedPullRequests,
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
@@ -893,12 +900,6 @@ export const make = Effect.gen(function* () {
                 Effect.andThen(settle(plan.attempt, "interrupted")),
               );
           }),
-          Effect.catchTag("IssueTrackerError", (error) =>
-            Effect.logWarning("pull request review plan refresh failed", {
-              item: plan.item,
-              message: error.message,
-            }),
-          ),
         );
       },
       { discard: true },

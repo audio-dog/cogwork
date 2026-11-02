@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import type { SourceControlProviderService } from "./source-control";
+import type { PullRequestContext, SourceControlProviderService } from "./source-control";
 
 export const PullRequestToolInput = Schema.Struct({
   workspace: WorkspaceId,
@@ -18,12 +18,15 @@ const unavailable = (message: string) =>
 export const makePullRequestTool = (
   sourceControl: SourceControlProviderService,
   workspaces: ReadonlyArray<RegisteredWorkspace>,
+  recordRead: (workspace: RegisteredWorkspace, pullRequest: PullRequestContext) => Effect.Effect<void> = () =>
+    Effect.void,
 ) => {
   const read = Effect.fn("PullRequestTool.read")(function* (input: typeof PullRequestToolInput.Type) {
     const workspace = workspaces.find(({ config }) => config.name === input.workspace);
     if (!workspace) return yield* unavailable(`Workspace ${input.workspace} is not selected`);
     const pullRequest = yield* sourceControl.readPullRequest(workspace, input.pull_request);
     if (pullRequest === null) return yield* unavailable(`Pull request ${input.pull_request} was not found`);
+    yield* recordRead(workspace, pullRequest);
     return { pullRequest };
   });
 

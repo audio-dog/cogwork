@@ -52,6 +52,7 @@ import {
 import {
   emptyLayer as emptyIssueTrackerLayer,
   IssueTracker,
+  IssueTrackerError,
   type IssueTrackerService,
   makeEmpty as makeEmptyIssueTracker,
 } from "./issue-tracker";
@@ -1180,7 +1181,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("adds the pull request tool only for a named-pull-request action", () =>
+  it.effect("adds the pull request tool and rejects a head change after its read", () =>
     Effect.gen(function* () {
       const reviewWorkspace: RegisteredWorkspace = {
         source: "test",
@@ -1222,40 +1223,51 @@ describe("WorkflowRun", () => {
         agentInputs: ["pull_request", "review_body", "review_comments"],
         emits: [],
       } satisfies WorkflowCatalogEntry;
+      const pullReads = yield* Ref.make(0);
       const sourceControl = {
         ...emptySourceControl,
         readPullRequest: () =>
-          Effect.succeed({
-            number: 826,
-            url: "https://github.com/owner/repo/pull/826",
-            headBranch: "826-review-actions",
-            baseBranch: "main",
-            headSha: "abc123",
-            title: "Review actions",
-            description: "Adds review actions.",
-            diff: "",
-            changedFiles: [],
-            comments: [],
-          }),
+          Ref.getAndUpdate(pullReads, (count) => count + 1).pipe(
+            Effect.map((count) => ({
+              number: 826,
+              url: "https://github.com/owner/repo/pull/826",
+              headBranch: "826-review-actions",
+              baseBranch: "main",
+              headSha: count === 0 ? "abc123" : "new-head",
+              title: "Review actions",
+              description: "Adds review actions.",
+              diff: "",
+              changedFiles: [],
+              comments: [],
+            })),
+          ),
       };
-      const { runner } = yield* testProgram(
-        [
-          {
-            summary: "Review ready",
-            stuck: false,
-            answers: { done: "yes" },
-            workspace: reviewWorkspace.config.name,
-            inputs: {
-              pull_request: "#826",
-              review_body: "Looks good.",
-              review_comments: [],
-              approval_request: "Post this review?",
-            },
-          },
-        ],
+      const reviewOutput = {
+        summary: "Review ready",
+        stuck: false,
+        answers: { done: "yes" },
+        workspace: reviewWorkspace.config.name,
+        inputs: {
+          pull_request: "#826",
+          review_body: "Looks good.",
+          review_comments: [],
+          approval_request: "Post this review?",
+        },
+      };
+      const { runner, coordination } = yield* testProgram(
+        [reviewOutput],
         {
           registry: { ...emptyRegistry, workspaces: [reviewWorkspace] },
           sourceControl,
+          run: (request) => {
+            const execute = request.engineTools?.find(({ name }) => name === "pull-request")?.execute;
+            if (!execute) return Stream.die("pull request tool is unavailable");
+            return Stream.fromEffect(
+              Effect.promise(() =>
+                Promise.resolve(execute({ workspace: "repo", pull_request: "#826" })),
+              ).pipe(Effect.map(() => resultEvent(reviewOutput))),
+            );
+          },
         },
         workflowServiceFor(reviewDocument, [postReviewCatalogEntry, waitForApprovalCatalogEntry]),
       );
@@ -1267,6 +1279,8 @@ describe("WorkflowRun", () => {
       const plan = yield* (yield* RunLedger).getRunPlan(run.id);
 
       assert.deepStrictEqual(plan?.tools, ["pull-request"]);
+      assert.strictEqual(run.status, "failed");
+      assert.include((yield* Ref.get(coordination.attempts))[0]?.reason ?? "", "received a new commit");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -1631,7 +1645,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("withdraws a waiting review plan when the pull request head changes", () =>
+  it.effect("keeps approval waiting on refresh failure and withdraws it for a new head", () =>
     Effect.gen(function* () {
       const reviewWorkspace: RegisteredWorkspace = {
         source: "test",
@@ -1705,22 +1719,47 @@ describe("WorkflowRun", () => {
           }),
         ],
       });
+      const refreshAvailable = yield* Ref.make(false);
+      const reviewWrites = yield* Ref.make(0);
       const sourceControl = {
         ...emptySourceControl,
         readPullRequest: () =>
-          Effect.succeed({
-            number: 826,
-            url: "https://github.com/owner/repo/pull/826",
-            headBranch: "826-review-actions",
-            baseBranch: "main",
-            headSha: "new-head",
-            title: "Review actions",
-            description: "Adds review actions.",
-            diff: "",
-            changedFiles: [],
-            comments: [],
-          }),
-      };
+          Ref.get(refreshAvailable).pipe(
+            Effect.flatMap((available) =>
+              available
+                ? Effect.succeed({
+                    number: 826,
+                    url: "https://github.com/owner/repo/pull/826",
+                    headBranch: "826-review-actions",
+                    baseBranch: "main",
+                    headSha: "new-head",
+                    title: "Review actions",
+                    description: "Adds review actions.",
+                    diff: "",
+                    changedFiles: [],
+                    comments: [],
+                  })
+                : Effect.fail(
+                    new IssueTrackerError({
+                      reason: "unavailable",
+                      retryable: true,
+                      message: "GitHub unavailable",
+                    }),
+                  ),
+            ),
+          ),
+        postReview: (selected, pullRequest, _event, _input, origin) =>
+          Ref.update(reviewWrites, (count) => count + 1).pipe(
+            Effect.map(() =>
+              WorkflowActionArtifact.make({
+                workspace: selected.config.name,
+                issue: WorkItemId.make(`#${pullRequest.number}`),
+                url: pullRequest.url,
+                origin,
+              }),
+            ),
+          ),
+      } satisfies SourceControlProviderService;
       const { runner, coordination, observationStore } = yield* testProgram([], {
         registry: { ...emptyRegistry, workspaces: [reviewWorkspace] },
         sourceControl,
@@ -1741,6 +1780,21 @@ describe("WorkflowRun", () => {
         endedAtMillis: 2,
       });
 
+      const unavailableApproval = yield* Effect.result(
+        runner.approve({
+          item: admission.event.key,
+          attempt,
+          digest: reviewPlan.digest,
+        }),
+      );
+      assert.isTrue(Result.isFailure(unavailableApproval));
+      if (Result.isFailure(unavailableApproval)) {
+        assert.strictEqual(unavailableApproval.failure.reason, "unavailable");
+      }
+      assert.strictEqual(yield* Ref.get(reviewWrites), 0);
+      assert.isNotNull(yield* (yield* WorkflowActionPlanStore).pending(reviewPlan.item, workflow));
+
+      yield* Ref.set(refreshAvailable, true);
       yield* runner.refreshReviewPlans();
 
       assert.isNull(yield* (yield* WorkflowActionPlanStore).pending(reviewPlan.item, workflow));

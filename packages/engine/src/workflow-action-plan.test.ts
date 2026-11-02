@@ -447,7 +447,7 @@ describe("Workflow action plan", () => {
             headSha: "abc123",
             title: "Review actions",
             description: "Adds review actions.",
-            diff: "diff --git a/src/review.ts b/src/review.ts",
+            diff: "diff --git a/src/review.ts b/src/review.ts\n--- a/src/review.ts\n+++ b/src/review.ts\n@@ -10,2 +10,3 @@\n context\n-old\n+new\n tail",
             changedFiles: [
               {
                 path: "src/review.ts",
@@ -455,7 +455,7 @@ describe("Workflow action plan", () => {
                 additions: 1,
                 deletions: 1,
                 changes: 2,
-                patch: "@@ -10,2 +10,3 @@\n context\n-old\n+new\n tail",
+                patch: null,
               },
             ],
             comments: [],
@@ -484,10 +484,16 @@ describe("Workflow action plan", () => {
           sourceControl,
         });
 
-      const built = yield* build(12);
+      const built = yield* Effect.result(build(12));
       const rejected = yield* Effect.result(build(99));
 
-      assert.deepInclude(built.steps[0]?.target, { _tag: "NamedPullRequest", headSha: "abc123" });
+      assert.isTrue(Result.isSuccess(built));
+      if (Result.isSuccess(built)) {
+        assert.deepInclude(built.success.steps[0]?.target, {
+          _tag: "NamedPullRequest",
+          headSha: "abc123",
+        });
+      }
       assert.isTrue(Result.isFailure(rejected));
       if (Result.isFailure(rejected)) assert.include(rejected.failure.message, "src/review.ts:99");
     }),

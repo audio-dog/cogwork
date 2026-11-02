@@ -561,6 +561,8 @@ const pull = (over: Partial<RawPull> & { readonly number: number; readonly headR
   authorAssociation: "MEMBER",
   draft: false,
   headSha: `sha-${over.number}`,
+  baseSha: `base-${over.number}`,
+  baseRef: "main",
   headRepository: "owner/repo",
   closingIssueNumbers: [],
   updatedAtMillis: 0,
@@ -1223,6 +1225,25 @@ describe("GitHub adapters", () => {
               headRepository: "fork/repo",
             }),
           ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("reads a named fork pull request through its base repository", () =>
+    Effect.gen(function* () {
+      const pullRequest = yield* (yield* SourceControlProvider).readPullRequest(workspace, "#482");
+
+      assert.deepInclude(pullRequest, {
+        number: 482,
+        headSha: "sha-482",
+        baseBranch: "main",
+      });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          pulls: [pull({ number: 482, headRef: "review-actions", headRepository: "fork/repo" })],
         }),
       ),
     ),

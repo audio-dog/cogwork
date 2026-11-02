@@ -133,7 +133,7 @@ export const githubSourceControlActionEntries = [
   ),
 ] as const;
 
-const slackReviewTemplate = decodeTemplate({
+export const slackReviewTemplate = decodeTemplate({
   id: "slack-to-github-review",
   name: "Slack → Review",
   description: "Review a GitHub pull request when someone asks in Slack.",
@@ -537,15 +537,21 @@ const make = (
     const target = yield* sourceControlTarget(workspace);
     const number = pullNumberFromReference(workspace, target, reference.trim());
     if (number === null) return null;
-    const [pull, diff, changedFiles, issueComments, reviewComments, reviews] = yield* Effect.all([
-      client.getPull(target, number),
-      client.getPullDiff(target, number),
-      client.listPullFiles(target, number),
+    const pull = yield* client.getPull(target, number);
+    if (!pull.baseSha) {
+      return yield* new IssueTrackerError({
+        reason: "unavailable",
+        retryable: true,
+        message: `Pull request #${number} has no base commit`,
+      });
+    }
+    const [diff, changedFiles, issueComments, reviewComments, reviews] = yield* Effect.all([
+      client.getPullDiff(target, pull.baseSha, pull.headSha),
+      client.listPullFiles(target, pull.baseSha, pull.headSha),
       client.listAllComments(target, number),
       client.listReviewComments(target, number),
       client.listReviews(target, number),
     ]);
-    if (!sameRepositoryHead(target, pull)) return null;
     const comments = [
       ...issueComments.map(({ authorLogin, body }) => ({
         author: authorLogin ?? "unknown",
@@ -657,6 +663,19 @@ const make = (
     return workflowArtifact(workspace, pullRequest, origin);
   });
 
+  const writePullRequestComment = Effect.fn("github.writePullRequestComment")(function* (
+    workspace: RegisteredWorkspace,
+    pullRequest: ResolvedPullRequest,
+    body: string,
+    origin: WorkflowActionOrigin,
+  ) {
+    const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
+    if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
+      yield* client.createComment(target, pullRequest.number, workflowMarkedBody(body, origin.writeKey));
+    }
+    return workflowArtifact(workspace, pullRequest, origin);
+  });
+
   const contribution: WorkflowCatalogContribution = {
     entries: githubSourceControlActionEntries,
     templates: [slackReviewTemplate],
@@ -763,14 +782,7 @@ const make = (
         yield* markPullRequest(target, pullRequest.number, origin.writeKey);
         return workflowArtifact(workspace, pullRequest, origin);
       }),
-    commentPullRequest: (workspace, pullRequest, body, origin) =>
-      Effect.gen(function* () {
-        const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
-        if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
-          yield* client.createComment(target, pullRequest.number, workflowMarkedBody(body, origin.writeKey));
-        }
-        return workflowArtifact(workspace, pullRequest, origin);
-      }),
+    commentPullRequest: writePullRequestComment,
     requestReview: (workspace, pullRequest, reviewer, origin) =>
       Effect.gen(function* () {
         const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
@@ -781,14 +793,7 @@ const make = (
         yield* markPullRequest(target, pullRequest.number, origin.writeKey);
         return workflowArtifact(workspace, pullRequest, origin);
       }),
-    commentNamedPullRequest: (workspace, pullRequest, body, origin) =>
-      Effect.gen(function* () {
-        const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
-        if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
-          yield* client.createComment(target, pullRequest.number, workflowMarkedBody(body, origin.writeKey));
-        }
-        return workflowArtifact(workspace, pullRequest, origin);
-      }),
+    commentNamedPullRequest: writePullRequestComment,
     postReview: (workspace, pullRequest, event, input, origin) =>
       writeReview(workspace, pullRequest, event, input, origin),
     draftReview: (workspace, pullRequest, input, origin) =>
