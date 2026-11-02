@@ -46,8 +46,6 @@ const readOperatingInstructionResource = (resource: string) =>
 const readOperatingInstructions = (agent: OperatingInstructionAgent) =>
   readOperatingInstructionResource(`${agent}/INSTRUCTIONS.md`);
 
-const readTestValue = () => readOperatingInstructionResource("shared/test-value/TEST-VALUE.md");
-
 describe("resolveTriage", () => {
   it("falls back to the default skill and prompt when the stage is unset", () => {
     const resolved = resolveTriage(config());
@@ -405,14 +403,16 @@ layer(NodeFileSystem.layer)((it) => {
   });
 
   describe("implement Operating Instructions", () => {
-    it.effect("keeps the shared test-value resource free of named repo concepts", () =>
-      Effect.gen(function* () {
-        const testValue = yield* readTestValue();
+    it.effect.each(["shared/test-value/TEST-VALUE.md", "shared/bug-hunt/BUG-HUNT.md"])(
+      "keeps the shared %s resource free of named repo concepts",
+      (resource) =>
+        Effect.gen(function* () {
+          const shared = yield* readOperatingInstructionResource(resource);
 
-        assert.notInclude(testValue, "cogwork");
-        assert.notInclude(testValue, "ADR");
-        assert.notInclude(testValue, "Effect");
-      }),
+          assert.notInclude(shared, "cogwork");
+          assert.notInclude(shared, "ADR");
+          assert.notInclude(shared, "Effect");
+        }),
     );
 
     it.effect("carries the test-value bar through implementation, checks, and review", () =>
@@ -466,10 +466,14 @@ layer(NodeFileSystem.layer)((it) => {
         assert.include(review, "`/code-review`");
         assert.include(review, "minimalist");
         assert.include(review, "security-auditor");
+        assert.include(review, "bug-hunter");
+        assert.include(review, "`bug-hunt/BUG-HUNT.md`");
         assert.include(review, "~/.agents/rules/*");
         assert.include(review, "One fix round");
         assert.include(review, "none edits code");
-        assert.lengthOf(review.match(/^- \*\*/gm) ?? [], 3);
+        assert.lengthOf(review.match(/^- \*\*/gm) ?? [], 4);
+        assert.include(review, "run it on the reviewed commit");
+        assert.include(review, "*invalid*");
         assert.isAbove(
           instructions.indexOf("Commit the checked implementation"),
           instructions.indexOf("### Checks"),

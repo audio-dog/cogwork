@@ -71,7 +71,7 @@ Before review, run all four from a clean run:
 
 1. Typecheck — no errors and no suppressions (`as any` / `@ts-ignore` / `@ts-expect-error` defeat the point of a clean typecheck).
 2. Targeted tests — every test file that exercises your diff. Find them by reading what the diff calls and what calls the diff, then run that whole set.
-3. Red proofs — every new or changed test fails on an assertion for the contract it guards. Use one of two sources:
+3. Red proofs — every new or changed test fails on an assertion for the contract it guards. Use one of two sources here; the fix round adds a third, **Review**, for a bug-hunter finding:
    - **Base** — run the test against the base commit's production code for a bug fix or behavior change.
    - **Mutation** — make a small, named break in the new production code for new behavior, run the test, then restore the code.
 
@@ -86,19 +86,26 @@ Commit the checked implementation with `/git-master` before review, but do not p
 
 ### Review — one round, then stop
 
-Dispatch three reviews **in parallel**, each with a clean context: the diff and nothing from this conversation. All report; none edits code.
+Dispatch four reviews **in parallel**, each with a clean context: the diff and nothing from this conversation. All report; none edits code.
 
-Give every reviewer the proposal's Review requirements as mandatory focus. They can strengthen a review; they never remove one of these three reviewers, and the security review always runs.
+Give every reviewer the proposal's Review requirements as mandatory focus. They can strengthen a review; they never remove one of these four reviewers, and the security review always runs.
 
 - **`/code-review`** — invoke it intact. Fixed point: the merge-base with the base branch. Spec source: this work item, including its body, thread, and the triage proposal's requirements digest. Add `~/.agents/rules/*` to the repo's documented standards sources. It owns standards, the smell baseline, and spec fidelity, and numbers every finding (`S1`, `SP1`, …).
 - **minimalist** — review over-engineering and needless code. Give it `test-value/TEST-VALUE.md` and the work item so it judges added tests and scope creep against the real requirement.
 - **security-auditor** — review every diff.
+- **bug-hunter** — review correctness: the inputs and sequences that make the diff produce a wrong result. Dispatch a read-only reviewer whose brief is `bug-hunt/BUG-HUNT.md`, and give it the work item. It numbers every finding (`B1`, `B2`, …) and sketches a failing test for each.
 
-Reviewers cite the specific hunk and the specific rule, risk, smell, or spec line. They do not go for perfection. There is no second round.
+Reviewers cite the specific hunk and the specific rule, risk, smell, bug path, or spec line. They do not go for perfection. There is no second round.
 
-**One fix round.** Fix every blocking finding. A React composition violation is a blocking finding. Fix nits at your judgment. Every finding left unfixed gets a recorded disposition in the draft's Open questions section: *won't-fix* with a concrete reason, or *escalated* as a question for the reviewer. Key it to the finding's id when `/code-review` supplied one. Then re-run the checks above on what the fixes touched. Findings a reviewer would raise against the fixes wait for human review.
+**One fix round.** Fix every blocking finding. A React composition violation is a blocking finding. Fix nits at your judgment. Every finding left unfixed gets a recorded disposition in the draft's Open questions section: *won't-fix* with a concrete reason, *invalid* with the evidence that refutes it, or *escalated* as a question for the reviewer. Key it to the finding's id when the reviewer supplied one. Then re-run the checks above on what the fixes touched. Findings a reviewer would raise against the fixes wait for human review.
 
-Completion: every finding from `/code-review`, minimalist, and security-auditor is fixed in the diff or has a disposition in the PR-body draft, and the checks are green on the fixed diff.
+Prove a bug-hunter finding before you fix it. For each blocking finding a test can express, write its test first and run it on the reviewed commit, before the fix:
+
+1. The test fails on its assertion: the bug is real. Fix it. The test's red proof is **Review**, keyed to the finding's id.
+2. The test passes: the finding is *invalid*. Delete the test and record the passing run as the evidence.
+3. No test can express the bug: fix it or not at your judgment, and record the call.
+
+Completion: every finding from `/code-review`, minimalist, security-auditor, and bug-hunter is fixed in the diff or has a disposition in the draft's Open questions, every blocking bug-hunter finding a test can express has a Review proof or an *invalid* disposition, and the checks are green on the fixed diff.
 
 ### Build, once
 
@@ -150,12 +157,12 @@ The body also carries the Work item, Steering honored, Verification, Test proof,
 
 ## Test proof
 
-- <test — Base, or Mutation: named production break — failing assertion>
+- <test — Base, Mutation: named production break, or Review: finding id — failing assertion>
 - <moved or characterization test — why no red proof applies>
 
 ## Open questions
 
-- <review findings left unfixed, each with its id where it has one and its disposition: won't-fix + the concrete reason, or escalated>
+- <review findings left unfixed, each with its id where it has one and its disposition: won't-fix + the concrete reason, invalid + the refuting evidence, or escalated>
 - <anything else a reviewer should weigh in on; "none" if none>
 ```
 

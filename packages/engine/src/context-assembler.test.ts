@@ -364,6 +364,10 @@ describe("ContextAssembler.assemble", () => {
           dest: "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/implement-agent",
         },
         {
+          source: "/engine/operating-instructions/shared/bug-hunt",
+          dest: "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/implement-agent/bug-hunt",
+        },
+        {
           source: "/engine/operating-instructions/shared/test-value",
           dest: "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/implement-agent/test-value",
         },
@@ -498,9 +502,17 @@ describe("ContextAssembler.assemble", () => {
     }),
   );
 
-  it.effect.each(["implement-agent", "follow-up-agent"])(
-    "provisions the shared test-value resource for %s",
-    (operatingInstructions) =>
+  const sharedResourceFiles = {
+    "bug-hunt": { file: "BUG-HUNT.md", content: "bug-hunt brief" },
+    "test-value": { file: "TEST-VALUE.md", content: "test-value bar" },
+  } as const;
+
+  it.effect.each([
+    { operatingInstructions: "implement-agent", bundles: ["bug-hunt", "test-value"] },
+    { operatingInstructions: "follow-up-agent", bundles: ["test-value"] },
+  ] as const)(
+    "provisions the shared resources for $operatingInstructions",
+    ({ operatingInstructions, bundles }) =>
       Effect.gen(function* () {
         const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
         const assembler = make(
@@ -508,7 +520,12 @@ describe("ContextAssembler.assemble", () => {
           stubFs(
             {
               [`/engine/operating-instructions/${operatingInstructions}/INSTRUCTIONS.md`]: `${operatingInstructions} instructions`,
-              "/engine/operating-instructions/shared/test-value/TEST-VALUE.md": "test-value bar",
+              ...Object.fromEntries(
+                Object.entries(sharedResourceFiles).map(([bundle, { file, content }]) => [
+                  `/engine/operating-instructions/shared/${bundle}/${file}`,
+                  content,
+                ]),
+              ),
             },
             copies,
           ),
@@ -521,17 +538,18 @@ describe("ContextAssembler.assemble", () => {
             source: `/engine/operating-instructions/${operatingInstructions}`,
             dest: assembled.operatingInstructionsPath,
           },
-          {
-            source: "/engine/operating-instructions/shared/test-value",
-            dest: `${assembled.operatingInstructionsPath}/test-value`,
-          },
+          ...bundles.map((bundle) => ({
+            source: `/engine/operating-instructions/shared/${bundle}`,
+            dest: `${assembled.operatingInstructionsPath}/${bundle}`,
+          })),
         ]);
-        assert.deepStrictEqual(assembled.operatingInstructionResources, [
-          {
-            source: `${assembled.operatingInstructionsPath}/test-value/TEST-VALUE.md`,
-            content: "test-value bar",
-          },
-        ]);
+        assert.deepStrictEqual(
+          assembled.operatingInstructionResources,
+          bundles.map((bundle) => ({
+            source: `${assembled.operatingInstructionsPath}/${bundle}/${sharedResourceFiles[bundle].file}`,
+            content: sharedResourceFiles[bundle].content,
+          })),
+        );
       }),
   );
 
