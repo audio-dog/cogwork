@@ -369,7 +369,7 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 41);
+      assert.lengthOf(catalog.catalog.entries, 44);
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "slack.i-am-mentioned"));
       assert.deepInclude(
@@ -499,6 +499,9 @@ describe("daemon server composition", () => {
           "Push to this pull request",
           "Comment on this pull request",
           "Request a review",
+          "Comment on a named pull request",
+          "Post a review",
+          "Draft a review",
           "Issue has label",
           "New comment from a person",
           "Pull request checks failed",

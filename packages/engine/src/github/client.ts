@@ -93,6 +93,27 @@ export interface RawPull {
   readonly updatedAtMillis: number;
 }
 
+export interface RawPullDetail extends RawPull {
+  readonly title: string;
+  readonly body: string;
+}
+
+export interface RawPullFile {
+  readonly path: string;
+  readonly status: string;
+  readonly additions: number;
+  readonly deletions: number;
+  readonly changes: number;
+  readonly patch: string | null;
+}
+
+export interface CreateReviewInput {
+  readonly commitId: string;
+  readonly body: string;
+  readonly comments: ReadonlyArray<{ readonly path: string; readonly line: number; readonly body: string }>;
+  readonly event: "APPROVE" | "COMMENT" | "REQUEST_CHANGES" | null;
+}
+
 interface RawCommentFields {
   readonly id: number;
   readonly authorLogin: string;
@@ -109,6 +130,8 @@ export type RawIssueComment = Omit<RawCommentFields, "authorLogin"> & {
 export type RawReviewComment = RawCommentFields & {
   readonly inReplyToId: number | null;
   readonly subjectType: "line" | "file";
+  readonly path?: string | null;
+  readonly line?: number | null;
 };
 
 export interface RawReview {
@@ -182,7 +205,22 @@ const PullSchema = Schema.Struct({
 });
 
 const PullDetailSchema = Schema.Struct({
+  ...PullSchema.fields,
+  title: Schema.String,
+  body: Schema.NullOr(Schema.String),
   mergeable_state: Schema.optional(Schema.NullOr(Schema.String)),
+});
+const PullMergeableStateSchema = Schema.Struct({
+  mergeable_state: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
+const PullFileSchema = Schema.Struct({
+  filename: Schema.String,
+  status: Schema.String,
+  additions: Schema.Natural,
+  deletions: Schema.Natural,
+  changes: Schema.Natural,
+  patch: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) });
@@ -222,6 +260,8 @@ const ReviewCommentSchema = Schema.Struct({
   user: Schema.NullOr(GitHubUserSchema),
   in_reply_to_id: Schema.NullOr(Schema.Finite).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
   subject_type: Schema.Union([Schema.Literal("line"), Schema.Literal("file")]),
+  path: Schema.optional(Schema.NullOr(Schema.String)),
+  line: Schema.optional(Schema.NullOr(Schema.Finite)),
 });
 
 const toRawIssueComment = (comment: typeof IssueCommentSchema.Type) => ({
@@ -245,6 +285,8 @@ const toRawReviewComment = ({ user, ...comment }: typeof ReviewCommentSchema.Typ
           createdAtMillis: commentMillis(comment.created_at),
           inReplyToId: comment.in_reply_to_id,
           subjectType: comment.subject_type,
+          path: comment.path ?? null,
+          line: comment.line ?? null,
         } satisfies RawReviewComment,
       ]
     : [];
@@ -499,6 +541,7 @@ const decodeCreatedPull = Schema.decodeUnknownEffect(CreatedPullSchema);
 const decodeCreatedPulls = Schema.decodeUnknownEffect(Schema.Array(CreatedPullSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
+const decodePullFiles = Schema.decodeUnknownEffect(Schema.Array(PullFileSchema));
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
 const decodeIssueComments = Schema.decodeUnknownEffect(Schema.Array(IssueCommentSchema));
 const decodeReviewComments = Schema.decodeUnknownEffect(Schema.Array(ReviewCommentSchema));
@@ -788,11 +831,14 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     if (cooldownUntil !== null && now < cooldownUntil) {
       return yield* permanentAttemptError(rateLimited(cooldownUntil));
     }
-    const response = yield* withTransientAttemptDeadline(
-      client.execute(
-        request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
-      ),
+    const authenticated = request.pipe(
+      HttpClientRequest.bearerToken(token),
+      HttpClientRequest.setHeaders(baseHeaders),
     );
+    const prepared = request.headers.accept
+      ? HttpClientRequest.setHeader(authenticated, "accept", request.headers.accept)
+      : authenticated;
+    const response = yield* withTransientAttemptDeadline(client.execute(prepared));
     const remaining = response.headers["x-ratelimit-remaining"];
     const resumeAt = rateLimitResumeAt(response.headers, now);
     if (remaining === "0" && resumeAt !== null) {
@@ -1329,6 +1375,64 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     );
   });
 
+  const createReview = Effect.fn("github.createReview")(function* (
+    repo: GitHubRepoRef,
+    pullNumber: number,
+    input: CreateReviewInput,
+  ) {
+    yield* sendJson(repo, HttpClientRequest.post(repoPath(repo, `/pulls/${pullNumber}/reviews`)), {
+      commit_id: input.commitId,
+      body: input.body,
+      comments: input.comments.map((comment) => ({ ...comment, side: "RIGHT" })),
+      ...(input.event === null ? {} : { event: input.event }),
+    });
+  });
+
+  const getPull = Effect.fn("github.getPull")(function* (repo: GitHubRepoRef, pullNumber: number) {
+    const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}`));
+    const pull = yield* Effect.mapError(decodePullDetail(json), toUnavailable);
+    return {
+      number: pull.number,
+      url: pull.html_url || `https://github.com/${repo.owner}/${repo.name}/pull/${pull.number}`,
+      authorLogin: pull.user.login,
+      authorAssociation: pull.author_association ?? "NONE",
+      draft: pull.draft ?? false,
+      headSha: pull.head.sha,
+      baseSha: pull.base?.sha,
+      baseRef: pull.base?.ref,
+      headRef: pull.head.ref,
+      headRepository: pull.head.repo?.full_name ?? null,
+      closingIssueNumbers: [] as ReadonlyArray<number>,
+      updatedAtMillis: millisFromIso(pull.updated_at ?? null),
+      title: pull.title,
+      body: pull.body ?? "",
+    } satisfies RawPullDetail;
+  });
+
+  const listPullFiles = Effect.fn("github.listPullFiles")(function* (
+    repo: GitHubRepoRef,
+    pullNumber: number,
+  ) {
+    const collect: (page?: number) => Effect.Effect<ReadonlyArray<RawPullFile>, IssueTrackerError> =
+      Effect.fn("github.collectPullFilePages")(function* (page = 1) {
+        const json = yield* fetchJson(
+          repo,
+          repoPath(repo, `/pulls/${pullNumber}/files?per_page=100&page=${page}`),
+        );
+        const decoded = yield* Effect.mapError(decodePullFiles(json), toUnavailable);
+        const current = decoded.map((file) => ({
+          path: file.filename,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          changes: file.changes,
+          patch: file.patch ?? null,
+        }));
+        return current.length < 100 ? current : [...current, ...(yield* collect(page + 1))];
+      });
+    return yield* withPaginationDeadline(collect());
+  });
+
   const createPerformanceComment = Effect.fn("github.createPerformanceComment")(function* (
     repo: GitHubRepoRef,
     issueNumber: number,
@@ -1483,11 +1587,27 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         }),
       );
     }),
+    getPull,
+    getPullDiff: Effect.fn("github.getPullDiff")(function* (repo: GitHubRepoRef, pullNumber: number) {
+      return yield* withTransientRetry(
+        send(
+          repo,
+          HttpClientRequest.get(repoPath(repo, `/pulls/${pullNumber}`)).pipe(
+            HttpClientRequest.setHeader("accept", "application/vnd.github.v3.diff"),
+          ),
+          (response) => response.text,
+        ),
+      );
+    }),
+    listPullFiles,
     issuePullReferences,
     pullMergeableState: (repo: GitHubRepoRef, pullNumber: number) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}`));
-        const detail = yield* Effect.mapError(decodePullDetail(json), toUnavailable);
+        const detail = yield* Effect.mapError(
+          Schema.decodeUnknownEffect(PullMergeableStateSchema)(json),
+          toUnavailable,
+        );
         return detail.mergeable_state ?? null;
       }),
     listComments: Effect.fn("github.listComments")(function* (repo: GitHubRepoRef, issueNumber: number) {
@@ -1591,6 +1711,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     listCollaborators,
     listRequestedReviewers,
     requestReview,
+    createReview,
     createPerformanceComment,
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),

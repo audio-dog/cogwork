@@ -766,6 +766,85 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("creates a pending review by omitting event", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({ id: 91 }, 200)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      yield* client.createReview(repo, 480, {
+        commitId: "reviewed-sha",
+        body: "Review draft",
+        comments: [{ path: "src/index.ts", line: 12, body: "Please rename this." }],
+        event: null,
+      });
+
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.method, "POST");
+      assert.strictEqual(request.url, "https://api.github.com/repos/colonylabs/cogwork/pulls/480/reviews");
+      assert.deepStrictEqual(yield* Effect.promise(() => request.json()), {
+        commit_id: "reviewed-sha",
+        body: "Review draft",
+        comments: [{ path: "src/index.ts", line: 12, side: "RIGHT", body: "Please rename this." }],
+      });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("reads pull request description, diff, and changed files", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>((input, init) => {
+      const request = new Request(input, init);
+      if (request.headers.get("accept") === "application/vnd.github.v3.diff") {
+        return Promise.resolve(new Response("diff --git a/src/index.ts b/src/index.ts\n"));
+      }
+      if (request.url.endsWith("/files?per_page=100&page=1")) {
+        return Promise.resolve(
+          jsonResponse([
+            {
+              filename: "src/index.ts",
+              status: "modified",
+              additions: 1,
+              deletions: 0,
+              changes: 1,
+              patch: "@@ -10,0 +11,1 @@\n+const answer = 42;",
+            },
+          ]),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({
+          ...pullResponse(480),
+          title: "Review this change",
+          body: "Please review the implementation.",
+          base: { sha: "base-sha", ref: "main" },
+        }),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const [pull, diff, files] = yield* Effect.all([
+        client.getPull(repo, 480),
+        client.getPullDiff(repo, 480),
+        client.listPullFiles(repo, 480),
+      ]);
+
+      assert.strictEqual(pull.title, "Review this change");
+      assert.strictEqual(pull.body, "Please review the implementation.");
+      assert.strictEqual(diff, "diff --git a/src/index.ts b/src/index.ts\n");
+      assert.deepStrictEqual(files, [
+        {
+          path: "src/index.ts",
+          status: "modified",
+          additions: 1,
+          deletions: 0,
+          changes: 1,
+          patch: "@@ -10,0 +11,1 @@\n+const answer = 42;",
+        },
+      ]);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("surfaces a rejected pull request write as a typed error", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, 422)));
 

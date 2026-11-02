@@ -4,6 +4,7 @@ import {
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
   type WorkflowOptionList,
+  WorkflowTemplate,
   type WorkItem,
   WorkItemId,
   WorkItemRef,
@@ -19,6 +20,9 @@ import type { RegisteredWorkspace, RegistryState } from "../projector";
 import { WorkspaceRegistry } from "../registry";
 import {
   type PrSignals,
+  type PullRequestContext,
+  type PullRequestReviewEvent,
+  type PullRequestReviewInput,
   type ResolvedPullRequest,
   SourceControlProvider,
   type SourceControlProviderService,
@@ -49,12 +53,20 @@ import {
 export { baseDivergenceOf } from "./source-control-target";
 
 const catalogKey = Schema.decodeSync(WorkflowCatalogKey);
+const decodeTemplate = Schema.decodeUnknownSync(WorkflowTemplate);
 
 const reviewerParameter = {
   id: "reviewer",
   required: true,
   source: "live",
   values: [],
+} satisfies WorkflowCatalogEntry["parameters"][number];
+
+const reviewEventParameter = {
+  id: "event",
+  required: true,
+  source: "fixed",
+  values: ["approve", "comment", "request-changes"],
 } satisfies WorkflowCatalogEntry["parameters"][number];
 
 const sourceControlAction = (
@@ -95,7 +107,157 @@ export const githubSourceControlActionEntries = [
     "comment",
   ]),
   sourceControlAction("request-review", "Request a review", "read-only", [], [reviewerParameter]),
+  sourceControlAction(
+    "comment-on-named-pull-request",
+    "Comment on a named pull request",
+    "read-only",
+    ["pull_request", "comment_body"],
+    [],
+    ["*"],
+  ),
+  sourceControlAction(
+    "post-review",
+    "Post a review",
+    "read-only",
+    ["pull_request", "review_body", "review_comments"],
+    [reviewEventParameter],
+    ["*"],
+  ),
+  sourceControlAction(
+    "draft-review",
+    "Draft a review",
+    "read-only",
+    ["pull_request", "review_body", "review_comments"],
+    [],
+    ["*"],
+  ),
 ] as const;
+
+const slackReviewTemplate = decodeTemplate({
+  id: "slack-to-github-review",
+  name: "Slack → Review",
+  description: "Review a GitHub pull request when someone asks in Slack.",
+  document: {
+    name: "Slack → Review",
+    workspaces: { _tag: "Every" },
+    triggers: [
+      {
+        id: "slack-mention",
+        entry: "slack.i-am-mentioned",
+        parameters: [],
+        start: "classify",
+      },
+    ],
+    operations: [
+      {
+        id: "classify",
+        name: "Classify",
+        instructionPackage: null,
+        instruction:
+          "Decide whether the Slack message asks for a pull request review, asks a question, or needs no action.",
+        permissionProfile: "read-only",
+        requires: [],
+        model: { harness: null, model: null, options: [] },
+        forEach: null,
+        questions: [
+          {
+            id: "ask",
+            text: "What does the Slack message ask for?",
+            choices: [
+              { id: "review-request", name: "Review request" },
+              { id: "question", name: "Question" },
+              { id: "not-actionable", name: "Not actionable" },
+            ],
+          },
+        ],
+        transitions: [
+          {
+            when: [{ question: "ask", choice: "review-request" }],
+            actions: [
+              { entry: "slack.add-reaction", parameters: [{ id: "emoji", value: "eyes" }] },
+              { entry: "slack.reply-in-thread", parameters: [] },
+            ],
+            handOff: "review",
+          },
+          {
+            when: [{ question: "ask", choice: "question" }],
+            actions: [{ entry: "slack.draft-reply-in-slack", parameters: [] }],
+            handOff: null,
+          },
+          {
+            when: [{ question: "ask", choice: "not-actionable" }],
+            actions: [{ entry: "cogwork.stop", parameters: [] }],
+            handOff: null,
+          },
+        ],
+        hints: [{ field: "reply", text: "Say that you are reviewing the pull request." }],
+      },
+      {
+        id: "review",
+        name: "Review",
+        instructionPackage: null,
+        instruction:
+          "Read the pull request named in the Slack thread. Review the frozen commit and choose a verdict.",
+        permissionProfile: "read-only",
+        requires: [],
+        model: { harness: null, model: null, options: [] },
+        forEach: null,
+        questions: [
+          {
+            id: "verdict",
+            text: "What is the review verdict?",
+            choices: [
+              { id: "approve", name: "Approve" },
+              { id: "comment", name: "Comment" },
+              { id: "request-changes", name: "Request changes" },
+              { id: "cannot-review", name: "Cannot review" },
+            ],
+          },
+        ],
+        transitions: [
+          {
+            when: [{ question: "verdict", choice: "approve" }],
+            actions: [
+              { entry: "github.post-review", parameters: [{ id: "event", value: "approve" }] },
+              { entry: "cogwork.wait-for-approval", parameters: [] },
+              { entry: "slack.reply-in-thread", parameters: [] },
+            ],
+            handOff: null,
+          },
+          {
+            when: [{ question: "verdict", choice: "comment" }],
+            actions: [
+              { entry: "github.post-review", parameters: [{ id: "event", value: "comment" }] },
+              { entry: "slack.reply-in-thread", parameters: [] },
+            ],
+            handOff: null,
+          },
+          {
+            when: [{ question: "verdict", choice: "request-changes" }],
+            actions: [
+              {
+                entry: "github.post-review",
+                parameters: [{ id: "event", value: "request-changes" }],
+              },
+              { entry: "cogwork.wait-for-approval", parameters: [] },
+              { entry: "slack.reply-in-thread", parameters: [] },
+            ],
+            handOff: null,
+          },
+          {
+            when: [{ question: "verdict", choice: "cannot-review" }],
+            actions: [{ entry: "cogwork.hand-to-me", parameters: [] }],
+            handOff: null,
+          },
+        ],
+        hints: [
+          { field: "pull_request", text: "Name the pull request from the Slack thread." },
+          { field: "reply", text: "Say that you reviewed the pull request." },
+        ],
+      },
+    ],
+  },
+});
 
 interface GitHubTarget extends GitHubTargetConfig {
   readonly actorLogin: string;
@@ -349,6 +511,69 @@ const make = (
     baseBranch: pull.baseRef ?? workspace.config.worktrees?.baseBranch ?? "main",
   });
 
+  const pullNumberFromReference = (
+    workspace: RegisteredWorkspace,
+    target: GitHubRepoRef,
+    reference: string,
+  ) => {
+    const prefix = `${workspace.config.name}:`;
+    const raw = reference.startsWith(prefix) ? reference.slice(prefix.length) : reference;
+    const numeric = /^#?(\d+)$/.exec(raw)?.[1];
+    if (numeric) return Number(numeric);
+    if (!URL.canParse(raw)) return null;
+    const url = new URL(raw);
+    const match = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/.exec(url.pathname);
+    const sameRepository =
+      url.origin === "https://github.com" &&
+      match?.[1]?.toLowerCase() === target.owner.toLowerCase() &&
+      match?.[2]?.toLowerCase() === target.name.toLowerCase();
+    return sameRepository && match?.[3] ? Number(match[3]) : null;
+  };
+
+  const readPullRequest = Effect.fn("github.readPullRequest")(function* (
+    workspace: RegisteredWorkspace,
+    reference: string,
+  ) {
+    const target = yield* sourceControlTarget(workspace);
+    const number = pullNumberFromReference(workspace, target, reference.trim());
+    if (number === null) return null;
+    const [pull, diff, changedFiles, issueComments, reviewComments, reviews] = yield* Effect.all([
+      client.getPull(target, number),
+      client.getPullDiff(target, number),
+      client.listPullFiles(target, number),
+      client.listAllComments(target, number),
+      client.listReviewComments(target, number),
+      client.listReviews(target, number),
+    ]);
+    if (!sameRepositoryHead(target, pull)) return null;
+    const comments = [
+      ...issueComments.map(({ authorLogin, body }) => ({
+        author: authorLogin ?? "unknown",
+        body,
+        path: null,
+        line: null,
+      })),
+      ...reviews.flatMap(({ authorLogin, body }) =>
+        body ? [{ author: authorLogin, body, path: null, line: null }] : [],
+      ),
+      ...reviewComments.map(({ authorLogin, body, path, line }) => ({
+        author: authorLogin,
+        body,
+        path: path ?? null,
+        line: line ?? null,
+      })),
+    ];
+    return {
+      ...resolvedPull(workspace, pull),
+      headSha: pull.headSha,
+      title: pull.title,
+      description: pull.body,
+      diff,
+      changedFiles,
+      comments,
+    } satisfies PullRequestContext;
+  });
+
   const pullForItem = (target: GitHubTarget, item: WorkItemRef, pulls: ReadonlyArray<RawPull>) =>
     WorkItemRef.match(item, {
       Issue: ({ id }) =>
@@ -396,9 +621,45 @@ const make = (
     yield* client.createComment(target, pullNumber, writeMarker(writeKey));
   });
 
+  const reviewsCarry = (target: GitHubTarget, pullNumber: number, writeKey: string) =>
+    client
+      .listReviews(target, pullNumber)
+      .pipe(
+        Effect.map((reviews) =>
+          reviews.some(
+            ({ authorLogin, body }) => authorLogin === target.actorLogin && carriesWriteKey(body, writeKey),
+          ),
+        ),
+      );
+
+  const reviewEvents = {
+    approve: "APPROVE",
+    comment: "COMMENT",
+    "request-changes": "REQUEST_CHANGES",
+  } as const satisfies Record<PullRequestReviewEvent, "APPROVE" | "COMMENT" | "REQUEST_CHANGES">;
+
+  const writeReview = Effect.fn("github.writeReview")(function* (
+    workspace: RegisteredWorkspace,
+    pullRequest: ResolvedPullRequest,
+    event: PullRequestReviewEvent | null,
+    input: PullRequestReviewInput,
+    origin: WorkflowActionOrigin,
+  ) {
+    const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
+    if (!(yield* reviewsCarry(target, pullRequest.number, origin.writeKey))) {
+      yield* client.createReview(target, pullRequest.number, {
+        commitId: input.commitId,
+        body: workflowMarkedBody(input.body, origin.writeKey),
+        comments: input.comments,
+        event: event === null ? null : reviewEvents[event],
+      });
+    }
+    return workflowArtifact(workspace, pullRequest, origin);
+  });
+
   const contribution: WorkflowCatalogContribution = {
     entries: githubSourceControlActionEntries,
-    templates: [],
+    templates: [slackReviewTemplate],
     listOptions: (entry, parameter, workspaces) => {
       const listsReviewers = entry === catalogKey("github.request-review") && parameter === "reviewer";
       if (!listsReviewers) return Effect.succeed([]);
@@ -465,6 +726,7 @@ const make = (
         return yield* client.createPull(target, input);
       }),
     resolvePullRequest,
+    readPullRequest,
     openWorkflowPullRequest: (workspace, input) =>
       Effect.gen(function* () {
         const configuredTarget = yield* sourceControlTarget(workspace);
@@ -519,6 +781,18 @@ const make = (
         yield* markPullRequest(target, pullRequest.number, origin.writeKey);
         return workflowArtifact(workspace, pullRequest, origin);
       }),
+    commentNamedPullRequest: (workspace, pullRequest, body, origin) =>
+      Effect.gen(function* () {
+        const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
+        if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
+          yield* client.createComment(target, pullRequest.number, workflowMarkedBody(body, origin.writeKey));
+        }
+        return workflowArtifact(workspace, pullRequest, origin);
+      }),
+    postReview: (workspace, pullRequest, event, input, origin) =>
+      writeReview(workspace, pullRequest, event, input, origin),
+    draftReview: (workspace, pullRequest, input, origin) =>
+      writeReview(workspace, pullRequest, null, input, origin),
   };
 };
 
