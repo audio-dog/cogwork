@@ -1,0 +1,21 @@
+apps/cli/src/cli.test.ts
+  s_d02f765b9ff4a9::t_d778adbe11b6fc 20-34
+apps/cli/src/workflow-commands.ts
+  s_d02f765b9ff4a9::t_e8fc525a779470 19,61-76,160-168,172-175,201-203,209,218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c8e920c58928a74811fb3a9f32716fe6d0c1c7fc",
+  "prompts": {},
+  "sessions": {
+    "s_d02f765b9ff4a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d3f-e486-76a3-9b7e-ba03c7ba9561",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
