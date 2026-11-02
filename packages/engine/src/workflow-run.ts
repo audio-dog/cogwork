@@ -43,6 +43,7 @@ import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
+import { SlackWrite } from "./slack-write";
 import { SourceControlProvider } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { Workflows } from "./workflow";
@@ -231,6 +232,7 @@ export const make = Effect.gen(function* () {
   const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
   const fs = yield* FileSystem.FileSystem;
   const observationStore = yield* TriggerObservationStore;
+  const slack = yield* SlackWrite;
   const harnessContext = yield* Effect.context<HarnessRunnerEnv>();
   const coreExecutionContext = harnessContext.pipe(
     Context.add(Coordination, coordination),
@@ -240,6 +242,7 @@ export const make = Effect.gen(function* () {
     Context.add(WorkflowArtifactStore, artifacts),
     Context.add(WorkflowNotifications, notifications),
     Context.add(WorkspaceRegistry, registry),
+    Context.add(SlackWrite, slack),
     Context.add(TriggerObservationStore, observationStore),
   );
   const sourceControlExecutionContext =

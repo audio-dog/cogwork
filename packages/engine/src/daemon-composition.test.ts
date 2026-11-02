@@ -369,9 +369,13 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 37);
+      assert.lengthOf(catalog.catalog.entries, 41);
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "slack.i-am-mentioned"));
+      assert.deepInclude(
+        catalog.catalog.entries.find(({ key }) => key === "slack.send-message"),
+        { parameters: [{ id: "channel", required: true, source: "live", values: [] }] },
+      );
       assert.deepStrictEqual(
         status.sources.map(({ source }) => source),
         ["github", "linear", "clock", "granola", "slack"],
@@ -511,6 +515,10 @@ describe("daemon server composition", () => {
           "I am mentioned",
           "Message in a channel",
           "Reaction added",
+          "Send a message",
+          "Reply in thread",
+          "Add a reaction",
+          "Draft a reply in Slack",
         ],
       );
       assert.isTrue(Result.isFailure(result.readiness));

@@ -4,11 +4,16 @@ import {
   keyOf,
   type ParkReason,
   RunId,
+  SlackChannelId,
+  SlackMessageTs,
+  SlackTeamId,
   SourceControlType,
   WorkflowActionArtifact,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
+  WorkflowActionTarget,
   WorkflowCatalogKey,
+  WorkflowDocument,
   WorkflowId,
   WorkflowNodeId,
   WorkItemId,
@@ -25,6 +30,7 @@ import { IssueTracker, IssueTrackerError, makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
+import { SlackWrite, SlackWriteError, slackActionEntries } from "./slack-write";
 import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import {
@@ -32,7 +38,7 @@ import {
   type TriggerAdmission,
   TriggerObservationStore,
 } from "./trigger-observation";
-import { executeWorkflowActionPlan } from "./workflow-action-plan";
+import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import {
   WorkflowActionPlanStore,
   memoryLayer as workflowActionPlanStoreLayer,
@@ -44,6 +50,10 @@ const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
 const decodeRun = Schema.decodeSync(RunId);
 const decodeItem = Schema.decodeSync(WorkItemId);
+const decodeSlackTarget = Schema.decodeSync(WorkflowActionTarget);
+const decodeSlackChannel = Schema.decodeSync(SlackChannelId);
+const decodeSlackTs = Schema.decodeSync(SlackMessageTs);
+const slackTeam = Schema.decodeSync(SlackTeamId)("T123");
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const decodeHarness = Schema.decodeSync(HarnessName);
 const decodeBranch = Schema.decodeSync(BranchName);
@@ -88,6 +98,17 @@ const admission: TriggerAdmission = {
     root: Schema.decodeSync(Schema.String.pipe(Schema.brand("LineageId")))(keyOf(ref)),
     parent: null,
     hop: 0,
+  },
+};
+
+const slackRef = { _tag: "SlackMessage", team: "T123", channel: "C123", ts: "900.000" } as const;
+const slackAdmission: TriggerAdmission = {
+  ...admission,
+  event: {
+    ...admission.event,
+    key: slackRef,
+    entry: decodeEntry("slack.i-am-mentioned"),
+    workspace: null,
   },
 };
 
@@ -162,6 +183,34 @@ const openPullRequestStep = WorkflowActionPlanStep.make({
   },
 });
 
+const slackStep = (
+  position: number,
+  entry: string,
+  input: Readonly<Record<string, string>> = {},
+  parameters: ReadonlyArray<{ readonly id: string; readonly value: string }> = [],
+) =>
+  WorkflowActionPlanStep.make({
+    position,
+    entry: decodeEntry(entry),
+    parameters,
+    inputs: input,
+    target: decodeSlackTarget(
+      entry === "slack.send-message"
+        ? { _tag: "SlackChannel", channel: "C456" }
+        : {
+            _tag: "SlackMessage",
+            team: "T123",
+            channel: "C123",
+            ts: "900.000",
+            threadTs: "900.000",
+          },
+    ),
+    writeKey: `write-${position}`,
+    status: "pending",
+    failures: 0,
+    artifact: null,
+  });
+
 class ActionPlanProbe extends Context.Service<
   ActionPlanProbe,
   {
@@ -169,6 +218,7 @@ class ActionPlanProbe extends Context.Service<
     readonly barrier: Ref.Ref<number>;
     readonly parks: Ref.Ref<ReadonlyArray<ParkReason>>;
     readonly pushOrigins: Ref.Ref<ReadonlyArray<WorkflowActionArtifact["origin"]>>;
+    readonly parkFailures: Ref.Ref<number>;
   }
 >()("@cogwork/engine/workflow-action-plan.test/ActionPlanProbe") {
   static readonly layer = Layer.effect(
@@ -178,6 +228,7 @@ class ActionPlanProbe extends Context.Service<
       barrier: Ref.make(0),
       parks: Ref.make<ReadonlyArray<ParkReason>>([]),
       pushOrigins: Ref.make<ReadonlyArray<WorkflowActionArtifact["origin"]>>([]),
+      parkFailures: Ref.make(0),
     }),
   );
 }
@@ -199,7 +250,14 @@ const coordinationLayer = Layer.effect(
         release: () => Effect.die("unused"),
         recordAttempt: () => Effect.die("unused"),
         park: (_ref, reason) =>
-          Ref.update(probe.parks, (current) => [...current, reason]).pipe(
+          Ref.modify(probe.parkFailures, (failures) =>
+            failures > 0 ? [true, failures - 1] : [false, failures],
+          ).pipe(
+            Effect.flatMap((shouldFail) =>
+              shouldFail
+                ? Effect.die("park crashed")
+                : Ref.update(probe.parks, (current) => [...current, reason]),
+            ),
             Effect.andThen(Ref.get(probe.barrier)),
             Effect.map(viewAt),
           ),
@@ -247,7 +305,66 @@ const trackerLayer = Layer.effect(
   }),
 );
 
-const adapterLayers = Layer.merge(coordinationLayer, trackerLayer).pipe(
+const slackLayer = Layer.effect(
+  SlackWrite,
+  Effect.map(ActionPlanProbe, (probe) => {
+    const record = (value: string) => Ref.update(probe.calls, (current) => [...current, value]);
+    const receipt = (channel: SlackChannelId, ts: string, threadTs: string | null) => ({
+      team: slackTeam,
+      channel,
+      ts: decodeSlackTs(ts),
+      threadTs: threadTs ? decodeSlackTs(threadTs) : null,
+    });
+    const draftOutcomes = new Map<string, () => Effect.Effect<void, SlackWriteError>>([
+      [
+        "unknown",
+        () =>
+          Effect.fail(
+            new SlackWriteError({
+              reason: "draft-outcome-unknown",
+              retryable: false,
+              message: "Slack draft outcome is unknown",
+            }),
+          ),
+      ],
+      ["crash", () => Effect.die("crashed after draft")],
+    ]);
+    return {
+      sendMessage: (channel, message, writeKey) =>
+        record(`send:${channel}:${message}:${writeKey}`).pipe(
+          Effect.andThen(
+            Ref.get(probe.calls).pipe(
+              Effect.flatMap((calls) => {
+                const firstRateLimit =
+                  message === "rate-limit" &&
+                  calls.filter((call) => call === `send:${channel}:${message}:${writeKey}`).length === 1;
+                return firstRateLimit
+                  ? Effect.fail(
+                      new SlackWriteError({
+                        reason: "rate-limited",
+                        retryable: true,
+                        message: "Slack rate limited the write",
+                      }),
+                    )
+                  : Effect.succeed(receipt(channel, "901.000", null));
+              }),
+            ),
+          ),
+        ),
+      replyInThread: (target, message, writeKey) =>
+        record(`reply:${target.threadTs}:${message}:${writeKey}`).pipe(
+          Effect.map(() => receipt(target.channel, "902.000", target.threadTs)),
+        ),
+      addReaction: (target, emoji) => record(`reaction:${target.ts}:${emoji}`),
+      draftReply: (target, message) =>
+        record(`draft:${target.threadTs}:${message}`).pipe(
+          Effect.andThen(draftOutcomes.get(message)?.() ?? Effect.void),
+        ),
+    };
+  }),
+);
+
+const adapterLayers = Layer.mergeAll(coordinationLayer, trackerLayer, slackLayer).pipe(
   Layer.provideMerge(ActionPlanProbe.layer),
 );
 
@@ -261,6 +378,234 @@ const requirements = Layer.mergeAll(
 );
 
 describe("Workflow action plan", () => {
+  it.effect("freezes Slack channel and item targets before writing", () =>
+    Effect.gen(function* () {
+      const slackOperation = {
+        id: operation,
+        name: "Write",
+        instructionPackage: null,
+        instruction: "Respond in Slack.",
+        permissionProfile: "read-only",
+        requires: [],
+        model: { harness: null, model: null, options: [] },
+        forEach: null,
+        questions: [],
+        transitions: [
+          {
+            when: [],
+            actions: [
+              { entry: decodeEntry("slack.send-message"), parameters: [{ id: "channel", value: "C456" }] },
+              { entry: decodeEntry("slack.reply-in-thread"), parameters: [] },
+              { entry: decodeEntry("slack.add-reaction"), parameters: [{ id: "emoji", value: "eyes" }] },
+              { entry: decodeEntry("slack.draft-reply-in-slack"), parameters: [] },
+            ],
+            handOff: null,
+          },
+        ],
+        hints: [],
+      } as const;
+      const document = WorkflowDocument.make({
+        name: "Slack writes",
+        workspaces: { _tag: "Every" },
+        triggers: [],
+        operations: [slackOperation],
+      });
+      const catalog = {
+        entries: slackActionEntries,
+        instructionPackages: [],
+        harnesses: [],
+      };
+
+      const built = yield* buildWorkflowActionPlan({
+        admission: slackAdmission,
+        document,
+        operation: slackOperation,
+        catalog,
+        workspaces: [],
+        output: { summary: "Respond", answers: {}, inputs: { message: "Hello", reply: "On it" } },
+        attempt: decodeRun("slack-plan"),
+        createdAtMillis: 20,
+        workflowRevision: 1,
+      });
+
+      assert.deepStrictEqual(
+        built.steps.map(({ target }) => target),
+        [
+          decodeSlackTarget({ _tag: "SlackChannel", channel: "C456" }),
+          decodeSlackTarget({
+            _tag: "SlackMessage",
+            team: "T123",
+            channel: "C123",
+            ts: "900.000",
+            threadTs: "900.000",
+          }),
+          decodeSlackTarget({
+            _tag: "SlackMessage",
+            team: "T123",
+            channel: "C123",
+            ts: "900.000",
+            threadTs: "900.000",
+          }),
+          decodeSlackTarget({
+            _tag: "SlackMessage",
+            team: "T123",
+            channel: "C123",
+            ts: "900.000",
+            threadTs: "900.000",
+          }),
+        ],
+      );
+    }),
+  );
+
+  it.effect("executes Slack writes in plan order", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const initial = WorkflowActionPlan.make({
+        ...plan([
+          slackStep(0, "slack.send-message", { message: "Hello" }),
+          slackStep(1, "slack.reply-in-thread", { reply: "On it" }),
+          slackStep(2, "slack.add-reaction", {}, [{ id: "emoji", value: "eyes" }]),
+          slackStep(3, "slack.draft-reply-in-slack", { reply: "Looks good" }),
+        ]),
+        item: keyOf(slackRef),
+      });
+      const store = yield* WorkflowActionPlanStore;
+      yield* store.create(initial);
+
+      const result = yield* executeWorkflowActionPlan(initial, slackAdmission);
+
+      assert.strictEqual(result._tag, "Complete");
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), [
+        "send:C456:Hello:write-0",
+        "reply:900.000:On it:write-1",
+        "reaction:900.000:eyes",
+        "draft:900.000:Looks good",
+      ]);
+      assert.isNull(yield* store.pending(initial.item, initial.workflow));
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("retries Slack 429 on the next execution with the same plan", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const initial = WorkflowActionPlan.make({
+        ...plan([slackStep(0, "slack.send-message", { message: "rate-limit" })]),
+        item: keyOf(slackRef),
+      });
+      const store = yield* WorkflowActionPlanStore;
+      yield* store.create(initial);
+
+      const first = yield* executeWorkflowActionPlan(initial, slackAdmission);
+      const pending = yield* store.pending(initial.item, initial.workflow);
+      const second = yield* executeWorkflowActionPlan(pending ?? initial, slackAdmission);
+
+      assert.strictEqual(first._tag, "Retry");
+      assert.strictEqual(second._tag, "Complete");
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), [
+        "send:C456:rate-limit:write-0",
+        "send:C456:rate-limit:write-0",
+      ]);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("records the posted timestamp and write origin before the next step retries", () =>
+    Effect.gen(function* () {
+      const initial = WorkflowActionPlan.make({
+        ...plan([
+          slackStep(0, "slack.send-message", { message: "Hello" }),
+          slackStep(1, "slack.send-message", { message: "rate-limit" }),
+        ]),
+        item: keyOf(slackRef),
+      });
+      const store = yield* WorkflowActionPlanStore;
+      yield* store.create(initial);
+
+      const result = yield* executeWorkflowActionPlan(initial, slackAdmission);
+      const saved = yield* store.pending(initial.item, initial.workflow);
+
+      assert.strictEqual(result._tag, "Retry");
+      const artifact = saved?.steps[0]?.artifact;
+      assert.deepInclude(artifact, {
+        team: slackTeam,
+        channel: decodeSlackChannel("C456"),
+        ts: decodeSlackTs("901.000"),
+        threadTs: null,
+      });
+      assert.strictEqual(artifact?.origin.writeKey, "write-0");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("parks an unknown draft outcome and never drafts it again", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const initial = WorkflowActionPlan.make({
+        ...plan([slackStep(0, "slack.draft-reply-in-slack", { reply: "unknown" })]),
+        item: keyOf(slackRef),
+      });
+      const store = yield* WorkflowActionPlanStore;
+      yield* store.create(initial);
+
+      const first = yield* executeWorkflowActionPlan(initial, slackAdmission);
+      const saved = yield* store.pending(initial.item, initial.workflow);
+      const second = yield* executeWorkflowActionPlan(saved ?? initial, slackAdmission);
+
+      assert.strictEqual(first._tag, "Parked");
+      assert.strictEqual(second._tag, "Parked");
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:unknown"]);
+      assert.deepInclude((yield* Ref.get(probe.parks))[0], {
+        _tag: "DraftOutcomeUnknown",
+        step: "slack.draft-reply-in-slack",
+      });
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("parks an in-flight draft after a crash without drafting again", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const initial = WorkflowActionPlan.make({
+        ...plan([slackStep(0, "slack.draft-reply-in-slack", { reply: "crash" })]),
+        item: keyOf(slackRef),
+      });
+      const store = yield* WorkflowActionPlanStore;
+      yield* store.create(initial);
+
+      const crashed = yield* Effect.exit(executeWorkflowActionPlan(initial, slackAdmission));
+      const inFlight = yield* store.pending(initial.item, initial.workflow);
+      const recovered = yield* Effect.exit(executeWorkflowActionPlan(inFlight ?? initial, slackAdmission));
+
+      assert.strictEqual(crashed._tag, "Failure");
+      assert.strictEqual(inFlight?.steps[0]?.status, "executing");
+      assert.strictEqual(recovered._tag, "Success");
+      if (recovered._tag === "Success") assert.strictEqual(recovered.value._tag, "Parked");
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:crash"]);
+      assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "DraftOutcomeUnknown");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("retries the park after an unknown draft outcome without drafting again", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const initial = WorkflowActionPlan.make({
+        ...plan([slackStep(0, "slack.draft-reply-in-slack", { reply: "unknown" })]),
+        item: keyOf(slackRef),
+      });
+      const store = yield* WorkflowActionPlanStore;
+      yield* store.create(initial);
+      yield* Ref.set(probe.parkFailures, 1);
+
+      const crashed = yield* Effect.exit(executeWorkflowActionPlan(initial, slackAdmission));
+      const inFlight = yield* store.pending(initial.item, initial.workflow);
+      const recovered = yield* executeWorkflowActionPlan(inFlight ?? initial, slackAdmission);
+
+      assert.strictEqual(crashed._tag, "Failure");
+      assert.strictEqual(inFlight?.steps[0]?.status, "executing");
+      assert.strictEqual(recovered._tag, "Parked");
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:unknown"]);
+      assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "DraftOutcomeUnknown");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("withdraws the pending approval for this item", () =>
     Effect.gen(function* () {
       const store = yield* WorkflowActionPlanStore;

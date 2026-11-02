@@ -59,6 +59,7 @@ import { defaultRunBudget } from "./provider-runner";
 import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
+import { SlackWrite } from "./slack-write";
 import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import {
@@ -423,6 +424,12 @@ const requirements = Layer.mergeAll(
   CredentialStore.layerEnv,
   NodeServices.layer,
   FetchHttpClient.layer,
+  Layer.mock(SlackWrite, {
+    sendMessage: () => Effect.die("unused"),
+    replyInThread: () => Effect.die("unused"),
+    addReaction: () => Effect.die("unused"),
+    draftReply: () => Effect.die("unused"),
+  }),
   Layer.mock(ContextAssembler, {
     assemble: ({ operatingInstructions }) =>
       Effect.succeed({
