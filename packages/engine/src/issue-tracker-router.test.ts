@@ -29,7 +29,7 @@ const linearWorkspace = workspaceOf("lin", { type: "linear", teams: ["AUD"] });
 
 type Recorded = {
   readonly source: string;
-  readonly action: "attemptFailed";
+  readonly action: "attemptFailed" | "workflowCoordination";
   readonly reason: string | undefined;
 };
 
@@ -63,6 +63,11 @@ const fakeSource = (source: string, calls: Ref.Ref<ReadonlyArray<Recorded>>): Is
   handBack: () => Effect.void,
   stalled: () => Effect.void,
   reclassify: () => Effect.void,
+  workflowCoordination: () =>
+    Ref.update(calls, (recorded) => [
+      ...recorded,
+      { source, action: "workflowCoordination", reason: undefined } satisfies Recorded,
+    ]).pipe(Effect.andThen(Effect.die("probe"))),
 });
 
 const routerLayer = () =>
@@ -111,6 +116,21 @@ describe("issueTrackerRouter", () => {
       });
       assert.deepStrictEqual(yield* Ref.get(calls), [
         { source: "github", action: "attemptFailed", reason: undefined },
+      ]);
+    }).pipe(Effect.provide(routerLayer())),
+  );
+
+  it.effect("routes Workflow coordination through the workspace tracker", () =>
+    Effect.gen(function* () {
+      const calls = yield* RouterCalls;
+      const router = yield* IssueTracker;
+      if (router.workflowCoordination === undefined) return assert.fail("missing Workflow coordination");
+      yield* router.workflowCoordination(githubWorkspace, id("#7")).pipe(Effect.exit);
+      yield* router.workflowCoordination(linearWorkspace, id("AUD-7")).pipe(Effect.exit);
+
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { source: "github", action: "workflowCoordination", reason: undefined },
+        { source: "linear", action: "workflowCoordination", reason: undefined },
       ]);
     }).pipe(Effect.provide(routerLayer())),
   );

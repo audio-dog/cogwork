@@ -16,6 +16,7 @@ import {
   type WorkflowCatalogEntry,
   type WorkflowDocument,
   type WorkflowNodeId,
+  WorkflowNotificationId,
   type WorkflowOperation,
   type WorkflowParameterValue,
   WorkflowSlackActionArtifact,
@@ -26,7 +27,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { Coordination } from "./coordination";
+import { Coordination, defaultClaimant } from "./coordination";
 import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { WorkspaceRegistry } from "./registry";
@@ -471,6 +472,7 @@ const invalidTarget = (step: WorkflowActionPlanStep) =>
   });
 
 interface ActionContext {
+  readonly item: TriggerAdmission["event"]["key"];
   readonly plan: WorkflowActionPlan;
   readonly step: WorkflowActionPlanStep;
   readonly workspace: WorkspaceIssueTrackerBinding | null;
@@ -623,6 +625,9 @@ const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPending
       }),
     { discard: true },
   );
+  if (waiting.length > 0) {
+    yield* context.coordination.handBack(context.item, { by: defaultClaimant });
+  }
   return null;
 });
 
@@ -761,11 +766,17 @@ const actionExecutors: Record<string, ActionExecutor> = {
     if (run === null) return yield* invalidTarget(context.step);
     yield* context.notifications
       .write(run, {
-        id: `${context.plan.workflow}:${context.plan.operation}:${context.plan.revision}`,
+        id: WorkflowNotificationId.make(
+          `${keyOf(context.item)}:${context.plan.attempt}:${context.step.writeKey}`,
+        ),
+        item: context.item,
         workflow: context.plan.workflow,
         operation: context.plan.operation,
         summary: context.step.inputs.notification ?? "",
         answers: context.plan.answers,
+        artifacts: context.plan.steps.flatMap(({ artifact }) =>
+          Schema.is(WorkflowActionArtifact)(artifact) ? [artifact] : [],
+        ),
         atMillis: context.plan.createdAtMillis,
       })
       .pipe(
@@ -882,12 +893,16 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     return { _tag: "Replan" } as const;
   }
   if (waiting) {
-    yield* coordination.park(admission.event.key, {
-      _tag: "AwaitingApproval",
-      plan: initial.attempt,
-      digest: initial.digest,
-      revision: initial.revision,
-    });
+    yield* coordination.park(
+      admission.event.key,
+      {
+        _tag: "AwaitingApproval",
+        plan: initial.attempt,
+        digest: initial.digest,
+        revision: initial.revision,
+      },
+      { workflow: initial.workflow, operation: initial.operation },
+    );
     return { _tag: "AwaitingApproval" } as const;
   }
   const planForParking = (plan: WorkflowActionPlan) =>
@@ -927,6 +942,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
         const workspace = targetWorkspace(executingStep);
         const sourceWorkspace = sourceTargetWorkspace(executingStep, registeredWorkspaces);
         const context = {
+          item: admission.event.key,
           plan: executingPlan,
           step: executingStep,
           workspace,
