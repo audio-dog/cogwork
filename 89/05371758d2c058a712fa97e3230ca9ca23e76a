@@ -1,0 +1,24 @@
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_f29dff91b8e93b::t_557d4a611474b1 1,123-127
+packages/engine/src/github/trigger-source.test.ts
+  s_f29dff91b8e93b::t_51d2a1cd1d5eb7 572,574
+packages/engine/src/workflow-run.test.ts
+  s_f29dff91b8e93b::t_416e560ec76861 950-955
+  s_f29dff91b8e93b::t_4444ce983347dc 25,434-439,441-443,461,901,906-907,924,944-949,956-961,963-989,999-1000
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8905371758d2c058a712fa97e3230ca9ca23e76a",
+  "prompts": {},
+  "sessions": {
+    "s_f29dff91b8e93b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-3603-7a30-b771-959684067fe4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
