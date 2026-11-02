@@ -1,0 +1,60 @@
+packages/contracts/src/coordination.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 20,114
+packages/engine/src/granola-http.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 8,58-60
+packages/engine/src/index.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 47
+packages/engine/src/slack-write.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 1-437
+packages/engine/src/slack-source.test.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 4-6,40-42,141-145,201,530,592,824-933
+  s_814e7f77c8e38f::t_4853903809095f 934
+packages/engine/src/workflow-run.ts
+  s_814e7f77c8e38f::t_84085f41b84b1d 235,245
+  s_814e7f77c8e38f::t_43ca508be726f6 46
+packages/engine/src/json-event-stream.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 1-109
+packages/contracts/src/workflow.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 8-10,107-113,137-149,165,167
+packages/contracts/src/base-schemas.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 27-38
+packages/engine/src/daemon-composition.test.ts
+  s_814e7f77c8e38f::t_19c0d437945216 372
+  s_814e7f77c8e38f::t_43ca508be726f6 375-378,518-521
+packages/engine/src/workflow-action-plan.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 7,9,12,14,21,23,34,197,203,267-332,338,346,391-398,440,483,499-526,632,729-758,786,836,844-855,921-927,930-931,939,946,950,955-968
+  s_814e7f77c8e38f::t_28991adb2e5426 928
+packages/engine/src/workflow-catalog.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 14,83-93
+  s_814e7f77c8e38f::t_84085f41b84b1d 105
+packages/engine/src/workflow-attention.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 23,36
+packages/engine/src/daemon.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 120,548,575
+packages/engine/src/slack-source.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 2-4,25,40-41,65-70,95-98,206-208,231,319-327,336,370-372,390-391,409-414,418,434-470,563,617,721-727
+packages/engine/src/workflow-run.test.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 62,427-432
+packages/contracts/CONTEXT.md
+  s_814e7f77c8e38f::t_43ca508be726f6 419
+packages/engine/src/slack-write.test.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 1-357
+packages/engine/src/workflow-action-plan.test.ts
+  s_814e7f77c8e38f::t_43ca508be726f6 7-9,14,16,33,41,53-56,104-114,186-213,221,231,253-260,308-367,381-608
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c101b55854ec7df86cc8205330c7ed2f2847ed25",
+  "prompts": {},
+  "sessions": {
+    "s_814e7f77c8e38f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d3f-c351-7c71-814e-0ed1f47be139",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
