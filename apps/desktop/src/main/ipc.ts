@@ -17,6 +17,7 @@ import { type BrowserWindow, ipcMain, type WebContents } from "electron";
 import {
   type DesktopNotificationRequest,
   type DesktopNotificationStatus,
+  desktopNotificationLimits,
   type EngineStatus,
   IpcChannel,
   type RendererErrorReport,
@@ -41,18 +42,25 @@ export interface IpcDeps {
   readonly notifications: DesktopNotifications;
 }
 
+const boundedText = (value: unknown, maximum: number) =>
+  typeof value === "string" && value.length > 0 && value.length <= maximum;
+
 const isDesktopNotificationRequest = (value: unknown): value is DesktopNotificationRequest =>
   typeof value === "object" &&
   value !== null &&
   "id" in value &&
-  typeof value.id === "string" &&
+  boundedText(value.id, desktopNotificationLimits.id) &&
+  "focus" in value &&
+  boundedText(value.focus, desktopNotificationLimits.focus) &&
   "title" in value &&
-  typeof value.title === "string" &&
+  boundedText(value.title, desktopNotificationLimits.title) &&
   "body" in value &&
-  typeof value.body === "string";
+  boundedText(value.body, desktopNotificationLimits.body);
 
 const notificationRequests = (input: unknown) =>
-  Array.isArray(input) ? input.filter(isDesktopNotificationRequest) : [];
+  Array.isArray(input)
+    ? input.slice(0, desktopNotificationLimits.requests).filter(isDesktopNotificationRequest)
+    : [];
 
 const WindowPreferencesSchema = Schema.Struct({
   closeToHide: Schema.optionalKey(Schema.Boolean),

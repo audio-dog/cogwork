@@ -3,7 +3,12 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { useUpdateEffect } from "@react-hookz/web";
 import { useRouter } from "@tanstack/react-router";
 import { useRef, useSyncExternalStore } from "react";
-import type { DesktopNotificationRequest, DesktopNotificationStatus } from "../../../shared/ipc";
+import {
+  type DesktopNotificationRequest,
+  type DesktopNotificationStatus,
+  desktopNotificationIdOf,
+  desktopNotificationLimits,
+} from "../../../shared/ipc";
 import { workflowAttentionAtom } from "../daemon/atoms";
 import { reportRendererError } from "./report-error";
 
@@ -11,11 +16,13 @@ type NotificationPark = Pick<WorkflowPark, "item" | "summary">;
 
 const parkRequests = (parks: readonly NotificationPark[]) =>
   parks.map((park) => {
-    const id = keyOf(park.item);
+    const focus = keyOf(park.item);
+    const id = desktopNotificationIdOf(focus);
     return {
       id,
+      focus,
       title: "Cogwork needs you",
-      body: `${id}: ${park.summary}`,
+      body: `${focus}: ${park.summary}`.slice(0, desktopNotificationLimits.body),
     } satisfies DesktopNotificationRequest;
   });
 
@@ -25,8 +32,7 @@ export const notificationChanges = (previous: ReadonlySet<string>, parks: readon
   return {
     next,
     current,
-    show: current.filter(({ id }) => !previous.has(id)),
-    dismiss: [...previous].filter((id) => !next.has(id)),
+    changed: current.some(({ id }) => !previous.has(id)) || [...previous].some((id) => !next.has(id)),
   };
 };
 
@@ -104,6 +110,7 @@ export function DesktopNotificationCoordinator({
   const { navigation } = useDesktopNotificationSnapshot();
   const previous = useRef<ReadonlySet<string>>(new Set());
   const hasSynced = useRef(false);
+  const notificationSync = useRef(Promise.resolve());
   const hasEnabledWorkflow = workflows.some(({ enabled }) => enabled);
   const parks = attention._tag === "Success" ? attention.value.parks : null;
 
@@ -113,13 +120,18 @@ export function DesktopNotificationCoordinator({
     const changes = notificationChanges(previous.current, parks);
     const shouldSync = hasEnabledWorkflow || previous.current.size > 0 || changes.current.length > 0;
     if (!shouldSync) return;
-    previous.current = changes.next;
-    const changed = changes.show.length > 0 || changes.dismiss.length > 0;
-    if (hasSynced.current && !changed) return;
-    hasSynced.current = true;
-    window.cogwork.notifications
-      .enable()
-      .then(() => window.cogwork.notifications.sync(changes.current))
+    if (hasSynced.current && !changes.changed) return;
+    const reconcile = () =>
+      window.cogwork.notifications
+        .enable()
+        .then(() => window.cogwork.notifications.sync(changes.current))
+        .then(() => undefined);
+    notificationSync.current = notificationSync.current
+      .then(() => reconcile().catch(reconcile))
+      .then(() => {
+        previous.current = changes.next;
+        hasSynced.current = true;
+      })
       .catch((error) => reportRendererError(error, "desktop notifications"));
   }, [parks, hasEnabledWorkflow]);
   useUpdateEffect(() => {

@@ -1,10 +1,15 @@
-import type { DesktopNotificationRequest, DesktopNotificationStatus } from "../shared/ipc";
+import {
+  type DesktopNotificationRequest,
+  type DesktopNotificationStatus,
+  desktopNotificationLimits,
+} from "../shared/ipc";
 
 export interface DesktopNotificationHandle {
   readonly id: string;
   readonly title: string;
   readonly body: string;
   readonly close: () => void;
+  readonly removeAllListeners: () => unknown;
   readonly show: () => void;
   on(event: "click", listener: () => void): unknown;
   on(event: "failed", listener: (event: unknown, error: string) => void): unknown;
@@ -26,9 +31,25 @@ interface DesktopNotificationDeps {
 
 const inactiveStatus = { _tag: "inactive" } as const satisfies DesktopNotificationStatus;
 const readyStatus = { _tag: "ready" } as const satisfies DesktopNotificationStatus;
-const maximumNotificationIdLength = 64;
+const validId = (id: string) => id.length > 0 && id.length <= desktopNotificationLimits.id;
 
-const validId = (id: string) => id.length > 0 && id.length <= maximumNotificationIdLength;
+const validRequest = ({ id, focus, title, body }: DesktopNotificationRequest) =>
+  validId(id) &&
+  focus.length > 0 &&
+  focus.length <= desktopNotificationLimits.focus &&
+  title.length > 0 &&
+  title.length <= desktopNotificationLimits.title &&
+  body.length > 0 &&
+  body.length <= desktopNotificationLimits.body;
+
+const normalizedRequests = (requests: readonly DesktopNotificationRequest[]) => [
+  ...new Map(
+    requests
+      .slice(0, desktopNotificationLimits.requests)
+      .filter(validRequest)
+      .map((request) => [request.id, request] as const),
+  ).values(),
+];
 
 export const attentionFocusFromUrl = (value: string) => {
   const url = URL.parse(value);
@@ -49,9 +70,9 @@ export const createDesktopNotifications = (deps: DesktopNotificationDeps) => {
     enablePromise: Promise<DesktopNotificationStatus> | null;
     status: DesktopNotificationStatus;
     live: Map<string, DesktopNotificationHandle>;
-    knownIds: ReadonlySet<string>;
+    knownItems: ReadonlyMap<string, string>;
     hasReadModel: boolean;
-    pendingCandidate: string | null;
+    pendingCandidates: readonly string[];
     pendingNavigation: string | null;
   } = {
     enabled: false,
@@ -59,9 +80,9 @@ export const createDesktopNotifications = (deps: DesktopNotificationDeps) => {
     enablePromise: null,
     status: inactiveStatus,
     live: new Map(),
-    knownIds: new Set(),
+    knownItems: new Map(),
     hasReadModel: false,
-    pendingCandidate: deps.launchIdentifier,
+    pendingCandidates: deps.launchIdentifier ? [deps.launchIdentifier] : [],
     pendingNavigation: null,
   };
 
@@ -77,18 +98,21 @@ export const createDesktopNotifications = (deps: DesktopNotificationDeps) => {
   };
 
   const flushNavigation = () => {
-    const candidate = state.pendingCandidate;
-    if (!candidate || !state.hasReadModel) return;
-    state.pendingCandidate = null;
-    if (!state.knownIds.has(candidate)) return;
-    state.pendingNavigation = candidate;
-    deps.navigate(candidate);
+    if (!state.hasReadModel) return;
+    const focus = state.pendingCandidates
+      .map((candidate) => state.knownItems.get(candidate))
+      .filter((candidate): candidate is string => candidate !== undefined)
+      .at(-1);
+    state.pendingCandidates = [];
+    if (!focus) return;
+    state.pendingNavigation = focus;
+    deps.navigate(focus);
   };
 
   const requestNavigation = (id: string) => {
     deps.showWindow();
     if (!validId(id)) return;
-    state.pendingCandidate = id;
+    state.pendingCandidates = [...state.pendingCandidates, id].slice(-desktopNotificationLimits.requests);
     flushNavigation();
   };
 
@@ -120,16 +144,20 @@ export const createDesktopNotifications = (deps: DesktopNotificationDeps) => {
   };
 
   const sync = async (requests: readonly DesktopNotificationRequest[]) => {
+    const validRequests = normalizedRequests(requests);
+    const knownItems = new Map(validRequests.map(({ id, focus }) => [id, focus]));
+    state.knownItems = knownItems;
+    state.hasReadModel = true;
+    flushNavigation();
     if (!state.enabled) return state.status;
     await state.enablePromise;
     if (!state.supported) return state.status;
-    const validRequests = requests.filter(({ id }) => validId(id));
-    const knownIds = new Set(validRequests.map(({ id }) => id));
     [...state.live.entries()]
-      .filter(([id]) => !knownIds.has(id))
+      .filter(([id]) => !knownItems.has(id))
       .forEach(([id, notification]) => {
         notification.close();
         deps.remove(id);
+        notification.removeAllListeners();
         state.live.delete(id);
       });
     validRequests
@@ -140,9 +168,6 @@ export const createDesktopNotifications = (deps: DesktopNotificationDeps) => {
         attach(notification);
         notification.show();
       });
-    state.knownIds = knownIds;
-    state.hasReadModel = true;
-    flushNavigation();
     return state.status;
   };
 
@@ -150,7 +175,7 @@ export const createDesktopNotifications = (deps: DesktopNotificationDeps) => {
     deps.showWindow();
     const focus = attentionFocusFromUrl(url);
     if (!focus) return;
-    state.pendingCandidate = focus;
+    state.pendingCandidates = [...state.pendingCandidates, focus].slice(-desktopNotificationLimits.requests);
     flushNavigation();
   };
 
@@ -164,6 +189,7 @@ export const createDesktopNotifications = (deps: DesktopNotificationDeps) => {
     [...state.live.entries()].forEach(([id, notification]) => {
       notification.close();
       deps.remove(id);
+      notification.removeAllListeners();
     });
     state.live.clear();
   };

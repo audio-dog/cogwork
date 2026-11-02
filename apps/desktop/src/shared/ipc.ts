@@ -7,9 +7,37 @@ export type EngineStatus = "starting" | "running" | "adopted" | "stopped" | "fai
 
 export interface DesktopNotificationRequest {
   readonly id: string;
+  readonly focus: string;
   readonly title: string;
   readonly body: string;
 }
+
+export const desktopNotificationLimits = {
+  requests: 256,
+  id: 64,
+  focus: 4096,
+  title: 256,
+  body: 1024,
+} as const;
+
+const hashNotificationFocus = (value: string, offset: bigint) =>
+  Array.from(value).reduce(
+    (hash, character) =>
+      BigInt.asUintN(64, (hash ^ BigInt(character.codePointAt(0) ?? 0)) * 1_099_511_628_211n),
+    offset,
+  );
+
+export const desktopNotificationIdOf = (focus: string) => {
+  if (focus.length <= desktopNotificationLimits.id) return focus;
+  const digest = [
+    hashNotificationFocus(focus, 14_695_981_039_346_656_037n),
+    hashNotificationFocus(focus, 7_809_847_782_465_536_322n),
+  ]
+    .map((part) => part.toString(16).padStart(16, "0"))
+    .join("");
+  const prefixLength = desktopNotificationLimits.id - digest.length - 1;
+  return `${focus.slice(0, prefixLength)}:${digest}`;
+};
 
 export type DesktopNotificationStatus =
   | { readonly _tag: "inactive" }

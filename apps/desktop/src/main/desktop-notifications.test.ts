@@ -19,7 +19,12 @@ class FakeNotification extends EventEmitter implements DesktopNotificationHandle
   }
 }
 
-const request = (id: string) => ({ id, title: `${id} needs you`, body: "Review the parked item" });
+const request = (id: string, focus = id) => ({
+  id,
+  focus,
+  title: `${id} needs you`,
+  body: "Review the parked item",
+});
 
 const setup = (history: readonly FakeNotification[] = [], launchIdentifier: string | null = null) => {
   const created: FakeNotification[] = [];
@@ -90,6 +95,16 @@ describe("desktop notifications", () => {
     await service.sync([]);
 
     expect(created[0]?.close).toHaveBeenCalledOnce();
+    expect(created[0]?.listenerCount("click")).toBe(0);
+  });
+
+  it("deduplicates notification ids before creating native handles", async () => {
+    const { service, created } = setup();
+    await service.enable();
+
+    await service.sync([request("issue:acme:818"), request("issue:acme:818")]);
+
+    expect(created).toHaveLength(1);
   });
 
   it("shows the window and routes clicks only after the read model confirms the item", async () => {
@@ -124,6 +139,28 @@ describe("desktop notifications", () => {
     const { service, navigated } = setup([], "issue:acme:818");
 
     await service.enable();
+    await service.sync([request("issue:acme:818")]);
+
+    expect(navigated).toEqual(["issue:acme:818"]);
+  });
+
+  it("keeps valid launch input when a later candidate is unknown", async () => {
+    const { service, navigated } = setup();
+    await service.enable();
+    service.openUrl("cogwork://attention?focus=issue%3Aacme%3A818");
+    service.openUrl("cogwork://attention?focus=issue%3Aacme%3A999");
+
+    await service.sync([request("issue:acme:818")]);
+
+    expect(navigated).toEqual(["issue:acme:818"]);
+  });
+
+  it("routes known items when OS notification delivery is unsupported", async () => {
+    const { service, deps, navigated } = setup();
+    deps.isSupported.mockReturnValue(false);
+    service.openUrl("cogwork://attention?focus=issue%3Aacme%3A818");
+    await service.enable();
+
     await service.sync([request("issue:acme:818")]);
 
     expect(navigated).toEqual(["issue:acme:818"]);
