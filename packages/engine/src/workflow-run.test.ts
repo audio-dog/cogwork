@@ -3,10 +3,12 @@ import {
   Claim,
   HarnessName,
   keyOf,
+  LineageId,
   localOwnerId,
   type ParkReason,
   ParkRecord,
   RunId,
+  WorkflowActionArtifact,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
   WorkflowCatalogKey,
@@ -15,6 +17,7 @@ import {
   WorkflowNodeId,
   type WorkflowRecord,
   WorkItemId,
+  WorkspaceConfig,
   WorkspaceId,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -40,9 +43,15 @@ import {
   type HarnessRunner,
   make as makeHarness,
 } from "./harness";
-import { emptyLayer as emptyIssueTrackerLayer } from "./issue-tracker";
+import {
+  emptyLayer as emptyIssueTrackerLayer,
+  IssueTracker,
+  type IssueTrackerService,
+  makeEmpty as makeEmptyIssueTracker,
+} from "./issue-tracker";
+import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
-import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SlackWrite } from "./slack-write";
@@ -51,6 +60,7 @@ import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
   TriggerObservationStore,
+  TriggerObservationStoreError,
   type TriggerObservationStoreService,
 } from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
@@ -58,6 +68,7 @@ import {
   WorkflowActionPlanStore,
   memoryLayer as workflowActionPlanStoreLayer,
 } from "./workflow-action-plan-store";
+import { WorkflowArtifactStore, memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
 
@@ -183,6 +194,15 @@ const workflowService: WorkflowsService = {
   listOptions: () => Effect.succeed([]),
 };
 
+const workflowServiceWith = (publishedCopy: WorkflowDocument): WorkflowsService => ({
+  ...workflowService,
+  list: Effect.succeed({
+    workflows: [{ ...workflowRecord, workingCopy: publishedCopy, publishedCopy }],
+    unreadable: [],
+  }),
+  get: () => Effect.succeed({ ...workflowRecord, workingCopy: publishedCopy, publishedCopy }),
+});
+
 const admission: TriggerAdmission = {
   event: {
     key: { _tag: "ScheduleInstant", workflow, instantMillis: 1_000 },
@@ -256,12 +276,19 @@ const makeCoordination = () =>
     const processed = yield* Ref.make<string | null>(null);
     const barrier = yield* Ref.make(0);
     const claims = yield* Ref.make(0);
+    const activeClaim = yield* Ref.make<Claim | null>(null);
     const read = (_ref?: unknown) =>
-      Effect.all([Ref.get(attempts), Ref.get(parks), Ref.get(processed), Ref.get(barrier)]).pipe(
-        Effect.map(([currentAttempts, currentParks, currentProcessed, barrierAtMillis]) => ({
+      Effect.all([
+        Ref.get(attempts),
+        Ref.get(parks),
+        Ref.get(processed),
+        Ref.get(barrier),
+        Ref.get(activeClaim),
+      ]).pipe(
+        Effect.map(([currentAttempts, currentParks, currentProcessed, barrierAtMillis, currentClaim]) => ({
           ...fold(
             {
-              claim: null,
+              claim: currentClaim,
               attempts: currentAttempts,
               handbacks: [],
               parks: currentParks,
@@ -278,9 +305,10 @@ const makeCoordination = () =>
         read,
         claim: (_ref, input) =>
           Ref.update(claims, (current) => current + 1).pipe(
-            Effect.map(() => Claim.make({ ...input, by: "cogwork", claimedAtMillis: 1 })),
+            Effect.andThen(Effect.sync(() => Claim.make({ ...input, by: "cogwork", claimedAtMillis: 1 }))),
+            Effect.tap((claim) => Ref.set(activeClaim, claim)),
           ),
-        release: () => Effect.void,
+        release: () => Ref.set(activeClaim, null),
         recordAttempt: (_ref, input) =>
           Ref.update(attempts, (current) => [
             ...current,
@@ -317,6 +345,7 @@ const requirements = Layer.mergeAll(
   emptyIssueTrackerLayer,
   Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
   workflowActionPlanStoreLayer,
+  workflowArtifactStoreLayer,
   CredentialStore.layerEnv,
   NodeServices.layer,
   FetchHttpClient.layer,
@@ -353,6 +382,8 @@ interface HarnessBehavior {
   readonly run?: HarnessRunner["run"];
   readonly coordination?: (service: CoordinationService) => CoordinationService;
   readonly observationStore?: (service: TriggerObservationStoreService) => TriggerObservationStoreService;
+  readonly issueTracker?: IssueTrackerService;
+  readonly registry?: RegistryState;
 }
 
 const testProgram = (
@@ -366,6 +397,8 @@ const testProgram = (
     const baseObservationStore = yield* makeMemoryTriggerObservationStore;
     const observationStore = behavior.observationStore?.(baseObservationStore) ?? baseObservationStore;
     const notifications = yield* makeNotifications;
+    const issueTracker = behavior.issueTracker ?? (yield* IssueTracker);
+    const registry = readOnlyRegistry(behavior.registry ?? emptyRegistry);
     const harness = makeHarness([
       {
         name: harnessName,
@@ -408,12 +441,277 @@ const testProgram = (
       ),
       Effect.provideService(TriggerObservationStore, observationStore),
       Effect.provideService(Harness, harness),
+      Effect.provideService(IssueTracker, issueTracker),
+      Effect.provideService(WorkspaceRegistry, registry),
       Effect.provideService(WorkflowNotifications, notifications),
     );
     return { runner, coordination, notifications, observationStore };
   });
 
+const exerciseFanOut = Effect.fn("WorkflowRunTest.exerciseFanOut")(function* (
+  summaries: ReadonlyArray<string>,
+) {
+  const fanOutDocument = WorkflowDocument.make({
+    ...document,
+    operations: document.operations.map((candidate) => ({
+      ...candidate,
+      forEach: "commitment",
+    })),
+  });
+  const { runner, notifications, observationStore } = yield* testProgram(
+    [
+      {
+        summary: summaries.length === 0 ? "No commitments" : "Three commitments",
+        stuck: false,
+        elements: summaries.map((summary) => ({
+          summary,
+          answers: { done: "yes" },
+          inputs: { notification: summary },
+        })),
+      },
+    ],
+    {},
+    workflowServiceWith(fanOutDocument),
+  );
+  yield* observationStore.putAll([granolaAdmission]);
+
+  assert.strictEqual(yield* runner.execute(granolaAdmission), "completed");
+  const children = yield* observationStore.admissions;
+  assert.lengthOf(children, summaries.length);
+  const childRun = children[0]?.event.key._tag === "FanOutChild" ? children[0].event.key.run : null;
+  assert.deepStrictEqual(
+    children.map(({ event, lineage }) => ({
+      tag: event.key._tag,
+      parent: event.key._tag === "FanOutChild" ? event.key.parent : null,
+      run: event.key._tag === "FanOutChild" ? event.key.run : null,
+      position: event.key._tag === "FanOutChild" ? event.key.position : null,
+      lineage,
+    })),
+    summaries.map((_, position) => ({
+      tag: "FanOutChild" as const,
+      parent: keyOf(granolaAdmission.event.key),
+      run: childRun,
+      position,
+      lineage: {
+        root: granolaAdmission.lineage.root,
+        parent: childRun === null ? null : LineageId.make(childRun),
+        hop: 1,
+      },
+    })),
+  );
+  yield* Effect.forEach(children, runner.execute, { discard: true });
+  assert.deepStrictEqual(
+    (yield* notifications.list).map(({ summary }) => summary),
+    [...summaries],
+  );
+});
+
 describe("WorkflowRun", () => {
+  it.effect("fans each result element into one child item with inherited lineage", () =>
+    Effect.forEach([[], ["First", "Second", "Third"]] as const, exerciseFanOut, {
+      discard: true,
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("retries a failed fan-out without exposing duplicate children", () =>
+    Effect.gen(function* () {
+      const fanOutDocument = WorkflowDocument.make({
+        ...document,
+        operations: document.operations.map((candidate) => ({ ...candidate, forEach: "commitment" })),
+      });
+      const output = {
+        summary: "Two commitments",
+        stuck: false,
+        elements: ["First", "Second"].map((summary) => ({
+          summary,
+          answers: { done: "yes" },
+          inputs: { notification: summary },
+        })),
+      };
+      const failFanOut = yield* Ref.make(true);
+      const { runner, observationStore } = yield* testProgram(
+        [output, output],
+        {
+          observationStore: (base) => ({
+            ...base,
+            fanOut: (parent, children, closeRevision) =>
+              Ref.getAndSet(failFanOut, false).pipe(
+                Effect.flatMap((fail) =>
+                  fail
+                    ? Effect.fail(new TriggerObservationStoreError({ message: "fan-out write failed" }))
+                    : base.fanOut(parent, children, closeRevision),
+                ),
+              ),
+          }),
+        },
+        workflowServiceWith(fanOutDocument),
+      );
+      yield* observationStore.putAll([granolaAdmission]);
+
+      assert.isTrue(Result.isFailure(yield* Effect.result(runner.execute(granolaAdmission))));
+      assert.deepStrictEqual(yield* observationStore.admissions, [granolaAdmission]);
+      assert.strictEqual(yield* runner.execute(granolaAdmission), "completed");
+      assert.lengthOf(yield* observationStore.admissions, 2);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("parks a lineage at hop 25 before starting a Run", () =>
+    Effect.gen(function* () {
+      const capped = { ...admission, lineage: { ...admission.lineage, hop: 25 } };
+      const { runner, coordination, observationStore } = yield* testProgram([]);
+      yield* observationStore.putAll([capped]);
+
+      assert.strictEqual(yield* runner.execute(capped), "completed");
+      assert.strictEqual((yield* Ref.get(coordination.parks))[0]?.reason._tag, "HopCap");
+      assert.isEmpty(yield* (yield* RunLedger).listRuns(1));
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("runs the Granola to issue document through child routes", () =>
+    Effect.gen(function* () {
+      const repo: RegisteredWorkspace = {
+        source: "test",
+        contributions: [],
+        repository: "colonylabs/cogwork",
+        config: yield* Schema.decodeEffect(WorkspaceConfig)({
+          name: "cogwork",
+          checkoutPath: "/cogwork",
+          issueTracker: { type: "github" },
+        }),
+      };
+      const createEntry = decodeEntry("github.create-issue");
+      const commentEntry = decodeEntry("github.comment-issue");
+      const match = decodeNode("match");
+      const newChoice = decodeNode("new");
+      const duplicateChoice = decodeNode("duplicate");
+      const relatedChoice = decodeNode("related");
+      const actionEntry = (key: typeof createEntry, name: string, inputs: ReadonlyArray<string>) => ({
+        key,
+        name,
+        kind: "action" as const,
+        system: "github",
+        connection: "github",
+        requires: [],
+        parameters: [],
+        itemKind: null,
+        actsOn: ["*"],
+        requiresWorkspace: true,
+        permissionProfile: "read-only" as const,
+        agentInputs: inputs,
+        emits: [],
+      });
+      const granolaDocument = WorkflowDocument.make({
+        ...document,
+        workspaces: { _tag: "Listed", workspaces: [repo.config.name] },
+        operations: [
+          {
+            ...document.operations[0],
+            forEach: "commitment",
+            questions: [
+              {
+                id: match,
+                text: "Match?",
+                choices: [
+                  { id: newChoice, name: "New" },
+                  { id: duplicateChoice, name: "Duplicate" },
+                  { id: relatedChoice, name: "Related" },
+                ],
+              },
+            ],
+            transitions: [
+              {
+                when: [{ question: match, choice: newChoice }],
+                actions: [{ entry: createEntry, parameters: [] }],
+                handOff: null,
+              },
+              ...[duplicateChoice, relatedChoice].map((choice) => ({
+                when: [{ question: match, choice }],
+                actions: [{ entry: commentEntry, parameters: [] }],
+                handOff: null,
+              })),
+            ],
+          },
+        ],
+      });
+      const baseCatalogResult = yield* workflowService.catalog;
+      const granolaService = {
+        ...workflowServiceWith(granolaDocument),
+        catalog: Effect.succeed({
+          ...baseCatalogResult,
+          catalog: {
+            ...baseCatalogResult.catalog,
+            entries: [
+              ...baseCatalogResult.catalog.entries,
+              actionEntry(createEntry, "Create an issue", ["issue_title", "issue_body"]),
+              actionEntry(commentEntry, "Comment on an issue", ["issue", "comment"]),
+            ],
+          },
+        }),
+      } satisfies WorkflowsService;
+      const writes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const baseTracker = yield* makeEmptyIssueTracker;
+      const tracker = {
+        ...baseTracker,
+        createIssue: (workspace: Parameters<IssueTrackerService["createIssue"]>[0], input) =>
+          Ref.modify(writes, (current) => {
+            const issue = WorkItemId.make(`#${current.length + 100}`);
+            return [
+              WorkflowActionArtifact.make({
+                workspace: workspace.config.name,
+                issue,
+                url: `https://example.test/issues/${issue.slice(1)}`,
+                origin: input.origin,
+              }),
+              [...current, `create:${input.title}`],
+            ];
+          }),
+        commentIssue: (_workspace, issue, body) =>
+          Ref.update(writes, (current) => [...current, `comment:${issue}:${body}`]),
+      } satisfies IssueTrackerService;
+      const blankInputs = { issue_title: "", issue_body: "", issue: "", comment: "" };
+      const { runner, observationStore } = yield* testProgram(
+        [
+          {
+            summary: "Three commitments",
+            stuck: false,
+            elements: [
+              {
+                summary: "Add retries",
+                answers: { match: "new" },
+                inputs: { ...blankInputs, issue_title: "Add retries", issue_body: "Retry failed sends." },
+                workspace: "cogwork",
+              },
+              {
+                summary: "Document setup",
+                answers: { match: "duplicate" },
+                inputs: { ...blankInputs, issue: "#12", comment: "Captured in the meeting." },
+                workspace: "cogwork",
+              },
+              {
+                summary: "Expose health",
+                answers: { match: "new" },
+                inputs: { ...blankInputs, issue_title: "Expose health", issue_body: "Show source health." },
+                workspace: "cogwork",
+              },
+            ],
+          },
+        ],
+        { issueTracker: tracker, registry: { workspaces: [repo], failures: [] } },
+        granolaService,
+      );
+      yield* observationStore.putAll([granolaAdmission]);
+
+      yield* runner.execute(granolaAdmission);
+      yield* Effect.forEach(yield* observationStore.admissions, runner.execute, { discard: true });
+
+      assert.deepStrictEqual(yield* Ref.get(writes), [
+        "create:Add retries",
+        "comment:#12:Captured in the meeting.",
+        "create:Expose health",
+      ]);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("freezes the complete Granola note in Work context", () =>
     Effect.gen(function* () {
       const { runner } = yield* testProgram([
@@ -449,6 +747,41 @@ describe("WorkflowRun", () => {
           "Taylor: Ship the smaller change.\nAri: Agreed.",
         ].join("\n"),
       );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("includes artifacts already created by the lineage in Work context", () =>
+    Effect.gen(function* () {
+      const artifact = WorkflowActionArtifact.make({
+        workspace: decodeWorkspace("cogwork"),
+        issue: decodeWorkItem("#99"),
+        url: "https://example.test/issues/99",
+        origin: {
+          item: keyOf(granolaAdmission.event.key),
+          workflow,
+          attempt: decodeRun("prior-run"),
+          writeKey: "prior-write",
+          lineage: granolaAdmission.lineage,
+        },
+      });
+      yield* (yield* WorkflowArtifactStore).record(artifact);
+      const { runner } = yield* testProgram([
+        {
+          summary: "Captured",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "Captured" },
+        },
+      ]);
+
+      yield* runner.execute(granolaAdmission);
+      const [run] = yield* (yield* RunLedger).listRuns(10);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.include(plan?.workContext.prose.body ?? "", "## Artifacts this lineage created");
+      assert.include(plan?.workContext.prose.body ?? "", "https://example.test/issues/99");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -678,6 +1011,7 @@ describe("WorkflowRun", () => {
 
       assert.strictEqual(run.status, "succeeded");
       assert.isNull(plan?.sandbox.workspace);
+      assert.isEmpty(plan?.tools ?? []);
       assert.isDefined(actionPlan);
       assert.strictEqual(frozenPlan.steps[0]?.entry, notifyEntry);
       assert.deepStrictEqual(frozenPlan.steps[0]?.inputs, { notification: "Deploy ready" });
@@ -694,6 +1028,71 @@ describe("WorkflowRun", () => {
         (yield* restartedNotifications.list).map(({ summary, answers }) => ({ summary, answers })),
         [{ summary: "Deploy ready", answers: { done: "yes" } }],
       );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("adds issue search only when a Transition writes an issue", () =>
+    Effect.gen(function* () {
+      const createIssueEntry = decodeEntry("github.create-issue");
+      const issueDocument = WorkflowDocument.make({
+        ...document,
+        operations: document.operations.map((candidate) => ({
+          ...candidate,
+          transitions: candidate.transitions.map((candidateTransition) => ({
+            ...candidateTransition,
+            actions: [{ entry: createIssueEntry, parameters: [] }],
+          })),
+        })),
+      });
+      const baseCatalogResult = yield* workflowService.catalog;
+      const issueService = {
+        ...workflowServiceWith(issueDocument),
+        catalog: Effect.succeed({
+          ...baseCatalogResult,
+          catalog: {
+            ...baseCatalogResult.catalog,
+            entries: [
+              ...baseCatalogResult.catalog.entries,
+              {
+                key: createIssueEntry,
+                name: "Create an issue",
+                kind: "action" as const,
+                system: "github",
+                connection: "github",
+                requires: [],
+                parameters: [],
+                itemKind: null,
+                actsOn: ["*"],
+                requiresWorkspace: true,
+                permissionProfile: "read-only" as const,
+                agentInputs: ["issue_title", "issue_body"],
+                emits: [],
+              },
+            ],
+          },
+        }),
+      } satisfies WorkflowsService;
+      const { runner } = yield* testProgram(
+        [
+          {
+            summary: "Create it",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { issue_title: "Title", issue_body: "Body" },
+            workspace: "none",
+          },
+        ],
+        {},
+        issueService,
+      );
+
+      yield* runner.execute(admission);
+      const [run] = yield* (yield* RunLedger).listRuns(1);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.deepStrictEqual(plan?.tools, ["issue-search"]);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -870,6 +1269,7 @@ describe("WorkflowRun", () => {
         digest: "publish-plan",
         summary: "Waiting for a Workspace",
         answers: {},
+        lineage: admission.lineage,
         handOff: null,
         steps: [
           WorkflowActionPlanStep.make({
@@ -971,7 +1371,7 @@ describe("WorkflowRun", () => {
           })),
         ),
       };
-      const handbackOnRead = yield* Ref.make(true);
+      const coordinationReads = yield* Ref.make(0);
       const { runner } = yield* testProgram(
         [
           {
@@ -991,9 +1391,9 @@ describe("WorkflowRun", () => {
           coordination: (service) => ({
             ...service,
             read: (...args) =>
-              Ref.getAndSet(handbackOnRead, false).pipe(
-                Effect.flatMap((shouldHandBack) =>
-                  shouldHandBack
+              Ref.updateAndGet(coordinationReads, (count) => count + 1).pipe(
+                Effect.flatMap((count) =>
+                  count === 2
                     ? service
                         .handBack(admission.event.key, { by: "Taylor" })
                         .pipe(
@@ -1037,6 +1437,7 @@ describe("WorkflowRun", () => {
         digest: "stale-plan",
         summary: "Stale plan",
         answers: {},
+        lineage: admission.lineage,
         handOff: null,
         steps: [],
       });

@@ -37,7 +37,7 @@ not a convergence.
 
 Two things constrain the shape. Rules with globs such as `**/*.test.ts` would carry path-scoped
 guidance, but the engine does not evaluate Rule globs yet. And
-[#764](https://github.com/colonylabs/cogwork/pull/764) has rewritten both shipped packages to ADR
+[#764](https://github.com/taylorfsteele/cogwork/pull/764) has rewritten both shipped packages to ADR
 [0027](./0027-headless-review-is-one-bounded-round-of-report-only-reviewers.md)'s shape — the
 "Write it lean" ladder, the Checks stage, and the three-review round — so this change lands on that
 text.

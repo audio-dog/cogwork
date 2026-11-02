@@ -16,9 +16,9 @@ import { Switch } from "@cogwork/ui/components/switch";
 import { Textarea } from "@cogwork/ui/components/textarea";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use } from "react";
 import { githubPriorityFieldsAtom } from "../daemon/atoms";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import type { WorkspaceRecordDraft } from "../features/workspace-record";
 
 export type PatchDraft = (next: Partial<WorkspaceRecordDraft>) => void;
@@ -274,7 +274,7 @@ function LivePriorityFieldSelect({
       <PriorityFieldSelect fields={[]} />
       <Alert variant="destructive" className="max-w-80">
         <AlertTitle>Could not load priority fields</AlertTitle>
-        <AlertDescription>{Cause.pretty(result.cause)}</AlertDescription>
+        <AlertDescription>{daemonFailureMessage(result.cause)}</AlertDescription>
         <Button type="button" variant="outline" size="sm" onClick={refresh}>
           Try again
         </Button>

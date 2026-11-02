@@ -1,5 +1,9 @@
 import {
   IssueTrackerError,
+  keyOf,
+  LineageId,
+  RunId,
+  WorkflowActionOrigin,
   WorkflowCatalogKey,
   WorkflowId,
   WorkflowNodeId,
@@ -20,6 +24,7 @@ import { vi } from "vitest";
 import type { RegisteredWorkspace } from "../projector";
 import { matchTriggerEvent } from "../trigger-observation";
 import type { TriggerSubscription } from "../trigger-source";
+import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
 import { GitHubClient, type GitHubClientService, type RawPull } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
@@ -249,6 +254,43 @@ describe("GitHub Trigger sources", () => {
                     },
                   ],
             ),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("carries the creating Workflow lineage into issue label events", () =>
+    Effect.gen(function* () {
+      const inherited = { root: LineageId.make("issue:root"), parent: null, hop: 4 } as const;
+      const origin = WorkflowActionOrigin.make({
+        item: keyOf({ _tag: "Issue", workspace: workspaceId, id: firstIssueId }),
+        workflow,
+        attempt: RunId.make("creating-run"),
+        writeKey: "create-issue",
+        lineage: inherited,
+      });
+      const artifacts = {
+        record: () => Effect.die("unused"),
+        byLineage: () => Effect.die("unused"),
+        origin: () => Effect.succeed(origin),
+      } satisfies WorkflowArtifactStoreService;
+      const client = yield* GitHubClient;
+      const [event] = yield* makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState), artifacts)
+        .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
+        .pipe(Stream.take(1), Stream.runCollect);
+
+      assert.deepStrictEqual(event?.cause, {
+        _tag: "Cogwork",
+        origin: origin.item,
+        lineage: inherited,
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () => Effect.succeed([issue(1)]),
+          listIssueEvents: () =>
+            Effect.succeed([{ id: 1, event: "labeled", labelName: "needs-triage", createdAtMillis: 1_500 }]),
+          listTriggerComments: () => Effect.succeed([]),
         }),
       ),
     ),

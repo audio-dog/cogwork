@@ -24,6 +24,6 @@ any {
     register_diagnostic(span=$block, message="Rule: avoid pipeline fragment staging. Why this is wrong: this operation stages an intermediate pipeline fragment and then returns another pipeline that consumes it, so the reader must chase names to understand the final flow. Safe remediation: keep the producer and final selection in one visible pipeline, or promote a complete named domain operation.", severity="error")
   },
   JsSwitchStatement() as $switchStatement where {
-    register_diagnostic(span=$switchStatement, message="Rule: no switch statements. Why: they read as a control-flow ladder, and a default case silently swallows new cases instead of failing the build. Fix: use a mapped-type object map keyed by the discriminant, a keyed dictionary of functions, a cond/rule table, or a tuple spec table projected into a Map — see https://github.com/colonylabs/cogwork/issues/102.", severity="error")
+    register_diagnostic(span=$switchStatement, message="Rule: no switch statements. Why: they read as a control-flow ladder, and a default case silently swallows new cases instead of failing the build. Fix: use a mapped-type object map keyed by the discriminant, a keyed dictionary of functions, a cond/rule table, or a tuple spec table projected into a Map — see https://github.com/taylorfsteele/cogwork/issues/102.", severity="error")
   }
 }

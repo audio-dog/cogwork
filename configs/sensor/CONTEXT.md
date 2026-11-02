@@ -16,7 +16,7 @@ _Avoid_: monitor, watcher, detector
 A standing target the suite or the app must meet; missing it files work. A budget fires on the
 standing condition, not on a transition.
 The slowest-test-file budget is 14,000 ms, rounded to two significant figures from the first timing
-report's 13,565 ms measurement ([run 36749774543](https://github.com/colonylabs/cogwork/actions/runs/36749774543)).
+report's 13,565 ms measurement ([run 36749774543](https://github.com/taylorfsteele/cogwork/actions/runs/36749774543)).
 _Avoid_: threshold (that is a sensor's firing point, not the target), SLA
 
 **Seed run**:

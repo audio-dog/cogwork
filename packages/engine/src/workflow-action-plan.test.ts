@@ -32,6 +32,7 @@ import {
   WorkflowActionPlanStore,
   memoryLayer as workflowActionPlanStoreLayer,
 } from "./workflow-action-plan-store";
+import { memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
 
 const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
@@ -109,6 +110,7 @@ const plan = (steps: ReadonlyArray<WorkflowActionPlanStep>) =>
     digest: "plan-digest",
     summary: "write",
     answers: {},
+    lineage: admission.lineage,
     handOff: null,
     steps,
   });
@@ -316,7 +318,12 @@ const adapterLayers = Layer.mergeAll(coordinationLayer, trackerLayer, slackLayer
   Layer.provideMerge(ActionPlanProbe.layer),
 );
 
-const requirements = Layer.mergeAll(engineTestLayer(), workflowActionPlanStoreLayer, adapterLayers);
+const requirements = Layer.mergeAll(
+  engineTestLayer(),
+  workflowActionPlanStoreLayer,
+  workflowArtifactStoreLayer,
+  adapterLayers,
+);
 
 describe("Workflow action plan", () => {
   it.effect("freezes Slack channel and item targets before writing", () =>
@@ -666,13 +673,25 @@ describe("Workflow action plan", () => {
       yield* (yield* WorkflowActionPlanStore).create(initial);
 
       const result = yield* executeWorkflowActionPlan(initial, admission);
+      const parked = (yield* Ref.get(probe.parks))[0];
 
       assert.strictEqual(result._tag, "Parked");
       assert.isEmpty(yield* Ref.get(probe.calls));
-      assert.deepInclude((yield* Ref.get(probe.parks))[0], {
-        _tag: "NoWorkspaceRecognized",
-        plan: initial.digest,
-      });
+      assert.strictEqual(parked?._tag, "NoWorkspaceRecognized");
+      if (parked?._tag !== "NoWorkspaceRecognized") return;
+      const parkedPlan = yield* Schema.decodeEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            summary: Schema.String,
+            steps: Schema.Array(Schema.Struct({ position: Schema.Finite, entry: WorkflowCatalogKey })),
+          }),
+        ),
+      )(parked.plan);
+      assert.deepStrictEqual(
+        parkedPlan.steps.map(({ entry }) => entry),
+        ["github.comment-this-item", "github.close-this-issue"],
+      );
+      assert.notInclude(parked.plan, "first");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

@@ -14,9 +14,9 @@ ADR 0013 enumerated the settings a person can write. ADR 0014 made the install r
 for *this Plugin is installed* and machine-local. Neither said where those records physically live,
 how they migrate across an automatic desktop update, or what happens when a migration fails.
 
-[#126](https://github.com/colonylabs/cogwork/issues/126) asked for that. Its research artifact
+[#126](https://github.com/taylorfsteele/cogwork/issues/126) asked for that. Its research artifact
 (`docs/research/desktop-settings-storage-updates.md`, from
-[#129](https://github.com/colonylabs/cogwork/issues/129)) recommended Electron's `userData`
+[#129](https://github.com/taylorfsteele/cogwork/issues/129)) recommended Electron's `userData`
 directory, Drizzle's migrator driven by generated SQL files, and a `SecretStore` port beside the
 settings store. An AFK grilling session worked the ticket across seven rounds; three of those
 recommendations did not survive it, and a fourth decision — the one this ADR leads with — reversed
@@ -55,7 +55,7 @@ so unbounded run history becomes a startup cost.
 
 **No `SecretStore` and no Connection record.** The Credential store already names the first and
 already carries the seam the research proposed. *Connection* is marked *provisional, do not design
-against*; [#172](https://github.com/colonylabs/cogwork/issues/172) owns it.
+against*; [#172](https://github.com/taylorfsteele/cogwork/issues/172) owns it.
 
 ## Considered Options
 
@@ -99,10 +99,10 @@ is the only host.
 - `~/.cogwork/runs.db` becomes the wrong filename, and renaming it is itself a migration step.
 - Because the Control store now spans both families, a foreign key between a run row and a settings
   row becomes possible. Nothing needs one today —
-  [#130](https://github.com/colonylabs/cogwork/issues/130) embeds provenance in the Run Plan rather
+  [#130](https://github.com/taylorfsteele/cogwork/issues/130) embeds provenance in the Run Plan rather
   than referencing it — and wanting one is the signal to revisit this ADR.
 - One store-wide revision was considered and cut: its only consumer went to
-  [#133](https://github.com/colonylabs/cogwork/issues/133), and a counter every write must touch is a
+  [#133](https://github.com/taylorfsteele/cogwork/issues/133), and a counter every write must touch is a
   contention point invented for a consumer that does not exist. Stale-write detection stays per-row.
 
 ## Amendment (2026-08-25) — `drizzle-kit` is adopted as a development tool
@@ -145,7 +145,7 @@ that two committed representations would otherwise leave open.
 Nothing about the boot loop changes. The engine still owns it, still reads an array of statements,
 still never calls Drizzle's `migrate()`, and still does no filesystem read at run time.
 
-Full reasoning: [#126](https://github.com/colonylabs/cogwork/issues/126). Research:
+Full reasoning: [#126](https://github.com/taylorfsteele/cogwork/issues/126). Research:
 `docs/research/desktop-settings-storage-updates.md` on `research/desktop-settings-storage`.
 
 ## Amendment (2026-08-25) — the daemon's runtime limits are a record kind
@@ -181,7 +181,7 @@ daemon cannot read the location of its own store out of that store.
 ## Amendment (2026-08-25) — the Control store gains a Connection record
 
 This ADR decided "no `SecretStore` and no Connection record", noting that *Connection* was marked
-*provisional, do not design against* and that [#172](https://github.com/colonylabs/cogwork/issues/172)
+*provisional, do not design against* and that [#172](https://github.com/taylorfsteele/cogwork/issues/172)
 owned it.
 
 That ticket defines the term, and the record is now needed. **The Control store holds a Connection
@@ -225,7 +225,7 @@ on disk forever with no command to restore one. The compatibility check on appli
 its mirror for shipped ids a store's history would skip. The `authoritative_records` table,
 `writeAuthoritative`, and the expected-revision write: no caller, and *authoritative record* is a noun
 no `CONTEXT.md` glossary carries. The revision-and-stale-write pattern lands with
-[#219](https://github.com/colonylabs/cogwork/issues/219)'s typed table, which wants three named
+[#219](https://github.com/taylorfsteele/cogwork/issues/219)'s typed table, which wants three named
 columns rather than an opaque blob.
 
 **And no legacy cutover.** This ADR's Consequences said `~/.cogwork/runs.db` becomes the wrong

@@ -11,7 +11,9 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import { TestClock } from "effect/testing";
 import { classify } from "./classify";
 import { triageProposalBody } from "./comments";
 import type { CommentHost, CoordinationComment } from "./coordination";
@@ -671,21 +673,59 @@ describe("coordination outcomes", () => {
     }),
   );
 
-  it.effect("handBack never creates a coordination comment", () =>
+  it.effect("handBack creates the coordination comment when it is missing", () =>
     Effect.gen(function* () {
       const { host, itemAt } = yield* makeFakeHost([{ number: 18, labels: ["ready-for-human"] }]);
       const tracker = makeCoordinationTracker(host);
-      const error = yield* Effect.flip(
+      const outcome = yield* Effect.result(
         tracker.handBack(workspace, decodeId("#18"), {
           record: { by: "local-owner", atMillis: 5 },
           changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
+          note: "Try again with the repaired setup.",
         }),
       );
+      if (Result.isFailure(outcome)) return assert.fail(outcome.failure.message);
 
-      assert.strictEqual(error._tag, "IssueTrackerError");
       const item = yield* itemAt(18);
-      assert.strictEqual(item?.comments.length, 0);
-      assert.deepStrictEqual(item?.labels, ["ready-for-human"]);
+      assert.strictEqual(item?.comments.length, 1);
+      assert.deepStrictEqual(item?.labels, ["ready-for-agent"]);
+      const body = ledgerBody(item?.comments ?? []);
+      assert.deepStrictEqual(Coordination.parseHandback(codec, body), {
+        by: "local-owner",
+        atMillis: 5,
+        note: "Try again with the repaired setup.",
+      });
+      assert.strictEqual(
+        Coordination.coordinationStatus(codec, body),
+        "Handed back by local-owner: Try again with the repaired setup.",
+      );
+      const observedItem = yield* observed(tracker, "#18");
+      assert.strictEqual(observedItem?.coordination?.barrierAtMillis, 5);
+    }),
+  );
+
+  it.effect("Coordination.handBack creates its record and returns its barrier", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 20, labels: ["ready-for-human"] }]);
+      const [listed] = yield* host.list(workspace);
+      if (listed === undefined) return assert.fail("missing tracker item");
+      const coordination = makeTrackerCoordination(host, workspace, listed, claimant);
+      const ref = { _tag: "Issue", workspace: workspace.config.name, id: decodeId("#20") } as const;
+
+      yield* TestClock.setTime(7);
+      const outcome = yield* Effect.result(
+        coordination.handBack(ref, { by: "local-owner", note: "Try again." }),
+      );
+      if (Result.isFailure(outcome)) return assert.fail(outcome.failure.message);
+
+      assert.strictEqual(outcome.success.barrierAtMillis, 7);
+      const item = yield* itemAt(20);
+      assert.strictEqual(item?.comments.length, 1);
+      assert.deepStrictEqual(Coordination.parseHandback(codec, ledgerBody(item?.comments ?? [])), {
+        by: "local-owner",
+        atMillis: 7,
+        note: "Try again.",
+      });
     }),
   );
 

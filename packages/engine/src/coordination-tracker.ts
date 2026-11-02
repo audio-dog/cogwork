@@ -120,7 +120,7 @@ const makeTrackerRecords = <Ref, CommentId>(
     note?: string,
     trigger?: FollowUpTrigger,
   ) =>
-    Coordination.editCoordination(host.codec, host.comments(ref), {
+    Coordination.upsertCoordination(host.codec, host.comments(ref), {
       status: Coordination.handbackStatus(handback, note),
       marker: Coordination.serializeHandback(host.codec, handback, trigger),
     });

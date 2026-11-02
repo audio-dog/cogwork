@@ -18,6 +18,7 @@ import {
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
+import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
 import { credentialAccountFor } from "./account";
 import type { LinearClientService, LinearTeamRef, RawComment, RawIssue } from "./client";
 import { hasCogworkMarker } from "./markers";
@@ -58,6 +59,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
   selected: ReadonlyArray<TriggerSubscription>,
   issue: RawIssue,
   now: number,
+  artifacts: WorkflowArtifactStoreService | null,
 ) {
   const issueSubscriptions = selected.filter((subscription) => {
     const label = parameterValue(subscription.parameters, "label");
@@ -67,6 +69,23 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
   const target = targetsFor(workspace).find(({ team }) => issue.identifier.startsWith(`${team}-`));
   if (!target) return [];
   const prose = yield* client.readTriggerProse(target, issue.id);
+  const issueId = itemId(issue.identifier);
+  const origin =
+    artifacts === null
+      ? null
+      : yield* artifacts
+          .origin(workspace.config.name, issueId)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("Workflow artifact origin read failed", { error }).pipe(
+                Effect.map(() => null),
+              ),
+            ),
+          );
+  const issueCause =
+    origin === null
+      ? ({ _tag: "Unknown" } as const)
+      : ({ _tag: "Cogwork", origin: origin.item, lineage: origin.lineage } as const);
   const labelEvents = yield* Effect.forEach(issueSubscriptions, (subscription) =>
     Effect.gen(function* () {
       if (subscription.entry !== issueHasLabelKey) return [];
@@ -81,10 +100,10 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
           key: {
             _tag: "Issue",
             workspace: workspace.config.name,
-            id: itemId(issue.identifier),
+            id: issueId,
           },
           revision: `label:${label}:${appliedAt}`,
-          cause: { _tag: "Unknown" },
+          cause: issueCause,
           atMillis: appliedAt,
           entry: issueHasLabelKey,
           workspace: workspace.config.name,
@@ -133,6 +152,7 @@ const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(func
   subscriptions: ReadonlyArray<TriggerSubscription>,
   workspace: RegistryState["workspaces"][number],
   now: number,
+  artifacts: WorkflowArtifactStoreService | null,
 ) {
   const selected = workspaceSubscriptions(workspace.config.name, subscriptions);
   if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
@@ -144,7 +164,7 @@ const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(func
   const events = yield* Effect.forEach(issues.flat(), (issue) =>
     isolateProviderItemRead(
       { source: "linear", workspace: workspace.config.name, item: issue.identifier },
-      eventsForIssue(client, workspace, selected, issue, now),
+      eventsForIssue(client, workspace, selected, issue, now, artifacts),
     ),
   );
   return {
@@ -159,12 +179,20 @@ const read = Effect.fn("LinearTrackerTriggerSource.read")(function* (
   registry: Effect.Effect<RegistryState>,
   subscriptions: ReadonlyArray<TriggerSubscription>,
   checkpoint: ProviderPollCheckpoint,
+  artifacts: WorkflowArtifactStoreService | null,
 ) {
   const now = yield* Clock.currentTimeMillis;
   const state = yield* registry;
   const workspaces = state.workspaces.filter(({ config }) => config.issueTracker.type === "linear");
   const reads = yield* Effect.forEach(workspaces, (workspace) =>
-    readWorkspace(client, checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
+    readWorkspace(
+      client,
+      checkpoint.cursors.get(workspace.config.name),
+      subscriptions,
+      workspace,
+      now,
+      artifacts,
+    ),
   );
   return {
     events: reads.flatMap(({ events }) => events),
@@ -178,6 +206,7 @@ const read = Effect.fn("LinearTrackerTriggerSource.read")(function* (
 export const makeLinearTrackerTriggerSource = (
   client: LinearClientService,
   registry: Effect.Effect<RegistryState>,
+  artifacts: WorkflowArtifactStoreService | null = null,
 ): TriggerSource => ({
   id: "linear",
   entries: linearTrackerEntries,
@@ -196,5 +225,7 @@ export const makeLinearTrackerTriggerSource = (
       );
     }).pipe(Effect.mapError((error) => sourceFailure("linear", error))),
   observe: (subscriptions) =>
-    providerPollingStream("linear", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
+    providerPollingStream("linear", (checkpoint) =>
+      read(client, registry, subscriptions, checkpoint, artifacts),
+    ),
 });
