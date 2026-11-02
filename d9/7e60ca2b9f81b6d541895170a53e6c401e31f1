@@ -1,0 +1,46 @@
+apps/desktop/src/shared/ipc.ts
+  s_dab70cd82002cf::t_b489d1a6156da4 31
+  s_dab70cd82002cf::t_10bd2a0acd96f7 10,15-30,32-40
+  s_dab70cd82002cf::t_7a595b36410cee 41
+apps/desktop/src/main/desktop-notifications.test.ts
+  s_dab70cd82002cf::t_c48b9c44fe0ef1 22-27,98-107,147-164,166-167
+  s_dab70cd82002cf::t_f7e43b427369f2 165
+  s_dab70cd82002cf::t_daca34c3c0399f 168
+apps/desktop/src/main/ipc.test.ts
+  s_dab70cd82002cf::t_c48b9c44fe0ef1 158,168-190
+  s_dab70cd82002cf::t_d04f3367819ee8 159-160
+  s_dab70cd82002cf::t_38c67d05699ca9 191-193
+  s_dab70cd82002cf::t_65a327a09464be 194-195
+apps/desktop/src/renderer/src/features/desktop-notifications.test.ts
+  s_dab70cd82002cf::t_c48b9c44fe0ef1 20,23,28-30,36-44
+apps/desktop/src/renderer/src/features/desktop-notifications.tsx
+  s_dab70cd82002cf::t_eb00c6e992ae0f 35
+  s_dab70cd82002cf::t_10bd2a0acd96f7 6-8,11,19-20,23,25,113,123-134
+  s_dab70cd82002cf::t_4aebfb3275c911 9-10
+apps/desktop/src/main/ipc.ts
+  s_dab70cd82002cf::t_b8df845b59ce38 61-63
+  s_dab70cd82002cf::t_10bd2a0acd96f7 20,45-47,52-54,56,58
+apps/desktop/src/main/desktop-notifications.ts
+  s_dab70cd82002cf::t_9259aee17c0ddc 45-52
+  s_dab70cd82002cf::t_537fab1eaf3fa5 101
+  s_dab70cd82002cf::t_a0aa97d8989355 160
+  s_dab70cd82002cf::t_10bd2a0acd96f7 1-3,5,12,34-39,41,43-44,73,75,83,85,102-109,147-151,156,192
+  s_dab70cd82002cf::t_e3f446317964d7 40,42,115,178
+  s_dab70cd82002cf::t_75c31e2c905b0a 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d97e60ca2b9f81b6d541895170a53e6c401e31f1",
+  "prompts": {},
+  "sessions": {
+    "s_dab70cd82002cf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d85-0bcd-7902-b31c-987efe96e20d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
