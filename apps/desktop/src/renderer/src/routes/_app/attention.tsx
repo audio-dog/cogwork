@@ -12,6 +12,7 @@ import {
   workflowNotificationsAtom,
 } from "../../daemon/atoms";
 import { AttentionClientProvider } from "../../features/attention-session";
+import { useDesktopNotificationStatus } from "../../features/desktop-notifications";
 import { useWorkflowSession } from "../../features/workflow-session";
 import { useRightPanelStore } from "../../store/right-panel";
 
@@ -41,6 +42,7 @@ function AttentionRoute() {
   const chooseAnswer = useAtomSet(chooseWorkflowAnswerAtom, { mode: "promise" });
   const dismiss = useAtomSet(dismissWorkflowNotificationAtom, { mode: "promise" });
   const { state } = useWorkflowSession();
+  const notificationStatus = useDesktopNotificationStatus();
   const openItem = useRightPanelStore((panel) => panel.openItem);
   const attention = attentionResult._tag === "Success" ? attentionResult.value : null;
   const notifications = notificationsResult._tag === "Success" ? notificationsResult.value : [];
@@ -74,6 +76,10 @@ function AttentionRoute() {
         if (WorkItemRef.guards.Issue(item)) openItem(item.workspace, item.id);
       }}
       onRefresh={refresh}
+      notificationFailure={notificationStatus._tag === "failed" ? notificationStatus.message : null}
+      onOpenNotificationSettings={() => {
+        window.cogwork.notifications.openSettings();
+      }}
     >
       <Attention.Frame>
         <Attention.Lanes />

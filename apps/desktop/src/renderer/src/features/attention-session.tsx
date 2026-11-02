@@ -343,6 +343,8 @@ export function AttentionClientProvider({
   onLayoutChange,
   onOpenItem,
   onRefresh,
+  notificationFailure,
+  onOpenNotificationSettings,
   children,
 }: {
   readonly snapshot: AttentionSnapshot;
@@ -353,6 +355,8 @@ export function AttentionClientProvider({
   readonly onLayoutChange: (layout: AttentionLayout) => void;
   readonly onOpenItem: (item: WorkItemRef) => void;
   readonly onRefresh: () => void;
+  readonly notificationFailure: string | null;
+  readonly onOpenNotificationSettings: () => void;
   readonly children: ReactNode;
 }) {
   const [failure, setFailure] = useState<string | null>(null);
@@ -387,6 +391,7 @@ export function AttentionClientProvider({
         layout,
         focus,
         failure,
+        notificationFailure,
       }}
       actions={{
         approve: ({ item, digest, edits }) => {
@@ -412,6 +417,7 @@ export function AttentionClientProvider({
         openItem: onOpenItem,
         setFocus: onFocusChange,
         setLayout: onLayoutChange,
+        openNotificationSettings: onOpenNotificationSettings,
       }}
       meta={{}}
     >

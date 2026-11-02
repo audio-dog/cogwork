@@ -208,7 +208,12 @@ const defaultClient = (): AttentionClient => ({
   dismiss: async () => undefined,
 });
 
-const renderAttention = async (value: { snapshot: AttentionSnapshot; client: AttentionClient }) => {
+const renderAttention = async (value: {
+  snapshot: AttentionSnapshot;
+  client: AttentionClient;
+  notificationFailure?: string;
+  onOpenNotificationSettings?: () => void;
+}) => {
   function Harness() {
     const [focus, setFocus] = useState<string | null>("issue:acme:%23817");
     return (
@@ -221,6 +226,8 @@ const renderAttention = async (value: { snapshot: AttentionSnapshot; client: Att
         onLayoutChange={() => undefined}
         onOpenItem={() => undefined}
         onRefresh={() => undefined}
+        notificationFailure={value.notificationFailure ?? null}
+        onOpenNotificationSettings={value.onOpenNotificationSettings ?? (() => undefined)}
       >
         <Attention.Frame>
           <Attention.Lanes />
@@ -416,6 +423,22 @@ describe("AttentionClientProvider", () => {
     await act(async () => button(container, "Dismiss")?.click());
 
     expect(dismiss).toHaveBeenCalledWith({ id: "triage:review:revision-2" });
+    await act(async () => root.unmount());
+  });
+
+  it("keeps the Attention list visible and points to System Settings when OS delivery fails", async () => {
+    const openSettings = vi.fn();
+    const { container, root } = await renderAttention({
+      snapshot: snapshot(attentionWith({ _tag: "Stuck", summary: "Need a person" }, ["hand-back"], null)),
+      client: defaultClient(),
+      notificationFailure: "Notifications are not allowed",
+      onOpenNotificationSettings: openSettings,
+    });
+
+    expect(container.textContent).toContain("Need a person");
+    expect(container.textContent).toContain("Parks still appear here");
+    await act(async () => button(container, "System Settings")?.click());
+    expect(openSettings).toHaveBeenCalledOnce();
     await act(async () => root.unmount());
   });
 });

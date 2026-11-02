@@ -57,6 +57,16 @@ const captureMainProfile = () => Effect.succeed("/diagnostics/main.heapsnapshot"
 
 const makeRuntime = () => ManagedRuntime.make(Layer.succeed(EngineSupervisor, supervisor));
 
+const notifications = {
+  enable: vi.fn(async () => ({ _tag: "ready" as const })),
+  sync: vi.fn(async () => ({ _tag: "ready" as const })),
+  getStatus: vi.fn(() => ({ _tag: "inactive" as const })),
+  takeNavigation: vi.fn(() => null),
+  openSettings: vi.fn(async () => true),
+  openUrl: vi.fn(),
+  closeAll: vi.fn(),
+};
+
 const deps = (socketPath: string, runtime: ReturnType<typeof makeRuntime>) => ({
   socketPath,
   supervisor,
@@ -65,6 +75,7 @@ const deps = (socketPath: string, runtime: ReturnType<typeof makeRuntime>) => ({
   captureMainProfile,
   isTrustedSender: () => true,
   runtime,
+  notifications,
 });
 
 const listen = (server: net.Server, socketPath: string) =>
@@ -131,6 +142,54 @@ it("resolves connect with a value Electron can clone across IPC", async () => {
     await runtime.dispose();
     await closeServer(server);
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it("rejects notification writes from an untrusted renderer", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+  notifications.sync.mockClear();
+
+  try {
+    registerIpc({ ...deps("/tmp/test.sock", runtime), isTrustedSender: () => false });
+    const sync = ipc.handlers.get(IpcChannel.syncDesktopNotifications);
+    if (!sync) throw new Error("Notification sync handler was not registered");
+
+    await sync({ sender }, [
+      { id: "issue:acme:818", focus: "issue:acme:818", title: "Needs you", body: "Review" },
+    ]);
+
+    expect(notifications.sync).not.toHaveBeenCalled();
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("forwards bounded notification requests from the trusted renderer", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+  notifications.enable.mockClear();
+  notifications.sync.mockClear();
+
+  try {
+    registerIpc(deps("/tmp/test.sock", runtime));
+    const enable = ipc.handlers.get(IpcChannel.enableDesktopNotifications);
+    const sync = ipc.handlers.get(IpcChannel.syncDesktopNotifications);
+    if (!enable || !sync) throw new Error("Notification handlers were not registered");
+    const request = {
+      id: "issue:acme:818",
+      focus: "issue:acme:818",
+      title: "Needs you",
+      body: "Review",
+    };
+
+    await enable({ sender });
+    await sync({ sender }, [request, { ...request, id: "x".repeat(65) }]);
+
+    expect(notifications.enable).toHaveBeenCalledOnce();
+    expect(notifications.sync).toHaveBeenCalledWith([request]);
+  } finally {
+    await runtime.dispose();
   }
 });
 
