@@ -1597,7 +1597,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("rebuilds edited approval text and records the digest that runs", () =>
+  it.effect("returns the rebuilt approval digest and dismisses its notification", () =>
     Effect.gen(function* () {
       const waitingDocument = yield* documentWithTransition({
         when: [{ question: decodeNode("done"), choice: decodeNode("yes") }],
@@ -1625,14 +1625,18 @@ describe("WorkflowRun", () => {
       assert.isNotNull(plan);
       if (plan === null) return;
 
-      yield* runner.approve({
+      const approvedDigest = yield* runner.approve({
         item: admission.event.key,
         attempt: plan.attempt,
         digest: plan.digest,
         edits: { notification: "Edited" },
       });
 
-      assert.deepInclude((yield* notifications.list)[0], { summary: "Edited" });
+      const [notification] = yield* notifications.list;
+      assert.deepInclude(notification, { summary: "Edited", item: admission.event.key });
+      assert.include(notification?.id, keyOf(admission.event.key));
+      assert.include(notification?.id, plan.attempt);
+      assert.notStrictEqual(approvedDigest, plan.digest);
       assert.isNull(yield* (yield* WorkflowActionPlanStore).pending(keyOf(admission.event.key), workflow));
       const run = yield* (yield* RunLedger).getRun(plan.attempt);
       assert.isNotNull(run);
@@ -1641,7 +1645,11 @@ describe("WorkflowRun", () => {
         ({ event }) => event.type === "CUSTOM" && event.name === "workflow.plan-approved",
       );
       const approvalValue = approval?.event.type === "CUSTOM" ? approval.event.value : undefined;
-      assert.notStrictEqual(decodeDecisionValue(approvalValue).object.digest, plan.digest);
+      assert.strictEqual(decodeDecisionValue(approvalValue).object.digest, approvedDigest);
+      assert.isDefined(notification);
+      if (!notification) return;
+      yield* notifications.dismiss(notification.id);
+      assert.isEmpty(yield* notifications.list);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
