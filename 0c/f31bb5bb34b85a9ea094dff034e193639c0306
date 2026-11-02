@@ -1,0 +1,24 @@
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_1499f8cf284854::t_ff65d45aa8485d 143-145
+  s_1499f8cf284854::t_9e0bdaf666c15e 8,139,142,146-149,171,174,213
+  s_1499f8cf284854::t_468397197f70e1 125
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_1499f8cf284854::t_8761640df2cbf2 307-311
+  s_1499f8cf284854::t_ddd5aa5b9ceeec 258-306,312-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0cf31bb5bb34b85a9ea094dff034e193639c0306",
+  "prompts": {},
+  "sessions": {
+    "s_1499f8cf284854": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-347d-7603-bbd8-088ebfebc478",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
