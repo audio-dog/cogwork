@@ -1,0 +1,77 @@
+packages/engine/src/github/github.test.ts
+  s_1499f8cf284854::t_ca379b3b71b46d 1233-1251
+  s_1499f8cf284854::t_8c08e8f7ef3839 564-565
+packages/engine/src/workflow-action-plan.ts
+  s_1499f8cf284854::t_846003f35e571e 78-81,295-297,307,310-321,433-435,439,504
+  s_1499f8cf284854::t_bc382a03f90a20 278-282
+packages/engine/src/github/client.ts
+  s_1499f8cf284854::t_5bb04533c7e4ab 225,545,803-805,1418-1419,1421-1430,1588-1592
+  s_1499f8cf284854::t_bc382a03f90a20 1387,1596
+packages/engine/src/github/client.test.ts
+  s_1499f8cf284854::t_3a25f5b9b3bd96 825,827-838,855-856
+  s_1499f8cf284854::t_e26be26f897c74 872-879
+  s_1499f8cf284854::t_bb6e0fc857b14d 7,795-815
+  s_dab70cd82002cf::t_08ee6de5a6edc1 816-818
+packages/engine/src/workflow-run.test.ts
+  s_1499f8cf284854::t_94951d01f55d63 1723,1751-1752,1754-1761,1794
+  s_1499f8cf284854::t_0c18626e4a5f2e 1245-1256,1258,1262-1267,1269-1270
+  s_1499f8cf284854::t_5cc0e700057784 1184,1226,1230-1243,1257,1282-1283
+  s_1499f8cf284854::t_5bdda8d2fcac0f 1722,1727-1750,1783-1793,1795-1797
+  s_1499f8cf284854::t_a87774b155d6bd 1762
+  s_1499f8cf284854::t_8b71330143774a 1648
+  s_1499f8cf284854::t_f1a4d80614a735 55
+  s_1499f8cf284854::t_106c7d8a878de3 1268,1753
+packages/engine/src/workflow-action-plan.test.ts
+  s_1499f8cf284854::t_e26be26f897c74 487,490-496
+  s_1499f8cf284854::t_0e0fb44f1cda74 450
+  s_1499f8cf284854::t_ecb27ae5e0051e 458
+packages/engine/src/source-control.ts
+  s_1499f8cf284854::t_27d675a7d49991 157-165,171,174-180
+packages/engine/src/pull-request-tool.test.ts
+  s_1499f8cf284854::t_f1a4d80614a735 41,46-47
+  s_1499f8cf284854::t_106c7d8a878de3 42
+  s_1499f8cf284854::t_5e2d8e76ec120c 23-36,40,55-57
+packages/engine/src/pull-request-tool.ts
+  s_1499f8cf284854::t_5e2d8e76ec120c 7,22,29
+  s_1499f8cf284854::t_9e308dd4ccceee 21
+packages/engine/src/workflow.test.ts
+  s_1499f8cf284854::t_bc382a03f90a20 81
+  s_1499f8cf284854::t_f85f7dafd40561 36,94,97-99,140,241-253
+  s_1499f8cf284854::t_0ec6238c3e4abf 96
+  s_1499f8cf284854::t_a16cd65f63e761 95
+  s_1499f8cf284854::t_c80313f1436b31 254-255
+  s_1499f8cf284854::t_bbbf050114d184 40-41
+packages/engine/src/github/provider.ts
+  s_1499f8cf284854::t_694a9dd070664d 540-550
+  s_1499f8cf284854::t_2dddccbb5bf6ad 666-678,785,796
+  s_1499f8cf284854::t_f85f7dafd40561 136
+packages/engine/src/workflow-run.ts
+  s_1499f8cf284854::t_34631bed25b86d 49,598-600,604-611,666-667,712
+  s_1499f8cf284854::t_6e4fe457a51d80 96-99,104
+  s_1499f8cf284854::t_e6f387a43b38e7 82,85,92,100
+  s_1499f8cf284854::t_bc382a03f90a20 734
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b1ab9fd48ceba9d19c0d312414174939ab1c93b6",
+  "prompts": {},
+  "sessions": {
+    "s_1499f8cf284854": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-347d-7603-bbd8-088ebfebc478",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dab70cd82002cf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d85-0bcd-7902-b31c-987efe96e20d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
