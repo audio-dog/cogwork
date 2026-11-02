@@ -17,6 +17,7 @@ import {
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
+import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -28,7 +29,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { clockEntries } from "./clock-source";
+import { clockEntries, clockSource } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
@@ -392,6 +393,22 @@ describe("TriggerObservation", () => {
     assert.deepStrictEqual(matchTriggerEvent([other, selected], slackEvent), [selected]);
   });
 
+  it("matches a targeted sweep item only to its Workflow Trigger", () => {
+    const selected = {
+      ...subscription,
+      entry: Schema.decodeSync(WorkflowCatalogKey)("schedule.sweep"),
+      workspaces: [selectedWorkspaceId],
+    };
+    const other = { ...selected, workflow: otherWorkflowId };
+    const sweepEvent = {
+      ...selectedEvent,
+      entry: selected.entry,
+      target: { workflow: selected.workflow, trigger: selected.trigger },
+    };
+
+    assert.deepStrictEqual(matchTriggerEvent([other, selected], sweepEvent), [selected]);
+  });
+
   it.effect("admits every matching Workflow for one source revision", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
@@ -422,7 +439,7 @@ describe("TriggerObservation", () => {
       const changes = yield* observation.changes.pipe(
         Stream.take(2),
         Stream.runCollect,
-        Effect.timeoutOption("1 second"),
+        Effect.timeoutOption("2 minutes"),
         Effect.forkChild({ startImmediately: true }),
       );
       yield* scripted.emit({
@@ -459,6 +476,16 @@ describe("TriggerObservation", () => {
           },
         },
         {
+          cause: { _tag: "Clock" } as const,
+          expected: {
+            root: yield* Schema.decodeEffect(LineageId)(
+              `${keyOf(selectedEvent.key)}:${selectedEvent.revision}`,
+            ),
+            parent: null,
+            hop: 0,
+          },
+        },
+        {
           cause: {
             _tag: "Cogwork",
             origin: parent,
@@ -478,6 +505,190 @@ describe("TriggerObservation", () => {
           observeLineage(cause).pipe(Effect.map((lineage) => assert.deepStrictEqual(lineage, expected))),
         { discard: true },
       );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("sweeps 60 parked idle issues across two ticks without repeating the first 50", () =>
+    Effect.gen(function* () {
+      const start = Date.UTC(2026, 0, 1);
+      const day = 86_400_000;
+      yield* TestClock.setTime(start);
+      const sweepDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        name: "Staleness sweep",
+        workspaces: { _tag: "Every" },
+        triggers: [
+          {
+            id: "sweep",
+            entry: "schedule.sweep",
+            parameters: [
+              { id: "hour", value: "0" },
+              { id: "minute", value: "1" },
+              { id: "zone", value: "UTC" },
+              { id: "source", value: "trackers" },
+              { id: "state", value: "parked" },
+              { id: "idle-days", value: "30" },
+            ],
+            start: "judge",
+          },
+        ],
+        operations: [
+          {
+            id: "judge",
+            name: "Judge",
+            instructionPackage: null,
+            instruction: "Judge the parked issue.",
+            permissionProfile: "read-only",
+            requires: [],
+            model: { harness: null, model: null, options: [] },
+            forEach: null,
+            questions: [],
+            transitions: [
+              {
+                when: [],
+                actions: [{ entry: "github.close-this-issue", parameters: [] }],
+                handOff: null,
+              },
+            ],
+            hints: [],
+          },
+        ],
+      });
+      const parked = (index: number, lastTouchedAtMillis: number) =>
+        ({
+          ...selectedTrackerItem,
+          id: Schema.decodeSync(WorkItemId)(`#${index}`),
+          title: `Parked issue ${index}`,
+          url: `https://github.com/acme/example/issues/${index}`,
+          lastTouchedAtMillis,
+          coordination: fold(
+            {
+              claim: null,
+              attempts: [],
+              handbacks: [],
+              parks: [
+                ParkRecord.make({
+                  reason: {
+                    _tag: "AwaitingApproval",
+                    plan: `retire-${index}`,
+                    digest: `digest-${index}`,
+                    revision: "1",
+                  },
+                  atMillis: lastTouchedAtMillis,
+                }),
+              ],
+              revision: null,
+            },
+            "cogwork",
+          ),
+        }) satisfies TrackerItem;
+      const candidates = [
+        ...Array.from({ length: 60 }, (_, index) => parked(index + 1, start - (120 - index) * day)),
+        parked(61, start - day),
+      ];
+      const linearWorkspace: RegisteredWorkspace = {
+        source: "test",
+        contributions: [],
+        config: yield* Schema.decodeEffect(WorkspaceConfig)({
+          name: "linear",
+          checkoutPath: "/repos/linear",
+          issueTracker: { type: "linear", teams: ["LIN"] },
+        }),
+      };
+      const current = yield* Ref.make(record(true, sweepDocument));
+      const sourceRevisions = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+      const coordination: CoordinationService = {
+        fold,
+        read: (ref) =>
+          Ref.get(sourceRevisions).pipe(
+            Effect.map((revisions) =>
+              fold(
+                {
+                  claim: null,
+                  attempts: [],
+                  handbacks: [],
+                  parks: [],
+                  revision: {
+                    observed: revisions.get(keyOf(ref)) ?? "unobserved",
+                    processed: null,
+                  },
+                },
+                "cogwork",
+              ),
+            ),
+          ),
+        claim: () => Effect.die("unused"),
+        release: () => Effect.die("unused"),
+        recordAttempt: () => Effect.die("unused"),
+        park: () => Effect.die("unused"),
+        handBack: () => Effect.die("unused"),
+        observe: (ref, revision) =>
+          Ref.modify(sourceRevisions, (revisions) => {
+            const item = keyOf(ref);
+            const outcome = revisions.get(item) === revision ? "redelivered" : "moved";
+            return [outcome, new Map(revisions).set(item, revision)] as const;
+          }),
+        markProcessed: () => Effect.void,
+      };
+      const store = yield* makeMemoryTriggerObservationStore;
+      const emptyTracker = yield* makeEmptyIssueTracker;
+      const testClock = yield* TestClock.testClockWith(Effect.succeed);
+      const refreshClock = yield* TestClock.make();
+      yield* refreshClock.setTime(start);
+      const sweepClockSource = {
+        ...clockSource,
+        observe: (subscriptions, readPort) =>
+          clockSource.observe(subscriptions, readPort).pipe(Stream.provideService(Clock.Clock, testClock)),
+      } satisfies TriggerSource;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, [sweepClockSource]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, {
+          ...emptyTracker,
+          observe: (workspace) =>
+            Effect.succeed(
+              workspace.config.issueTracker.type === "linear" ? [parked(99, start - 200 * day)] : candidates,
+            ),
+          readProse: (_workspace, id) => Effect.succeed({ body: `Parked body ${id}`, comments: [] }),
+        }),
+        Effect.provideService(
+          WorkspaceRegistry,
+          readOnlyRegistry({ workspaces: [selectedWorkspace, linearWorkspace], failures: [] }),
+        ),
+        Effect.provideService(Clock.Clock, refreshClock),
+      );
+      yield* observation.refresh.pipe(Effect.provideService(Clock.Clock, refreshClock));
+      const firstBatch = yield* Deferred.make<void>();
+      const seen = yield* Ref.make(0);
+      const changed = yield* observation.changes.pipe(
+        Stream.tap(() =>
+          Ref.updateAndGet(seen, (count) => count + 1).pipe(
+            Effect.flatMap((count) => (count === 50 ? Deferred.succeed(firstBatch, undefined) : Effect.void)),
+          ),
+        ),
+        Stream.take(60),
+        Stream.runCollect,
+        Effect.timeoutOption("2 days"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+
+      yield* TestClock.adjust("1 minute");
+      yield* Deferred.await(firstBatch);
+      yield* TestClock.adjust("1 day");
+      const admitted = yield* Fiber.join(changed);
+
+      assert.isTrue(Option.isSome(admitted));
+      if (Option.isNone(admitted)) return;
+      assert.deepStrictEqual(
+        admitted.value.map(({ event }) => (event.key._tag === "Issue" ? event.key.id : "")),
+        Array.from({ length: 60 }, (_, index) => `#${index + 1}`),
+      );
+      assert.isTrue(admitted.value.every(({ event }) => event.cause._tag === "Clock"));
+      assert.strictEqual(new Set(admitted.value.map(({ event }) => event.revision)).size, 2);
+      assert.strictEqual(new Set(admitted.value.map(({ lineage }) => lineage.root)).size, 60);
+      assert.strictEqual(admitted.value[0]?.event.workContext?.body, "Parked body #1");
     }).pipe(Effect.scoped),
   );
 

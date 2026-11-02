@@ -369,7 +369,7 @@ describe("daemon server composition", () => {
       );
       assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
       assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 44);
+      assert.lengthOf(catalog.catalog.entries, 45);
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
       assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "slack.i-am-mentioned"));
       assert.deepInclude(
@@ -513,6 +513,7 @@ describe("daemon server composition", () => {
           "Every hour",
           "Every day",
           "Every week",
+          "Sweep idle items",
           "Note generated",
           "Note edited",
           "I am mentioned",

@@ -29,7 +29,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { Coordination } from "./coordination";
+import { Coordination, defaultClaimant } from "./coordination";
 import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { WorkspaceRegistry } from "./registry";
@@ -761,6 +761,9 @@ const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPending
       }),
     { discard: true },
   );
+  if (waiting.length > 0) {
+    yield* context.coordination.handBack(context.item, { by: defaultClaimant });
+  }
   return null;
 });
 
@@ -1071,12 +1074,16 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     return { _tag: "Replan" } as const;
   }
   if (waiting) {
-    yield* coordination.park(admission.event.key, {
-      _tag: "AwaitingApproval",
-      plan: initial.attempt,
-      digest: initial.digest,
-      revision: initial.revision,
-    });
+    yield* coordination.park(
+      admission.event.key,
+      {
+        _tag: "AwaitingApproval",
+        plan: initial.attempt,
+        digest: initial.digest,
+        revision: initial.revision,
+      },
+      { workflow: initial.workflow, operation: initial.operation },
+    );
     return { _tag: "AwaitingApproval" } as const;
   }
   const planForParking = (plan: WorkflowActionPlan) =>

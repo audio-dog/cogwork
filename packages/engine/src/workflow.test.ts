@@ -224,6 +224,21 @@ layer(NodeServices.layer)((it) => {
             ],
           },
           {
+            id: "github-staleness-sweep",
+            trigger: "schedule.sweep",
+            forEach: null,
+            choices: ["keep", "retire", "refresh"],
+            actions: [
+              { choice: "keep", entry: "cogwork.stop", parameters: [] },
+              { choice: "retire", entry: "cogwork.wait-for-approval", parameters: [] },
+              {
+                choice: "refresh",
+                entry: "github.add-label",
+                parameters: [{ id: "label", value: "needs-triage" }],
+              },
+            ],
+          },
+          {
             id: "granola-to-linear-issue",
             trigger: "granola.note-generated",
             forEach: "commitment",
@@ -236,6 +251,21 @@ layer(NodeServices.layer)((it) => {
               },
               { choice: "duplicate", entry: "linear.comment-issue", parameters: [] },
               { choice: "related", entry: "linear.comment-issue", parameters: [] },
+            ],
+          },
+          {
+            id: "linear-staleness-sweep",
+            trigger: "schedule.sweep",
+            forEach: null,
+            choices: ["keep", "retire", "refresh"],
+            actions: [
+              { choice: "keep", entry: "cogwork.stop", parameters: [] },
+              { choice: "retire", entry: "cogwork.wait-for-approval", parameters: [] },
+              {
+                choice: "refresh",
+                entry: "linear.add-label",
+                parameters: [{ id: "label", value: "state:needs-triage" }],
+              },
             ],
           },
           {
@@ -516,6 +546,51 @@ layer(NodeServices.layer)((it) => {
         "follow-up-agent",
       ]);
       assert.deepStrictEqual(result.machine, machine);
+    }),
+  );
+
+  it.effect("routes every Staleness sweep verdict", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const templates = (yield* withWorkflows(storePath, ({ templates }) => templates)).filter(({ id }) =>
+        String(id).endsWith("-staleness-sweep"),
+      );
+
+      assert.deepStrictEqual(
+        templates.map(({ id }) => id),
+        ["github-staleness-sweep", "linear-staleness-sweep"],
+      );
+      assert.deepStrictEqual(
+        templates.map(({ id, document }) => ({
+          id,
+          verdicts: document.operations[0]?.questions[0]?.choices.map(({ id: verdict }) => verdict),
+          routes: document.operations[0]?.transitions.map(({ actions }) =>
+            actions.map(({ entry, parameters }) =>
+              [entry, ...parameters.map(({ value }) => value)].join(":"),
+            ),
+          ),
+        })),
+        [
+          {
+            id: "github-staleness-sweep",
+            verdicts: ["keep", "retire", "refresh"],
+            routes: [
+              ["cogwork.stop"],
+              ["cogwork.wait-for-approval", "github.comment-this-item", "github.close-this-issue"],
+              ["github.add-label:needs-triage"],
+            ],
+          },
+          {
+            id: "linear-staleness-sweep",
+            verdicts: ["keep", "retire", "refresh"],
+            routes: [
+              ["cogwork.stop"],
+              ["cogwork.wait-for-approval", "linear.comment-this-item", "linear.close-this-issue"],
+              ["linear.add-label:state:needs-triage"],
+            ],
+          },
+        ],
+      );
     }),
   );
 

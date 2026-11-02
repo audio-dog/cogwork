@@ -337,6 +337,8 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
         acceptedClaimants: [Coordination.defaultClaimant],
         priority: issue.priority,
         comments: issue.coordinationComments.map(toCoordinationComment(target.actorUserId)),
+        states: [...issue.labels, issue.stateName],
+        lastTouchedAtMillis: issue.updatedAtMillis,
       } satisfies ListedItem<string>;
     });
 
