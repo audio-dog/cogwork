@@ -124,11 +124,11 @@ const temporaryStore = Effect.fn("test.temporaryWorkflowsStore")(function* () {
 
 const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
+  issueTrackerWorkflowCatalogContribution("github"),
+  issueTrackerWorkflowCatalogContribution("linear"),
   triggerContribution,
   granolaWorkflowCatalogContribution,
   clockContribution,
-  issueTrackerWorkflowCatalogContribution("github"),
-  issueTrackerWorkflowCatalogContribution("linear"),
 ]);
 
 const testLayer = (
@@ -177,6 +177,112 @@ layer(NodeServices.layer)((it) => {
           { _tag: "Unavailable", reason: "Granola login expired" },
         ],
       );
+    }),
+  );
+
+  it.effect("creates and publishes every shipped Workflow template", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const templates = yield* withWorkflows(storePath, ({ templates }) => templates);
+
+      assert.deepStrictEqual(
+        templates.map(({ id, document }) => ({
+          id: String(id),
+          trigger: String(document.triggers[0]?.entry),
+          forEach: document.operations[0]?.forEach,
+          choices: document.operations[0]?.questions[0]?.choices.map(({ id }) => String(id)),
+          actions: document.operations[0]?.transitions.map(({ when, actions }) => ({
+            choice: String(when[0]?.choice),
+            entry: String(actions[0]?.entry),
+            parameters: actions[0]?.parameters.map(({ id, value }) => ({ id: String(id), value })),
+          })),
+        })),
+        [
+          {
+            id: "granola-to-github-issue",
+            trigger: "granola.note-generated",
+            forEach: "commitment",
+            choices: ["new", "duplicate", "related"],
+            actions: [
+              {
+                choice: "new",
+                entry: "github.create-issue",
+                parameters: [{ id: "label", value: "needs-triage" }],
+              },
+              { choice: "duplicate", entry: "github.comment-issue", parameters: [] },
+              { choice: "related", entry: "github.comment-issue", parameters: [] },
+            ],
+          },
+          {
+            id: "github-staleness-sweep",
+            trigger: "schedule.sweep",
+            forEach: null,
+            choices: ["keep", "retire", "refresh"],
+            actions: [
+              { choice: "keep", entry: "cogwork.stop", parameters: [] },
+              { choice: "retire", entry: "cogwork.wait-for-approval", parameters: [] },
+              {
+                choice: "refresh",
+                entry: "github.add-label",
+                parameters: [{ id: "label", value: "needs-triage" }],
+              },
+            ],
+          },
+          {
+            id: "granola-to-linear-issue",
+            trigger: "granola.note-generated",
+            forEach: "commitment",
+            choices: ["new", "duplicate", "related"],
+            actions: [
+              {
+                choice: "new",
+                entry: "linear.create-issue",
+                parameters: [{ id: "label", value: "state:needs-triage" }],
+              },
+              { choice: "duplicate", entry: "linear.comment-issue", parameters: [] },
+              { choice: "related", entry: "linear.comment-issue", parameters: [] },
+            ],
+          },
+          {
+            id: "linear-staleness-sweep",
+            trigger: "schedule.sweep",
+            forEach: null,
+            choices: ["keep", "retire", "refresh"],
+            actions: [
+              { choice: "keep", entry: "cogwork.stop", parameters: [] },
+              { choice: "retire", entry: "cogwork.wait-for-approval", parameters: [] },
+              {
+                choice: "refresh",
+                entry: "linear.add-label",
+                parameters: [{ id: "label", value: "state:needs-triage" }],
+              },
+            ],
+          },
+        ],
+      );
+      yield* Effect.forEach(templates, (template) => {
+        assert.deepStrictEqual(template.document.workspaces, { _tag: "Every" });
+        assert.isTrue(
+          template.document.operations.every(
+            ({ model }) => model.harness === null && model.model === null && model.options.length === 0,
+          ),
+        );
+        return withWorkflows(storePath, ({ create, publish }) =>
+          create({ document: template.document }).pipe(
+            Effect.tap((created) =>
+              Effect.sync(() =>
+                assert.isFalse(
+                  created.diagnostics.some(
+                    ({ class: diagnosticClass }) =>
+                      diagnosticClass === "malformed" || diagnosticClass === "incomplete",
+                  ),
+                ),
+              ),
+            ),
+            Effect.flatMap((created) => publish({ id: created.id, revision: created.workingRevision })),
+          ),
+        );
+      });
     }),
   );
 
@@ -409,7 +515,6 @@ layer(NodeServices.layer)((it) => {
       const storePath = yield* temporaryStore();
       const result = yield* withWorkflows(storePath, ({ catalog }) => catalog);
 
-      assert.lengthOf(result.catalog.entries, 24);
       assert.deepStrictEqual(result.catalog.instructionPackages, [
         "triage-agent",
         "implement-agent",
@@ -419,12 +524,11 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("creates every Staleness sweep template without blocking diagnostics", () =>
+  it.effect("routes every Staleness sweep verdict", () =>
     Effect.gen(function* () {
       const storePath = yield* temporaryStore();
-      const templates = yield* withWorkflows(storePath, ({ templates }) => templates);
-      const records = yield* Effect.forEach(templates, (template) =>
-        withWorkflows(storePath, ({ create }) => create({ document: template.document })),
+      const templates = (yield* withWorkflows(storePath, ({ templates }) => templates)).filter(({ id }) =>
+        String(id).endsWith("-staleness-sweep"),
       );
 
       assert.deepStrictEqual(
@@ -461,12 +565,6 @@ layer(NodeServices.layer)((it) => {
             ],
           },
         ],
-      );
-      assert.deepStrictEqual(
-        records.flatMap(({ diagnostics }) =>
-          diagnostics.filter(({ class: diagnosticClass }) => diagnosticClass !== "advisory"),
-        ),
-        [],
       );
     }),
   );

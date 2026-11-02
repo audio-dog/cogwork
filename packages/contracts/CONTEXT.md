@@ -416,7 +416,7 @@ The engine holding a Work item for the person, with a **park reason**, until a p
 _Avoid_: Needs-human (the fixed pipeline's narrower set), blocked (open dependencies), pause, hold
 
 **Park reason**:
-Why a Work item is parked, as a tagged set: `stuck`, `exhausted`, `hop-cap`, `missing-operation` (a hand-off to an Operation the current published revision lacks), `write-failed`, `no-workspace-recognized`, `awaiting-approval`, and `handed-to-you` (the *Hand to me* action). `stuck`, `exhausted`, and `hop-cap` are failures; `awaiting-approval`, `no-workspace-recognized`, and `handed-to-you` are not, and move no failure counter.
+Why a Work item is parked, as a tagged set: `stuck`, `exhausted`, `hop-cap`, `missing-operation` (a hand-off to an Operation the current published revision lacks), `write-failed`, `draft-outcome-unknown` (a Slack draft might exist, so Cogwork will not try it again), `no-workspace-recognized`, `awaiting-approval`, and `handed-to-you` (the *Hand to me* action). `stuck`, `exhausted`, and `hop-cap` are failures; `awaiting-approval`, `draft-outcome-unknown`, `no-workspace-recognized`, and `handed-to-you` are not, and move no failure counter.
 _Avoid_: Needs-human reason (its two values become labels a Workflow adds), halt reason, error
 
 **Approval**:
