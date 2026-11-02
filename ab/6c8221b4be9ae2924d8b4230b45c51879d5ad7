@@ -1,0 +1,48 @@
+packages/engine/src/github/client.ts
+  s_1499f8cf284854::t_618114d76ed98f 1591-1597,1599
+  s_1499f8cf284854::t_d5f0ca495cbb26 133-134
+  s_1499f8cf284854::t_c21a64f703983f 1387,1598
+  s_1499f8cf284854::t_3d60863a071ce5 96-109,208-210,216-223,544,834-836,838-841,1388-1404,1406-1431,1433-1435,1590,1602
+  s_1499f8cf284854::t_6d6679cb4207b9 1405
+  s_1499f8cf284854::t_03d69deb10a303 110-116,1378-1386,1432,1714
+  s_1499f8cf284854::t_c4ad6d8cb123f0 263-264,288-289
+  s_1499f8cf284854::t_0d17a583c67dc3 213-215,224,1607-1610
+  s_1499f8cf284854::t_a269c1b904db63 1600-1601
+packages/engine/src/github/provider.ts
+  s_1499f8cf284854::t_8dd01ea219a9bb 23-25,65-71,110-133,514-576,624-657,729,784-795
+  s_1499f8cf284854::t_5044ae9ae6973e 56,136-260
+  s_1499f8cf284854::t_da861180230f51 662
+  s_1499f8cf284854::t_84aaad04296c9f 7,261,658-659
+packages/engine/src/github/client.test.ts
+  s_1499f8cf284854::t_aa41e6a27036a5 769-793
+  s_1499f8cf284854::t_974a5b8d1ea31e 794-847
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_1499f8cf284854::t_910356b97c7b40 374-377
+packages/engine/src/source-control.ts
+  s_1499f8cf284854::t_c4ad6d8cb123f0 4,39-71,106-109,131-149,171,204-227
+packages/engine/src/daemon-composition.test.ts
+  s_1499f8cf284854::t_bbbb48786b9c93 372,502-504
+packages/engine/src/github/github.test.ts
+  s_1499f8cf284854::t_605b70d74c70e7 369-377,381
+  s_1499f8cf284854::t_0f3022319d41dc 52,378-380
+  s_1499f8cf284854::t_bbbb48786b9c93 1233-1234,1287-1288
+  s_1499f8cf284854::t_0d17a583c67dc3 1267-1284
+  s_1499f8cf284854::t_910356b97c7b40 366-368,382-386
+  s_1499f8cf284854::t_2f19c6b72f5266 1289-1290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ab6c8221b4be9ae2924d8b4230b45c51879d5ad7",
+  "prompts": {},
+  "sessions": {
+    "s_1499f8cf284854": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-347d-7603-bbd8-088ebfebc478",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
