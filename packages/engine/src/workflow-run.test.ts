@@ -12,6 +12,7 @@ import {
   Principal,
   RunId,
   SessionId,
+  SourceControlType,
   WorkflowActionArtifact,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
@@ -60,7 +61,11 @@ import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry 
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SlackWrite } from "./slack-write";
-import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
+import {
+  emptyService as emptySourceControl,
+  SourceControlProvider,
+  type SourceControlProviderService,
+} from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   makeMemoryTriggerObservationStore,
@@ -86,6 +91,7 @@ const decodeRun = Schema.decodeSync(RunId);
 const decodeSession = Schema.decodeSync(SessionId);
 const decodeWorkItem = Schema.decodeSync(WorkItemId);
 const decodeWorkspace = Schema.decodeSync(WorkspaceId);
+const githubSourceControlType = Schema.decodeSync(SourceControlType)("github");
 const workflow = decodeWorkflow("daily-summary");
 const siblingWorkflow = decodeWorkflow("sibling-summary");
 const trigger = decodeNode("schedule");
@@ -405,6 +411,7 @@ const makeCoordination = () =>
       processed,
       observed,
       claims,
+      handbacks,
     };
   });
 
@@ -459,6 +466,7 @@ interface HarnessBehavior {
   readonly observationStore?: (service: TriggerObservationStoreService) => TriggerObservationStoreService;
   readonly issueTracker?: IssueTrackerService;
   readonly registry?: RegistryState;
+  readonly sourceControl?: SourceControlProviderService;
 }
 
 const testProgram = (
@@ -519,6 +527,7 @@ const testProgram = (
       Effect.provideService(IssueTracker, issueTracker),
       Effect.provideService(WorkspaceRegistry, registry),
       Effect.provideService(WorkflowNotifications, notifications),
+      Effect.provideService(SourceControlProvider, behavior.sourceControl ?? emptySourceControl),
     );
     return { runner, coordination, notifications, observationStore };
   });
@@ -1171,6 +1180,96 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
+  it.effect("adds the pull request tool only for a named-pull-request action", () =>
+    Effect.gen(function* () {
+      const reviewWorkspace: RegisteredWorkspace = {
+        source: "test",
+        repository: "owner/repo",
+        contributions: [],
+        config: yield* Schema.decodeEffect(WorkspaceConfig)({
+          name: "repo",
+          checkoutPath: "/repo",
+          issueTracker: { type: "github" },
+        }),
+      };
+      const postReviewEntry = decodeEntry("github.post-review");
+      const reviewDocument = WorkflowDocument.make({
+        ...document,
+        workspaces: { _tag: "Every" },
+        operations: document.operations.map((candidate) => ({
+          ...candidate,
+          transitions: candidate.transitions.map((transition) => ({
+            ...transition,
+            actions: [
+              { entry: postReviewEntry, parameters: [{ id: "event", value: "comment" }] },
+              { entry: waitForApprovalEntry, parameters: [] },
+            ],
+          })),
+        })),
+      });
+      const postReviewCatalogEntry = {
+        key: postReviewEntry,
+        name: "Post a review",
+        kind: "action" as const,
+        system: "github",
+        connection: "github",
+        requires: [],
+        parameters: [{ id: "event", required: true, source: "fixed" as const, values: ["comment"] }],
+        itemKind: null,
+        actsOn: ["*"],
+        requiresWorkspace: true,
+        permissionProfile: "read-only" as const,
+        agentInputs: ["pull_request", "review_body", "review_comments"],
+        emits: [],
+      } satisfies WorkflowCatalogEntry;
+      const sourceControl = {
+        ...emptySourceControl,
+        readPullRequest: () =>
+          Effect.succeed({
+            number: 826,
+            url: "https://github.com/owner/repo/pull/826",
+            headBranch: "826-review-actions",
+            baseBranch: "main",
+            headSha: "abc123",
+            title: "Review actions",
+            description: "Adds review actions.",
+            diff: "",
+            changedFiles: [],
+            comments: [],
+          }),
+      };
+      const { runner } = yield* testProgram(
+        [
+          {
+            summary: "Review ready",
+            stuck: false,
+            answers: { done: "yes" },
+            workspace: reviewWorkspace.config.name,
+            inputs: {
+              pull_request: "#826",
+              review_body: "Looks good.",
+              review_comments: [],
+              approval_request: "Post this review?",
+            },
+          },
+        ],
+        {
+          registry: { ...emptyRegistry, workspaces: [reviewWorkspace] },
+          sourceControl,
+        },
+        workflowServiceFor(reviewDocument, [postReviewCatalogEntry, waitForApprovalCatalogEntry]),
+      );
+
+      yield* runner.execute(admission);
+      const [run] = yield* (yield* RunLedger).listRuns(1);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.deepStrictEqual(plan?.tools, ["pull-request"]);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("refuses a matched action input that is empty after trim", () =>
     Effect.gen(function* () {
       const { runner, coordination } = yield* testProgram([
@@ -1529,6 +1628,127 @@ describe("WorkflowRun", () => {
       );
       const approvalValue = approval?.event.type === "CUSTOM" ? approval.event.value : undefined;
       assert.notStrictEqual(decodeDecisionValue(approvalValue).object.digest, plan.digest);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("withdraws a waiting review plan when the pull request head changes", () =>
+    Effect.gen(function* () {
+      const reviewWorkspace: RegisteredWorkspace = {
+        source: "test",
+        repository: "owner/repo",
+        contributions: [],
+        config: yield* Schema.decodeEffect(WorkspaceConfig)({
+          name: "repo",
+          checkoutPath: "/repo",
+          issueTracker: { type: "github" },
+        }),
+      };
+      const attempt = decodeRun("waiting-review");
+      const reviewPlan = WorkflowActionPlan.make({
+        item: keyOf(admission.event.key),
+        workflow,
+        attempt,
+        operation,
+        revision: admission.event.revision,
+        createdAtMillis: 1_000,
+        consumedHandbackAtMillis: 0,
+        digest: "waiting-review-digest",
+        workflowRevision: 1,
+        summary: "Review is ready",
+        answers: { done: decodeNode("yes") },
+        inputs: {
+          pull_request: "#826",
+          review_body: "Looks good.",
+          review_comments: [],
+          approval_request: "Post this review?",
+        },
+        workspace: reviewWorkspace.config.name,
+        lineage: admission.lineage,
+        handOff: null,
+        steps: [
+          WorkflowActionPlanStep.make({
+            position: 0,
+            entry: waitForApprovalEntry,
+            parameters: [],
+            inputs: { approval_request: "Post this review?" },
+            target: { _tag: "Cogwork" },
+            writeKey: "wait-review",
+            status: "pending",
+            failures: 0,
+            artifact: null,
+          }),
+          WorkflowActionPlanStep.make({
+            position: 1,
+            entry: decodeEntry("github.post-review"),
+            parameters: [{ id: "event", value: "approve" }],
+            inputs: {
+              pull_request: "#826",
+              review_body: "Looks good.",
+              review_comments: [],
+            },
+            target: {
+              _tag: "NamedPullRequest",
+              workspace: reviewWorkspace.config.name,
+              app: githubSourceControlType,
+              issueTracker: reviewWorkspace.config.issueTracker,
+              repository: reviewWorkspace.repository ?? null,
+              number: 826,
+              url: "https://github.com/owner/repo/pull/826",
+              headBranch: "826-review-actions",
+              baseBranch: "main",
+              headSha: "old-head",
+            },
+            writeKey: "post-review",
+            status: "pending",
+            failures: 0,
+            artifact: null,
+          }),
+        ],
+      });
+      const sourceControl = {
+        ...emptySourceControl,
+        readPullRequest: () =>
+          Effect.succeed({
+            number: 826,
+            url: "https://github.com/owner/repo/pull/826",
+            headBranch: "826-review-actions",
+            baseBranch: "main",
+            headSha: "new-head",
+            title: "Review actions",
+            description: "Adds review actions.",
+            diff: "",
+            changedFiles: [],
+            comments: [],
+          }),
+      };
+      const { runner, coordination, observationStore } = yield* testProgram([], {
+        registry: { ...emptyRegistry, workspaces: [reviewWorkspace] },
+        sourceControl,
+      });
+      yield* observationStore.putAll([admission]);
+      yield* (yield* WorkflowActionPlanStore).create(reviewPlan);
+      yield* (yield* RunLedger).insertRun({
+        id: attempt,
+        workspace: reviewWorkspace.config.name,
+        workItem: decodeWorkItem("#826"),
+        stage: "implement",
+        harness: harnessName,
+        branch: null,
+        session: null,
+        usage: null,
+        status: "succeeded",
+        startedAtMillis: 1,
+        endedAtMillis: 2,
+      });
+
+      yield* runner.refreshReviewPlans();
+
+      assert.isNull(yield* (yield* WorkflowActionPlanStore).pending(reviewPlan.item, workflow));
+      assert.strictEqual(
+        (yield* Ref.get(coordination.handbacks))[0]?.note,
+        "The pull request received a new commit. Review the new head.",
+      );
+      assert.strictEqual((yield* (yield* RunLedger).getRun(attempt))?.status, "interrupted");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

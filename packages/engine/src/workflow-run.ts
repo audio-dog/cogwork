@@ -12,6 +12,7 @@ import {
   type RunRecord,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
+  type WorkflowAgentInputValue,
   type WorkflowOperationElement,
   WorkflowTouchpointFailure,
   WorkItemId,
@@ -39,6 +40,7 @@ import { makeIssueSearchTool } from "./issue-search-tool";
 import { IssueTracker, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
+import { makePullRequestTool } from "./pull-request-tool";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
@@ -75,6 +77,7 @@ const encodeArtifactContext = Schema.encodeSync(
   ),
 );
 const issueSearchActionNames = new Set(["create-issue", "comment-issue", "comment-this-item"]);
+const namedPullRequestActionNames = new Set(["comment-on-named-pull-request", "post-review", "draft-review"]);
 
 const needsIssueSearch = (
   operation: Parameters<typeof workflowOperationResultSchema>[0],
@@ -90,6 +93,25 @@ const needsIssueSearch = (
       );
     });
 };
+
+const needsPullRequestTool = (
+  operation: Parameters<typeof workflowOperationResultSchema>[0],
+  catalog: Parameters<typeof workflowOperationResultSchema>[1],
+) => {
+  const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
+  return operation.transitions
+    .flatMap(({ actions }) => actions)
+    .some(({ entry }) => {
+      const catalogEntry = entries.get(entry);
+      return (
+        catalogEntry?.kind === "action" &&
+        namedPullRequestActionNames.has(entry.slice(entry.indexOf(".") + 1))
+      );
+    });
+};
+
+const agentInputIsMissing = (value: WorkflowAgentInputValue | undefined) =>
+  value === undefined || (typeof value === "string" && value.trim().length === 0);
 
 const fallbackBranch = WorkItemRef.match({
   Issue: ({ id }) => ticketSlug(id),
@@ -428,7 +450,8 @@ export const make = Effect.gen(function* () {
       registryState.workspaces.find(({ config }) => config.name === admission.event.workspace) ?? null;
     const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
     const issueSearchEnabled = needsIssueSearch(operation, catalogResult.catalog);
-    const issueSearchWorkspaces = registryState.workspaces.filter(({ config }) =>
+    const pullRequestToolEnabled = needsPullRequestTool(operation, catalogResult.catalog);
+    const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
       outputWorkspaces.includes(config.name),
     );
     const selectedHarness = operation.model.harness ?? catalogResult.machine.defaultHarness;
@@ -534,7 +557,10 @@ export const make = Effect.gen(function* () {
             : `Run Workflow Operation: ${operation.name}`,
         },
       ],
-      tools: issueSearchEnabled ? ["issue-search"] : [],
+      tools: [
+        ...(issueSearchEnabled ? ["issue-search" as const] : []),
+        ...(pullRequestToolEnabled ? ["pull-request" as const] : []),
+      ],
       skills: [],
       mcp: [],
       subagents: [],
@@ -576,7 +602,12 @@ export const make = Effect.gen(function* () {
     };
     yield* ledger.acceptRun(run, plan);
 
-    const engineTools = issueSearchEnabled ? [makeIssueSearchTool(issueTracker, issueSearchWorkspaces)] : [];
+    const engineTools = [
+      ...(issueSearchEnabled ? [makeIssueSearchTool(issueTracker, toolWorkspaces)] : []),
+      ...(pullRequestToolEnabled && sourceControl
+        ? [makePullRequestTool(sourceControl, toolWorkspaces)]
+        : []),
+    ];
     const eventsExit = yield* harness.run({ plan, session, mcpCredentials: new Map(), engineTools }).pipe(
       Stream.tap((event) => recorder.record(run, event)),
       Stream.filter(agUiIsStructuredOutputComplete),
@@ -672,6 +703,7 @@ export const make = Effect.gen(function* () {
           attempt: run.id,
           createdAtMillis: startedAtMillis,
           workflowRevision: record.publishedRevision ?? record.workingRevision,
+          ...(sourceControl ? { sourceControl } : {}),
         }),
       ).pipe(
         Effect.matchEffect({
@@ -692,6 +724,7 @@ export const make = Effect.gen(function* () {
         attempt: run.id,
         createdAtMillis: yield* Clock.currentTimeMillis,
         workflowRevision: record.publishedRevision ?? record.workingRevision,
+        ...(sourceControl ? { sourceControl } : {}),
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
@@ -820,11 +853,63 @@ export const make = Effect.gen(function* () {
     return { plan, admission };
   });
 
+  const waitingReviewTarget = (plan: WorkflowActionPlan) => {
+    const waiting = plan.steps.some(
+      ({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending",
+    );
+    if (!waiting) return null;
+    return plan.steps.find(({ target }) => target._tag === "NamedPullRequest")?.target ?? null;
+  };
+
+  const refreshReviewPlansRaw = Effect.fn("WorkflowRun.refreshReviewPlans")(function* () {
+    if (sourceControl === null) return;
+    const plans = yield* actionPlans.list;
+    const admissions = yield* observationStore.admissions;
+    const workspaces = (yield* registry.state).workspaces;
+    yield* Effect.forEach(
+      plans,
+      (plan) => {
+        const target = waitingReviewTarget(plan);
+        if (target?._tag !== "NamedPullRequest") return Effect.void;
+        const workspace = workspaces.find(({ config }) => config.name === target.workspace);
+        if (!workspace) return Effect.void;
+        return sourceControl.readPullRequest(workspace, `#${target.number}`).pipe(
+          Effect.flatMap((pullRequest) => {
+            if (pullRequest === null || pullRequest.headSha === target.headSha) return Effect.void;
+            const admission = admissions.find(
+              (candidate) =>
+                keyOf(candidate.event.key) === plan.item &&
+                candidate.subscription.workflow === plan.workflow &&
+                candidate.event.revision === plan.revision,
+            );
+            if (!admission) return Effect.void;
+            return coordination
+              .handBack(admission.event.key, {
+                by: "cogwork",
+                note: "The pull request received a new commit. Review the new head.",
+              })
+              .pipe(
+                Effect.andThen(actionPlans.remove(plan.item, plan.workflow, plan.attempt)),
+                Effect.andThen(settle(plan.attempt, "interrupted")),
+              );
+          }),
+          Effect.catchTag("IssueTrackerError", (error) =>
+            Effect.logWarning("pull request review plan refresh failed", {
+              item: plan.item,
+              message: error.message,
+            }),
+          ),
+        );
+      },
+      { discard: true },
+    );
+  });
+
   const rebuildPlan = Effect.fn("WorkflowRun.rebuildPlan")(function* (
     plan: WorkflowActionPlan,
     admission: TriggerAdmission,
     answers: Readonly<Record<string, string>>,
-    inputs: Readonly<Record<string, string>>,
+    inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
     createdAtMillis: number,
   ) {
     const record = yield* workflows.get({ id: plan.workflow });
@@ -859,7 +944,7 @@ export const make = Effect.gen(function* () {
     const missingInput = catalogResult.catalog.entries
       .filter(({ key }) => matchedEntries.has(key))
       .flatMap(({ agentInputs }) => agentInputs)
-      .find((input) => !inputs[input]?.trim());
+      .find((input) => agentInputIsMissing(inputs[input]));
     if (missingInput !== undefined) {
       return yield* failTouchpoint("invalid-edits", `The plan needs input ${missingInput}`);
     }
@@ -878,6 +963,7 @@ export const make = Effect.gen(function* () {
       attempt: plan.attempt,
       createdAtMillis,
       workflowRevision: plan.workflowRevision,
+      ...(sourceControl ? { sourceControl } : {}),
     }).pipe(Effect.mapError((error) => touchpointFailure("invalid-edits", error.message)));
   });
 
@@ -933,6 +1019,7 @@ export const make = Effect.gen(function* () {
     readonly digest: string;
     readonly edits?: Readonly<Record<string, string>>;
   }) {
+    yield* refreshReviewPlansRaw();
     const { plan, admission } = yield* currentPlan(payload.item, payload.attempt);
     const waiting = plan.steps.some(
       ({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending",
@@ -1067,6 +1154,7 @@ export const make = Effect.gen(function* () {
 
   return {
     execute: executeAdmission,
+    refreshReviewPlans: () => touchpointGate.withPermit(refreshReviewPlansRaw()),
     approve: (payload: Parameters<typeof approve>[0]) => runTouchpoint(approve(payload)),
     reject: (payload: Parameters<typeof reject>[0]) => runTouchpoint(reject(payload)),
     chooseAnswer: (payload: Parameters<typeof chooseAnswer>[0]) => runTouchpoint(chooseAnswer(payload)),
@@ -1079,6 +1167,7 @@ export const WorkflowRun = Context.Reference<Effect.Success<typeof make>>(
   {
     defaultValue: () => ({
       execute: () => Effect.succeed("completed" as const),
+      refreshReviewPlans: () => Effect.void,
       approve: () =>
         Effect.fail(new WorkflowTouchpointFailure({ reason: "unavailable", message: "unavailable" })),
       reject: () =>
