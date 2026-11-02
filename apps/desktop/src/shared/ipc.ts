@@ -5,6 +5,17 @@ export type ProcessProfileCapture = ProcessProfileCaptureValue;
 
 export type EngineStatus = "starting" | "running" | "adopted" | "stopped" | "failed";
 
+export interface DesktopNotificationRequest {
+  readonly id: string;
+  readonly title: string;
+  readonly body: string;
+}
+
+export type DesktopNotificationStatus =
+  | { readonly _tag: "inactive" }
+  | { readonly _tag: "ready" }
+  | { readonly _tag: "failed"; readonly message: string };
+
 export const IpcChannel = {
   getEngineStatus: "cogwork:get-engine-status",
   setEngineEnabled: "cogwork:set-engine-enabled",
@@ -20,6 +31,13 @@ export const IpcChannel = {
   rpcData: "cogwork:rpc-data",
   rpcClosed: "cogwork:rpc-closed",
   rendererError: "cogwork:renderer-error",
+  enableDesktopNotifications: "cogwork:enable-desktop-notifications",
+  syncDesktopNotifications: "cogwork:sync-desktop-notifications",
+  getDesktopNotificationStatus: "cogwork:get-desktop-notification-status",
+  desktopNotificationStatusChanged: "cogwork:desktop-notification-status-changed",
+  desktopNotificationNavigation: "cogwork:desktop-notification-navigation",
+  takeDesktopNotificationNavigation: "cogwork:take-desktop-notification-navigation",
+  openNotificationSettings: "cogwork:open-notification-settings",
 } as const;
 
 // The window behavior the main process owns and persists across restarts. `closeToHide` on means
@@ -68,5 +86,16 @@ export interface CogworkBridge {
   readonly setWindowPreferences: (preferences: Partial<WindowPreferences>) => Promise<WindowPreferences>;
   readonly captureProcessProfile: (capture: ProcessProfileCapture) => Promise<string>;
   readonly rpc: DaemonRpcBridge;
+  readonly notifications: {
+    readonly enable: () => Promise<DesktopNotificationStatus>;
+    readonly sync: (
+      requests: ReadonlyArray<DesktopNotificationRequest>,
+    ) => Promise<DesktopNotificationStatus>;
+    readonly getStatus: () => Promise<DesktopNotificationStatus>;
+    readonly onStatus: (listener: (status: DesktopNotificationStatus) => void) => () => void;
+    readonly onNavigation: (listener: () => void) => () => void;
+    readonly takeNavigation: () => Promise<string | null>;
+    readonly openSettings: () => Promise<boolean>;
+  };
   readonly reportError: (report: RendererErrorReport) => void;
 }

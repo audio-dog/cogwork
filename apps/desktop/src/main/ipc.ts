@@ -15,6 +15,8 @@ import * as Semaphore from "effect/Semaphore";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { type BrowserWindow, ipcMain, type WebContents } from "electron";
 import {
+  type DesktopNotificationRequest,
+  type DesktopNotificationStatus,
   type EngineStatus,
   IpcChannel,
   type RendererErrorReport,
@@ -22,6 +24,7 @@ import {
   type WindowPreferences,
 } from "../shared/ipc";
 import { createDaemonBridgePort, type DaemonBridgePort } from "./daemon-bridge";
+import type { DesktopNotifications } from "./desktop-notifications";
 import type { EngineSupervisor, EngineSupervisorService } from "./engine-supervisor";
 import { mainLogger, rendererLogger } from "./logger";
 import { makeMainProcessHealth } from "./process-health";
@@ -35,7 +38,21 @@ export interface IpcDeps {
   readonly captureMainProfile: (input: ProcessProfileInput) => Effect.Effect<string, ProcessProfileError>;
   readonly isTrustedSender: (sender: WebContents) => boolean;
   readonly runtime: ManagedRuntime.ManagedRuntime<EngineSupervisor, never>;
+  readonly notifications: DesktopNotifications;
 }
+
+const isDesktopNotificationRequest = (value: unknown): value is DesktopNotificationRequest =>
+  typeof value === "object" &&
+  value !== null &&
+  "id" in value &&
+  typeof value.id === "string" &&
+  "title" in value &&
+  typeof value.title === "string" &&
+  "body" in value &&
+  typeof value.body === "string";
+
+const notificationRequests = (input: unknown) =>
+  Array.isArray(input) ? input.filter(isDesktopNotificationRequest) : [];
 
 const WindowPreferencesSchema = Schema.Struct({
   closeToHide: Schema.optionalKey(Schema.Boolean),
@@ -196,6 +213,22 @@ export const registerIpc = (deps: IpcDeps) => {
     ),
   );
 
+  ipcMain.handle(IpcChannel.enableDesktopNotifications, (event) =>
+    deps.isTrustedSender(event.sender) ? deps.notifications.enable() : deps.notifications.getStatus(),
+  );
+  ipcMain.handle(IpcChannel.syncDesktopNotifications, (event, input: unknown) =>
+    deps.isTrustedSender(event.sender)
+      ? deps.notifications.sync(notificationRequests(input))
+      : deps.notifications.getStatus(),
+  );
+  ipcMain.handle(IpcChannel.getDesktopNotificationStatus, () => deps.notifications.getStatus());
+  ipcMain.handle(IpcChannel.takeDesktopNotificationNavigation, (event) =>
+    deps.isTrustedSender(event.sender) ? deps.notifications.takeNavigation() : null,
+  );
+  ipcMain.handle(IpcChannel.openNotificationSettings, (event) =>
+    deps.isTrustedSender(event.sender) ? deps.notifications.openSettings() : false,
+  );
+
   const sessions = new WeakMap<WebContents, RendererSession>();
 
   const closeSession = (sender: WebContents) => {
@@ -265,5 +298,20 @@ export const broadcastEngineStatus = (windows: readonly BrowserWindow[], status:
 export const broadcastSystemResume = (windows: readonly BrowserWindow[]) => {
   windows.forEach((window) => {
     safeSend(window.webContents, IpcChannel.systemResumed, undefined);
+  });
+};
+
+export const broadcastDesktopNotificationStatus = (
+  windows: readonly BrowserWindow[],
+  status: DesktopNotificationStatus,
+) => {
+  windows.forEach((window) => {
+    safeSend(window.webContents, IpcChannel.desktopNotificationStatusChanged, status);
+  });
+};
+
+export const broadcastDesktopNotificationNavigation = (windows: readonly BrowserWindow[]) => {
+  windows.forEach((window) => {
+    safeSend(window.webContents, IpcChannel.desktopNotificationNavigation, undefined);
   });
 };
