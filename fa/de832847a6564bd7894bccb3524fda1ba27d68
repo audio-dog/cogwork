@@ -1,0 +1,33 @@
+packages/engine/src/trigger-observation.test.ts
+  s_9fd7d719c90ee1::t_67bd95ca10f0e8 513,635-652,654-662
+  s_9fd7d719c90ee1::t_d9ca03dcf277c4 20
+  s_9fd7d719c90ee1::t_5e92451856daa7 511-512
+  s_9fd7d719c90ee1::t_d12957d52f9673 514-516
+  s_9fd7d719c90ee1::t_0a5b232d72004e 632-634
+  s_9fd7d719c90ee1::t_70563c511bd548 663-665
+  s_1499f8cf284854::t_05a2b5a35a8409 517-563,565-577,579,581-604,606-612,614-615,619-631,666-668,670-675,677-680,682-692
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fade832847a6564bd7894bccb3524fda1ba27d68",
+  "prompts": {},
+  "sessions": {
+    "s_1499f8cf284854": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-347d-7603-bbd8-088ebfebc478",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9fd7d719c90ee1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d58-a706-72e1-9a2c-5b30c0af3f52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
