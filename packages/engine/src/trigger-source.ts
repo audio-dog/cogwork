@@ -60,6 +60,20 @@ export const TriggerEvent = Schema.Struct({
 });
 export type TriggerEvent = typeof TriggerEvent.Type;
 
+export interface SweepCandidate {
+  readonly key: WorkItemRef;
+  readonly workspace: WorkspaceId | null;
+  readonly lastTouchedAtMillis: number;
+  readonly loadWorkContext?: Effect.Effect<RunPlanWorkContextProse | undefined, SourceFailure>;
+}
+
+export interface TriggerReadPort {
+  readonly sweep: (
+    subscription: TriggerSubscription,
+    tickInstant: number,
+  ) => Effect.Effect<ReadonlyArray<SweepCandidate>, SourceFailure>;
+}
+
 export class SourceFailure extends Schema.TaggedError<SourceFailure>()("SourceFailure", {
   source: TriggerSourceId,
   reason: Schema.Literals(["auth", "unavailable", "rate-limited", "decode", "connection-not-ready"]),
@@ -78,6 +92,7 @@ export interface TriggerSource {
   ) => Effect.Effect<ReadonlyArray<WorkflowOption>, SourceFailure>;
   readonly observe: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
+    readPort?: TriggerReadPort,
   ) => Stream.Stream<TriggerEvent, SourceFailure>;
   readonly acknowledge?: (
     event: TriggerEvent,
@@ -100,14 +115,14 @@ export const combineTriggerSources = (sources: ReadonlyArray<TriggerSource>) =>
         listOptions: (entry, parameter, workspace) =>
           grouped.find((source) => ownsEntry(source, entry))?.listOptions(entry, parameter, workspace) ??
           Effect.succeed([]),
-        observe: (subscriptions) => {
+        observe: (subscriptions, readPort) => {
           const streams = grouped
             .map((source) => ({
               source,
               subscriptions: subscriptions.filter(({ entry }) => ownsEntry(source, entry)),
             }))
             .filter(({ subscriptions: selected }) => selected.length > 0)
-            .map(({ source, subscriptions: selected }) => source.observe(selected));
+            .map(({ source, subscriptions: selected }) => source.observe(selected, readPort));
           return streams.length === 0 ? Stream.empty : Stream.mergeAll(streams, { concurrency: "unbounded" });
         },
         acknowledge: (event, subscriptions) =>

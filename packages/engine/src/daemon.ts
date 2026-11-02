@@ -36,7 +36,7 @@ import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import type { SqlError } from "effect/unstable/sql/SqlError";
 import { Availability } from "./availability";
-import { clockSource } from "./clock-source";
+import { makeClockSource } from "./clock-source";
 import {
   cancelRun,
   deregisterWorkspace,
@@ -433,13 +433,10 @@ const providerTriggerSourcesLayer = <E, R>(
   Layer.effect(
     TriggerSources,
     Effect.all([IssueTracker, SourceControlProvider]).pipe(
-      Effect.map(([tracker, provider]) =>
-        combineTriggerSources([
-          ...(tracker.triggerSources ?? []),
-          ...(provider.triggerSources ?? []),
-          clockSource,
-        ]),
-      ),
+      Effect.map(([tracker, provider]) => {
+        const sources = [...(tracker.triggerSources ?? []), ...(provider.triggerSources ?? [])];
+        return combineTriggerSources([...sources, makeClockSource(sources)]);
+      }),
     ),
   ).pipe(Layer.provide(issueTracker));
 
