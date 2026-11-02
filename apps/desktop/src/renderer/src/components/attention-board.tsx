@@ -112,7 +112,7 @@ export interface HandBack {
 export interface AnswerChosen {
   readonly item: ParkedItem;
   readonly choice: AnswerChoice;
-  readonly input: string | null;
+  readonly inputs: Readonly<Record<string, string>>;
 }
 
 export interface AttentionState {
@@ -158,10 +158,10 @@ interface ParkDraft {
   readonly edits: PlanEdits;
   readonly note: string;
   readonly choice: string | null;
-  readonly input: string;
+  readonly inputs: Readonly<Record<string, string>>;
 }
 
-const emptyDraft: ParkDraft = { mode: "view", edits: {}, note: "", choice: null, input: "" };
+const emptyDraft: ParkDraft = { mode: "view", edits: {}, note: "", choice: null, inputs: {} };
 
 interface DraftsContextValue {
   state: { drafts: Readonly<Record<string, ParkDraft>> };
@@ -407,8 +407,7 @@ function ParkedProvider({ item, children }: { item: ParkedItem; children: ReactN
           approve: () => send(() => actions.approve({ item, digest, edits: draft.edits })),
           reject: () => send(() => actions.reject({ item, note: draft.note })),
           handBack: () => send(() => actions.handBack({ item, note: draft.note })),
-          chooseAnswer: (choice) =>
-            send(() => actions.chooseAnswer({ item, choice, input: choice.input ? draft.input : null })),
+          chooseAnswer: (choice) => send(() => actions.chooseAnswer({ item, choice, inputs: draft.inputs })),
         },
         meta: {},
       }}
@@ -652,26 +651,32 @@ function ApprovalPrompt() {
   return <Panel />;
 }
 
-function AnswerInput({ choice, label }: { choice: AnswerChoice; label: string }) {
+function AnswerInputs({ choice }: { choice: AnswerChoice }) {
   const {
     state: { draft },
     actions: { update, cancel, chooseAnswer },
   } = useParked();
   return (
     <FieldGroup>
-      <Field>
-        <Textarea
-          aria-label={label}
-          placeholder={label}
-          value={draft.input}
-          onChange={(event) => update({ input: event.target.value })}
-        />
-      </Field>
+      {choice.inputs.map((input) => (
+        <Field key={input.id}>
+          <Textarea
+            aria-label={input.label}
+            placeholder={input.label}
+            value={draft.inputs[input.id] ?? ""}
+            onChange={(event) => update({ inputs: { ...draft.inputs, [input.id]: event.target.value } })}
+          />
+        </Field>
+      ))}
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={cancel}>
           Cancel
         </Button>
-        <Button size="sm" disabled={draft.input.trim() === ""} onClick={() => chooseAnswer(choice)}>
+        <Button
+          size="sm"
+          disabled={choice.inputs.some(({ id }) => !draft.inputs[id]?.trim())}
+          onClick={() => chooseAnswer(choice)}
+        >
           {choice.label}
         </Button>
       </div>
@@ -686,9 +691,9 @@ function AnswerPrompt() {
   } = useParked();
   const choices = item.reason.tag === "handed-to-you" ? item.reason.choices : [];
   const pending = choices.find((choice) => choice.id === draft.choice);
-  if (pending?.input) return <AnswerInput choice={pending} label={pending.input.label} />;
+  if (pending?.inputs.length) return <AnswerInputs choice={pending} />;
   const pick = (choice: AnswerChoice) => {
-    if (choice.input) {
+    if (choice.inputs.length > 0) {
       update({ choice: choice.id });
       return;
     }

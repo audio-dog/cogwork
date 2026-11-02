@@ -8,6 +8,7 @@ import {
   type WorkflowAttention,
   type WorkflowCatalog,
   type WorkflowNotification,
+  type WorkflowNotificationId,
   type WorkflowPark,
   type WorkflowRecord,
   type WorkItemRef,
@@ -17,16 +18,12 @@ import { type ReactNode, useState } from "react";
 import { Attention, type AttentionLayout } from "../components/attention-board";
 import type { CatalogIcon } from "./workflow-catalog";
 import type {
-  AnswerChoice,
   Artifact,
   NotificationRecord,
   ParkedItem,
   ParkReason,
   PlanStep,
-  SkippedRecord,
-  SourceRef,
   StepState,
-  WorkflowRef,
 } from "./workflow-parks";
 
 interface ApproveInput {
@@ -51,7 +48,7 @@ export interface AttentionClient {
       readonly inputs: Readonly<Record<string, string>>;
     },
   ) => Promise<void>;
-  readonly dismiss: (input: { readonly id: string }) => Promise<void>;
+  readonly dismiss: (input: { readonly id: WorkflowNotificationId }) => Promise<void>;
 }
 
 export interface AttentionSnapshot {
@@ -75,11 +72,11 @@ const catalogIcons: ReadonlyArray<CatalogIcon> = [
 const catalogIcon = (system: string | null) =>
   catalogIcons.find((candidate) => candidate === system) ?? "cogwork";
 
-const source = (app: CatalogIcon, label: string): SourceRef => ({ app, label });
+const source = (app: CatalogIcon, label: string) => ({ app, label });
 
-const sourceOf = (item: WorkItemRef): SourceRef =>
+const sourceOf = (item: WorkItemRef, issueApp: CatalogIcon = "cogwork") =>
   WorkItemRefSchema.match(item, {
-    Issue: ({ id }) => source("github", id),
+    Issue: ({ id }) => source(issueApp, id),
     PullRequest: ({ number }) => source("github", `PR #${number}`),
     GranolaNote: ({ noteId }) => source("granola", noteId),
     SlackMessage: ({ channel }) => source("slack", channel),
@@ -88,12 +85,16 @@ const sourceOf = (item: WorkItemRef): SourceRef =>
     FanOutChild: ({ position }) => source("cogwork", `Finding ${position + 1}`),
   });
 
-const workflowRef = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>): WorkflowRef => {
-  const record = workflows.find(({ id }) => id === park.workflow);
+const workflowRef = (
+  id: WorkflowPark["workflow"],
+  revision: number,
+  workflows: ReadonlyArray<WorkflowRecord>,
+) => {
+  const record = workflows.find((workflow) => workflow.id === id);
   return {
-    id: park.workflow,
-    name: record?.publishedCopy?.name ?? record?.workingCopy.name ?? park.workflow,
-    revision: park.publishedRevision,
+    id,
+    name: record?.publishedCopy?.name ?? record?.workingCopy.name ?? id,
+    revision,
   };
 };
 
@@ -117,13 +118,22 @@ const targetLabel = (target: WorkflowActionTarget) =>
     NewIssue: ({ workspace }) => workspace,
   });
 
+const targetApp = (target: WorkflowActionTarget) =>
+  WorkflowActionTarget.match<CatalogIcon | null>(target, {
+    Cogwork: () => "cogwork",
+    NoWorkspace: () => null,
+    CurrentIssue: ({ app }) => catalogIcon(app),
+    ExistingIssue: ({ app }) => catalogIcon(app),
+    NewIssue: ({ app }) => catalogIcon(app),
+  });
+
 const stepStates = {
   pending: "planned",
   completed: "done",
   failed: "failed",
 } satisfies Record<"pending" | "completed" | "failed", StepState>;
 
-const planSteps = (park: WorkflowPark, catalog: WorkflowCatalog): ReadonlyArray<PlanStep> => {
+const planSteps = (park: WorkflowPark, catalog: WorkflowCatalog) => {
   const hiddenEntries = new Set(["cogwork.wait-for-approval", "cogwork.hand-to-me"]);
   return (park.plan?.steps ?? [])
     .filter(({ entry }) => !hiddenEntries.has(entry))
@@ -143,7 +153,7 @@ const planSteps = (park: WorkflowPark, catalog: WorkflowCatalog): ReadonlyArray<
         })),
         state: stepStates[step.status],
         note: step.status === "failed" ? failedReason : (step.artifact?.issue ?? null),
-      };
+      } satisfies PlanStep;
     });
 };
 
@@ -165,7 +175,7 @@ const choicesFor = (
   park: WorkflowPark,
   workflows: ReadonlyArray<WorkflowRecord>,
   catalog: WorkflowCatalog,
-): ReadonlyArray<AnswerChoice> => {
+) => {
   const operation = operationOf(park, workflows);
   if (!operation) return [];
   return answerSets(park, workflows).map(({ answers, labels }) => {
@@ -177,54 +187,51 @@ const choicesFor = (
     const requiredInputs = catalog.entries
       .filter(({ key }) => entries.has(key))
       .flatMap(({ agentInputs }) => agentInputs);
-    const input = requiredInputs.find((id) => !park.plan?.inputs[id]?.trim());
-    const label = input
-      ? (operation.hints.find(({ field }) => field === input)?.text ?? titleCase(input))
-      : null;
+    const inputs = [...new Set(requiredInputs)]
+      .filter((id) => !park.plan?.inputs[id]?.trim())
+      .map((id) => ({
+        id,
+        label: operation.hints.find(({ field }) => field === id)?.text ?? titleCase(id),
+      }));
     return {
       id: Object.values(answers).join(":"),
       label: labels.join(" · "),
       answers,
-      input: input && label ? { id: input, label } : null,
+      inputs,
     };
   });
 };
 
-const localReason = (reason: ParkReason): ParkReason => reason;
-
-const reasonOf = (
-  park: WorkflowPark,
-  workflows: ReadonlyArray<WorkflowRecord>,
-  catalog: WorkflowCatalog,
-): ParkReason =>
-  ParkReasonSchema.match(park.reason, {
-    Stuck: ({ summary }) => localReason({ tag: "stuck", summary }),
-    Exhausted: ({ reason }) => localReason({ tag: "exhausted", failure: reason }),
-    HopCap: () => localReason({ tag: "hop-cap" }),
-    MissingOperation: () => localReason({ tag: "missing-operation" }),
-    PlanRejected: ({ reason }) => localReason({ tag: "plan-rejected", reason }),
-    WriteFailed: ({ step, error }) => localReason({ tag: "write-failed", step, error }),
-    NoWorkspaceRecognized: () => localReason({ tag: "no-workspace-recognized" }),
+const reasonOf = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>, catalog: WorkflowCatalog) =>
+  ParkReasonSchema.match<ParkReason>(park.reason, {
+    Stuck: ({ summary }) => ({ tag: "stuck", summary }) as const,
+    Exhausted: ({ reason }) => ({ tag: "exhausted", failure: reason }) as const,
+    HopCap: () => ({ tag: "hop-cap" }) as const,
+    MissingOperation: () => ({ tag: "missing-operation" }) as const,
+    PlanRejected: ({ reason }) => ({ tag: "plan-rejected", reason }) as const,
+    WriteFailed: ({ step, error }) => ({ tag: "write-failed", step, error }) as const,
+    NoWorkspaceRecognized: () => ({ tag: "no-workspace-recognized" }) as const,
     AwaitingApproval: ({ digest, revision }) =>
-      localReason({ tag: "awaiting-approval", digest, builtOn: revision }),
+      ({ tag: "awaiting-approval", digest, builtOn: revision }) as const,
     HandedToYou: () =>
-      localReason({
+      ({
         tag: "handed-to-you",
         question:
           operationOf(park, workflows)
             ?.questions.map(({ text }) => text)
             .join(" · ") ?? "Choose an answer",
         choices: choicesFor(park, workflows, catalog),
-      }),
+      }) as const,
   });
 
 const parkedItem = (
   park: WorkflowPark,
   workflows: ReadonlyArray<WorkflowRecord>,
   catalog: WorkflowCatalog,
-): ParkedItem => {
-  const source = sourceOf(park.item);
-  const workflow = workflowRef(park, workflows);
+) => {
+  const issueApp = park.plan?.steps.map(({ target }) => targetApp(target)).find((app) => app !== null);
+  const source = sourceOf(park.item, issueApp ?? "cogwork");
+  const workflow = workflowRef(park.workflow, park.publishedRevision, workflows);
   const parent = park.lineage.parent
     ? [{ app: "operation" as const, label: park.lineage.parent, workflow: workflow.name }]
     : [];
@@ -243,22 +250,19 @@ const parkedItem = (
     reason: reasonOf(park, workflows, catalog),
     plan: planSteps(park, catalog),
     commands: park.commands,
-  };
+  } satisfies ParkedItem;
 };
 
-const artifactRecord = (artifact: WorkflowActionArtifact): Artifact => {
+const artifactRecord = (artifact: WorkflowActionArtifact) => {
   const isLinearArtifact = artifact.url.includes("linear.app");
   return {
     app: isLinearArtifact ? "linear" : "github",
     label: artifact.issue,
     url: artifact.url,
-  };
+  } satisfies Artifact;
 };
 
-const notificationRecord = (
-  notification: WorkflowNotification,
-  workflows: ReadonlyArray<WorkflowRecord>,
-): NotificationRecord => {
+const notificationRecord = (notification: WorkflowNotification, workflows: ReadonlyArray<WorkflowRecord>) => {
   const source = sourceOf(notification.item);
   const workflow = workflows.find(({ id }) => id === notification.workflow);
   return {
@@ -266,11 +270,7 @@ const notificationRecord = (
     item: notification.item,
     title: source.label,
     source,
-    workflow: {
-      id: notification.workflow,
-      name: workflow?.publishedCopy?.name ?? workflow?.workingCopy.name ?? notification.workflow,
-      revision: workflow?.publishedRevision ?? 0,
-    },
+    workflow: workflowRef(notification.workflow, workflow?.publishedRevision ?? 0, workflows),
     operation:
       workflow?.publishedCopy?.operations.find(({ id }) => id === notification.operation)?.name ??
       notification.operation,
@@ -278,20 +278,13 @@ const notificationRecord = (
     answers: Object.entries(notification.answers).map(([question, choice]) => ({ question, choice })),
     artifacts: notification.artifacts.map(artifactRecord),
     atMillis: notification.atMillis,
-  };
+  } satisfies NotificationRecord;
 };
 
-const skippedRecords = (
-  attention: WorkflowAttention,
-  workflows: ReadonlyArray<WorkflowRecord>,
-): ReadonlyArray<SkippedRecord> =>
+const skippedRecords = (attention: WorkflowAttention, workflows: ReadonlyArray<WorkflowRecord>) =>
   attention.skipped.flatMap((group) => {
     const workflow = workflows.find(({ id }) => id === group.workflow);
-    const ref = {
-      id: group.workflow,
-      name: workflow?.publishedCopy?.name ?? workflow?.workingCopy.name ?? group.workflow,
-      revision: workflow?.publishedRevision ?? 0,
-    };
+    const ref = workflowRef(group.workflow, workflow?.publishedRevision ?? 0, workflows);
     return [
       ...group.steps.map((record, index) => ({
         id: `${group.workflow}:step:${index}`,
@@ -386,9 +379,8 @@ export function AttentionClientProvider({
             : Promise.resolve(false);
         },
         handBack: ({ item, note }) => execute(() => client.handBack({ item: item.ref, ...noteField(note) })),
-        chooseAnswer: ({ item, choice, input }) => {
+        chooseAnswer: ({ item, choice, inputs }) => {
           const attempt = currentAttempt(item);
-          const inputs = choice.input && input ? { [choice.input.id]: input } : {};
           return attempt
             ? execute(() => client.chooseAnswer({ item: item.ref, attempt, answers: choice.answers, inputs }))
             : Promise.resolve(false);

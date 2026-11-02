@@ -52,7 +52,10 @@ const operation = {
       handOff: null,
     },
   ],
-  hints: [{ field: "comment", text: "Question for the reporter" }],
+  hints: [
+    { field: "comment", text: "Question for the reporter" },
+    { field: "label", text: "Label to add" },
+  ],
 };
 const workflow = decodeWorkflow({
   id: "triage",
@@ -84,7 +87,7 @@ const catalog = decodeCatalog({
       actsOn: ["issue"],
       requiresWorkspace: true,
       permissionProfile: "read-only",
-      agentInputs: ["comment"],
+      agentInputs: ["comment", "label"],
       emits: [],
     },
     {
@@ -289,7 +292,7 @@ describe("AttentionClientProvider", () => {
 
   it("requires the empty input for a chosen answer before sending it", async () => {
     const chooseAnswer = vi.fn<AttentionClient["chooseAnswer"]>();
-    const handedPlan = { ...plan, answers: {}, inputs: { comment: "" }, steps: [] };
+    const handedPlan = { ...plan, answers: {}, inputs: { comment: "", label: "" }, steps: [] };
     const { container, root } = await renderAttention({
       snapshot: snapshot(attentionWith({ _tag: "HandedToYou" }, ["choose-answer", "hand-back"], handedPlan)),
       client: { ...defaultClient(), chooseAnswer },
@@ -299,18 +302,22 @@ describe("AttentionClientProvider", () => {
     const input = container.querySelector<HTMLTextAreaElement>(
       'textarea[aria-label="Question for the reporter"]',
     );
+    const label = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Label to add"]');
     const confirm = button(container, "Needs info");
     expect(input).not.toBeNull();
+    expect(label).not.toBeNull();
     expect(confirm?.disabled).toBe(true);
-    if (!input) return;
+    if (!input || !label) return;
     await changeTextarea(input, "Which macOS version?");
+    expect(confirm?.disabled).toBe(true);
+    await changeTextarea(label, "needs-reproduction");
     await act(async () => button(container, "Needs info")?.click());
 
     expect(chooseAnswer).toHaveBeenCalledWith({
       item: expect.objectContaining({ _tag: "Issue", id: "#817" }),
       attempt: "run-817",
       answers: { decision: "needs-info" },
-      inputs: { comment: "Which macOS version?" },
+      inputs: { comment: "Which macOS version?", label: "needs-reproduction" },
     });
     await act(async () => root.unmount());
   });

@@ -1,4 +1,4 @@
-import type { RunId, WorkItemRef } from "@cogwork/contracts";
+import type { RunId, WorkflowNotificationId, WorkflowParkCommand, WorkItemRef } from "@cogwork/contracts";
 import { plural } from "./format";
 import type { CatalogIcon } from "./workflow-catalog";
 
@@ -6,7 +6,7 @@ export interface AnswerChoice {
   readonly id: string;
   readonly label: string;
   readonly answers: Readonly<Record<string, string>>;
-  readonly input: { readonly id: string; readonly label: string } | null;
+  readonly inputs: readonly { readonly id: string; readonly label: string }[];
 }
 
 export type ParkReason =
@@ -22,7 +22,7 @@ export type ParkReason =
 
 export type ParkTag = ParkReason["tag"];
 
-export type ParkCommand = "approve" | "reject" | "hand-back" | "choose-answer" | "open-workflow";
+export type ParkCommand = WorkflowParkCommand;
 
 export type StepState = "planned" | "done" | "failed" | "skipped";
 
@@ -89,7 +89,7 @@ export interface Artifact {
 }
 
 export interface NotificationRecord {
-  readonly id: string;
+  readonly id: WorkflowNotificationId;
   readonly item: WorkItemRef;
   readonly title: string;
   readonly source: SourceRef;
