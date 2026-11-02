@@ -831,14 +831,14 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     if (cooldownUntil !== null && now < cooldownUntil) {
       return yield* permanentAttemptError(rateLimited(cooldownUntil));
     }
-    const authenticated = request.pipe(
-      HttpClientRequest.bearerToken(token),
-      HttpClientRequest.setHeaders(baseHeaders),
+    const response = yield* withTransientAttemptDeadline(
+      client.execute(
+        HttpClientRequest.setHeaders(HttpClientRequest.bearerToken(request, token), {
+          ...baseHeaders,
+          ...(request.headers.accept ? { accept: request.headers.accept } : {}),
+        }),
+      ),
     );
-    const prepared = request.headers.accept
-      ? HttpClientRequest.setHeader(authenticated, "accept", request.headers.accept)
-      : authenticated;
-    const response = yield* withTransientAttemptDeadline(client.execute(prepared));
     const remaining = response.headers["x-ratelimit-remaining"];
     const resumeAt = rateLimitResumeAt(response.headers, now);
     if (remaining === "0" && resumeAt !== null) {
