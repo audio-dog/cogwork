@@ -1,0 +1,62 @@
+packages/engine/src/commands.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 86,268
+packages/engine/src/observe.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 11-15,83
+packages/engine/src/daemon.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 578-580,617
+packages/engine/src/github/client.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 89,179,189-190,1286-1331,1480,1591-1593
+packages/contracts/src/workflow.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 11,20,96-103,117-118
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 377-379
+packages/engine/src/executor.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 84,913,1210,1247,1354,1364
+packages/engine/src/source-control.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 1-7,15,33-41,44,68-92,100-101,113-145,150
+packages/engine/src/workflow-catalog.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 15,96-107
+packages/engine/src/workflow-action-plan.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 2-3,10-11,31-32,34,47,58-59,152-185,225,240,843-973
+packages/engine/src/github/client.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 1015-1031
+packages/engine/src/event-publisher.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 63,320
+packages/engine/src/engine.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 59,161,267,282,297,1174
+packages/engine/src/worktree.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 381,387,429-444,520
+packages/engine/src/workflow-action-plan.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 8,27,32,35,40,99-105,134-164,229-264,341-345,455-465,481-483,529-564,677-732,836-839,936,945-947
+packages/engine/src/workflow-run.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 5,18,27,39,47,58,94-113,231-233,236-246,248-255,259-288,337,347,427-428,457-458,474,481-483,554,566,570,700-719
+packages/engine/src/worktree.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 927-970
+packages/engine/src/workflow-run.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 3,63,80,1193-1358
+packages/engine/src/run-preparation.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 197
+packages/engine/src/daemon-composition.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 67,498-501
+  s_9fd7d719c90ee1::t_b1bc1583b4f27d 372
+packages/engine/src/github/provider.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 1-10,14,20-26,40,51-99,322-436,441,467-521
+packages/engine/src/github/github.test.ts
+  s_9fd7d719c90ee1::t_39c6c2a7b5527c 14,60-62,135,143-144,152-156,212,250,311,343-364,374-382,456,460-461,496,1107-1367,2235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ba234e2baf76b240f6cda8be7f90cf48cfa33185",
+  "prompts": {},
+  "sessions": {
+    "s_9fd7d719c90ee1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d58-a706-72e1-9a2c-5b30c0af3f52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
