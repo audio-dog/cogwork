@@ -1,25 +1,28 @@
+import type { RunId, WorkItemRef } from "@cogwork/contracts";
 import { plural } from "./format";
 import type { CatalogIcon } from "./workflow-catalog";
 
 export interface AnswerChoice {
   readonly id: string;
   readonly label: string;
+  readonly answers: Readonly<Record<string, string>>;
   readonly input: { readonly id: string; readonly label: string } | null;
 }
 
 export type ParkReason =
-  | { readonly tag: "awaiting-approval"; readonly builtOn: string }
+  | { readonly tag: "awaiting-approval"; readonly builtOn: string; readonly digest: string }
   | { readonly tag: "handed-to-you"; readonly question: string; readonly choices: readonly AnswerChoice[] }
   | { readonly tag: "stuck"; readonly summary: string }
-  | { readonly tag: "exhausted"; readonly failure: string; readonly attempts: number }
+  | { readonly tag: "exhausted"; readonly failure: string }
   | { readonly tag: "write-failed"; readonly step: string; readonly error: string }
-  | { readonly tag: "hop-cap"; readonly hops: number }
-  | { readonly tag: "missing-operation"; readonly operation: string }
+  | { readonly tag: "hop-cap" }
+  | { readonly tag: "missing-operation" }
+  | { readonly tag: "plan-rejected"; readonly reason: string }
   | { readonly tag: "no-workspace-recognized" };
 
 export type ParkTag = ParkReason["tag"];
 
-export type ParkCommand = "approve" | "reject" | "hand-back" | "choose-answer";
+export type ParkCommand = "approve" | "reject" | "hand-back" | "choose-answer" | "open-workflow";
 
 export type StepState = "planned" | "done" | "failed" | "skipped";
 
@@ -64,6 +67,8 @@ export interface WorkflowRef {
 
 export interface ParkedItem {
   readonly id: string;
+  readonly ref: WorkItemRef;
+  readonly attempt: RunId | null;
   readonly title: string;
   readonly source: SourceRef;
   readonly workflow: WorkflowRef;
@@ -85,6 +90,7 @@ export interface Artifact {
 
 export interface NotificationRecord {
   readonly id: string;
+  readonly item: WorkItemRef;
   readonly title: string;
   readonly source: SourceRef;
   readonly workflow: WorkflowRef;
@@ -112,7 +118,6 @@ type ReasonOf<Tag extends ParkTag> = Extract<ParkReason, { readonly tag: Tag }>;
 interface ReasonSpec<Tag extends ParkTag> {
   readonly label: string;
   readonly urgency: number;
-  readonly commands: readonly ParkCommand[];
   readonly detail: (reason: ReasonOf<Tag>, item: ParkedItem) => string | null;
 }
 
@@ -120,49 +125,45 @@ const reasonSpecs: { readonly [Tag in ParkTag]: ReasonSpec<Tag> } = {
   "awaiting-approval": {
     label: "Approval",
     urgency: 0,
-    commands: ["approve", "reject", "hand-back"],
     detail: () => null,
   },
   "handed-to-you": {
     label: "Handed to you",
     urgency: 0,
-    commands: ["choose-answer"],
     detail: (reason) => reason.question,
   },
-  stuck: { label: "Stuck", urgency: 1, commands: ["hand-back"], detail: (reason) => reason.summary },
+  stuck: { label: "Stuck", urgency: 1, detail: (reason) => reason.summary },
   exhausted: {
     label: "Failed",
     urgency: 1,
-    commands: ["hand-back"],
-    detail: (reason) => `${reason.failure} · ${plural(reason.attempts, "attempt")}`,
+    detail: (reason) => reason.failure,
   },
   "write-failed": {
     label: "Write failed",
     urgency: 1,
-    commands: ["hand-back"],
     detail: (reason) => `${reason.step}: ${reason.error}`,
   },
   "hop-cap": {
     label: "Hop cap",
     urgency: 2,
-    commands: ["hand-back"],
-    detail: (reason, item) => `${plural(reason.hops, "hop")} from ${item.lineage[0]?.label ?? "the root"}`,
+    detail: (_reason, item) => `Lineage from ${item.lineage[0]?.label ?? "the root"} reached its hop cap`,
   },
   "missing-operation": {
     label: "Missing Operation",
     urgency: 2,
-    commands: ["hand-back"],
-    detail: (reason, item) => `r${item.workflow.revision} has no “${reason.operation}”`,
+    detail: (_reason, item) => `Published revision ${item.workflow.revision} no longer has this Operation`,
+  },
+  "plan-rejected": {
+    label: "Plan rejected",
+    urgency: 2,
+    detail: (reason) => reason.reason,
   },
   "no-workspace-recognized": {
     label: "No Workspace",
     urgency: 2,
-    commands: ["hand-back"],
     detail: () => null,
   },
 };
-
-export const commandsFor = (reason: ParkReason) => reasonSpecs[reason.tag].commands;
 
 export const reasonLabel = (item: ParkedItem) => reasonSpecs[item.reason.tag].label;
 
@@ -208,40 +209,13 @@ const stepTitles: Record<StepState, (action: string) => string> = {
 
 export const stepTitle = (step: PlanStep) => stepTitles[step.state](step.action);
 
-export const editKey = (item: ParkedItem, step: PlanStep, input: AgentInputText) =>
-  `${item.id}/${step.id}/${input.id}`;
+export const editKey = (input: AgentInputText) => input.id;
 
-export const inputText = (edits: PlanEdits, item: ParkedItem, step: PlanStep, input: AgentInputText) =>
-  edits[editKey(item, step, input)] ?? input.text;
+export const inputText = (edits: PlanEdits, input: AgentInputText) => edits[editKey(input)] ?? input.text;
 
 export const isRunnable = (step: PlanStep) => step.state !== "skipped";
 
 export const runnableSteps = (item: ParkedItem) => item.plan.filter(isRunnable);
-
-export const isEdited = (item: ParkedItem, edits: PlanEdits) =>
-  runnableSteps(item).some((step) =>
-    step.inputs.some((input) => inputText(edits, item, step, input) !== input.text),
-  );
-
-const fnv1a = (text: string) =>
-  [...text]
-    .reduce((hash, char) => Math.imul(hash ^ (char.codePointAt(0) ?? 0), 16777619) >>> 0, 2166136261)
-    .toString(16)
-    .padStart(8, "0")
-    .slice(0, 7);
-
-/** Stands in for the engine's plan digest until the read model carries it. */
-export const planDigest = (item: ParkedItem, edits: PlanEdits) =>
-  fnv1a(
-    runnableSteps(item)
-      .map(
-        (step) =>
-          `${step.app}:${step.action}:${step.target}:${step.parameters.join(",")}:${step.inputs
-            .map((input) => inputText(edits, item, step, input))
-            .join("|")}`,
-      )
-      .join("\n"),
-  );
 
 export const skippedByWorkflow = (records: readonly SkippedRecord[]) =>
   [...Map.groupBy(records, (record) => record.workflow.id).values()].flatMap(([first, ...rest]) =>
