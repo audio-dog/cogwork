@@ -1,0 +1,32 @@
+packages/engine/src/workflow.test.ts
+  s_1499f8cf284854::t_34c32637af7077 37-38,42,141-143,205-216,296-505,516,522-528
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_1499f8cf284854::t_34c32637af7077 1,123-127
+packages/engine/src/workflow-run.test.ts
+  s_1499f8cf284854::t_15cfb217fdde83 946,957
+  s_1499f8cf284854::t_e7adc1b7e5cda5 981
+  s_1499f8cf284854::t_34c32637af7077 26,32,47,62,88,430-498,874-945,947-956,958-980,982-1018
+  s_1499f8cf284854::t_45712e7821c880 1019
+packages/engine/src/daemon-composition.test.ts
+  s_1499f8cf284854::t_34c32637af7077 457-484
+packages/engine/src/github/trigger-source.test.ts
+  s_1499f8cf284854::t_34c32637af7077 572,574
+packages/engine/src/issue-workflow-catalog.ts
+  s_1499f8cf284854::t_34c32637af7077 18-20,203-359,376
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8f21beb034e1f9155d1fe1ef34efde38ad21deda",
+  "prompts": {},
+  "sessions": {
+    "s_1499f8cf284854": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-347d-7603-bbd8-088ebfebc478",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
