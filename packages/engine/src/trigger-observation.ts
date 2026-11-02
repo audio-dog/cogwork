@@ -6,6 +6,7 @@ import {
   type ParkReason,
   type TriggerSourceHealth,
   type WorkflowCatalog,
+  type WorkflowDocument,
   type WorkflowRecord,
   type WorkItemId,
   type WorkspaceId,
@@ -24,15 +25,17 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlError from "effect/unstable/sql/SqlError";
-import { matchesScheduledInstant } from "./clock-source";
+import { matchesScheduledInstant, sweepKey } from "./clock-source";
 import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker } from "./issue-tracker";
 import { WorkspaceRegistry } from "./registry";
 import {
-  type SourceFailure,
+  SourceFailure,
+  type SweepCandidate,
   TriggerEvent,
+  type TriggerReadPort,
   type TriggerSource,
   TriggerSources,
   TriggerSubscription,
@@ -138,8 +141,29 @@ const checkpointOf = (admission: TriggerAdmission) =>
     ? admission.event.key.instantMillis
     : admission.event.atMillis;
 const assigneeSnapshotTtl = 60_000;
+const trackerSystems = ["github", "linear"] as const;
 const freshAssignees = (snapshot: AssigneeSnapshot | undefined, now: number) =>
   snapshot && now - snapshot.atMillis < assigneeSnapshotTtl ? snapshot.assignees : null;
+
+const trackerSystemsOf = (document: WorkflowDocument | null) =>
+  new Set(
+    document?.operations.flatMap(({ transitions }) =>
+      transitions.flatMap(({ actions }) =>
+        actions.flatMap(({ entry }) => trackerSystems.filter((system) => entry.startsWith(`${system}.`))),
+      ),
+    ) ?? [],
+  );
+
+const subscriptionParameter = (subscription: TriggerSubscription, id: string) =>
+  subscription.parameters.find((parameter) => parameter.id === id)?.value;
+
+const sweepFailure = (error: unknown) =>
+  new SourceFailure({
+    source: "clock",
+    reason: "unavailable",
+    retryAfterMillis: null,
+    message: error instanceof Error ? error.message : String(error),
+  });
 
 const activateSubscriptions = (
   subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -480,7 +504,8 @@ const fingerprintOf = (subscriptions: ReadonlyArray<TriggerSubscription>) =>
   );
 
 const lineageOf = (event: TriggerEvent): Lineage => {
-  const current = Schema.decodeSync(LineageId)(keyOf(event.key));
+  const root = event.cause._tag === "Clock" ? `${keyOf(event.key)}:${event.revision}` : keyOf(event.key);
+  const current = Schema.decodeSync(LineageId)(root);
   if (event.cause._tag !== "Cogwork") return { root: current, parent: null, hop: 0 };
   return {
     root: event.cause.lineage.root,
@@ -533,6 +558,135 @@ export const make = Effect.gen(function* () {
   const refreshGate = Semaphore.makeUnsafe(1);
   const assigneeGate = Semaphore.makeUnsafe(1);
   const assigneeSnapshots = yield* Ref.make<ReadonlyMap<WorkspaceId, AssigneeSnapshot>>(new Map());
+
+  const lastSweepTimes = Effect.fn("TriggerObservation.lastSweepTimes")(function* (
+    subscription: TriggerSubscription,
+  ) {
+    const admissions = yield* Effect.all([store.admissions, store.processed]).pipe(
+      Effect.map((all) => all.flat()),
+    );
+    return admissions
+      .filter(
+        (admission) =>
+          admission.event.entry === sweepKey &&
+          admission.subscription.workflow === subscription.workflow &&
+          admission.subscription.trigger === subscription.trigger,
+      )
+      .reduce((times, admission) => {
+        const item = keyOf(admission.event.key);
+        return new Map(times).set(item, Math.max(times.get(item) ?? 0, admission.event.atMillis));
+      }, new Map<string, number>());
+  });
+
+  const trackerSweepCandidates = Effect.fn("TriggerObservation.trackerSweepCandidates")(function* (
+    subscription: TriggerSubscription,
+    tickInstant: number,
+    state: string,
+    sweptAt: ReadonlyMap<string, number>,
+  ) {
+    const registryState = yield* registry.state;
+    const listedWorkflows = yield* workflows.list;
+    const document =
+      listedWorkflows.workflows.find(({ id }) => id === subscription.workflow)?.publishedCopy ?? null;
+    const systems = trackerSystemsOf(document);
+    const workspaces = registryState.workspaces.filter(({ config }) => {
+      const isSelected = subscription.workspaces.includes(config.name);
+      const matchesSystem =
+        systems.size === 0 ||
+        trackerSystems.some((system) => systems.has(system) && config.issueTracker.type === system);
+      return isSelected && matchesSystem;
+    });
+    const listed = yield* Effect.forEach(workspaces, (workspace) =>
+      tracker.observe(workspace).pipe(Effect.map((items) => items.map((item) => ({ item, workspace })))),
+    );
+    return listed.flat().flatMap(({ item, workspace }): ReadonlyArray<SweepCandidate> => {
+      const isParked = item.coordination?.park !== null && item.coordination?.park !== undefined;
+      const matchesState = state === "parked" ? isParked : (item.states ?? item.roles).includes(state);
+      if (!matchesState) return [];
+      const key = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
+      const lastTouchedAtMillis = Math.max(
+        item.lastTouchedAtMillis ?? tickInstant,
+        item.coordination?.park?.atMillis ?? 0,
+        sweptAt.get(keyOf(key)) ?? 0,
+      );
+      return [
+        {
+          key,
+          workspace: workspace.config.name,
+          lastTouchedAtMillis,
+          loadWorkContext: tracker.readProse(workspace, item.id).pipe(Effect.mapError(sweepFailure)),
+        },
+      ];
+    });
+  });
+
+  const workflowSweepCandidates = Effect.fn("TriggerObservation.workflowSweepCandidates")(function* (
+    subscription: TriggerSubscription,
+    state: string,
+    sweptAt: ReadonlyMap<string, number>,
+  ) {
+    const admissions = yield* Effect.all([store.admissions, store.processed]).pipe(
+      Effect.map((all) => all.flat()),
+    );
+    const latest = admissions
+      .filter(
+        (admission) =>
+          admission.subscription.workflow === subscription.workflow &&
+          admission.event.entry !== sweepKey &&
+          admission.event.key._tag !== "Issue",
+      )
+      .reduce((items, admission) => {
+        const item = keyOf(admission.event.key);
+        const current = items.get(item);
+        return current === undefined || current.event.atMillis < admission.event.atMillis
+          ? new Map(items).set(item, admission)
+          : items;
+      }, new Map<string, TriggerAdmission>());
+    return yield* Effect.forEach([...latest.values()], (admission) =>
+      coordination.read(admission.event.key).pipe(
+        Effect.map((view): SweepCandidate | null => {
+          const matchesState = state === "parked" && view.park !== null;
+          if (!matchesState) return null;
+          return {
+            key: admission.event.key,
+            workspace: admission.event.workspace,
+            lastTouchedAtMillis: Math.max(
+              admission.event.atMillis,
+              view.park?.atMillis ?? 0,
+              sweptAt.get(keyOf(admission.event.key)) ?? 0,
+            ),
+            loadWorkContext: Effect.succeed(admission.event.workContext),
+          };
+        }),
+      ),
+    ).pipe(Effect.map((candidates) => candidates.filter((candidate) => candidate !== null)));
+  });
+
+  const sweep = Effect.fn("TriggerObservation.sweep")(function* (
+    subscription: TriggerSubscription,
+    tickInstant: number,
+  ) {
+    const source = subscriptionParameter(subscription, "source");
+    const state = subscriptionParameter(subscription, "state");
+    if (state === undefined) return yield* sweepFailure("Sweep state is missing");
+    const sweptAt = yield* lastSweepTimes(subscription);
+    const reader = [
+      {
+        source: "trackers",
+        read: () => trackerSweepCandidates(subscription, tickInstant, state, sweptAt),
+      },
+      {
+        source: "workflow",
+        read: () => workflowSweepCandidates(subscription, state, sweptAt),
+      },
+    ].find((candidate) => candidate.source === source);
+    if (reader === undefined) return yield* sweepFailure("Sweep source is invalid");
+    return yield* reader.read();
+  });
+  const sweepReadPort: TriggerReadPort = {
+    sweep: (subscription, tickInstant) =>
+      sweep(subscription, tickInstant).pipe(Effect.mapError(sweepFailure)),
+  };
 
   const setHealth = (
     source: TriggerSource["id"],
@@ -645,7 +799,7 @@ export const make = Effect.gen(function* () {
     subscriptions: ReadonlyArray<TriggerSubscription>,
     fingerprint: string,
   ) =>
-    source.observe(subscriptions).pipe(
+    source.observe(subscriptions, sweepReadPort).pipe(
       Stream.runForEach((event) => admit(source, subscriptions, event)),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(Effect.andThen(waitForRetry(error))),
