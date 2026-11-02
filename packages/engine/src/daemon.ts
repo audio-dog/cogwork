@@ -126,6 +126,7 @@ import {
 import { combineTriggerSources, TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import { controlStoreLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
+import { controlStoreLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
 import { WorkflowAttention, layer as workflowAttentionLayer } from "./workflow-attention";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
@@ -447,6 +448,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
   // one, or they would mint and rotate the app-actor token independently.
   const credentials = adapters.credentials;
+  const controlStore = bootControlStoreLayer(adapters.controlStorePath);
+  const workflowArtifacts = workflowArtifactStoreLayer.pipe(Layer.provide(controlStore));
   // One GitHub client, built once: the issue tracker and the establish-time credential check must
   // share it, or the second instance resolves its own credentials and drifts from the first.
   const githubClient = GitHub.clientLayer.pipe(Layer.provide(credentials));
@@ -454,8 +457,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(githubClient),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
+    Layer.provide(workflowArtifacts),
   );
-  const controlStore = bootControlStoreLayer(adapters.controlStorePath);
   const connections = connectionStoreLayer.pipe(
     Layer.provide(controlStore),
     Layer.provide(credentials),
@@ -563,6 +566,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         runLedger,
         runRecorder,
         workflowActionPlans,
+        workflowArtifacts,
         workflowNotifications,
         triggerObservationStore,
       ),
@@ -591,6 +595,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     triggerObservation,
     workflowNotifications,
     workflowActionPlans,
+    workflowArtifacts,
     workflowRun,
     workflowAttention,
     McpSkill.layer.pipe(Layer.provide(credentials)),

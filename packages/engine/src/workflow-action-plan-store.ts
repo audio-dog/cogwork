@@ -24,6 +24,9 @@ export interface WorkflowActionPlanStoreService {
     workflow: WorkflowId,
   ) => Effect.Effect<WorkflowActionPlan | null, ControlStoreFailure>;
   readonly create: (plan: WorkflowActionPlan) => Effect.Effect<WorkflowActionPlan, ControlStoreFailure>;
+  readonly createAll: (
+    plans: ReadonlyArray<WorkflowActionPlan>,
+  ) => Effect.Effect<ReadonlyArray<WorkflowActionPlan>, ControlStoreFailure>;
   readonly save: (plan: WorkflowActionPlan) => Effect.Effect<void, ControlStoreFailure>;
   readonly remove: (
     item: WorkItemKey,
@@ -74,6 +77,14 @@ export const makeMemory = Effect.gen(function* () {
     create: (plan) =>
       snapshotPlan(plan).pipe(
         Effect.tap((stored) => Ref.update(plans, (current) => new Map(current).set(planKey(stored), stored))),
+      ),
+    createAll: (batch) =>
+      Effect.forEach(batch, snapshotPlan).pipe(
+        Effect.tap((stored) =>
+          Ref.update(plans, (current) =>
+            stored.reduce((next, plan) => new Map(next).set(planKey(plan), plan), current),
+          ),
+        ),
       ),
     save: (plan) =>
       snapshotPlan(plan).pipe(
@@ -168,6 +179,38 @@ export const makeControlStore = Effect.gen(function* () {
             ),
             Effect.map(() => stored),
           ),
+        ),
+      ),
+    createAll: (plans) =>
+      Effect.forEach(plans, (plan) =>
+        snapshotPlan(plan).pipe(
+          Effect.flatMap((stored) =>
+            encodeStoredPlan("encode Workflow action plan", stored).pipe(
+              Effect.map((encoded) => ({ stored, encoded })),
+            ),
+          ),
+        ),
+      ).pipe(
+        Effect.flatMap((storedPlans) =>
+          write(
+            "create Workflow action plans",
+            sql.withTransaction(
+              Effect.forEach(
+                storedPlans,
+                ({ stored, encoded }) => sql`
+                  INSERT INTO workflow_action_plans (
+                    work_item, workflow, attempt, created_at_millis, plan
+                  ) VALUES (
+                    ${stored.item}, ${stored.workflow}, ${stored.attempt},
+                    ${stored.createdAtMillis}, ${encoded}
+                  )
+                  ON CONFLICT (work_item, workflow, attempt)
+                  DO UPDATE SET plan = excluded.plan
+                `,
+                { discard: true },
+              ),
+            ),
+          ).pipe(Effect.map(() => storedPlans.map(({ stored }) => stored))),
         ),
       ),
     save: (plan) =>

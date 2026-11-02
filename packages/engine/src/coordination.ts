@@ -24,7 +24,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { markdownCode, parseTriageProposal, statusReason } from "./comments";
 import { FollowUpMarker, type FollowUpTrigger } from "./follow-up";
-import { IssueTrackerError } from "./issue-tracker";
+import type { IssueTrackerError } from "./issue-tracker";
 
 export interface MarkerSpan {
   readonly name: string;
@@ -718,22 +718,6 @@ export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(f
     return;
   }
   yield* host.create(body);
-});
-
-export const editCoordination = Effect.fn("coordination.editCoordination")(function* <Id>(
-  codec: WireCodec,
-  host: CommentHost<Id>,
-  update: CoordinationUpdate,
-) {
-  const comments = yield* host.comments;
-  const { ledger, body } = coordinationUpdate(codec, comments, update);
-  if (!ledger) {
-    return yield* new IssueTrackerError({
-      reason: "unavailable",
-      message: "Cannot hand back a work item without a coordination comment",
-    });
-  }
-  yield* host.edit(ledger.id, body);
 });
 
 export const postNote = Effect.fn("coordination.postNote")(function* <Id>(

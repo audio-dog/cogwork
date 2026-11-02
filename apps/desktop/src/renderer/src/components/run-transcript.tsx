@@ -21,9 +21,9 @@ import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
 import { RiArrowDownSLine, RiCheckLine, RiErrorWarningLine, RiStopCircleLine } from "@remixicon/react";
-import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import { duration } from "../features/format";
 import { useRunTranscript } from "../features/run-activity";
 import {
@@ -83,12 +83,12 @@ function RunTranscriptProvider({ run, children }: { run: RunSummary; children: R
           rows,
           line: runLine(rows, run.status),
           running,
-          streamError: result._tag === "Failure" ? Cause.pretty(result.cause) : null,
+          streamError: result._tag === "Failure" ? daemonFailureMessage(result.cause) : null,
         },
         actions: { cancel: () => cancelRun({ payload: { runId: run.id } }) },
         meta: {
           cancelPending: cancelResult.waiting,
-          cancelError: cancelResult._tag === "Failure" ? Cause.pretty(cancelResult.cause) : null,
+          cancelError: cancelResult._tag === "Failure" ? daemonFailureMessage(cancelResult.cause) : null,
         },
       }}
     >

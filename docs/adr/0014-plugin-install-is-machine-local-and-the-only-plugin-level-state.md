@@ -41,7 +41,7 @@ answers on the re-binding problem the assumption created.
 - **The install record is the authority**, held in the Settings profile and keyed by `pluginId`
   alone, so one resolved identity is installed at a time. Nothing synchronizes a Settings profile
   today, so an install is machine-local in practice and no design may assume otherwise. Cross-machine
-  ownership stays in map [#124](https://github.com/colonylabs/cogwork/issues/124)'s fog.
+  ownership stays in map [#124](https://github.com/taylorfsteele/cogwork/issues/124)'s fog.
 - **A Plugin references files; it never copies them into the record.** Placing a bundle's files on a
   host is engine ADR 0007's existing `provision`, and needs no new noun.
 - **Provision is atomic** — write elsewhere, swap into the identity-keyed path — so a half-written
@@ -111,9 +111,9 @@ in this lifecycle touches the network.
 
 ## Consequences
 
-- Storage ([#126](https://github.com/colonylabs/cogwork/issues/126)) gets a closed field list and a
+- Storage ([#126](https://github.com/taylorfsteele/cogwork/issues/126)) gets a closed field list and a
   single-key install record, and no install-history table.
-- Customize ([#131](https://github.com/colonylabs/cogwork/issues/131)) gains a third row state beside
+- Customize ([#131](https://github.com/taylorfsteele/cogwork/issues/131)) gains a third row state beside
   ADR 0013's offer-versus-enable one: *this Plugin ships this Hook; it failed to load; here is the
   file.*
 - An update must not touch an in-flight Run. Provision keyed by resolved identity makes that
@@ -122,8 +122,8 @@ in this lifecycle touches the network.
   no longer hold at read time what they held at dispatch the moment a Plugin updates.
 - **Connection behaviour is deliberately not decided here.** Its glossary entry stays provisional and
   keeps its *Avoid* line. Establishment, health, re-grant and revocation wait on
-  [#172](https://github.com/colonylabs/cogwork/issues/172); update-time consent and permission
-  summaries are [#135](https://github.com/colonylabs/cogwork/issues/135)'s. The planning session
+  [#172](https://github.com/taylorfsteele/cogwork/issues/172); update-time consent and permission
+  summaries are [#135](https://github.com/taylorfsteele/cogwork/issues/135)'s. The planning session
   answered four Connection questions anyway; those answers are struck.
 - **Generalizing `MCP server readiness` to a `Readiness` term is deferred** for the same reason: its
   second instance would be Connection readiness, and the concept is undefined until #172 lands. One
@@ -133,14 +133,14 @@ in this lifecycle touches the network.
   refusal lands at Run Plan resolution — so only whether setup can ever complete differs.
 - Declaring which host versions a Plugin supports remains unsolved across the field and stays in fog.
 
-Full reasoning: [#125](https://github.com/colonylabs/cogwork/issues/125). Research:
+Full reasoning: [#125](https://github.com/taylorfsteele/cogwork/issues/125). Research:
 `docs/research/plugin-and-connector-versioning.md`. On-disk prior art:
 `~/.codex/plugins/`, `~/.cursor/plugins/`, `~/.claude/plugins/`.
 
 ## Amendment (2026-08-25) — the Connections surface exists, and establishing one installs a Plugin
 
 This ADR deliberately excluded Connection behaviour and struck four answers it had produced anyway.
-[#172](https://github.com/colonylabs/cogwork/issues/172) has now landed, and it changes three things
+[#172](https://github.com/taylorfsteele/cogwork/issues/172) has now landed, and it changes three things
 here. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
 
 **The third surface is adopted.** This ADR rejected "a third surface for Connections" *while the
@@ -166,7 +166,7 @@ workspace binding takes when its Connection is removed.
 
 ## Amendment (2026-08-26) — the answer is still no, and the fetch machinery is struck
 
-[#205](https://github.com/colonylabs/cogwork/issues/205) asked this ADR's "a Plugin-level on / off has
+[#205](https://github.com/taylorfsteele/cogwork/issues/205) asked this ADR's "a Plugin-level on / off has
 no cause" against Codex, whose `~/.codex/config.toml` carries `[plugins."browser@openai-bundled"]
 enabled = true`. The answer holds. **This ADR's stated reason for it does not**, and two of its
 mechanisms are struck outright.
@@ -219,12 +219,12 @@ machinery built for fetching has no caller and is deleted rather than kept:
 - the catalog network fetch, its cache, its stale-tolerance, and *no updates known*;
 - the **computed digest** per entry and "the fetched bundle always wins on mismatch";
 - the `active` / `deprecated` / `deleted` status set, and with it
-  [#135](https://github.com/colonylabs/cogwork/issues/135)'s "catalog status bounds resolution";
+  [#135](https://github.com/taylorfsteele/cogwork/issues/135)'s "catalog status bounds resolution";
 - the staged-update ceremony — stage, accept, decline — and with it #135's "install grants nothing so
   consent belongs to update". Consenting to a bundle that arrived with an app you already chose to
   update is theatre.
 
-This is [#203](https://github.com/colonylabs/cogwork/issues/203)'s argument, which ADR
+This is [#203](https://github.com/taylorfsteele/cogwork/issues/203)'s argument, which ADR
 [0016](./0016-one-management-contract-for-the-app-and-the-cli.md) already carries in writing: "a
 control for declining updates to a separately-installed bundle has nothing to act on." A staged-update
 ceremony is that control with more steps.
@@ -269,4 +269,4 @@ must not stop the daemon reconciling. The Plugins surface shows a notice naming 
 still established, and never offers to remove it: **Connections** remains the only surface that writes
 Connection state.
 
-Full reasoning: [#205](https://github.com/colonylabs/cogwork/issues/205).
+Full reasoning: [#205](https://github.com/taylorfsteele/cogwork/issues/205).

@@ -55,6 +55,7 @@ import {
 } from "./trigger-observation";
 import {
   SourceFailure,
+  type TriggerEvent,
   type TriggerSource,
   TriggerSources,
   type TriggerSubscription,
@@ -202,7 +203,21 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
   );
   yield* Effect.yieldNow;
   yield* observation.refresh;
-  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed, coordination };
+  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed, coordination, store };
+});
+
+const observeLineage = Effect.fn("TriggerObservationTest.observeLineage")(function* (
+  cause: TriggerEvent["cause"],
+) {
+  const { observation, scripted } = yield* makeWorkspaceObservation();
+  const changed = yield* observation.changes.pipe(
+    Stream.take(1),
+    Stream.runCollect,
+    Effect.forkChild({ startImmediately: true }),
+  );
+  yield* scripted.emit({ ...selectedEvent, cause });
+  const admitted = yield* Fiber.join(changed);
+  return admitted[0]?.lineage;
 });
 
 const granolaEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-generated");
@@ -312,6 +327,25 @@ const exerciseFailedLastAdmissionFinish = (storePath: string, admission: Trigger
     return { failure, failedView, pending, completedView, remaining };
   }).pipe(Effect.provide(bootControlStoreLayer(storePath)));
 
+const exerciseFailedFanOutFinish = Effect.fn("TriggerObservationTest.exerciseFailedFanOutFinish")(function* (
+  parent: TriggerAdmission,
+  child: TriggerAdmission,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const store = yield* makeControlStoreTriggerObservationStore;
+  yield* store.putAll([parent]);
+  yield* sql`
+      CREATE TRIGGER fail_fan_out_parent_finish
+      BEFORE UPDATE OF processed ON trigger_admissions
+      WHEN NEW.processed = 1
+      BEGIN
+        SELECT RAISE(ABORT, 'finish failed');
+      END
+    `;
+  const failure = yield* Effect.flip(store.fanOut(parent, [child], Effect.void));
+  return { failure, pending: yield* store.admissions };
+});
+
 describe("TriggerObservation", () => {
   it("matches a schedule event to one Trigger with the scheduled parameters", () => {
     const other = { ...subscription, workflow: Schema.decodeSync(WorkflowId)("other") };
@@ -408,6 +442,42 @@ describe("TriggerObservation", () => {
       );
       assert.lengthOf(yield* observation.eligible, 2);
       assert.strictEqual(yield* Ref.get(observed), 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("starts person lineages and extends Cogwork lineages", () =>
+    Effect.gen(function* () {
+      const inheritedRoot = yield* Schema.decodeEffect(LineageId)("issue:root");
+      const parent = keyOf(workItem);
+      const cases = [
+        {
+          cause: { _tag: "Person" } as const,
+          expected: {
+            root: yield* Schema.decodeEffect(LineageId)(keyOf(selectedEvent.key)),
+            parent: null,
+            hop: 0,
+          },
+        },
+        {
+          cause: {
+            _tag: "Cogwork",
+            origin: parent,
+            lineage: { root: inheritedRoot, parent: null, hop: 7 },
+          } as const,
+          expected: {
+            root: inheritedRoot,
+            parent: yield* Schema.decodeEffect(LineageId)(parent),
+            hop: 8,
+          },
+        },
+      ];
+
+      yield* Effect.forEach(
+        cases,
+        ({ cause, expected }) =>
+          observeLineage(cause).pipe(Effect.map((lineage) => assert.deepStrictEqual(lineage, expected))),
+        { discard: true },
+      );
     }).pipe(Effect.scoped),
   );
 
@@ -1215,6 +1285,30 @@ layer(NodeServices.layer)((it) => {
         processed: event.revision,
       });
       assert.deepStrictEqual(result.remaining, []);
+    }),
+  );
+
+  it.effect("rolls back fan-out children when finishing the parent fails", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-trigger-admissions-" });
+      const storePath = path.join(directory, "control.db");
+      const parent = { event, subscription, lineage } as const;
+      const child = {
+        ...parent,
+        event: {
+          ...event,
+          key: { ...event.key, instantMillis: event.key.instantMillis + 1 },
+          revision: String(event.key.instantMillis + 1),
+        },
+      };
+      const result = yield* exerciseFailedFanOutFinish(parent, child).pipe(
+        Effect.provide(bootControlStoreLayer(storePath)),
+      );
+
+      assert.strictEqual(result.failure._tag, "TriggerObservationStoreError");
+      assert.deepStrictEqual(result.pending, [parent]);
     }),
   );
 

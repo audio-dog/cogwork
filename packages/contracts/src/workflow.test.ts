@@ -602,9 +602,15 @@ describe("Workflow edits", () => {
 
 describe("Workflow Operation result", () => {
   const schema = workflowOperationResultSchema(operation, baseCatalog, [cogworkWorkspace]);
+  const element = {
+    summary: "Ready to continue",
+    answers: { decision: decodeNodeId("yes") },
+    inputs: { comment: "Proceed." },
+    workspace: cogworkWorkspace,
+  };
 
   it("decodes the flat result and refuses missing answers", () => {
-    const decoded = Schema.decodeSync(schema)({
+    const decoded = Schema.decodeUnknownSync(schema)({
       summary: "Ready to continue",
       stuck: false,
       answers: { decision: decodeNodeId("yes") },
@@ -612,9 +618,10 @@ describe("Workflow Operation result", () => {
       workspace: cogworkWorkspace,
     });
 
+    if (!("answers" in decoded)) return assert.fail("expected a once result");
     assert.strictEqual(decoded.answers.decision, "yes");
     assert.throws(() =>
-      Schema.decodeSync(schema)({
+      Schema.decodeUnknownSync(schema)({
         summary: "Ready to continue",
         stuck: false,
         answers: {},
@@ -631,6 +638,38 @@ describe("Workflow Operation result", () => {
 
     assert.strictEqual(json.type, "object");
     assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs", "workspace"]);
+    assert.strictEqual(json.additionalProperties, false);
+  });
+
+  it("decodes at most 50 for-each elements", () => {
+    const forEachSchema = workflowOperationResultSchema(
+      { ...operation, forEach: "commitment" },
+      baseCatalog,
+      [cogworkWorkspace],
+    );
+    const decoded = Schema.decodeSync(forEachSchema)({
+      summary: "Found commitments",
+      stuck: false,
+      elements: Array.from({ length: 50 }, () => element),
+    });
+
+    if (!("elements" in decoded)) return assert.fail("expected a for-each result");
+    assert.lengthOf(decoded.elements, 50);
+    assert.throws(() =>
+      Schema.decodeSync(forEachSchema)({
+        summary: "Found too many commitments",
+        stuck: false,
+        elements: Array.from({ length: 51 }, () => element),
+      }),
+    );
+  });
+
+  it("builds a strict for-each envelope", () => {
+    const json = workflowOperationResultJsonSchema({ ...operation, forEach: "commitment" }, baseCatalog, [
+      cogworkWorkspace,
+    ])["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+
+    assert.deepStrictEqual(json.required, ["summary", "stuck", "elements"]);
     assert.strictEqual(json.additionalProperties, false);
   });
 

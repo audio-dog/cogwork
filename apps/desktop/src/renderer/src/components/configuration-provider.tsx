@@ -6,7 +6,7 @@ import {
   type ControlStore,
 } from "@cogwork/contracts";
 import { useAtom, useAtomValue } from "@effect/atom-react";
-import * as Cause from "effect/Cause";
+import type * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
@@ -25,6 +25,7 @@ import type {
 } from "../features/configuration-model";
 import { configurationPicture } from "../features/configuration-picture";
 import { type CustomizePlaces, customizePlaces } from "../features/customize-places";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import {
   configurationWithPlugins,
   type PluginLoadState,
@@ -54,9 +55,12 @@ const pluginFailureOf = (
   mutationFailure: Cause.Cause<unknown> | null,
   queryFailure: Cause.Cause<unknown> | null,
 ) => {
-  if (mutationFailure) return PluginFailurePresentation.Mutation({ message: Cause.pretty(mutationFailure) });
-  if (queryFailure) return PluginFailurePresentation.Load({ message: Cause.pretty(queryFailure) });
-  return null;
+  const failure = [
+    { cause: mutationFailure, present: PluginFailurePresentation.Mutation },
+    { cause: queryFailure, present: PluginFailurePresentation.Load },
+  ].find(({ cause }) => cause !== null);
+  if (!failure?.cause) return null;
+  return failure.present({ message: daemonFailureMessage(failure.cause) });
 };
 
 interface ConfigurationActions {

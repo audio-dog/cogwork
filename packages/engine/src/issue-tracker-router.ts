@@ -9,6 +9,7 @@ import { LinearClient } from "./linear/client";
 import { makeLinearTrackerTriggerSource } from "./linear/tracker-trigger-source";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 import { WorkspaceRegistry } from "./registry";
+import { WorkflowArtifactStore } from "./workflow-artifact-store";
 
 export const route = (github: IssueTrackerService, linear: IssueTrackerService): IssueTrackerService => {
   const forWorkspace = (workspace: WorkspaceIssueTrackerBinding) =>
@@ -48,14 +49,15 @@ export const routedLayer = Layer.effect(
     const githubClient = yield* GitHubClient;
     const linearClient = yield* LinearClient;
     const registry = yield* WorkspaceRegistry;
+    const artifacts = yield* WorkflowArtifactStore;
     return route(
       {
         ...makeGitHub(githubClient),
-        triggerSources: [makeGitHubTrackerTriggerSource(githubClient, registry.state)],
+        triggerSources: [makeGitHubTrackerTriggerSource(githubClient, registry.state, artifacts)],
       },
       {
         ...makeLinear(linearClient),
-        triggerSources: [makeLinearTrackerTriggerSource(linearClient, registry.state)],
+        triggerSources: [makeLinearTrackerTriggerSource(linearClient, registry.state, artifacts)],
       },
     );
   }),

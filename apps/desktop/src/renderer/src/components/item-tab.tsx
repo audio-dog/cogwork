@@ -21,11 +21,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
 import { RiArrowRightLine, RiFileList2Line, RiPulseLine, RiStopCircleLine } from "@remixicon/react";
-import * as Cause from "effect/Cause";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useRef, useState } from "react";
 import { cancelRunAtom, handBackAtom, handBackTargetAtom, reclassifyAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import { boardItem, needsHumanReasonLabel, runForItem, runsForItem } from "../features/feed";
 import { relativeTime } from "../features/format";
 import {
@@ -102,7 +102,7 @@ function useItemTab(): ItemTabContextValue {
 
 const mutationStatus = <A, E>(result: AsyncResult.AsyncResult<A, E>, active = true) => ({
   pending: active && result.waiting,
-  error: active && result._tag === "Failure" ? Cause.pretty(result.cause) : null,
+  error: active && result._tag === "Failure" ? daemonFailureMessage(result.cause) : null,
 });
 
 function ItemTabProvider({

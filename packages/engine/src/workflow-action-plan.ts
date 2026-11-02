@@ -26,12 +26,19 @@ import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projec
 import { RunLedger } from "./run-ledger";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 
 export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
   "WorkflowActionPlanDecodeError",
   { message: Schema.String },
 ) {}
+
+const planPreview = (plan: WorkflowActionPlan) =>
+  JSON.stringify({
+    summary: plan.summary,
+    steps: plan.steps.map(({ position, entry }) => ({ position, entry })),
+  });
 
 interface OperationOutput {
   readonly summary: string;
@@ -257,6 +264,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     answers: input.output.answers,
     inputs: input.output.inputs,
     workspace: input.output.workspace ?? null,
+    lineage: input.admission.lineage,
     handOff,
     steps,
   } as const;
@@ -397,6 +405,7 @@ const actionExecutors = {
         workflow: context.plan.workflow,
         attempt: context.plan.attempt,
         writeKey: context.step.writeKey,
+        lineage: context.plan.lineage,
       }),
     });
   }),
@@ -492,6 +501,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
   admission: TriggerAdmission,
 ) {
   const store = yield* WorkflowActionPlanStore;
+  const artifacts = yield* WorkflowArtifactStore;
   const coordination = yield* Coordination;
   const tracker = yield* IssueTracker;
   const notifications = yield* WorkflowNotifications;
@@ -520,7 +530,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     }
     yield* coordination.park(admission.event.key, {
       _tag: "NoWorkspaceRecognized",
-      plan: initial.digest,
+      plan: planPreview(initial),
     });
     return { _tag: "Parked" } as const;
   }
@@ -586,6 +596,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
             status: "completed",
             artifact: result.success,
           });
+          if (result.success !== null) yield* artifacts.record(result.success);
           yield* store.save(plan);
           return initialExecutionState(plan);
         }

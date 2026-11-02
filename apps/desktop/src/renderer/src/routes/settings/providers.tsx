@@ -19,7 +19,6 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
@@ -32,6 +31,7 @@ import {
   setHarnessEnabledAtom,
 } from "../../daemon/atoms";
 import { BoardResult, useBoard } from "../../features/activity-session";
+import { daemonFailureMessage } from "../../features/daemon-failure";
 import { relativeTime } from "../../features/format";
 import {
   applyHarnessEnablement,
@@ -124,7 +124,7 @@ export const providerMutationFailure = (
   const hasNoNewFailure =
     submission === null || result === submission.previousResult || result._tag !== "Failure";
   if (hasNoNewFailure) return null;
-  return { title: submission.failureTitle, message: Cause.pretty(result.cause) };
+  return { title: submission.failureTitle, message: daemonFailureMessage(result.cause) };
 };
 
 function Providers({ children }: { readonly children: ReactNode }) {
