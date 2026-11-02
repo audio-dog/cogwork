@@ -41,6 +41,7 @@ import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
+import { SlackWrite } from "./slack-write";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { Workflows } from "./workflow";
 import {
@@ -204,6 +205,7 @@ export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
   const observationStore = yield* TriggerObservationStore;
+  const slack = yield* SlackWrite;
   const executionContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
     Effect.map((context) =>
       context.pipe(
@@ -213,6 +215,7 @@ export const make = Effect.gen(function* () {
         Context.add(WorkflowActionPlanStore, actionPlans),
         Context.add(WorkflowArtifactStore, artifacts),
         Context.add(WorkflowNotifications, notifications),
+        Context.add(SlackWrite, slack),
         Context.add(TriggerObservationStore, observationStore),
       ),
     ),

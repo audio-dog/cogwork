@@ -3,7 +3,7 @@ import {
   matchWorkflowTransitions,
   ParkReason as ParkReasonSchema,
   type RunId,
-  type WorkflowActionArtifact,
+  WorkflowActionArtifact,
   WorkflowActionTarget,
   type WorkflowAttention,
   type WorkflowCatalog,
@@ -14,6 +14,7 @@ import {
   type WorkItemRef,
   WorkItemRef as WorkItemRefSchema,
 } from "@cogwork/contracts";
+import * as Schema from "effect/Schema";
 import { type ReactNode, useState } from "react";
 import { Attention, type AttentionLayout } from "../components/attention-board";
 import type { CatalogIcon } from "./workflow-catalog";
@@ -113,6 +114,8 @@ const targetLabel = (target: WorkflowActionTarget) =>
   WorkflowActionTarget.match(target, {
     Cogwork: () => "Cogwork",
     NoWorkspace: () => "No Workspace",
+    SlackChannel: ({ channel }) => channel,
+    SlackMessage: ({ channel, ts }) => `${channel} · ${ts}`,
     CurrentIssue: ({ issue }) => issue,
     ExistingIssue: ({ issue }) => issue,
     NewIssue: ({ workspace }) => workspace,
@@ -122,6 +125,8 @@ const targetApp = (target: WorkflowActionTarget) =>
   WorkflowActionTarget.match<CatalogIcon | null>(target, {
     Cogwork: () => "cogwork",
     NoWorkspace: () => null,
+    SlackChannel: () => "slack",
+    SlackMessage: () => "slack",
     CurrentIssue: ({ app }) => catalogIcon(app),
     ExistingIssue: ({ app }) => catalogIcon(app),
     NewIssue: ({ app }) => catalogIcon(app),
@@ -129,9 +134,10 @@ const targetApp = (target: WorkflowActionTarget) =>
 
 const stepStates = {
   pending: "planned",
+  executing: "planned",
   completed: "done",
   failed: "failed",
-} satisfies Record<"pending" | "completed" | "failed", StepState>;
+} satisfies Record<"pending" | "executing" | "completed" | "failed", StepState>;
 
 const planSteps = (park: WorkflowPark, catalog: WorkflowCatalog) => {
   const hiddenEntries = new Set(["cogwork.wait-for-approval", "cogwork.hand-to-me"]);
@@ -140,6 +146,7 @@ const planSteps = (park: WorkflowPark, catalog: WorkflowCatalog) => {
     .map((step) => {
       const entry = catalog.entries.find(({ key }) => key === step.entry);
       const failedReason = ParkReasonSchema.guards.WriteFailed(park.reason) ? park.reason.error : null;
+      const issueArtifact = Schema.is(WorkflowActionArtifact)(step.artifact) ? step.artifact : null;
       return {
         id: `${step.position}:${step.entry}`,
         app: catalogIcon(entry?.system ?? null),
@@ -152,7 +159,7 @@ const planSteps = (park: WorkflowPark, catalog: WorkflowCatalog) => {
           text,
         })),
         state: stepStates[step.status],
-        note: step.status === "failed" ? failedReason : (step.artifact?.issue ?? null),
+        note: step.status === "failed" ? failedReason : (issueArtifact?.issue ?? null),
       } satisfies PlanStep;
     });
 };
@@ -210,6 +217,7 @@ const reasonOf = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>, 
     MissingOperation: () => ({ tag: "missing-operation" }) as const,
     PlanRejected: ({ reason }) => ({ tag: "plan-rejected", reason }) as const,
     WriteFailed: ({ step, error }) => ({ tag: "write-failed", step, error }) as const,
+    DraftOutcomeUnknown: ({ step }) => ({ tag: "draft-outcome-unknown", step }) as const,
     NoWorkspaceRecognized: () => ({ tag: "no-workspace-recognized" }) as const,
     AwaitingApproval: ({ digest, revision }) =>
       ({ tag: "awaiting-approval", digest, builtOn: revision }) as const,

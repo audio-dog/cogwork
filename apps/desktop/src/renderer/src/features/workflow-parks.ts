@@ -18,6 +18,7 @@ export type ParkReason =
   | { readonly tag: "hop-cap" }
   | { readonly tag: "missing-operation" }
   | { readonly tag: "plan-rejected"; readonly reason: string }
+  | { readonly tag: "draft-outcome-unknown"; readonly step: string }
   | { readonly tag: "no-workspace-recognized" };
 
 export type ParkTag = ParkReason["tag"];
@@ -157,6 +158,11 @@ const reasonSpecs: { readonly [Tag in ParkTag]: ReasonSpec<Tag> } = {
     label: "Plan rejected",
     urgency: 2,
     detail: (reason) => reason.reason,
+  },
+  "draft-outcome-unknown": {
+    label: "Draft outcome unknown",
+    urgency: 1,
+    detail: (reason) => `${reason.step}: check Slack before continuing`,
   },
   "no-workspace-recognized": {
     label: "No Workspace",

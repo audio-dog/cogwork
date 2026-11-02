@@ -218,6 +218,7 @@ const reasonPresentations: Record<
   "hop-cap": { icon: RiLoopLeftLine, tone: "setup" },
   "missing-operation": { icon: RiSignpostLine, tone: "setup" },
   "plan-rejected": { icon: RiCloseCircleLine, tone: "failure" },
+  "draft-outcome-unknown": { icon: RiErrorWarningLine, tone: "failure" },
   "no-workspace-recognized": { icon: RiMapPinLine, tone: "setup" },
 };
 
