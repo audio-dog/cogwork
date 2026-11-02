@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_ba08b7cf6195a4::t_328624b87a8e29 206,253,262,281
+  s_ba08b7cf6195a4::t_c70b0554127d8a 75,88-93,95-97,136,178,205,207-213,215,217,224,231,234,256,265,273,284,287
+  s_ba08b7cf6195a4::t_d4498092032092 77,79,121-127,232-233
+  s_ba08b7cf6195a4::t_56f60e03bee827 11,51,190-195,200,382
+  s_ba08b7cf6195a4::t_e989c606764c26 156
+  s_ba08b7cf6195a4::t_baa28e6823b34d 128-129
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_ba08b7cf6195a4::t_56f60e03bee827 115,161,164,410,654,661-670,675-679,694,696
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_ba08b7cf6195a4::t_56f60e03bee827 1,9,25
+  s_ba08b7cf6195a4::t_328624b87a8e29 92
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_ba08b7cf6195a4::t_79e51a864a855b 55-58,90,295,305,308,310,312-313,320
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b1a638d6a727cebe6e76e094cca243948d72b603",
+  "prompts": {},
+  "sessions": {
+    "s_ba08b7cf6195a4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d57-75f5-7743-aa07-3fa49250abf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
