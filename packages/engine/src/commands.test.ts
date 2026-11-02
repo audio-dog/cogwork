@@ -30,6 +30,7 @@ import {
   type SettingLevel,
   type TriageRole,
   WorkItemId,
+  WorkItemRef,
   WorkspaceConfig,
   WorkspaceId,
   WorkspaceRegistration,
@@ -85,6 +86,7 @@ import { SlackLogin } from "./slack-login";
 import { emptyService as emptySourceControl, type PrSignals, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
+import { WorkflowRun } from "./workflow-run";
 
 const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
@@ -824,12 +826,6 @@ const activeClaim = {
   operation: codingOperation("implement"),
   lineage: coordinationLineage,
 } as const;
-const failedAttempt = (atMillis: number) => ({
-  operation: codingOperation("implement"),
-  outcome: "failed" as const,
-  atMillis,
-  lineage: coordinationLineage,
-});
 
 describe("CancelRun", () => {
   it.effect("settles the run, hands the item off to a human, and releases the claim", () => {
@@ -1206,55 +1202,37 @@ describe("Reclassify", () => {
 });
 
 describe("HandBack", () => {
-  it.effect("clears failure history, applies one role, and returns the eligible item", () => {
-    const calls = Ref.makeUnsafe(emptyCalls);
-    const item = trackerItem({
-      id: id("AUD-5"),
-      roles: ["ready-for-human"],
-      claimedByUs: false,
-      claimHeld: false,
-      attempts: [failedAttempt(1), failedAttempt(2), failedAttempt(3)],
+  it.effect("addresses a Workflow item and carries the person's note", () => {
+    const handedBack = Ref.makeUnsafe<ReadonlyArray<unknown>>([]);
+    const workflowRun = Layer.succeed(WorkflowRun, {
+      execute: () => Effect.succeed("completed" as const),
+      approve: () => Effect.die("Unexpected approval"),
+      reject: () => Effect.die("Unexpected rejection"),
+      chooseAnswer: () => Effect.die("Unexpected answer"),
+      handBack: (payload) =>
+        Ref.update(handedBack, (calls) => [...calls, payload]).pipe(Effect.map(() => undefined)),
     });
+    const item = WorkItemRef.cases.Issue.make({ workspace: wsid("example"), id: id("AUD-5") });
     return Effect.gen(function* () {
-      const worker = yield* Reconcile.ReconcileWorker;
-      yield* worker.submit();
-      yield* TestClock.adjust("4 millis");
-
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const result = yield* client.HandBack({
-        workspace: wsid("example"),
-        workItem: id("AUD-5"),
-        role: "ready-for-agent",
-        note: "worktree setup repaired",
-      });
+      yield* client.HandBack({ item, note: "worktree setup repaired" });
 
-      assert.strictEqual(result?._tag, "Eligible");
-      assert.deepStrictEqual((yield* Ref.get(calls)).handBack, [
-        {
-          workItem: id("AUD-5"),
-          outcome: {
-            record: { by: localOwnerId, atMillis: 4 },
-            changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
-            note: "worktree setup repaired",
-          },
-        },
-      ]);
-    }).pipe(Effect.provide(daemonLayer(recordingTracker([item], calls))), Effect.scoped);
+      assert.deepStrictEqual(yield* Ref.get(handedBack), [{ item, note: "worktree setup repaired" }]);
+    }).pipe(Effect.provide(daemonLayer(Layer.merge(trackerLayer({}), workflowRun))), Effect.scoped);
   });
 
-  it.effect("fails with WorkItemNotFound for an unknown item", () =>
+  it.effect("returns the Workflow touchpoint failure", () =>
     Effect.gen(function* () {
-      const worker = yield* Reconcile.ReconcileWorker;
-      yield* worker.submit();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const error = yield* Effect.flip(
         client.HandBack({
-          workspace: wsid("example"),
-          workItem: id("MISSING"),
-          role: "ready-for-agent",
+          item: WorkItemRef.cases.Issue.make({
+            workspace: wsid("example"),
+            id: id("MISSING"),
+          }),
         }),
       );
-      assert.strictEqual(error._tag, "WorkItemNotFound");
+      assert.strictEqual(error._tag, "WorkflowTouchpointFailure");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 });
